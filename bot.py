@@ -49,7 +49,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     url = f"https://api.sunnah.com/v1/hadiths/{collection}:{number}"
-    headers = {"X-API-Key": "SqD712P3E82xnwOAEOkGd5JZH8s9wRR24TqNFzjLAP43w"}
+    headers = {"X-API-Key": os.environ.get("SUNNAH_API_KEY", "")}
 
     try:
         r = requests.get(url, headers=headers, timeout=10)
