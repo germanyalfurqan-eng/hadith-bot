@@ -32,6 +32,35 @@ def parse_query(text):
                 return en, int(num)
     return None, None
 
+def get_hadith(collection, number):
+    # Try hadith-api (no key needed)
+    try:
+        url = f"https://hadith-api.vercel.app/api/hadith/{collection}/{number}"
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            arabic = data.get("arabic", "")
+            english = data.get("english", {}).get("text", "")
+            if arabic or english:
+                return arabic, english, ""
+    except:
+        pass
+
+    # Try cdn.jsdelivr.net hadith database
+    try:
+        url = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/eng-{collection}/{number}.json"
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            hadith = data.get("hadith", {})
+            arabic = hadith.get("arabic", "")
+            english = hadith.get("text", "")
+            return arabic, english, ""
+    except:
+        pass
+
+    return "", "", ""
+
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     collection, number = parse_query(text)
@@ -48,37 +77,31 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    url = f"https://api.sunnah.com/v1/hadiths/{collection}:{number}"
-    headers = {"X-API-Key": os.environ.get("SUNNAH_API_KEY", "")}
+    await update.message.reply_text("⏳ Ищу хадис...")
 
-    try:
-        r = requests.get(url, headers=headers, timeout=10)
-        data = r.json()
+    arabic, english, grade = get_hadith(collection, number)
 
-        arabic = data.get("arabic", "")
-        english = ""
-        for lang in data.get("translations", []):
-            if lang.get("lang") == "en":
-                english = lang.get("body", "")
-                break
-        if not english:
-            english = data.get("text", "нет перевода")
-
-        grade = data.get("grades", [{}])
-        grade_text = grade[0].get("grade", "") if grade else ""
-
-        msg = (
-            f"📖 *{NAMES.get(collection, collection)}, хадис №{number}*\n\n"
-            f"🔤 *Арабский текст:*\n{arabic}\n\n"
-            f"🌍 *Перевод (англ):*\n{english}\n"
+    if not arabic and not english:
+        await update.message.reply_text(
+            f"❌ Хадис {NAMES.get(collection, collection)} №{number} не найден.\n"
+            "Проверь номер и попробуй снова."
         )
-        if grade_text:
-            msg += f"\n✅ *Степень:* {grade_text}"
+        return
 
-        await update.message.reply_text(msg, parse_mode="Markdown")
+    msg = f"📖 *{NAMES.get(collection, collection)}, хадис №{number}*\n\n"
 
-    except Exception as e:
-        await update.message.reply_text("Не удалось найти хадис. Проверь номер и попробуй снова.")
+    if arabic:
+        msg += f"🔤 *Арабский текст:*\n{arabic}\n\n"
+
+    if english:
+        msg += f"🌍 *Перевод (англ):*\n{english}\n"
+
+    if grade:
+        msg += f"\n✅ *Степень:* {grade}"
+
+    msg += f"\n\n📚 *Источник:* {NAMES.get(collection, collection)}"
+
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
