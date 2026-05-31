@@ -36,25 +36,30 @@ def get_hadith(collection, number):
     try:
         url_en = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/eng-{collection}/{number}.min.json"
         url_ar = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-{collection}/{number}.min.json"
-        
+        url_ru = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-{collection}/{number}.min.json"
+
+        english, arabic, russian = "", "", ""
+
         r_en = requests.get(url_en, timeout=15)
-        r_ar = requests.get(url_ar, timeout=15)
-        
-        english = ""
-        arabic = ""
-        
         if r_en.status_code == 200:
             hadiths = r_en.json().get("hadiths", [])
             if hadiths:
                 english = hadiths[0].get("text", "")
-        
+
+        r_ar = requests.get(url_ar, timeout=15)
         if r_ar.status_code == 200:
             hadiths = r_ar.json().get("hadiths", [])
             if hadiths:
                 arabic = hadiths[0].get("text", "")
-        
-        if arabic or english:
-            return arabic, english, ""
+
+        r_ru = requests.get(url_ru, timeout=15)
+        if r_ru.status_code == 200:
+            hadiths = r_ru.json().get("hadiths", [])
+            if hadiths:
+                russian = hadiths[0].get("text", "")
+
+        if arabic or english or russian:
+            return arabic, russian or english, ""
     except:
         pass
     return "", "", ""
