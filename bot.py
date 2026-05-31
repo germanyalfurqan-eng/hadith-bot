@@ -5,6 +5,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
 TOKEN = os.environ.get("TOKEN")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 COLLECTIONS = {
     "бухари": "bukhari",
@@ -56,6 +57,16 @@ def parse_quran_query(text):
             return int(parts[0]), int(parts[1])
     return None, None
 
+def parse_gemini_query(text):
+    """Проверяет, начинается ли сообщение с 'гемини' или 'gemini'"""
+    text_lower = text.lower().strip()
+    for prefix in ["гемини ", "гемини\n", "gemini ", "gemini\n"]:
+        if text_lower.startswith(prefix):
+            return text[len(prefix):].strip()
+    if text_lower in ["гемини", "gemini"]:
+        return ""
+    return None
+
 def get_hadith(collection, number):
     try:
         url_ar = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-{collection}/{number}.min.json"
@@ -64,14 +75,12 @@ def get_hadith(collection, number):
 
         arabic, russian, english, grade = "", "", "", ""
 
-        # Arabic
         r_ar = requests.get(url_ar, timeout=10)
         if r_ar.status_code == 200:
             hadiths = r_ar.json().get("hadiths", [])
             if hadiths:
                 arabic = hadiths[0].get("text", "")
 
-        # Russian
         r_ru = requests.get(url_ru, timeout=10)
         if r_ru.status_code == 200:
             hadiths = r_ru.json().get("hadiths", [])
@@ -79,14 +88,13 @@ def get_hadith(collection, number):
                 h = hadiths[0]
                 text = h.get("text", "")
                 text = text.replace("\\n", "\n")
-                text = re.sub(r"\[\d+\]", "", text)  # убираем [1], [2] и т.д.
+                text = re.sub(r"\[\d+\]", "", text)
                 russian = text
                 grades = h.get("grades", [])
                 if grades:
                     g = grades[0].get("grade", "")
                     grade = GRADE_MAP.get(g, g)
 
-        # English fallback
         if not russian:
             r_en = requests.get(url_en, timeout=10)
             if r_en.status_code == 200:
@@ -131,8 +139,59 @@ def get_quran_ayah(surah, ayah):
         print(f"Quran error: {e}")
     return "", ""
 
+def ask_gemini(question):
+    if not GEMINI_API_KEY:
+        return "❌ API-ключ Gemini не настроен. Добавь GEMINI_API_KEY в Railway Variables."
+
+    if not question:
+        return "❌ Напиши вопрос после слова 'гемини'. Например: гемини Что такое тафсир?"
+
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+
+        system_prompt = (
+            "Ты — полезный ассистент в исламском Телеграм-боте. "
+            "Отвечай на русском языке. "
+            "Если вопрос религиозный — придерживайся суннитского ислама, Корана и Сунны. "
+            "Будь уважителен, полезен и краток. "
+            "Если вопрос не по теме — отвечай нейтрально."
+        )
+
+        data = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": f"{system_prompt}\n\nВопрос пользователя: {question}"}
+                    ]
+                }
+            ]
+        }
+
+        r = requests.post(url, json=data, timeout=30)
+        if r.status_code == 200:
+            result = r.json()
+            answer = result["candidates"][0]["content"]["parts"][0]["text"]
+            return answer
+        else:
+            return f"❌ Ошибка Gemini: {r.status_code}"
+
+    except Exception as e:
+        return f"❌ Ошибка: {e}"
+
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
+
+    # Gemini
+    gemini_question = parse_gemini_query(text)
+    if gemini_question is not None:
+        await update.message.reply_text("🤔 Думаю...")
+        answer = ask_gemini(gemini_question)
+        if len(answer) > 4000:
+            for i in range(0, len(answer), 4000):
+                await update.message.reply_text(answer[i:i+4000])
+        else:
+            await update.message.reply_text(answer)
+        return
 
     # Коран
     surah, ayah = parse_quran_query(text)
@@ -185,18 +244,21 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Справка
     await update.message.reply_text(
-        "📚 Команды бота:\n\n"
-        "Хадисы:\n"
+        "📚 *Команды бота:*\n\n"
+        "*Хадисы:*\n"
         "бухари 1\n"
         "муслим 2564\n"
         "абу дауд 4607\n"
         "тирмизи 2516\n"
         "ибн маджа 1\n"
         "насаи 1\n\n"
-        "Коран:\n"
+        "*Коран:*\n"
         "коран 2:255\n"
         "коран 36:1\n\n"
-        "Формат: название + номер"
+        "*ИИ (Gemini):*\n"
+        "гемини твой вопрос\n\n"
+        "Формат: название + номер",
+        parse_mode="Markdown"
     )
 
 app = ApplicationBuilder().token(TOKEN).build()
