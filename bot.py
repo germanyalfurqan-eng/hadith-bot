@@ -42,7 +42,6 @@ def parse_hadith_query(text):
     return None, None
 
 def parse_quran_query(text):
-    # formats: "коран 2:255" or "коран 2 255"
     text = text.lower().strip()
     if text.startswith("коран"):
         ref = text.replace("коран", "").strip()
@@ -58,19 +57,21 @@ def parse_quran_query(text):
 
 def get_hadith(collection, number):
     try:
-        url_ru = f"https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/rus-elmirkuliev/{surah}/{ayah}.min.json"
         url_ar = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-{collection}/{number}.min.json"
+        url_ru = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-{collection}/{number}.min.json"
         url_en = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/eng-{collection}/{number}.min.json"
 
         arabic, russian, english, grade = "", "", "", ""
 
-        r_ar = requests.get(url_ar, timeout=15)
+        # Arabic
+        r_ar = requests.get(url_ar, timeout=10)
         if r_ar.status_code == 200:
             hadiths = r_ar.json().get("hadiths", [])
             if hadiths:
                 arabic = hadiths[0].get("text", "")
 
-        r_ru = requests.get(url_ru, timeout=15)
+        # Russian
+        r_ru = requests.get(url_ru, timeout=10)
         if r_ru.status_code == 200:
             hadiths = r_ru.json().get("hadiths", [])
             if hadiths:
@@ -81,8 +82,9 @@ def get_hadith(collection, number):
                     g = grades[0].get("grade", "")
                     grade = GRADE_MAP.get(g, g)
 
+        # English fallback
         if not russian:
-            r_en = requests.get(url_en, timeout=15)
+            r_en = requests.get(url_en, timeout=10)
             if r_en.status_code == 200:
                 hadiths = r_en.json().get("hadiths", [])
                 if hadiths:
@@ -105,19 +107,17 @@ def get_hadith(collection, number):
 
 def get_quran_ayah(surah, ayah):
     try:
-        # Arabic
         url_ar = f"https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/ara-quranindopak/{surah}/{ayah}.min.json"
-        # Russian (Kuliev)
-        url_ru = f"https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/rus-kuliev/{surah}/{ayah}.min.json"
+        url_ru = f"https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/rus-elmirkuliev/{surah}/{ayah}.min.json"
 
         arabic, russian = "", ""
 
-        r_ar = requests.get(url_ar, timeout=15)
+        r_ar = requests.get(url_ar, timeout=10)
         if r_ar.status_code == 200:
             data = r_ar.json()
             arabic = data.get("text", "")
 
-        r_ru = requests.get(url_ru, timeout=15)
+        r_ru = requests.get(url_ru, timeout=10)
         if r_ru.status_code == 200:
             data = r_ru.json()
             russian = data.get("text", "")
@@ -130,7 +130,7 @@ def get_quran_ayah(surah, ayah):
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
 
-    # Check if Quran query
+    # Коран
     surah, ayah = parse_quran_query(text)
     if surah and ayah:
         await update.message.reply_text("⏳ Ищу аят...")
@@ -142,17 +142,17 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        msg = f"📖 *Коран, {surah}:{ayah}*\n\n"
+        msg = f"📖 Коран, {surah}:{ayah}\n\n"
         if arabic:
-            msg += f"🔤 *Арабский текст:*\n{arabic}\n\n"
+            msg += f"🔤 Арабский текст:\n{arabic}\n\n"
         if russian:
-            msg += f"🌍 *Перевод (Кулиев):*\n{russian}\n"
-        msg += f"\n📚 *Источник:* Священный Коран, сура {surah}, аят {ayah}"
+            msg += f"🌍 Перевод (рус):\n{russian}\n"
+        msg += f"\n📚 Источник: Священный Коран, сура {surah}, аят {ayah}"
 
-        await update.message.reply_text(msg, parse_mode="Markdown")
+        await update.message.reply_text(msg)
         return
 
-    # Check if Hadith query
+    # Хадисы
     collection, number = parse_hadith_query(text)
     if collection and number:
         await update.message.reply_text("⏳ Ищу хадис...")
@@ -165,35 +165,34 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        msg = f"📖 *{NAMES.get(collection, collection)}, хадис №{number}*\n\n"
+        msg = f"📖 {NAMES.get(collection, collection)}, хадис №{number}\n\n"
 
         if arabic:
-            msg += f"🔤 *Арабский текст:*\n{arabic}\n\n"
+            msg += f"🔤 Арабский текст:\n{arabic}\n\n"
         if translation:
-            msg += f"🌍 *Перевод ({lang}):*\n{translation}\n"
+            msg += f"🌍 Перевод ({lang}):\n{translation}\n"
         if grade:
-            msg += f"\n📊 *Достоверность:* {grade}"
+            msg += f"\n📊 Достоверность: {grade}"
 
-        msg += f"\n\n📚 *Источник:* {NAMES.get(collection, collection)}, хадис №{number}"
+        msg += f"\n\n📚 Источник: {NAMES.get(collection, collection)}, хадис №{number}"
 
-        await update.message.reply_text(msg, parse_mode="Markdown")
+        await update.message.reply_text(msg)
         return
 
-    # Help message
+    # Справка
     await update.message.reply_text(
-        "📚 *Команды бота:*\n\n"
-        "*Хадисы:*\n"
+        "📚 Команды бота:\n\n"
+        "Хадисы:\n"
         "бухари 1\n"
         "муслим 2564\n"
         "абу дауд 4607\n"
         "тирмизи 2516\n"
         "ибн маджа 1\n"
         "насаи 1\n\n"
-        "*Коран:*\n"
+        "Коран:\n"
         "коран 2:255\n"
         "коран 36:1\n\n"
-        "Формат: название + номер",
-        parse_mode="Markdown"
+        "Формат: название + номер"
     )
 
 app = ApplicationBuilder().token(TOKEN).build()
