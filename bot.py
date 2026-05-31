@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
@@ -76,7 +77,10 @@ def get_hadith(collection, number):
             hadiths = r_ru.json().get("hadiths", [])
             if hadiths:
                 h = hadiths[0]
-                russian = h.get("text", "").replace("\\n", "\n")
+                text = h.get("text", "")
+                text = text.replace("\\n", "\n")
+                text = re.sub(r"\[\d+\]", "", text)  # убираем [1], [2] и т.д.
+                russian = text
                 grades = h.get("grades", [])
                 if grades:
                     g = grades[0].get("grade", "")
