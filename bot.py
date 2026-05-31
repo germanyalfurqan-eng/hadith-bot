@@ -33,32 +33,16 @@ def parse_query(text):
     return None, None
 
 def get_hadith(collection, number):
-    # Try hadith-api (no key needed)
     try:
-        url = f"https://hadith-api.vercel.app/api/hadith/{collection}/{number}"
-        r = requests.get(url, timeout=10)
+        url = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/eng-{collection}/{number}.min.json"
+        r = requests.get(url, timeout=15)
         if r.status_code == 200:
             data = r.json()
-            arabic = data.get("arabic", "")
-            english = data.get("english", {}).get("text", "")
-            if arabic or english:
-                return arabic, english, ""
-    except:
-        pass
-
-    # Try cdn.jsdelivr.net hadith database
-    try:
-        url = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/eng-{collection}/{number}.json"
-        r = requests.get(url, timeout=10)
-        if r.status_code == 200:
-            data = r.json()
-            hadith = data.get("hadith", {})
-            arabic = hadith.get("arabic", "")
-            english = hadith.get("text", "")
+            english = data.get("hadith", {}).get("text", "")
+            arabic = data.get("hadith", {}).get("arabic", "")
             return arabic, english, ""
     except:
         pass
-
     return "", "", ""
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
