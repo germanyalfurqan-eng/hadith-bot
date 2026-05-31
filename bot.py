@@ -38,9 +38,12 @@ def get_hadith(collection, number):
         r = requests.get(url, timeout=15)
         if r.status_code == 200:
             data = r.json()
-            english = data.get("hadith", {}).get("text", "")
-            arabic = data.get("hadith", {}).get("arabic", "")
-            return arabic, english, ""
+            hadiths = data.get("hadiths", [])
+            if hadiths:
+                h = hadiths[0]
+                english = h.get("text", "")
+                arabic = h.get("arabic", "")
+                return arabic, english, ""
     except:
         pass
     return "", "", ""
