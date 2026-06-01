@@ -273,7 +273,11 @@ def get_hadith(collection, number):
 
 def get_ahmad_hadith(number):
     try:
-        url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/ahmad_1.json"
+        # Определяем в каком томе искать
+        if number <= 561:
+            url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/ahmad_1.json"
+        else:
+            url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/ahmad_2.json"
         r = requests.get(url, timeout=10)
         if r.status_code == 200:
             data = r.json()
