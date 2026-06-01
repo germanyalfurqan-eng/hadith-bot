@@ -527,23 +527,27 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await update.message.reply_text("❌ Не найдено в реестре.")
                 return
 
-    # Улучшение аудио
-    if is_owner(update) and text and text.lower() == "улучшить":
+    # Конвертация аудио в MP3
+    if is_owner(update) and text and text.lower().startswith("бахни mp3"):
         if update.message.reply_to_message and (update.message.reply_to_message.audio or update.message.reply_to_message.voice):
-            await update.message.reply_text("🎧 Обрабатываю аудио...")
+            await update.message.reply_text("🎧 Конвертирую...")
             replied = update.message.reply_to_message
             file_obj = replied.audio or replied.voice
+            
+            artist = replied.sender_chat.title if replied.sender_chat else (replied.from_user.full_name if replied.from_user else "Unknown")
+            title = text[10:].strip() if len(text) > 10 else datetime.now().strftime("%d.%m.%Y %H:%M")
+            
             file = await file_obj.get_file()
             input_path = f"/tmp/{file.file_id}.ogg"
-            output_path = f"/tmp/{file.file_id}_clean.mp3"
+            output_path = f"/tmp/{file.file_id}.mp3"
             await file.download_to_drive(input_path)
             
-            if enhance_audio(input_path, output_path):
-                await update.message.reply_audio(audio=open(output_path, "rb"), title="Чистое аудио")
+            if convert_to_mp3(input_path, output_path, artist=artist, title=title):
+                await update.message.reply_audio(audio=open(output_path, "rb"), title=title, performer=artist)
             else:
-                await update.message.reply_text("❌ Не удалось обработать аудио.")
+                await update.message.reply_text("❌ Не удалось конвертировать.")
         else:
-            await update.message.reply_text("❌ Ответь на аудио или войс командой 'улучшить'.")
+            await update.message.reply_text("❌ Ответь на аудио или войс командой 'бахни mp3'.")
         return
 
     if not text: return
