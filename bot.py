@@ -388,19 +388,21 @@ def search_similar_hadith(arabic_text):
 def ask_ai(prompt, system=None):
     # Список моделей от лучшей к запасной
     модели = [
-        "nvidia/nemotron-3-super-120b-a12b:free",
-        "google/gemma-4-31b-it:free",
-        "openai/gpt-oss-120b:free",
-        "openrouter/free"
-    ]
+    "nousresearch/hermes-3-405b-instruct:free",   # 1. Самая умная (405B!)
+    "meta-llama/llama-3.3-70b-instruct:free",     # 2. Надёжная 70B
+    "nvidia/nemotron-3-super-120b-a12b:free",     # 3. Твоя старая
+    "openrouter/free"                             # 4. Запасной
+]
     
     # Названия моделей для подписи
-    имена = {
-        "nvidia/nemotron-3-super-120b-a12b:free": "🧠 Nemotron 3 (NVIDIA)",
-        "google/gemma-4-31b-it:free": "🦊 Gemma 4 (Google)",
-        "openai/gpt-oss-120b:free": "🤖 GPT-OSS (OpenAI)",
-        "openrouter/free": "🔄 Auto (OpenRouter)"
-    }
+имена = {
+    "nousresearch/hermes-3-405b-instruct:free": "🧠 Hermes 3 405B (Nous)",
+    "meta-llama/llama-3.3-70b-instruct:free": "🦙 Llama 3.3 (Meta)",
+    "nvidia/nemotron-3-super-120b-a12b:free": "🧠 Nemotron 3 (NVIDIA)",
+    "google/gemma-4-31b-it:free": "🦊 Gemma 4 (Google)",
+    "openai/gpt-oss-120b:free": "🤖 GPT-OSS (OpenAI)",
+    "openrouter/free": "🔄 Auto (OpenRouter)"
+}
     
     if not OPENROUTER_API_KEY:
         return "❌ API-ключ не настроен."
