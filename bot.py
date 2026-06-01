@@ -168,10 +168,8 @@ def enhance_audio(input_path, output_path):
 
         data, rate = sf.read(temp_wav)
 
-        # noisereduce — убираем шум
         reduced = nr.reduce_noise(y=data, sr=rate)
 
-        # Сохраняем
         out_wav = output_path + ".wav"
         sf.write(out_wav, reduced, rate)
 
