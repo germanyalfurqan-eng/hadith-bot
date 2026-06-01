@@ -15,6 +15,12 @@ COLLECTIONS = {
     "тирмизи": "tirmidhi",
     "ибн маджа": "ibnmajah",
     "насаи": "nasai",
+    "муватта": "malik",
+    "ахмад": "ahmad",
+    "дарими": "darimi",
+    "байхаки": "bayhaqi",
+    "хаким": "hakim",
+    "адаб": "adab",
 }
 
 NAMES = {
@@ -24,6 +30,12 @@ NAMES = {
     "tirmidhi": "Сунан ат-Тирмизи",
     "ibnmajah": "Сунан Ибн Маджа",
     "nasai": "Сунан ан-Насаи",
+    "malik": "Муватта имама Малика",
+    "ahmad": "Муснад имама Ахмада",
+    "darimi": "Сунан ад-Дарими",
+    "bayhaqi": "Сунан аль-Байхаки",
+    "hakim": "Мустадрак аль-Хакима",
+    "adab": "Аль-Адаб аль-Муфрад",
 }
 
 GRADE_MAP = {
@@ -173,12 +185,10 @@ def search_hadith(query):
         if not html:
             return []
 
-        # Убираем HTML-теги
         text_only = re.sub(r'<[^>]+>', ' ', html)
         text_only = unescape(text_only)
         text_only = re.sub(r'\s+', ' ', text_only)
 
-        # Разбиваем по разделителю
         blocks = text_only.split("--------------")
 
         results = []
@@ -187,13 +197,11 @@ def search_hadith(query):
             if not block:
                 continue
 
-            # Извлекаем номер и текст хадиса
             match = re.match(r'^\d+\s*-\s*(.*)', block)
             if not match:
                 continue
             hadith_text = match.group(1).strip()
 
-            # Извлекаем метаданные
             rawi = ""
             muhaddith = ""
             source = ""
@@ -222,7 +230,6 @@ def search_hadith(query):
             if m:
                 grade = m.group(1).strip()
 
-            # Убираем метаданные из текста хадиса
             for marker in ["الراوي:", "المحدث:", "المصدر:"]:
                 if marker in hadith_text:
                     hadith_text = hadith_text.split(marker)[0].strip()
@@ -270,7 +277,6 @@ def ask_gemini(question):
         return f"❌ Ошибка: {e}"
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Проверяем что есть текст сообщения
     if not update.message or not update.message.text:
         return
 
@@ -362,9 +368,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text.lower() in ["помощь", "справка", "команды", "хелп", "help", "/start"]:
         await update.message.reply_text(
             "📚 *Команды бота:*\n\n"
-            "*Хадисы (6 сборников):*\n"
+            "*Хадисы (12 сборников):*\n"
             "бухари 1 | муслим 1 | абу дауд 1\n"
-            "тирмизи 1 | ибн маджа 1 | насаи 1\n\n"
+            "тирмизи 1 | ибн маджа 1 | насаи 1\n"
+            "муватта 1 | ахмад 1 | дарими 1\n"
+            "байхаки 1 | хаким 1 | адаб 1\n\n"
             "*Коран:*\n"
             "коран 2:255\n\n"
             "*Поиск по базе (340 000 хадисов):*\n"
