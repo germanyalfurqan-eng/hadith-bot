@@ -1,5 +1,6 @@
 import os
 import re
+import random
 import requests
 from html import unescape
 from telegram import Update
@@ -38,6 +39,12 @@ NAMES = {
     "adab": "Аль-Адаб аль-Муфрад",
 }
 
+# Примерные максимальные номера хадисов для случайного выбора
+MAX_HADITH = {
+    "bukhari": 7563,
+    "muslim": 3033,
+}
+
 GRADE_MAP = {
     "Sahih": "Сахих (достоверный) ✅",
     "Hasan": "Хасан (хороший) 🟡",
@@ -49,6 +56,15 @@ GRADE_MAP = {
 
 def parse_hadith_query(text):
     text = text.lower().strip()
+    # Проверяем специальные команды
+    if text == "случайный":
+        return "random", None
+    if text == "случайный бухари":
+        return "random_bukhari", None
+    if text == "случайный муслим":
+        return "random_muslim", None
+    if text == "случайный коран":
+        return "random_quran", None
     for ru, en in COLLECTIONS.items():
         if text.startswith(ru):
             num = text.replace(ru, "").strip()
@@ -151,6 +167,22 @@ def get_hadith(collection, number):
         print(f"Error in get_hadith: {e}")
     return "", "", "", ""
 
+def get_random_hadith(collection=None):
+    """Получает случайный хадис из указанного сборника или случайного из bukhari/muslim"""
+    if collection is None:
+        collection = random.choice(["bukhari", "muslim"])
+    
+    max_num = MAX_HADITH.get(collection, 1000)
+    
+    # Пробуем до 10 раз найти существующий хадис
+    for _ in range(10):
+        num = random.randint(1, max_num)
+        arabic, translation, lang, grade = get_hadith(collection, num)
+        if arabic or translation:
+            return collection, num, arabic, translation, lang, grade
+    
+    return None, None, "", "", "", ""
+
 def get_quran_ayah(surah, ayah):
     try:
         url_ar = f"https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/ara-quranindopak/{surah}/{ayah}.min.json"
@@ -172,6 +204,28 @@ def get_quran_ayah(surah, ayah):
     except Exception as e:
         print(f"Quran error: {e}")
     return "", ""
+
+def get_random_quran():
+    """Случайный аят из Корана"""
+    surah = random.randint(1, 114)
+    # Приблизительное количество аятов в сурах
+    ayah_counts = {
+        1:7, 2:286, 3:200, 4:176, 5:120, 6:165, 7:206, 8:75, 9:129, 10:109,
+        11:123, 12:111, 13:43, 14:52, 15:99, 16:128, 17:111, 18:110, 19:98, 20:135,
+        21:112, 22:78, 23:118, 24:64, 25:77, 26:227, 27:93, 28:88, 29:69, 30:60,
+        31:34, 32:30, 33:73, 34:54, 35:45, 36:83, 37:182, 38:88, 39:75, 40:85,
+        41:54, 42:53, 43:89, 44:59, 45:37, 46:35, 47:38, 48:29, 49:18, 50:45,
+        51:60, 52:49, 53:62, 54:55, 55:78, 56:96, 57:29, 58:22, 59:24, 60:13,
+        61:14, 62:11, 63:11, 64:18, 65:12, 66:12, 67:30, 68:52, 69:52, 70:44,
+        71:28, 72:28, 73:20, 74:56, 75:40, 76:31, 77:50, 78:40, 79:46, 80:42,
+        81:29, 82:19, 83:36, 84:25, 85:22, 86:17, 87:19, 88:26, 89:30, 90:20,
+        91:15, 92:21, 93:11, 94:8, 95:8, 96:19, 97:5, 98:8, 99:8, 100:11,
+        101:11, 102:8, 103:3, 104:9, 105:5, 106:4, 107:7, 108:3, 109:6, 110:3,
+        111:5, 112:4, 113:5, 114:6
+    }
+    ayah = random.randint(1, ayah_counts.get(surah, 10))
+    arabic, russian = get_quran_ayah(surah, ayah)
+    return surah, ayah, arabic, russian
 
 def search_hadith(query):
     try:
@@ -342,27 +396,99 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg)
         return
 
-    # Хадисы
+    # Хадисы (включая случайные)
     collection, number = parse_hadith_query(text)
-    if collection and number:
-        await update.message.reply_text("⏳ Ищу хадис...")
-        arabic, translation, lang, grade = get_hadith(collection, number)
-        if not arabic and not translation:
-            await update.message.reply_text(
-                f"❌ Хадис {NAMES.get(collection, collection)} №{number} не найден.\n"
-                "Проверь номер и попробуй снова."
-            )
+    if collection:
+        # Случайный хадис
+        if collection == "random":
+            await update.message.reply_text("🎲 Ищу случайный хадис...")
+            coll, num, arabic, translation, lang, grade = get_random_hadith()
+            if coll:
+                msg = f"🎲 *Случайный хадис*\n📖 {NAMES.get(coll, coll)}, хадис №{num}\n\n"
+                if arabic:
+                    msg += f"🔤 Арабский текст:\n{arabic[:500]}\n\n"
+                if translation:
+                    msg += f"🌍 Перевод ({lang}):\n{translation[:1500]}\n"
+                if grade:
+                    msg += f"\n📊 Достоверность: {grade}"
+                msg += f"\n\n📚 Источник: {NAMES.get(coll, coll)}, хадис №{num}"
+                await update.message.reply_text(msg, parse_mode="Markdown")
+            else:
+                await update.message.reply_text("❌ Не удалось найти хадис. Попробуй ещё раз.")
             return
-        msg = f"📖 {NAMES.get(collection, collection)}, хадис №{number}\n\n"
-        if arabic:
-            msg += f"🔤 Арабский текст:\n{arabic[:500]}\n\n"
-        if translation:
-            msg += f"🌍 Перевод ({lang}):\n{translation[:1500]}\n"
-        if grade:
-            msg += f"\n📊 Достоверность: {grade}"
-        msg += f"\n\n📚 Источник: {NAMES.get(collection, collection)}, хадис №{number}"
-        await update.message.reply_text(msg)
-        return
+
+        # Случайный бухари
+        if collection == "random_bukhari":
+            await update.message.reply_text("🎲 Ищу случайный хадис из Бухари...")
+            coll, num, arabic, translation, lang, grade = get_random_hadith("bukhari")
+            if coll:
+                msg = f"🎲 *Случайный хадис*\n📖 {NAMES.get(coll, coll)}, хадис №{num}\n\n"
+                if arabic:
+                    msg += f"🔤 Арабский текст:\n{arabic[:500]}\n\n"
+                if translation:
+                    msg += f"🌍 Перевод ({lang}):\n{translation[:1500]}\n"
+                if grade:
+                    msg += f"\n📊 Достоверность: {grade}"
+                msg += f"\n\n📚 Источник: {NAMES.get(coll, coll)}, хадис №{num}"
+                await update.message.reply_text(msg, parse_mode="Markdown")
+            else:
+                await update.message.reply_text("❌ Не удалось найти хадис. Попробуй ещё раз.")
+            return
+
+        # Случайный муслим
+        if collection == "random_muslim":
+            await update.message.reply_text("🎲 Ищу случайный хадис из Муслима...")
+            coll, num, arabic, translation, lang, grade = get_random_hadith("muslim")
+            if coll:
+                msg = f"🎲 *Случайный хадис*\n📖 {NAMES.get(coll, coll)}, хадис №{num}\n\n"
+                if arabic:
+                    msg += f"🔤 Арабский текст:\n{arabic[:500]}\n\n"
+                if translation:
+                    msg += f"🌍 Перевод ({lang}):\n{translation[:1500]}\n"
+                if grade:
+                    msg += f"\n📊 Достоверность: {grade}"
+                msg += f"\n\n📚 Источник: {NAMES.get(coll, coll)}, хадис №{num}"
+                await update.message.reply_text(msg, parse_mode="Markdown")
+            else:
+                await update.message.reply_text("❌ Не удалось найти хадис. Попробуй ещё раз.")
+            return
+
+        # Случайный аят
+        if collection == "random_quran":
+            await update.message.reply_text("🎲 Ищу случайный аят...")
+            surah, ayah, arabic, russian = get_random_quran()
+            if arabic or russian:
+                msg = f"🎲 *Случайный аят*\n📖 Коран, {surah}:{ayah}\n\n"
+                if arabic:
+                    msg += f"🔤 Арабский текст:\n{arabic[:500]}\n\n"
+                if russian:
+                    msg += f"🌍 Перевод (рус):\n{russian[:1000]}\n"
+                msg += f"\n📚 Источник: Священный Коран, сура {surah}, аят {ayah}"
+                await update.message.reply_text(msg, parse_mode="Markdown")
+            else:
+                await update.message.reply_text("❌ Не удалось найти аят. Попробуй ещё раз.")
+            return
+
+        # Обычный хадис по номеру
+        if number:
+            await update.message.reply_text("⏳ Ищу хадис...")
+            arabic, translation, lang, grade = get_hadith(collection, number)
+            if not arabic and not translation:
+                await update.message.reply_text(
+                    f"❌ Хадис {NAMES.get(collection, collection)} №{number} не найден.\n"
+                    "Проверь номер и попробуй снова."
+                )
+                return
+            msg = f"📖 {NAMES.get(collection, collection)}, хадис №{number}\n\n"
+            if arabic:
+                msg += f"🔤 Арабский текст:\n{arabic[:500]}\n\n"
+            if translation:
+                msg += f"🌍 Перевод ({lang}):\n{translation[:1500]}\n"
+            if grade:
+                msg += f"\n📊 Достоверность: {grade}"
+            msg += f"\n\n📚 Источник: {NAMES.get(collection, collection)}, хадис №{number}"
+            await update.message.reply_text(msg)
+            return
 
     # Справка
     if text.lower() in ["помощь", "справка", "команды", "хелп", "help", "/start"]:
@@ -373,6 +499,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "тирмизи 1 | ибн маджа 1 | насаи 1\n"
             "муватта 1 | ахмад 1 | дарими 1\n"
             "байхаки 1 | хаким 1 | адаб 1\n\n"
+            "*Случайный хадис/аят:*\n"
+            "случайный — из Бухари или Муслима\n"
+            "случайный бухари | случайный муслим\n"
+            "случайный коран\n\n"
             "*Коран:*\n"
             "коран 2:255\n\n"
             "*Поиск по базе (340 000 хадисов):*\n"
