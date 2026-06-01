@@ -554,7 +554,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if results:
                     msg = f"🔍 *«{reg_cmd}»:*\n\n" + "\n".join([f"#{e['id']} {'🟢' if e['status']=='готово' else '🔴'} {e['description'][:100]}" for e in results])
                     await send_long(update, msg, "Markdown")
-                                else:
+                else:
                     await update.message.reply_text("❌ Не найдено в реестре.")
                 return
 
