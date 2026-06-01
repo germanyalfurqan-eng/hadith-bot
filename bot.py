@@ -156,31 +156,31 @@ def ai_describe_media(text_hint=""):
 def enhance_audio(input_path, output_path):
     try:
         from pydub import AudioSegment
-        import pyloudnorm as pyln
-        import numpy as np
+        from deepfilternet import enhance
         import soundfile as sf
         import os
 
+        # Конвертируем в wav
         sound = AudioSegment.from_file(input_path)
         sound = sound.set_frame_rate(16000).set_channels(1)
         temp_wav = input_path + ".temp.wav"
         sound.export(temp_wav, format="wav")
 
+        # Читаем wav
         data, rate = sf.read(temp_wav)
 
-        threshold = 0.02
-        data[np.abs(data) < threshold] = 0
+        # DeepFilterNet — убираем шум
+        enhanced = enhance(model="deepfilternet", audio=data, sr=rate)
 
-        meter = pyln.Meter(rate)
-        loudness = meter.integrated_loudness(data)
-        data = pyln.normalize.loudness(data, loudness, -16.0)
-
+        # Сохраняем результат
         out_wav = output_path + ".wav"
-        sf.write(out_wav, data, rate)
+        sf.write(out_wav, enhanced, rate)
 
+        # Конвертируем в mp3
         result = AudioSegment.from_wav(out_wav)
         result.export(output_path, format="mp3", bitrate="64k")
 
+        # Чистим
         os.remove(temp_wav)
         os.remove(out_wav)
 
