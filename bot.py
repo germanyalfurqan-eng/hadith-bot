@@ -173,9 +173,13 @@ def is_owner(update: Update) -> bool:
     sender_chat_id = 0
     if update.message and update.message.sender_chat:
         sender_chat_id = update.message.sender_chat.id
-    if update.message and update.message.sender_chat and sender_chat_id != OWNER_CHANNEL_ID:
-        return False
-    return user_id == OWNER_ID or sender_chat_id == OWNER_CHANNEL_ID
+    
+    # Если сообщение от твоего канала (-1001660979432) - разрешаем
+    if sender_chat_id == OWNER_CHANNEL_ID:   # <-- здесь используется твой ID
+        return True
+    
+    # Если сообщение от твоего личного аккаунта (131827895) - разрешаем
+    return user_id == OWNER_ID
 
 def parse_hadith_query(text):
     text = text.lower().strip()
