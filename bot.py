@@ -15,9 +15,9 @@ GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 OWNER_ID = 131827895
 OWNER_CHANNEL_ID = -1001660979432
 LOG_CHAT_ID = -1003480426073
-REGISTRY_FILE = "registry.json"
 GITHUB_REPO = "germanyalfurqan-eng/hadith-bot"
 MEMORY_FILE = "memory.json"
+REGISTRY_FILE = "registry.json"
 
 COLLECTIONS = {
     "бухари": "bukhari", "муслим": "muslim", "абу дауд": "abudawud",
@@ -34,7 +34,13 @@ GRADE_MAP = {
     "Mawdu": "Мавду' ❌", "Hasan Sahih": "Хасан Сахих ✅", "Sahih Hasan": "Сахих Хасан ✅",
 }
 
+# Временное хранилище ожидающих подтверждения правок
+pending_edits = {}
+
 # ─── ПАМЯТЬ ───────────────────────────────────────────────
+
+def today():
+    return datetime.now().strftime("%d.%m.%Y")
 
 def load_memory():
     try:
@@ -43,7 +49,15 @@ def load_memory():
             timeout=5
         )
         if r.status_code == 200:
-            return r.json()
+            data = r.json()
+            # Поддержка старого формата (список строк)
+            result = []
+            for item in data:
+                if isinstance(item, str):
+                    result.append({"date": "—", "text": item})
+                else:
+                    result.append(item)
+            return result
     except:
         pass
     return []
@@ -62,6 +76,34 @@ def save_memory(data):
         requests.put(api_url, headers=headers, json=payload, timeout=10)
     except:
         pass
+
+def format_memory_item(text):
+    """AI структурирует факт перед сохранением"""
+    if not OPENROUTER_API_KEY:
+        return text
+    try:
+        prompt = f"""Перефразируй этот факт кратко и структурированно для базы знаний. 
+Сохрани всю важную информацию включая арабский текст если есть.
+Отвечай только самим фактом без пояснений и вступлений.
+
+Факт: {text}"""
+        r = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "model": "google/gemini-2.0-flash-001",
+                "messages": [
+                    {"role": "system", "content": "Ты — помощник для структурирования заметок. Отвечай только самим фактом, кратко и чётко."},
+                    {"role": "user", "content": prompt}
+                ]
+            },
+            timeout=15
+        )
+        if r.status_code == 200:
+            return r.json()["choices"][0]["message"]["content"].strip()
+    except:
+        pass
+    return text
 
 # ─── РЕЕСТР ───────────────────────────────────────────────
 
@@ -346,7 +388,7 @@ def ask_ai_with_memory(prompt):
     memory = load_memory()
     system = "Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском."
     if memory:
-        memory_text = "\n".join([f"- {m}" for m in memory])
+        memory_text = "\n".join([f"- [{m.get('date','—')}] {m.get('text','')}" for m in memory])
         system += f"\n\nЧто ты знаешь о владельце и контексте:\n{memory_text}"
     return ask_ai(prompt, system)
 
@@ -386,6 +428,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_type = update.effective_chat.type
     text = update.message.text or update.message.caption or ""
     text = text.strip()
+    chat_id = update.effective_chat.id
 
     if chat_type == "private" and not is_owner(update): return
 
@@ -447,14 +490,43 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_owner(update):
         t_lower = text.lower().strip()
 
+        # Подтверждение правки памяти
+        if chat_id in pending_edits:
+            if t_lower in ["да", "сохранить", "ок", "ok", "yes"]:
+                pending = pending_edits.pop(chat_id)
+                memory = load_memory()
+                idx = pending["index"]
+                if 0 <= idx < len(memory):
+                    memory[idx]["text"] = pending["new_text"]
+                    memory[idx]["date"] = today()
+                    save_memory(memory)
+                    await update.message.reply_text(f"✅ Память #{idx+1} обновлена.")
+                return
+            elif t_lower in ["нет", "не надо", "отмена", "no"]:
+                pending_edits.pop(chat_id)
+                await update.message.reply_text("❌ Правка отменена.")
+                return
+            else:
+                # Продолжаем уточнять правку
+                pending = pending_edits[chat_id]
+                await update.message.reply_text("🔄 Переделываю...")
+                new_text = format_memory_item(f"{pending['original']} — {text}")
+                pending_edits[chat_id]["new_text"] = new_text
+                await update.message.reply_text(
+                    f"📝 Новый вариант:\n\n{new_text}\n\nСохранить? (да/нет)"
+                )
+                return
+
         # Сохранить в память
         if t_lower.startswith("запомни:") or t_lower.startswith("запомни "):
-            fact = text[8:].strip() if t_lower.startswith("запомни:") else text[8:].strip()
+            fact = text[8:].strip()
             if fact:
+                await update.message.reply_text("🧠 Структурирую...")
+                formatted = format_memory_item(fact)
                 memory = load_memory()
-                memory.append(fact)
+                memory.append({"date": today(), "text": formatted})
                 save_memory(memory)
-                await update.message.reply_text(f"🧠 Запомнил:\n{fact}")
+                await update.message.reply_text(f"✅ Запомнил [{today()}]:\n{formatted}")
             return
 
         # Показать память
@@ -463,8 +535,59 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not memory:
                 await update.message.reply_text("🧠 Память пуста.")
             else:
-                msg = "🧠 *Что я знаю:*\n\n" + "\n".join([f"{i+1}. {m}" for i, m in enumerate(memory)])
+                msg = "🧠 *Что я знаю:*\n\n"
+                for i, m in enumerate(memory):
+                    msg += f"*{i+1}.* [{m.get('date','—')}] {m.get('text','')}\n\n"
                 await send_long(update, msg, "Markdown")
+            return
+
+        # Удалить из памяти по номеру
+        if t_lower.startswith("удали память "):
+            val = text[13:].strip()
+            memory = load_memory()
+            if val.isdigit():
+                idx = int(val) - 1
+                if 0 <= idx < len(memory):
+                    removed = memory.pop(idx)
+                    save_memory(memory)
+                    await update.message.reply_text(f"🗑 Удалено:\n{removed.get('text','')}")
+                else:
+                    await update.message.reply_text("❌ Такого номера нет.")
+            else:
+                # Удалить по ключевому слову
+                before = len(memory)
+                memory = [m for m in memory if val.lower() not in m.get("text", "").lower()]
+                if len(memory) < before:
+                    save_memory(memory)
+                    await update.message.reply_text(f"🗑 Удалено {before - len(memory)} записей содержащих «{val}».")
+                else:
+                    await update.message.reply_text(f"❌ Не найдено записей с «{val}».")
+            return
+
+        # Исправить память по номеру
+        if t_lower.startswith("исправь память "):
+            rest = text[15:].strip()
+            parts = rest.split(":", 1)
+            if len(parts) == 2 and parts[0].strip().isdigit():
+                idx = int(parts[0].strip()) - 1
+                instruction = parts[1].strip()
+                memory = load_memory()
+                if 0 <= idx < len(memory):
+                    original = memory[idx].get("text", "")
+                    await update.message.reply_text("🔄 Переделываю...")
+                    new_text = format_memory_item(f"{original} — {instruction}")
+                    pending_edits[chat_id] = {
+                        "index": idx,
+                        "original": original,
+                        "new_text": new_text
+                    }
+                    await update.message.reply_text(
+                        f"📝 Было:\n{original}\n\n✏️ Стало:\n{new_text}\n\nСохранить? (да/нет)"
+                    )
+                else:
+                    await update.message.reply_text("❌ Такого номера нет.")
+            else:
+                await update.message.reply_text("❌ Формат: исправь память 2: сделай короче")
             return
 
         # Очистить память
@@ -611,8 +734,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*Случайные:*\nслучайный | случайный бухари | случайный муслим | случайный коран\n\n"
             "*Коран:*\nкоран 2:255\n\n"
             "*Поиск:*\nискать بدعة\n\n"
-            "*Ботяра (владелец):*\nботяра вопрос\nОтвет на сообщение + ботяра переведи/источник\n\n"
-            "*Память (владелец):*\nзапомни: текст\nпамять | очистить память\n\n"
+            "*Ботяра (владелец):*\nботяра вопрос\nОтвет на сообщение бота → автоматически AI\n\n"
+            "*Память (владелец):*\n"
+            "запомни: текст\n"
+            "память\n"
+            "удали память 2\n"
+            "удали память ключевое слово\n"
+            "исправь память 2: сделай короче\n"
+            "очистить память\n\n"
             "*Реестр (владелец):*\nПерешли файл → сохранится\nреестр | ожидает | сделано 1 | удали 1",
             parse_mode="Markdown"
         )
