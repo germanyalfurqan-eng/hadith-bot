@@ -30,14 +30,7 @@ GRADE_MAP = {
     "Mawdu": "Мавду' ❌", "Hasan Sahih": "Хасан Сахих ✅", "Sahih Hasan": "Сахих Хасан ✅",
 }
 
-def send_long(update, text, parse_mode=None):
-    """Отправляет длинное сообщение, разбивая на части"""
-    for i in range(0, len(text), 4000):
-        chunk = text[i:i+4000]
-        if parse_mode:
-            await update.message.reply_text(chunk, parse_mode=parse_mode)
-        else:
-            await update.message.reply_text(chunk)
+async def send_long(update, text, parse_mode=None):
 
 def is_owner(update: Update) -> bool:
     user_id = update.effective_user.id if update.effective_user else 0
