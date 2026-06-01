@@ -34,7 +34,7 @@ GRADE_MAP = {
     "Sahih": "Сахих ✅", "Hasan": "Хасан 🟡", "Daif": "Да'иф ⚠️",
     "Mawdu": "Мавду' ❌", "Hasan Sahih": "Хасан Сахих ✅", "Sahih Hasan": "Сахих Хасан ✅",
 }
-AI_MODEL = "openrouter/free"
+AI_MODEL = "google/gemini-2.0-flash-exp:free"
 
 pending_edits = {}
 
