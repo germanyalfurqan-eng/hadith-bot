@@ -170,33 +170,74 @@ def search_hadith(query):
         if not html:
             return []
 
-        # Парсим HTML
         results = []
-        # Находим все хадисы
-        hadith_blocks = html.split("--------------\n")
-
-        for block in hadith_blocks[:5]:  # первые 5
-            # Текст хадиса
-            text_match = re.search(r'<div class="hadith".*?>(.*?)</div>', block, re.DOTALL)
-            # Инфо
-            rawi_match = re.search(r'<span class="info-subtitle">الراوي:<\/span>\s*(.*?)<\/span>', block)
-            muhaddith_match = re.search(r'<span class="info-subtitle">المحدث:<\/span>\s*(.*?)\s*<', block)
-            source_match = re.search(r'<span class="info-subtitle">المصدر:<\/span>\s*(.*?)\s*<', block)
-            page_match = re.search(r'<span class="info-subtitle">الصفحة أو الرقم:<\/span>\s*(.*?)\s*<', block)
-            grade_match = re.search(r'<span class="info-subtitle">خلاصة حكم المحدث:<\/span>\s*<span[^>]*>(.*?)<\/span>', block)
-
-            if text_match:
-                text = unescape(re.sub(r'<[^>]+>', '', text_match.group(1))).strip()
-                rawi = unescape(rawi_match.group(1)).strip() if rawi_match else ""
-                muhaddith = unescape(muhaddith_match.group(1)).strip() if muhaddith_match else ""
-                source = unescape(source_match.group(1)).strip() if source_match else ""
-                page = unescape(page_match.group(1)).strip() if page_match else ""
-                grade = unescape(grade_match.group(1)).strip() if grade_match else ""
-
-                # Очищаем пустые поля
-                rawi = rawi if rawi != "-" else ""
-                muhaddith = muhaddith if muhaddith != "-" else ""
-
+        # Убираем HTML-теги кроме разделителей, затем разбиваем
+        # Сначала заменим разделитель на уникальный маркер
+        html = html.replace("--------------\n", "|||SPLIT|||")
+        
+        # Убираем все HTML-теги
+        text_only = re.sub(r'<[^>]+>', ' ', html)
+        text_only = unescape(text_only)
+        
+        # Разбиваем по маркеру
+        blocks = text_only.split("|||SPLIT|||")
+        
+        for block in blocks[:5]:
+            block = block.strip()
+            if not block:
+                continue
+            
+            # Убираем лишние пробелы
+            block = re.sub(r'\s+', ' ', block).strip()
+            
+            # Извлекаем поля
+            # Номер и текст
+            match = re.match(r'^\d+\s*-\s*(.*)', block)
+            text = match.group(1) if match else block
+            
+            # Ищем поля в оставшемся тексте
+            rawi = ""
+            muhaddith = ""
+            source = ""
+            page = ""
+            grade = ""
+            
+            # الراوي
+            m = re.search(r'الراوي:\s*([^\n]+?)(?:\s*المحدث:|$)', text_only)
+            if m:
+                rawi = m.group(1).strip()
+                if rawi == "-":
+                    rawi = ""
+            
+            # المحدث
+            m = re.search(r'المحدث:\s*([^\n]+?)(?:\s*المصدر:|$)', text_only)
+            if m:
+                muhaddith = m.group(1).strip()
+            
+            # المصدر
+            m = re.search(r'المصدر:\s*([^\n]+?)(?:\s*الصفحة|$)', text_only)
+            if m:
+                source = m.group(1).strip()
+            
+            # الصفحة أو الرقم
+            m = re.search(r'الصفحة أو الرقم:\s*([^\n]+?)(?:\s*خلاصة|$)', text_only)
+            if m:
+                page = m.group(1).strip()
+            
+            # خلاصة حكم المحدث
+            m = re.search(r'خلاصة حكم المحدث:\s*([^\n]+?)(?:\s*--------------|$)', text_only)
+            if m:
+                grade = m.group(1).strip()
+            
+            # Очищаем текст хадиса от метаданных
+            # Берём только первую часть до الراوي
+            if text:
+                # Убираем всё после первой метки если она есть в тексте
+                for marker in ["الراوي:", "المحدث:", "المصدر:"]:
+                    if marker in text:
+                        text = text.split(marker)[0].strip()
+            
+            if text and len(text) > 10:
                 results.append({
                     "text": text,
                     "rawi": rawi,
@@ -205,7 +246,7 @@ def search_hadith(query):
                     "page": page,
                     "grade": grade,
                 })
-
+        
         return results
     except Exception as e:
         print(f"Search error: {e}")
