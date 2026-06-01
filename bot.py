@@ -11,7 +11,7 @@ from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTyp
 TOKEN = os.environ.get("TOKEN")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OWNER_ID = 131827895
-OWNER_CHANNEL_ID = 1001660979432  # Твой канал
+OWNER_CHANNEL_ID = 1001660979432
 LOG_CHAT_ID = -1003480426073
 REGISTRY_FILE = "registry.json"
 
@@ -30,7 +30,6 @@ GRADE_MAP = {
     "Mawdu": "Мавду' ❌", "Hasan Sahih": "Хасан Сахих ✅", "Sahih Hasan": "Сахих Хасан ✅",
 }
 
-# ---------- ПРОВЕРКА СВОЙ ----------
 def is_owner(update: Update) -> bool:
     user_id = update.effective_user.id if update.effective_user else 0
     sender_chat_id = 0
@@ -38,7 +37,6 @@ def is_owner(update: Update) -> bool:
         sender_chat_id = update.message.sender_chat.id
     return user_id == OWNER_ID or sender_chat_id == OWNER_CHANNEL_ID
 
-# ---------- РЕЕСТР ----------
 def load_registry():
     try:
         r = requests.get("https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/registry.json", timeout=5)
@@ -64,22 +62,17 @@ def add_to_registry(entry):
 def mark_done(eid):
     data = load_registry()
     for e in data:
-        if e["id"] == eid:
-            e["status"] = "готово"
-            save_registry(data)
-            return True
+        if e["id"] == eid: e["status"] = "готово"; save_registry(data); return True
     return False
 
 def delete_entry(eid):
-    data = load_registry()
-    data = [e for e in data if e["id"] != eid]
+    data = [e for e in load_registry() if e["id"] != eid]
     save_registry(data)
     return True
 
 def search_registry(query):
     return [e for e in load_registry() if query.lower() in e.get("description", "").lower()]
 
-# ---------- ПАРСЕРЫ ----------
 def parse_hadith_query(text):
     text = text.lower().strip()
     if text == "случайный": return "random", None
@@ -96,12 +89,9 @@ def parse_quran_query(text):
     text = text.lower().strip()
     if text.startswith("коран"):
         ref = text.replace("коран", "").strip()
-        if ":" in ref:
-            parts = ref.split(":")
-        elif " " in ref:
-            parts = ref.split()
-        else:
-            return None, None
+        if ":" in ref: parts = ref.split(":")
+        elif " " in ref: parts = ref.split()
+        else: return None, None
         if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
             return int(parts[0]), int(parts[1])
     return None, None
@@ -120,7 +110,7 @@ def parse_translate(text):
 
 def parse_ai_query(text):
     t = text.lower().strip()
-    for p in ["ai ", "ии ", "ai\n", "ии\n"]:
+    for p in ["ai ", "ии "]:
         if t.startswith(p): return t[len(p):].strip()
     if t in ["ai", "ии"]: return ""
     return None
@@ -140,12 +130,10 @@ def parse_registry_command(text):
     if t == "реестр": return "all"
     if t.startswith("реестр "): return t[8:].strip()
     if t == "ожидает": return "pending"
-    if t.startswith("сделано "):
-        n = t[8:].strip()
-        if n.isdigit(): return f"done_{n}"
-    if t.startswith("готово "):
-        n = t[7:].strip()
-        if n.isdigit(): return f"done_{n}"
+    for cmd in ["сделано ", "готово "]:
+        if t.startswith(cmd):
+            n = t[len(cmd):].strip()
+            if n.isdigit(): return f"done_{n}"
     if t.startswith("удали "):
         n = t[6:].strip()
         if n.isdigit(): return f"delete_{n}"
@@ -155,7 +143,6 @@ def parse_registry_command(text):
             return f"result_{parts[0]}_{parts[1] if len(parts) > 1 else ''}"
     return None
 
-# ---------- ХАДИСЫ ----------
 def get_hadith(collection, number):
     try:
         ua = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-{collection}/{number}.min.json"
@@ -276,10 +263,9 @@ def search_similar_hadith(arabic_text):
         return refs
     except: return []
 
-# ---------- AI ----------
 def ask_ai(prompt, system=None):
     if not OPENROUTER_API_KEY: return "❌ API-ключ не настроен."
-    if system is None: system = "Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском языке. Будь уважителен, полезен и краток."
+    if system is None: system = "Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском."
     try:
         r = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -291,25 +277,24 @@ def ask_ai(prompt, system=None):
         else: return f"❌ Ошибка AI: {r.status_code}"
     except Exception as e: return f"❌ Ошибка: {e}"
 
-# ---------- ОТСЛЕЖИВАНИЕ ----------
 async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    member = update.chat_member
-    user = member.new_chat_member.user
-    now = datetime.now().strftime("%d.%m.%Y, %H:%M")
-    name = user.full_name
-    username = f"@{user.username}" if user.username else "нет"
-    uid = user.id
-    if member.new_chat_member.status == "member":
-        msg = f"➕ {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}\n🕐 {now}"
-    elif member.new_chat_member.status in ["left", "kicked"]:
-        a = "🚫 Удалён" if member.new_chat_member.status == "kicked" else "➖ Вышел"
-        msg = f"{a} {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}\n🕐 {now}"
-    else: return
-    try: await context.bot.send_message(chat_id=LOG_CHAT_ID, text=msg)
+    try:
+        chat = update.effective_chat
+        member = update.chat_member
+        user = member.new_chat_member.user
+        now = datetime.now().strftime("%d.%m.%Y, %H:%M")
+        name = user.full_name
+        username = f"@{user.username}" if user.username else "нет"
+        uid = user.id
+        if member.new_chat_member.status == "member":
+            msg = f"➕ {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}\n🕐 {now}"
+        elif member.new_chat_member.status in ["left", "kicked"]:
+            a = "🚫 Удалён" if member.new_chat_member.status == "kicked" else "➖ Вышел"
+            msg = f"{a} {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}\n🕐 {now}"
+        else: return
+        await context.bot.send_message(chat_id=LOG_CHAT_ID, text=msg)
     except: pass
 
-# ---------- ГЛАВНЫЙ ОБРАБОТЧИК ----------
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message: return
 
@@ -323,7 +308,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Реестр (только owner)
     if is_owner(update):
-        is_forward = update.message.forward_from_chat or update.message.forward_from
+        is_forward = update.message.forward_origin is not None
         has_media = update.message.audio or update.message.voice or update.message.video or update.message.photo or update.message.document
         if is_forward or has_media:
             desc = text if text else "без описания"
@@ -371,13 +356,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             return
                     await update.message.reply_text("❌ Не найдено.")
                     return
-                # Поиск
                 results = search_registry(reg_cmd)
                 if results:
                     msg = f"🔍 *«{reg_cmd}»:*\n\n" + "\n".join([f"#{e['id']} {'🟢' if e['status']=='готово' else '🔴'} {e['description'][:100]}" for e in results])
                     await update.message.reply_text(msg, parse_mode="Markdown")
                 else:
-                    await update.message.reply_text("❌ Не найдено.")
+                    await update.message.reply_text("❌ Не найдено в реестре.")
                 return
 
     if not text:
@@ -490,7 +474,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(msg)
             return
 
-    # Справка
     if text.lower() in ["помощь", "справка", "команды", "хелп", "help", "/start"]:
         await update.message.reply_text(
             "📚 *Команды бота:*\n\n"
@@ -505,6 +488,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
-app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL | filters.FORWARDED, handle))
+app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
 app.add_handler(ChatMemberHandler(track_member, ChatMemberHandler.CHAT_MEMBER))
 app.run_polling()
