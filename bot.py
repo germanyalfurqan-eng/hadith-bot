@@ -789,13 +789,19 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if parse_botyara(text) is not None: is_command = True
             
             if not is_command:
-                if is_reply_to_bot:
-                    await update.message.reply_text("🤔 Думаю...")
-                    result = ask_ai_with_memory(text)
-                    await send_long(update, result)
-                    return
                 await update.message.reply_text("🤔 Думаю...")
                 result = ask_ai_with_memory(text)
+                await send_long(update, result)
+                return
+        
+        # В чате/канале: отвечаем ТОЛЬКО если есть "ботяра" или ответ боту
+        elif chat_type != "private":
+            if "ботяра" in text.lower() or is_reply_to_bot:
+                clean = text.replace("ботяра", "").strip()
+                if not clean:
+                    clean = "продолжи"
+                await update.message.reply_text("🤔 Думаю...")
+                result = ask_ai_with_memory(clean)
                 await send_long(update, result)
                 return
         
