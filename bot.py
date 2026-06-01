@@ -11,7 +11,7 @@ from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTyp
 TOKEN = os.environ.get("TOKEN")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OWNER_ID = 131827895
-OWNER_CHANNEL_ID = 1001660979432
+OWNER_CHANNEL_ID = -1001660979432
 LOG_CHAT_ID = -1003480426073
 REGISTRY_FILE = "registry.json"
 
