@@ -89,38 +89,50 @@ def get_hadith(collection, number):
 
         arabic, russian, english, grade = "", "", "", ""
 
-        r_ar = requests.get(url_ar, timeout=10)
-        if r_ar.status_code == 200:
-            hadiths = r_ar.json().get("hadiths", [])
-            if hadiths:
-                arabic = hadiths[0].get("text", "")
+        # Арабский
+        try:
+            r_ar = requests.get(url_ar, timeout=10)
+            if r_ar.status_code == 200:
+                hadiths = r_ar.json().get("hadiths", [])
+                if hadiths:
+                    arabic = hadiths[0].get("text", "")
+        except:
+            pass
 
-        r_ru = requests.get(url_ru, timeout=10)
-        if r_ru.status_code == 200:
-            hadiths = r_ru.json().get("hadiths", [])
-            if hadiths:
-                h = hadiths[0]
-                text = h.get("text", "")
-                text = text.replace("\\n", "\n")
-                text = re.sub(r"\[\d+\]", "", text)
-                russian = text
-                grades = h.get("grades", [])
-                if grades:
-                    g = grades[0].get("grade", "")
-                    grade = GRADE_MAP.get(g, g)
-
-        if not russian:
-            r_en = requests.get(url_en, timeout=10)
-            if r_en.status_code == 200:
-                hadiths = r_en.json().get("hadiths", [])
+        # Русский
+        try:
+            r_ru = requests.get(url_ru, timeout=10)
+            if r_ru.status_code == 200:
+                hadiths = r_ru.json().get("hadiths", [])
                 if hadiths:
                     h = hadiths[0]
-                    english = h.get("text", "")
-                    if not grade:
-                        grades = h.get("grades", [])
-                        if grades:
-                            g = grades[0].get("grade", "")
-                            grade = GRADE_MAP.get(g, g)
+                    text = h.get("text", "")
+                    text = text.replace("\\n", " ")
+                    text = re.sub(r"\[\d+\]", "", text)
+                    russian = text
+                    grades = h.get("grades", [])
+                    if grades:
+                        g = grades[0].get("grade", "")
+                        grade = GRADE_MAP.get(g, g)
+        except:
+            pass
+
+        # Английский (если нет русского)
+        if not russian:
+            try:
+                r_en = requests.get(url_en, timeout=10)
+                if r_en.status_code == 200:
+                    hadiths = r_en.json().get("hadiths", [])
+                    if hadiths:
+                        h = hadiths[0]
+                        english = h.get("text", "")
+                        if not grade:
+                            grades = h.get("grades", [])
+                            if grades:
+                                g = grades[0].get("grade", "")
+                                grade = GRADE_MAP.get(g, g)
+            except:
+                pass
 
         translation = russian or english
         lang = "рус" if russian else "англ"
@@ -128,7 +140,7 @@ def get_hadith(collection, number):
         if arabic or translation:
             return arabic, translation, lang, grade
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error in get_hadith: {e}")
     return "", "", "", ""
 
 # ---------- КОРАН ----------
