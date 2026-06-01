@@ -1,6 +1,7 @@
 import os
 import re
 import random
+import json
 import requests
 from datetime import datetime
 from html import unescape
@@ -8,40 +9,75 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler
 
 TOKEN = os.environ.get("TOKEN")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-LOG_CHAT_ID = -1003480426073  # Чат для логов входов/выходов
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OWNER_ID = 131827895
+OWNER_CHANNEL_ID = 1001660979432  # Твой канал
+LOG_CHAT_ID = -1003480426073
+REGISTRY_FILE = "registry.json"
 
 COLLECTIONS = {
-    "бухари": "bukhari",
-    "муслим": "muslim",
-    "абу дауд": "abudawud",
-    "тирмизи": "tirmidhi",
-    "ибн маджа": "ibnmajah",
-    "насаи": "nasai",
-    "муватта": "malik",
+    "бухари": "bukhari", "муслим": "muslim", "абу дауд": "abudawud",
+    "тирмизи": "tirmidhi", "ибн маджа": "ibnmajah", "насаи": "nasai", "муватта": "malik",
 }
-
 NAMES = {
-    "bukhari": "Сахих аль-Бухари",
-    "muslim": "Сахих Муслим",
-    "abudawud": "Сунан Абу Дауда",
-    "tirmidhi": "Сунан ат-Тирмизи",
-    "ibnmajah": "Сунан Ибн Маджа",
-    "nasai": "Сунан ан-Насаи",
+    "bukhari": "Сахих аль-Бухари", "muslim": "Сахих Муслим", "abudawud": "Сунан Абу Дауда",
+    "tirmidhi": "Сунан ат-Тирмизи", "ibnmajah": "Сунан Ибн Маджа", "nasai": "Сунан ан-Насаи",
     "malik": "Муватта имама Малика",
 }
-
 MAX_HADITH = {"bukhari": 7563, "muslim": 3033}
-
 GRADE_MAP = {
-    "Sahih": "Сахих (достоверный) ✅",
-    "Hasan": "Хасан (хороший) 🟡",
-    "Daif": "Да'иф (слабый) ⚠️",
-    "Mawdu": "Мавду' (выдуманный) ❌",
-    "Hasan Sahih": "Хасан Сахих ✅",
-    "Sahih Hasan": "Сахих Хасан ✅",
+    "Sahih": "Сахих ✅", "Hasan": "Хасан 🟡", "Daif": "Да'иф ⚠️",
+    "Mawdu": "Мавду' ❌", "Hasan Sahih": "Хасан Сахих ✅", "Sahih Hasan": "Сахих Хасан ✅",
 }
 
+# ---------- ПРОВЕРКА СВОЙ ----------
+def is_owner(update: Update) -> bool:
+    user_id = update.effective_user.id if update.effective_user else 0
+    sender_chat_id = update.effective_sender_chat.id if update.effective_sender_chat else 0
+    return user_id == OWNER_ID or sender_chat_id == OWNER_CHANNEL_ID
+
+# ---------- РЕЕСТР ----------
+def load_registry():
+    try:
+        r = requests.get("https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/registry.json", timeout=5)
+        if r.status_code == 200: return r.json()
+    except: pass
+    return []
+
+def save_registry(data):
+    try:
+        with open(REGISTRY_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except: pass
+
+def add_to_registry(entry):
+    data = load_registry()
+    entry["id"] = len(data) + 1
+    entry["status"] = "ожидает"
+    entry["date"] = datetime.now().strftime("%d.%m.%Y %H:%M")
+    data.append(entry)
+    save_registry(data)
+    return entry["id"]
+
+def mark_done(eid):
+    data = load_registry()
+    for e in data:
+        if e["id"] == eid:
+            e["status"] = "готово"
+            save_registry(data)
+            return True
+    return False
+
+def delete_entry(eid):
+    data = load_registry()
+    data = [e for e in data if e["id"] != eid]
+    save_registry(data)
+    return True
+
+def search_registry(query):
+    return [e for e in load_registry() if query.lower() in e.get("description", "").lower()]
+
+# ---------- ПАРСЕРЫ ----------
 def parse_hadith_query(text):
     text = text.lower().strip()
     if text == "случайный": return "random", None
@@ -51,8 +87,7 @@ def parse_hadith_query(text):
     for ru, en in COLLECTIONS.items():
         if text.startswith(ru):
             num = text.replace(ru, "").strip()
-            if num.isdigit():
-                return en, int(num)
+            if num.isdigit(): return en, int(num)
     return None, None
 
 def parse_quran_query(text):
@@ -81,13 +116,11 @@ def parse_translate(text):
     if t == "переведи": return "REPLY"
     return None
 
-def parse_gemini_query(text):
+def parse_ai_query(text):
     t = text.lower().strip()
-    for p in ["гемини ", "гемини\n", "gemini ", "gemini\n"]:
-        if t.startswith(p):
-            return t[len(p):].strip()
-    if t in ["гемини", "gemini"]:
-        return ""
+    for p in ["ai ", "ии ", "ai\n", "ии\n"]:
+        if t.startswith(p): return t[len(p):].strip()
+    if t in ["ai", "ии"]: return ""
     return None
 
 def parse_tafsir_query(text):
@@ -100,20 +133,41 @@ def parse_tafsir_query(text):
                 return int(parts[0]), int(parts[1])
     return None, None
 
+def parse_registry_command(text):
+    t = text.lower().strip()
+    if t == "реестр": return "all"
+    if t.startswith("реестр "): return t[8:].strip()
+    if t == "ожидает": return "pending"
+    if t.startswith("сделано "):
+        n = t[8:].strip()
+        if n.isdigit(): return f"done_{n}"
+    if t.startswith("готово "):
+        n = t[7:].strip()
+        if n.isdigit(): return f"done_{n}"
+    if t.startswith("удали "):
+        n = t[6:].strip()
+        if n.isdigit(): return f"delete_{n}"
+    if t.startswith("результат "):
+        parts = t[10:].strip().split(" ", 1)
+        if parts[0].isdigit():
+            return f"result_{parts[0]}_{parts[1] if len(parts) > 1 else ''}"
+    return None
+
+# ---------- ХАДИСЫ ----------
 def get_hadith(collection, number):
     try:
-        url_ar = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-{collection}/{number}.min.json"
-        url_ru = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-{collection}/{number}.min.json"
-        url_en = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/eng-{collection}/{number}.min.json"
-        arabic, russian, english, grade = "", "", "", ""
+        ua = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-{collection}/{number}.min.json"
+        ur = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-{collection}/{number}.min.json"
+        ue = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/eng-{collection}/{number}.min.json"
+        arabic = russian = english = grade = ""
         try:
-            r = requests.get(url_ar, timeout=10)
+            r = requests.get(ua, timeout=10)
             if r.status_code == 200:
                 h = r.json().get("hadiths", [])
                 if h: arabic = h[0].get("text", "").replace("\n", " ")
         except: pass
         try:
-            r = requests.get(url_ru, timeout=10)
+            r = requests.get(ur, timeout=10)
             if r.status_code == 200:
                 h = r.json().get("hadiths", [])
                 if h:
@@ -124,7 +178,7 @@ def get_hadith(collection, number):
         except: pass
         if not russian:
             try:
-                r = requests.get(url_en, timeout=10)
+                r = requests.get(ue, timeout=10)
                 if r.status_code == 200:
                     h = r.json().get("hadiths", [])
                     if h:
@@ -135,8 +189,7 @@ def get_hadith(collection, number):
             except: pass
         translation = russian or english
         lang = "рус" if russian else "англ"
-        if arabic or translation:
-            return arabic, translation, lang, grade
+        if arabic or translation: return arabic, translation, lang, grade
     except: pass
     return "", "", "", ""
 
@@ -170,52 +223,50 @@ def search_hadith(query):
         if r.status_code != 200: return []
         html = r.json().get("ahadith", {}).get("result", "")
         if not html: return []
-        text_only = unescape(re.sub(r'<[^>]+>', ' ', html))
-        text_only = re.sub(r'\s+', ' ', text_only)
-        blocks = text_only.split("--------------")
+        t = re.sub(r'\s+', ' ', unescape(re.sub(r'<[^>]+>', ' ', html)))
+        blocks = t.split("--------------")
         results = []
-        for block in blocks[:5]:
-            block = block.strip()
-            if not block: continue
-            m = re.match(r'^\d+\s*-\s*(.*)', block)
+        for b in blocks[:5]:
+            b = b.strip()
+            if not b: continue
+            m = re.match(r'^\d+\s*-\s*(.*)', b)
             if not m: continue
-            hadith_text = m.group(1).strip()
+            text = m.group(1).strip()
             rawi = muhaddith = source = page = grade = ""
-            for key, var in [("الراوي:", "rawi"), ("المحدث:", "muhaddith"), ("المصدر:", "source"), ("الصفحة أو الرقم:", "page"), ("خلاصة حكم المحدث:", "grade")]:
-                m2 = re.search(rf'{key}\s*([^\n]+)', block)
+            for k, v in [("الراوي:", "rawi"), ("المحدث:", "muhaddith"), ("المصدر:", "source"), ("الصفحة أو الرقم:", "page"), ("خلاصة حكم المحدث:", "grade")]:
+                m2 = re.search(rf'{k}\s*([^\n]+)', b)
                 if m2:
                     val = m2.group(1).strip()
                     if val == "-": val = ""
-                    if var == "rawi": rawi = val
-                    elif var == "muhaddith": muhaddith = val
-                    elif var == "source": source = val
-                    elif var == "page": page = val
-                    elif var == "grade": grade = val
-            for marker in ["الراوي:", "المحدث:", "المصدر:"]:
-                if marker in hadith_text:
-                    hadith_text = hadith_text.split(marker)[0].strip()
-            if hadith_text and len(hadith_text) > 10:
-                results.append({"text": hadith_text, "rawi": rawi, "muhaddith": muhaddith, "source": source, "page": page, "grade": grade})
+                    if v == "rawi": rawi = val
+                    elif v == "muhaddith": muhaddith = val
+                    elif v == "source": source = val
+                    elif v == "page": page = val
+                    elif v == "grade": grade = val
+            for mk in ["الراوي:", "المحدث:", "المصدر:"]:
+                if mk in text: text = text.split(mk)[0].strip()
+            if text and len(text) > 10:
+                results.append({"text": text, "rawi": rawi, "muhaddith": muhaddith, "source": source, "page": page, "grade": grade})
         return results
     except: return []
 
 def search_similar_hadith(arabic_text):
     if not arabic_text or len(arabic_text) < 20: return []
-    query = " ".join(arabic_text[:100].split()[-5:])
+    q = " ".join(arabic_text[:100].split()[-5:])
     try:
-        r = requests.get(f"https://dorar.net/dorar_api.json?skey={query}&page=1", timeout=10)
+        r = requests.get(f"https://dorar.net/dorar_api.json?skey={q}&page=1", timeout=10)
         if r.status_code != 200: return []
         html = r.json().get("ahadith", {}).get("result", "")
         if not html: return []
-        text_only = unescape(re.sub(r'<[^>]+>', ' ', html))
-        blocks = re.sub(r'\s+', ' ', text_only).split("--------------")
+        t = re.sub(r'\s+', ' ', unescape(re.sub(r'<[^>]+>', ' ', html)))
+        blocks = t.split("--------------")
         refs = []
-        for block in blocks[:5]:
-            if not block.strip(): continue
+        for b in blocks[:5]:
+            if not b.strip(): continue
             source = page = ""
-            m = re.search(r'المصدر:\s*([^\n]+)', block)
+            m = re.search(r'المصدر:\s*([^\n]+)', b)
             if m: source = m.group(1).strip()
-            m = re.search(r'الصفحة أو الرقم:\s*([^\n]+)', block)
+            m = re.search(r'الصفحة أو الرقم:\s*([^\n]+)', b)
             if m: page = m.group(1).strip()
             if source:
                 ref = source + (f" №{page}" if page else "")
@@ -223,195 +274,217 @@ def search_similar_hadith(arabic_text):
         return refs
     except: return []
 
-def ask_gemini(prompt, system=None):
-    if not GEMINI_API_KEY:
-        return "❌ API-ключ Gemini не настроен."
-    if system is None:
-        system = "Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском языке. Будь уважителен, полезен и краток."
+# ---------- AI ----------
+def ask_ai(prompt, system=None):
+    if not OPENROUTER_API_KEY: return "❌ API-ключ не настроен."
+    if system is None: system = "Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском языке. Будь уважителен, полезен и краток."
     try:
         r = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
-            json={"contents": [{"parts": [{"text": f"{system}\n\nВопрос: {prompt}"}]}]},
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+            json={"model": "google/gemini-2.0-flash-001", "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}]},
             timeout=30
         )
-        if r.status_code == 200:
-            return r.json()["candidates"][0]["content"]["parts"][0]["text"]
-        else:
-            return f"❌ Ошибка Gemini: {r.status_code}"
-    except Exception as e:
-        return f"❌ Ошибка: {e}"
+        if r.status_code == 200: return r.json()["choices"][0]["message"]["content"]
+        else: return f"❌ Ошибка AI: {r.status_code}"
+    except Exception as e: return f"❌ Ошибка: {e}"
 
+# ---------- ОТСЛЕЖИВАНИЕ ----------
 async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отслеживает входы и выходы участников"""
     chat = update.effective_chat
     member = update.chat_member
     user = member.new_chat_member.user
     now = datetime.now().strftime("%d.%m.%Y, %H:%M")
-
     name = user.full_name
-    username = f"@{user.username}" if user.username else "нет username"
-    user_id = user.id
-
+    username = f"@{user.username}" if user.username else "нет"
+    uid = user.id
     if member.new_chat_member.status == "member":
-        # Новый участник
-        msg = (
-            f"➕ Новый участник\n"
-            f"👤 {name}\n"
-            f"🔗 {username}\n"
-            f"🆔 ID: {user_id}\n"
-            f"📁 Группа: {chat.title}\n"
-            f"🕐 {now}"
-        )
+        msg = f"➕ {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}\n🕐 {now}"
     elif member.new_chat_member.status in ["left", "kicked"]:
-        # Участник вышел или удалён
-        action = "🚫 Удалён" if member.new_chat_member.status == "kicked" else "➖ Вышел"
-        msg = (
-            f"{action} участник\n"
-            f"👤 {name}\n"
-            f"🔗 {username}\n"
-            f"🆔 ID: {user_id}\n"
-            f"📁 Группа: {chat.title}\n"
-            f"🕐 {now}"
-        )
-    else:
-        return
+        a = "🚫 Удалён" if member.new_chat_member.status == "kicked" else "➖ Вышел"
+        msg = f"{a} {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}\n🕐 {now}"
+    else: return
+    try: await context.bot.send_message(chat_id=LOG_CHAT_ID, text=msg)
+    except: pass
 
-    try:
-        await context.bot.send_message(chat_id=LOG_CHAT_ID, text=msg)
-    except Exception as e:
-        print(f"Log error: {e}")
-
+# ---------- ГЛАВНЫЙ ОБРАБОТЧИК ----------
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
+    if not update.message: return
+
+    chat_type = update.effective_chat.type
+    text = update.message.text or update.message.caption or ""
+    text = text.strip()
+
+    # Блокировка чужих в личке
+    if chat_type == "private" and not is_owner(update):
         return
 
-    text = update.message.text.strip()
+    # Реестр (только owner)
+    if is_owner(update):
+        is_forward = update.message.forward_from_chat or update.message.forward_from
+        has_media = update.message.audio or update.message.voice or update.message.video or update.message.photo or update.message.document
+        if is_forward or has_media:
+            desc = text if text else "без описания"
+            eid = add_to_registry({"type": "медиа", "description": desc})
+            await update.message.reply_text(f"✅ #{eid}\n📝 {desc}\n📌 ожидает")
+            return
+
+        if text:
+            reg_cmd = parse_registry_command(text)
+            if reg_cmd:
+                if reg_cmd == "all":
+                    data = load_registry()
+                    if not data: await update.message.reply_text("📋 Пусто."); return
+                    msg = "📋 *Реестр:*\n\n"
+                    for e in data[-20:]:
+                        icon = "🟢" if e["status"] == "готово" else "🔴"
+                        msg += f"#{e['id']} {icon} {e.get('description','')[:100]}\n"
+                    await update.message.reply_text(msg, parse_mode="Markdown")
+                    return
+                if reg_cmd == "pending":
+                    data = [e for e in load_registry() if e["status"] == "ожидает"]
+                    if not data: await update.message.reply_text("📋 Нет ожидающих."); return
+                    msg = "📋 *Ожидает:*\n\n" + "\n".join([f"#{e['id']} 🔴 {e.get('description','')[:100]}" for e in data])
+                    await update.message.reply_text(msg, parse_mode="Markdown")
+                    return
+                if reg_cmd.startswith("done_"):
+                    mark_done(int(reg_cmd.split("_")[1]))
+                    await update.message.reply_text(f"✅ #{reg_cmd.split('_')[1]} готово.")
+                    return
+                if reg_cmd.startswith("delete_"):
+                    delete_entry(int(reg_cmd.split("_")[1]))
+                    await update.message.reply_text(f"🗑 #{reg_cmd.split('_')[1]} удалено.")
+                    return
+                if reg_cmd.startswith("result_"):
+                    parts = reg_cmd.split("_", 2)
+                    eid = int(parts[1])
+                    link = parts[2] if len(parts) > 2 else ""
+                    data = load_registry()
+                    for e in data:
+                        if e["id"] == eid:
+                            e["result"] = link
+                            e["status"] = "готово"
+                            save_registry(data)
+                            await update.message.reply_text(f"✅ #{eid} результат сохранён.")
+                            return
+                    await update.message.reply_text("❌ Не найдено.")
+                    return
+                # Поиск
+                results = search_registry(reg_cmd)
+                if results:
+                    msg = f"🔍 *«{reg_cmd}»:*\n\n" + "\n".join([f"#{e['id']} {'🟢' if e['status']=='готово' else '🔴'} {e['description'][:100]}" for e in results])
+                    await update.message.reply_text(msg, parse_mode="Markdown")
+                else:
+                    await update.message.reply_text("❌ Не найдено.")
+                return
+
     if not text:
         return
 
-    # Перевод
-    tr = parse_translate(text)
-    if tr == "REPLY":
-        if update.message.reply_to_message and update.message.reply_to_message.text:
+    # AI / Перевод (только owner)
+    if is_owner(update):
+        tr = parse_translate(text)
+        if tr == "REPLY":
+            if update.message.reply_to_message and update.message.reply_to_message.text:
+                await update.message.reply_text("🔄 Перевожу...")
+                result = ask_ai(f"Переведи на русский:\n{update.message.reply_to_message.text}", "Ты — переводчик с арабского на русский.")
+                for i in range(0, len(result), 4000): await update.message.reply_text(result[i:i+4000])
+                return
+            else:
+                await update.message.reply_text("❌ Ответь на сообщение с арабским текстом.")
+                return
+        if tr and tr != "REPLY":
             await update.message.reply_text("🔄 Перевожу...")
-            result = ask_gemini(f"Переведи на русский:\n{update.message.reply_to_message.text}", "Ты — переводчик с арабского на русский. Переводи точно.")
-            for i in range(0, len(result), 4000):
-                await update.message.reply_text(result[i:i+4000])
+            result = ask_ai(f"Переведи на русский:\n{tr}", "Ты — переводчик с арабского на русский.")
+            for i in range(0, len(result), 4000): await update.message.reply_text(result[i:i+4000])
             return
-        else:
-            await update.message.reply_text("❌ Ответь на сообщение с арабским текстом.")
+
+        surah, ayah = parse_tafsir_query(text)
+        if surah and ayah:
+            await update.message.reply_text(f"📖 Ищу тафсир {surah}:{ayah}...")
+            arabic_ayah, _ = get_quran_ayah(surah, ayah)
+            prompt = f"Дай тафсир Ибн Касира на аят {surah}:{ayah}."
+            if arabic_ayah: prompt += f"\n\nАят: {arabic_ayah}"
+            result = ask_ai(prompt, "Ты — знаток тафсира Ибн Касира.")
+            for i in range(0, len(result), 4000): await update.message.reply_text(result[i:i+4000])
             return
-    if tr and tr != "REPLY":
-        await update.message.reply_text("🔄 Перевожу...")
-        result = ask_gemini(f"Переведи на русский:\n{tr}", "Ты — переводчик с арабского на русский. Переводи точно.")
-        for i in range(0, len(result), 4000):
-            await update.message.reply_text(result[i:i+4000])
-        return
 
-    # Тафсир
-    surah, ayah = parse_tafsir_query(text)
-    if surah and ayah:
-        await update.message.reply_text(f"📖 Ищу тафсир аята {surah}:{ayah}...")
-        arabic_ayah, ru_ayah = get_quran_ayah(surah, ayah)
-        prompt = f"Дай тафсир Ибн Касира на аят {surah}:{ayah} из Корана. Сначала приведи арабский текст тафсира, затем русский перевод."
-        if arabic_ayah:
-            prompt += f"\n\nАят: {arabic_ayah}"
-        result = ask_gemini(prompt, "Ты — знаток тафсира Ибн Касира.")
-        for i in range(0, len(result), 4000):
-            await update.message.reply_text(result[i:i+4000])
-        return
+        ai_q = parse_ai_query(text)
+        if ai_q is not None:
+            await update.message.reply_text("🤔 Думаю...")
+            result = ask_ai(ai_q) if ai_q else "❌ Напиши вопрос после 'ai'."
+            for i in range(0, len(result), 4000): await update.message.reply_text(result[i:i+4000])
+            return
 
-    # Gemini вопрос
-    gem_q = parse_gemini_query(text)
-    if gem_q is not None:
-        await update.message.reply_text("🤔 Думаю...")
-        if gem_q:
-            result = ask_gemini(gem_q)
-        else:
-            result = "❌ Напиши вопрос после 'гемини'. Например: гемини столица Саудовской Аравии?"
-        for i in range(0, len(result), 4000):
-            await update.message.reply_text(result[i:i+4000])
-        return
-
-    # Поиск
+    # Поиск хадисов (для всех)
     sq = parse_search_query(text)
     if sq:
         await update.message.reply_text(f"🔍 Ищу: {sq}...")
         results = search_hadith(sq)
-        if not results:
-            await update.message.reply_text("❌ Ничего не найдено.")
-            return
-        msg = f"🔍 *Результаты поиска:* «{sq}»\n\n"
+        if not results: await update.message.reply_text("❌ Ничего не найдено."); return
+        msg = f"🔍 *«{sq}»*\n\n"
         for i, r in enumerate(results, 1):
             msg += f"*{i}.* {r['text'][:300]}\n"
             if r['rawi']: msg += f"👤 {r['rawi']}\n"
-            if r['muhaddith']: msg += f"🎓 {r['muhaddith']}\n"
-            if r['source']: msg += f"📚 {r['source']}" + (f" ({r['page']})" if r['page'] else "") + "\n"
+            if r['source']: msg += f"📚 {r['source']}\n"
             if r['grade']: msg += f"📊 {r['grade']}\n"
             msg += "\n"
         await update.message.reply_text(msg[:4000], parse_mode="Markdown")
         return
 
-    # Коран
+    # Коран (для всех)
     surah, ayah = parse_quran_query(text)
     if surah and ayah:
         await update.message.reply_text("⏳ Ищу аят...")
         a, r = get_quran_ayah(surah, ayah)
-        if not a and not r:
-            await update.message.reply_text(f"❌ Аят {surah}:{ayah} не найден.")
-            return
+        if not a and not r: await update.message.reply_text(f"❌ Аят {surah}:{ayah} не найден."); return
         msg = f"📖 Коран, {surah}:{ayah}\n\n"
-        if a: msg += f"🔤 Арабский текст:\n{a[:500]}\n\n"
-        if r: msg += f"🌍 Перевод (рус):\n{r[:1000]}\n"
-        msg += f"\n📚 Священный Коран, сура {surah}, аят {ayah}"
+        if a: msg += f"🔤 {a[:500]}\n\n"
+        if r: msg += f"🌍 {r[:1000]}\n"
+        msg += f"\n📚 Коран, {surah}:{ayah}"
         await update.message.reply_text(msg)
         return
 
-    # Хадисы
+    # Хадисы (для всех)
     collection, number = parse_hadith_query(text)
     if collection:
         if collection in ["random", "random_bukhari", "random_muslim", "random_quran"]:
             await update.message.reply_text("🎲 Ищу...")
             if collection == "random_quran":
-                s, a_num, ar, ru = get_random_quran()
+                s, n, ar, ru = get_random_quran()
                 if ar or ru:
-                    msg = f"🎲 *Случайный аят*\n📖 Коран, {s}:{a_num}\n\n"
+                    msg = f"🎲 Коран, {s}:{n}\n\n"
                     if ar: msg += f"🔤 {ar[:500]}\n\n"
                     if ru: msg += f"🌍 {ru[:1000]}\n"
-                    msg += f"\n📚 Коран, {s}:{a_num}"
-                    await update.message.reply_text(msg, parse_mode="Markdown")
-                else:
-                    await update.message.reply_text("❌ Не удалось.")
+                    await update.message.reply_text(msg)
+                else: await update.message.reply_text("❌ Не удалось.")
                 return
             else:
-                coll_arg = None if collection == "random" else collection.replace("random_", "")
-                coll, num, ar, tr, lang, grade = get_random_hadith(coll_arg)
-                if coll:
+                c = None if collection == "random" else collection.replace("random_", "")
+                c, n, ar, tr, lang, gr = get_random_hadith(c)
+                if c:
                     similar = search_similar_hadith(ar)
-                    msg = f"🎲 *Случайный хадис*\n📖 {NAMES.get(coll, coll)}, №{num}\n\n"
+                    msg = f"🎲 {NAMES.get(c, c)}, №{n}\n\n"
                     if ar: msg += f"🔤 {ar[:500]}\n\n"
-                    if tr: msg += f"🌍 Перевод ({lang}):\n{tr[:1500]}\n"
-                    if grade: msg += f"\n📊 {grade}"
-                    msg += f"\n\n📚 {NAMES.get(coll, coll)}, №{num}"
-                    if similar: msg += f"\n\n📖 Также передаётся:\n• " + "\n• ".join(similar[:5])
-                    await update.message.reply_text(msg, parse_mode="Markdown")
-                else:
-                    await update.message.reply_text("❌ Не удалось.")
+                    if tr: msg += f"🌍 ({lang}): {tr[:1500]}\n"
+                    if gr: msg += f"\n📊 {gr}"
+                    msg += f"\n\n📚 {NAMES.get(c, c)}, №{n}"
+                    if similar: msg += f"\n\n📖 Также:\n• " + "\n• ".join(similar[:5])
+                    await update.message.reply_text(msg)
+                else: await update.message.reply_text("❌ Не удалось.")
                 return
 
         if number:
             await update.message.reply_text("⏳ Ищу хадис...")
-            ar, tr, lang, grade = get_hadith(collection, number)
-            if not ar and not tr:
-                await update.message.reply_text(f"❌ Хадис {NAMES.get(collection, collection)} №{number} не найден.")
-                return
+            ar, tr, lang, gr = get_hadith(collection, number)
+            if not ar and not tr: await update.message.reply_text(f"❌ {NAMES.get(collection, collection)} №{number} не найден."); return
             similar = search_similar_hadith(ar)
             msg = f"📖 {NAMES.get(collection, collection)}, №{number}\n\n"
             if ar: msg += f"🔤 {ar[:500]}\n\n"
-            if tr: msg += f"🌍 Перевод ({lang}):\n{tr[:1500]}\n"
-            if grade: msg += f"\n📊 {grade}"
+            if tr: msg += f"🌍 ({lang}): {tr[:1500]}\n"
+            if gr: msg += f"\n📊 {gr}"
             msg += f"\n\n📚 {NAMES.get(collection, collection)}, №{number}"
-            if similar: msg += f"\n\n📖 Также передаётся:\n• " + "\n• ".join(similar[:5])
+            if similar: msg += f"\n\n📖 Также:\n• " + "\n• ".join(similar[:5])
             await update.message.reply_text(msg)
             return
 
@@ -419,17 +492,17 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text.lower() in ["помощь", "справка", "команды", "хелп", "help", "/start"]:
         await update.message.reply_text(
             "📚 *Команды бота:*\n\n"
-            "*Хадисы (7 сборников):*\nбухари 1 | муслим 1 | абу дауд 1\nтирмизи 1 | ибн маджа 1 | насаи 1 | муватта 1\n\n"
+            "*Хадисы:*\nбухари 1 | муслим 1 | абу дауд 1\nтирмизи 1 | ибн маджа 1 | насаи 1 | муватта 1\n\n"
             "*Случайные:*\nслучайный | случайный бухари | случайный муслим | случайный коран\n\n"
             "*Коран:*\nкоран 2:255\n\n"
             "*Поиск:*\nискать بدعة\n\n"
-            "*Gemini ИИ:*\nгемини вопрос\nтафсир 5:6\nпереведи текст\n\n"
-            "*Справка:* помощь",
+            "*AI (владелец):*\nai вопрос | тафсир 5:6 | переведи текст\n\n"
+            "*Реестр (владелец):*\nПерешли файл → сохранится\nреестр | ожидает | сделано 1 | удали 1",
             parse_mode="Markdown"
         )
-        return
 
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
+app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL | filters.FORWARDED, handle))
 app.add_handler(ChatMemberHandler(track_member, ChatMemberHandler.CHAT_MEMBER))
 app.run_polling()
