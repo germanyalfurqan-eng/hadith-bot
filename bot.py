@@ -420,7 +420,7 @@ def ask_ai(prompt, system=None):
         return "❌ API-ключ не настроен."
     
     if system is None:
-        system = "Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском."
+        system = f"Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском. Сегодняшняя дата: {datetime.now().strftime('%d.%m.%Y')}."
     
     for модель in модели:
         try:
@@ -455,7 +455,7 @@ def ask_ai(prompt, system=None):
 
 def ask_ai_with_memory(prompt):
     memory = load_memory()
-    system = "Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском."
+    system = f"Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском. Сегодняшняя дата: {datetime.now().strftime('%d.%m.%Y')}."
     if memory:
         memory_text = "\n".join([f"- [{m.get('date','—')}] {m.get('text','')}" for m in memory])
         system += f"\n\nЧто ты знаешь о владельце и контексте:\n{memory_text}"
