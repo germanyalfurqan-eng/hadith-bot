@@ -501,10 +501,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_reply_to_bot = False
     is_reply_to_channel = False
     if update.message.reply_to_message:
-        if update.message.reply_to_message.from_user and update.message.reply_to_message.from_user.is_bot:
+        replied = update.message.reply_to_message
+        if replied.from_user and replied.from_user.is_bot and not replied.sender_chat:
             is_reply_to_bot = True
-        if update.message.reply_to_message.sender_chat:
+        if replied.sender_chat:
             is_reply_to_channel = True
+
 
     
     # ============ ВЛАДЕЛЕЦ: РЕЕСТР ============
