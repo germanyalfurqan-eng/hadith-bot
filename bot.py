@@ -473,6 +473,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("🧠 Память очищена.")
             return
 
+    # Если owner отвечает на сообщение бота — автоматически AI
+    if is_owner(update) and update.message.reply_to_message:
+        if update.message.reply_to_message.from_user and update.message.reply_to_message.from_user.is_bot:
+            await update.message.reply_text("🤔 Думаю...")
+            result = ask_ai_with_memory(text)
+            await send_long(update, result)
+            return
+
     # Ботяра — AI с памятью (только owner)
     if is_owner(update):
         botyara_q = parse_botyara(text)
