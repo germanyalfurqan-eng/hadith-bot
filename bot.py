@@ -34,7 +34,7 @@ GRADE_MAP = {
     "Sahih": "Сахих ✅", "Hasan": "Хасан 🟡", "Daif": "Да'иф ⚠️",
     "Mawdu": "Мавду' ❌", "Hasan Sahih": "Хасан Сахих ✅", "Sahih Hasan": "Сахих Хасан ✅",
 }
-AI_MODEL = "google/gemini-2.0-flash-exp:free"
+AI_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 
 pending_edits = {}
 
