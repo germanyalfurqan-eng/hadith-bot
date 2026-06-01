@@ -388,14 +388,14 @@ def search_similar_hadith(arabic_text):
 def ask_ai(prompt, system=None):
     # Список моделей от лучшей к запасной
     модели = [
-    "nousresearch/hermes-3-405b-instruct:free",   # 1. Самая умная (405B!)
-    "meta-llama/llama-3.3-70b-instruct:free",     # 2. Надёжная 70B
-    "nvidia/nemotron-3-super-120b-a12b:free",     # 3. Твоя старая
-    "openrouter/free"                             # 4. Запасной
-]
+        "nousresearch/hermes-3-405b-instruct:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "openrouter/free"
+    ]
     
     # Названия моделей для подписи
-имена = {
+    имена = {
     "nousresearch/hermes-3-405b-instruct:free": "🧠 Hermes 3 405B (Nous)",
     "meta-llama/llama-3.3-70b-instruct:free": "🦙 Llama 3.3 (Meta)",
     "nvidia/nemotron-3-super-120b-a12b:free": "🧠 Nemotron 3 (NVIDIA)",
