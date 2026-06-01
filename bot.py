@@ -153,35 +153,19 @@ def ai_describe_media(text_hint=""):
     except:
         pass
     return text_hint or "без описания"
-def enhance_audio(input_path, output_path):
+def convert_to_mp3(input_path, output_path, artist="", title=""):
     try:
         from pydub import AudioSegment
-        import noisereduce as nr
-        import numpy as np
-        import soundfile as sf
         import os
 
         sound = AudioSegment.from_file(input_path)
-        sound = sound.set_frame_rate(16000).set_channels(1)
-        temp_wav = input_path + ".temp.wav"
-        sound.export(temp_wav, format="wav")
-
-        data, rate = sf.read(temp_wav)
-
-        reduced = nr.reduce_noise(y=data, sr=rate)
-
-        out_wav = output_path + ".wav"
-        sf.write(out_wav, reduced, rate)
-
-        result = AudioSegment.from_wav(out_wav)
-        result.export(output_path, format="mp3", bitrate="64k")
-
-        os.remove(temp_wav)
-        os.remove(out_wav)
-
+        sound.export(output_path, format="mp3", bitrate="128k", tags={
+            "artist": artist or "Unknown",
+            "title": title or "Без названия"
+        })
         return True
     except Exception as e:
-        print(f"Audio error: {e}")
+        print(f"Convert error: {e}")
         return False
 def is_owner(update: Update) -> bool:
     user_id = update.effective_user.id if update.effective_user else 0
