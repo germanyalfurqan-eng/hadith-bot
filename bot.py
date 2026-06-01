@@ -401,17 +401,19 @@ def search_similar_hadith(arabic_text):
 
 def ask_ai(prompt, system=None):
     модели = [
-        "nousresearch/hermes-3-405b-instruct:free",
         "meta-llama/llama-3.3-70b-instruct:free",
-        "nvidia/nemotron-3-super-120b-a12b:free",
-        "openrouter/free"
+        "deepseek/deepseek-r1:free",
+        "qwen/qwen3-235b-a22b:free",
+        "microsoft/phi-4-reasoning-plus:free",
+        "openrouter/auto",
     ]
     
     имена = {
-        "nousresearch/hermes-3-405b-instruct:free": "🧠 Hermes 3 405B (Nous)",
-        "meta-llama/llama-3.3-70b-instruct:free": "🦙 Llama 3.3 (Meta)",
-        "nvidia/nemotron-3-super-120b-a12b:free": "🧠 Nemotron 3 (NVIDIA)",
-        "openrouter/free": "🔄 Auto (OpenRouter)"
+        "meta-llama/llama-3.3-70b-instruct:free": "🦙 Llama 3.3 70B (Meta)",
+        "deepseek/deepseek-r1:free": "🧠 DeepSeek R1",
+        "qwen/qwen3-235b-a22b:free": "⚡ Qwen3 235B (Alibaba)",
+        "microsoft/phi-4-reasoning-plus:free": "🔬 Phi-4 Reasoning (Microsoft)",
+        "openrouter/auto": "🔄 Auto (OpenRouter)",
     }
     
     if not OPENROUTER_API_KEY:
