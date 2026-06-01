@@ -499,14 +499,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # ===== AI ОТВЕТЫ ТОЛЬКО ДЛЯ ВЛАДЕЛЬЦА =====
     if user_id == OWNER_ID:
-        # В личке - отвечаем всегда
         if chat_type == "private":
             await update.message.reply_text("🤔 Думаю...")
             result = ask_ai_with_memory(text)
             await send_long(update, result)
             return
         else:
-            # В чате/канале - отвечаем если есть "ботяра" или ответ боту
             if "ботяра" in text.lower() or is_reply_to_bot:
                 clean = text.replace("ботяра", "").strip()
                 if not clean:
@@ -516,9 +514,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await send_long(update, result)
                 return
     
-    # ===== ДАЛЬШЕ ИДУТ ХАДИСЫ, КОРАН (ДОСТУПНЫ ВСЕМ) =====
-    
-    # Поиск хадисов
+    # ===== ПОИСК ХАДИСОВ (ДЛЯ ВСЕХ) =====
     sq = parse_search_query(text)
     if sq:
         await update.message.reply_text(f"🔍 Ищу: {sq}...")
@@ -537,7 +533,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_long(update, msg, "Markdown")
         return
     
-    # Коран
+    # ===== КОРАН (ДЛЯ ВСЕХ) =====
     surah, ayah = parse_quran_query(text)
     if surah and ayah:
         await update.message.reply_text("⏳ Ищу аят...")
@@ -553,38 +549,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_long(update, msg)
         return
     
-    # Хадисы
+    # ===== ХАДИСЫ (ДЛЯ ВСЕХ) =====
     collection, number = parse_hadith_query(text)
     if collection:
-        if collection in ["random", "random_bukhari", "random_muslim", "random_quran"]:
-            await update.message.reply_text("🎲 Ищу...")
-            if collection == "random_quran":
-                s, n, ar, ru = get_random_quran()
-                if ar or ru:
-                    msg = f"🎲 Коран, {s}:{n}\n\n"
-                    if ar:
-                        msg += f"🔤 {ar}\n\n"
-                    if ru:
-                        msg += f"🌍 {ru}\n"
-                    await send_long(update, msg)
-                else:
-                    await update.message.reply_text("❌ Не удалось.")
-                return
-            else:
-                c = None if collection == "random" else collection.replace("random_", "")
-                c, n, ar, tr, lang, gr = get_random_hadith(c)
-                if c:
-                    msg = f"🎲 {NAMES.get(c, c)}, №{n}\n\n"
-                    if ar:
-                        msg += f"🔤 {ar}\n\n"
-                    if tr:
-                        msg += f"🌍 ({lang}): {tr}\n"
-                    if gr:
-                        msg += f"\n📊 {gr}"
-                    await send_long(update, msg)
-                else:
-                    await update.message.reply_text("❌ Не удалось.")
-                return
         if number:
             await update.message.reply_text("⏳ Ищу хадис...")
             if collection == "ahmad_local":
@@ -604,7 +571,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_long(update, msg)
             return
     
-    # Помощь
+    # ===== ПОМОЩЬ =====
     if text.lower() in ["помощь", "справка", "команды", "хелп", "help", "/start"]:
         await update.message.reply_text(
             "📚 *Команды бота:*\n\n"
