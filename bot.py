@@ -33,7 +33,9 @@ GRADE_MAP = {
 # ---------- ПРОВЕРКА СВОЙ ----------
 def is_owner(update: Update) -> bool:
     user_id = update.effective_user.id if update.effective_user else 0
-    sender_chat_id = update.effective_sender_chat.id if update.effective_sender_chat else 0
+    sender_chat_id = 0
+    if update.message and update.message.sender_chat:
+        sender_chat_id = update.message.sender_chat.id
     return user_id == OWNER_ID or sender_chat_id == OWNER_CHANNEL_ID
 
 # ---------- РЕЕСТР ----------
