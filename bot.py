@@ -806,6 +806,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif chat_type != "private":
             if "ботяра" in text.lower() or (is_reply_to_bot and not is_reply_to_channel):
                 clean = text.replace("ботяра", "").strip()
+                if update.message.reply_to_message and update.message.reply_to_message.text:
+                    quoted = update.message.reply_to_message.text
+                    clean = f"{clean}\n\nСообщение на которое я отвечаю:\n{quoted}" if clean else f"Прокомментируй это сообщение:\n{quoted}"
                 if not clean:
                     clean = "продолжи"
                 await update.message.reply_text("🤔 Думаю...")
