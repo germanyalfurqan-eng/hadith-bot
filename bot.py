@@ -134,12 +134,13 @@ def parse_translate(text):
         return "REPLY"
     return None
 
-def parse_ai_query(text):
+def parse_botyara(text):
+    """Обращение к боту: ботяра вопрос"""
     t = text.lower().strip()
-    for p in ["ai ", "ии "]:
+    for p in ["ботяра ", "botyara "]:
         if t.startswith(p):
             return t[len(p):].strip()
-    if t in ["ai", "ии"]:
+    if t in ["ботяра", "botyara"]:
         return ""
     return None
 
@@ -447,6 +448,34 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not text:
         return
 
+    # Ботяра — AI (только для владельца)
+    if is_owner(update):
+        botyara_q = parse_botyara(text)
+        if botyara_q is not None:
+            # Если это ответ на чьё-то сообщение
+            if update.message.reply_to_message and update.message.reply_to_message.text:
+                original_text = update.message.reply_to_message.text
+                if botyara_q == "":
+                    # просто "ботяра" на reply -> объясни
+                    prompt = f"Объясни это сообщение простыми словами:\n\n{original_text}"
+                elif "переведи" in botyara_q:
+                    prompt = f"Переведи на русский:\n{original_text}"
+                elif "источник" in botyara_q or "откуда" in botyara_q:
+                    prompt = f"Найди источник этого сообщения. Из какого сборника, какой номер:\n\n{original_text}"
+                elif "достоверн" in botyara_q or "сахих" in botyara_q:
+                    prompt = f"Проверь достоверность этого хадиса:\n\n{original_text}"
+                else:
+                    prompt = f"{botyara_q}\n\nСообщение: {original_text}"
+                await update.message.reply_text("🤔 Думаю...")
+                result = ask_ai(prompt)
+                await send_long(update, result)
+                return
+            # Обычный вопрос к ботяре
+            await update.message.reply_text("🤔 Думаю...")
+            result = ask_ai(botyara_q) if botyara_q else "❌ Напиши что-то после 'ботяра'."
+            await send_long(update, result)
+            return
+
     if is_owner(update):
         tr = parse_translate(text)
         if tr == "REPLY":
@@ -454,9 +483,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("🔄 Перевожу...")
                 result = ask_ai(f"Переведи на русский:\n{update.message.reply_to_message.text}", "Ты — переводчик с арабского на русский.")
                 await send_long(update, result)
-                return
-            else:
-                await update.message.reply_text("❌ Ответь на сообщение с арабским текстом.")
                 return
         if tr and tr != "REPLY":
             await update.message.reply_text("🔄 Перевожу...")
@@ -472,13 +498,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if arabic_ayah:
                 prompt += f"\n\nАят: {arabic_ayah}"
             result = ask_ai(prompt, "Ты — знаток тафсира Ибн Касира.")
-            await send_long(update, result)
-            return
-
-        ai_q = parse_ai_query(text)
-        if ai_q is not None:
-            await update.message.reply_text("🤔 Думаю...")
-            result = ask_ai(ai_q) if ai_q else "❌ Напиши вопрос после 'ai'."
             await send_long(update, result)
             return
 
@@ -581,7 +600,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*Случайные:*\nслучайный | случайный бухари | случайный муслим | случайный коран\n\n"
             "*Коран:*\nкоран 2:255\n\n"
             "*Поиск:*\nискать بدعة\n\n"
-            "*AI (владелец):*\nai вопрос | тафсир 5:6 | переведи текст\n\n"
+            "*Ботяра (владелец):*\nботяра вопрос\nОтвет на сообщение + ботяра объясни/переведи/источник\n\n"
             "*Реестр (владелец):*\nПерешли файл → сохранится\nреестр | ожидает | сделано 1 | удали 1",
             parse_mode="Markdown"
         )
