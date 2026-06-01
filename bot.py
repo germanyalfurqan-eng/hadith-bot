@@ -30,6 +30,15 @@ GRADE_MAP = {
     "Mawdu": "Мавду' ❌", "Hasan Sahih": "Хасан Сахих ✅", "Sahih Hasan": "Сахих Хасан ✅",
 }
 
+def send_long(update, text, parse_mode=None):
+    """Отправляет длинное сообщение, разбивая на части"""
+    for i in range(0, len(text), 4000):
+        chunk = text[i:i+4000]
+        if parse_mode:
+            await update.message.reply_text(chunk, parse_mode=parse_mode)
+        else:
+            await update.message.reply_text(chunk)
+
 def is_owner(update: Update) -> bool:
     user_id = update.effective_user.id if update.effective_user else 0
     sender_chat_id = 0
@@ -302,7 +311,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or update.message.caption or ""
     text = text.strip()
 
-    # Блокировка чужих в личке
     if chat_type == "private" and not is_owner(update):
         return
 
@@ -326,13 +334,13 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     for e in data[-20:]:
                         icon = "🟢" if e["status"] == "готово" else "🔴"
                         msg += f"#{e['id']} {icon} {e.get('description','')[:100]}\n"
-                    await update.message.reply_text(msg, parse_mode="Markdown")
+                    await send_long(update, msg, "Markdown")
                     return
                 if reg_cmd == "pending":
                     data = [e for e in load_registry() if e["status"] == "ожидает"]
                     if not data: await update.message.reply_text("📋 Нет ожидающих."); return
                     msg = "📋 *Ожидает:*\n\n" + "\n".join([f"#{e['id']} 🔴 {e.get('description','')[:100]}" for e in data])
-                    await update.message.reply_text(msg, parse_mode="Markdown")
+                    await send_long(update, msg, "Markdown")
                     return
                 if reg_cmd.startswith("done_"):
                     mark_done(int(reg_cmd.split("_")[1]))
@@ -359,7 +367,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 results = search_registry(reg_cmd)
                 if results:
                     msg = f"🔍 *«{reg_cmd}»:*\n\n" + "\n".join([f"#{e['id']} {'🟢' if e['status']=='готово' else '🔴'} {e['description'][:100]}" for e in results])
-                    await update.message.reply_text(msg, parse_mode="Markdown")
+                    await send_long(update, msg, "Markdown")
                 else:
                     await update.message.reply_text("❌ Не найдено в реестре.")
                 return
@@ -374,7 +382,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if update.message.reply_to_message and update.message.reply_to_message.text:
                 await update.message.reply_text("🔄 Перевожу...")
                 result = ask_ai(f"Переведи на русский:\n{update.message.reply_to_message.text}", "Ты — переводчик с арабского на русский.")
-                for i in range(0, len(result), 4000): await update.message.reply_text(result[i:i+4000])
+                await send_long(update, result)
                 return
             else:
                 await update.message.reply_text("❌ Ответь на сообщение с арабским текстом.")
@@ -382,7 +390,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if tr and tr != "REPLY":
             await update.message.reply_text("🔄 Перевожу...")
             result = ask_ai(f"Переведи на русский:\n{tr}", "Ты — переводчик с арабского на русский.")
-            for i in range(0, len(result), 4000): await update.message.reply_text(result[i:i+4000])
+            await send_long(update, result)
             return
 
         surah, ayah = parse_tafsir_query(text)
@@ -392,14 +400,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             prompt = f"Дай тафсир Ибн Касира на аят {surah}:{ayah}."
             if arabic_ayah: prompt += f"\n\nАят: {arabic_ayah}"
             result = ask_ai(prompt, "Ты — знаток тафсира Ибн Касира.")
-            for i in range(0, len(result), 4000): await update.message.reply_text(result[i:i+4000])
+            await send_long(update, result)
             return
 
         ai_q = parse_ai_query(text)
         if ai_q is not None:
             await update.message.reply_text("🤔 Думаю...")
             result = ask_ai(ai_q) if ai_q else "❌ Напиши вопрос после 'ai'."
-            for i in range(0, len(result), 4000): await update.message.reply_text(result[i:i+4000])
+            await send_long(update, result)
             return
 
     # Поиск хадисов (для всех)
@@ -415,7 +423,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if r['source']: msg += f"📚 {r['source']}\n"
             if r['grade']: msg += f"📊 {r['grade']}\n"
             msg += "\n"
-        await update.message.reply_text(msg[:4000], parse_mode="Markdown")
+        await send_long(update, msg, "Markdown")
         return
 
     # Коран (для всех)
@@ -425,10 +433,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         a, r = get_quran_ayah(surah, ayah)
         if not a and not r: await update.message.reply_text(f"❌ Аят {surah}:{ayah} не найден."); return
         msg = f"📖 Коран, {surah}:{ayah}\n\n"
-        if a: msg += f"🔤 {a[:500]}\n\n"
-        if r: msg += f"🌍 {r[:1000]}\n"
+        if a: msg += f"🔤 {a}\n\n"
+        if r: msg += f"🌍 {r}\n"
         msg += f"\n📚 Коран, {surah}:{ayah}"
-        await update.message.reply_text(msg)
+        await send_long(update, msg)
         return
 
     # Хадисы (для всех)
@@ -440,9 +448,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 s, n, ar, ru = get_random_quran()
                 if ar or ru:
                     msg = f"🎲 Коран, {s}:{n}\n\n"
-                    if ar: msg += f"🔤 {ar[:500]}\n\n"
-                    if ru: msg += f"🌍 {ru[:1000]}\n"
-                    await update.message.reply_text(msg)
+                    if ar: msg += f"🔤 {ar}\n\n"
+                    if ru: msg += f"🌍 {ru}\n"
+                    await send_long(update, msg)
                 else: await update.message.reply_text("❌ Не удалось.")
                 return
             else:
@@ -451,12 +459,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if c:
                     similar = search_similar_hadith(ar)
                     msg = f"🎲 {NAMES.get(c, c)}, №{n}\n\n"
-                    if ar: msg += f"🔤 {ar[:500]}\n\n"
-                    if tr: msg += f"🌍 ({lang}): {tr[:1500]}\n"
+                    if ar: msg += f"🔤 {ar}\n\n"
+                    if tr: msg += f"🌍 ({lang}): {tr}\n"
                     if gr: msg += f"\n📊 {gr}"
                     msg += f"\n\n📚 {NAMES.get(c, c)}, №{n}"
                     if similar: msg += f"\n\n📖 Также:\n• " + "\n• ".join(similar[:5])
-                    await update.message.reply_text(msg)
+                    await send_long(update, msg)
                 else: await update.message.reply_text("❌ Не удалось.")
                 return
 
@@ -466,12 +474,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not ar and not tr: await update.message.reply_text(f"❌ {NAMES.get(collection, collection)} №{number} не найден."); return
             similar = search_similar_hadith(ar)
             msg = f"📖 {NAMES.get(collection, collection)}, №{number}\n\n"
-            if ar: msg += f"🔤 {ar[:500]}\n\n"
-            if tr: msg += f"🌍 ({lang}): {tr[:1500]}\n"
+            if ar: msg += f"🔤 {ar}\n\n"
+            if tr: msg += f"🌍 ({lang}): {tr}\n"
             if gr: msg += f"\n📊 {gr}"
             msg += f"\n\n📚 {NAMES.get(collection, collection)}, №{number}"
             if similar: msg += f"\n\n📖 Также:\n• " + "\n• ".join(similar[:5])
-            await update.message.reply_text(msg)
+            await send_long(update, msg)
             return
 
     if text.lower() in ["помощь", "справка", "команды", "хелп", "help", "/start"]:
