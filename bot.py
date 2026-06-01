@@ -554,9 +554,28 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if results:
                     msg = f"🔍 *«{reg_cmd}»:*\n\n" + "\n".join([f"#{e['id']} {'🟢' if e['status']=='готово' else '🔴'} {e['description'][:100]}" for e in results])
                     await send_long(update, msg, "Markdown")
-                else:
+                                else:
                     await update.message.reply_text("❌ Не найдено в реестре.")
                 return
+
+    # Улучшение аудио
+    if is_owner(update) and text and text.lower() == "улучшить":
+        if update.message.reply_to_message and (update.message.reply_to_message.audio or update.message.reply_to_message.voice):
+            await update.message.reply_text("🎧 Обрабатываю аудио...")
+            replied = update.message.reply_to_message
+            file_obj = replied.audio or replied.voice
+            file = await file_obj.get_file()
+            input_path = f"/tmp/{file.file_id}.ogg"
+            output_path = f"/tmp/{file.file_id}_clean.mp3"
+            await file.download_to_drive(input_path)
+            
+            if enhance_audio(input_path, output_path):
+                await update.message.reply_audio(audio=open(output_path, "rb"), title="Чистое аудио")
+            else:
+                await update.message.reply_text("❌ Не удалось обработать аудио.")
+        else:
+            await update.message.reply_text("❌ Ответь на аудио или войс командой 'улучшить'.")
+        return
 
     if not text: return
 
