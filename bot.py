@@ -75,7 +75,7 @@ def format_memory_item(text):
     if not OPENROUTER_API_KEY:
         return text
     try:
-        prompt = f"""Перефразируй этот факт кратко и структурированно. Сохрани всю важную информацию включая арабский текст если есть. Отвечай только самим фактом: {text}"""
+        prompt = f"Перефразируй кратко и структурированно: {text}"
         r = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
@@ -145,7 +145,7 @@ def ai_describe_media(text_hint=""):
         r = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
-            json={"model": "google/gemini-2.0-flash-001", "messages": [{"role": "user", "content": f"Опиши кратко этот файл для реестра (5-10 слов): {text_hint}"}]},
+            json={"model": "google/gemini-2.0-flash-001", "messages": [{"role": "user", "content": f"Опиши кратко этот файл (5-10 слов): {text_hint}"}]},
             timeout=10
         )
         if r.status_code == 200:
@@ -416,3 +416,392 @@ async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else: return
         await context.bot.send_message(chat_id=LOG_CHAT_ID, text=msg)
     except: pass
+
+async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message: return
+    chat_type = update.effective_chat.type
+    text = update.message.text or update.message.caption or ""
+    text = text.strip()
+    chat_id = update.effective_chat.id
+    if chat_type == "private" and not is_owner(update): return
+
+    if is_owner(update):
+        has_media = update.message.audio or update.message.voice or update.message.video or update.message.photo or update.message.document
+        is_forward = update.message.forward_origin is not None
+        if text and parse_registry_command(text) == "add_media":
+            if update.message.reply_to_message:
+                replied = update.message.reply_to_message
+                if replied.audio or replied.voice or replied.video or replied.photo or replied.document:
+                    hint = replied.caption or ""
+                    await update.message.reply_text("🔍 Анализирую...")
+                    desc = ai_describe_media(hint)
+                    pending_edits[chat_id] = {"action": "add_registry", "description": desc}
+                    await update.message.reply_text(f"📝 {desc}\n\nСохранить в реестр? (да/нет)")
+                    return
+                else:
+                    await update.message.reply_text("❌ Ответь на медиа.")
+            else:
+                await update.message.reply_text("❌ Ответь на медиа командой 'в реестр'.")
+            return
+        if chat_id in pending_edits and pending_edits[chat_id].get("action") == "add_registry":
+            pending = pending_edits.pop(chat_id)
+            if text.lower() in ["да", "ок", "ok", "yes", "сохранить"]:
+                eid = add_to_registry({"type": "медиа", "description": pending["description"]})
+                await update.message.reply_text(f"✅ #{eid}\n📝 {pending['description']}\n📌 ожидает")
+            else:
+                await update.message.reply_text("❌ Отмена.")
+            return
+        if chat_type == "private" and (is_forward or has_media):
+            hint = text or ""
+            await update.message.reply_text("🔍 Анализирую...")
+            desc = ai_describe_media(hint)
+            pending_edits[chat_id] = {"action": "add_registry", "description": desc}
+            await update.message.reply_text(f"📝 {desc}\n\nСохранить в реестр? (да/нет)")
+            return
+        if text:
+            reg_cmd = parse_registry_command(text)
+            if reg_cmd and reg_cmd != "add_media":
+                if reg_cmd == "all":
+                    data = load_registry()
+                    if not data: await update.message.reply_text("📋 Пусто."); return
+                    msg = "📋 *Реестр:*\n\n"
+                    for e in data[-20:]:
+                        icon = "🟢" if e["status"] == "готово" else "🔴"
+                        msg += f"#{e['id']} {icon} {e.get('description','')[:100]}\n"
+                    await send_long(update, msg, "Markdown"); return
+                if reg_cmd == "pending":
+                    data = [e for e in load_registry() if e["status"] == "ожидает"]
+                    if not data: await update.message.reply_text("📋 Нет ожидающих."); return
+                    msg = "📋 *Ожидает:*\n\n" + "\n".join([f"#{e['id']} 🔴 {e.get('description','')[:100]}" for e in data])
+                    await send_long(update, msg, "Markdown"); return
+                if reg_cmd.startswith("done_"):
+                    eid = int(reg_cmd.split("_")[1])
+                    data = load_registry()
+                    for e in data:
+                        if e["id"] == eid:
+                            pending_edits[chat_id] = {"action": "done_registry", "id": eid, "desc": e.get("description","")[:100]}
+                            await update.message.reply_text(f"✅ Отметить #{eid} как готовое?\n\n{e.get('description','')[:100]}\n\nНапиши «да» или «нет».")
+                            return
+                    await update.message.reply_text("❌ Не найдено."); return
+                if reg_cmd.startswith("delete_"):
+                    eid = int(reg_cmd.split("_")[1])
+                    data = load_registry()
+                    for e in data:
+                        if e["id"] == eid:
+                            pending_edits[chat_id] = {"action": "delete_registry", "id": eid, "desc": e.get("description","")[:100]}
+                            await update.message.reply_text(f"⚠️ Удалить #{eid}?\n\n{e.get('description','')[:100]}\n\nНапиши «да» или «нет».")
+                            return
+                    await update.message.reply_text("❌ Не найдено."); return
+                if reg_cmd.startswith("result_"):
+                    parts = reg_cmd.split("_", 2)
+                    eid = int(parts[1])
+                    link = parts[2] if len(parts) > 2 else ""
+                    data = load_registry()
+                    for e in data:
+                        if e["id"] == eid:
+                            e["result"] = link; e["status"] = "готово"
+                            save_registry(data)
+                            await update.message.reply_text(f"✅ #{eid} результат сохранён."); return
+                    await update.message.reply_text("❌ Не найдено."); return
+                results = search_registry(reg_cmd)
+                if results:
+                    msg = f"🔍 *«{reg_cmd}»:*\n\n" + "\n".join([f"#{e['id']} {'🟢' if e['status']=='готово' else '🔴'} {e['description'][:100]}" for e in results])
+                    await send_long(update, msg, "Markdown")
+                else:
+                    await update.message.reply_text("❌ Не найдено в реестре.")
+                return
+
+    if not text: return
+
+    if is_owner(update):
+        t_lower = text.lower().strip()
+        if chat_id in pending_edits:
+            pending = pending_edits.get(chat_id)
+            if pending.get("action") == "clear_memory":
+                if t_lower == "точно ботяра":
+                    pending_edits.pop(chat_id); save_memory([])
+                    await update.message.reply_text("🧠 Память полностью очищена.")
+                else:
+                    pending_edits.pop(chat_id)
+                    await update.message.reply_text("❌ Удаление отменено.")
+                return
+            if pending.get("action") == "delete_memory":
+                if t_lower in ["да", "ок", "ok", "yes", "удалить"]:
+                    pending_edits.pop(chat_id)
+                    memory = load_memory()
+                    idx = pending["index"]
+                    if 0 <= idx < len(memory):
+                        removed = memory.pop(idx); save_memory(memory)
+                        await update.message.reply_text(f"🗑 Удалено:\n{removed.get('text','')}")
+                else:
+                    pending_edits.pop(chat_id)
+                    await update.message.reply_text("❌ Удаление отменено.")
+                return
+            if pending.get("action") == "delete_memory_word":
+                if t_lower in ["да", "ок", "ok", "yes", "удалить"]:
+                    word = pending["word"]; pending_edits.pop(chat_id)
+                    memory = load_memory()
+                    before = len(memory)
+                    memory = [m for m in memory if word.lower() not in m.get("text", "").lower()]
+                    save_memory(memory)
+                    await update.message.reply_text(f"🗑 Удалено {before - len(memory)} записей с «{word}».")
+                else:
+                    pending_edits.pop(chat_id)
+                    await update.message.reply_text("❌ Удаление отменено.")
+                return
+            if pending.get("action") == "done_registry":
+                if t_lower in ["да", "ок", "ok", "yes"]:
+                    pending_edits.pop(chat_id); mark_done(pending["id"])
+                    await update.message.reply_text(f"✅ #{pending['id']} готово.")
+                else:
+                    pending_edits.pop(chat_id)
+                    await update.message.reply_text("❌ Отмена.")
+                return
+            if pending.get("action") == "delete_registry":
+                if t_lower in ["да", "ок", "ok", "yes", "удалить"]:
+                    pending_edits.pop(chat_id); delete_entry(pending["id"])
+                    await update.message.reply_text(f"🗑 #{pending['id']} удалено.")
+                else:
+                    pending_edits.pop(chat_id)
+                    await update.message.reply_text("❌ Отмена.")
+                return
+            if "new_text" in pending:
+                if t_lower in ["да", "сохранить", "ок", "ok", "yes"]:
+                    pending_edits.pop(chat_id)
+                    memory = load_memory()
+                    idx = pending["index"]
+                    if 0 <= idx < len(memory):
+                        memory[idx]["text"] = pending["new_text"]; memory[idx]["date"] = today()
+                        save_memory(memory)
+                        await update.message.reply_text(f"✅ Запись #{idx+1} обновлена.")
+                elif t_lower in ["нет", "не надо", "отмена", "no"]:
+                    pending_edits.pop(chat_id)
+                    await update.message.reply_text("❌ Правка отменена.")
+                else:
+                    await update.message.reply_text("🔄 Переделываю...")
+                    new_text = format_memory_item(f"{pending['original']} — {text}")
+                    pending_edits[chat_id]["new_text"] = new_text
+                    await update.message.reply_text(f"📝 Новый вариант:\n\n{new_text}\n\nСохранить? (да/нет)")
+                return
+
+        if t_lower.startswith("запомни:") or t_lower.startswith("запомни "):
+            fact = text.split(" ", 1)[1].strip() if " " in text else ""
+            if fact:
+                await update.message.reply_text("🧠 Структурирую...")
+                formatted = format_memory_item(fact)
+                memory = load_memory()
+                memory.append({"date": today(), "text": formatted})
+                save_memory(memory)
+                new_id = len(memory)
+                await update.message.reply_text(f"✅ Запись #{new_id} [{today()}]\n📝 {formatted}\n\n✏️ Исправить: исправь память {new_id}: текст")
+            return
+
+        botyara_q = parse_botyara(text)
+        if botyara_q is not None:
+            if botyara_q in ["очисти свою память", "очисти память", "забудь всё", "сотри память", "стереть память"]:
+                pending_edits[chat_id] = {"action": "clear_memory"}
+                await update.message.reply_text("⚠️ Ты хочешь удалить ВСЮ память!\nЭто нельзя отменить.\n\nЕсли уверен — напиши: **точно ботяра**")
+                return
+
+        if t_lower == "память":
+            memory = load_memory()
+            if not memory:
+                await update.message.reply_text("🧠 Память пуста.")
+            else:
+                msg = "🧠 *Что я знаю:*\n\n"
+                for i, m in enumerate(memory):
+                    msg += f"*{i+1}.* [{m.get('date','—')}] {m.get('text','')}\n\n"
+                await send_long(update, msg, "Markdown")
+            return
+
+        if t_lower.startswith("удали память "):
+            val = text[13:].strip()
+            memory = load_memory()
+            if val.isdigit():
+                idx = int(val) - 1
+                if 0 <= idx < len(memory):
+                    pending_edits[chat_id] = {"action": "delete_memory", "index": idx, "text": memory[idx].get("text", "")}
+                    await update.message.reply_text(f"⚠️ Удалить запись #{idx+1}?\n\n{memory[idx].get('text','')}\n\nНапиши «да» или «нет».")
+                else:
+                    await update.message.reply_text("❌ Такого номера нет.")
+            else:
+                found = [m for m in memory if val.lower() in m.get("text", "").lower()]
+                if found:
+                    pending_edits[chat_id] = {"action": "delete_memory_word", "word": val, "count": len(found)}
+                    msg = f"⚠️ Удалить {len(found)} записей с «{val}»?\n\n"
+                    for f in found[:5]: msg += f"• {f.get('text','')[:100]}\n"
+                    if len(found) > 5: msg += f"...и ещё {len(found)-5}\n"
+                    msg += "\nНапиши «да» или «нет»."
+                    await update.message.reply_text(msg)
+                else:
+                    await update.message.reply_text(f"❌ Не найдено записей с «{val}».")
+            return
+
+        if t_lower.startswith("исправь память "):
+            rest = text[15:].strip()
+            parts = rest.split(":", 1)
+            if len(parts) == 2 and parts[0].strip().isdigit():
+                idx = int(parts[0].strip()) - 1
+                instruction = parts[1].strip()
+                memory = load_memory()
+                if 0 <= idx < len(memory):
+                    original = memory[idx].get("text", "")
+                    await update.message.reply_text("🔄 Переделываю...")
+                    new_text = format_memory_item(f"{original} — {instruction}")
+                    pending_edits[chat_id] = {"index": idx, "original": original, "new_text": new_text}
+                    await update.message.reply_text(f"📝 Было:\n{original}\n\n✏️ Стало:\n{new_text}\n\nСохранить? (да/нет)")
+                else:
+                    await update.message.reply_text("❌ Такого номера нет.")
+            else:
+                await update.message.reply_text("❌ Формат: исправь память 2: сделай короче")
+            return
+
+        if t_lower == "очистить память":
+            save_memory([])
+            await update.message.reply_text("🧠 Память очищена.")
+            return
+
+    if is_owner(update) and update.message.reply_to_message:
+        if update.message.reply_to_message.from_user and update.message.reply_to_message.from_user.is_bot:
+            await update.message.reply_text("🤔 Думаю...")
+            result = ask_ai_with_memory(text)
+            await send_long(update, result)
+            return
+
+    if is_owner(update):
+        botyara_q = parse_botyara(text)
+        if botyara_q is not None and botyara_q not in ["очисти свою память", "очисти память", "забудь всё", "сотри память", "стереть память"]:
+            if update.message.reply_to_message and update.message.reply_to_message.text:
+                original_text = update.message.reply_to_message.text
+                if botyara_q == "":
+                    prompt = f"Объясни это сообщение:\n\n{original_text}"
+                elif "переведи" in botyara_q:
+                    prompt = f"Переведи на русский:\n{original_text}"
+                elif "источник" in botyara_q or "откуда" in botyara_q:
+                    prompt = f"Найди источник:\n\n{original_text}"
+                elif "достоверн" in botyara_q or "сахих" in botyara_q:
+                    prompt = f"Проверь достоверность:\n\n{original_text}"
+                else:
+                    prompt = f"{botyara_q}\n\nСообщение: {original_text}"
+            else:
+                prompt = botyara_q if botyara_q else None
+            if prompt:
+                await update.message.reply_text("🤔 Думаю...")
+                result = ask_ai_with_memory(prompt)
+                await send_long(update, result)
+            else:
+                await update.message.reply_text("❌ Напиши что-то после 'ботяра'.")
+            return
+
+        tr = parse_translate(text)
+        if tr == "REPLY":
+            if update.message.reply_to_message and update.message.reply_to_message.text:
+                await update.message.reply_text("🔄 Перевожу...")
+                result = ask_ai(f"Переведи на русский:\n{update.message.reply_to_message.text}", "Ты — переводчик.")
+                await send_long(update, result)
+            return
+        if tr and tr != "REPLY":
+            await update.message.reply_text("🔄 Перевожу...")
+            result = ask_ai(f"Переведи на русский:\n{tr}", "Ты — переводчик.")
+            await send_long(update, result)
+            return
+
+        surah, ayah = parse_tafsir_query(text)
+        if surah and ayah:
+            await update.message.reply_text(f"📖 Ищу тафсир {surah}:{ayah}...")
+            arabic_ayah, _ = get_quran_ayah(surah, ayah)
+            prompt = f"Дай тафсир Ибн Касира на аят {surah}:{ayah}."
+            if arabic_ayah: prompt += f"\n\nАят: {arabic_ayah}"
+            result = ask_ai(prompt, "Ты — знаток тафсира Ибн Касира.")
+            await send_long(update, result)
+            return
+
+    sq = parse_search_query(text)
+    if sq:
+        await update.message.reply_text(f"🔍 Ищу: {sq}...")
+        results = search_hadith(sq)
+        if not results: await update.message.reply_text("❌ Ничего не найдено."); return
+        msg = f"🔍 *«{sq}»*\n\n"
+        for i, r in enumerate(results, 1):
+            msg += f"*{i}.* {r['text'][:300]}\n"
+            if r['rawi']: msg += f"👤 {r['rawi']}\n"
+            if r['source']: msg += f"📚 {r['source']}\n"
+            if r['grade']: msg += f"📊 {r['grade']}\n"
+            msg += "\n"
+        await send_long(update, msg, "Markdown")
+        return
+
+    surah, ayah = parse_quran_query(text)
+    if surah and ayah:
+        await update.message.reply_text("⏳ Ищу аят...")
+        a, r = get_quran_ayah(surah, ayah)
+        if not a and not r: await update.message.reply_text(f"❌ Аят {surah}:{ayah} не найден."); return
+        msg = f"📖 Коран, {surah}:{ayah}\n\n"
+        if a: msg += f"🔤 {a}\n\n"
+        if r: msg += f"🌍 {r}\n"
+        msg += f"\n📚 Коран, {surah}:{ayah}"
+        await send_long(update, msg)
+        return
+
+    collection, number = parse_hadith_query(text)
+    if collection:
+        if collection in ["random", "random_bukhari", "random_muslim", "random_quran"]:
+            await update.message.reply_text("🎲 Ищу...")
+            if collection == "random_quran":
+                s, n, ar, ru = get_random_quran()
+                if ar or ru:
+                    msg = f"🎲 Коран, {s}:{n}\n\n"
+                    if ar: msg += f"🔤 {ar}\n\n"
+                    if ru: msg += f"🌍 {ru}\n"
+                    await send_long(update, msg)
+                else: await update.message.reply_text("❌ Не удалось.")
+                return
+            else:
+                c = None if collection == "random" else collection.replace("random_", "")
+                c, n, ar, tr, lang, gr = get_random_hadith(c)
+                if c:
+                    similar = search_similar_hadith(ar)
+                    msg = f"🎲 {NAMES.get(c, c)}, №{n}\n\n"
+                    if ar: msg += f"🔤 {ar}\n\n"
+                    if tr: msg += f"🌍 ({lang}): {tr}\n"
+                    if gr: msg += f"\n📊 {gr}"
+                    msg += f"\n\n📚 {NAMES.get(c, c)}, №{n}"
+                    if similar: msg += f"\n\n📖 Также:\n• " + "\n• ".join(similar[:5])
+                    await send_long(update, msg)
+                else: await update.message.reply_text("❌ Не удалось.")
+                return
+        if number:
+            await update.message.reply_text("⏳ Ищу хадис...")
+            if collection == "ahmad_local":
+                ar, tr, lang, gr = get_ahmad_hadith(number)
+            else:
+                ar, tr, lang, gr = get_hadith(collection, number)
+            if not ar and not tr: await update.message.reply_text(f"❌ {NAMES.get(collection, collection)} №{number} не найден."); return
+            similar = search_similar_hadith(ar) if collection != "ahmad_local" else []
+            msg = f"📖 {NAMES.get(collection, collection)}, №{number}\n\n"
+            if ar: msg += f"🔤 {ar}\n\n"
+            if tr: msg += f"🌍 ({lang}): {tr}\n"
+            if gr: msg += f"\n📊 {gr}"
+            msg += f"\n\n📚 {NAMES.get(collection, collection)}, №{number}"
+            if similar: msg += f"\n\n📖 Также:\n• " + "\n• ".join(similar[:5])
+            await send_long(update, msg)
+            return
+
+    if text.lower() in ["помощь", "справка", "команды", "хелп", "help", "/start"]:
+        await update.message.reply_text(
+            "📚 *Команды бота:*\n\n"
+            "*Хадисы (8 сборников):*\nбухари 1 | муслим 1 | абу дауд 1\nтирмизи 1 | ибн маджа 1 | насаи 1 | муватта 1\nахмад 1\n\n"
+            "*Случайные:*\nслучайный | случайный бухари | случайный муслим | случайный коран\n\n"
+            "*Коран:*\nкоран 2:255\n\n"
+            "*Поиск:*\nискать بدعة\n\n"
+            "*Ботяра (владелец):*\nботяра вопрос | ботяра очисти свою память\n\n"
+            "*Память (владелец):*\nзапомни: факт | память | удали память 2\nисправь память 2: текст | очистить память\n\n"
+            "*Реестр (владелец):*\nв реестр (reply) | реестр | ожидает\nсделано 1 | удали 1 | результат 1 ссылка",
+            parse_mode="Markdown"
+        )
+
+app = ApplicationBuilder().token(TOKEN).build()
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
+app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
+app.add_handler(ChatMemberHandler(track_member, ChatMemberHandler.CHAT_MEMBER))
+app.run_polling()
