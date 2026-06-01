@@ -2,12 +2,14 @@ import os
 import re
 import random
 import requests
+from datetime import datetime
 from html import unescape
 from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler
 
 TOKEN = os.environ.get("TOKEN")
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+LOG_CHAT_ID = -1003480426073  # Чат для логов входов/выходов
 
 COLLECTIONS = {
     "бухари": "bukhari",
@@ -79,12 +81,12 @@ def parse_translate(text):
     if t == "переведи": return "REPLY"
     return None
 
-def parse_deep_query(text):
+def parse_gemini_query(text):
     t = text.lower().strip()
-    for p in ["deep ", "диип ", "дип ", "глубокий "]:
+    for p in ["гемини ", "гемини\n", "gemini ", "gemini\n"]:
         if t.startswith(p):
             return t[len(p):].strip()
-    if t in ["deep", "диип", "дип"]:
+    if t in ["гемини", "gemini"]:
         return ""
     return None
 
@@ -108,8 +110,7 @@ def get_hadith(collection, number):
             r = requests.get(url_ar, timeout=10)
             if r.status_code == 200:
                 h = r.json().get("hadiths", [])
-                if h:
-                    arabic = h[0].get("text", "").replace("\n", " ")
+                if h: arabic = h[0].get("text", "").replace("\n", " ")
         except: pass
         try:
             r = requests.get(url_ru, timeout=10)
@@ -136,8 +137,7 @@ def get_hadith(collection, number):
         lang = "рус" if russian else "англ"
         if arabic or translation:
             return arabic, translation, lang, grade
-    except Exception as e:
-        print(f"Error: {e}")
+    except: pass
     return "", "", "", ""
 
 def get_random_hadith(collection=None):
@@ -182,7 +182,7 @@ def search_hadith(query):
             hadith_text = m.group(1).strip()
             rawi = muhaddith = source = page = grade = ""
             for key, var in [("الراوي:", "rawi"), ("المحدث:", "muhaddith"), ("المصدر:", "source"), ("الصفحة أو الرقم:", "page"), ("خلاصة حكم المحدث:", "grade")]:
-                m2 = re.search(rf'{key}\s*([^\n]+?)(?:\s*(?:المحدث|المصدر|الصفحة|خلاصة|$))', block)
+                m2 = re.search(rf'{key}\s*([^\n]+)', block)
                 if m2:
                     val = m2.group(1).strip()
                     if val == "-": val = ""
@@ -211,10 +211,9 @@ def search_similar_hadith(arabic_text):
         blocks = re.sub(r'\s+', ' ', text_only).split("--------------")
         refs = []
         for block in blocks[:5]:
-            block = block.strip()
-            if not block: continue
+            if not block.strip(): continue
             source = page = ""
-            m = re.search(r'المصدر:\s*([^\n]+?)(?:\s*الصفحة|$)', block)
+            m = re.search(r'المصدر:\s*([^\n]+)', block)
             if m: source = m.group(1).strip()
             m = re.search(r'الصفحة أو الرقم:\s*([^\n]+)', block)
             if m: page = m.group(1).strip()
@@ -224,24 +223,63 @@ def search_similar_hadith(arabic_text):
         return refs
     except: return []
 
-def ask_deepseek(prompt, system=None):
-    if not DEEPSEEK_API_KEY:
-        return "❌ API-ключ DeepSeek не настроен."
+def ask_gemini(prompt, system=None):
+    if not GEMINI_API_KEY:
+        return "❌ API-ключ Gemini не настроен."
     if system is None:
         system = "Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском языке. Будь уважителен, полезен и краток."
     try:
         r = requests.post(
-            "https://api.deepseek.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
-            json={"model": "deepseek-chat", "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}], "temperature": 0.7, "max_tokens": 2000},
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
+            json={"contents": [{"parts": [{"text": f"{system}\n\nВопрос: {prompt}"}]}]},
             timeout=30
         )
         if r.status_code == 200:
-            return r.json()["choices"][0]["message"]["content"]
+            return r.json()["candidates"][0]["content"]["parts"][0]["text"]
         else:
-            return f"❌ Ошибка DeepSeek: {r.status_code}"
+            return f"❌ Ошибка Gemini: {r.status_code}"
     except Exception as e:
         return f"❌ Ошибка: {e}"
+
+async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отслеживает входы и выходы участников"""
+    chat = update.effective_chat
+    member = update.chat_member
+    user = member.new_chat_member.user
+    now = datetime.now().strftime("%d.%m.%Y, %H:%M")
+
+    name = user.full_name
+    username = f"@{user.username}" if user.username else "нет username"
+    user_id = user.id
+
+    if member.new_chat_member.status == "member":
+        # Новый участник
+        msg = (
+            f"➕ Новый участник\n"
+            f"👤 {name}\n"
+            f"🔗 {username}\n"
+            f"🆔 ID: {user_id}\n"
+            f"📁 Группа: {chat.title}\n"
+            f"🕐 {now}"
+        )
+    elif member.new_chat_member.status in ["left", "kicked"]:
+        # Участник вышел или удалён
+        action = "🚫 Удалён" if member.new_chat_member.status == "kicked" else "➖ Вышел"
+        msg = (
+            f"{action} участник\n"
+            f"👤 {name}\n"
+            f"🔗 {username}\n"
+            f"🆔 ID: {user_id}\n"
+            f"📁 Группа: {chat.title}\n"
+            f"🕐 {now}"
+        )
+    else:
+        return
+
+    try:
+        await context.bot.send_message(chat_id=LOG_CHAT_ID, text=msg)
+    except Exception as e:
+        print(f"Log error: {e}")
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
@@ -256,7 +294,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if tr == "REPLY":
         if update.message.reply_to_message and update.message.reply_to_message.text:
             await update.message.reply_text("🔄 Перевожу...")
-            result = ask_deepseek(f"Переведи на русский:\n{update.message.reply_to_message.text}", "Ты — переводчик с арабского на русский. Переводи точно.")
+            result = ask_gemini(f"Переведи на русский:\n{update.message.reply_to_message.text}", "Ты — переводчик с арабского на русский. Переводи точно.")
             for i in range(0, len(result), 4000):
                 await update.message.reply_text(result[i:i+4000])
             return
@@ -265,7 +303,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
     if tr and tr != "REPLY":
         await update.message.reply_text("🔄 Перевожу...")
-        result = ask_deepseek(f"Переведи на русский:\n{tr}", "Ты — переводчик с арабского на русский. Переводи точно.")
+        result = ask_gemini(f"Переведи на русский:\n{tr}", "Ты — переводчик с арабского на русский. Переводи точно.")
         for i in range(0, len(result), 4000):
             await update.message.reply_text(result[i:i+4000])
         return
@@ -278,19 +316,19 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         prompt = f"Дай тафсир Ибн Касира на аят {surah}:{ayah} из Корана. Сначала приведи арабский текст тафсира, затем русский перевод."
         if arabic_ayah:
             prompt += f"\n\nАят: {arabic_ayah}"
-        result = ask_deepseek(prompt, "Ты — знаток тафсира Ибн Касира. Даёшь оригинальный арабский текст тафсира и русский перевод.")
+        result = ask_gemini(prompt, "Ты — знаток тафсира Ибн Касира.")
         for i in range(0, len(result), 4000):
             await update.message.reply_text(result[i:i+4000])
         return
 
-    # DeepSeek вопрос
-    deep_q = parse_deep_query(text)
-    if deep_q is not None:
+    # Gemini вопрос
+    gem_q = parse_gemini_query(text)
+    if gem_q is not None:
         await update.message.reply_text("🤔 Думаю...")
-        if deep_q:
-            result = ask_deepseek(deep_q)
+        if gem_q:
+            result = ask_gemini(gem_q)
         else:
-            result = "❌ Напиши вопрос после 'deep'. Например: deep столица Саудовской Аравии?"
+            result = "❌ Напиши вопрос после 'гемини'. Например: гемини столица Саудовской Аравии?"
         for i in range(0, len(result), 4000):
             await update.message.reply_text(result[i:i+4000])
         return
@@ -385,7 +423,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*Случайные:*\nслучайный | случайный бухари | случайный муслим | случайный коран\n\n"
             "*Коран:*\nкоран 2:255\n\n"
             "*Поиск:*\nискать بدعة\n\n"
-            "*DeepSeek ИИ:*\ndeep вопрос\nтафсир 5:6\nпереведи текст\n(ответь на сообщение + переведи)\n\n"
+            "*Gemini ИИ:*\nгемини вопрос\nтафсир 5:6\nпереведи текст\n\n"
             "*Справка:* помощь",
             parse_mode="Markdown"
         )
@@ -393,4 +431,5 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
+app.add_handler(ChatMemberHandler(track_member, ChatMemberHandler.CHAT_MEMBER))
 app.run_polling()
