@@ -35,8 +35,6 @@ GRADE_MAP = {
     "Sahih Hasan": "Сахих Хасан ✅",
 }
 
-# ---------- ПАРСЕРЫ ЗАПРОСОВ ----------
-
 def parse_hadith_query(text):
     text = text.lower().strip()
     for ru, en in COLLECTIONS.items():
@@ -61,7 +59,6 @@ def parse_quran_query(text):
     return None, None
 
 def parse_search_query(text):
-    """искать запрос"""
     text_lower = text.lower().strip()
     if text_lower.startswith("искать "):
         return text[7:].strip()
@@ -70,7 +67,6 @@ def parse_search_query(text):
     return None
 
 def parse_gemini_query(text):
-    """гемини запрос"""
     text_lower = text.lower().strip()
     for prefix in ["гемини ", "гемини\n", "gemini ", "gemini\n"]:
         if text_lower.startswith(prefix):
@@ -78,8 +74,6 @@ def parse_gemini_query(text):
     if text_lower in ["гемини", "gemini"]:
         return ""
     return None
-
-# ---------- ХАДИСЫ (локальная база) ----------
 
 def get_hadith(collection, number):
     try:
@@ -96,6 +90,8 @@ def get_hadith(collection, number):
                 hadiths = r_ar.json().get("hadiths", [])
                 if hadiths:
                     arabic = hadiths[0].get("text", "")
+                    if arabic:
+                        arabic = arabic.replace("\n", " ")
         except:
             pass
 
@@ -143,8 +139,6 @@ def get_hadith(collection, number):
         print(f"Error in get_hadith: {e}")
     return "", "", "", ""
 
-# ---------- КОРАН ----------
-
 def get_quran_ayah(surah, ayah):
     try:
         url_ar = f"https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/ara-quranindopak/{surah}/{ayah}.min.json"
@@ -167,10 +161,7 @@ def get_quran_ayah(surah, ayah):
         print(f"Quran error: {e}")
     return "", ""
 
-# ---------- ПОИСК ЧЕРЕЗ DORAR API ----------
-
 def search_hadith(query):
-    """Ищет хадисы через Dorar API"""
     try:
         url = f"https://dorar.net/dorar_api.json?skey={query}&page=1"
         r = requests.get(url, timeout=15)
@@ -182,89 +173,74 @@ def search_hadith(query):
         if not html:
             return []
 
-        results = []
-        # Убираем HTML-теги кроме разделителей, затем разбиваем
-        # Сначала заменим разделитель на уникальный маркер
-        html = html.replace("--------------\n", "|||SPLIT|||")
-        
-        # Убираем все HTML-теги
+        # Убираем HTML-теги
         text_only = re.sub(r'<[^>]+>', ' ', html)
         text_only = unescape(text_only)
-        
-        # Разбиваем по маркеру
-        blocks = text_only.split("|||SPLIT|||")
-        
+        text_only = re.sub(r'\s+', ' ', text_only)
+
+        # Разбиваем по разделителю
+        blocks = text_only.split("--------------")
+
+        results = []
         for block in blocks[:5]:
             block = block.strip()
             if not block:
                 continue
-            
-            # Убираем лишние пробелы
-            block = re.sub(r'\s+', ' ', block).strip()
-            
-            # Извлекаем поля
-            # Номер и текст
+
+            # Извлекаем номер и текст хадиса
             match = re.match(r'^\d+\s*-\s*(.*)', block)
-            text = match.group(1) if match else block
-            
-            # Ищем поля в оставшемся тексте
+            if not match:
+                continue
+            hadith_text = match.group(1).strip()
+
+            # Извлекаем метаданные
             rawi = ""
             muhaddith = ""
             source = ""
             page = ""
             grade = ""
-            
-            # الراوي
-            m = re.search(r'الراوي:\s*([^\n]+?)(?:\s*المحدث:|$)', text_only)
+
+            m = re.search(r'الراوي:\s*([^\n]+?)(?:\s*المحدث:|$)', block)
             if m:
                 rawi = m.group(1).strip()
                 if rawi == "-":
                     rawi = ""
-            
-            # المحدث
-            m = re.search(r'المحدث:\s*([^\n]+?)(?:\s*المصدر:|$)', text_only)
+
+            m = re.search(r'المحدث:\s*([^\n]+?)(?:\s*المصدر:|$)', block)
             if m:
                 muhaddith = m.group(1).strip()
-            
-            # المصدر
-            m = re.search(r'المصدر:\s*([^\n]+?)(?:\s*الصفحة|$)', text_only)
+
+            m = re.search(r'المصدر:\s*([^\n]+?)(?:\s*الصفحة|$)', block)
             if m:
                 source = m.group(1).strip()
-            
-            # الصفحة أو الرقم
-            m = re.search(r'الصفحة أو الرقم:\s*([^\n]+?)(?:\s*خلاصة|$)', text_only)
+
+            m = re.search(r'الصفحة أو الرقم:\s*([^\n]+?)(?:\s*خلاصة|$)', block)
             if m:
                 page = m.group(1).strip()
-            
-            # خلاصة حكم المحدث
-            m = re.search(r'خلاصة حكم المحدث:\s*([^\n]+?)(?:\s*--------------|$)', text_only)
+
+            m = re.search(r'خلاصة حكم المحدث:\s*([^\n]+)', block)
             if m:
                 grade = m.group(1).strip()
-            
-            # Очищаем текст хадиса от метаданных
-            # Берём только первую часть до الراوي
-            if text:
-                # Убираем всё после первой метки если она есть в тексте
-                for marker in ["الراوي:", "المحدث:", "المصدر:"]:
-                    if marker in text:
-                        text = text.split(marker)[0].strip()
-            
-            if text and len(text) > 10:
+
+            # Убираем метаданные из текста хадиса
+            for marker in ["الراوي:", "المحدث:", "المصدر:"]:
+                if marker in hadith_text:
+                    hadith_text = hadith_text.split(marker)[0].strip()
+
+            if hadith_text and len(hadith_text) > 10:
                 results.append({
-                    "text": text,
+                    "text": hadith_text,
                     "rawi": rawi,
                     "muhaddith": muhaddith,
                     "source": source,
                     "page": page,
                     "grade": grade,
                 })
-        
+
         return results
     except Exception as e:
         print(f"Search error: {e}")
         return []
-
-# ---------- GEMINI ----------
 
 def ask_gemini(question):
     if not GEMINI_API_KEY:
@@ -293,10 +269,14 @@ def ask_gemini(question):
     except Exception as e:
         return f"❌ Ошибка: {e}"
 
-# ---------- ОБРАБОТЧИК СООБЩЕНИЙ ----------
-
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Проверяем что есть текст сообщения
+    if not update.message or not update.message.text:
+        return
+
     text = update.message.text.strip()
+    if not text:
+        return
 
     # Поиск через Dorar
     search_query = parse_search_query(text)
@@ -310,7 +290,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         msg = f"🔍 *Результаты поиска:* «{search_query}»\n\n"
         for i, r in enumerate(results, 1):
-            msg += f"*{i}.* {r['text']}\n"
+            msg += f"*{i}.* {r['text'][:300]}\n"
             if r['rawi']:
                 msg += f"👤 *Передатчик:* {r['rawi']}\n"
             if r['muhaddith']:
@@ -349,26 +329,29 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         msg = f"📖 Коран, {surah}:{ayah}\n\n"
         if arabic:
-            msg += f"🔤 Арабский текст:\n{arabic}\n\n"
+            msg += f"🔤 Арабский текст:\n{arabic[:500]}\n\n"
         if russian:
-            msg += f"🌍 Перевод (рус):\n{russian}\n"
+            msg += f"🌍 Перевод (рус):\n{russian[:1000]}\n"
         msg += f"\n📚 Источник: Священный Коран, сура {surah}, аят {ayah}"
         await update.message.reply_text(msg)
         return
 
-    # Хадисы (локальная база)
+    # Хадисы
     collection, number = parse_hadith_query(text)
     if collection and number:
         await update.message.reply_text("⏳ Ищу хадис...")
         arabic, translation, lang, grade = get_hadith(collection, number)
         if not arabic and not translation:
-            await update.message.reply_text(f"❌ Хадис {NAMES.get(collection, collection)} №{number} не найден.")
+            await update.message.reply_text(
+                f"❌ Хадис {NAMES.get(collection, collection)} №{number} не найден.\n"
+                "Проверь номер и попробуй снова."
+            )
             return
         msg = f"📖 {NAMES.get(collection, collection)}, хадис №{number}\n\n"
         if arabic:
-            msg += f"🔤 Арабский текст:\n{arabic}\n\n"
+            msg += f"🔤 Арабский текст:\n{arabic[:500]}\n\n"
         if translation:
-            msg += f"🌍 Перевод ({lang}):\n{translation}\n"
+            msg += f"🌍 Перевод ({lang}):\n{translation[:1500]}\n"
         if grade:
             msg += f"\n📊 Достоверность: {grade}"
         msg += f"\n\n📚 Источник: {NAMES.get(collection, collection)}, хадис №{number}"
@@ -376,21 +359,23 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Справка
-    await update.message.reply_text(
-        "📚 *Команды бота:*\n\n"
-        "*Хадисы (6 сборников):*\n"
-        "бухари 1 | муслим 1 | абу дауд 1\n"
-        "тирмизи 1 | ибн маджа 1 | насаи 1\n\n"
-        "*Коран:*\n"
-        "коран 2:255\n\n"
-        "*Поиск по базе (340 000 хадисов):*\n"
-        "искать بدعة\n"
-        "искать намерения\n\n"
-        "*ИИ (Gemini):*\n"
-        "гемини твой вопрос\n\n"
-        "*Справка:* помощь",
-        parse_mode="Markdown"
-    )
+    if text.lower() in ["помощь", "справка", "команды", "хелп", "help", "/start"]:
+        await update.message.reply_text(
+            "📚 *Команды бота:*\n\n"
+            "*Хадисы (6 сборников):*\n"
+            "бухари 1 | муслим 1 | абу дауд 1\n"
+            "тирмизи 1 | ибн маджа 1 | насаи 1\n\n"
+            "*Коран:*\n"
+            "коран 2:255\n\n"
+            "*Поиск по базе (340 000 хадисов):*\n"
+            "искать بدعة\n"
+            "искать намерения\n\n"
+            "*ИИ (Gemini):*\n"
+            "гемини твой вопрос\n\n"
+            "*Справка:* помощь",
+            parse_mode="Markdown"
+        )
+        return
 
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
