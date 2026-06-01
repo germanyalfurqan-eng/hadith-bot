@@ -499,9 +499,13 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Проверка: ответ на сообщение бота
     is_reply_to_bot = False
+    is_reply_to_channel = False
     if update.message.reply_to_message:
         if update.message.reply_to_message.from_user and update.message.reply_to_message.from_user.is_bot:
             is_reply_to_bot = True
+        if update.message.reply_to_message.sender_chat:
+            is_reply_to_channel = True
+
     
     # ============ ВЛАДЕЛЕЦ: РЕЕСТР ============
     if is_owner(update):
@@ -798,7 +802,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # В чате/канале: отвечаем ТОЛЬКО если есть "ботяра" или ответ боту
         elif chat_type != "private":
-            if "ботяра" in text.lower() or is_reply_to_bot:
+            if "ботяра" in text.lower() or (is_reply_to_bot and not is_reply_to_channel):
                 clean = text.replace("ботяра", "").strip()
                 if not clean:
                     clean = "продолжи"
