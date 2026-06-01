@@ -386,18 +386,58 @@ def search_similar_hadith(arabic_text):
     except: return []
 
 def ask_ai(prompt, system=None):
-    if not OPENROUTER_API_KEY: return "❌ API-ключ не настроен."
-    if system is None: system = "Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском."
-    try:
-        r = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
-            json={"model": AI_MODEL, "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}]},
-            timeout=30
-        )
-        if r.status_code == 200: return r.json()["choices"][0]["message"]["content"]
-        else: return f"❌ Ошибка AI: {r.status_code}"
-    except Exception as e: return f"❌ Ошибка: {e}"
+    # Список моделей от лучшей к запасной
+    модели = [
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "google/gemma-4-31b-it:free",
+        "openai/gpt-oss-120b:free",
+        "openrouter/free"
+    ]
+    
+    # Названия моделей для подписи
+    имена = {
+        "nvidia/nemotron-3-super-120b-a12b:free": "🧠 Nemotron 3 (NVIDIA)",
+        "google/gemma-4-31b-it:free": "🦊 Gemma 4 (Google)",
+        "openai/gpt-oss-120b:free": "🤖 GPT-OSS (OpenAI)",
+        "openrouter/free": "🔄 Auto (OpenRouter)"
+    }
+    
+    if not OPENROUTER_API_KEY:
+        return "❌ API-ключ не настроен."
+    
+    if system is None:
+        system = "Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском."
+    
+    for модель in модели:
+        try:
+            r = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": модель,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "max_tokens": 1500
+                },
+                timeout=30
+            )
+            
+            if r.status_code == 200:
+                ответ = r.json()["choices"][0]["message"]["content"]
+                имя_модели = имена.get(модель, модель)
+                return f"{ответ}\n\n---\n✨ *Модель:* {имя_модели}"
+            
+            elif r.status_code == 429:
+                continue
+            else:
+                continue
+                
+        except:
+            continue
+    
+    return "❌ Все AI-модели временно недоступны. Попробуйте позже."
 
 def ask_ai_with_memory(prompt):
     memory = load_memory()
