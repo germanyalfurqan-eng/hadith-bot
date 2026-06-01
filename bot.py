@@ -772,8 +772,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("🧠 Память очищена.")
             return
     
-    # ============ AI ДЛЯ ВЛАДЕЛЬЦА ============
-    if user_id == OWNER_ID:
+    # ============ AI ДЛЯ ВЛАДЕЛЬЦА И ЕГО КАНАЛА ============
+    if user_id == OWNER_ID or (update.message.sender_chat and update.message.sender_chat.id == OWNER_CHANNEL_ID):
         # AI в личке на любое сообщение
         if chat_type == "private":
             # Проверяем не команда ли это
