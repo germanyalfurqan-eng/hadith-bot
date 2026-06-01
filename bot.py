@@ -34,6 +34,7 @@ GRADE_MAP = {
     "Sahih": "Сахих ✅", "Hasan": "Хасан 🟡", "Daif": "Да'иф ⚠️",
     "Mawdu": "Мавду' ❌", "Hasan Sahih": "Хасан Сахих ✅", "Sahih Hasan": "Сахих Хасан ✅",
 }
+AI_MODEL = "google/gemini-flash-latest"
 
 pending_edits = {}
 
@@ -75,11 +76,10 @@ def format_memory_item(text):
     if not OPENROUTER_API_KEY:
         return text
     try:
-        prompt = f"Перефразируй кратко и структурированно: {text}"
         r = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
-            json={"model": "google/gemini-2.0-flash-001", "messages": [{"role": "user", "content": prompt}]},
+            json={"model": AI_MODEL, "messages": [{"role": "user", "content": f"Перефразируй кратко и структурированно: {text}"}]},
             timeout=10
         )
         if r.status_code == 200:
@@ -145,7 +145,7 @@ def ai_describe_media(text_hint=""):
         r = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
-            json={"model": "google/gemini-2.0-flash-001", "messages": [{"role": "user", "content": f"Опиши кратко этот файл (5-10 слов): {text_hint}"}]},
+            json={"model": AI_MODEL, "messages": [{"role": "user", "content": f"Опиши кратко этот файл (5-10 слов): {text_hint}"}]},
             timeout=10
         )
         if r.status_code == 200:
@@ -273,7 +273,6 @@ def get_hadith(collection, number):
 
 def get_ahmad_hadith(number):
     try:
-        # Определяем в каком томе искать
         if number <= 561:
             url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/ahmad_1.json"
         else:
@@ -380,7 +379,7 @@ def ask_ai(prompt, system=None):
         r = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
-            json={"model": "google/gemini-2.0-flash-001", "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}]},
+            json={"model": AI_MODEL, "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}]},
             timeout=30
         )
         if r.status_code == 200: return r.json()["choices"][0]["message"]["content"]
@@ -665,6 +664,31 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("🧠 Память очищена.")
             return
 
+    # Авто-AI в личке для владельца (без "ботяра")
+    if is_owner(update) and chat_type == "private":
+        # Проверяем не команда ли это (хадис, коран, реестр...)
+        is_command = False
+        if parse_hadith_query(text)[0]: is_command = True
+        if parse_quran_query(text)[0]: is_command = True
+        if parse_search_query(text): is_command = True
+        if parse_translate(text): is_command = True
+        if parse_tafsir_query(text)[0]: is_command = True
+        if parse_registry_command(text): is_command = True
+        if text.lower() in ["память", "помощь", "справка", "команды"]: is_command = True
+        if text.lower().startswith(("запомни", "удали память", "исправь память", "очистить память")): is_command = True
+        if parse_botyara(text) is not None: is_command = True
+        
+        if not is_command:
+            if update.message.reply_to_message and update.message.reply_to_message.from_user and update.message.reply_to_message.from_user.is_bot:
+                await update.message.reply_text("🤔 Думаю...")
+                result = ask_ai_with_memory(text)
+                await send_long(update, result)
+                return
+            await update.message.reply_text("🤔 Думаю...")
+            result = ask_ai_with_memory(text)
+            await send_long(update, result)
+            return
+
     if is_owner(update) and update.message.reply_to_message:
         if update.message.reply_to_message.from_user and update.message.reply_to_message.from_user.is_bot:
             await update.message.reply_text("🤔 Думаю...")
@@ -799,6 +823,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*Коран:*\nкоран 2:255\n\n"
             "*Поиск:*\nискать بدعة\n\n"
             "*Ботяра (владелец):*\nботяра вопрос | ботяра очисти свою память\n\n"
+            "*В личке:* просто вопрос → AI ответит\n\n"
             "*Память (владелец):*\nзапомни: факт | память | удали память 2\nисправь память 2: текст | очистить память\n\n"
             "*Реестр (владелец):*\nв реестр (reply) | реестр | ожидает\nсделано 1 | удали 1 | результат 1 ссылка",
             parse_mode="Markdown"
