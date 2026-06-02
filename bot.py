@@ -473,8 +473,12 @@ def get_ahmad_hadith(number):
     try:
         if number <= 561:
             url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/ahmad_1.json"
-        else:
+        elif number <= 1380:
             url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/ahmad_2.json"
+        elif number <= 14600:
+            url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/ahmad_3a.json"
+        else:
+            url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/ahmad_3b.json"
         r = requests.get(url, timeout=10)
         if r.status_code == 200:
             data = r.json()
@@ -485,6 +489,7 @@ def get_ahmad_hadith(number):
                     return h["arabic"], "", "араб", grade
     except: pass
     return "", "", "", ""
+
 
 def get_random_hadith(collection=None):
     if collection is None: collection = random.choice(["bukhari", "muslim"])
