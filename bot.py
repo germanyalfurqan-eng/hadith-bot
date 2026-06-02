@@ -1170,8 +1170,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     msg += f" [{r['source']}]"
                 msg += f"\n{r['text']}\n\n"
 
-            if data['riwayat_count'] > 3:
-                msg += f"📌 Показано 3 из {data['riwayat_count']}"
+            if data['riwayat_count'] > 7:
+                msg += f"📌 Показано {data['riwayat_count']} версий"
             await send_long(update, msg)
         else:
             await update.message.reply_text(f"❌ Хадис {number} не найден")
