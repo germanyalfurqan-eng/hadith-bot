@@ -49,18 +49,18 @@ def find_in_murhid(source, number):
         return []
     
     source_map = {
-        'бухари': 'البخاري', 'bukhari': 'البخاري', 'аль-бухари': 'البخاري',
-        'муслим': 'مسلم', 'muslim': 'مسلم',
-        'ахмад': 'أحمد', 'ahmad': 'أحمد',
-        'абу дауд': 'أبو داود', 'abudawud': 'أبو داود',
-        'тирмизи': 'الترمذي', 'tirmidhi': 'الترمذي',
-        'насаи': 'النسائي', 'nasai': 'النسائي',
-        'ибн маджа': 'ابن ماجه', 'ibnmajah': 'ابن ماجه',
-        'малик': 'مالك', 'malik': 'مالك',
-        'дарими': 'الدارمي', 'darimi': 'الدارمي',
+        'bukhari': 'اﻟﺑﺧﺎري',
+        'muslim': 'ﻣﺳﻠم',
+        'ahmad': 'أﺣﻣد',
+        'abudawud': 'أﺑو داود',
+        'tirmidhi': 'اﻟﺗرﻣذي',
+        'nasai': 'اﻟﻧﺳﺎﺋﻲ',
+        'ibnmajah': 'اﺑن ﻣﺎﺟﮫ',
+        'malik': 'ﻣﺎﻟك',
+        'darimi': 'اﻟدارﻣﻲ',
     }
     
-    source_arabic = source_map.get(source.lower(), source)
+    source_arabic = source_map.get(source, source)
     
     arabic_digits = {'0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩'}
     number_arabic = ''.join(arabic_digits.get(c, c) for c in str(number))
