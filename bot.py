@@ -1163,7 +1163,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = get_hadith_riwayat(number)
         if data:
             msg = f"📖 Хадис №{number}\n📚 Всего версий: {data['riwayat_count']}\n\n"
-            for i, r in enumerate(data['riwayat'][:3], 1):
+            for i, r in enumerate(data['riwayat'], 1):
+
                 msg += f"▫️ Версия {i}"
                 if r.get('source'):
                     msg += f" [{r['source']}]"
