@@ -21,12 +21,18 @@ def get_hadith_riwayat(number):
                 _hadith_cache = r.json()
             else:
                 return None
+        
+        # Конвертируем латинские цифры в персидские
+        persian_map = {'0':'۰', '1':'۱', '2':'۲', '3':'۳', '4':'۴', '5':'۵', '6':'۶', '7':'۷', '8':'۸', '9':'۹'}
+        persian_num = ''.join(persian_map.get(c, c) for c in str(number))
+        
         for h in _hadith_cache:
-            if h['number'] == str(number):
+            if h['number'] == persian_num:
                 return h
     except:
         pass
     return None
+
 
 
 TOKEN = os.environ.get("TOKEN")
