@@ -44,33 +44,26 @@ def get_reverse_index():
     return _reverse_cache
 
 def find_in_murhid(source, number):
-    murhid_nums = find_in_murhid(collection, number)
-    # ОТЛАДКА
-    print(f"DEBUG: collection={collection}, number={number}, result={murhid_nums}")
-    
     idx = get_reverse_index()
     if not idx:
         return []
     
+    # Карта: английское название → точное арабское как в индексе
     source_map = {
         'bukhari': 'اﻟﺑﺧﺎري',
         'muslim': 'ﻣﺳﻠم',
         'ahmad': 'أﺣﻣد',
-        'abudawud': 'أﺑو داود',
-        'tirmidhi': 'اﻟﺗرﻣذي',
-        'nasai': 'اﻟﻧﺳﺎﺋﻲ',
-        'ibnmajah': 'اﺑن ﻣﺎﺟﮫ',
-        'malik': 'ﻣﺎﻟك',
-        'darimi': 'اﻟدارﻣﻲ',
     }
     
     source_arabic = source_map.get(source, source)
     
+    # Конвертируем номер
     arabic_digits = {'0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩'}
     number_arabic = ''.join(arabic_digits.get(c, c) for c in str(number))
     
     key = f"{source_arabic}|{number_arabic}"
     return idx.get(key, [])
+
 # ============ КОНЕЦ ВСТАВКИ ============
 
 TOKEN = os.environ.get("TOKEN")
