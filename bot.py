@@ -1009,11 +1009,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if latin_key:
             url = f"https://corpus.quran.com/qurandictionary.jsp?q={latin_key}"
             await update.message.reply_text(
-                f"📖 *Корень:* {query} → {arabic_root} → `{latin_key}`\n\n"
-                f"🔗 [Открыть все аяты с этим корнем]({url})",
-                parse_mode="Markdown",
+                f"📖 Корень: {query} → {arabic_root} → {latin_key}\n\n"
+                f"🔗 {url}",
                 disable_web_page_preview=False
             )
+
         else:
             direct_url = f"https://corpus.quran.com/qurandictionary.jsp?q={arabic_root}"
             await update.message.reply_text(
