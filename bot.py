@@ -1168,7 +1168,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 msg += f"▫️ Версия {i}"
                 if r.get('source'):
                     msg += f" [{r['source']}]"
-                msg += f"\n{r['text'][:400]}\n\n"
+                msg += f"\n{r['text']}\n\n"
+
             if data['riwayat_count'] > 3:
                 msg += f"📌 Показано 3 из {data['riwayat_count']}"
             await send_long(update, msg)
