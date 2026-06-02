@@ -239,6 +239,29 @@ def parse_tafsir_query(text):
                 return int(parts[0]), int(parts[1])
     return None, None
 
+def find_root_transliteration(arabic_root):
+    """Ищет транслитерацию корня через corpus.quran.com"""
+    try:
+        url = f"https://corpus.quran.com/search.jsp?q={arabic_root}"
+        r = requests.get(url, timeout=10, headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept-Language": "en"
+        })
+        match = re.search(r'qurandictionary\.jsp\?q=(\w+)', r.text)
+        if match:
+            return match.group(1)
+        
+        r2 = requests.get(
+            f"https://corpus.quran.com/qurandictionary.jsp?q={arabic_root}",
+            timeout=10,
+            headers={"User-Agent": "Mozilla/5.0", "Accept-Language": "en"}
+        )
+        if "No results found" not in r2.text and len(r2.text) > 500:
+            return arabic_root
+    except:
+        pass
+    return None
+
 def parse_registry_command(text):
     t = text.lower().strip()
     if t in ["в реестр", "реестр добавить", "ботяра сохрани"]: return "add_media"
