@@ -881,35 +881,38 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         arabic_root = text[7:].strip()
         
         if not arabic_root:
-            await update.message.reply_text("❌ Напишите корень после команды, например: `корень حكم`", parse_mode="Markdown")
+            await update.message.reply_text(
+                "❌ Напишите корень после команды.\n"
+                "Пример: `корень علم` или `корень حكم`",
+                parse_mode="Markdown"
+            )
             return
         
-        # ВРЕМЕННЫЙ СЛОВАРЬ (пока нет файла roots_complete.json)
-        ROOTS = {
-            "حكم": "Hkm",
-            "علم": "Elm",
-            "صبر": "Sbr",
-            "رحم": "rHm",
-            "ربب": "rbb",
-            "كتب": "ktb",
-            "نزل": "nzl",
-        }
+        await update.message.reply_text(f"🔍 Ищу корень «{arabic_root}»...")
         
-        latin_key = ROOTS.get(arabic_root)
+        # Ищем через API corpus.quran.com
+        latin_key = find_root_transliteration(arabic_root)
         
         if latin_key:
             url = f"https://corpus.quran.com/qurandictionary.jsp?q={latin_key}"
             await update.message.reply_text(
-                f"📖 *Корень:* {arabic_root} → {latin_key}\n🔗 {url}",
-                parse_mode="Markdown"
+                f"📖 *Корень:* {arabic_root} → `{latin_key}`\n\n"
+                f"🔗 [Открыть все аяты с этим корнем]({url})",
+                parse_mode="Markdown",
+                disable_web_page_preview=False
             )
         else:
+            # Пробуем прямую ссылку
+            direct_url = f"https://corpus.quran.com/qurandictionary.jsp?q={arabic_root}"
             await update.message.reply_text(
-                f"❌ Корень «{arabic_root}» пока не в словаре.\n"
-                f"💡 Попробуйте: حكم, علم, صبر",
-                parse_mode="Markdown"
+                f"📖 *Корень:* {arabic_root}\n\n"
+                f"🔗 [Попробовать открыть в Corpus Quran]({direct_url})\n\n"
+                f"💡 Если страница не открылась — корень не найден в базе.",
+                parse_mode="Markdown",
+                disable_web_page_preview=False
             )
         return
+
 
 
 
