@@ -1193,16 +1193,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # ============ ДЛЯ ВСЕХ: ХАДИСЫ ============
-    # Обратный поиск: бухари 333 → номер в Муршиде
-    parts = text.strip().split()
-    if len(parts) == 2 and parts[1].isdigit():
-        source_name = parts[0].lower()
-        hadith_num = parts[1]
-        murhid_nums = find_in_murhid(source_name, hadith_num)
-        if murhid_nums:
-            nums_str = ', '.join(murhid_nums)
-            await update.message.reply_text(f"✅ Хадис {source_name} №{hadith_num} есть в Муршиде под номером: {nums_str}")
-            return    
+  
     collection, number = parse_hadith_query(text)
         # НОВЫЙ ПОИСК ПО JSON
     if collection == "riwayat":
