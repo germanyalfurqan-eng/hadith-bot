@@ -32,7 +32,44 @@ def get_hadith_riwayat(number):
     except:
         pass
     return None
+REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json"
+_reverse_cache = None
 
+def get_reverse_index():
+    global _reverse_cache
+    if _reverse_cache is None:
+        r = requests.get(REVERSE_INDEX_URL, timeout=10)
+        if r.status_code == 200:
+            _reverse_cache = r.json()
+    return _reverse_cache
+
+def find_in_murhid(source, number):
+    idx = get_reverse_index()
+    if not idx:
+        return []
+    
+    source_map = {
+        'бухари': 'البخاري', 'bukhari': 'البخاري', 'аль-бухари': 'البخاري',
+        'муслим': 'مسلم', 'muslim': 'مسلم',
+        'ахмад': 'أحمد', 'ahmad': 'أحمد',
+        'абу дауд': 'أبو داود', 'abudawud': 'أبو داود',
+        'тирмизи': 'الترمذي', 'tirmidhi': 'الترمذي',
+        'насаи': 'النسائي', 'nasai': 'النسائي',
+        'ибн маджа': 'ابن ماجه', 'ibnmajah': 'ابن ماجه',
+        'малик': 'مالك', 'malik': 'مالك',
+        'дарими': 'الدارمي', 'darimi': 'الدارمي',
+    }
+    
+    source_arabic = source_map.get(source.lower(), source)
+    
+    arabic_digits = {'0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩'}
+    number_arabic = ''.join(arabic_digits.get(c, c) for c in str(number))
+    
+    key = f"{source_arabic}|{number_arabic}"
+    return idx.get(key, [])
+# ============ КОНЕЦ ВСТАВКИ ============
+
+TOKEN = os.environ.get("TOKEN")
 
 
 TOKEN = os.environ.get("TOKEN")
