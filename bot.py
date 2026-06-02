@@ -48,11 +48,16 @@ def find_in_murhid(source, number):
     if not idx:
         return []
     
-    persian_digits = {'0':'۰','1':'۱','2':'۲','3':'۳','4':'۴','5':'۵','6':'۶','7':'۷','8':'۸','9':'۹'}
-    num_persian = ''.join(persian_digits.get(c, c) for c in str(number))
+    persian = {'0':'۰','1':'۱','2':'۲','3':'۳','4':'۴','5':'۵','6':'۶','7':'۷','8':'۸','9':'۹'}
+    arabic = {'0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩'}
     
-    key = f"{source}|{num_persian}"
-    return idx.get(key, [])
+    for digits in [persian, arabic]:
+        num = ''.join(digits.get(c, c) for c in str(number))
+        result = idx.get(f"{source}|{num}")
+        if result:
+            return result
+    return []
+
 
 
 # ============ КОНЕЦ ВСТАВКИ ============
