@@ -8,6 +8,26 @@ from datetime import datetime
 from html import unescape
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler
+# ============ ХАДИСЫ С РИВАЯТАМИ ============
+HADITH_RIWAYAT_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/hadiths_complete.json"
+_hadith_cache = None
+
+def get_hadith_riwayat(number):
+    global _hadith_cache
+    try:
+        if _hadith_cache is None:
+            r = requests.get(HADITH_RIWAYAT_URL, timeout=10)
+            if r.status_code == 200:
+                _hadith_cache = r.json()
+            else:
+                return None
+        for h in _hadith_cache:
+            if h['number'] == str(number):
+                return h
+    except:
+        pass
+    return None
+
 
 TOKEN = os.environ.get("TOKEN")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
