@@ -44,6 +44,10 @@ def get_reverse_index():
     return _reverse_cache
 
 def find_in_murhid(source, number):
+    murhid_nums = find_in_murhid(collection, number)
+    # ОТЛАДКА
+    print(f"DEBUG: collection={collection}, number={number}, result={murhid_nums}")
+    
     idx = get_reverse_index()
     if not idx:
         return []
