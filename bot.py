@@ -48,7 +48,6 @@ def find_in_murhid(source, number):
     if not idx:
         return []
     
-    # ПЕРСИДСКИЕ цифры (не арабские!)
     persian_digits = {'0':'۰','1':'۱','2':'۲','3':'۳','4':'۴','5':'۵','6':'۶','7':'۷','8':'۸','9':'۹'}
     num_persian = ''.join(persian_digits.get(c, c) for c in str(number))
     
