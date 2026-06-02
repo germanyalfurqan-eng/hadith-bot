@@ -206,6 +206,12 @@ def is_owner(update: Update) -> bool:
 # ============ ПАРСЕРЫ ============
 def parse_hadith_query(text):
     text = text.lower().strip()
+        # мухэймин 145
+    if text.startswith("мухэймин "):
+        parts = text.split()
+        if len(parts) >= 2 and parts[1].isdigit():
+            return "riwayat", int(parts[1])
+
     if text == "случайный": return "random", None
     if text == "случайный бухари": return "random_bukhari", None
     if text == "случайный муслим": return "random_muslim", None
