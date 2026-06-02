@@ -1264,6 +1264,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg += f"\n\n📚 {NAMES.get(collection, collection)}, №{number}"
             if similar:
                 msg += f"\n\n📖 Также:\n• " + "\n• ".join(similar[:5])
+            murhid_nums = find_in_murhid(collection, number)
+            if murhid_nums:
+                msg += f"\n\n📖 Также в Муршиде: №{', '.join(murhid_nums)}"
+
             await send_long(update, msg)
             return
     
