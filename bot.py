@@ -1151,6 +1151,24 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # ============ ДЛЯ ВСЕХ: ХАДИСЫ ============
     collection, number = parse_hadith_query(text)
+        # НОВЫЙ ПОИСК ПО JSON
+    if collection == "riwayat":
+        await update.message.reply_text("🔍 Ищу хадис...")
+        data = get_hadith_riwayat(number)
+        if data:
+            msg = f"📖 Хадис №{number}\n📚 Всего версий: {data['riwayat_count']}\n\n"
+            for i, r in enumerate(data['riwayat'][:3], 1):
+                msg += f"▫️ Версия {i}"
+                if r.get('source'):
+                    msg += f" [{r['source']}]"
+                msg += f"\n{r['text'][:400]}\n\n"
+            if data['riwayat_count'] > 3:
+                msg += f"📌 Показано 3 из {data['riwayat_count']}"
+            await send_long(update, msg)
+        else:
+            await update.message.reply_text(f"❌ Хадис {number} не найден")
+        return
+
     if collection:
         if collection in ["random", "random_bukhari", "random_muslim", "random_quran"]:
             await update.message.reply_text("🎲 Ищу...")
