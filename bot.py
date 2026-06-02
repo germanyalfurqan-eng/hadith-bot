@@ -853,18 +853,41 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             result = ask_ai(prompt, "Ты — знаток тафсира Ибн Касира.")
             await send_long(update, result)
             return
-    # ============ НОВАЯ КОМАНДА: КОРЕНЬ СЛОВА ИЗ КОРАНА ============
+    # ============ КОМАНДА: КОРЕНЬ СЛОВА ИЗ КОРАНА ============
     if text.lower().startswith("корень "):
-        root = text[7:].strip()
-        if root:
-            url = f"https://corpus.quran.com/qurandictionary.jsp?q={root}"
+        arabic_root = text[7:].strip()
+        
+        if not arabic_root:
+            await update.message.reply_text("❌ Напишите корень после команды, например: `корень حكم`", parse_mode="Markdown")
+            return
+        
+        # ВРЕМЕННЫЙ СЛОВАРЬ (пока нет файла roots_complete.json)
+        ROOTS = {
+            "حكم": "Hkm",
+            "علم": "Elm",
+            "صبر": "Sbr",
+            "رحم": "rHm",
+            "ربب": "rbb",
+            "كتب": "ktb",
+            "نزل": "nzl",
+        }
+        
+        latin_key = ROOTS.get(arabic_root)
+        
+        if latin_key:
+            url = f"https://corpus.quran.com/qurandictionary.jsp?q={latin_key}"
             await update.message.reply_text(
-                f"📖 *Словарь Корана для корня «{root}»:*\n{url}",
+                f"📖 *Корень:* {arabic_root} → {latin_key}\n🔗 {url}",
                 parse_mode="Markdown"
             )
         else:
-            await update.message.reply_text("❌ Напишите корень после команды, например: `корень حكم`", parse_mode="Markdown")
+            await update.message.reply_text(
+                f"❌ Корень «{arabic_root}» пока не в словаре.\n"
+                f"💡 Попробуйте: حكم, علم, صبر",
+                parse_mode="Markdown"
+            )
         return
+
 
 
 
