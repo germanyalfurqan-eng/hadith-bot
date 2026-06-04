@@ -98,16 +98,43 @@ def parse_source_query(text):
                 return code, int(num)
     return None, None
 
+def _clean_chapter(t):
+    """Привести арабский заголовок главы к читаемому виду."""
+    t = (t or "").replace("للاا", "الله")
+    t = re.sub(r"\s+([ً-ٟ])", r"\1", t)   # убрать пробелы перед огласовками
+    t = re.sub(r"\s+", " ", t).strip().rstrip(".").strip()
+    if t.startswith("باب "):
+        t = t[4:].strip()
+    return t
+
 def muhaymin_crossref_note(code, number):
-    """Готовая строка-отметка: где этот первоисточник встречается в Мухаймине."""
+    """Готовая строка-отметка: где этот первоисточник встречается в Мухаймине.
+    Один и тот же хадис автор может приводить в нескольких главах — показываем
+    номер + главу для каждого вхождения."""
     places = find_in_murhid(code, number)
     if not places:
         return ""
     nm = SOURCE_NAMES_RU.get(code, code)
-    parts = [f"№{p['m']} (риваят {p['v']})" for p in places[:8]]
-    extra = f" и ещё {len(places)-8}" if len(places) > 8 else ""
-    return (f"\n📌 *Этот хадис есть в аль-Мухаймине* ({nm} {number}):\n"
-            + ", ".join(parts) + extra)
+    n = len(places)
+    if n == 1:
+        p = places[0]
+        ch = _clean_chapter(p.get("chapter", ""))
+        line = f"№{p['m']} (риваят {p['v']})"
+        if ch:
+            line += f" — {ch}"
+        return f"\n📌 *Этот хадис есть в аль-Мухаймине* ({nm} {number}):\n{line}"
+    head = (f"\n📌 *Этот хадис в аль-Мухаймине приводится {n} раз* "
+            f"(один и тот же хадис в разных главах, {nm} {number}):")
+    lines = []
+    for p in places[:10]:
+        ch = _clean_chapter(p.get("chapter", ""))
+        line = f"• №{p['m']} (риваят {p['v']})"
+        if ch:
+            line += f" — {ch}"
+        lines.append(line)
+    if n > 10:
+        lines.append(f"…и ещё {n - 10}")
+    return head + "\n" + "\n".join(lines)
 
 # ============ КОНЕЦ ВСТАВКИ ============
 
