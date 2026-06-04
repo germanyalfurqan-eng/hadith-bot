@@ -40,17 +40,74 @@ def get_reverse_index():
             _reverse_cache = r.json()
     return _reverse_cache
 
-def find_in_murhid(source, number):
+def find_in_murhid(source_code, number):
+    """source_code — код первоисточника (bukhari/tayalisi/...), number — int.
+    Возвращает список мест в аль-Мухаймине: [{m, v, chapter}, ...]."""
     idx = get_reverse_index()
     if not idx:
         return []
+    return idx.get(f"{source_code} {int(number)}", [])
 
-    persian_digits = {'0':'۰','1':'۱','2':'۲','3':'۳','4':'۴','5':'۵','6':'۶','7':'۷','8':'۸','9':'۹'}
-    num_persian = ''.join(persian_digits.get(c, c) for c in str(number))
+# Транслитерация названий первоисточников (рус.) -> код в обратном индексе.
+# Триггеры проверяются по startswith, сначала длинные.
+SOURCE_TRIGGERS = [
+    ("ибн аби шейба", "ibnabishayba"), ("ибн абу шейба", "ibnabishayba"),
+    ("ибн аби шайба", "ibnabishayba"), ("ибн абу шайба", "ibnabishayba"),
+    ("исхак бин рахавайх", "ishaq"), ("исхак ибн рахавайх", "ishaq"),
+    ("исмаил бин джафар", "ismail_jafar"), ("исмаил ибн джафар", "ismail_jafar"),
+    ("абд бин хумайд", "abdbinhumayd"), ("абд ибн хумайд", "abdbinhumayd"),
+    ("ибн аль-джад", "ibnaljad"), ("ибн хузайма", "ibnkhuzayma"),
+    ("ибн хиббан", "ibnhibban"),
+    ("ат-таялиси", "tayalisi"), ("ат-тиялиси", "tayalisi"),
+    ("таялиси", "tayalisi"), ("тиялиси", "tayalisi"), ("тайалиси", "tayalisi"),
+    ("аль-хумайди", "humaydi"), ("хумайди", "humaydi"),
+    ("ад-дарими", "darimi"), ("дарими", "darimi"),
+    ("абу йала", "abuyala"), ("абу яла", "abuyala"), ("абу йа'ла", "abuyala"),
+    ("исхак", "ishaq"),
+    # источники, у которых есть и свой сборник в боте (для кросс-ссылки):
+    ("аль-бухари", "bukhari"), ("бухари", "bukhari"),
+    ("муслим", "muslim"), ("абу дауд", "abudawud"),
+    ("ат-тирмизи", "tirmidhi"), ("тирмизи", "tirmidhi"),
+    ("ибн маджа", "ibnmajah"), ("ан-насаи", "nasai"), ("насаи", "nasai"),
+    ("малик", "malik"), ("муватта", "malik"),
+    ("ахмад", "ahmad"),
+]
+SOURCE_NAMES_RU = {
+    "bukhari": "аль-Бухари", "muslim": "Муслим", "abudawud": "Абу Дауд",
+    "tirmidhi": "ат-Тирмизи", "ibnmajah": "Ибн Маджа", "nasai": "ан-Насаи",
+    "malik": "Малик", "ahmad": "Ахмад", "tayalisi": "ат-Таялиси",
+    "humaydi": "аль-Хумайди", "ibnabishayba": "Ибн Аби Шейба",
+    "darimi": "ад-Дарими", "abuyala": "Абу Я'ла", "ishaq": "Исхак ибн Рахавайх",
+    "ibnkhuzayma": "Ибн Хузайма", "ibnhibban": "Ибн Хиббан",
+    "abdbinhumayd": "Абд ибн Хумайд", "ismail_jafar": "Исмаил ибн Джафар",
+    "ibnaljad": "Ибн аль-Джа'д",
+}
+# коды первоисточников, у которых НЕТ своего сборника в боте — для них
+# показываем сам текст риваята из аль-Мухаймина.
+SOURCE_ONLY_CODES = {"tayalisi", "humaydi", "ibnabishayba", "darimi", "abuyala",
+                     "ishaq", "ibnkhuzayma", "ibnhibban", "abdbinhumayd",
+                     "ismail_jafar", "ibnaljad"}
 
-    key = f"{source}|{num_persian}"
-    return idx.get(key, [])
+def parse_source_query(text):
+    """'тиялиси 323' -> ('tayalisi', 323). Иначе (None, None)."""
+    t = text.lower().strip()
+    for trig, code in SOURCE_TRIGGERS:
+        if t.startswith(trig):
+            num = t[len(trig):].strip()
+            if num.isdigit():
+                return code, int(num)
+    return None, None
 
+def muhaymin_crossref_note(code, number):
+    """Готовая строка-отметка: где этот первоисточник встречается в Мухаймине."""
+    places = find_in_murhid(code, number)
+    if not places:
+        return ""
+    nm = SOURCE_NAMES_RU.get(code, code)
+    parts = [f"№{p['m']} (риваят {p['v']})" for p in places[:8]]
+    extra = f" и ещё {len(places)-8}" if len(places) > 8 else ""
+    return (f"\n📌 *Этот хадис есть в аль-Мухаймине* ({nm} {number}):\n"
+            + ", ".join(parts) + extra)
 
 # ============ КОНЕЦ ВСТАВКИ ============
 
@@ -959,6 +1016,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Проверяем не команда ли это
             is_command = False
             if parse_hadith_query(text)[0]: is_command = True
+            if parse_source_query(text)[0] in SOURCE_ONLY_CODES: is_command = True
             if parse_quran_query(text)[0]: is_command = True
             if parse_search_query(text): is_command = True
             if parse_translate(text): is_command = True
@@ -1115,6 +1173,31 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ============ ДЛЯ ВСЕХ: ХАДИСЫ ============
     collection, number = parse_hadith_query(text)
 
+    # ПЕРВОИСТОЧНИКИ без своего сборника (Таялиси, Хумайди, Ибн Аби Шейба, ...)
+    # -> показываем сам текст риваята из аль-Мухаймина + где ещё встречается.
+    if not collection:
+        scode, snum = parse_source_query(text)
+        if scode and scode in SOURCE_ONLY_CODES:
+            places = find_in_murhid(scode, snum)
+            nm = SOURCE_NAMES_RU.get(scode, scode)
+            if not places:
+                await update.message.reply_text(
+                    f"❌ {nm} {snum} в аль-Мухаймине не найден.")
+                return
+            data = get_muhaymin(places[0]["m"])
+            riw = data.get("riwayat", []) if data else []
+            v = places[0]["v"] - 1
+            msg = f"📖 *{nm} {snum}*\n"
+            if 0 <= v < len(riw):
+                r = riw[v]
+                msg += f"📂 {places[0].get('chapter','')}\n\n"
+                msg += f"{r.get('text','')}\n"
+                if r.get("sources"):
+                    msg += f"📎 {r['sources']}\n"
+            msg += muhaymin_crossref_note(scode, snum)
+            await send_long(update, msg)
+            return
+
     # АЛЬ-МУХАЙМИН — поиск по нашему выверенному индексу
     if collection == "riwayat":
         await update.message.reply_text("🔍 Ищу хадис в аль-Мухаймине...")
@@ -1189,9 +1272,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg += f"\n\n📚 {NAMES.get(collection, collection)}, №{number}"
             if similar:
                 msg += f"\n\n📖 Также:\n• " + "\n• ".join(similar[:5])
-            murhid_nums = find_in_murhid(collection, number)
-            if murhid_nums:
-                msg += f"\n\n📖 Также в Муршиде: №{', '.join(murhid_nums)}"
+            _src_code = {"ahmad_local": "ahmad"}.get(collection, collection)
+            msg += muhaymin_crossref_note(_src_code, number)
 
             await send_long(update, msg)
             return
@@ -1202,6 +1284,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📚 *Команды бота:*\n\n"
             "*Хадисы (8 сборников):*\nбухари 1 | муслим 1 | абу дауд 1\nтирмизи 1 | ибн маджа 1 | насаи 1 | муватта 1\nахмад 1\n\n"
             "*Аль-Мухаймин (الموحد المهيمن):*\nмухаймин 907 | муршид 907\n\n"
+            "*Первоисточники → где в Мухаймине:*\nтиялиси 323 | хумайди 28 | ибн аби шейба 100\n(а для бухари/муслим/ахмад отметка добавляется к самому хадису)\n\n"
             "*Случайные:*\nслучайный | случайный бухари | случайный муслим | случайный коран\n\n"
             "*Коран:*\nкоран 2:255\n\n"
             "*Поиск:*\nискать بدعة\n\n"
