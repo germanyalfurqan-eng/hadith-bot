@@ -1237,13 +1237,15 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg += f"📚 Риваятов: {len(riw)}\n\n"
             for i, r in enumerate(riw, 1):
                 ref = (r.get("short_ref") or "").strip()
-                if len(riw) > 1:
-                    msg += f"▫️ Риваят {i}" + (f" [{ref}]" if ref else "") + "\n"
-                elif ref:
-                    msg += f"🔖 [{ref}]\n"
+                msg += f"▫️ *Версия {i}*" + (f" [{ref}]" if ref else " [нет метки]") + "\n"
                 msg += f"{r.get('text','')}\n"
+                if r.get("text_ru_ready"):
+                    msg += f"🌍 {r['text_ru_ready']}\n"
                 if r.get("sources"):
                     msg += f"📎 {r['sources']}\n"
+                rf = (r.get("restored_from") or "").strip()
+                if rf:
+                    msg += f"✅ источник: {rf}\n"
                 msg += "\n"
             await send_long(update, msg)
         else:
