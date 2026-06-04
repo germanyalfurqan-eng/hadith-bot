@@ -1126,11 +1126,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 msg += f"📂 {data['chapter']}\n"
             msg += f"📚 Риваятов: {len(riw)}\n\n"
             for i, r in enumerate(riw, 1):
+                ref = (r.get("short_ref") or "").strip()
                 if len(riw) > 1:
-                    msg += f"▫️ Риваят {i}\n"
+                    msg += f"▫️ Риваят {i}" + (f" [{ref}]" if ref else "") + "\n"
+                elif ref:
+                    msg += f"🔖 [{ref}]\n"
                 msg += f"{r.get('text','')}\n"
-                if r.get("short_ref"):
-                    msg += f"🔖 {r['short_ref']}\n"
                 if r.get("sources"):
                     msg += f"📎 {r['sources']}\n"
                 msg += "\n"
