@@ -29,6 +29,65 @@ def get_muhaymin(number):
         pass
     return None
 
+# ---- Просмотр базы по книгам/главам (для удобного обзора) ----
+_book_struct_cache = None
+def build_book_structure():
+    """Из кэша индекса собрать [{title, start, end, chapters:[{title,start,count}]}]."""
+    global _book_struct_cache
+    if _book_struct_cache is not None:
+        return _book_struct_cache
+    get_muhaymin(1)  # подгрузить кэш
+    if not _muhaymin_cache:
+        return []
+    items = sorted(((int(k), e) for k, e in _muhaymin_cache.items()), key=lambda x: x[0])
+    books = []
+    for n, e in items:
+        bt = e.get("book", "") or "—"; ct = e.get("chapter", "") or "—"
+        if not books or books[-1]["title"] != bt:
+            books.append({"title": bt, "start": n, "end": n, "chapters": []})
+        bk = books[-1]; bk["end"] = n
+        if not bk["chapters"] or bk["chapters"][-1]["title"] != ct:
+            bk["chapters"].append({"title": ct, "start": n, "count": 0})
+        bk["chapters"][-1]["count"] += 1
+    _book_struct_cache = books
+    return books
+
+def parse_browse(text):
+    t = text.lower().strip()
+    if t in ("книги", "оглавление", "فهرس", "содержание"):
+        return ("books", None)
+    if t.startswith("книга "):
+        return ("book", text.strip()[6:].strip())
+    return (None, None)
+
+def fmt_books():
+    bs = build_book_structure()
+    if not bs:
+        return "❌ База недоступна."
+    msg = "📚 الموحد المهيمن — 44 книги:\n\n"
+    for i, b in enumerate(bs, 1):
+        nh = sum(c["count"] for c in b["chapters"])
+        msg += f"{i}. {b['title']}  (№{b['start']}–{b['end']}, {nh} хад.)\n"
+    msg += "\n👉 «книга <номер или название>» — главы; «мухэймин <номер>» — хадис."
+    return msg
+
+def fmt_book_chapters(arg):
+    bs = build_book_structure()
+    b = None
+    if arg.isdigit() and 1 <= int(arg) <= len(bs):
+        b = bs[int(arg) - 1]
+    else:
+        for x in bs:
+            if arg and arg in x["title"]:
+                b = x; break
+    if not b:
+        return "❌ Книга не найдена. Напиши «книги» — список."
+    msg = f"📕 {b['title']}  (№{b['start']}–{b['end']}, {len(b['chapters'])} глав)\n\n"
+    for c in b["chapters"]:
+        msg += f"  [{c['start']}] {c['title']}  ({c['count']})\n"
+    msg += "\n👉 «мухэймин <номер>» — открыть хадис."
+    return msg
+
 REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json"
 _reverse_cache = None
 
@@ -748,12 +807,24 @@ def ask_ai_with_memory(prompt, owner=True):
     return ask_ai(prompt, system, owner=owner)
 
 async def send_long(update, text, parse_mode=None):
-    for i in range(0, len(text), 4000):
-        chunk = text[i:i+4000]
-        if parse_mode:
-            await update.message.reply_text(chunk, parse_mode=parse_mode)
+    limit = 3900
+    while text:
+        if len(text) <= limit:
+            chunk, text = text, ""
         else:
-            await update.message.reply_text(chunk)
+            cut = text.rfind("\n", 0, limit)        # резать по строке
+            if cut < limit // 2:
+                cut = text.rfind(" ", 0, limit)      # иначе по пробелу
+            if cut <= 0:
+                cut = limit
+            chunk, text = text[:cut], text[cut:].lstrip("\n ")
+        try:
+            if parse_mode:
+                await update.message.reply_text(chunk, parse_mode=parse_mode)
+            else:
+                await update.message.reply_text(chunk)
+        except Exception:
+            await update.message.reply_text(chunk)   # фолбэк без разметки
 
 async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -1071,6 +1142,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Проверяем не команда ли это
             is_command = False
             if parse_hadith_query(text)[0]: is_command = True
+            if parse_browse(text)[0]: is_command = True
             if parse_source_query(text)[0] in SOURCE_ONLY_CODES: is_command = True
             if parse_quran_query(text)[0]: is_command = True
             if parse_search_query(text): is_command = True
@@ -1225,6 +1297,15 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_long(update, msg)
         return
 
+    # ============ ПРОСМОТР БАЗЫ ПО КНИГАМ/ГЛАВАМ ============
+    bmode, barg = parse_browse(text)
+    if bmode == "books":
+        await send_long(update, fmt_books())
+        return
+    if bmode == "book":
+        await send_long(update, fmt_book_chapters(barg))
+        return
+
     # ============ ДЛЯ ВСЕХ: ХАДИСЫ ============
     collection, number = parse_hadith_query(text)
 
@@ -1259,23 +1340,30 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = get_muhaymin(number)
         if data:
             riw = data.get("riwayat", [])
-            msg = f"📖 *الموحد المهيمن* — хадис №{number}\n"
+            # ── шапка хадиса (отдельным сообщением) ──
+            head = f"📖 الموحد المهيمن — хадис №{number}\n"
+            if data.get("book"):
+                head += f"📕 {data['book']}\n"
             if data.get("chapter"):
-                msg += f"📂 {data['chapter']}\n"
-            msg += f"📚 Риваятов: {len(riw)}\n\n"
+                head += f"📂 {data['chapter']}\n"
+            if data.get("note"):
+                head += f"{data['note']}\n"
+            head += f"📚 Риваятов (версий): {len(riw)}"
+            await update.message.reply_text(head)
+            # ── каждая версия — своим сообщением ──
+            SEP = "━━━━━━━━━━━━━━"
             for i, r in enumerate(riw, 1):
                 ref = (r.get("short_ref") or "").strip()
-                msg += f"▫️ *Версия {i}*" + (f" [{ref}]" if ref else " [нет метки]") + "\n"
-                msg += f"{r.get('text','')}\n"
+                vmark = "✅" if r.get("verified") else "⏳"
+                vf = (r.get("verified_from") or r.get("restored_from") or "").strip()
+                body = f"▫️ Риваят {i}/{len(riw)} {vmark}"
+                body += f"  [{ref}]" if ref else "  [метка не распознана]"
+                body += f"\n{SEP}\n{r.get('text','')}\n"
                 if r.get("text_ru_ready"):
-                    msg += f"🌍 {r['text_ru_ready']}\n"
-                if r.get("sources"):
-                    msg += f"📎 {r['sources']}\n"
-                rf = (r.get("restored_from") or "").strip()
-                if rf:
-                    msg += f"✅ источник: {rf}\n"
-                msg += "\n"
-            await send_long(update, msg)
+                    body += f"\n🌍 {r['text_ru_ready']}\n"
+                if vf:
+                    body += f"🔖 первоисточник: {vf}"
+                await send_long(update, body)
         else:
             await update.message.reply_text(f"❌ Хадис №{number} в аль-Мухаймине не найден.")
         return
@@ -1340,7 +1428,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "📚 *Команды бота:*\n\n"
             "*Хадисы (8 сборников):*\nбухари 1 | муслим 1 | абу дауд 1\nтирмизи 1 | ибн маджа 1 | насаи 1 | муватта 1\nахмад 1\n\n"
-            "*Аль-Мухаймин (الموحد المهيمن):*\nмухаймин 907 | муршид 907\n\n"
+            "*Аль-Мухаймин (الموحد المهيمن):*\nмухаймин 907 | муршид 907\n"
+            "📚 книги — список 44 книг\n📕 книга 5 | книга الصيام — главы книги\n\n"
             "*Первоисточники → где в Мухаймине:*\nтиялиси 323 | хумайди 28 | ибн аби шейба 100\n(а для бухари/муслим/ахмад отметка добавляется к самому хадису)\n\n"
             "*Случайные:*\nслучайный | случайный бухари | случайный муслим | случайный коран\n\n"
             "*Коран:*\nкоран 2:255\n\n"
