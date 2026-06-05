@@ -1734,6 +1734,23 @@ app = ApplicationBuilder().token(TOKEN).post_init(_setup).build()
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
 app.add_handler(ChatMemberHandler(track_member, ChatMemberHandler.CHAT_MEMBER))
+_seen_chats = set()
+async def _chat_seen(update, context):
+    try:
+        ch = update.effective_chat
+        if ch and ch.id not in _seen_chats:
+            _seen_chats.add(ch.id)
+            await context.bot.send_message(LOG_CHAT_ID, f"📡 Чат/канал: «{ch.title}» | id={ch.id} | type={ch.type}")
+    except Exception:
+        pass
+async def _bot_member(update, context):
+    try:
+        ch = update.effective_chat; st = update.my_chat_member.new_chat_member.status
+        await context.bot.send_message(LOG_CHAT_ID, f"🤖 Бот: {st} в «{ch.title}» (id={ch.id}, {ch.type})")
+    except Exception:
+        pass
+app.add_handler(MessageHandler(filters.ChatType.CHANNEL, _chat_seen))
+app.add_handler(ChatMemberHandler(_bot_member, ChatMemberHandler.MY_CHAT_MEMBER))
 async def _on_error(update, context):
     err = str(context.error); print("ERR:", err)
     if 'Conflict' in err:  # две копии бота — не спамим, settle сам
