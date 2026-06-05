@@ -879,36 +879,63 @@ def ask_ai_with_memory(prompt, owner=True):
         system += f"\n\nЧто ты знаешь о владельце и контексте:\n{memory_text}"
     return ask_ai(prompt, system, owner=owner)
 
-# ---- Накопительный кэш переводов матнов ----
+# ---- Накопительный кэш переводов матнов (хранится в репо на GitHub) ----
 TRANS_FILE = "translations.json"
 _trans_cache = None
+_trans_dirty = 0
 def _load_trans():
     global _trans_cache
     if _trans_cache is None:
-        try: _trans_cache = json.load(open(TRANS_FILE, encoding="utf-8"))
-        except: _trans_cache = {}
+        _trans_cache = {}
+        try:
+            r = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{TRANS_FILE}", timeout=8)
+            if r.status_code == 200:
+                _trans_cache = r.json()
+        except: pass
     return _trans_cache
+def _save_trans():
+    """Записать кэш переводов обратно в репо (как memory/registry)."""
+    if not GITHUB_TOKEN:
+        return
+    try:
+        content = json.dumps(_trans_cache, ensure_ascii=False, indent=1)
+        b64 = base64.b64encode(content.encode()).decode()
+        api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{TRANS_FILE}"
+        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        r = requests.get(api_url, headers=headers, timeout=8)
+        sha = r.json().get("sha", "") if r.status_code == 200 else ""
+        payload = {"message": f"translations ({len(_trans_cache)})", "content": b64}
+        if sha:
+            payload["sha"] = sha
+        requests.put(api_url, headers=headers, json=payload, timeout=12)
+    except: pass
+def flush_trans():
+    global _trans_dirty
+    if _trans_dirty:
+        _save_trans(); _trans_dirty = 0
 def _trans_key(arabic):
     t = re.sub(r"[ً-ٰٟـ]", "", arabic or "")
     return "".join(c for c in t if "ء" <= c <= "ي")[:300]
-def translate_matn(arabic, owner=False):
-    """Перевод матна на русский с кэшем (накопительно). Только перевод."""
+def translate_matn(arabic, src="", owner=False):
+    """Перевод матна на русский с накопительным кэшем (оригинал+перевод+источник)."""
+    global _trans_dirty
     if not arabic or len(arabic) < 5:
         return ""
     cache = _load_trans()
     key = _trans_key(arabic)
     if key in cache:
-        return cache[key]
+        v = cache[key]
+        return v.get("ru", "") if isinstance(v, dict) else v
     sysmsg = ("Ты профессиональный переводчик хадисов с арабского на русский. "
               "Выдай ТОЛЬКО точный перевод текста на русский язык. "
               "Без вступлений, без пояснений, без арабского текста, без кавычек, без указания модели — только перевод.")
     ru = ask_ai("Переведи на русский:\n" + arabic, sysmsg, owner=owner)
     if ru and not ru.startswith("❌"):
         ru = re.sub(r"\n*⚡ \*Модель:.*$", "", ru, flags=re.S).strip()
-        cache[key] = ru
-        try:
-            json.dump(cache, open(TRANS_FILE, "w", encoding="utf-8"), ensure_ascii=False)
-        except: pass
+        cache[key] = {"ar": arabic[:600], "ru": ru, "src": (src or "")[:120]}
+        _trans_dirty += 1
+        if _trans_dirty >= 3:          # батч: коммитим в репо каждые 3 новых
+            _save_trans(); _trans_dirty = 0
         return ru
     return ""
 
@@ -1400,12 +1427,13 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             block = f"{i}. {hukm_emoji(r['hukm'])} <b>الحكم:</b> {_esc_mark(r['hukm'] or '—')}\n"
             block += f"📜 <b>{_esc_mark(r['marked'])}</b>\n"
             if is_owner(update):
-                ru = translate_matn(r["text"], owner=True)
+                ru = translate_matn(r["text"], src=r.get("takhreej", ""), owner=True)
                 if ru:
                     block += f"🌍 {_esc_mark(ru)}\n"
             if r["takhreej"]:
                 block += f"📋 {takhreej_html(r['takhreej'])}\n"
             await send_long(update, block, "HTML")
+        flush_trans()   # сохранить новые переводы в репо
         return
 
     # ============ ДЛЯ ВСЕХ: ПОИСК ХАДИСОВ ============
