@@ -109,7 +109,7 @@
       <div class="gear" id="gear">⚙️</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v7</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v8</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -176,6 +176,12 @@
       <b>☰ Ещё</b><button class="mini" id="menuClose">закрыть ✕</button>
     </div>
     <div class="row"><span>📺 Наш YouTube-канал</span><button class="go" id="ytLink" style="padding:5px 12px">Открыть</button></div>
+    <div class="row"><span>📖 Перевод Корана</span>
+      <select id="qtrSel" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 8px">
+        <option value="rus-elmirkuliev">Кулиев</option>
+        <option value="rus-abuadel">Абу Адель</option>
+      </select></div>
+    <div class="row"><span>الـ Коран без огласовок</span><div class="sw" id="noDiacSw"></div></div>
     <div class="row" style="opacity:.55"><span>⭐ Закладки / избранное</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>🔊 Озвучка аятов</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>📚 Другие источники (Лейс, Мукбиль, Сильсиля…)</span><span>скоро</span></div>
@@ -222,7 +228,7 @@ const COLLECTIONS = [
   {code:'ibnmajah',ru:'Ибн Маджа',ar:'ابن ماجه'},
   {code:'nasai',ru:'Насаи',ar:'النسائي'},
   {code:'malik',ru:'Малик',ar:'مالك'},
-  {code:'ahmad',ru:'Ахмад',ar:'أحمد',heavy:true},
+  {code:'ahmad',ru:'Ахмад',ar:'أحمد'},
   {code:'muhaymin',ru:'аль-Мухаймин',ar:'المهيمن',special:true,heavy:true},
 ];
 
@@ -238,7 +244,7 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({publicApp:false,fHadith:true,fQuran:true,fNeuro:false,fTranslate:false,whitelist:[]}, loadCfg());
+let cfg = Object.assign({publicApp:false,fHadith:true,fQuran:true,fNeuro:false,fTranslate:false,whitelist:[],qtr:'rus-elmirkuliev',noDiac:false}, loadCfg());
 
 function userAllowed(){
   if(isOwner) return true;
@@ -447,7 +453,7 @@ function cardMuh(d,groups){
 }
 function cardAyah(d,groups){
   const {v}=d; const card=document.createElement('div');card.className='card';
-  const ar=document.createElement('div');ar.className='ar';ar.innerHTML=highlight(v.text,groups,modes);card.appendChild(ar);
+  const ar=document.createElement('div');ar.className='ar';ar.innerHTML=highlight(cfg.noDiac?stripDiac(v.text):v.text,groups,modes);card.appendChild(ar);
   const meta=document.createElement('div');meta.className='meta';
   meta.innerHTML='<span class="src">Коран · '+v.s+':'+v.a+'</span>';
   addTr(meta,card,v.text,{s:v.s,a:v.a}); card.appendChild(meta); return card;
@@ -460,8 +466,9 @@ function addTr(meta,card,text,ayah){
 }
 async function doTranslateAyah(s,a,out,btn){
   btn.disabled=true; btn.textContent='…';
-  try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/rus-elmirkuliev/'+s+'/'+a+'.min.json')).json();
-    out.textContent=(j.text||'—')+'  — пер. Э. Кулиева'; out.style.display='block'; }
+  const ed=cfg.qtr||'rus-elmirkuliev'; const nm=ed==='rus-abuadel'?'Абу Адель':'Э. Кулиев';
+  try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/'+ed+'/'+s+'/'+a+'.min.json')).json();
+    out.textContent=(j.text||'—')+'  — пер. '+nm; out.style.display='block'; }
   catch(e){ toast('Не удалось загрузить перевод'); }
   btn.disabled=false; btn.textContent='Перевод';
 }
@@ -535,7 +542,7 @@ async function doTranslate(text,out,btn){
 
 /* ===================== УПРАВЛЕНИЕ ===================== */
 function renderModal(){
-  document.querySelectorAll('.sw').forEach(sw=>{ sw.classList.toggle('on', !!cfg[sw.dataset.flag]); });
+  document.querySelectorAll('.sw').forEach(sw=>{ if(sw.dataset.flag) sw.classList.toggle('on', !!cfg[sw.dataset.flag]); });
   const wl=document.getElementById('wlList'); wl.innerHTML='';
   (cfg.whitelist||[]).forEach((w,i)=>{ const t=document.createElement('span');t.className='tag';
     t.textContent=w+' ✕'; t.style.cursor='pointer'; t.onclick=()=>{ cfg.whitelist.splice(i,1);saveCfg(cfg);renderModal(); };
@@ -543,7 +550,9 @@ function renderModal(){
 }
 document.getElementById('gear').onclick=()=>{ document.getElementById('modal').style.display='flex'; renderModal(); };
 document.getElementById('modalClose').onclick=()=>{ document.getElementById('modal').style.display='none'; };
-document.querySelectorAll('.sw').forEach(sw=>sw.onclick=()=>{ const f=sw.dataset.flag; cfg[f]=!cfg[f]; saveCfg(cfg); renderModal(); });
+document.querySelectorAll('.sw').forEach(sw=>sw.onclick=()=>{ const f=sw.dataset.flag; if(!f) return; cfg[f]=!cfg[f]; saveCfg(cfg); renderModal(); });
+var _qs=document.getElementById('qtrSel'); if(_qs){ _qs.value=cfg.qtr||'rus-elmirkuliev'; _qs.onchange=()=>{ cfg.qtr=_qs.value; saveCfg(cfg); }; }
+var _nd=document.getElementById('noDiacSw'); if(_nd){ _nd.classList.toggle('on',!!cfg.noDiac); _nd.onclick=()=>{ cfg.noDiac=!cfg.noDiac; saveCfg(cfg); _nd.classList.toggle('on',!!cfg.noDiac); if(document.getElementById('q').value.trim()) runSearch(); }; }
 document.getElementById('wlAdd').onclick=()=>{ const v=document.getElementById('wlIn').value.trim(); if(!v)return;
   cfg.whitelist=cfg.whitelist||[]; cfg.whitelist.push(v); saveCfg(cfg); document.getElementById('wlIn').value=''; renderModal(); };
 
@@ -572,7 +581,7 @@ var _yt=document.getElementById('ytLink'); if(_yt) _yt.onclick=()=>openLink('htt
 
 if(userAllowed()){
   document.getElementById('app').style.display='block';
-  if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v7 · хадисы · аяты · аль-Мухаймин'; }
+  if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v8 · хадисы · аяты · аль-Мухаймин'; }
   try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
     if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
       (st.cols||[]).forEach(c=>selCols.add(c));
