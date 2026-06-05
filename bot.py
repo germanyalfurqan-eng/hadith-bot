@@ -156,6 +156,24 @@ def parse_smart_sunnah(text):
             return text.strip()[len(trig):].strip()
     return None
 
+# Код первоисточника (verified_from) -> арабское имя; цифры лат->араб
+SRC_AR = {"ahmad": "أحمد", "bukhari": "البخاري", "muslim": "مسلم", "abudawud": "أبو داود",
+          "tirmidhi": "الترمذي", "nasai": "النسائي", "ibnmajah": "ابن ماجه", "malik": "مالك",
+          "humaydi": "الحميدي", "tayalisi": "الطيالسي", "ibnabishayba": "ابن أبي شيبة",
+          "darimi": "الدارمي", "abuyala": "أبو يعلى", "ishaq": "إسحاق بن راهويه",
+          "nasaikubra": "النسائي الكبرى", "ibnhibban": "ابن حبان", "ibnkhuzayma": "ابن خزيمة",
+          "abuawana": "أبو عوانة", "adabmufrad": "الأدب المفرد", "abdbinhumayd": "عبد بن حميد",
+          "ismail": "إسماعيل بن جعفر", "ibnaljad": "ابن الجعد", "ibnmubarak": "ابن المبارك"}
+_LAT2AR = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
+def fmt_src_ref(short_ref, verified_from):
+    """Чистая метка первоисточника: из verified_from (надёжный номер) -> «أحمد ٩٦٠»."""
+    if verified_from:
+        p = verified_from.split()
+        name = SRC_AR.get(p[0], p[0])
+        num = (p[1] if len(p) > 1 else "").translate(_LAT2AR)
+        return f"{name} {num}".strip()
+    return (short_ref or "—").strip()
+
 REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json"
 _reverse_cache = None
 
@@ -1538,17 +1556,17 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # ── каждая версия — своим сообщением ──
             SEP = "━━━━━━━━━━━━━━"
             for i, r in enumerate(riw, 1):
-                ref = (r.get("short_ref") or "").strip()
                 vmark = "✅" if r.get("verified") else "⏳"
                 vf = (r.get("verified_from") or r.get("restored_from") or "").strip()
-                body = f"▫️ Риваят {i}/{len(riw)} {vmark}"
-                body += f"  [{ref}]" if ref else "  [метка не распознана]"
-                body += f"\n{SEP}\n{r.get('text','')}\n"
-                if r.get("text_ru_ready"):
-                    body += f"\n🌍 {r['text_ru_ready']}\n"
-                if vf:
-                    body += f"🔖 первоисточник: {vf}"
+                ref = fmt_src_ref(r.get("short_ref", ""), vf)
+                body = f"▫️ Риваят {i}/{len(riw)} {vmark}  📖 {ref}\n{SEP}\n{r.get('text','')}\n"
+                ru = r.get("text_ru_ready")
+                if not ru and is_owner(update):
+                    ru = translate_matn(r.get("text", ""), src=vf, owner=True)
+                if ru:
+                    body += f"\n🌍 {ru}\n"
                 await send_long(update, body)
+            flush_trans()
         else:
             await update.message.reply_text(f"❌ Хадис №{number} в аль-Мухаймине не найден.")
         return
