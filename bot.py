@@ -6,7 +6,7 @@ import base64
 import requests
 from datetime import datetime
 from html import unescape
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler
 
 # ============ АЛЬ-МУХАЙМИН (الموحد المهيمن) — наша выверенная база ============
@@ -313,6 +313,17 @@ OWNER_ID = 131827895
 OWNER_CHANNEL_ID = -1001660979432
 LOG_CHAT_ID = -1003480426073
 GITHUB_REPO = "germanyalfurqan-eng/hadith-bot"
+
+GUIDE_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/bot_guide_tg.txt"
+MAIN_KB = ReplyKeyboardMarkup([["📖 Инструкция"]], resize_keyboard=True)
+def get_guide():
+    try:
+        r = requests.get(GUIDE_URL, timeout=6)
+        if r.status_code == 200:
+            return r.text
+    except Exception:
+        pass
+    return "📖 Инструкция временно недоступна, попробуй позже."
 MEMORY_FILE = "memory.json"
 REGISTRY_FILE = "registry.json"
 
@@ -1022,6 +1033,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text or ""
     text = text.strip()
+
+    if text in ("📖 Инструкция", "инструкция", "путеводитель", "гайд", "/guide"):
+        await send_long(update, get_guide())
+        return
     user_id = update.effective_user.id if update.effective_user else 0
     chat_type = update.effective_chat.type
     chat_id = update.effective_chat.id
@@ -1700,7 +1715,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🎧 бахни mp3 (reply)\n\n"
             "*Память (владелец):*\nзапомни: факт | память | удали память 2\nисправь память 2: текст | очистить память\n\n"
             "*Реестр (владелец):*\nв реестр (reply) | реестр | ожидает\nсделано 1 | удали 1 | результат 1 ссылка",
-            parse_mode="Markdown"
+            parse_mode="Markdown",
+            reply_markup=MAIN_KB
         )
 
 app = ApplicationBuilder().token(TOKEN).build()
