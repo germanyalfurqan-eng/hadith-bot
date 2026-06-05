@@ -64,6 +64,7 @@
   .tr-btn{padding:6px 12px;background:var(--btn);color:#fff;font-size:13px}
   .tr-out{margin-top:8px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:14px;display:none}
   mark{background:var(--mark);color:#241c00;border-radius:3px;padding:0 1px}
+  .isnad{color:var(--hint)}
   .status{text-align:center;color:var(--hint);padding:14px;font-size:14px}
   .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#000;color:#fff;
         padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:.2s;z-index:99;max-width:90%}
@@ -110,7 +111,7 @@
       <div class="gear" id="gear">⚙️</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v17</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v18</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -199,6 +200,7 @@
         <option value="rus-abuadel">Абу Адель</option>
       </select></div>
     <div class="row"><span>🔤 Коран без огласовок (تشكيل)</span><div class="sw" id="noDiacSw"></div></div>
+    <div class="row"><span>🎨 Выделять иснад (цепочку) серым</span><div class="sw" id="isnadSw"></div></div>
     <div class="row"><span>⭐ Закладки / избранное</span><button class="go" id="favBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row" style="opacity:.55"><span>🔊 Озвучка аятов</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>📚 Другие источники (Лейс, Мукбиль, Сильсиля…)</span><span>скоро</span></div>
@@ -269,7 +271,7 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({publicApp:false,fHadith:true,fQuran:true,fNeuro:false,fTranslate:false,whitelist:[],qtr:'rus-elmirkuliev',noDiac:false}, loadCfg());
+let cfg = Object.assign({publicApp:false,fHadith:true,fQuran:true,fNeuro:false,fTranslate:false,whitelist:[],qtr:'rus-elmirkuliev',noDiac:false,isnad:true}, loadCfg());
 
 function userAllowed(){
   if(isOwner) return true;
@@ -332,6 +334,21 @@ function highlight(raw,groups,modes){
   return html.split('%%HL%%').join('<mark>').split('%%EL%%').join('</mark>');
 }
 function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function splitIsnad(text){
+  const words=(text||'').split(/\s+/); if(words.length<4) return [null,text];
+  const c=words.map(w=>canon(w));
+  for(let i=1;i<c.length;i++){ const w=c[i],p=c[i-1];
+    if((w.indexOf('رسول')===0||w.indexOf('النبي')===0)&&(p.indexOf('قال')===0||p.indexOf('ان')===0||p.indexOf('عن')===0))
+      return [words.slice(0,i-1).join(' '), words.slice(i-1).join(' ')]; }
+  for(let i=0;i<c.length;i++){ if(c[i].indexOf('وسلم')!==-1) return [words.slice(0,i+1).join(' '), words.slice(i+1).join(' ')]; }
+  return [null,text];
+}
+function hl(text,groups){
+  const disp=cfg.noDiac?stripDiac(text):text;
+  if(!cfg.isnad) return highlight(disp,groups,modes);
+  const sp=splitIsnad(disp); if(!sp[0]) return highlight(disp,groups,modes);
+  return '<span class="isnad">'+highlight(sp[0],groups,modes)+'</span> '+highlight(sp[1],groups,modes);
+}
 /* ===== копирование ===== */
 function copyText(t){ try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(()=>toast('Скопировано ✓'),()=>_fbCopy(t)); } else _fbCopy(t); }catch(e){ _fbCopy(t); } }
 function _fbCopy(t){ try{ const ta=document.createElement('textarea'); ta.value=t; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); toast('Скопировано ✓'); }catch(e){ toast('Не удалось скопировать'); } }
@@ -490,7 +507,7 @@ function info(t){const d=document.createElement('div');d.className='hint';d.styl
 
 function cardHadith(d,groups){
   const {code,h}=d; const card=document.createElement('div');card.className='card';
-  const ar=document.createElement('div');ar.className='ar';ar.innerHTML=highlight(h.text,groups,modes);card.appendChild(ar);
+  const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(h.text,groups);card.appendChild(ar);
   const meta=document.createElement('div');meta.className='meta';
   meta.innerHTML='<span class="src">'+arOf(code)+' · №'+h.num+'</span>';
   if(h.grade) meta.innerHTML+='<span class="grade">'+esc(h.grade)+'</span>';
@@ -509,7 +526,7 @@ function cardMuh(d,groups){
     const cp=document.createElement('button'); cp.className='mini'; cp.textContent='⧉ копир.';
     cp.onclick=()=>copyText(t+(s?('\n— '+s):'')+'\n(المهيمن №'+h.n+')');
     head.appendChild(lab); head.appendChild(cp); card.appendChild(head);
-    const ar=document.createElement('div');ar.className='ar';ar.innerHTML=highlight(cfg.noDiac?stripDiac(t):t,groups,modes);card.appendChild(ar);
+    const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(t,groups);card.appendChild(ar);
   });
   const meta=document.createElement('div');meta.className='meta';
   meta.innerHTML='<span class="badge muh">المهيمن №'+h.n+' · مرشد بن يوسف</span>'+
@@ -627,6 +644,7 @@ document.getElementById('modalClose').onclick=()=>{ document.getElementById('mod
 document.querySelectorAll('.sw').forEach(sw=>sw.onclick=()=>{ const f=sw.dataset.flag; if(!f) return; cfg[f]=!cfg[f]; saveCfg(cfg); renderModal(); });
 var _qs=document.getElementById('qtrSel'); if(_qs){ _qs.value=cfg.qtr||'rus-elmirkuliev'; _qs.onchange=()=>{ cfg.qtr=_qs.value; saveCfg(cfg); }; }
 var _nd=document.getElementById('noDiacSw'); if(_nd){ _nd.classList.toggle('on',!!cfg.noDiac); _nd.onclick=()=>{ cfg.noDiac=!cfg.noDiac; saveCfg(cfg); _nd.classList.toggle('on',!!cfg.noDiac); if(document.getElementById('q').value.trim()) runSearch(); }; }
+var _is=document.getElementById('isnadSw'); if(_is){ _is.classList.toggle('on',!!cfg.isnad); _is.onclick=()=>{ cfg.isnad=!cfg.isnad; saveCfg(cfg); _is.classList.toggle('on',!!cfg.isnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
 document.getElementById('wlAdd').onclick=()=>{ const v=document.getElementById('wlIn').value.trim(); if(!v)return;
   cfg.whitelist=cfg.whitelist||[]; cfg.whitelist.push(v); saveCfg(cfg); document.getElementById('wlIn').value=''; renderModal(); };
 
@@ -665,7 +683,7 @@ var _yt=document.getElementById('ytLink'); if(_yt) _yt.onclick=()=>openLink('htt
 
 if(userAllowed()){
   document.getElementById('app').style.display='block';
-  if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v17 · хадисы · аяты · аль-Мухаймин'; }
+  if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v18 · хадисы · аяты · аль-Мухаймин'; }
   try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
     if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
       (st.cols||[]).forEach(c=>selCols.add(c));
