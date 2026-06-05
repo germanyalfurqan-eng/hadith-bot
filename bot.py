@@ -1841,7 +1841,7 @@ def verify_init_data(init_data, max_age=86400):
 ACCESS_FILE = "access.json"
 ACCESS_FEATURES = ["app", "translate", "neuro", "bot"]   # app = первый рубильник (вход)
 DEFAULT_ACCESS = {
-    "all": {"whitelist": []},                              # полный белый список → доступ ко ВСЕМУ
+    "all": {"public": False, "whitelist": []},             # public=главный рубильник «всё всем»; whitelist=полный доступ конкретным
     "app": {"public": False, "whitelist": []},
     "translate": {"public": False, "whitelist": []},
     "neuro": {"public": False, "whitelist": []},
@@ -1892,10 +1892,12 @@ def _in_list(user, lst):
     return False
 
 def feature_allowed(feature, user):
-    """owner | полный белый список | feature.public | feature.whitelist."""
+    """owner | 🌐 all.public (всё всем) | полный белый список | feature.public | feature.whitelist."""
     if user and str(user.get("id")) == str(OWNER_ID):
         return True
     acc = load_access()
+    if acc.get("all", {}).get("public"):              # главный рубильник: всё открыто каждому
+        return True
     if _in_list(user, acc.get("all", {}).get("whitelist")):
         return True
     f = acc.get(feature, {})
