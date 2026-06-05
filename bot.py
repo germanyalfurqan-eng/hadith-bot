@@ -611,12 +611,17 @@ def get_hadith(collection, number):
         ur = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-{collection}/{number}.min.json"
         ue = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/eng-{collection}/{number}.min.json"
         arabic = russian = english = grade = ""
-        try:
-            r = requests.get(ua, timeout=10)
-            if r.status_code == 200:
-                h = r.json().get("hadiths", [])
-                if h: arabic = h[0].get("text", "").replace("\n", " ")
-        except: pass
+        # арабский — главное; берём с повтором и фолбэк-CDN (бывают таймауты)
+        ua_fallback = f"https://raw.githubusercontent.com/fawazahmed0/hadith-api/1/editions/ara-{collection}/{number}.min.json"
+        for u in (ua, ua, ua_fallback):
+            try:
+                r = requests.get(u, timeout=15)
+                if r.status_code == 200:
+                    h = r.json().get("hadiths", [])
+                    if h and h[0].get("text", "").strip():
+                        arabic = h[0].get("text", "").replace("\n", " ")
+                        break
+            except: pass
         try:
             r = requests.get(ur, timeout=10)
             if r.status_code == 200:
@@ -1455,7 +1460,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 ar, tr, lang, gr = get_hadith(collection, number)
             if not ar and not tr:
-                await update.message.reply_text(f"❌ {NAMES.get(collection, collection)} №{number} не найден.")
+                hint = ""
+                if collection == "muslim":
+                    hint = ("\nℹ️ У Муслима нумерация источника местами пустая/нестандартная "
+                            "(مقدمة и т.п.). Надёжнее искать по тексту: «сунна <часть хадиса>».")
+                await update.message.reply_text(
+                    f"❌ {NAMES.get(collection, collection)} №{number} не найден (пусто в источнике).{hint}")
                 return
             similar = search_similar_hadith(ar) if collection != "ahmad_local" else []
             msg = f"📖 {NAMES.get(collection, collection)}, №{number}\n\n"
