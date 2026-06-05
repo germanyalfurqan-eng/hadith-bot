@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Поиск хадисов и аятов</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root{
+    --bg:#ffffff; --text:#1c1c1e; --hint:#8e8e93; --link:#2481cc;
+    --btn:#2481cc; --btn-text:#fff; --card:#f4f4f7; --border:#e3e3e8; --mark:#ffe39e;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--text);font-size:16px;line-height:1.5}
+  .wrap{max-width:780px;margin:0 auto;padding:12px}
+  h1{font-size:18px;margin:6px 0 12px;text-align:center}
+  .tabs{display:flex;gap:8px;margin-bottom:12px}
+  .tab{flex:1;padding:11px;text-align:center;border-radius:12px;background:var(--card);
+       border:1px solid var(--border);font-weight:600;cursor:pointer}
+  .tab.active{background:var(--btn);color:var(--btn-text);border-color:var(--btn)}
+  .searchbar{display:flex;gap:8px;margin-bottom:8px}
+  input[type=text]{flex:1;padding:12px;border-radius:12px;border:1px solid var(--border);
+       background:var(--card);color:var(--text);font-size:16px}
+  button{font-size:15px;border:none;border-radius:12px;cursor:pointer}
+  .go{padding:0 16px;background:var(--btn);color:var(--btn-text);font-weight:600}
+  .modes{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .chip{padding:7px 11px;border-radius:20px;background:var(--card);border:1px solid var(--border);
+        font-size:13px;cursor:pointer;user-select:none}
+  .chip.on{background:var(--btn);color:var(--btn-text);border-color:var(--btn)}
+  .hint{color:var(--hint);font-size:12px;margin:4px 2px 10px}
+  .cols{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .col{padding:6px 10px;border-radius:18px;background:var(--card);border:1px solid var(--border);
+       font-size:13px;cursor:pointer}
+  .col.on{background:#34c759;color:#fff;border-color:#34c759}
+  .neuro-box{background:var(--card);border:1px dashed var(--border);border-radius:12px;
+       padding:10px;margin-bottom:10px;display:none}
+  .neuro-box textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:8px;
+       font-size:15px;background:var(--bg);color:var(--text);resize:vertical;min-height:54px}
+  .res{margin-top:6px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;
+        padding:12px;margin-bottom:10px}
+  .ar{font-size:19px;line-height:2;direction:rtl;text-align:right;font-family:"Traditional Arabic","Amiri",serif}
+  .meta{margin-top:8px;font-size:13px;color:var(--hint);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .src{color:var(--link);font-weight:600}
+  .badge{background:#34c759;color:#fff;border-radius:8px;padding:2px 8px;font-size:12px;font-weight:600}
+  .grade{background:#e9e9ef;border-radius:8px;padding:2px 8px}
+  .tr-btn{padding:6px 12px;background:var(--btn);color:#fff;font-size:13px}
+  .tr-out{margin-top:8px;padding:8px;background:var(--bg);border:1px solid var(--border);
+        border-radius:8px;font-size:14px;display:none}
+  mark{background:var(--mark);border-radius:3px;padding:0 1px}
+  .status{text-align:center;color:var(--hint);padding:16px;font-size:14px}
+  .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#000;color:#fff;
+        padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:.2s;z-index:99;max-width:90%}
+  .toast.show{opacity:.92}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔎 Поиск хадисов и аятов <span style="color:var(--hint);font-size:12px">v1</span></h1>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="hadith">📚 Хадисы</div>
+    <div class="tab" data-tab="quran">📖 Аяты</div>
+  </div>
+
+  <div class="cols" id="cols"></div>
+
+  <div class="searchbar">
+    <input type="text" id="q" placeholder="Введите слова для поиска…" autocomplete="off">
+    <button class="go" id="goBtn">Найти</button>
+  </div>
+
+  <div class="modes">
+    <div class="chip" data-mode="diac">َ Огласовки точно</div>
+    <div class="chip" data-mode="root">جذ Однокоренные</div>
+    <div class="chip" id="neuroChip" data-mode="neuro">🧠 По смыслу (ИИ)</div>
+  </div>
+  <div class="hint">
+    «…» в кавычках = точная фраза · пробел = все слова · <b>|</b> = ИЛИ · -слово = исключить
+  </div>
+
+  <div class="neuro-box" id="neuroBox">
+    <div style="font-size:13px;margin-bottom:6px">Опиши смысл (любой язык) — ИИ подберёт арабские ключевые фразы:</div>
+    <textarea id="neuroIn" placeholder="напр.: дела оцениваются по намерениям"></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="go" id="neuroRun" style="padding:8px 14px">Подобрать фразы</button>
+    </div>
+  </div>
+
+  <div class="res" id="res"></div>
+  <div class="status" id="status"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===================== КОНФИГ ===================== */
+const BACKEND_URL = ""; // напр. https://твой-бэкенд/api — пусто = нейро/перевод выкл (заглушка)
+const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
+const QURAN_URL = "./quran.json";
+const EDITION_URL = code => `https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-${code}.min.json`;
+const COLLECTIONS = [
+  {code:'bukhari',ru:'Бухари',ar:'البخاري'},
+  {code:'muslim',ru:'Муслим',ar:'مسلم'},
+  {code:'abudawud',ru:'Абу Дауд',ar:'أبو داود'},
+  {code:'tirmidhi',ru:'Тирмизи',ar:'الترمذي'},
+  {code:'ibnmajah',ru:'Ибн Маджа',ar:'ابن ماجه'},
+  {code:'nasai',ru:'Насаи',ar:'النسائي'},
+  {code:'malik',ru:'Малик',ar:'مالك'},
+];
+
+/* ===================== TELEGRAM ===================== */
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg){ try{ tg.ready(); tg.expand();
+  const p=tg.themeParams||{};
+  const set=(k,v)=>v&&document.documentElement.style.setProperty(k,v);
+  set('--bg',p.bg_color); set('--text',p.text_color); set('--hint',p.hint_color);
+  set('--link',p.link_color); set('--btn',p.button_color); set('--btn-text',p.button_text_color);
+  set('--card',p.secondary_bg_color);
+}catch(e){} }
+
+/* ===================== НОРМАЛИЗАЦИЯ ===================== */
+const DIAC = '\\u0610-\\u061A\\u064B-\\u065F\\u0670\\u06D6-\\u06ED\\u0640';
+const reDiac = new RegExp('['+DIAC+']','g');
+function stripDiac(s){ return (s||'').replace(/﻿/g,'').replace(reDiac,''); }
+function fold(s){ return s
+  .replace(/[إأآٱ]/g,'ا')
+  .replace(/[ىئ]/g,'ي').replace(/ؤ/g,'و')
+  .replace(/ة/g,'ه').replace(/گ/g,'ك'); }
+function canon(s){ return fold(stripDiac(s)).replace(/\s+/g,' ').trim(); }
+function stem(w){
+  let x=w;
+  x=x.replace(/^(وال|فال|بال|كال|ال|و|ف|ب|ك|ل|س)/,'');
+  x=x.replace(/(ات|ون|ين|ان|ها|هم|هن|كم|نا|تم|ه|ي|ا)$/,'');
+  return x.length>=3?x:w;
+}
+function stemText(t){ return canon(t).split(' ').map(stem).join(' '); }
+
+/* ===================== РАЗБОР ЗАПРОСА ===================== */
+function parseQuery(q){
+  return q.split('|').map(g=>{
+    const terms=[]; const re=/"([^"]+)"|(\S+)/g; let m;
+    while((m=re.exec(g))){
+      let phrase=m[1]!==undefined; let t=phrase?m[1]:m[2]; let neg=false;
+      if(!phrase && t[0]==='-'){neg=true;t=t.slice(1);}
+      if(t) terms.push({t,phrase,neg});
+    }
+    return terms;
+  }).filter(g=>g.length);
+}
+function termMatch(term, doc, modes){
+  if(modes.diac){
+    return doc.rawN.indexOf(term.t.replace(/\s+/g,' ').trim())!==-1;
+  }
+  if(modes.root){
+    const words=canon(term.t).split(' ').map(stem).filter(Boolean);
+    return words.every(w=>doc.stem.indexOf(w)!==-1);
+  }
+  return doc.norm.indexOf(canon(term.t))!==-1;
+}
+function docMatch(doc, groups, modes){
+  return groups.some(g=>{
+    for(const term of g){
+      const hit=termMatch(term,doc,modes);
+      if(term.neg && hit) return false;
+      if(!term.neg && !hit) return false;
+    }
+    return true;
+  });
+}
+
+/* ===================== ПОДСВЕТКА ===================== */
+function letterClass(ch){
+  if('اأإآٱ'.includes(ch)) return '[اأإآٱ]';
+  if('يىئ'.includes(ch)) return '[يىئ]';
+  if('وؤ'.includes(ch)) return '[وؤ]';
+  if('هة'.includes(ch)) return '[هة]';
+  if('كگ'.includes(ch)) return '[كگ]';
+  return ch.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+}
+function highlight(raw, groups, modes){
+  let terms=[]; groups.forEach(g=>g.forEach(t=>{ if(!t.neg) terms.push(t.t); }));
+  let html=esc(raw);
+  terms.sort((a,b)=>b.length-a.length);
+  for(const term of terms){
+    try{
+      const c=canon(term); if(!c) continue;
+      const pat=[...c].map(ch=> ch===' ' ? '[\\s'+DIAC+']+' : letterClass(ch)+'['+DIAC+']*').join('');
+      html=html.replace(new RegExp(pat,'g'), m=>'%%HL%%'+m+'%%EL%%');
+    }catch(e){}
+  }
+  return html.split('%%HL%%').join('<mark>').split('%%EL%%').join('</mark>');
+}
+function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+/* ===================== ДАННЫЕ ===================== */
+const cache={};
+let reverse=null;
+async function loadReverse(){
+  if(reverse) return reverse;
+  try{ const r=await fetch(REVERSE_INDEX_URL); reverse=await r.json(); }catch(e){ reverse={}; }
+  return reverse;
+}
+function gradeOf(h){ const g=h.grades&&h.grades[0]; return g?(g.grade||'').toString():''; }
+async function loadCollection(code){
+  if(cache[code]) return cache[code];
+  setStatus('Загружаю сборник '+nameOf(code)+'…');
+  const r=await fetch(EDITION_URL(code));
+  const j=await r.json();
+  const arr=(j.hadiths||[]).map(h=>{
+    const raw=(h.text||'').replace(/\s+/g,' ').trim();
+    return {num:String(h.hadithnumber), text:raw, grade:gradeOf(h),
+            norm:canon(raw), rawN:raw, stem:stemText(raw)};
+  });
+  cache[code]=arr; setStatus('');
+  return arr;
+}
+let quran=null;
+async function loadQuran(){
+  if(quran) return quran;
+  setStatus('Загружаю Коран…');
+  const r=await fetch(QURAN_URL); const j=await r.json();
+  quran=j.map(v=>{ const raw=(v.text||'').replace(/﻿/g,'').replace(/\s+/g,' ').trim();
+    return {s:v.s,a:v.a,text:raw,norm:canon(raw),rawN:raw,stem:stemText(raw)}; });
+  setStatus(''); return quran;
+}
+function nameOf(code){const c=COLLECTIONS.find(x=>x.code===code);return c?c.ru:code;}
+function arOf(code){const c=COLLECTIONS.find(x=>x.code===code);return c?c.ar:code;}
+
+/* ===================== СОСТОЯНИЕ UI ===================== */
+let tab='hadith';
+const modes={diac:false,root:false,neuro:false};
+const selCols=new Set(['bukhari','muslim']);
+
+function renderCols(){
+  const box=document.getElementById('cols');
+  box.style.display = tab==='hadith'?'flex':'none';
+  box.innerHTML='';
+  COLLECTIONS.forEach(c=>{
+    const d=document.createElement('div');
+    d.className='col'+(selCols.has(c.code)?' on':'');
+    d.textContent=c.ru;
+    d.onclick=()=>{ selCols.has(c.code)?selCols.delete(c.code):selCols.add(c.code); renderCols(); };
+    box.appendChild(d);
+  });
+}
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); tab=t.dataset.tab; renderCols();
+  document.getElementById('q').placeholder = tab==='hadith'?'Слова или смысл хадиса…':'Слова или смысл аята…';
+  document.getElementById('res').innerHTML=''; setStatus('');
+});
+document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{
+  const m=ch.dataset.mode;
+  if(m==='neuro'){ modes.neuro=!modes.neuro; ch.classList.toggle('on',modes.neuro);
+    document.getElementById('neuroBox').style.display=modes.neuro?'block':'none'; return; }
+  modes[m]=!modes[m]; ch.classList.toggle('on',modes[m]);
+});
+
+/* ===================== ПОИСК ===================== */
+async function runSearch(){
+  const q=document.getElementById('q').value.trim();
+  if(!q){ toast('Введите запрос'); return; }
+  const groups=parseQuery(q);
+  if(!groups.length){ toast('Пустой запрос'); return; }
+  const res=document.getElementById('res'); res.innerHTML=''; setStatus('Ищу…');
+  let docs=[];
+  if(tab==='hadith'){
+    if(!selCols.size){ setStatus('Выберите хотя бы один сборник'); return; }
+    for(const code of selCols){
+      try{ const arr=await loadCollection(code);
+        arr.forEach(h=>{ if(docMatch(h,groups,modes)) docs.push({type:'h',code,h}); }); }
+      catch(e){ toast('Не загрузился '+nameOf(code)); }
+    }
+    await loadReverse();
+  }else{
+    const arr=await loadQuran();
+    arr.forEach(v=>{ if(docMatch(v,groups,modes)) docs.push({type:'q',v}); });
+  }
+  setStatus('');
+  if(!docs.length){ res.innerHTML='<div class="status">Ничего не найдено 🤷</div>'; return; }
+  const total=docs.length; docs=docs.slice(0,200);
+  res.appendChild(elInfo('Найдено: '+total+(total>200?' (показаны первые 200)':'')));
+  docs.forEach(d=> res.appendChild(d.type==='h'?cardHadith(d,groups):cardAyah(d,groups)));
+}
+function elInfo(t){const d=document.createElement('div');d.className='hint';d.style.textAlign='center';d.textContent=t;return d;}
+
+function cardHadith(d,groups){
+  const {code,h}=d; const card=document.createElement('div'); card.className='card';
+  const ar=document.createElement('div'); ar.className='ar';
+  ar.innerHTML=highlight(h.text,groups,modes); card.appendChild(ar);
+  const meta=document.createElement('div'); meta.className='meta';
+  meta.innerHTML='<span class="src">'+arOf(code)+' · №'+h.num+'</span>';
+  if(h.grade) meta.innerHTML+='<span class="grade">'+esc(h.grade)+'</span>';
+  const key=code+' '+h.num;
+  let m = reverse && (reverse[key]||reverse[code+' '+toArabicDigits(h.num)]);
+  if(m && m.length){ const nums=[...new Set(m.map(x=>x.m))].join(', ');
+    meta.innerHTML+='<span class="badge">✓ في المهيمن: №'+nums+'</span>'; }
+  const tr=document.createElement('button'); tr.className='tr-btn'; tr.textContent='Перевод';
+  const out=document.createElement('div'); out.className='tr-out';
+  tr.onclick=()=>doTranslate(h.text,out,tr); meta.appendChild(tr);
+  card.appendChild(meta); card.appendChild(out);
+  return card;
+}
+function cardAyah(d,groups){
+  const {v}=d; const card=document.createElement('div'); card.className='card';
+  const ar=document.createElement('div'); ar.className='ar';
+  ar.innerHTML=highlight(v.text,groups,modes); card.appendChild(ar);
+  const meta=document.createElement('div'); meta.className='meta';
+  meta.innerHTML='<span class="src">Коран · '+v.s+':'+v.a+'</span>';
+  const tr=document.createElement('button'); tr.className='tr-btn'; tr.textContent='Перевод';
+  const out=document.createElement('div'); out.className='tr-out';
+  tr.onclick=()=>doTranslate(v.text,out,tr); meta.appendChild(tr);
+  card.appendChild(meta); card.appendChild(out);
+  return card;
+}
+function toArabicDigits(s){const m={'0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩'};return String(s).replace(/[0-9]/g,d=>m[d]);}
+
+/* ===================== ИИ (заглушки на бэкенд) ===================== */
+async function doTranslate(text,out,btn){
+  if(!BACKEND_URL){ toast('Перевод подключится после настройки сервера (DeepSeek)'); return; }
+  btn.disabled=true; btn.textContent='…';
+  try{
+    const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text, initData:tg&&tg.initData})});
+    const j=await r.json();
+    out.textContent=j.translation||'—'; out.style.display='block';
+  }catch(e){ toast('Ошибка перевода'); }
+  btn.disabled=false; btn.textContent='Перевод';
+}
+async function neuroRun(){
+  const meaning=document.getElementById('neuroIn').value.trim();
+  if(!meaning){ toast('Опишите смысл'); return; }
+  if(!BACKEND_URL){ toast('Нейро-режим подключится после настройки сервера (DeepSeek)'); return; }
+  setStatus('ИИ подбирает фразы…');
+  try{
+    const r=await fetch(BACKEND_URL+'/neuro',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({meaning, kind:tab, initData:tg&&tg.initData})});
+    const j=await r.json();
+    const phrases=(j.phrases||[]);
+    if(phrases.length){ document.getElementById('q').value=phrases.map(p=>'"'+p+'"').join(' | '); runSearch(); }
+    else toast('ИИ не дал вариантов');
+  }catch(e){ toast('Ошибка ИИ'); }
+  setStatus('');
+}
+
+/* ===================== УТИЛИТЫ ===================== */
+function setStatus(t){document.getElementById('status').textContent=t;}
+let toastT;
+function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('show');
+  clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2600);}
+
+document.getElementById('goBtn').onclick=runSearch;
+document.getElementById('q').addEventListener('keydown',e=>{if(e.key==='Enter')runSearch();});
+document.getElementById('neuroRun').onclick=neuroRun;
+renderCols();
+</script>
+</body>
+</html>
