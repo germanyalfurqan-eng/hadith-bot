@@ -1,4 +1,5 @@
 import os
+import asyncio
 import re
 import random
 import json
@@ -1720,6 +1721,52 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 WEBAPP_URL = "https://germanyalfurqan-eng.github.io/hadith-bot/"
+
+async def _api_serve():
+    from aiohttp import web
+    loop = asyncio.get_event_loop()
+    def _cors(resp):
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        resp.headers['Access-Control-Allow-Methods'] = 'POST,GET,OPTIONS'
+        return resp
+    async def health(r): return _cors(web.json_response({'ok': True}))
+    async def opt(r): return _cors(web.Response(text=''))
+    async def neuro(r):
+        try:
+            d = await r.json(); meaning = (d.get('meaning') or '')[:500]
+            sysm = ("Помоги искать хадисы/аяты. Дай 4-8 ключевых АРАБСКИХ слов/фраз "
+                    "(каждое с новой строки), которыми ищут по смыслу запроса; включай формы "
+                    "с артиклем ال и без, синонимы. Только арабские слова, без перевода и пояснений.")
+            txt = await loop.run_in_executor(None, ask_deepseek, "Запрос: " + meaning, sysm) or ""
+            ph = [re.sub(r'^[\d\.\-\)\s]+', '', x).strip() for x in (txt or '').splitlines() if x.strip()]
+            ph = [p for p in ph if re.search(r'[؀-ۿ]', p)][:10]
+            return _cors(web.json_response({'phrases': ph}))
+        except Exception as e:
+            return _cors(web.json_response({'phrases': [], 'error': str(e)}))
+    async def translate(r):
+        try:
+            d = await r.json(); text = (d.get('text') or '')[:4000]
+            tr = await loop.run_in_executor(None, ask_deepseek, "Переведи точно на русский, выдай только перевод:\n" + text, "Ты — точный переводчик арабского (хадисы/аяты).") or ""
+            return _cors(web.json_response({'translation': tr or ''}))
+        except Exception as e:
+            return _cors(web.json_response({'translation': '', 'error': str(e)}))
+    async def search(r):
+        try:
+            q = (r.query.get('q') or '')[:200]
+            res = await loop.run_in_executor(None, search_hadith, q) if q else []
+            return _cors(web.json_response({'results': res or []}))
+        except Exception as e:
+            return _cors(web.json_response({'results': [], 'error': str(e)}))
+    a = web.Application()
+    a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro),
+                  web.post('/api/translate', translate), web.get('/api/search', search),
+                  web.options('/api/{t:.*}', opt)])
+    runner = web.AppRunner(a); await runner.setup()
+    port = int(os.environ.get('PORT', '8080'))
+    site = web.TCPSite(runner, '0.0.0.0', port); await site.start()
+    print("API server on port", port)
+
 async def _setup(application):
     try:
         from telegram import MenuButtonWebApp, WebAppInfo
@@ -1729,6 +1776,10 @@ async def _setup(application):
         )
     except Exception as e:
         print("menu button setup failed:", e)
+    try:
+        asyncio.create_task(_api_serve())
+    except Exception as e:
+        print("api start failed:", e)
 
 app = ApplicationBuilder().token(TOKEN).post_init(_setup).build()
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
