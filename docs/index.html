@@ -68,6 +68,10 @@
   .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#000;color:#fff;
         padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:.2s;z-index:99;max-width:90%}
   .toast.show{opacity:.95}
+  button,.chip,.col,.tab,.tr-btn,.gear,.mini{transition:transform .08s ease,background .15s ease,opacity .15s}
+  button:active,.chip:active,.col:active,.tab:active,.tr-btn:active,.gear:active{transform:scale(.94)}
+  .card{animation:fadeIn .16s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
   /* gate */
   .gate{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;
         justify-content:center;text-align:center;padding:30px;z-index:50}
@@ -96,13 +100,16 @@
 
 <div class="wrap" id="app" style="display:none">
   <div class="brand">
-    <div class="bleft" id="brand" style="cursor:pointer" title="YouTube-канал">
+    <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <div class="logo">М</div>
       <h1><span class="b">M</span>uslimoon <span class="b">Bot</span></h1>
     </div>
-    <div class="gear" id="gear">⚙️ Управление</div>
+    <div style="display:flex;gap:6px;flex:none">
+      <div class="gear" id="menuBtn" style="display:block">☰ Ещё</div>
+      <div class="gear" id="gear">⚙️</div>
+    </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v5</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v6</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -163,6 +170,18 @@
   </div>
 </div>
 
+<div class="modal" id="menuModal">
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <b>☰ Ещё</b><button class="mini" id="menuClose">закрыть ✕</button>
+    </div>
+    <div class="row"><span>📺 Наш YouTube-канал</span><button class="go" id="ytLink" style="padding:5px 12px">Открыть</button></div>
+    <div class="row" style="opacity:.55"><span>⭐ Закладки / избранное</span><span>скоро</span></div>
+    <div class="row" style="opacity:.55"><span>🔊 Озвучка аятов</span><span>скоро</span></div>
+    <div class="row" style="opacity:.55"><span>📚 Другие источники (Лейс, Мукбиль, Сильсиля…)</span><span>скоро</span></div>
+    <div class="row" style="opacity:.55"><span>🌐 English / язык</span><span>скоро</span></div>
+  </div>
+</div>
 <div class="modal" id="helpModal">
   <div class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -178,8 +197,8 @@
       • <b>جذ Однокоренные</b> — ищет однокоренные (приблизительно).<br>
       • <b>🧠 По смыслу</b> — опиши смысл (рус/eng), подберёт арабские фразы.<br>
       • <b>Искать в:</b> ничего не выбрано = искать ВЕЗДЕ; выбрал сборники = только в них.
-      <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
-        📺 <span id="ytLink" style="color:var(--link);cursor:pointer">Наш YouTube-канал</span> · имя «Muslimoon Bot» вверху = на главную
+      <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;color:var(--hint)">
+        Имя «Muslimoon Bot» вверху = на главную. Канал и доп. функции — в кнопке «☰ Ещё».
       </div>
     </div>
   </div>
@@ -203,8 +222,8 @@ const COLLECTIONS = [
   {code:'ibnmajah',ru:'Ибн Маджа',ar:'ابن ماجه'},
   {code:'nasai',ru:'Насаи',ar:'النسائي'},
   {code:'malik',ru:'Малик',ar:'مالك'},
-  {code:'ahmad',ru:'Ахмад',ar:'أحمد'},
-  {code:'muhaymin',ru:'аль-Мухаймин',ar:'المهيمن',special:true},
+  {code:'ahmad',ru:'Ахмад',ar:'أحمد',heavy:true},
+  {code:'muhaymin',ru:'аль-Мухаймин',ar:'المهيمن',special:true,heavy:true},
 ];
 
 /* ===================== TELEGRAM + ДОСТУП ===================== */
@@ -240,6 +259,8 @@ function stem(w){ let x=w;
   x=x.replace(/(ات|ون|ين|ان|ها|هم|هن|كم|نا|تم|ه|ي|ا)$/,'');
   return x.length>=3?x:w; }
 function stemText(t){ return canon(t).split(' ').map(stem).join(' '); }
+function skel(w){ let s=w.replace(/^(وال|بال|كال|فال|ال)/,'').replace(/[اويىءؤئ]/g,''); if(s.length>3) s=s.replace(/ه$/,''); return s; }
+function isSubseq(a,b){ let i=0; for(let j=0;j<b.length&&i<a.length;j++) if(b[j]===a[i]) i++; return i===a.length; }
 
 /* ===================== РАЗБОР + МАТЧ ===================== */
 function parseQuery(q){
@@ -252,7 +273,12 @@ function parseQuery(q){
 }
 function termMatch(term,doc,modes){
   if(modes.diac) return doc.text.indexOf(term.t.replace(/\s+/g,' ').trim())!==-1;
-  if(modes.root){ if(!doc._st) doc._st=stemText(doc.text); const ws=canon(term.t).split(' ').map(stem).filter(Boolean); return ws.every(w=>doc._st.indexOf(w)!==-1); }
+  if(modes.root){
+    if(!doc._wsk) doc._wsk=doc.norm.split(' ').map(skel);
+    const qs=canon(term.t).split(' ').map(skel).filter(s=>s.length>=2);
+    if(!qs.length) return doc.norm.indexOf(canon(term.t))!==-1;
+    return qs.every(q=> doc._wsk.some(w=> w.length>=q.length && isSubseq(q,w)));
+  }
   return doc.norm.indexOf(canon(term.t))!==-1;
 }
 function docMatch(doc,groups,modes){
@@ -373,9 +399,15 @@ async function runSearch(){
     setHead(true);
   } else {
     try{ const arr=await loadQuran(); if(seq!==_seq) return;
-      for(const v of arr){ if(docMatch(v,groups,modes)) add({type:'q',v}); } }catch(e){}
+      const qn=q.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+      const mref=qn.match(/^(\d{1,3})\s*[:\s]\s*(\d{1,3})$/);
+      if(mref){ const s=+mref[1],a=+mref[2]; arr.filter(v=>v.s===s&&v.a===a).forEach(v=>add({type:'q',v})); }
+      else if(numMode){ const s=+q; if(s>=1&&s<=114) arr.filter(v=>v.s===s).forEach(v=>add({type:'q',v})); }
+      else { for(const v of arr){ if(docMatch(v,groups,modes)) add({type:'q',v}); } }
+    }catch(e){}
     setHead(true);
   }
+  setStatus('');
   if(!count && seq===_seq){ res.innerHTML='<div class="status">Ничего не найдено 🤷</div>'; }
 }
 function makeCard(d){ return d.type==='q'?cardAyah(d,_groups):(d.type==='m'?cardMuh(d,_groups):cardHadith(d,_groups)); }
@@ -528,11 +560,13 @@ function goHome(){ document.getElementById('q').value=''; document.getElementByI
 document.getElementById('brand').onclick=goHome;
 document.getElementById('helpBtn').onclick=()=>{ document.getElementById('helpModal').style.display='flex'; };
 document.getElementById('helpClose').onclick=()=>{ document.getElementById('helpModal').style.display='none'; };
+document.getElementById('menuBtn').onclick=()=>{ document.getElementById('menuModal').style.display='flex'; };
+document.getElementById('menuClose').onclick=()=>{ document.getElementById('menuModal').style.display='none'; };
 var _yt=document.getElementById('ytLink'); if(_yt) _yt.onclick=()=>openLink('https://www.youtube.com/@MUSLIMOON.TT2024');
 
 if(userAllowed()){
   document.getElementById('app').style.display='block';
-  if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v5 · хадисы · аяты · аль-Мухаймин'; }
+  if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v6 · хадисы · аяты · аль-Мухаймин'; }
   try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
     if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
       (st.cols||[]).forEach(c=>selCols.add(c));
