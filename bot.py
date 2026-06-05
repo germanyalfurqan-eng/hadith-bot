@@ -174,6 +174,27 @@ def fmt_src_ref(short_ref, verified_from):
         return f"{name} {num}".strip()
     return (short_ref or "—").strip()
 
+# ---- Поиск передатчиков (موسوعة رواة الحديث — hawramani) ----
+def search_transmitters(name, limit=8):
+    """Вернуть [{title, url}] из موسوعة رواة الحديث (WP REST API)."""
+    try:
+        url = ("https://hadithtransmitters.hawramani.com/wp-json/wp/v2/search?per_page="
+               + str(limit) + "&search=" + requests.utils.quote(name))
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+        if r.status_code != 200:
+            return []
+        return [{"title": (it.get("title") or "").strip(), "url": it.get("url") or ""}
+                for it in r.json() if it.get("title")]
+    except Exception:
+        return []
+
+def parse_transmitter(text):
+    t = text.lower().strip()
+    for trig in ("передатчик ", "равий ", "راوي ", "рави "):
+        if t.startswith(trig):
+            return text.strip()[len(trig):].strip()
+    return None
+
 REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json"
 _reverse_cache = None
 
@@ -1299,6 +1320,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if parse_search_query(text): is_command = True
             if parse_sunnah(text): is_command = True
             if parse_smart_sunnah(text): is_command = True
+            if parse_transmitter(text): is_command = True
             if parse_translate(text): is_command = True
             if parse_tafsir_query(text)[0]: is_command = True
             if parse_registry_command(text): is_command = True
@@ -1413,6 +1435,32 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown",
                 disable_web_page_preview=False
             )
+        return
+
+    # ============ ПЕРЕДАТЧИК (راوي) — موسوعة رواة الحديث ============
+    tr_name = parse_transmitter(text)
+    if tr_name:
+        query = tr_name
+        if re.search(r"[а-яА-ЯёЁ]", tr_name):   # русское имя -> арабское
+            await update.message.reply_text("🔤 Перевожу имя на арабский...")
+            ar = ask_ai("Дай арабское написание имени этого передатчика хадисов. "
+                        "Только арабское имя, без пояснений:\n" + tr_name,
+                        "Ты знаток рижаль (передатчиков хадисов). Отвечай ТОЛЬКО арабским именем.",
+                        owner=is_owner(update))
+            ar = re.sub(r"\n*⚡ \*Модель:.*$", "", ar or "", flags=re.S)
+            ar = re.sub(r"[^؀-ۿ\s]", " ", ar).strip()
+            query = ar or tr_name
+        await update.message.reply_text(f"🧑‍🏫 Ищу передатчиков «{query}»...")
+        res = search_transmitters(query, 8)
+        if not res:
+            await update.message.reply_text("❌ Не найдено в موسوعة رواة الحديث. Попробуй другое написание.")
+            return
+        msg = f"🧑‍🏫 <b>Передатчики «{query}»</b> (موسوعة رواة الحديث):\n\n"
+        for i, t in enumerate(res, 1):
+            title = t["title"].replace("<", "").replace(">", "")
+            msg += f'{i}. <a href="{t["url"]}">{title}</a>\n'
+        msg += "\n👉 Нажми имя — откроется полная ترجمة: جرح وتعديل, что сказали учёные, источники."
+        await send_long(update, msg, "HTML")
         return
 
     # ============ ПОИСК ПО SUNNAH.ONE (الدرر السنية): хукм + перевод + تخريج ============
@@ -1639,6 +1687,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*Аль-Мухаймин (الموحد المهيمن):*\nмухаймин 907 | муршид 907\n"
             "📚 книги — список 44 книг\n📕 книга 5 | книга الصيام — главы книги\n\n"
             "*Первоисточники → где в Мухаймине:*\nтиялиси 323 | хумайди 28 | ибн аби шейба 100\n(а для бухари/муслим/ахмад отметка добавляется к самому хадису)\n\n"
+            "*Передатчик (راوي):*\nпередатчик الزهري | передатчик Абу Хурайра\n(список рави → جرح وتعديل на موسوعة رواة الحديث)\n\n"
             "*Случайные:*\nслучайный | случайный бухари | случайный муслим | случайный коран\n\n"
             "*Коран:*\nкоран 2:255\n\n"
             "*Поиск:*\nискать بدعة\n\n"
