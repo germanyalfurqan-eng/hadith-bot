@@ -1422,17 +1422,28 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not res:
             await update.message.reply_text("❌ Ничего не найдено (или источник недоступен).")
             return
-        await update.message.reply_text(f"🔎 الدرر السنية — найдено: {cnt}, показываю {len(res)}:")
-        for i, r in enumerate(res, 1):
-            block = f"{i}. {hukm_emoji(r['hukm'])} <b>الحكم:</b> {_esc_mark(r['hukm'] or '—')}\n"
-            block += f"📜 <b>{_esc_mark(r['marked'])}</b>\n"
-            if is_owner(update):
-                ru = translate_matn(r["text"], src=r.get("takhreej", ""), owner=True)
-                if ru:
-                    block += f"🌍 {_esc_mark(ru)}\n"
-            if r["takhreej"]:
-                block += f"📋 {takhreej_html(r['takhreej'])}\n"
-            await send_long(update, block, "HTML")
+        await update.message.reply_text(f"🔎 الدرر السنية — найдено: {cnt}, версий: {len(res)}")
+        # ── ГЛАВНАЯ версия: полно, с переводом ──
+        r0 = res[0]
+        main = f"{hukm_emoji(r0['hukm'])} <b>الحكم:</b> {_esc_mark(r0['hukm'] or '—')}\n"
+        main += f"📜 <b>{_esc_mark(r0['marked'])}</b>\n"
+        if is_owner(update):
+            ru = translate_matn(r0["text"], src=r0.get("takhreej", ""), owner=True)
+            if ru:
+                main += f"🌍 {_esc_mark(ru)}\n"
+        if r0["takhreej"]:
+            main += f"📋 {takhreej_html(r0['takhreej'])}\n"
+        await send_long(update, main, "HTML")
+        # ── ОСТАЛЬНЫЕ версии: компактно, в одном посте, без перевода ──
+        if len(res) > 1:
+            others = "📚 <b>Другие варианты (тот же смысл):</b>\n\n"
+            for r in res[1:]:
+                others += f"{hukm_emoji(r['hukm'])} <b>{_esc_mark(r['hukm'] or '—')}</b>\n"
+                others += f"{_esc_mark(r['marked'])}\n"
+                if r["takhreej"]:
+                    others += f"📋 {takhreej_html(r['takhreej'])}\n"
+                others += "\n"
+            await send_long(update, others, "HTML")
         flush_trans()   # сохранить новые переводы в репо
         return
 
