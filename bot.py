@@ -1719,7 +1719,18 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=MAIN_KB
         )
 
-app = ApplicationBuilder().token(TOKEN).build()
+WEBAPP_URL = "https://germanyalfurqan-eng.github.io/hadith-bot/"
+async def _setup(application):
+    try:
+        from telegram import MenuButtonWebApp, WebAppInfo
+        await application.bot.set_chat_menu_button(
+            chat_id=OWNER_ID,
+            menu_button=MenuButtonWebApp(text="🔎 Поиск", web_app=WebAppInfo(url=WEBAPP_URL)),
+        )
+    except Exception as e:
+        print("menu button setup failed:", e)
+
+app = ApplicationBuilder().token(TOKEN).post_init(_setup).build()
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
 app.add_handler(ChatMemberHandler(track_member, ChatMemberHandler.CHAT_MEMBER))
