@@ -89,6 +89,11 @@
   .wl{display:flex;gap:6px;margin-top:8px}
   .wl input{flex:1}
   .tag{display:inline-block;background:#22303f;border-radius:8px;padding:3px 8px;margin:3px 4px 0 0;font-size:13px}
+  .accf{border:1px solid var(--border);border-radius:12px;padding:10px;margin-top:10px;background:var(--bg)}
+  .accf.full{border-color:#d4af37}
+  .accf .ah{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .accf .at{font-weight:700;font-size:14px}
+  .accf .ad{color:var(--hint);font-size:12px;margin:2px 0 0}
 </style>
 </head>
 <body>
@@ -111,7 +116,7 @@
       <div class="gear" id="gear">⚙️</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v18</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v19</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -152,27 +157,14 @@
   <div class="status" id="status"></div>
 </div>
 
-<!-- модал управления -->
+<!-- модал управления (G9: серверный гранулярный доступ) -->
 <div class="modal" id="modal">
   <div class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
       <b>⚙️ Управление доступом</b><button class="mini" id="modalClose">закрыть ✕</button>
     </div>
-    <div class="hint">⚠️ Эти настройки заработают для ДРУГИХ людей после подключения серверной проверки (задача G9, скоро). Сейчас сохраняются только у тебя на устройстве.</div>
-
-    <div style="margin-top:10px;font-weight:700">1) Доступ</div>
-    <div class="row"><span>🌍 Открыть приложение всем</span><div class="sw" data-flag="publicApp"></div></div>
-
-    <div style="margin-top:14px;font-weight:700">2) Белый список <span style="font-weight:400;color:var(--hint)">— открыть конкретному человеку</span></div>
-    <div class="hint">Добавь его <b>@ник</b> или <b>Telegram ID</b> (число). Список будем дополнять.</div>
-    <div class="wl"><input type="text" id="wlIn" placeholder="@username или 123456789"><button class="go" id="wlAdd" style="padding:8px 12px">+</button></div>
-    <div id="wlList" style="margin-top:6px"></div>
-
-    <div style="margin-top:14px;font-weight:700">3) Какие функции открыть другим</div>
-    <div class="row"><span>📚 Поиск хадисов</span><div class="sw" data-flag="fHadith"></div></div>
-    <div class="row"><span>📖 Поиск аятов</span><div class="sw" data-flag="fQuran"></div></div>
-    <div class="row"><span>🧠 Нейро-режим (ИИ)</span><div class="sw" data-flag="fNeuro"></div></div>
-    <div class="row"><span>🔄 Перевод (DeepSeek)</span><div class="sw" data-flag="fTranslate"></div></div>
+    <div class="hint" id="accStatus">Доступ хранится на сервере: меняешь — применяется для всех сразу. Менять может только владелец.</div>
+    <div id="accBody"></div>
   </div>
 </div>
 
@@ -269,17 +261,34 @@ if (tg){ try{ tg.ready(); tg.expand();
 const DEV = location.hash.indexOf('dev')!==-1;
 const isOwner = DEV || (USER && USER.id===OWNER_ID);
 
+/* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({publicApp:false,fHadith:true,fQuran:true,fNeuro:false,fTranslate:false,whitelist:[],qtr:'rus-elmirkuliev',noDiac:false,isnad:true}, loadCfg());
+let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true}, loadCfg());
 
-function userAllowed(){
-  if(isOwner) return true;
-  if(cfg.publicApp) return true;
-  if(USER){ const id=String(USER.id), un=USER.username?('@'+USER.username).toLowerCase():'';
-    return cfg.whitelist.some(w=>{w=String(w).toLowerCase(); return w===id||w===un;}); }
-  return false;
+/* ===================== СЕРВЕРНЫЙ ДОСТУП (G9) ===================== */
+const INITDATA = (tg && tg.initData) || '';
+let ALLOW=null;   // {app,translate,neuro,bot} с сервера
+let ACC=null;     // полный конфиг доступа (для owner-панели)
+let ME=null;      // {id,username,owner,verified}
+function loadAllowCache(){ try{ return JSON.parse(localStorage.getItem('muslimoon_allow'))||null; }catch(e){ return null; } }
+function saveAllowCache(a){ try{ localStorage.setItem('muslimoon_allow', JSON.stringify(a)); }catch(e){} }
+async function fetchAccess(){
+  if(!BACKEND_URL) return null;
+  try{
+    const r=await fetch(BACKEND_URL+'/access',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'get', initData:INITDATA})});
+    const j=await r.json();
+    if(j&&j.allow){ ALLOW=j.allow; ME=j.me||null; if(j.config) ACC=j.config; saveAllowCache(ALLOW); }
+    return j;
+  }catch(e){ return null; }
 }
+function allowFeature(f){
+  if(isOwner) return true;
+  if(ALLOW && typeof ALLOW[f]==='boolean') return ALLOW[f];
+  const c=loadAllowCache(); return c? !!c[f] : false;   // оффлайн-фолбэк
+}
+function userAllowed(){ return isOwner || allowFeature('app'); }
 
 /* ===================== НОРМАЛИЗАЦИЯ ===================== */
 const DIAC = '\\u0610-\\u061A\\u064B-\\u065F\\u0670\\u06D6-\\u06ED\\u0640';
@@ -605,10 +614,12 @@ async function neuroRun(){
   if(!meaning){ toast('Опишите смысл'); return; }
   const btn=document.getElementById('neuroRun'); const prev=btn.textContent; btn.disabled=true; btn.textContent='Подбираю…⏳';
   try{
-    if(BACKEND_URL && (isOwner||cfg.fNeuro)){
-      try{ const j=await (await fetch(BACKEND_URL+'/neuro',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({meaning,kind:tab,initData:tg&&tg.initData})})).json();
-        const ph=j.phrases||[]; if(ph.length){ applyPhrases(ph); return; } }catch(e){}
+    if(BACKEND_URL){
+      try{ const r=await fetch(BACKEND_URL+'/neuro',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({meaning,kind:tab,initData:INITDATA})});
+        if(r.ok){ const j=await r.json(); const ph=j.phrases||[]; if(ph.length){ applyPhrases(ph); return; } }
+        else if(r.status===403){ toast('ИИ-подбор тебе пока не открыт — использую базовый словарь.'); }
+      }catch(e){}
     }
     const ph=neuroLocal(meaning);
     if(!ph.length){ toast('Не нашёл по смыслу — попробуй ключевое слово (намерение, терпение…)'); return; }
@@ -623,30 +634,86 @@ function applyPhrases(ph){
 /* ===================== ПЕРЕВОД ===================== */
 async function doTranslate(text,out,btn){
   if(!BACKEND_URL){ toast('Перевод заработает после подключения сервера (DeepSeek)'); return; }
-  if(!(isOwner||cfg.fTranslate)){ toast('Перевод доступен не всем'); return; }
   btn.disabled=true; btn.textContent='…';
-  try{ const j=await (await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text,initData:tg&&tg.initData})})).json();
-    out.innerHTML='<span style="color:var(--hint);font-style:italic">Перевод:</span> '+esc(j.translation||'—'); out.style.display='block'; }catch(e){ toast('Ошибка перевода'); }
+  try{ const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text,initData:INITDATA})});
+    const j=await r.json().catch(()=>({}));
+    if(r.status===403){ toast(j.message||'Перевод тебе пока не открыт.'); }
+    else if(r.ok && j.translation){ out.innerHTML='<span style="color:var(--hint);font-style:italic">Перевод:</span> '+esc(j.translation); out.style.display='block'; }
+    else { toast('Не удалось перевести'); }
+  }catch(e){ toast('Ошибка перевода'); }
   btn.disabled=false; btn.textContent='Перевод';
 }
 
-/* ===================== УПРАВЛЕНИЕ ===================== */
-function renderModal(){
-  document.querySelectorAll('.sw').forEach(sw=>{ if(sw.dataset.flag) sw.classList.toggle('on', !!cfg[sw.dataset.flag]); });
-  const wl=document.getElementById('wlList'); wl.innerHTML='';
-  (cfg.whitelist||[]).forEach((w,i)=>{ const t=document.createElement('span');t.className='tag';
-    t.textContent=w+' ✕'; t.style.cursor='pointer'; t.onclick=()=>{ cfg.whitelist.splice(i,1);saveCfg(cfg);renderModal(); };
-    wl.appendChild(t); });
+/* ===================== УПРАВЛЕНИЕ ДОСТУПОМ (G9, серверное) ===================== */
+const ACC_SPEC=[
+  {key:'all',       title:'🟢 Полный доступ',         desc:'Кто здесь — получает СРАЗУ всё: вход, перевод, нейро, ботяру.', full:true, noPublic:true},
+  {key:'app',       title:'🌍 Вход в приложение',     desc:'Первый рубильник: кого вообще пускать внутрь.'},
+  {key:'translate', title:'🔄 Перевод (DeepSeek)',    desc:'Тратит твой ключ — открывай выборочно.'},
+  {key:'neuro',     title:'🧠 Нейро-подбор (DeepSeek)',desc:'Подбор арабских фраз по смыслу.'},
+  {key:'bot',       title:'🤖 Ботяра (ИИ в боте)',     desc:'ИИ-чат в самом боте: команда «ботяра …».'},
+];
+function defaultAcc(){ const o={all:{whitelist:[]}}; ['app','translate','neuro','bot'].forEach(k=>o[k]={public:false,whitelist:[]}); return o; }
+function setAccStatus(t,err){ const e=document.getElementById('accStatus'); if(e){ e.textContent=t; e.style.color=err?'#ff6b6b':'var(--hint)'; } }
+function normFeat(k){ ACC[k]=ACC[k]||(k==='all'?{whitelist:[]}:{public:false,whitelist:[]}); ACC[k].whitelist=ACC[k].whitelist||[]; return ACC[k]; }
+async function saveAccess(){
+  if(!BACKEND_URL){ setAccStatus('Нет адреса сервера.',true); return; }
+  setAccStatus('Сохраняю…');
+  try{
+    const r=await fetch(BACKEND_URL+'/access',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'set', config:ACC, initData:INITDATA})});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok && j.ok){ ACC=j.config||ACC; setAccStatus('✅ Сохранено и применено для всех.'); renderAccess(); }
+    else if(r.status===403){ setAccStatus('⛔ Менять может только владелец (открой через Telegram).',true); }
+    else setAccStatus('Ошибка сохранения ('+(r.status||'сеть')+').',true);
+  }catch(e){ setAccStatus('Сеть недоступна — не сохранено.',true); }
 }
-document.getElementById('gear').onclick=()=>{ document.getElementById('modal').style.display='flex'; renderModal(); };
+function renderAccess(){
+  const box=document.getElementById('accBody'); if(!box) return; box.innerHTML='';
+  ACC=ACC||defaultAcc();
+  ACC_SPEC.forEach(sp=>{
+    const f=normFeat(sp.key);
+    const card=document.createElement('div'); card.className='accf'+(sp.full?' full':'');
+    const head=document.createElement('div'); head.className='ah';
+    const left=document.createElement('div');
+    left.innerHTML='<div class="at">'+sp.title+'</div><div class="ad">'+sp.desc+'</div>';
+    head.appendChild(left);
+    if(!sp.noPublic){
+      const sw=document.createElement('div'); sw.className='sw'+(f.public?' on':''); sw.title='Открыть всем';
+      sw.onclick=()=>{ f.public=!f.public; sw.classList.toggle('on',f.public); saveAccess(); };
+      head.appendChild(sw);
+    }
+    card.appendChild(head);
+    const wl=document.createElement('div'); wl.className='wl';
+    const inp=document.createElement('input'); inp.type='text'; inp.placeholder='@username или 123456789';
+    const add=document.createElement('button'); add.className='go'; add.textContent='+'; add.style.padding='8px 12px';
+    const doAdd=()=>{ const v=inp.value.trim(); if(!v) return; if(f.whitelist.indexOf(v)<0) f.whitelist.push(v); inp.value=''; saveAccess(); };
+    add.onclick=doAdd; inp.addEventListener('keydown',e=>{ if(e.key==='Enter') doAdd(); });
+    wl.appendChild(inp); wl.appendChild(add); card.appendChild(wl);
+    const tags=document.createElement('div'); tags.style.marginTop='6px';
+    (f.whitelist||[]).forEach((w,i)=>{ const t=document.createElement('span'); t.className='tag'; t.style.cursor='pointer';
+      t.textContent=w+' ✕'; t.onclick=()=>{ f.whitelist.splice(i,1); saveAccess(); };
+      tags.appendChild(t); });
+    if(!f.whitelist.length){ const e=document.createElement('span'); e.className='hint'; e.textContent='список пуст'; tags.appendChild(e); }
+    card.appendChild(tags);
+    box.appendChild(card);
+  });
+}
+async function openModal(){
+  document.getElementById('modal').style.display='flex';
+  setAccStatus('Загружаю настройки с сервера…');
+  const j=await fetchAccess();
+  if(j && j.config){ ACC=j.config; } else if(!ACC){ ACC=defaultAcc(); }
+  renderAccess();
+  if(j && j.me && !j.me.owner) setAccStatus('⚠️ Сервер не подтвердил владельца (открой через Telegram) — изменения не сохранятся.',true);
+  else if(!j) setAccStatus('⚠️ Сервер недоступен — изменения не сохранятся.',true);
+  else setAccStatus('Меняешь — применяется для всех сразу.');
+}
+document.getElementById('gear').onclick=openModal;
 document.getElementById('modalClose').onclick=()=>{ document.getElementById('modal').style.display='none'; };
-document.querySelectorAll('.sw').forEach(sw=>sw.onclick=()=>{ const f=sw.dataset.flag; if(!f) return; cfg[f]=!cfg[f]; saveCfg(cfg); renderModal(); });
 var _qs=document.getElementById('qtrSel'); if(_qs){ _qs.value=cfg.qtr||'rus-elmirkuliev'; _qs.onchange=()=>{ cfg.qtr=_qs.value; saveCfg(cfg); }; }
 var _nd=document.getElementById('noDiacSw'); if(_nd){ _nd.classList.toggle('on',!!cfg.noDiac); _nd.onclick=()=>{ cfg.noDiac=!cfg.noDiac; saveCfg(cfg); _nd.classList.toggle('on',!!cfg.noDiac); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _is=document.getElementById('isnadSw'); if(_is){ _is.classList.toggle('on',!!cfg.isnad); _is.onclick=()=>{ cfg.isnad=!cfg.isnad; saveCfg(cfg); _is.classList.toggle('on',!!cfg.isnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
-document.getElementById('wlAdd').onclick=()=>{ const v=document.getElementById('wlIn').value.trim(); if(!v)return;
-  cfg.whitelist=cfg.whitelist||[]; cfg.whitelist.push(v); saveCfg(cfg); document.getElementById('wlIn').value=''; renderModal(); };
 
 /* ===================== УТИЛИТЫ ===================== */
 function setStatus(t){document.getElementById('status').textContent=t;}
@@ -681,19 +748,24 @@ document.getElementById('favByDate').onclick=()=>renderFav('date');
 document.getElementById('favByColl').onclick=()=>renderFav('coll');
 var _yt=document.getElementById('ytLink'); if(_yt) _yt.onclick=()=>openLink('https://www.youtube.com/@MUSLIMOON.TT2024');
 
-if(userAllowed()){
-  document.getElementById('app').style.display='block';
-  if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v18 · хадисы · аяты · аль-Мухаймин'; }
-  try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
-    if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
-      (st.cols||[]).forEach(c=>selCols.add(c));
-      if(st.q) document.getElementById('q').value=st.q; }
-  }catch(e){}
-  renderCols();
-}else{
-  document.getElementById('gate').style.display='flex';
-  if(USER&&USER.first_name) document.getElementById('gateMsg').textContent='Салам, '+USER.first_name+'! 🔒 Доступ пока только для владельца. Скоро откроем больше — ин ша Аллах.';
+async function boot(){
+  // владелец заходит сразу (конфиг тянем в фоне для панели); остальные ждут вердикт сервера
+  if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
+  if(userAllowed()){
+    document.getElementById('app').style.display='block';
+    if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v19 · хадисы · аяты · аль-Мухаймин'; }
+    try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
+      if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
+        (st.cols||[]).forEach(c=>selCols.add(c));
+        if(st.q) document.getElementById('q').value=st.q; }
+    }catch(e){}
+    renderCols();
+  }else{
+    document.getElementById('gate').style.display='flex';
+    if(USER&&USER.first_name) document.getElementById('gateMsg').textContent='Салам, '+USER.first_name+'! 🔒 Доступ пока только для владельца. Скоро откроем больше — ин ша Аллах.';
+  }
 }
+boot();
 </script>
 </body>
 </html>

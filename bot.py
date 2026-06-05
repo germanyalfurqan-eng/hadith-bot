@@ -4,9 +4,14 @@ import re
 import random
 import json
 import base64
+import hmac
+import hashlib
+import time
+import collections
 import requests
 from datetime import datetime
 from html import unescape
+from urllib.parse import parse_qsl
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler
 
@@ -936,31 +941,26 @@ TRANS_FILE = "translations.json"
 _trans_cache = None
 _trans_dirty = 0
 def _load_trans():
+    # G9: кэш переводов теперь в ветке data (запись в main = редеплой Railway = Conflict).
     global _trans_cache
     if _trans_cache is None:
         _trans_cache = {}
         try:
-            r = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{TRANS_FILE}", timeout=8)
-            if r.status_code == 200:
-                _trans_cache = r.json()
-        except: pass
+            d = _data_get(TRANS_FILE, None)          # сначала ветка data
+            if isinstance(d, dict):
+                _trans_cache = d
+            else:                                    # миграция: разовый перенос накопленного из main
+                r = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{TRANS_FILE}", timeout=8)
+                if r.status_code == 200:
+                    _trans_cache = r.json()
+        except Exception:
+            pass
     return _trans_cache
 def _save_trans():
-    """Записать кэш переводов обратно в репо (как memory/registry)."""
+    """Записать кэш переводов в ветку data (не трогаем main → нет редеплоя/Conflict)."""
     if not GITHUB_TOKEN:
         return
-    try:
-        content = json.dumps(_trans_cache, ensure_ascii=False, indent=1)
-        b64 = base64.b64encode(content.encode()).decode()
-        api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{TRANS_FILE}"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-        r = requests.get(api_url, headers=headers, timeout=8)
-        sha = r.json().get("sha", "") if r.status_code == 200 else ""
-        payload = {"message": f"translations ({len(_trans_cache)})", "content": b64}
-        if sha:
-            payload["sha"] = sha
-        requests.put(api_url, headers=headers, json=payload, timeout=12)
-    except: pass
+    _data_put(TRANS_FILE, _trans_cache, f"translations ({len(_trans_cache)})")
 def flush_trans():
     global _trans_dirty
     if _trans_dirty:
@@ -1061,6 +1061,24 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             is_reply_to_bot = True
         if replied.sender_chat:
             is_reply_to_channel = True
+
+    # ============ G9: «ботяра» для белого списка (не владелец) ============
+    if user_id != OWNER_ID and text:
+        _bq = parse_botyara(text)
+        _triggered = (_bq is not None) or (is_reply_to_bot and not is_reply_to_channel)
+        if _triggered and feature_allowed('bot', tg_user_dict(update)):
+            clean = _bq if _bq else text.replace("ботяра", "").strip()
+            if (not clean) and update.message.reply_to_message and update.message.reply_to_message.text:
+                clean = update.message.reply_to_message.text
+            if not clean:
+                clean = "продолжи"
+            if not rate_ok('bot:' + str(user_id), limit=15, window=60):
+                await update.message.reply_text("⏳ Слишком часто, подожди немного.")
+                return
+            await update.message.reply_text("🤔 Думаю...")
+            result = ask_ai_with_memory(clean)
+            await send_long(update, result)
+            return
 
     # ============ ВЛАДЕЛЕЦ: РЕЕСТР ============
     if is_owner(update):
@@ -1732,6 +1750,178 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 WEBAPP_URL = "https://germanyalfurqan-eng.github.io/hadith-bot/"
 
+# ============ G9: БЕЗОПАСНОСТЬ + ГРАНУЛЯРНЫЙ ДОСТУП ============
+# Хранилище правил доступа и кэшей — в ОТДЕЛЬНОЙ ветке `data`, чтобы запись
+# не меняла `main` и Railway не передеплоивался (это и убирает ошибку Conflict).
+
+_data_branch_ready = False
+def _ensure_data_branch():
+    """Гарантировать существование ветки data (создаём из main при первой записи)."""
+    global _data_branch_ready
+    if _data_branch_ready or not GITHUB_TOKEN:
+        return _data_branch_ready
+    h = {"Authorization": f"token {GITHUB_TOKEN}"}
+    try:
+        r = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/git/ref/heads/data", headers=h, timeout=10)
+        if r.status_code == 200:
+            _data_branch_ready = True
+            return True
+        rm = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/git/ref/heads/main", headers=h, timeout=10)
+        sha = rm.json().get("object", {}).get("sha", "") if rm.status_code == 200 else ""
+        if not sha:
+            return False
+        rc = requests.post(f"https://api.github.com/repos/{GITHUB_REPO}/git/refs", headers=h,
+                           json={"ref": "refs/heads/data", "sha": sha}, timeout=10)
+        _data_branch_ready = rc.status_code in (200, 201) or "already exists" in (rc.text or "")
+    except Exception:
+        pass
+    return _data_branch_ready
+
+def _data_get(path, default=None):
+    """Прочитать JSON из ветки data через contents API (без CDN-кэша)."""
+    try:
+        if GITHUB_TOKEN:
+            api = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}?ref=data"
+            r = requests.get(api, headers={"Authorization": f"token {GITHUB_TOKEN}"}, timeout=8)
+            if r.status_code == 200:
+                return json.loads(base64.b64decode(r.json().get("content", "")).decode("utf-8"))
+            return default
+        r = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/data/{path}", timeout=8)
+        if r.status_code == 200:
+            return r.json()
+    except Exception:
+        pass
+    return default
+
+def _data_put(path, obj, message):
+    """Записать JSON в ветку data."""
+    if not GITHUB_TOKEN or not _ensure_data_branch():
+        return False
+    try:
+        content = json.dumps(obj, ensure_ascii=False, indent=1)
+        b64 = base64.b64encode(content.encode("utf-8")).decode()
+        api = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
+        h = {"Authorization": f"token {GITHUB_TOKEN}"}
+        r = requests.get(api + "?ref=data", headers=h, timeout=8)
+        sha = r.json().get("sha", "") if r.status_code == 200 else ""
+        payload = {"message": message, "content": b64, "branch": "data"}
+        if sha:
+            payload["sha"] = sha
+        rp = requests.put(api, headers=h, json=payload, timeout=12)
+        return rp.status_code in (200, 201)
+    except Exception:
+        return False
+
+def verify_init_data(init_data, max_age=86400):
+    """Проверить Telegram WebApp initData (HMAC по TOKEN). Вернуть dict user или None."""
+    if not init_data or not TOKEN:
+        return None
+    try:
+        data = dict(parse_qsl(init_data, keep_blank_values=True))
+        recv_hash = data.pop("hash", None)
+        if not recv_hash:
+            return None
+        check = "\n".join(f"{k}={data[k]}" for k in sorted(data))
+        secret = hmac.new(b"WebAppData", TOKEN.encode(), hashlib.sha256).digest()
+        calc = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(calc, recv_hash):
+            return None
+        if max_age:
+            try:
+                if time.time() - int(data.get("auth_date", "0")) > max_age:
+                    return None
+            except Exception:
+                pass
+        u = data.get("user")
+        return json.loads(u) if u else None
+    except Exception:
+        return None
+
+# ---- Правила доступа (хранятся в data/access.json) ----
+ACCESS_FILE = "access.json"
+ACCESS_FEATURES = ["app", "translate", "neuro", "bot"]   # app = первый рубильник (вход)
+DEFAULT_ACCESS = {
+    "all": {"whitelist": []},                              # полный белый список → доступ ко ВСЕМУ
+    "app": {"public": False, "whitelist": []},
+    "translate": {"public": False, "whitelist": []},
+    "neuro": {"public": False, "whitelist": []},
+    "bot": {"public": False, "whitelist": []},
+}
+_access_cache = None
+
+def _merge_access(cfg, base=None):
+    """Наложить cfg поверх base (по умолчанию — дефолт). Частичный cfg НЕ затирает
+    отсутствующие секции; неизвестные ключи и мусор в whitelist отбрасываются."""
+    out = json.loads(json.dumps(base if base is not None else DEFAULT_ACCESS))
+    for k, dv in DEFAULT_ACCESS.items():
+        if k not in out:
+            out[k] = json.loads(json.dumps(dv))
+    if isinstance(cfg, dict):
+        for k, v in cfg.items():
+            if k in DEFAULT_ACCESS and isinstance(v, dict):
+                if "public" in v and "public" in DEFAULT_ACCESS[k]:
+                    out[k]["public"] = bool(v["public"])
+                if isinstance(v.get("whitelist"), list):
+                    out[k]["whitelist"] = [str(x).strip() for x in v["whitelist"] if str(x).strip()][:500]
+    return out
+
+def load_access():
+    global _access_cache
+    if _access_cache is None:
+        _access_cache = _merge_access(_data_get(ACCESS_FILE, None))
+    return _access_cache
+
+def save_access(cfg):
+    global _access_cache
+    _access_cache = _merge_access(cfg, base=load_access())   # мержим поверх текущего
+    _data_put(ACCESS_FILE, _access_cache, "G9 access update")
+    return _access_cache
+
+def _norm(x):
+    return str(x).strip().lower().lstrip("@")
+
+def _in_list(user, lst):
+    if not user or not lst:
+        return False
+    uid = _norm(user.get("id"))
+    un = _norm(user.get("username")) if user.get("username") else None
+    for w in lst:
+        w = _norm(w)
+        if w and (w == uid or (un and w == un)):
+            return True
+    return False
+
+def feature_allowed(feature, user):
+    """owner | полный белый список | feature.public | feature.whitelist."""
+    if user and str(user.get("id")) == str(OWNER_ID):
+        return True
+    acc = load_access()
+    if _in_list(user, acc.get("all", {}).get("whitelist")):
+        return True
+    f = acc.get(feature, {})
+    if f.get("public"):
+        return True
+    return _in_list(user, f.get("whitelist"))
+
+def tg_user_dict(update):
+    u = update.effective_user
+    if not u:
+        return None
+    return {"id": u.id, "username": u.username or ""}
+
+# ---- Rate-limit (в памяти, на пользователя+функцию) ----
+_rl = collections.defaultdict(list)
+def rate_ok(bucket, limit=20, window=60):
+    now = time.time()
+    q = _rl[bucket]
+    while q and now - q[0] > window:
+        q.pop(0)
+    if len(q) >= limit:
+        return False
+    q.append(now)
+    return True
+# ============ КОНЕЦ G9-БЛОКА ============
+
 async def _api_serve():
     from aiohttp import web
     loop = asyncio.get_event_loop()
@@ -1740,11 +1930,52 @@ async def _api_serve():
         resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
         resp.headers['Access-Control-Allow-Methods'] = 'POST,GET,OPTIONS'
         return resp
+    def _deny(feature):
+        return _cors(web.json_response(
+            {'error': 'forbidden', 'feature': feature,
+             'message': 'Эта функция тебе пока не открыта. Попроси доступ у владельца.'}, status=403))
+    def _ratelimited():
+        return _cors(web.json_response({'error': 'rate', 'message': 'Слишком часто, подожди немного.'}, status=429))
+    async def _body(r):
+        try:
+            return await r.json()
+        except Exception:
+            return {}
+    def _uid(user, r):
+        return str(user.get('id')) if user else ('ip:' + (r.remote or '?'))
+
     async def health(r): return _cors(web.json_response({'ok': True}))
     async def opt(r): return _cors(web.Response(text=''))
+
+    async def access(r):
+        # POST {initData, action:'get'|'set', config?}
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        is_owner_u = bool(user and str(user.get('id')) == str(OWNER_ID))
+        if d.get('action') == 'set':
+            if not is_owner_u:
+                return _deny('app')
+            acc = await loop.run_in_executor(None, save_access, d.get('config') or {})
+            return _cors(web.json_response({'ok': True, 'config': acc}))
+        await loop.run_in_executor(None, load_access)   # прогреть кэш (1-й раз — сеть)
+        allow = {f: feature_allowed(f, user) for f in ACCESS_FEATURES}
+        resp = {'ok': True,
+                'me': {'id': (user or {}).get('id'), 'username': (user or {}).get('username'),
+                       'owner': is_owner_u, 'verified': bool(user)},
+                'allow': allow}
+        if is_owner_u:
+            resp['config'] = load_access()
+        return _cors(web.json_response(resp))
+
     async def neuro(r):
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('neuro', user):
+            return _deny('neuro')
+        if not rate_ok('neuro:' + _uid(user, r)):
+            return _ratelimited()
         try:
-            d = await r.json(); meaning = (d.get('meaning') or '')[:500]
+            meaning = (d.get('meaning') or '')[:500]
             sysm = ("Помоги искать хадисы/аяты. Дай 4-8 ключевых АРАБСКИХ слов/фраз "
                     "(каждое с новой строки), которыми ищут по смыслу запроса; включай формы "
                     "с артиклем ال и без, синонимы. Только арабские слова, без перевода и пояснений.")
@@ -1754,28 +1985,48 @@ async def _api_serve():
             return _cors(web.json_response({'phrases': ph}))
         except Exception as e:
             return _cors(web.json_response({'phrases': [], 'error': str(e)}))
+
     async def translate(r):
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('translate', user):
+            return _deny('translate')
+        if not rate_ok('translate:' + _uid(user, r)):
+            return _ratelimited()
         try:
-            d = await r.json(); text = (d.get('text') or '')[:4000]
+            text = (d.get('text') or '')[:4000]
             tr = await loop.run_in_executor(None, ask_deepseek, "Переведи точно на русский, выдай только перевод:\n" + text, "Ты — точный переводчик арабского (хадисы/аяты).") or ""
             tr = re.sub(r'\s*⚡.*$', '', tr, flags=re.S).strip()
             return _cors(web.json_response({'translation': tr or ''}))
         except Exception as e:
             return _cors(web.json_response({'translation': '', 'error': str(e)}))
+
     async def search(r):
+        # dorar-поиск: initData в заголовке X-Init-Data или в query (?initData=...); гейт = вход в приложение
+        user = verify_init_data(r.headers.get('X-Init-Data') or r.query.get('initData'))
+        if not feature_allowed('app', user):
+            return _deny('app')
+        if not rate_ok('search:' + _uid(user, r)):
+            return _ratelimited()
         try:
             q = (r.query.get('q') or '')[:200]
             res = await loop.run_in_executor(None, search_hadith, q) if q else []
             return _cors(web.json_response({'results': res or []}))
         except Exception as e:
             return _cors(web.json_response({'results': [], 'error': str(e)}))
+
     a = web.Application()
     a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro),
                   web.post('/api/translate', translate), web.get('/api/search', search),
+                  web.post('/api/access', access),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))
     site = web.TCPSite(runner, '0.0.0.0', port); await site.start()
+    try:
+        await loop.run_in_executor(None, load_access)   # прогреть правила доступа на старте
+    except Exception:
+        pass
     print("API server on port", port)
 
 async def _setup(application):
