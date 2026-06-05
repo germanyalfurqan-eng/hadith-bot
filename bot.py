@@ -88,6 +88,38 @@ def fmt_book_chapters(arg):
     msg += "\n👉 «мухэймин <номер>» — открыть хадис."
     return msg
 
+# ---- Поиск по sunnah.one (хадис + хукм достоверности + тахридж) ----
+def search_sunnah_one(query, limit=5):
+    """Вернуть (count, [{text, hukm, takhreej}]) из поиска sunnah.one."""
+    try:
+        url = "https://search.sunnah.one/?action=search&ver=2&q=" + requests.utils.quote(query)
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+        if r.status_code != 200:
+            return 0, []
+        d = r.json()
+        out = []
+        for it in d.get("data", [])[:limit]:
+            txt = re.sub(r"</?mark>", "", it.get("text") or "").strip()
+            hukm = re.sub(r"[\[\]]", "", str(it.get("hukm") or "")).strip()
+            out.append({"text": txt, "hukm": hukm, "takhreej": (it.get("takhreej") or "").strip()})
+        return d.get("count", 0), out
+    except Exception:
+        return 0, []
+
+def hukm_emoji(h):
+    if any(w in h for w in ("صحيح", "حسن", "جيد", "ثابت", "قوي")):
+        return "✅"
+    if any(w in h for w in ("ضعيف", "منكر", "موضوع", "باطل", "لا يصح", "واه", "متروك", "كذب", "شاذ")):
+        return "⚠️"
+    return "ℹ️"
+
+def parse_sunnah(text):
+    t = text.lower().strip()
+    for trig in ("сунна ", "достоверность ", "хукм ", "проверь хадис "):
+        if t.startswith(trig):
+            return text.strip()[len(trig):].strip()
+    return None
+
 REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json"
 _reverse_cache = None
 
@@ -1146,6 +1178,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if parse_source_query(text)[0] in SOURCE_ONLY_CODES: is_command = True
             if parse_quran_query(text)[0]: is_command = True
             if parse_search_query(text): is_command = True
+            if parse_sunnah(text): is_command = True
             if parse_translate(text): is_command = True
             if parse_tafsir_query(text)[0]: is_command = True
             if parse_registry_command(text): is_command = True
@@ -1260,6 +1293,24 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown",
                 disable_web_page_preview=False
             )
+        return
+
+    # ============ ПОИСК ПО SUNNAH.ONE (хадис + достоверность + тахридж) ============
+    sun = parse_sunnah(text)
+    if sun:
+        await update.message.reply_text(f"🔎 Ищу в sunnah.one: {sun}...")
+        cnt, res = search_sunnah_one(sun, limit=5)
+        if not res:
+            await update.message.reply_text("❌ Ничего не найдено (или sunnah.one недоступен).")
+            return
+        msg = f"🔎 sunnah.one — «{sun}»\nНайдено: {cnt}, топ {len(res)}:\n\n"
+        for i, r in enumerate(res, 1):
+            msg += f"{i}. {hukm_emoji(r['hukm'])} الحكم: {r['hukm'] or '—'}\n"
+            msg += f"{r['text']}\n"
+            if r["takhreej"]:
+                msg += f"📋 {r['takhreej']}\n"
+            msg += "\n"
+        await send_long(update, msg)
         return
 
     # ============ ДЛЯ ВСЕХ: ПОИСК ХАДИСОВ ============
@@ -1434,6 +1485,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*Случайные:*\nслучайный | случайный бухари | случайный муслим | случайный коран\n\n"
             "*Коран:*\nкоран 2:255\n\n"
             "*Поиск:*\nискать بدعة\n\n"
+            "*Достоверность (sunnah.one):*\nсунна من غشنا | достоверность احفظ الله\n(хадис + хукм صحيح/ضعيف + тахридж)\n\n"
             "*Корень слова:*\nкорень علм | корень хукм\n\n"
             "*Для владельца:*\n"
             "🤖 ботяра вопрос | ботяра очисти свою память\n"
