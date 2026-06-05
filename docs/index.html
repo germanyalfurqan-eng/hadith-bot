@@ -96,7 +96,7 @@
 
 <div class="wrap" id="app" style="display:none">
   <div class="brand">
-    <div class="bleft">
+    <div class="bleft" id="brand" style="cursor:pointer" title="YouTube-канал">
       <div class="logo">М</div>
       <h1><span class="b">M</span>uslimoon <span class="b">Bot</span></h1>
     </div>
@@ -128,7 +128,7 @@
     <div class="chip" data-mode="root">جذ Однокоренные</div>
     <div class="chip" id="neuroChip" data-mode="neuro">🧠 По смыслу</div>
   </div>
-  <div class="hint">«…» = точная фраза · пробел = все слова · <b>|</b> = ИЛИ · -слово = исключить</div>
+  <div class="hint">«…» = точная фраза · пробел = все слова · <b>|</b> = ИЛИ · -слово = исключить · <span id="helpBtn" style="color:var(--link);cursor:pointer">ⓘ как искать</span></div>
 
   <div class="neuro-box" id="neuroBox">
     <div style="font-size:13px;margin-bottom:6px">Опиши смысл (рус/eng) — подберу арабские ключевые фразы:</div>
@@ -163,6 +163,24 @@
   </div>
 </div>
 
+<div class="modal" id="helpModal">
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <b>ⓘ Как искать</b><button class="mini" id="helpClose">закрыть ✕</button>
+    </div>
+    <div style="font-size:14px;line-height:1.7">
+      • <b>обычно</b> — пишешь слова, ищет где есть ВСЕ слова (огласовки игнорируются).<br>
+      • <b>"точная фраза"</b> — в кавычках: слова строго подряд.<br>
+      • <b>|</b> — ИЛИ: <code>الصبر | الصلاة</code> найдёт где есть любое.<br>
+      • <b>-слово</b> — исключить: <code>الصلاة -الجمعة</code>.<br>
+      • <b>номер</b> — напиши число (напр. <code>87</code>): покажет хадис №87 из выбранных сборников (или из всех).<br>
+      • <b>َ Огласовки точно</b> — искать ровно с огласовками как ввёл.<br>
+      • <b>جذ Однокоренные</b> — ищет однокоренные (приблизительно).<br>
+      • <b>🧠 По смыслу</b> — опиши смысл (рус/eng), подберёт арабские фразы.<br>
+      • <b>Искать в:</b> ничего не выбрано = искать ВЕЗДЕ; выбрал сборники = только в них.
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -183,7 +201,6 @@ const COLLECTIONS = [
   {code:'ibnmajah',ru:'Ибн Маджа',ar:'ابن ماجه'},
   {code:'nasai',ru:'Насаи',ar:'النسائي'},
   {code:'malik',ru:'Малик',ar:'مالك'},
-  {code:'darimi',ru:'Дарими',ar:'الدارمي'},
   {code:'ahmad',ru:'Ахмад',ar:'أحمد'},
 ];
 
@@ -283,7 +300,7 @@ function nameOf(c){const x=COLLECTIONS.find(k=>k.code===c);return x?x.ru:c;}
 function arOf(c){const x=COLLECTIONS.find(k=>k.code===c);return x?x.ar:c;}
 
 /* ===================== UI STATE ===================== */
-let tab='hadith'; var _seq=0;
+let tab='hadith'; var _seq=0, _results=[], _groups=[], _shown=0;
 const modes={diac:false,root:false,neuro:false};
 const selCols=new Set(); // пусто = искать ВЕЗДЕ (как sunnah); выбор чипов = сузить
 
@@ -320,17 +337,24 @@ async function runSearch(){
   const groups=parseQuery(q); if(!groups.length){ toast('Пустой запрос'); return; }
   const res=document.getElementById('res'); res.innerHTML=''; setStatus('Ищу…');
   let docs=[];
+  const numMode = /^\d{1,7}$/.test(q);
   if(tab==='hadith'){
     const codes = selCols.size ? [...selCols] : COLLECTIONS.map(c=>c.code);
     for(const code of codes){
       if(seq!==_seq) return;
       try{
-        if(code==='muhaymin'){ const arr=await loadMuhaymin();
-          arr.forEach(h=>{ if(docMatch(h,groups,modes)) docs.push({type:'m',h}); }); }
-        else if(code==='ahmad'){ const arr=await loadAhmad();
-          arr.forEach(h=>{ if(docMatch(h,groups,modes)) docs.push({type:'h',code:'ahmad',h}); }); }
-        else{ const arr=await loadCollection(code);
-          arr.forEach(h=>{ if(docMatch(h,groups,modes)) docs.push({type:'h',code,h}); }); }
+        if(numMode){
+          if(code==='muhaymin'){ const arr=await loadMuhaymin(); const h=arr.find(x=>String(x.n)===q); if(h) docs.push({type:'m',h}); }
+          else if(code==='ahmad'){ const arr=await loadAhmad(); const h=arr.find(x=>x.num===q); if(h) docs.push({type:'h',code:'ahmad',h}); }
+          else{ const h=await getOne(code,q); if(h) docs.push({type:'h',code,h}); }
+        } else {
+          if(code==='muhaymin'){ const arr=await loadMuhaymin();
+            arr.forEach(h=>{ if(docMatch(h,groups,modes)) docs.push({type:'m',h}); }); }
+          else if(code==='ahmad'){ const arr=await loadAhmad();
+            arr.forEach(h=>{ if(docMatch(h,groups,modes)) docs.push({type:'h',code:'ahmad',h}); }); }
+          else{ const arr=await loadCollection(code);
+            arr.forEach(h=>{ if(docMatch(h,groups,modes)) docs.push({type:'h',code,h}); }); }
+        }
       }catch(e){ toast('Не загрузился: '+nameOf(code)); }
     }
     await loadReverse();
@@ -339,10 +363,28 @@ async function runSearch(){
   }
   if(seq!==_seq) return;
   setStatus('');
+  try{ localStorage.setItem('muslimoon_state',JSON.stringify({tab,q,cols:[...selCols]})); }catch(e){}
   if(!docs.length){ res.innerHTML='<div class="status">Ничего не найдено 🤷</div>'; return; }
-  const total=docs.length; docs=docs.slice(0,250);
-  res.appendChild(info('Найдено: '+total+(total>250?' (показаны первые 250)':'')));
-  docs.forEach(d=> res.appendChild(d.type==='q'?cardAyah(d,groups):(d.type==='m'?cardMuh(d,groups):cardHadith(d,groups))));
+  _results=docs; _groups=groups; _shown=0;
+  res.appendChild(info('Найдено: '+docs.length));
+  renderMore();
+}
+function renderMore(){
+  const res=document.getElementById('res');
+  const old=document.getElementById('moreBtn'); if(old) old.remove();
+  const end=Math.min(_shown+50,_results.length);
+  for(let i=_shown;i<end;i++){ const d=_results[i];
+    res.appendChild(d.type==='q'?cardAyah(d,_groups):(d.type==='m'?cardMuh(d,_groups):cardHadith(d,_groups))); }
+  _shown=end;
+  if(_shown<_results.length){ const b=document.createElement('button'); b.id='moreBtn'; b.className='go';
+    b.style.cssText='display:block;margin:10px auto;padding:10px 18px';
+    b.textContent='Показать ещё ('+(_results.length-_shown)+')'; b.onclick=renderMore; res.appendChild(b); }
+}
+async function getOne(code,num){
+  try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-'+code+'/'+num+'.min.json')).json();
+    const h=(j.hadiths||[])[0]; if(h){ const raw=(h.text||'').replace(/\s+/g,' ').trim();
+      return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),norm:canon(raw)}; } }catch(e){}
+  return null;
 }
 function info(t){const d=document.createElement('div');d.className='hint';d.style.textAlign='center';d.textContent=t;return d;}
 
@@ -373,10 +415,18 @@ function cardAyah(d,groups){
   meta.innerHTML='<span class="src">Коран · '+v.s+':'+v.a+'</span>';
   addTr(meta,card,v.text); card.appendChild(meta); return card;
 }
-function addTr(meta,card,text){
+function addTr(meta,card,text,ayah){
   const tr=document.createElement('button');tr.className='tr-btn';tr.textContent='Перевод';
   const out=document.createElement('div');out.className='tr-out';
-  tr.onclick=()=>doTranslate(text,out,tr); meta.appendChild(tr); card.appendChild(out);
+  tr.onclick=()=> ayah ? doTranslateAyah(ayah.s,ayah.a,out,tr) : doTranslate(text,out,tr);
+  meta.appendChild(tr); card.appendChild(out);
+}
+async function doTranslateAyah(s,a,out,btn){
+  btn.disabled=true; btn.textContent='…';
+  try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/rus-elmirkuliev/'+s+'/'+a+'.min.json')).json();
+    out.textContent=(j.text||'—')+'  — пер. Э. Кулиева'; out.style.display='block'; }
+  catch(e){ toast('Не удалось загрузить перевод'); }
+  btn.disabled=false; btn.textContent='Перевод';
 }
 function toAr(s){const m={'0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩'};return String(s).replace(/[0-9]/g,d=>m[d]);}
 
@@ -474,10 +524,19 @@ document.getElementById('goBtn').onclick=runSearch;
     t=setTimeout(runSearch,350); });
 })();
 document.getElementById('neuroRun').onclick=neuroRun;
+function openLink(u){ try{ if(tg&&tg.openLink) tg.openLink(u); else window.open(u,'_blank'); }catch(e){ try{window.open(u,'_blank');}catch(_){} } }
+document.getElementById('brand').onclick=()=>openLink('https://www.youtube.com/@MUSLIMOON.TT2024');
+document.getElementById('helpBtn').onclick=()=>{ document.getElementById('helpModal').style.display='flex'; };
+document.getElementById('helpClose').onclick=()=>{ document.getElementById('helpModal').style.display='none'; };
 
 if(userAllowed()){
   document.getElementById('app').style.display='block';
   if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · поиск по хадисам, аятам и аль-Мухаймин'; }
+  try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
+    if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
+      (st.cols||[]).forEach(c=>selCols.add(c));
+      if(st.q) document.getElementById('q').value=st.q; }
+  }catch(e){}
   renderCols();
 }else{
   document.getElementById('gate').style.display='flex';
