@@ -88,20 +88,31 @@ def fmt_book_chapters(arg):
     msg += "\n👉 «мухэймин <номер>» — открыть хадис."
     return msg
 
-# ---- Поиск по sunnah.one (хадис + хукм достоверности + тахридж) ----
-def search_sunnah_one(query, limit=5):
-    """Вернуть (count, [{text, hukm, takhreej}]) из поиска sunnah.one."""
+# ---- Поиск по sunnah.one (хадис + хукм достоверности + тахридж + شرح) ----
+def search_sunnah_one(query, limit=4):
+    """Вернуть (count, [{marked, text, hukm, takhreej, sharh_id}]) — с дедупом одинаковых матнов."""
     try:
         url = "https://search.sunnah.one/?action=search&ver=2&q=" + requests.utils.quote(query)
         r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
         if r.status_code != 200:
             return 0, []
         d = r.json()
-        out = []
-        for it in d.get("data", [])[:limit]:
-            txt = re.sub(r"</?mark>", "", it.get("text") or "").strip()
-            hukm = re.sub(r"[\[\]]", "", str(it.get("hukm") or "")).strip()
-            out.append({"text": txt, "hukm": hukm, "takhreej": (it.get("takhreej") or "").strip()})
+        out = []; seen = set()
+        for it in d.get("data", []):
+            raw = it.get("text") or ""
+            plain = re.sub(r"</?mark>", "", raw).strip()
+            key = re.sub(r"[^ء-ي]", "", plain)[:45]
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            out.append({
+                "marked": raw, "text": plain,
+                "hukm": re.sub(r"[\[\]]", "", str(it.get("hukm") or "")).strip(),
+                "takhreej": (it.get("takhreej") or "").strip(),
+                "sharh_id": it.get("sharh_id"),
+            })
+            if len(out) >= limit:
+                break
         return d.get("count", 0), out
     except Exception:
         return 0, []
@@ -113,9 +124,34 @@ def hukm_emoji(h):
         return "⚠️"
     return "ℹ️"
 
+def _esc_mark(t):
+    """Экранировать HTML и превратить <mark>искомое</mark> в <u>подчёркнутое</u>."""
+    t = (t or "").replace("<mark>", "\x00").replace("</mark>", "\x01")
+    t = t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return t.replace("\x00", "<u>").replace("\x01", "</u>")
+
+def takhreej_html(tk):
+    """Экранировать тахридж и сделать ссылки на sunnah.com для известных сборников."""
+    out = _esc_mark(tk)
+    for ar, slug in {"البخاري": "bukhari", "مسلم": "muslim", "أبو داود": "abudawud",
+                     "الترمذي": "tirmidhi", "النسائي": "nasai", "ابن ماجه": "ibnmajah",
+                     "ابن ماجة": "ibnmajah", "مالك": "malik", "أحمد": "ahmad", "الدارمي": "darimi"}.items():
+        out = re.sub(ar + r"\s*\(\s*(\d+)\s*\)",
+                     lambda m, s=slug, a=ar: f'<a href="https://sunnah.com/{s}:{m.group(1)}">{a} ({m.group(1)})</a>',
+                     out)
+    return out
+
 def parse_sunnah(text):
     t = text.lower().strip()
-    for trig in ("сунна ", "достоверность ", "хукм ", "проверь хадис "):
+    for trig in ("сунна ", "достоверность ", "хукм "):
+        if t.startswith(trig):
+            return text.strip()[len(trig):].strip()
+    return None
+
+def parse_smart_sunnah(text):
+    """«хадис о ...» / «хадис про ...» — поиск по СМЫСЛУ (через DeepSeek -> ключевые слова)."""
+    t = text.lower().strip()
+    for trig in ("хадис о ", "хадис про ", "достоверность хадиса о ", "достоверность хадиса про ", "найди хадис "):
         if t.startswith(trig):
             return text.strip()[len(trig):].strip()
     return None
@@ -843,6 +879,39 @@ def ask_ai_with_memory(prompt, owner=True):
         system += f"\n\nЧто ты знаешь о владельце и контексте:\n{memory_text}"
     return ask_ai(prompt, system, owner=owner)
 
+# ---- Накопительный кэш переводов матнов ----
+TRANS_FILE = "translations.json"
+_trans_cache = None
+def _load_trans():
+    global _trans_cache
+    if _trans_cache is None:
+        try: _trans_cache = json.load(open(TRANS_FILE, encoding="utf-8"))
+        except: _trans_cache = {}
+    return _trans_cache
+def _trans_key(arabic):
+    t = re.sub(r"[ً-ٰٟـ]", "", arabic or "")
+    return "".join(c for c in t if "ء" <= c <= "ي")[:300]
+def translate_matn(arabic, owner=False):
+    """Перевод матна на русский с кэшем (накопительно). Только перевод."""
+    if not arabic or len(arabic) < 5:
+        return ""
+    cache = _load_trans()
+    key = _trans_key(arabic)
+    if key in cache:
+        return cache[key]
+    sysmsg = ("Ты профессиональный переводчик хадисов с арабского на русский. "
+              "Выдай ТОЛЬКО точный перевод текста на русский язык. "
+              "Без вступлений, без пояснений, без арабского текста, без кавычек, без указания модели — только перевод.")
+    ru = ask_ai("Переведи на русский:\n" + arabic, sysmsg, owner=owner)
+    if ru and not ru.startswith("❌"):
+        ru = re.sub(r"\n*⚡ \*Модель:.*$", "", ru, flags=re.S).strip()
+        cache[key] = ru
+        try:
+            json.dump(cache, open(TRANS_FILE, "w", encoding="utf-8"), ensure_ascii=False)
+        except: pass
+        return ru
+    return ""
+
 async def send_long(update, text, parse_mode=None):
     limit = 3900
     while text:
@@ -1184,6 +1253,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if parse_quran_query(text)[0]: is_command = True
             if parse_search_query(text): is_command = True
             if parse_sunnah(text): is_command = True
+            if parse_smart_sunnah(text): is_command = True
             if parse_translate(text): is_command = True
             if parse_tafsir_query(text)[0]: is_command = True
             if parse_registry_command(text): is_command = True
@@ -1300,22 +1370,42 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
-    # ============ ПОИСК ПО SUNNAH.ONE (хадис + достоверность + тахридж) ============
+    # ============ ПОИСК ПО SUNNAH.ONE (الدرر السنية): хукм + перевод + تخريج ============
     sun = parse_sunnah(text)
-    if sun:
-        await update.message.reply_text(f"🔎 Ищу в sunnah.one: {sun}...")
-        cnt, res = search_sunnah_one(sun, limit=5)
+    smart = parse_smart_sunnah(text)
+    if sun or smart:
+        if smart:
+            await update.message.reply_text(f"🧠 Подбираю ключевые слова для «{smart}»...")
+            kw = ask_ai(
+                "Из описания хадиса по смыслу выдай 4-7 КЛЮЧЕВЫХ АРАБСКИХ СЛОВ из его матна. "
+                "Только слова через пробел, без огласовок, без перевода и пояснений.\nОписание: " + smart,
+                "Ты знаток хадисов. Отвечай ТОЛЬКО арабскими словами через пробел.",
+                owner=is_owner(update))
+            kw = re.sub(r"\n*⚡ \*Модель:.*$", "", kw or "", flags=re.S)
+            kw = re.sub(r"[^؀-ۿ\s]", " ", kw).strip()
+            if not kw:
+                await update.message.reply_text("❌ Не удалось подобрать ключевые слова.")
+                return
+            await update.message.reply_text(f"🔎 Ищу по словам: {kw}")
+            query = kw
+        else:
+            await update.message.reply_text(f"🔎 Ищу: {sun}...")
+            query = sun
+        cnt, res = search_sunnah_one(query, limit=4)
         if not res:
-            await update.message.reply_text("❌ Ничего не найдено (или sunnah.one недоступен).")
+            await update.message.reply_text("❌ Ничего не найдено (или источник недоступен).")
             return
-        msg = f"🔎 sunnah.one — «{sun}»\nНайдено: {cnt}, топ {len(res)}:\n\n"
+        await update.message.reply_text(f"🔎 الدرر السنية — найдено: {cnt}, показываю {len(res)}:")
         for i, r in enumerate(res, 1):
-            msg += f"{i}. {hukm_emoji(r['hukm'])} الحكم: {r['hukm'] or '—'}\n"
-            msg += f"{r['text']}\n"
+            block = f"{i}. {hukm_emoji(r['hukm'])} <b>الحكم:</b> {_esc_mark(r['hukm'] or '—')}\n"
+            block += f"📜 <b>{_esc_mark(r['marked'])}</b>\n"
+            if is_owner(update):
+                ru = translate_matn(r["text"], owner=True)
+                if ru:
+                    block += f"🌍 {_esc_mark(ru)}\n"
             if r["takhreej"]:
-                msg += f"📋 {r['takhreej']}\n"
-            msg += "\n"
-        await send_long(update, msg)
+                block += f"📋 {takhreej_html(r['takhreej'])}\n"
+            await send_long(update, block, "HTML")
         return
 
     # ============ ДЛЯ ВСЕХ: ПОИСК ХАДИСОВ ============
@@ -1495,7 +1585,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*Случайные:*\nслучайный | случайный бухари | случайный муслим | случайный коран\n\n"
             "*Коран:*\nкоран 2:255\n\n"
             "*Поиск:*\nискать بدعة\n\n"
-            "*Достоверность (sunnah.one):*\nсунна من غشنا | достоверность احفظ الله\n(хадис + хукм صحيح/ضعيف + тахридж)\n\n"
+            "*Достоверность (الدرر السنية):*\nсунна من غشنا (по тексту)\nхадис о терпении (по смыслу, через ИИ)\n(матн + хукм صحيح/ضعيف + перевод + تخريج со ссылками)\n\n"
             "*Корень слова:*\nкорень علм | корень хукм\n\n"
             "*Для владельца:*\n"
             "🤖 ботяра вопрос | ботяра очисти свою память\n"
