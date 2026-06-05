@@ -140,6 +140,8 @@ def muhaymin_crossref_note(code, number):
 
 TOKEN = os.environ.get("TOKEN")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 OWNER_ID = 131827895
 OWNER_CHANNEL_ID = -1001660979432
@@ -657,7 +659,33 @@ def search_similar_hadith(arabic_text):
         return refs
     except: return []
 
-def ask_ai(prompt, system=None):
+def ask_deepseek(prompt, system):
+    """Личный ответ владельцу через DeepSeek API."""
+    try:
+        r = requests.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
+            json={"model": DEEPSEEK_MODEL,
+                  "messages": [{"role": "system", "content": system},
+                               {"role": "user", "content": prompt}],
+                  "max_tokens": 2000},
+            timeout=60)
+        if r.status_code == 200:
+            ответ = r.json()["choices"][0]["message"]["content"]
+            ответ = ответ.replace("\n\n\n", "\n\n")
+            return f"{ответ}\n\n⚡ *Модель:* 🐬 DeepSeek"
+    except Exception:
+        pass
+    return None
+
+def ask_ai(prompt, system=None, owner=False):
+    if system is None:
+        system = f"Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском. Сегодняшняя дата: {datetime.now().strftime('%d.%m.%Y')}."
+    # для владельца — сначала его DeepSeek
+    if owner and DEEPSEEK_API_KEY:
+        d = ask_deepseek(prompt, system)
+        if d is not None:
+            return d
     модели = [
         "meta-llama/llama-3.3-70b-instruct:free",
         "deepseek/deepseek-r1:free",
@@ -711,13 +739,13 @@ def ask_ai(prompt, system=None):
             continue
     return "❌ Все AI-модели временно недоступны. Попробуйте позже."
 
-def ask_ai_with_memory(prompt):
+def ask_ai_with_memory(prompt, owner=True):
     memory = load_memory()
     system = f"Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском. Сегодняшняя дата: {datetime.now().strftime('%d.%m.%Y')}."
     if memory:
         memory_text = "\n".join([f"- [{m.get('date','—')}] {m.get('text','')}" for m in memory])
         system += f"\n\nЧто ты знаешь о владельце и контексте:\n{memory_text}"
-    return ask_ai(prompt, system)
+    return ask_ai(prompt, system, owner=owner)
 
 async def send_long(update, text, parse_mode=None):
     for i in range(0, len(text), 4000):
@@ -1108,7 +1136,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             arabic_ayah, _ = get_quran_ayah(surah, ayah)
             prompt = f"Дай тафсир Ибн Касира на аят {surah}:{ayah}."
             if arabic_ayah: prompt += f"\n\nАят: {arabic_ayah}"
-            result = ask_ai(prompt, "Ты — знаток тафсира Ибн Касира.")
+            result = ask_ai(prompt, "Ты — знаток тафсира Ибн Касира.", owner=is_owner(update))
             await send_long(update, result)
             return
 
