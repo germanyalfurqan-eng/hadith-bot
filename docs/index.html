@@ -109,7 +109,7 @@
       <div class="gear" id="gear">⚙️</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v11</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v12</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -170,6 +170,18 @@
   </div>
 </div>
 
+<div class="modal" id="favModal">
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <b>⭐ Избранное</b><button class="mini" id="favClose">закрыть ✕</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <button class="chip" id="favByDate">По дате</button>
+      <button class="chip" id="favByColl">По сборникам</button>
+    </div>
+    <div id="favList"></div>
+  </div>
+</div>
 <div class="modal" id="menuModal">
   <div class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -181,8 +193,8 @@
         <option value="rus-elmirkuliev">Кулиев</option>
         <option value="rus-abuadel">Абу Адель</option>
       </select></div>
-    <div class="row"><span>الـ Коран без огласовок</span><div class="sw" id="noDiacSw"></div></div>
-    <div class="row" style="opacity:.55"><span>⭐ Закладки / избранное</span><span>скоро</span></div>
+    <div class="row"><span>🔤 Коран без огласовок (تشكيل)</span><div class="sw" id="noDiacSw"></div></div>
+    <div class="row"><span>⭐ Закладки / избранное</span><button class="go" id="favBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row" style="opacity:.55"><span>🔊 Озвучка аятов</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>📚 Другие источники (Лейс, Мукбиль, Сильсиля…)</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>🌐 English / язык</span><span>скоро</span></div>
@@ -221,7 +233,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const BACKEND_URL = ""; // пусто = перевод/полный-ИИ через сервер выкл
+const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
 const MUHAYMIN_URL = "./muhaymin.json";
@@ -314,6 +326,33 @@ function highlight(raw,groups,modes){
   return html.split('%%HL%%').join('<mark>').split('%%EL%%').join('</mark>');
 }
 function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+/* ===== Избранное ===== */
+function loadFav(){try{return JSON.parse(localStorage.getItem('muslimoon_fav'))||[];}catch(e){return[];}}
+function saveFav(a){try{localStorage.setItem('muslimoon_fav',JSON.stringify(a));}catch(e){}}
+function isFav(k){return loadFav().some(x=>x.k===k);}
+function addStar(meta,f){ const s=document.createElement('button'); s.className='tr-btn';
+  s.style.cssText='background:transparent;border:1px solid var(--border);color:var(--mark);padding:6px 10px';
+  const upd=()=>{ s.textContent=isFav(f.k)?'★':'☆'; }; upd();
+  s.onclick=()=>{ let a=loadFav(); const i=a.findIndex(x=>x.k===f.k); if(i>=0){a.splice(i,1);}else{a.push(f);} saveFav(a); upd(); toast(i>=0?'Убрано':'В избранное ★'); };
+  meta.appendChild(s);
+}
+function renderFav(by){
+  const box=document.getElementById('favList'); const a=loadFav(); box.innerHTML='';
+  document.getElementById('favByDate').classList.toggle('on',by!=='coll');
+  document.getElementById('favByColl').classList.toggle('on',by==='coll');
+  if(!a.length){ box.innerHTML='<div class="status">Пусто. Нажми ☆ на результате поиска.</div>'; return; }
+  let groups; if(by==='coll'){ const m={}; a.forEach(f=>{(m[f.coll]=m[f.coll]||[]).push(f);}); groups=Object.entries(m); }
+  else groups=[['',a.slice().reverse()]];
+  groups.forEach(([g,items])=>{
+    if(g){ const h=document.createElement('div'); h.style.cssText='color:var(--hint);font-size:12px;margin:8px 0 4px;direction:rtl'; h.textContent=g; box.appendChild(h); }
+    items.forEach(f=>{ const d=document.createElement('div'); d.className='card'; d.style.padding='8px';
+      d.innerHTML='<div class="meta" style="margin:0 0 4px"><span class="src">'+esc(f.label)+'</span></div>'+
+        '<div class="ar" style="font-size:15px;line-height:1.7">'+esc((f.text||'').slice(0,110))+'…</div>';
+      const rm=document.createElement('button'); rm.className='mini'; rm.textContent='убрать ✕';
+      rm.onclick=()=>{ let arr=loadFav(); const i=arr.findIndex(x=>x.k===f.k); if(i>=0){arr.splice(i,1);saveFav(arr);renderFav(by);} };
+      d.appendChild(rm); box.appendChild(d); });
+  });
+}
 
 /* ===================== ДАННЫЕ ===================== */
 const cache={}; let reverse=null, quran=null, muh=null;
@@ -442,7 +481,7 @@ function cardHadith(d,groups){
   const key=code+' '+h.num; let m=reverse&&(reverse[key]||reverse[code+' '+toAr(h.num)]);
   if(m&&m.length){ const nums=[...new Set(m.map(x=>x.m))].join(', ');
     meta.innerHTML+='<span class="badge">✓ في المهيمن: №'+nums+'</span>'; }
-  addTr(meta,card,h.text); card.appendChild(meta); return card;
+  addTr(meta,card,h.text,null,{k:'h|'+code+'|'+h.num,type:'h',coll:arOf(code),label:arOf(code)+' №'+h.num,text:(h.text||'').slice(0,200)}); card.appendChild(meta); return card;
 }
 function cardMuh(d,groups){
   const {h}=d; const card=document.createElement('div');card.className='card';
@@ -456,16 +495,17 @@ function cardMuh(d,groups){
   meta.innerHTML='<span class="badge muh">المهيمن №'+h.n+' · مرشد بن يوسف</span>'+
     '<span class="src" style="direction:rtl">'+esc(h.b||'')+' › '+esc(h.c||'')+'</span>';
   if(rv.length>1) meta.innerHTML+='<span class="grade">риваятов: '+rv.length+'</span>';
-  addTr(meta,card,h.text); card.appendChild(meta); return card;
+  addTr(meta,card,h.text,null,{k:'m|'+h.n,type:'m',coll:'المهيمن',label:'المهيمن №'+h.n,text:(rv[0]||'').slice(0,200)}); card.appendChild(meta); return card;
 }
 function cardAyah(d,groups){
   const {v}=d; const card=document.createElement('div');card.className='card';
   const ar=document.createElement('div');ar.className='ar';ar.innerHTML=highlight(cfg.noDiac?stripDiac(v.text):v.text,groups,modes);card.appendChild(ar);
   const meta=document.createElement('div');meta.className='meta';
   meta.innerHTML='<span class="src">Коран · '+v.s+':'+v.a+'</span>';
-  addTr(meta,card,v.text,{s:v.s,a:v.a}); card.appendChild(meta); return card;
+  addTr(meta,card,v.text,{s:v.s,a:v.a},{k:'q|'+v.s+':'+v.a,type:'q',coll:'Коран',label:'Коран '+v.s+':'+v.a,text:(v.text||'').slice(0,200)}); card.appendChild(meta); return card;
 }
-function addTr(meta,card,text,ayah){
+function addTr(meta,card,text,ayah,fav){
+  if(fav) addStar(meta,fav);
   const tr=document.createElement('button');tr.className='tr-btn';tr.textContent='Перевод';
   const out=document.createElement('div');out.className='tr-out';
   tr.onclick=()=> ayah ? doTranslateAyah(ayah.s,ayah.a,out,tr) : doTranslate(text,out,tr);
@@ -590,11 +630,15 @@ document.querySelectorAll('.exq').forEach(e=>e.onclick=()=>{
 });
 document.getElementById('menuBtn').onclick=()=>{ document.getElementById('menuModal').style.display='flex'; };
 document.getElementById('menuClose').onclick=()=>{ document.getElementById('menuModal').style.display='none'; };
+document.getElementById('favBtn').onclick=()=>{ renderFav('date'); document.getElementById('favModal').style.display='flex'; };
+document.getElementById('favClose').onclick=()=>{ document.getElementById('favModal').style.display='none'; };
+document.getElementById('favByDate').onclick=()=>renderFav('date');
+document.getElementById('favByColl').onclick=()=>renderFav('coll');
 var _yt=document.getElementById('ytLink'); if(_yt) _yt.onclick=()=>openLink('https://www.youtube.com/@MUSLIMOON.TT2024');
 
 if(userAllowed()){
   document.getElementById('app').style.display='block';
-  if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v11 · хадисы · аяты · аль-Мухаймин'; }
+  if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v12 · хадисы · аяты · аль-Мухаймин'; }
   try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
     if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
       (st.cols||[]).forEach(c=>selCols.add(c));

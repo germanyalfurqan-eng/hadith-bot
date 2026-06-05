@@ -1748,6 +1748,7 @@ async def _api_serve():
         try:
             d = await r.json(); text = (d.get('text') or '')[:4000]
             tr = await loop.run_in_executor(None, ask_deepseek, "Переведи точно на русский, выдай только перевод:\n" + text, "Ты — точный переводчик арабского (хадисы/аяты).") or ""
+            tr = re.sub(r'\s*⚡.*$', '', tr, flags=re.S).strip()
             return _cors(web.json_response({'translation': tr or ''}))
         except Exception as e:
             return _cors(web.json_response({'translation': '', 'error': str(e)}))
