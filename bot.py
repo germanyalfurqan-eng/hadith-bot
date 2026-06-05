@@ -314,6 +314,7 @@ OWNER_ID = 131827895
 OWNER_CHANNEL_ID = -1001660979432
 LOG_CHAT_ID = -1003480426073
 GITHUB_REPO = "germanyalfurqan-eng/hadith-bot"
+ANNOUNCE_CHAT_ID = -1003982210885
 
 GUIDE_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/bot_guide_tg.txt"
 MAIN_KB = ReplyKeyboardMarkup([["📖 Инструкция"]], resize_keyboard=True)
@@ -1037,6 +1038,15 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text in ("📖 Инструкция", "инструкция", "путеводитель", "гайд", "/guide"):
         await send_long(update, get_guide())
+        return
+    if is_owner(update) and text.strip().lower() in ("анонс", "обновление", "релиз"):
+        try:
+            r = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/release_notes.txt", timeout=8)
+            note = r.text if r.status_code == 200 else "Нет release_notes.txt"
+            await context.bot.send_message(ANNOUNCE_CHAT_ID, note)
+            await update.message.reply_text("✅ Опубликовано в канале обновлений.")
+        except Exception as e:
+            await update.message.reply_text("Ошибка анонса: " + str(e))
         return
     user_id = update.effective_user.id if update.effective_user else 0
     chat_type = update.effective_chat.type
