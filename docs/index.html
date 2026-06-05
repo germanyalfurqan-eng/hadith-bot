@@ -110,7 +110,7 @@
       <div class="gear" id="gear">⚙️</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v15</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v16</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -444,11 +444,11 @@ async function runSearch(){
       const C=COLLECTIONS.find(x=>x.code===code);
       try{
         if(numMode){
-          let h=null;
-          if(code==='muhaymin'){ const a=await loadMuhaymin(); h=a.find(x=>String(x.n)===q); if(h) add({type:'m',h}); }
-          else if(code==='ahmad'){ const a=await loadAhmad(); h=a.find(x=>x.num===q); if(h) add({type:'h',code:'ahmad',h}); }
-          else if(C&&C.file){ const a=await loadLocal(code,C.file); h=a.find(x=>x.num===q); if(h) add({type:'h',code,h}); }
-          else { h=await getOne(code,q); if(h) add({type:'h',code,h}); }
+          let h=null; const qn=String(parseInt(q,10));
+          if(code==='muhaymin'){ const a=await loadMuhaymin(); h=a.find(x=>String(x.n)===qn); if(h) add({type:'m',h}); }
+          else if(code==='ahmad'){ const a=await loadAhmad(); h=a.find(x=>x.num===qn); if(h) add({type:'h',code:'ahmad',h}); }
+          else if(C&&C.file){ const a=await loadLocal(code,C.file); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
+          else { h=await getOne(code,qn); if(h) add({type:'h',code,h}); }
         } else {
           let arr;
           if(code==='muhaymin') arr=await loadMuhaymin();
@@ -582,20 +582,21 @@ function neuroLocal(meaning){
 async function neuroRun(){
   const meaning=document.getElementById('neuroIn').value.trim();
   if(!meaning){ toast('Опишите смысл'); return; }
-  if(BACKEND_URL && (isOwner||cfg.fNeuro)){ // полный ИИ через сервер (когда будет)
-    setStatus('ИИ подбирает фразы…');
-    try{ const j=await (await fetch(BACKEND_URL+'/neuro',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({meaning,kind:tab,initData:tg&&tg.initData})})).json();
-      const ph=j.phrases||[]; if(ph.length){ applyPhrases(ph); return; } }catch(e){}
-    setStatus('');
-  }
-  const ph=neuroLocal(meaning);
-  if(!ph.length){ toast('Не нашёл по смыслу — попробуй ключевое слово (намерение, терпение, сосед…)'); return; }
-  applyPhrases(ph);
+  const btn=document.getElementById('neuroRun'); const prev=btn.textContent; btn.disabled=true; btn.textContent='Подбираю…⏳';
+  try{
+    if(BACKEND_URL && (isOwner||cfg.fNeuro)){
+      try{ const j=await (await fetch(BACKEND_URL+'/neuro',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({meaning,kind:tab,initData:tg&&tg.initData})})).json();
+        const ph=j.phrases||[]; if(ph.length){ applyPhrases(ph); return; } }catch(e){}
+    }
+    const ph=neuroLocal(meaning);
+    if(!ph.length){ toast('Не нашёл по смыслу — попробуй ключевое слово (намерение, терпение…)'); return; }
+    applyPhrases(ph);
+  } finally { btn.disabled=false; btn.textContent=prev; setStatus(''); }
 }
 function applyPhrases(ph){
   document.getElementById('q').value = ph.map(p=> p.indexOf(' ')!==-1?('"'+p+'"'):p).join(' | ');
-  toast('Ищу варианты: '+ph.join(' · ')); runSearch();
+  toast('Подобрал: '+ph.join(' · ')+' — можешь дописать свои через | и нажать Найти'); runSearch();
 }
 
 /* ===================== ПЕРЕВОД ===================== */
@@ -605,7 +606,7 @@ async function doTranslate(text,out,btn){
   btn.disabled=true; btn.textContent='…';
   try{ const j=await (await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({text,initData:tg&&tg.initData})})).json();
-    out.textContent=j.translation||'—'; out.style.display='block'; }catch(e){ toast('Ошибка перевода'); }
+    out.innerHTML='<span style="color:var(--hint);font-style:italic">Перевод:</span> '+esc(j.translation||'—'); out.style.display='block'; }catch(e){ toast('Ошибка перевода'); }
   btn.disabled=false; btn.textContent='Перевод';
 }
 
@@ -660,7 +661,7 @@ var _yt=document.getElementById('ytLink'); if(_yt) _yt.onclick=()=>openLink('htt
 
 if(userAllowed()){
   document.getElementById('app').style.display='block';
-  if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v15 · хадисы · аяты · аль-Мухаймин'; }
+  if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v16 · хадисы · аяты · аль-Мухаймин'; }
   try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
     if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
       (st.cols||[]).forEach(c=>selCols.add(c));
