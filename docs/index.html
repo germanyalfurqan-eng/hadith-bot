@@ -110,7 +110,7 @@
       <div class="gear" id="gear">⚙️</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v14</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v15</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -250,6 +250,7 @@ const COLLECTIONS = [
   {code:'malik',ru:'Малик',ar:'مالك'},
   {code:'ahmad',ru:'Ахмад',ar:'أحمد'},
   {code:'muhaymin',ru:'аль-Мухаймин',ar:'المهيمن',special:true,heavy:true},
+  {code:'muqbil',ru:'Мукбиль · المسند الصحيح',ar:'الصحيح مما ليس في الصحيحين',heavy:true,file:'muqbil.json'},
 ];
 
 /* ===================== TELEGRAM + ДОСТУП ===================== */
@@ -335,8 +336,8 @@ function loadFav(){try{return JSON.parse(localStorage.getItem('muslimoon_fav'))|
 function saveFav(a){try{localStorage.setItem('muslimoon_fav',JSON.stringify(a));}catch(e){}}
 function isFav(k){return loadFav().some(x=>x.k===k);}
 function addStar(meta,f){ const s=document.createElement('button'); s.className='tr-btn';
-  s.style.cssText='background:transparent;border:1px solid var(--border);color:var(--mark);padding:6px 10px';
-  const upd=()=>{ s.textContent=isFav(f.k)?'★':'☆'; }; upd();
+  s.style.cssText='background:transparent;border:1px solid var(--border);padding:6px 10px';
+  const upd=()=>{ const on=isFav(f.k); s.textContent=on?'★':'☆'; s.style.color=on?'var(--mark)':'var(--hint)'; }; upd();
   s.onclick=()=>{ let a=loadFav(); const i=a.findIndex(x=>x.k===f.k); if(i>=0){a.splice(i,1);}else{a.push(f);} saveFav(a); upd(); toast(i>=0?'Убрано':'В избранное ★'); };
   meta.appendChild(s);
 }
@@ -374,6 +375,10 @@ let ahmadArr=null;
 async function loadAhmad(){ if(ahmadArr)return ahmadArr; setStatus('Загружаю Муснад Ахмада (большой)…');
   const j=await (await fetch(AHMAD_URL)).json();
   ahmadArr=j.map(x=>({num:String(x.n),text:x.t||'',grade:x.g||'',norm:canon(x.t||'')})); return ahmadArr; }
+const _local={};
+async function loadLocal(code,file){ if(_local[code])return _local[code]; setStatus('Загружаю '+nameOf(code)+'…');
+  const j=await (await fetch('./'+file)).json();
+  _local[code]=j.map(x=>{ const raw=(x.ar||x.t||'').replace(/\s+/g,' ').trim(); return {num:String(x.num),text:raw,grade:'',norm:canon(raw)}; }); return _local[code]; }
 async function loadQuran(){ if(quran)return quran; setStatus('Загружаю Коран…');
   const j=await (await fetch(QURAN_URL)).json();
   quran=j.map(v=>{ const raw=(v.text||'').replace(/﻿/g,'').replace(/\s+/g,' ').trim();
@@ -432,20 +437,23 @@ async function runSearch(){
   const add=(d)=>{ if(count<CAP) res.appendChild(makeCard(d)); count++; };
   if(tab==='hadith'){
     await loadReverse();
-    const ORDER=['bukhari','muslim','abudawud','tirmidhi','ibnmajah','nasai','malik','ahmad','muhaymin'];
-    const codes=ORDER.filter(c=>COLLECTIONS.some(x=>x.code===c) && (!selCols.size||selCols.has(c)));
+    const codes=COLLECTIONS.map(c=>c.code).filter(c=>{ const C=COLLECTIONS.find(x=>x.code===c); return selCols.size? selCols.has(c) : !C.heavy; })
+      .sort((a,b)=>((COLLECTIONS.find(x=>x.code===a).heavy?1:0)-(COLLECTIONS.find(x=>x.code===b).heavy?1:0)));
     for(const code of codes){
       if(seq!==_seq) return;
+      const C=COLLECTIONS.find(x=>x.code===code);
       try{
         if(numMode){
           let h=null;
           if(code==='muhaymin'){ const a=await loadMuhaymin(); h=a.find(x=>String(x.n)===q); if(h) add({type:'m',h}); }
           else if(code==='ahmad'){ const a=await loadAhmad(); h=a.find(x=>x.num===q); if(h) add({type:'h',code:'ahmad',h}); }
+          else if(C&&C.file){ const a=await loadLocal(code,C.file); h=a.find(x=>x.num===q); if(h) add({type:'h',code,h}); }
           else { h=await getOne(code,q); if(h) add({type:'h',code,h}); }
         } else {
           let arr;
           if(code==='muhaymin') arr=await loadMuhaymin();
           else if(code==='ahmad') arr=await loadAhmad();
+          else if(C&&C.file) arr=await loadLocal(code,C.file);
           else arr=await loadCollection(code);
           if(seq!==_seq) return;
           for(const h of arr){ if(docMatch(h,groups,modes)) add(code==='muhaymin'?{type:'m',h}:{type:'h',code,h}); }
@@ -652,7 +660,7 @@ var _yt=document.getElementById('ytLink'); if(_yt) _yt.onclick=()=>openLink('htt
 
 if(userAllowed()){
   document.getElementById('app').style.display='block';
-  if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v14 · хадисы · аяты · аль-Мухаймин'; }
+  if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v15 · хадисы · аяты · аль-Мухаймин'; }
   try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
     if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
       (st.cols||[]).forEach(c=>selCols.add(c));
