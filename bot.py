@@ -1734,4 +1734,13 @@ app = ApplicationBuilder().token(TOKEN).post_init(_setup).build()
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
 app.add_handler(ChatMemberHandler(track_member, ChatMemberHandler.CHAT_MEMBER))
-app.run_polling()
+async def _on_error(update, context):
+    err = str(context.error); print("ERR:", err)
+    if 'Conflict' in err:  # две копии бота — не спамим, settle сам
+        return
+    try:
+        await context.bot.send_message(LOG_CHAT_ID, "⚠️ Ошибка бота:\n" + err[:700])
+    except Exception:
+        pass
+app.add_error_handler(_on_error)
+app.run_polling(drop_pending_updates=True)

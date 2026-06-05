@@ -102,7 +102,7 @@
     </div>
     <div class="gear" id="gear">⚙️ Управление</div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v5</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -178,6 +178,9 @@
       • <b>جذ Однокоренные</b> — ищет однокоренные (приблизительно).<br>
       • <b>🧠 По смыслу</b> — опиши смысл (рус/eng), подберёт арабские фразы.<br>
       • <b>Искать в:</b> ничего не выбрано = искать ВЕЗДЕ; выбрал сборники = только в них.
+      <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+        📺 <span id="ytLink" style="color:var(--link);cursor:pointer">Наш YouTube-канал</span> · имя «Muslimoon Bot» вверху = на главную
+      </div>
     </div>
   </div>
 </div>
@@ -193,7 +196,6 @@ const MUHAYMIN_URL = "./muhaymin.json";
 const AHMAD_URL = "./ahmad.json";
 const EDITION_URL = code => `https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-${code}.min.json`;
 const COLLECTIONS = [
-  {code:'muhaymin',ru:'аль-Мухаймин',ar:'المهيمن',special:true},
   {code:'bukhari',ru:'Бухари',ar:'البخاري'},
   {code:'muslim',ru:'Муслим',ar:'مسلم'},
   {code:'abudawud',ru:'Абу Дауд',ar:'أبو داود'},
@@ -202,6 +204,7 @@ const COLLECTIONS = [
   {code:'nasai',ru:'Насаи',ar:'النسائي'},
   {code:'malik',ru:'Малик',ar:'مالك'},
   {code:'ahmad',ru:'Ахмад',ar:'أحمد'},
+  {code:'muhaymin',ru:'аль-Мухаймин',ar:'المهيمن',special:true},
 ];
 
 /* ===================== TELEGRAM + ДОСТУП ===================== */
@@ -334,52 +337,48 @@ async function runSearch(){
   const seq=++_seq;
   const q=document.getElementById('q').value.trim();
   if(!q){ toast('Введите запрос'); return; }
-  const groups=parseQuery(q); if(!groups.length){ toast('Пустой запрос'); return; }
-  const res=document.getElementById('res'); res.innerHTML=''; setStatus('Ищу…');
-  let docs=[];
-  const numMode = /^\d{1,7}$/.test(q);
+  const groups=parseQuery(q); _groups=groups; if(!groups.length){ toast('Пустой запрос'); return; }
+  const res=document.getElementById('res'); res.innerHTML='';
+  const head=info('Ищу…'); res.appendChild(head);
+  try{ localStorage.setItem('muslimoon_state',JSON.stringify({tab,q,cols:[...selCols]})); }catch(e){}
+  const numMode=/^\d{1,7}$/.test(q);
+  let count=0; const CAP=200;
+  const setHead=(done)=>{ head.textContent = count
+      ? ('Найдено: '+count+(count>CAP?' (показаны первые '+CAP+')':'')+(done?'':' · ищу…'))
+      : (done?'Ничего не найдено 🤷':'Ищу…'); };
+  const add=(d)=>{ if(count<CAP) res.appendChild(makeCard(d)); count++; };
   if(tab==='hadith'){
-    const codes = selCols.size ? [...selCols] : COLLECTIONS.map(c=>c.code);
+    await loadReverse();
+    const ORDER=['bukhari','muslim','abudawud','tirmidhi','ibnmajah','nasai','malik','ahmad','muhaymin'];
+    const codes=ORDER.filter(c=>COLLECTIONS.some(x=>x.code===c) && (!selCols.size||selCols.has(c)));
     for(const code of codes){
       if(seq!==_seq) return;
       try{
         if(numMode){
-          if(code==='muhaymin'){ const arr=await loadMuhaymin(); const h=arr.find(x=>String(x.n)===q); if(h) docs.push({type:'m',h}); }
-          else if(code==='ahmad'){ const arr=await loadAhmad(); const h=arr.find(x=>x.num===q); if(h) docs.push({type:'h',code:'ahmad',h}); }
-          else{ const h=await getOne(code,q); if(h) docs.push({type:'h',code,h}); }
+          let h=null;
+          if(code==='muhaymin'){ const a=await loadMuhaymin(); h=a.find(x=>String(x.n)===q); if(h) add({type:'m',h}); }
+          else if(code==='ahmad'){ const a=await loadAhmad(); h=a.find(x=>x.num===q); if(h) add({type:'h',code:'ahmad',h}); }
+          else { h=await getOne(code,q); if(h) add({type:'h',code,h}); }
         } else {
-          if(code==='muhaymin'){ const arr=await loadMuhaymin();
-            arr.forEach(h=>{ if(docMatch(h,groups,modes)) docs.push({type:'m',h}); }); }
-          else if(code==='ahmad'){ const arr=await loadAhmad();
-            arr.forEach(h=>{ if(docMatch(h,groups,modes)) docs.push({type:'h',code:'ahmad',h}); }); }
-          else{ const arr=await loadCollection(code);
-            arr.forEach(h=>{ if(docMatch(h,groups,modes)) docs.push({type:'h',code,h}); }); }
+          let arr;
+          if(code==='muhaymin') arr=await loadMuhaymin();
+          else if(code==='ahmad') arr=await loadAhmad();
+          else arr=await loadCollection(code);
+          if(seq!==_seq) return;
+          for(const h of arr){ if(docMatch(h,groups,modes)) add(code==='muhaymin'?{type:'m',h}:{type:'h',code,h}); }
         }
-      }catch(e){ toast('Не загрузился: '+nameOf(code)); }
+      }catch(e){}
+      if(seq!==_seq) return; setHead(false);
     }
-    await loadReverse();
-  }else{
-    const arr=await loadQuran(); arr.forEach(v=>{ if(docMatch(v,groups,modes)) docs.push({type:'q',v}); });
+    setHead(true);
+  } else {
+    try{ const arr=await loadQuran(); if(seq!==_seq) return;
+      for(const v of arr){ if(docMatch(v,groups,modes)) add({type:'q',v}); } }catch(e){}
+    setHead(true);
   }
-  if(seq!==_seq) return;
-  setStatus('');
-  try{ localStorage.setItem('muslimoon_state',JSON.stringify({tab,q,cols:[...selCols]})); }catch(e){}
-  if(!docs.length){ res.innerHTML='<div class="status">Ничего не найдено 🤷</div>'; return; }
-  _results=docs; _groups=groups; _shown=0;
-  res.appendChild(info('Найдено: '+docs.length));
-  renderMore();
+  if(!count && seq===_seq){ res.innerHTML='<div class="status">Ничего не найдено 🤷</div>'; }
 }
-function renderMore(){
-  const res=document.getElementById('res');
-  const old=document.getElementById('moreBtn'); if(old) old.remove();
-  const end=Math.min(_shown+50,_results.length);
-  for(let i=_shown;i<end;i++){ const d=_results[i];
-    res.appendChild(d.type==='q'?cardAyah(d,_groups):(d.type==='m'?cardMuh(d,_groups):cardHadith(d,_groups))); }
-  _shown=end;
-  if(_shown<_results.length){ const b=document.createElement('button'); b.id='moreBtn'; b.className='go';
-    b.style.cssText='display:block;margin:10px auto;padding:10px 18px';
-    b.textContent='Показать ещё ('+(_results.length-_shown)+')'; b.onclick=renderMore; res.appendChild(b); }
-}
+function makeCard(d){ return d.type==='q'?cardAyah(d,_groups):(d.type==='m'?cardMuh(d,_groups):cardHadith(d,_groups)); }
 async function getOne(code,num){
   try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-'+code+'/'+num+'.min.json')).json();
     const h=(j.hadiths||[])[0]; if(h){ const raw=(h.text||'').replace(/\s+/g,' ').trim();
@@ -403,7 +402,7 @@ function cardMuh(d,groups){
   const {h}=d; const card=document.createElement('div');card.className='card';
   const ar=document.createElement('div');ar.className='ar';ar.innerHTML=highlight(h.text,groups,modes);card.appendChild(ar);
   const meta=document.createElement('div');meta.className='meta';
-  meta.innerHTML='<span class="badge muh">المهيمن №'+h.n+'</span>'+
+  meta.innerHTML='<span class="badge muh">المهيمن №'+h.n+' · مرشد بن يوسف</span>'+
     '<span class="src" style="direction:rtl">'+esc(h.b||'')+' › '+esc(h.c||'')+'</span>';
   if(h.rc>1) meta.innerHTML+='<span class="grade">риваятов: '+h.rc+'</span>';
   addTr(meta,card,h.text); card.appendChild(meta); return card;
@@ -525,13 +524,15 @@ document.getElementById('goBtn').onclick=runSearch;
 })();
 document.getElementById('neuroRun').onclick=neuroRun;
 function openLink(u){ try{ if(tg&&tg.openLink) tg.openLink(u); else window.open(u,'_blank'); }catch(e){ try{window.open(u,'_blank');}catch(_){} } }
-document.getElementById('brand').onclick=()=>openLink('https://www.youtube.com/@MUSLIMOON.TT2024');
+function goHome(){ document.getElementById('q').value=''; document.getElementById('res').innerHTML=''; setStatus(''); document.querySelector('.tab[data-tab="hadith"]').click(); try{window.scrollTo(0,0);}catch(e){} }
+document.getElementById('brand').onclick=goHome;
 document.getElementById('helpBtn').onclick=()=>{ document.getElementById('helpModal').style.display='flex'; };
 document.getElementById('helpClose').onclick=()=>{ document.getElementById('helpModal').style.display='none'; };
+var _yt=document.getElementById('ytLink'); if(_yt) _yt.onclick=()=>openLink('https://www.youtube.com/@MUSLIMOON.TT2024');
 
 if(userAllowed()){
   document.getElementById('app').style.display='block';
-  if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · поиск по хадисам, аятам и аль-Мухаймин'; }
+  if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v5 · хадисы · аяты · аль-Мухаймин'; }
   try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
     if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
       (st.cols||[]).forEach(c=>selCols.add(c));
