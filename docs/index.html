@@ -14,19 +14,20 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
        background:var(--bg);color:var(--text);font-size:16px;line-height:1.5}
-  .wrap{max-width:820px;margin:0 auto;padding:12px}
+  .wrap{max-width:820px;margin:0 auto;padding:12px;padding-top:calc(16px + env(safe-area-inset-top,0px))}
   /* шапка/бренд */
-  .brand{display:flex;align-items:center;gap:10px;justify-content:center;margin:6px 0 4px;position:relative}
+  .brand{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 0}
+  .bleft{display:flex;align-items:center;gap:8px;min-width:0}
   .logo{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;
         border:2px solid #2f7be6;
         box-shadow:0 0 10px #1e6fd6aa, inset 0 0 8px #0008;font-weight:800;font-size:22px;
         background:radial-gradient(circle at 50% 35%,#3a4658,#0c1118);
         color:#dfe7ef;text-shadow:0 1px 2px #000}
-  .brand h1{font-size:19px;margin:0;letter-spacing:.3px}
+  .brand h1{font-size:17px;margin:0;letter-spacing:.2px;white-space:nowrap}
   .brand .b{color:#3da5ff}
   .sub{text-align:center;color:var(--hint);font-size:12px;margin-bottom:12px}
-  .gear{position:absolute;right:0;top:2px;background:var(--card);border:1px solid var(--border);
-        border-radius:10px;padding:6px 10px;font-size:13px;cursor:pointer;display:none}
+  .gear{flex:none;background:var(--card);border:1px solid var(--border);
+        border-radius:10px;padding:6px 9px;font-size:12px;cursor:pointer;display:none}
   .tabs{display:flex;gap:8px;margin-bottom:12px}
   .tab{flex:1;padding:11px;text-align:center;border-radius:12px;background:var(--card);
        border:1px solid var(--border);font-weight:600;cursor:pointer}
@@ -95,8 +96,10 @@
 
 <div class="wrap" id="app" style="display:none">
   <div class="brand">
-    <div class="logo">М</div>
-    <h1><span class="b">M</span>uslimoon <span class="b">Bot</span></h1>
+    <div class="bleft">
+      <div class="logo">М</div>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span></h1>
+    </div>
     <div class="gear" id="gear">⚙️ Управление</div>
   </div>
   <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин</div>
@@ -169,6 +172,7 @@ const BACKEND_URL = ""; // пусто = перевод/полный-ИИ чер�
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
 const MUHAYMIN_URL = "./muhaymin.json";
+const AHMAD_URL = "./ahmad.json";
 const EDITION_URL = code => `https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-${code}.min.json`;
 const COLLECTIONS = [
   {code:'muhaymin',ru:'аль-Мухаймин',ar:'المهيمن',special:true},
@@ -180,6 +184,7 @@ const COLLECTIONS = [
   {code:'nasai',ru:'Насаи',ar:'النسائي'},
   {code:'malik',ru:'Малик',ar:'مالك'},
   {code:'darimi',ru:'Дарими',ar:'الدارمي'},
+  {code:'ahmad',ru:'Ахмад',ar:'أحمد'},
 ];
 
 /* ===================== TELEGRAM + ДОСТУП ===================== */
@@ -226,8 +231,8 @@ function parseQuery(q){
   }).filter(g=>g.length);
 }
 function termMatch(term,doc,modes){
-  if(modes.diac) return doc.rawN.indexOf(term.t.replace(/\s+/g,' ').trim())!==-1;
-  if(modes.root){ const ws=canon(term.t).split(' ').map(stem).filter(Boolean); return ws.every(w=>doc.stem.indexOf(w)!==-1); }
+  if(modes.diac) return doc.text.indexOf(term.t.replace(/\s+/g,' ').trim())!==-1;
+  if(modes.root){ if(!doc._st) doc._st=stemText(doc.text); const ws=canon(term.t).split(' ').map(stem).filter(Boolean); return ws.every(w=>doc._st.indexOf(w)!==-1); }
   return doc.norm.indexOf(canon(term.t))!==-1;
 }
 function docMatch(doc,groups,modes){
@@ -260,23 +265,27 @@ async function loadCollection(code){
   setStatus('Загружаю: '+nameOf(code)+'…');
   const j=await (await fetch(EDITION_URL(code))).json();
   cache[code]=(j.hadiths||[]).map(h=>{ const raw=(h.text||'').replace(/\s+/g,' ').trim();
-    return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),norm:canon(raw),rawN:raw,stem:stemText(raw)}; });
+    return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),norm:canon(raw)}; });
   return cache[code];
 }
+let ahmadArr=null;
+async function loadAhmad(){ if(ahmadArr)return ahmadArr; setStatus('Загружаю Муснад Ахмада (большой)…');
+  const j=await (await fetch(AHMAD_URL)).json();
+  ahmadArr=j.map(x=>({num:String(x.n),text:x.t||'',grade:x.g||'',norm:canon(x.t||'')})); return ahmadArr; }
 async function loadQuran(){ if(quran)return quran; setStatus('Загружаю Коран…');
   const j=await (await fetch(QURAN_URL)).json();
   quran=j.map(v=>{ const raw=(v.text||'').replace(/﻿/g,'').replace(/\s+/g,' ').trim();
-    return {s:v.s,a:v.a,text:raw,norm:canon(raw),rawN:raw,stem:stemText(raw)}; }); return quran; }
-async function loadMuhaymin(){ if(muh)return muh; setStatus('Загружаю аль-Мухаймин (~3 МБ)…');
+    return {s:v.s,a:v.a,text:raw,norm:canon(raw)}; }); return quran; }
+async function loadMuhaymin(){ if(muh)return muh; setStatus('Загружаю аль-Мухаймин…');
   const j=await (await fetch(MUHAYMIN_URL)).json();
-  muh=j.map(x=>{ const raw=(x.t||''); return {n:x.n,b:x.b,c:x.c,rc:x.rc,text:raw,norm:canon(raw),rawN:raw,stem:stemText(raw)}; }); return muh; }
+  muh=j.map(x=>({n:x.n,b:x.b,c:x.c,rc:x.rc,text:x.t||'',norm:canon(x.t||'')})); return muh; }
 function nameOf(c){const x=COLLECTIONS.find(k=>k.code===c);return x?x.ru:c;}
 function arOf(c){const x=COLLECTIONS.find(k=>k.code===c);return x?x.ar:c;}
 
 /* ===================== UI STATE ===================== */
-let tab='hadith';
+let tab='hadith'; var _seq=0;
 const modes={diac:false,root:false,neuro:false};
-const selCols=new Set(COLLECTIONS.map(c=>c.code)); // по умолчанию ВСЕ
+const selCols=new Set(); // пусто = искать ВЕЗДЕ (как sunnah); выбор чипов = сузить
 
 function renderCols(){
   const box=document.getElementById('cols');
@@ -287,7 +296,7 @@ function renderCols(){
     d.textContent=c.ru;
     d.onclick=()=>{ selCols.has(c.code)?selCols.delete(c.code):selCols.add(c.code); renderCols(); };
     box.appendChild(d); });
-  document.getElementById('colCount').textContent='('+selCols.size+'/'+COLLECTIONS.length+')';
+  document.getElementById('colCount').textContent = selCols.size? '('+selCols.size+' выбрано)' : '(везде)';
 }
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); t.classList.add('active');
@@ -305,17 +314,21 @@ document.getElementById('selNone').onclick=()=>{ selCols.clear(); renderCols(); 
 
 /* ===================== ПОИСК ===================== */
 async function runSearch(){
+  const seq=++_seq;
   const q=document.getElementById('q').value.trim();
   if(!q){ toast('Введите запрос'); return; }
   const groups=parseQuery(q); if(!groups.length){ toast('Пустой запрос'); return; }
   const res=document.getElementById('res'); res.innerHTML=''; setStatus('Ищу…');
   let docs=[];
   if(tab==='hadith'){
-    if(!selCols.size){ selCols.add('muhaymin'); selCols.add('bukhari'); renderCols(); }
-    for(const code of selCols){
+    const codes = selCols.size ? [...selCols] : COLLECTIONS.map(c=>c.code);
+    for(const code of codes){
+      if(seq!==_seq) return;
       try{
         if(code==='muhaymin'){ const arr=await loadMuhaymin();
           arr.forEach(h=>{ if(docMatch(h,groups,modes)) docs.push({type:'m',h}); }); }
+        else if(code==='ahmad'){ const arr=await loadAhmad();
+          arr.forEach(h=>{ if(docMatch(h,groups,modes)) docs.push({type:'h',code:'ahmad',h}); }); }
         else{ const arr=await loadCollection(code);
           arr.forEach(h=>{ if(docMatch(h,groups,modes)) docs.push({type:'h',code,h}); }); }
       }catch(e){ toast('Не загрузился: '+nameOf(code)); }
@@ -324,6 +337,7 @@ async function runSearch(){
   }else{
     const arr=await loadQuran(); arr.forEach(v=>{ if(docMatch(v,groups,modes)) docs.push({type:'q',v}); });
   }
+  if(seq!==_seq) return;
   setStatus('');
   if(!docs.length){ res.innerHTML='<div class="status">Ничего не найдено 🤷</div>'; return; }
   const total=docs.length; docs=docs.slice(0,250);
@@ -453,7 +467,12 @@ let toastT; function toast(t){const el=document.getElementById('toast');el.textC
 
 /* ===================== СТАРТ ===================== */
 document.getElementById('goBtn').onclick=runSearch;
-document.getElementById('q').addEventListener('keydown',e=>{if(e.key==='Enter')runSearch();});
+(function(){ let t; const el=document.getElementById('q');
+  el.addEventListener('keydown',e=>{ if(e.key==='Enter'){ clearTimeout(t); runSearch(); } });
+  el.addEventListener('input',()=>{ clearTimeout(t); const v=el.value.trim();
+    if(v.length<2){ if(!v){document.getElementById('res').innerHTML='';setStatus('');} return; }
+    t=setTimeout(runSearch,350); });
+})();
 document.getElementById('neuroRun').onclick=neuroRun;
 
 if(userAllowed()){
