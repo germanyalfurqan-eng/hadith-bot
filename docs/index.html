@@ -141,7 +141,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v95</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v96</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -443,7 +443,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v95';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v96';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1315,7 +1315,11 @@ function addTr(meta,card,text,ayah,fav){
   const cp=document.createElement('button');cp.className='tr-btn';cp.textContent='⧉';
   cp.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
   cp.title='Копировать';
-  cp.onclick=()=>{ let s=text; if(fav&&fav.label) s+='\n— '+fav.label; const o=card.querySelector('.tr-out'); if(o&&o.style.display!=='none'&&o.textContent) s+='\n\n'+o.textContent; copyWithSig(s); };
+  // копируем матн + (если показан) ПЕРЕВОД. Берём именно блок перевода `out` (а не первый .tr-out —
+  // огласовки/тахридж/передатчики тоже .tr-out) и чистый текст из dataset.tr (без подписи/ссылки «обновить»).
+  cp.onclick=()=>{ let s=text; if(fav&&fav.label) s+='\n— '+fav.label;
+    if(out && out.style.display!=='none'){ const trv=(out.dataset.tr||'').trim()||(out.textContent||'').trim(); if(trv) s+='\n\n'+trv; }
+    copyWithSig(s); };
   meta.appendChild(cp);
   const tr=document.createElement('button');tr.className='tr-btn';
   const _ref0=ayah?null:refOf(fav); const _ready=_ref0&&READY_RU.indexOf(_ref0.source)!==-1;
@@ -1626,7 +1630,7 @@ async function doTranslateAyah(s,a,out,btn,ed){
   const other=ed==='rus-abuadel'?'rus-elmirkuliev':'rus-abuadel'; const otherNm=other==='rus-abuadel'?'Абу Адель':'Кулиев';
   try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/'+ed+'/'+s+'/'+a+'.min.json')).json();
     out.innerHTML='<span style="color:var(--hint);font-style:italic">Перевод ('+nm+'):</span> '+esc(j.text||'—')+' <span class="qsw" style="color:var(--link);cursor:pointer;font-size:12px;white-space:nowrap">⇄ '+otherNm+'</span>';
-    out.style.display='block';
+    out.dataset.tr='Перевод ('+nm+'): '+(j.text||'—'); out.style.display='block';
     const sw=out.querySelector('.qsw'); if(sw) sw.onclick=()=>doTranslateAyah(s,a,out,btn,other); }
   catch(e){ toast('Не удалось загрузить перевод'); }
   btn.disabled=false; btn.textContent=ot;
@@ -1864,7 +1868,7 @@ async function doTranslate(text,out,btn,ref,force){
     if(ref.source==='muslim'){ const mm=(cache['muslim']||[]).find(h=>String(h.num)===String(ref.num)); rnum=(mm&&mm.fw)?mm.fw:null; }  // Муслим: Абд аль-Баки→fawazahmed0 для готового перевода
     if(rnum!=null){ try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-'+ref.source+'/'+rnum+'.min.json')).json();
       const h=(j.hadiths||[])[0];
-      if(h && h.text){ out.innerHTML=trHead(ref)+lbl('📘 Перевод (готовый, профессиональный):')+esc(cleanRu(h.text)); out.style.display='block'; restore(); return; }
+      if(h && h.text){ const rt=cleanRu(h.text); out.innerHTML=trHead(ref)+lbl('📘 Перевод (готовый, профессиональный):')+esc(rt); out.dataset.tr=rt; out.style.display='block'; restore(); return; }
     }catch(e){} }
   }
   if(!BACKEND_URL){ toast('Перевод заработает после подключения сервера (DeepSeek)'); restore(); return; }
@@ -1881,7 +1885,7 @@ async function doTranslate(text,out,btn,ref,force){
                 : (j.cached ? ('♻️ Перевод (из нашей базы'+(e&&e.d?(', ИИ от '+e.d):'')+', бесплатно):') : '🧠 Перевод (сделал ИИ — возможны ошибки):');
       // «🔄 обновить» — переперевести заново (чинит оборванный/неточный перевод). Тратит ключ → подтверждение.
       const redo='<span class="trRedo" style="cursor:pointer;color:var(--link);text-decoration:underline;font-size:12px;white-space:nowrap">🔄 обновить перевод</span>';
-      out.innerHTML=trHead(ref)+lbl(tag)+esc(j.translation)+'<div style="margin-top:7px;opacity:.85">'+redo+'</div>'; out.style.display='block'; btn.disabled=false;
+      out.innerHTML=trHead(ref)+lbl(tag)+esc(j.translation)+'<div style="margin-top:7px;opacity:.85">'+redo+'</div>'; out.dataset.tr=j.translation; out.style.display='block'; btn.disabled=false;
       const rb=out.querySelector('.trRedo'); if(rb) rb.onclick=()=>{ if(confirm('Переперевести заново нейросетью? (потратит запрос к ИИ)')) doTranslate(text,out,btn,ref,true); };
       if(src && (num||num===0)) setTrBase(btn, e||{}, src);   // дальше эта кнопка = «♻️ из базы»
       else restore();
