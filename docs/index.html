@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v57</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v58</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -375,7 +375,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v57';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v58';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -585,6 +585,13 @@ function gradeOf(h){ const g=h.grades&&h.grades[0]; return g?(g.grade||'').toStr
 const GRADE_NOTE='Степень достоверности — по источнику (учёные/sunnah.com). Это НЕ наша проверка: наша готовится, возможны уточнения. Ждите нашу отметку ✅.';
 function gradeBadge(g){ if(!g) return '';
   return '<span class="grade" title="'+GRADE_NOTE+'">'+esc(g)+'</span><span class="srcchk" title="'+GRADE_NOTE+'">⚠ не наша проверка</span>'; }
+const SAHIHAYN=['bukhari','muslim'];
+const NOGRADE_NOTE='Оценки достоверности от учёных пока нет в источнике. Наша проверка готовится — ожидайте отметку ✅.';
+/* Достоверность на КАЖДОМ хадисе: Сахихайн → صحيح; есть оценка → она + «не наша проверка»; нет → «нет оценки — ожидайте». */
+function authBadge(code, grade){
+  if(SAHIHAYN.indexOf(code)!==-1) return '<span class="grade" style="background:#10331f;color:#bff5d4;border:1px solid #2e9b5b" title="Хадис из ас-Сахихайн (аль-Бухари/Муслим) — достоверность по согласию учёных (иджма).">صحيح · الصحيحين</span>';
+  if(grade) return gradeBadge(grade);
+  return '<span class="srcchk" title="'+NOGRADE_NOTE+'" style="border:1px dashed #6b5a2e;border-radius:8px;padding:1px 6px">⚠ нет оценки — ожидайте нашу проверку</span>'; }
 async function loadCollection(code){
   if(cache[code]) return cache[code];
   setStatus('Загружаю: '+nameOf(code)+'…');
@@ -930,7 +937,7 @@ function wideCard(x){ const card=document.createElement('div');card.className='c
   const ar=document.createElement('div');ar.className='ar';
   ar.innerHTML=esc(x.text||'').replace(/&lt;mark&gt;/g,'<mark>').replace(/&lt;\/mark&gt;/g,'</mark>'); card.appendChild(ar);
   const meta=document.createElement('div');meta.className='meta';
-  if(x.hukm) meta.innerHTML=gradeBadge(x.hukm);
+  meta.innerHTML = x.hukm ? gradeBadge(x.hukm) : '<span class="srcchk" title="'+NOGRADE_NOTE+'" style="border:1px dashed #6b5a2e;border-radius:8px;padding:1px 6px">⚠ нет оценки — ожидайте нашу проверку</span>';
   const cp=document.createElement('button');cp.className='tr-btn';cp.textContent='⧉';cp.title='Копировать';
   cp.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
   cp.onclick=()=>copyWithSig((x.text||'').replace(/<\/?mark>/g,'')+(x.takhreej?('\n— '+x.takhreej):''));
@@ -981,10 +988,8 @@ function cardHadith(d,groups){
   const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(h.text,groups);card.appendChild(ar);
   const meta=document.createElement('div');meta.className='meta';
   meta.innerHTML='<span class="src">'+arOf(code)+' · №'+h.num+'</span>';
-  if(h.grade) meta.innerHTML+=gradeBadge(h.grade);
-  const key=code+' '+h.num; let m=reverse&&(reverse[key]||reverse[code+' '+toAr(h.num)]);
-  if(m&&m.length){ const nums=[...new Set(m.map(x=>x.m))].join(', ');
-    meta.innerHTML+='<span class="badge" title="Этот хадис есть в книге аль-Мухаймин (الموحد المهيمن) под №'+nums+'. Это ссылка-указатель, НЕ оценка достоверности.">📖 في المهيمن №'+nums+'</span>'; }
+  meta.innerHTML+=authBadge(code, h.grade);   // достоверность ВСЕГДА (الصحيحين / оценка+«не наша» / нет оценки)
+  // «في المهيمن №…» больше НЕ инлайн-бейджем — показывается в «🔗 Где ещё передаётся».
   addTr(meta,card,h.text,null,{k:'h|'+code+'|'+h.num,type:'h',coll:arOf(code),label:arOf(code)+' №'+h.num,text:(h.text||'').slice(0,200)}); card.appendChild(meta); return card;
 }
 function cardMuh(d,groups){
@@ -1053,7 +1058,7 @@ function addTr(meta,card,text,ayah,fav){
       addHelpQ(meta,'«🧠 Заказать огласовки»: ИИ расставит تشكيل (там, где их нет). Может ошибаться. Тратит ключ ОДИН раз — дальше из базы для всех.');
     }
   }
-  if(!ayah){ const tx=document.createElement('button');tx.className='tr-btn';tx.textContent='🔗 Где ещё';tx.title='Где ещё передаётся этот хадис (التخريج) — по доступным сборникам';
+  if(!ayah){ const tx=document.createElement('button');tx.className='tr-btn';tx.textContent='🔗 Где ещё передаётся';tx.title='Где ещё передаётся этот хадис (التخريج) + есть ли он в аль-Мухаймин';
     tx.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
     const txout=document.createElement('div');txout.className='tr-out';
     tx.onclick=()=>doTakhrij(text, refOf(fav), txout, tx); meta.appendChild(tx); card.appendChild(txout); }
@@ -1080,7 +1085,12 @@ async function doTakhrij(text, ref, out, btn){
     }catch(e){}
   }
   const entries=Object.entries(found);
-  let html='<div style="color:var(--hint);font-size:12px;margin-bottom:4px">🔗 التخريج — также передаётся в сборниках:</div>';
+  let html='';
+  // в аль-Мухаймин? (наш обратный индекс по этому источнику+номеру)
+  try{ if(reverse && ref && ref.source){ const m=reverse[ref.source+' '+ref.num]||reverse[ref.source+' '+toAr(String(ref.num))];
+    if(m&&m.length){ const nums=[...new Set(m.map(x=>x.m))].join(', ');
+      html+='<div style="background:#1d3a5f;border:1px solid #2f5b8f;border-radius:8px;padding:5px 8px;margin-bottom:6px;font-size:13px">📖 Есть в аль-Мухаймин (الموحد المهيمن): №'+esc(nums)+' <span style="color:#9fb4cc">(книга в обработке)</span></div>'; } } }catch(e){}
+  html+='<div style="color:var(--hint);font-size:12px;margin-bottom:4px">🔗 التخريج — также передаётся в сборниках:</div>';
   if(!entries.length) html+='<span class="hint">совпадений не нашёл (или хадис уникален в доступных сборниках).</span>';
   else entries.forEach(([code,nums])=>{ html+='<div style="direction:rtl;font-size:14px">'+esc(arOf(code))+': '+nums.map(n=>'№'+n).join('، ')+'</div>'; });
   out.innerHTML=html; btn.disabled=false; btn.textContent=prev;
