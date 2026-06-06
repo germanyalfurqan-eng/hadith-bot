@@ -141,7 +141,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v90</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v91</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -442,7 +442,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v90';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v91';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -682,6 +682,11 @@ function authBadge(code, grade){
   return '<span class="srcchk" title="'+NOGRADE_NOTE+'" style="border:1px dashed #6b5a2e;border-radius:8px;padding:1px 6px">⏳ ожидается наша проверка</span>'; }
 async function loadCollection(code){
   if(cache[code]) return cache[code];
+  if(code==='muslim'){   // Муслим — нумерация Абд аль-Баки (как sunnah.com): 2363=пальмы. fw = номер fawazahmed0 для готового перевода
+    setStatus('Загружаю Сахих Муслим (Абд аль-Баки)…');
+    const j=await (await fetch('./muslim_baqi.json')).json();
+    cache[code]=j.map(x=>({num:String(x.num),text:(x.ar||'').replace(/\s+/g,' ').trim(),grade:'',fw:x.fw||null,norm:''}));
+    return cache[code]; }
   setStatus('Загружаю: '+nameOf(code)+'…');
   const j=await (await fetch(EDITION_URL(code))).json();
   cache[code]=(j.hadiths||[]).map(h=>{ const raw=(h.text||'').replace(/\s+/g,' ').trim();
@@ -1151,6 +1156,7 @@ function renderResultsView(){
     res.appendChild(h); res.appendChild(body); });
 }
 async function getOne(code,num){
+  if(code==='muslim'){ const a=await loadCollection('muslim'); return a.find(x=>x.num===String(num))||null; }   // Муслим — из Абд аль-Баки (наш файл)
   try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-'+code+'/'+num+'.min.json')).json();
     const h=(j.hadiths||[])[0]; if(h){ const raw=(h.text||'').replace(/\s+/g,' ').trim();
       return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),norm:''}; } }catch(e){}
@@ -1722,10 +1728,12 @@ async function doTranslate(text,out,btn,ref){
   const restore=()=>{ btn.disabled=false; btn.textContent=orig; btn.style.cssText=origStyle; };
   // 1) Готовый профессиональный перевод (Бухари/Муслим/Абу Дауд) — бесплатно, мгновенно, без траты ключа
   if(ref && READY_RU.indexOf(ref.source)!==-1 && (ref.num||ref.num===0)){
-    try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-'+ref.source+'/'+ref.num+'.min.json')).json();
+    let rnum=ref.num;
+    if(ref.source==='muslim'){ const mm=(cache['muslim']||[]).find(h=>String(h.num)===String(ref.num)); rnum=(mm&&mm.fw)?mm.fw:null; }  // Муслим: Абд аль-Баки→fawazahmed0 для готового перевода
+    if(rnum!=null){ try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-'+ref.source+'/'+rnum+'.min.json')).json();
       const h=(j.hadiths||[])[0];
       if(h && h.text){ out.innerHTML=trHead(ref)+lbl('📘 Перевод (готовый, профессиональный):')+esc(cleanRu(h.text)); out.style.display='block'; restore(); return; }
-    }catch(e){}
+    }catch(e){} }
   }
   if(!BACKEND_URL){ toast('Перевод заработает после подключения сервера (DeepSeek)'); restore(); return; }
   try{ const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
