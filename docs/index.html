@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v76</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v77</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -403,7 +403,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v76';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v77';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1352,27 +1352,66 @@ function isnadNarrators(text){
   });
   return [...new Set(parts)].slice(0,12);
 }
+// Подсветить передатчиков ПРЯМО в тексте иснада (клик по имени → биография). Безопасно: ходим по текстовым узлам.
+function highlightNarratorsInDiv(ad, names, onClick){
+  if(ad.dataset.narrOn) return; ad.dataset.narrOn='1';
+  const pats=names.map(nm=>{ const c=canon(nm); if(!c) return null;
+    try{ return {nm, re:new RegExp([...c].map(ch=> ch===' ' ? '[\\s'+DIAC+']+' : letterClass(ch)+'['+DIAC+']*').join(''))}; }catch(e){ return null; } }).filter(Boolean);
+  const walker=document.createTreeWalker(ad, NodeFilter.SHOW_TEXT, null); const nodes=[];
+  while(walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(node=>{ const txt=node.nodeValue; const ms=[];
+    for(const p of pats){ const re=new RegExp(p.re.source,'g'); let m;
+      while((m=re.exec(txt))){ ms.push({i:m.index,len:m[0].length,nm:p.nm}); if(!m[0].length) re.lastIndex++; } }
+    if(!ms.length) return;
+    ms.sort((a,b)=>a.i-b.i || b.len-a.len);
+    const picked=[]; let lastEnd=-1;
+    for(const m of ms){ if(m.i>=lastEnd){ picked.push(m); lastEnd=m.i+m.len; } }   // без перекрытий
+    const frag=document.createDocumentFragment(); let pos=0;
+    picked.forEach(m=>{ if(m.i>pos) frag.appendChild(document.createTextNode(txt.slice(pos,m.i)));
+      const span=document.createElement('span'); span.textContent=txt.slice(m.i,m.i+m.len);
+      span.style.cssText='cursor:pointer;color:#ffd479;border-bottom:1px dashed #ffd479;font-weight:600'; span.title='Нажми: кто это + слова учёных';
+      span.onclick=(e)=>{ e.stopPropagation(); onClick(m.nm); };
+      frag.appendChild(span); pos=m.i+m.len; });
+    if(pos<txt.length) frag.appendChild(document.createTextNode(txt.slice(pos)));
+    node.parentNode.replaceChild(frag, node);
+  });
+}
+async function showNarratorBio(name, out){
+  if(!BACKEND_URL){ toast('Нужен сервер'); return; }
+  out.style.display='block'; out.innerHTML='<span class="hint">Ищу «'+esc(name)+'» в موسوعة رواة الحديث…</span>';
+  try{ const r=await fetch(BACKEND_URL+'/narrator?q='+encodeURIComponent(name)+'&initData='+encodeURIComponent(INITDATA));
+    const j=await r.json().catch(()=>({})); let rs=j.results||[];
+    if(!rs.length){ out.innerHTML='<div class="hint">«'+esc(name)+'» не нашёл в энциклопедии равиев (имя в иснаде бывает сокращено).</div>'; return; }
+    const cn=canon(name); rs=rs.slice().sort((a,b)=>{ const A=canon(a.title||'').indexOf(cn), B=canon(b.title||'').indexOf(cn); return (A<0?99:A)-(B<0?99:B); });
+    const main=rs[0];
+    let html='<div style="border:1px solid var(--border);border-radius:12px;padding:10px;margin:6px 0;background:rgba(108,92,231,.06)">'
+      +'<div style="font-weight:700;direction:rtl;font-size:16px">'+esc(main.title)+'</div>'
+      +'<div style="color:var(--hint);font-size:12px;margin:4px 0 8px">📖 Источник: <b>موسوعة رواة الحديث</b> — биография · الطبقة · الوفاة · أقوال العلماء</div>'
+      +'<button class="go nlink" data-u="'+esc(main.url)+'" style="padding:6px 12px">📖 Открыть полную карточку →</button>';
+    if(rs.length>1) html+='<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--hint);font-size:12px">Другие совпадения ('+(rs.length-1)+')</summary>'+rs.slice(1,6).map(x=>'<div style="direction:rtl;margin:4px 0;font-size:14px"><span class="nlink" data-u="'+esc(x.url)+'" style="color:var(--link);cursor:pointer">• '+esc(x.title)+'</span></div>').join('')+'</details>';
+    html+='</div>';
+    out.innerHTML=html;
+    out.querySelectorAll('.nlink').forEach(b=>b.onclick=()=>openLink(b.dataset.u));
+  }catch(e){ out.innerHTML='<div class="hint">🔧 Сервис недоступен — попробуй позже.</div>'; }
+}
 async function doNarrators(text, out, btn){
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }
-  btn.disabled=true; const prev=btn.textContent; btn.textContent='…'; out.style.display='block';
   const names=isnadNarrators(text);
-  if(!names.length){ out.innerHTML='<span class="hint">Не удалось выделить цепочку передатчиков из этого текста.</span>'; btn.disabled=false; btn.textContent=prev; return; }
-  out.innerHTML='<div style="color:var(--hint);font-size:12px;margin-bottom:6px">👤 Цепочка передатчиков — нажми на имя: кто это и слова учёных (موسوعة رواة الحديث):</div>';
-  const wrap=document.createElement('div'); wrap.style.cssText='display:flex;flex-wrap:wrap;gap:6px;direction:rtl'; out.appendChild(wrap);
-  const box=document.createElement('div'); box.style.cssText='margin-top:8px'; out.appendChild(box);
-  names.forEach(nm=>{ const c=document.createElement('span'); c.className='chip'; c.textContent=nm; c.style.cssText='cursor:pointer;font-size:14px';
-    c.onclick=async()=>{ [...wrap.children].forEach(x=>x.classList.remove('on')); c.classList.add('on');
-      box.innerHTML='<span class="hint">Ищу «'+esc(nm)+'»…</span>';
-      try{ const r=await fetch(BACKEND_URL+'/narrator?q='+encodeURIComponent(nm)+'&initData='+encodeURIComponent(INITDATA));
-        const j=await r.json().catch(()=>({})); const rs=j.results||[];
-        if(!rs.length){ box.innerHTML='<span class="hint">В энциклопедии равиев не нашёл по «'+esc(nm)+'». Попробуй другое имя из цепочки (имена бывают сокращены).</span>'; return; }
-        box.innerHTML='<div style="color:var(--hint);font-size:12px;margin-bottom:4px">📖 Нашёл в موسوعة رواة الحديث — нажми, чтобы открыть биографию и оценки учёных:</div>';
-        rs.forEach(x=>{ const d=document.createElement('div'); d.style.cssText='direction:rtl;margin:3px 0;font-size:14px';
-          const a=document.createElement('span'); a.textContent='• '+x.title; a.style.cssText='color:var(--link);cursor:pointer'; a.onclick=()=>openLink(x.url); d.appendChild(a); box.appendChild(d); });
-      }catch(e){ box.innerHTML='<span class="hint">🔧 Сервис недоступен — попробуй позже.</span>'; }
-    };
-    wrap.appendChild(c); });
-  btn.disabled=false; btn.textContent=prev;
+  if(!names.length){ out.style.display='block'; out.innerHTML='<span class="hint">Не удалось выделить цепочку передатчиков из этого текста.</span>'; return; }
+  const card=btn.closest('.card'); const arDivs=card?[...card.querySelectorAll('.ar')]:[];
+  if(!btn.dataset.on){
+    // 1-й клик — подсветить имена ПРЯМО в тексте иснада (клик по имени → биография)
+    btn.dataset.on='1'; btn.style.background='rgba(108,92,231,.20)'; btn.textContent='👤 Список передатчиков';
+    arDivs.forEach(ad=>highlightNarratorsInDiv(ad, names, nm=>showNarratorBio(nm,out)));
+    out.style.display='block'; out.innerHTML='<div class="hint" style="font-size:12px">👆 Передатчики в тексте <b style="color:#ffd479">подсвечены</b> — нажми на имя: кто это + слова учёных. Кнопка ещё раз — список именами.</div>';
+  } else {
+    // 2-й клик — список именами (тоже кликаются → биография)
+    out.style.display='block';
+    out.innerHTML='<div style="color:var(--hint);font-size:12px;margin-bottom:6px">👤 Передатчики цепочки — нажми на имя:</div>';
+    const wrap=document.createElement('div'); wrap.style.cssText='display:flex;flex-wrap:wrap;gap:6px;direction:rtl'; out.appendChild(wrap);
+    const box=document.createElement('div'); box.style.marginTop='8px'; out.appendChild(box);
+    names.forEach(nm=>{ const c=document.createElement('span'); c.className='chip'; c.textContent=nm; c.style.cssText='cursor:pointer;font-size:14px'; c.onclick=()=>{ [...wrap.children].forEach(x=>x.classList.remove('on')); c.classList.add('on'); showNarratorBio(nm,box); }; wrap.appendChild(c); });
+  }
 }
 function hasDiac(t){ return /[ً-ْٰـ]/.test(t||''); }
 /* по-настоящему ли огласован текст (а не пара случайных значков): доля огласованных букв */
