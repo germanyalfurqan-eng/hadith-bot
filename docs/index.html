@@ -130,7 +130,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v79</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v80</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -414,7 +414,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v79';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v80';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1191,6 +1191,11 @@ function addTr(meta,card,text,ayah,fav){
     if(out.style.display!=='none' && (out.textContent||'').trim()){ tr.dataset.shown='1'; if(tr.dataset.t0===undefined) tr.dataset.t0=tr.title||''; tr.style.boxShadow='0 0 8px rgba(74,222,128,.6)'; tr.title='Нажми ещё раз, чтобы скрыть перевод'; }
   };
   meta.appendChild(tr);
+  if(ayah){ const tf=document.createElement('button');tf.className='tr-btn';tf.textContent='📖 Тафсир';tf.title='Тафсир аята: Ибн Касир (рус/ар) / Табари';
+    tf.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
+    const tfout=document.createElement('div');tfout.className='tr-out';
+    tf.onclick=()=>{ if(tf.dataset.on==='1'){ tfout.style.display='none'; tf.dataset.on=''; tf.style.boxShadow=''; return; } doTafsir(ayah.s,ayah.a,tfout,tf); tf.dataset.on='1'; tf.style.boxShadow='0 0 8px rgba(74,222,128,.5)'; };
+    meta.appendChild(tf); card.appendChild(tfout); }
   if(!ayah){
     if(isVocalized(text)){
       // огласовки РЕАЛЬНО есть (по доле) → простая бесплатная кнопка «убрать/вернуть» (без ИИ)
@@ -1408,7 +1413,7 @@ async function showNarratorBio(name, out){
     let html='<div style="border:1px solid var(--border);border-radius:12px;padding:10px;margin:6px 0;background:rgba(108,92,231,.06)">'
       +'<div style="font-weight:700;direction:rtl;font-size:16px">'+esc(main.title)+'</div>'
       +'<div style="color:var(--hint);font-size:12px;margin:4px 0 8px">📖 Источник: <b>موسوعة رواة الحديث</b> — биография · الطبقة · الوفاة · أقوال العلماء</div>'
-      +'<button class="go nlink" data-u="'+esc(main.url)+'" style="padding:6px 12px">📖 Открыть полную карточку →</button>';
+      +'<button class="nlink" data-u="'+esc(main.url)+'" style="background:var(--btn);color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:12.5px;cursor:pointer">📖 Открыть карточку (моусу‘а)</button> <span class="hint" style="font-size:11px">(откроется в браузере)</span>';
     if(rs.length>1) html+='<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--hint);font-size:12px">Другие совпадения ('+(rs.length-1)+')</summary>'+rs.slice(1,6).map(x=>'<div style="direction:rtl;margin:4px 0;font-size:14px"><span class="nlink" data-u="'+esc(x.url)+'" style="color:var(--link);cursor:pointer">• '+esc(x.title)+'</span></div>').join('')+'</details>';
     html+='</div>';
     out.innerHTML=html;
@@ -1466,6 +1471,23 @@ async function doTranslateAyah(s,a,out,btn,ed){
     const sw=out.querySelector('.qsw'); if(sw) sw.onclick=()=>doTranslateAyah(s,a,out,btn,other); }
   catch(e){ toast('Не удалось загрузить перевод'); }
   btn.disabled=false; btn.textContent=ot;
+}
+/* ===== ТАФСИР аятов (Ибн Касир рус/ар, Табари ар) — готовые ayah-индексы, источник учёных ===== */
+const TAFSIRS=[{id:'ru-tafsir-ibne-kahtir',nm:'Ибн Касир (рус)'},{id:'ar-tafsir-ibn-kathir',nm:'Ибн Касир (ар)'},{id:'ar-tafsir-al-tabari',nm:'Табари (ар)'}];
+async function doTafsir(s,a,out,btn,ed){
+  ed = ed || 'ru-tafsir-ibne-kahtir';
+  out.style.display='block'; out.innerHTML='<span class="hint">Загружаю тафсир…</span>';
+  try{
+    const j=await (await fetch('https://cdn.jsdelivr.net/gh/spa5k/tafsir_api@main/tafsir/'+ed+'/'+s+'/'+a+'.json')).json();
+    let txt=(j.text||'').replace(/\[\[[^\]]*\]\]/g,'').replace(/\(\d+\)/g,'').trim();   // убрать редакторские [[…]]
+    const isAr=ed.indexOf('ar-')===0; const cur=(TAFSIRS.find(t=>t.id===ed)||{}).nm||'';
+    let html='<div style="margin:6px 0">'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">'+TAFSIRS.map(t=>'<span class="tfsw chip" data-ed="'+t.id+'" style="cursor:pointer;font-size:12px'+(t.id===ed?';background:var(--btn);color:#fff;border-color:var(--btn)':'')+'">'+t.nm+'</span>').join('')+'</div>'
+      +'<div style="color:var(--hint);font-size:12px;margin-bottom:4px">📖 Тафсир «'+esc(cur)+'» · аят '+s+':'+a+' <span style="opacity:.8">(источник учёных, не наша проверка)</span></div>'
+      +'<div style="'+(isAr?'direction:rtl;text-align:right;font-size:17px;line-height:1.9':'font-size:14px;line-height:1.65')+';max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:10px">'+(txt?esc(txt).replace(/\n+/g,'<br>'):'Для этого аята тафсир не найден в этом издании.')+'</div></div>';
+    out.innerHTML=html;
+    out.querySelectorAll('.tfsw').forEach(b=>b.onclick=()=>doTafsir(s,a,out,btn,b.dataset.ed));
+  }catch(e){ out.innerHTML='<div class="hint">🔧 Не удалось загрузить тафсир — попробуй позже.</div>'; }
 }
 function toAr(s){const m={'0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩'};return String(s).replace(/[0-9]/g,d=>m[d]);}
 
