@@ -13,9 +13,9 @@
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-       color:var(--text);font-size:16px;line-height:1.5;background-color:#070a10;
-       background-image:linear-gradient(rgba(8,12,20,.90),rgba(7,10,16,.965)),url('./bg.jpg');
-       background-repeat:no-repeat;background-position:center top;background-size:cover;background-attachment:fixed}
+       color:var(--text);font-size:16px;line-height:1.5;background:#070a10}
+  body::before{content:'';position:fixed;inset:0;z-index:-2;background:url('./bg.jpg') no-repeat center top;background-size:cover}
+  body::after{content:'';position:fixed;inset:0;z-index:-1;background:linear-gradient(rgba(8,12,20,.60),rgba(7,10,16,.85))}
   .wrap{max-width:820px;margin:0 auto;padding:12px;padding-top:calc(16px + env(safe-area-inset-top,0px))}
   /* шапка/бренд */
   .brand{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 0}
@@ -120,7 +120,7 @@
       <div class="gear" id="devBtn" style="display:none">🛠</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v40</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v41</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -144,7 +144,7 @@
   <div class="modes">
     <div class="chip" data-mode="diac">َ Огласовки точно</div>
     <div class="chip" data-mode="root">جذ Однокоренные</div>
-    <div class="chip" data-mode="matnonly">📜 Без иснада</div>
+    <div class="chip" data-mode="matnonly" title="Искать совпадение только в тексте хадиса, не в цепочке передатчиков (иснаде)">📜 Не искать в иснаде</div>
     <div class="chip" data-mode="ai">🧠 По смыслу (ИИ)</div>
     <div class="chip" id="neuroChip" data-mode="neuro">🔬 Расширенный</div>
   </div>
@@ -198,6 +198,7 @@
       </select></div>
     <div class="row"><span>🔤 Коран без огласовок (تشكيل)</span><div class="sw" id="noDiacSw"></div></div>
     <div class="row"><span>🎨 Выделять иснад (цепочку) серым</span><div class="sw" id="isnadSw"></div></div>
+    <div class="row"><span>🙈 Скрывать иснад (показывать только матн)</span><div class="sw" id="hideIsnadSw"></div></div>
     <div class="row"><span>⭐ Закладки / избранное</span><button class="go" id="favBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row" style="opacity:.55"><span>🔊 Озвучка аятов</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>📚 Другие источники (Лейс, Мукбиль, Сильсиля…)</span><span>скоро</span></div>
@@ -413,6 +414,7 @@ function markMatn(html){
 }
 function hl(text,groups){
   const disp=text;   // хадисы — всегда как есть; «Коран без огласовок» относится ТОЛЬКО к аятам (своя кнопка на карточке)
+  if(cfg.hideIsnad){ const sp=splitIsnad(disp); return markMatn(highlight(sp[1]||disp,groups,modes)); }   // показываем только матн
   if(!cfg.isnad) return markMatn(highlight(disp,groups,modes));
   const sp=splitIsnad(disp); if(!sp[0]) return markMatn(highlight(disp,groups,modes));
   return markMatn('<span class="isnad">'+highlight(sp[0],groups,modes)+'</span> '+highlight(sp[1],groups,modes));
@@ -521,6 +523,7 @@ function renderCols(){
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); t.classList.add('active');
   tab=t.dataset.tab; renderCols();
+  var _mo=document.querySelector('.chip[data-mode="matnonly"]'); if(_mo) _mo.style.display = tab==='hadith'?'':'none';  // «не искать в иснаде» — только хадисы
   document.getElementById('q').placeholder = tab==='hadith'?'Слова или смысл хадиса…':'Слова или смысл аята…';
   document.getElementById('res').innerHTML=''; setStatus('');
 });
@@ -1087,6 +1090,7 @@ var _fbs=document.getElementById('fbSend'); if(_fbs) _fbs.onclick=sendFeedback;
 var _qs=document.getElementById('qtrSel'); if(_qs){ _qs.value=cfg.qtr||'rus-elmirkuliev'; _qs.onchange=()=>{ cfg.qtr=_qs.value; saveCfg(cfg); }; }
 var _nd=document.getElementById('noDiacSw'); if(_nd){ _nd.classList.toggle('on',!!cfg.noDiac); _nd.onclick=()=>{ cfg.noDiac=!cfg.noDiac; saveCfg(cfg); _nd.classList.toggle('on',!!cfg.noDiac); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _is=document.getElementById('isnadSw'); if(_is){ _is.classList.toggle('on',!!cfg.isnad); _is.onclick=()=>{ cfg.isnad=!cfg.isnad; saveCfg(cfg); _is.classList.toggle('on',!!cfg.isnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
+var _hi=document.getElementById('hideIsnadSw'); if(_hi){ _hi.classList.toggle('on',!!cfg.hideIsnad); _hi.onclick=()=>{ cfg.hideIsnad=!cfg.hideIsnad; saveCfg(cfg); _hi.classList.toggle('on',!!cfg.hideIsnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
 
 /* ===================== УТИЛИТЫ ===================== */
 function setStatus(t){document.getElementById('status').textContent=t;}
@@ -1126,7 +1130,7 @@ async function boot(){
   if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
   if(userAllowed()){
     document.getElementById('app').style.display='block';
-    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v40 · хадисы · аяты · аль-Мухаймин'; }
+    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v41 · хадисы · аяты · аль-Мухаймин'; }
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
         (st.cols||[]).forEach(c=>selCols.add(c));
