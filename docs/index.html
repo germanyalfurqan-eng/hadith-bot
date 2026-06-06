@@ -141,7 +141,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v84</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v85</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -433,7 +433,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v84';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v85';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -844,16 +844,20 @@ document.addEventListener('pointerdown',function(e){ const ae=document.activeEle
 /* ===================== ПОИСК ===================== */
 function isArabic(s){ return /[؀-ۿݐ-ݿ]/.test(s); }
 const _aiCache={};   // кэш ИИ-подбора по запросу: повтор того же не тратит ключ
-async function smartPhrases(meaning){
+async function smartPhrases(meaning, force){
   const key=tab+'|'+(meaning||'').trim().toLowerCase();
-  if(_aiCache[key]) return _aiCache[key];
+  if(!force && _aiCache[key]) return _aiCache[key];
   if(BACKEND_URL){
     try{ const r=await fetch(BACKEND_URL+'/neuro',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({meaning,kind:tab,initData:INITDATA})});
+        body:JSON.stringify({meaning,kind:tab,force:!!force,initData:INITDATA})});
       if(r.ok){ const j=await r.json(); if(j.phrases&&j.phrases.length){ _aiCache[key]=j.phrases; return j.phrases; } } }catch(e){}
   }
   return neuroLocal(meaning);
 }
+async function redoSmart(){ const q=(document.getElementById('q').value||'').trim(); if(!q) return;
+  delete _aiCache[tab+'|'+q.toLowerCase()]; toast('Переподбираю заново…⏳');
+  const ph=await smartPhrases(q, true); if(ph&&ph.length){ applyPhrases(ph); } else toast('ИИ не подобрал — уточни запрос'); }
+document.addEventListener('click',e=>{ if(e.target && e.target.classList && e.target.classList.contains('redoAi')) redoSmart(); });
 let _logT2;
 function logSearch(q,tab,count){
   if(!BACKEND_URL || !q || q.length<3) return;
@@ -940,7 +944,7 @@ async function runSearch(explicit){
   const setHead=(done)=>{ const n = count
       ? ('Найдено: '+count+(count>CAP?' (показаны первые '+CAP+')':'')+(done?'':' · ищу…'))
       : (done?('Ничего не найдено 🤷'+(smartNote?' — попробуй иначе':'')):'Ищу…');
-    head.innerHTML = (smartNote?('<div style="color:var(--link);margin-bottom:4px;font-size:13px">'+esc(smartNote)+'</div>'):'')+n; };
+    head.innerHTML = (smartNote?('<div style="color:var(--link);margin-bottom:4px;font-size:13px">'+esc(smartNote)+' <span class="redoAi" style="cursor:pointer;text-decoration:underline;white-space:nowrap">🔄 заново (ИИ)</span></div>'):'')+n; };
   const add=(d)=>{ _results.push(d); if(count<CAP) res.appendChild(makeCard(d)); count++; };
   // «Искать ещё в большой библиотеке» — 16 изданий + Мукбиль (не грузим по умолчанию ~127МБ; по кнопке, с прогрессом, потом кэш в сессии)
   function addLibMore(){

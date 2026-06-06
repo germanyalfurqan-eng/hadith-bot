@@ -2479,10 +2479,13 @@ async def _api_serve(application=None):
         if not rate_ok('neuro:' + _uid(user, r)):
             return _ratelimited()
         try:
-            meaning = (d.get('meaning') or '')[:500]
-            nkey = (d.get('kind') or 'hadith') + '|' + meaning.strip().lower()
-            # 1) УЖЕ подбирали этот запрос? → из накопителя, БЕЗ траты ключа
-            cached = await loop.run_in_executor(None, neuro_get, nkey)
+            meaning = (d.get('meaning') or '').strip()[:500]
+            if len(meaning) < 2:   # пустой/слишком короткий запрос — не зовём ИИ и НЕ кэшируем (фикс мусора «hadith|»)
+                return _cors(web.json_response({'phrases': [], 'cached': False}))
+            force = bool(d.get('force'))   # переподобрать заново (минуя кэш) — для исправления плохого подбора
+            nkey = (d.get('kind') or 'hadith') + '|' + meaning.lower()
+            # 1) УЖЕ подбирали этот запрос? → из накопителя, БЕЗ траты ключа (если не force)
+            cached = None if force else await loop.run_in_executor(None, neuro_get, nkey)
             if cached:
                 await loop.run_in_executor(None, usage_log, user, "нейро", False, len(meaning), "", "")
                 await _notify_usage(user, "нейро", False, "", "", None)
