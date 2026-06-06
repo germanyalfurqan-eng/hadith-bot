@@ -2452,7 +2452,7 @@ async def _setup(application):
             j = _journal_load()
             last = (j.get("app_post") or {}).get("note", "")
             if note != last:
-                body = (note + "\n\n———\n🔎 Открыть приложение: t.me/muslimoontt_bot")
+                body = (note + "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot/app\n🤖 Бот: https://t.me/muslimoontt_bot")
                 await application.bot.send_message(APP_CHANNEL_ID, body, disable_web_page_preview=True)
                 j["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
                 _journal_save("app_post → канал приложения")

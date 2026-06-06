@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v50</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v51</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -224,6 +224,7 @@
     <div class="row"><span>🎨 Выделять иснад (цепочку) серым</span><div class="sw" id="isnadSw"></div></div>
     <div class="row"><span>🙈 Скрывать иснад (показывать только матн)</span><div class="sw" id="hideIsnadSw"></div></div>
     <div class="row"><span>🔡 Автоподсказки в Коране (списком при вводе номера)</span><div class="sw" id="acSw"></div></div>
+    <div class="row"><span>✒️ Подпись при копировании (ссылка на приложение)</span><div class="sw" id="sigSw"></div></div>
     <div class="row" style="opacity:.55"><span>🎨 Тема оформления</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>🌐 English / язык</span><span>скоро</span></div>
   </div>
@@ -371,7 +372,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v50';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v51';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -430,7 +431,7 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 /* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true}, loadCfg());
+let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true}, loadCfg());
 
 /* ===================== СЕРВЕРНЫЙ ДОСТУП (G9) ===================== */
 const INITDATA = (tg && tg.initData) || '';
@@ -535,6 +536,10 @@ function hl(text,groups){
 }
 /* ===== копирование ===== */
 function copyText(t){ try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(()=>toast('Скопировано ✓'),()=>_fbCopy(t)); } else _fbCopy(t); }catch(e){ _fbCopy(t); } }
+function cleanRu(t){ return (t||'').replace(/\\[rn]/g,' ').replace(/[\r\n]+/g,' ').replace(/\s+/g,' ').trim(); }   // убираем литеральные "\n" и мусор в готовых переводах
+const APP_LINK='https://t.me/muslimoontt_bot/app';
+const BOT_LINK='https://t.me/muslimoontt_bot';
+function copyWithSig(t){ copyText( (cfg.sig===false) ? t : (t+'\n\n— 📗 Muslimoon — Коран и хадисы\n'+APP_LINK) ); }
 function _fbCopy(t){ try{ const ta=document.createElement('textarea'); ta.value=t; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); toast('Скопировано ✓'); }catch(e){ toast('Не удалось скопировать'); } }
 /* ===== Избранное ===== */
 function loadFav(){try{return JSON.parse(localStorage.getItem('muslimoon_fav'))||[];}catch(e){return[];}}
@@ -602,7 +607,7 @@ async function loadQuranRu(){ if(quranRu)return quranRu; setStatus('Загруж
 let hadithRu=null;
 async function loadHadithRu(){ if(hadithRu)return hadithRu; setStatus('Загружаю русские переводы хадисов…');
   const j=await (await fetch('./hadith_ru.json')).json();
-  hadithRu=j.map(x=>({s:x.s,n:x.n,t:x.t,norm:(x.t||'').toLowerCase()})); return hadithRu; }
+  hadithRu=j.map(x=>{ const t=cleanRu(x.t); return {s:x.s,n:x.n,t:t,norm:t.toLowerCase()}; }); return hadithRu; }
 function cardHadithRu(d){ const card=document.createElement('div');card.className='card';
   const ru=document.createElement('div');ru.style.cssText='font-size:16px;line-height:1.7';ru.innerHTML=hlRu(d.ru,d.rq||'');card.appendChild(ru);
   const meta=document.createElement('div');meta.className='meta';
@@ -610,7 +615,7 @@ function cardHadithRu(d){ const card=document.createElement('div');card.classNam
   addStar(meta,{k:'h|'+d.s+'|'+d.n,type:'h',coll:arOf(d.s),label:arOf(d.s)+' №'+d.n,text:(d.ru||'').slice(0,200)});
   const cp=document.createElement('button');cp.className='tr-btn';cp.textContent='⧉';cp.title='Копировать';
   cp.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
-  cp.onclick=()=>copyText(d.ru+'\n— '+arOf(d.s)+' №'+d.n); meta.appendChild(cp);
+  cp.onclick=()=>copyWithSig(d.ru+'\n— '+arOf(d.s)+' №'+d.n); meta.appendChild(cp);
   const fbb=document.createElement('button');fbb.className='tr-btn';fbb.textContent='✍️ Сообщить нам';
   fbb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--link);padding:6px 10px';
   fbb.onclick=()=>openFeedback(arOf(d.s)+' №'+d.n); meta.appendChild(fbb);
@@ -916,7 +921,7 @@ function cardMuh(d,groups){
     const head=document.createElement('div'); head.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--hint);font-size:12px;margin:8px 0 2px';
     const lab=document.createElement('span'); lab.innerHTML=(rv.length>1?('риваят '+(i+1)+'/'+rv.length):'')+(s?('  ·  <b style="color:var(--link)">'+esc(s)+'</b>'):'');
     const cp=document.createElement('button'); cp.className='mini'; cp.textContent='⧉ копир.';
-    cp.onclick=()=>copyText(t+(s?('\n— '+s):'')+'\n(المهيمن №'+h.n+')');
+    cp.onclick=()=>copyWithSig(t+(s?('\n— '+s):'')+'\n(المهيمن №'+h.n+')');
     head.appendChild(lab); head.appendChild(cp); card.appendChild(head);
     const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(t,groups);card.appendChild(ar);
   });
@@ -943,7 +948,7 @@ function addTr(meta,card,text,ayah,fav){
   const cp=document.createElement('button');cp.className='tr-btn';cp.textContent='⧉';
   cp.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
   cp.title='Копировать';
-  cp.onclick=()=>{ let s=text; if(fav&&fav.label) s+='\n— '+fav.label; const o=card.querySelector('.tr-out'); if(o&&o.style.display!=='none'&&o.textContent) s+='\n\n'+o.textContent; copyText(s); };
+  cp.onclick=()=>{ let s=text; if(fav&&fav.label) s+='\n— '+fav.label; const o=card.querySelector('.tr-out'); if(o&&o.style.display!=='none'&&o.textContent) s+='\n\n'+o.textContent; copyWithSig(s); };
   meta.appendChild(cp);
   const tr=document.createElement('button');tr.className='tr-btn';
   const _ref0=ayah?null:refOf(fav); const _ready=_ref0&&READY_RU.indexOf(_ref0.source)!==-1;
@@ -1106,7 +1111,7 @@ async function doTranslate(text,out,btn,ref){
   if(ref && READY_RU.indexOf(ref.source)!==-1 && (ref.num||ref.num===0)){
     try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-'+ref.source+'/'+ref.num+'.min.json')).json();
       const h=(j.hadiths||[])[0];
-      if(h && h.text){ out.innerHTML=trHead(ref)+lbl('📘 Перевод (готовый, профессиональный):')+esc(h.text); out.style.display='block'; btn.disabled=false; btn.textContent=orig; return; }
+      if(h && h.text){ out.innerHTML=trHead(ref)+lbl('📘 Перевод (готовый, профессиональный):')+esc(cleanRu(h.text)); out.style.display='block'; btn.disabled=false; btn.textContent=orig; return; }
     }catch(e){}
   }
   if(!BACKEND_URL){ toast('Перевод заработает после подключения сервера (DeepSeek)'); btn.disabled=false; btn.textContent=orig; return; }
@@ -1297,6 +1302,7 @@ var _nd=document.getElementById('noDiacSw'); if(_nd){ _nd.classList.toggle('on',
 var _is=document.getElementById('isnadSw'); if(_is){ _is.classList.toggle('on',!!cfg.isnad); _is.onclick=()=>{ cfg.isnad=!cfg.isnad; saveCfg(cfg); _is.classList.toggle('on',!!cfg.isnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _hi=document.getElementById('hideIsnadSw'); if(_hi){ _hi.classList.toggle('on',!!cfg.hideIsnad); _hi.onclick=()=>{ cfg.hideIsnad=!cfg.hideIsnad; saveCfg(cfg); _hi.classList.toggle('on',!!cfg.hideIsnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _ac=document.getElementById('acSw'); if(_ac){ _ac.classList.toggle('on',!!cfg.ac); _ac.onclick=()=>{ cfg.ac=!cfg.ac; saveCfg(cfg); _ac.classList.toggle('on',!!cfg.ac); updateQuranHelper(); }; }
+var _sig=document.getElementById('sigSw'); if(_sig){ _sig.classList.toggle('on',cfg.sig!==false); _sig.onclick=()=>{ cfg.sig=(cfg.sig===false); saveCfg(cfg); _sig.classList.toggle('on',cfg.sig!==false); }; }
 
 /* ===================== УТИЛИТЫ ===================== */
 function setStatus(t){document.getElementById('status').textContent=t;}
@@ -1347,9 +1353,14 @@ function renderExtraList(){
     const row=document.createElement('div'); row.className='exrow'+(on?' on':'')+(e.our?' our':'')+(e.soon?' soon':'');
     const tag=(e.soon?'<span class="extag" style="color:#9fb4cc;border-color:#2a3f59">скоро</span>':(e.our?'<span class="extag">наша</span>':''));
     const sub=e.soon?'<span dir="rtl">'+esc(e.ar)+'</span> · в работе, ин ша Аллах':('<span dir="rtl">'+esc(e.ar)+'</span> · '+e.n.toLocaleString('ru-RU')+' хад.');
-    row.innerHTML='<div style="min-width:0"><div style="font-weight:600">'+esc(e.ru)+tag+'</div>'
-      +'<div style="font-size:12px;color:var(--hint)">'+sub+'</div></div>'
-      +'<div class="plus">'+(e.soon?'🔜':(on?'✓':'+'))+'</div>';
+    const left=document.createElement('div'); left.style.minWidth='0';
+    left.innerHTML='<div style="font-weight:600">'+esc(e.ru)+tag+'</div><div style="font-size:12px;color:var(--hint)">'+sub+'</div>';
+    const right=document.createElement('div'); right.style.cssText='display:flex;align-items:center;gap:12px;flex:0 0 auto';
+    if(!e.soon && e.code!=='muhaymin'){ const rd=document.createElement('span'); rd.textContent='📖'; rd.title='Читать этот сборник';
+      rd.style.cssText='cursor:pointer;font-size:17px';
+      rd.onclick=(ev)=>{ ev.stopPropagation(); document.getElementById('extraModal').style.display='none'; openReader(e.code); }; right.appendChild(rd); }
+    const plus=document.createElement('span'); plus.className='plus'; plus.textContent=(e.soon?'🔜':(on?'✓':'+')); right.appendChild(plus);
+    row.appendChild(left); row.appendChild(right);
     row.onclick=e.soon ? ()=>toast('«'+e.short+'» — скоро добавим, ин ша Аллах')
                        : ()=>{ on?selExtra.delete(e.code):selExtra.add(e.code); renderExtraList(); renderCols(); };
     box.appendChild(row); };
