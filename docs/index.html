@@ -141,7 +141,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v87</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v88</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -438,7 +438,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v87';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v88';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1588,11 +1588,18 @@ async function doTafsir(s,a,out,btn,key,lang){
         +'<span class="tflang chip" data-l="ar" style="cursor:pointer;font-size:12px'+(isAr?';background:#2e5b3a;color:#fff;border-color:#2e9b5b':'')+'">📖 Оригинал (ар)</span>'
         +(tf.ru?('<span class="tflang chip" data-l="ru" style="cursor:pointer;font-size:12px'+(!isAr?';background:#10331f;color:#bff5d4;border-color:#2e9b5b':'')+'">📘 Перевод (рус, готовый)</span>'):'<span class="hint" style="font-size:11px">перевод этого тафсира — скоро (ИИ + накопление)</span>')
       +'</div>'
-      +'<div style="'+(isAr?'direction:rtl;text-align:right;font-size:17px;line-height:1.9':'font-size:14px;line-height:1.65')+';max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:10px">'+(txt?esc(txt).replace(/\n+/g,'<br>'):'Для этого аята в этом тафсире нет текста.')+'</div></div>';
+      +'<div style="display:flex;gap:6px;margin-bottom:6px"><input class="tfFind" placeholder="🔎 поиск внутри тафсира…" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:13px"><span class="tfFindInfo hint" style="font-size:11px;align-self:center;white-space:nowrap"></span></div>'
+      +'<div class="tafsirText" style="'+(isAr?'direction:rtl;text-align:right;font-size:17px;line-height:1.9':'font-size:14px;line-height:1.65')+';max-height:340px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:10px">'+(txt?esc(txt).replace(/\n+/g,'<br>'):'Для этого аята в этом тафсире нет текста.')+'</div></div>';
     out.innerHTML=html;
     out.querySelectorAll('.tfk').forEach(b=>b.onclick=()=>doTafsir(s,a,out,btn,b.dataset.k,lang));
     out.querySelectorAll('.tflang').forEach(b=>b.onclick=()=>doTafsir(s,a,out,btn,key,b.dataset.l));
     const x=out.querySelector('.tfx'); if(x) x.onclick=()=>{ var mm=document.getElementById('tafsirModal'); if(mm) mm.style.display='none'; };
+    const tDiv=out.querySelector('.tafsirText'), fInp=out.querySelector('.tfFind'), fInfo=out.querySelector('.tfFindInfo'), rawT=txt;   // поиск ВНУТРИ тафсира
+    if(fInp&&tDiv) fInp.oninput=()=>{ const term=fInp.value.trim();
+      if(!term){ tDiv.innerHTML=esc(rawT).replace(/\n+/g,'<br>'); fInfo.textContent=''; return; }
+      let h=esc(rawT), cnt=0; try{ const re=new RegExp('('+term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'); h=h.replace(re,m=>{cnt++;return '@@H@@'+m+'@@E@@';}); }catch(e){}
+      tDiv.innerHTML=h.replace(/\n+/g,'<br>').split('@@H@@').join('<mark>').split('@@E@@').join('</mark>');
+      fInfo.textContent=cnt?('✓ '+cnt):'нет'; const fm=tDiv.querySelector('mark'); if(fm) fm.scrollIntoView({block:'center'}); };
   }catch(e){ out.innerHTML='<div class="hint">🔧 Не удалось загрузить тафсир — попробуй позже.</div>'; }
 }
 function toAr(s){const m={'0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩'};return String(s).replace(/[0-9]/g,d=>m[d]);}
