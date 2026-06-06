@@ -38,7 +38,13 @@
        font-size:13px;cursor:pointer}
   .col.on{background:var(--ok);color:#06210f;border-color:var(--ok);font-weight:600;box-shadow:0 0 10px #34c75966}
   .col.muh.on{background:#d4af37;color:#241c00;border-color:#d4af37}
-  .colbar{display:flex;gap:8px;margin-bottom:8px}
+  .col.extra.on{background:#2563eb;color:#fff;border-color:#2563eb;box-shadow:0 0 10px #2563eb66}
+  .exrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 11px;margin-bottom:6px;
+         border:1px solid var(--border);border-radius:12px;background:var(--bg);cursor:pointer}
+  .exrow.on{border-color:#2563eb;background:#2563eb22}
+  .exrow .plus{font-size:18px;color:var(--link);font-weight:700;flex:0 0 auto}
+  .exrow.on .plus{color:#4ade80}
+  .colbar{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
   .mini{font-size:12px;color:var(--link);cursor:pointer;background:none;border:none;padding:2px}
   .searchbar{display:flex;gap:8px;margin-bottom:8px}
   input[type=text]{flex:1;padding:12px;border-radius:12px;border:1px solid var(--border);
@@ -121,7 +127,7 @@
       <div class="gear" id="devBtn" style="display:none">🛠</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам и аятам · v43</div>
+  <div class="sub" id="sub">поиск по хадисам и аятам · v44</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -134,6 +140,8 @@
     <div class="colbar">
       <button class="mini" id="selAll">выбрать все</button>
       <button class="mini" id="selNone">снять все</button>
+      <button class="mini" id="extraBtn" style="border:1px solid var(--link);border-radius:14px;padding:3px 9px">➕ Другие сборники</button>
+      <button class="mini" id="readBtn" style="border:1px solid var(--link);border-radius:14px;padding:3px 9px">📖 Читать сборник</button>
     </div>
   </div>
 
@@ -202,10 +210,54 @@
     <div class="row"><span>🙈 Скрывать иснад (показывать только матн)</span><div class="sw" id="hideIsnadSw"></div></div>
     <div class="row"><span>⭐ Закладки / избранное</span><button class="go" id="favBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row" style="opacity:.55"><span>🔊 Озвучка аятов</span><span>скоро</span></div>
-    <div class="row" style="opacity:.55"><span>📚 Другие источники (Лейс, Мукбиль, Сильсиля…)</span><span>скоро</span></div>
+    <div class="row"><span>📚 Другие сборники (Дарими, Ибн Хиббан…)</span><button class="go" id="extraBtn2" style="padding:5px 12px">Открыть</button></div>
     <div class="row" style="opacity:.55"><span>🌐 English / язык</span><span>скоро</span></div>
     <div class="row" style="margin-top:8px;border-top:1px solid var(--border);padding-top:12px"><span>🔗 Ссылка на приложение</span><button class="go" id="copyAppLink" style="padding:5px 12px">Копировать</button></div>
     <div class="row"><span>📺 Наш YouTube-канал</span><button class="go" id="ytLink" style="padding:5px 12px">Открыть</button></div>
+  </div>
+</div>
+<div class="modal" id="extraModal">
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <b>➕ Другие сборники</b><button class="mini" id="extraClose">закрыть ✕</button>
+    </div>
+    <div class="hint" style="margin:0 0 8px">Основные сборники — чипами на главной. Здесь — ещё <b id="extraTotal"></b> книг (≈98 тыс. хадисов). Найди по автору/названию и нажми, чтобы добавить к поиску. <span style="opacity:.7">Альбани, Табарани, Хаким и др. — добавим позже.</span></div>
+    <input type="text" id="extraSearch" placeholder="Автор или книга: дарими · ибн хиббан · мусаннаф…" autocomplete="off"
+           style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-size:14px">
+    <div id="extraList" style="margin-top:10px;max-height:52vh;overflow:auto"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px">
+      <span class="hint" id="extraSel" style="margin:0"></span>
+      <button class="mini" id="extraClear">снять доп.</button>
+    </div>
+  </div>
+</div>
+<div class="modal" id="readModal">
+  <div class="panel" style="max-width:560px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px">
+      <b id="readTitle">📖 Читать сборник</b><button class="mini" id="readClose">закрыть ✕</button>
+    </div>
+    <div id="readPick">
+      <div class="hint" style="margin:0 0 8px">Выбери сборник — открою его подряд (листать хадис за хадисом). Можно начать с номера.</div>
+      <select id="readSel" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-size:14px"></select>
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+        <input type="number" id="readFrom" placeholder="с № (необязательно)" min="1"
+               style="flex:1;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-size:14px">
+        <button class="go" id="readGo" style="padding:9px 16px">Открыть</button>
+      </div>
+    </div>
+    <div id="readView" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
+        <button class="mini" id="readBack">← к выбору</button>
+        <span class="hint" id="readPos" style="margin:0"></span>
+      </div>
+      <div id="readBody"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px">
+        <button class="go" id="readPrev" style="padding:8px 14px">← пред.</button>
+        <input type="number" id="readJump" placeholder="перейти к №" min="1"
+               style="width:120px;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:7px 9px;font-size:13px">
+        <button class="go" id="readNext" style="padding:8px 14px">след. →</button>
+      </div>
+    </div>
   </div>
 </div>
 <div class="modal" id="helpModal">
@@ -304,6 +356,29 @@ const COLLECTIONS = [
   {code:'muhaymin',ru:'аль-Мухаймин',ar:'المهيمن',special:true,heavy:true},
   {code:'muqbil',ru:'Мукбиль · المسند الصحيح',ar:'الصحيح مما ليس في الصحيحين',heavy:true,file:'muqbil.json'},
 ];
+
+/* ===== M44: ДРУГИЕ СБОРНИКИ (основные — чипами выше; эти — по кнопке «➕ Другие сборники») ===== */
+/* Издания лежат рядом: в превью — miniapp/editions/, в проде — docs/editions/ (GitHub Pages) */
+const EXTRA_BASE = './editions/';
+const EXTRA = [
+  {code:'ibnabishayba', short:'Ибн Аби Шейба', ru:'Ибн Аби Шейба — аль-Мусаннаф', ar:'مصنف ابن أبي شيبة', author:'Ибн Аби Шейба', kw:'мусаннаф ibnabishayba ibn abi shayba musannaf', n:37925},
+  {code:'abuawana',     short:'Абу Авана',     ru:'Абу Авана — аль-Мустахрадж',   ar:'مستخرج أبي عوانة',  author:'Абу Авана',     kw:'мустахрадж abuawana abu awana mustakhraj', n:13036},
+  {code:'nasaikubra',   short:'Насаи (Кубра)', ru:'ан-Насаи — ас-Сунан аль-Кубра', ar:'السنن الكبرى للنسائي', author:'ан-Насаи',     kw:'насаи кубра nasai kubra sunan большой', n:11943},
+  {code:'abuyala',      short:'Абу Я‘ля',      ru:'Абу Я‘ля — Муснад',            ar:'مسند أبي يعلى',     author:'Абу Я‘ля',      kw:'абу яля abuyala abu yala муснад', n:7546},
+  {code:'ibnhibban',    short:'Ибн Хиббан',    ru:'Ибн Хиббан — ас-Сахих',        ar:'صحيح ابن حبان',     author:'Ибн Хиббан',    kw:'ибн хиббан ibnhibban sahih сахих', n:7443},
+  {code:'darimi',       short:'Дарими',        ru:'ад-Дарими — Сунан',            ar:'سنن الدارمي',       author:'ад-Дарими',     kw:'дарими darimi sunan сунан', n:3477},
+  {code:'ibnaljad',     short:'Ибн аль-Джа‘д', ru:'Ибн аль-Джа‘д — Муснад',       ar:'مسند ابن الجعد',    author:'Ибн аль-Джа‘д', kw:'ибн джад ibnaljad jad муснад', n:3352},
+  {code:'ibnkhuzayma',  short:'Ибн Хузайма',   ru:'Ибн Хузайма — ас-Сахих',       ar:'صحيح ابن خزيمة',    author:'Ибн Хузайма',   kw:'ибн хузайма ibnkhuzayma sahih сахих', n:3066},
+  {code:'tayalisi',     short:'Таялиси',       ru:'Абу Дауд ат-Таялиси — Муснад',  ar:'مسند الطيالسي',     author:'ат-Таялиси',    kw:'таялиси tayalisi муснад', n:2889},
+  {code:'ishaq',        short:'Исхак',         ru:'Исхак ибн Рахавайх — Муснад',   ar:'مسند إسحاق بن راهويه', author:'Исхак ибн Рахавайх', kw:'исхак рахавайх ishaq rahawayh муснад', n:2336},
+  {code:'abdbinhumayd', short:'Абд ибн Хумайд',ru:'Абд ибн Хумайд — Муснад',      ar:'مسند عبد بن حميد',  author:'Абд ибн Хумайд', kw:'абд хумайд abdbinhumayd муснад', n:1594},
+  {code:'humaydi',      short:'Хумайди',       ru:'аль-Хумайди — Муснад',         ar:'مسند الحميدي',      author:'аль-Хумайди',   kw:'хумайди humaydi муснад', n:1334},
+  {code:'adabmufrad',   short:'Адаб аль-Муфрад',ru:'аль-Бухари — аль-Адаб аль-Муфрад', ar:'الأدب المفرد', author:'аль-Бухари',    kw:'адаб муфрад adabmufrad bukhari бухари нравственность', n:1322},
+  {code:'ismail',       short:'Исмаил б. Джа‘фар', ru:'Исмаил ибн Джа‘фар — Хадисы', ar:'أحاديث إسماعيل بن جعفر', author:'Исмаил ибн Джа‘фар', kw:'исмаил джафар ismail', n:477},
+  {code:'ibnmubarak',   short:'Ибн аль-Мубарак',ru:'Ибн аль-Мубарак — Муснад',    ar:'مسند ابن المبارك',  author:'Ибн аль-Мубарак', kw:'ибн мубарак ibnmubarak муснад', n:272},
+  {code:'jihad',        short:'аль-Джихад',    ru:'Ибн аль-Мубарак — аль-Джихад', ar:'الجهاد لابن المبارك', author:'Ибн аль-Мубарак', kw:'джихад jihad ибн мубарак', n:257},
+];
+const EXTRA_MAP={}; EXTRA.forEach(e=>EXTRA_MAP[e.code]=e);
 
 /* ===================== TELEGRAM + ДОСТУП ===================== */
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -472,6 +547,9 @@ const _local={};
 async function loadLocal(code,file){ if(_local[code])return _local[code]; setStatus('Загружаю '+nameOf(code)+'…');
   const j=await (await fetch('./'+file)).json();
   _local[code]=j.map(x=>{ const raw=(x.ar||x.t||'').replace(/\s+/g,' ').trim(); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }
+async function loadExtra(code){ if(_local[code])return _local[code]; const e=EXTRA_MAP[code]; setStatus('Загружаю '+(e?e.short:code)+'…');
+  const j=await (await fetch(EXTRA_BASE+code+'.json')).json();
+  _local[code]=j.map(x=>{ const raw=(x.ar||x.t||'').replace(/\s+/g,' ').trim(); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }
 async function loadQuran(){ if(quran)return quran; setStatus('Загружаю Коран…');
   const j=await (await fetch(QURAN_URL)).json();
   quran=j.map(v=>{ const raw=(v.text||'').replace(/﻿/g,'').replace(/\s+/g,' ').trim();
@@ -503,13 +581,14 @@ async function loadMuhaymin(){ if(muh)return muh; setStatus('Загружаю а
   const j=await (await fetch(MUHAYMIN_URL)).json();
   muh=j.map(x=>{ const rv=(x.rv||[]).map(r=> typeof r==='string'?{t:r,s:''}:r); const joined=rv.map(r=>r.t).join(' ');
     return {n:x.n,b:x.b,c:x.c,rv:rv,rc:rv.length,text:joined,norm:''}; }); return muh; }
-function nameOf(c){const x=COLLECTIONS.find(k=>k.code===c);return x?x.ru:c;}
-function arOf(c){const x=COLLECTIONS.find(k=>k.code===c);return x?x.ar:c;}
+function nameOf(c){const x=COLLECTIONS.find(k=>k.code===c);if(x)return x.ru;if(EXTRA_MAP[c])return EXTRA_MAP[c].short;return c;}
+function arOf(c){const x=COLLECTIONS.find(k=>k.code===c);if(x)return x.ar;if(EXTRA_MAP[c])return EXTRA_MAP[c].ar;return c;}
 
 /* ===================== UI STATE ===================== */
 let tab='hadith'; var _seq=0, _results=[], _groups=[], _shown=0;
 const modes={diac:false,root:false,neuro:false,ai:false};
 const selCols=new Set(); // пусто = искать ВЕЗДЕ (как sunnah); выбор чипов = сузить
+const selExtra=new Set(); // M44: выбранные «другие сборники» — добавляются к поиску только явно
 
 function renderCols(){
   const box=document.getElementById('cols');
@@ -520,7 +599,14 @@ function renderCols(){
     d.textContent=c.ru;
     d.onclick=()=>{ selCols.has(c.code)?selCols.delete(c.code):selCols.add(c.code); renderCols(); };
     box.appendChild(d); });
-  document.getElementById('colCount').textContent = selCols.size? '('+selCols.size+' выбрано)' : '(везде)';
+  // выбранные доп. сборники — отдельными чипами (нажал = убрать)
+  [...selExtra].forEach(code=>{ const e=EXTRA_MAP[code]; if(!e) return;
+    const d=document.createElement('div'); d.className='col extra on'; d.title='Доп. сборник — нажми, чтобы убрать';
+    d.innerHTML=esc(e.short)+' ✕';
+    d.onclick=()=>{ selExtra.delete(code); renderCols(); updateExtraSel(); };
+    box.appendChild(d); });
+  const cc = selCols.size? (selCols.size+' выбрано') : 'везде';
+  document.getElementById('colCount').textContent = '('+cc+(selExtra.size?(' + доп. '+selExtra.size):'')+')';
 }
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); t.classList.add('active');
@@ -651,21 +737,24 @@ async function runSearch(){
       return;
     }
     const codes=COLLECTIONS.map(c=>c.code).filter(c=>{ const C=COLLECTIONS.find(x=>x.code===c); return selCols.size? selCols.has(c) : !C.heavy; })
-      .sort((a,b)=>((COLLECTIONS.find(x=>x.code===a).heavy?1:0)-(COLLECTIONS.find(x=>x.code===b).heavy?1:0)));
+      .sort((a,b)=>((COLLECTIONS.find(x=>x.code===a).heavy?1:0)-(COLLECTIONS.find(x=>x.code===b).heavy?1:0)))
+      .concat([...selExtra]);   // M44: выбранные «другие сборники» — в конец (могут быть тяжёлыми)
     for(const code of codes){
       if(seq!==_seq) return;
-      const C=COLLECTIONS.find(x=>x.code===code);
+      const C=COLLECTIONS.find(x=>x.code===code); const X=EXTRA_MAP[code];
       try{
         if(numMode){
           let h=null; const qn=String(parseInt(q,10));
           if(code==='muhaymin'){ const a=await loadMuhaymin(); h=a.find(x=>String(x.n)===qn); if(h) add({type:'m',h}); }
           else if(code==='ahmad'){ const a=await loadAhmad(); h=a.find(x=>x.num===qn); if(h) add({type:'h',code:'ahmad',h}); }
+          else if(X){ const a=await loadExtra(code); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
           else if(C&&C.file){ const a=await loadLocal(code,C.file); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
           else { h=await getOne(code,qn); if(h) add({type:'h',code,h}); }
         } else {
           let arr;
           if(code==='muhaymin') arr=await loadMuhaymin();
           else if(code==='ahmad') arr=await loadAhmad();
+          else if(X) arr=await loadExtra(code);
           else if(C&&C.file) arr=await loadLocal(code,C.file);
           else arr=await loadCollection(code);
           if(seq!==_seq) return;
@@ -898,7 +987,7 @@ function applyPhrases(ph){
 /* ===================== ПЕРЕВОД ===================== */
 const READY_RU=['bukhari','muslim','abudawud'];   // готовый проф. перевод (rus-* в hadith-api) — без ИИ
 const RU_TITLE={bukhari:'Сахих аль-Бухари',muslim:'Сахих Муслим',abudawud:'Сунан Абу Дауд',tirmidhi:'Джами ат-Тирмизи',ibnmajah:'Сунан Ибн Маджа',nasai:'Сунан ан-Насаи',malik:'аль-Муватта (Малик)',ahmad:'Муснад Ахмада',muhaymin:'аль-Мухаймин',muqbil:'аль-Мукбиль · ас-Сахих'};
-function ruTitle(code){ return RU_TITLE[code]||((COLLECTIONS.find(c=>c.code===code)||{}).ru)||code; }
+function ruTitle(code){ return RU_TITLE[code]||((COLLECTIONS.find(c=>c.code===code)||{}).ru)||((EXTRA_MAP[code]||{}).ru)||code; }
 function trHead(ref){ return (ref&&ref.source)?('<div style="color:var(--link);font-size:12px;margin-bottom:3px">📖 '+esc(ruTitle(ref.source))+(ref.num?(' №'+ref.num):'')+'</div>'):''; }
 async function doTranslate(text,out,btn,ref){
   btn.disabled=true; btn.textContent='…';
@@ -1109,7 +1198,7 @@ document.getElementById('goBtn').onclick=runSearch;
 })();
 document.getElementById('neuroRun').onclick=neuroRun;
 function openLink(u){ try{ if(tg&&tg.openLink) tg.openLink(u); else window.open(u,'_blank'); }catch(e){ try{window.open(u,'_blank');}catch(_){} } }
-function goHome(){ document.getElementById('q').value=''; selCols.clear(); document.getElementById('res').innerHTML=''; setStatus(''); try{localStorage.removeItem('muslimoon_state');}catch(e){} document.querySelector('.tab[data-tab="hadith"]').click(); renderCols(); try{window.scrollTo(0,0);}catch(e){} }
+function goHome(){ document.getElementById('q').value=''; selCols.clear(); selExtra.clear(); document.getElementById('res').innerHTML=''; setStatus(''); try{localStorage.removeItem('muslimoon_state');}catch(e){} document.querySelector('.tab[data-tab="hadith"]').click(); renderCols(); updateExtraSel(); try{window.scrollTo(0,0);}catch(e){} }
 document.getElementById('brand').onclick=goHome;
 document.getElementById('helpBtn').onclick=()=>{ document.getElementById('helpModal').style.display='flex'; };
 document.getElementById('helpClose').onclick=()=>{ document.getElementById('helpModal').style.display='none'; };
@@ -1128,12 +1217,89 @@ document.getElementById('favByColl').onclick=()=>renderFav('coll');
 var _yt=document.getElementById('ytLink'); if(_yt) _yt.onclick=()=>openLink('https://www.youtube.com/@MUSLIMOON.TT2024');
 var _cal=document.getElementById('copyAppLink'); if(_cal) _cal.onclick=()=>copyText('https://germanyalfurqan-eng.github.io/hadith-bot/');
 
+/* ===================== M44: ДРУГИЕ СБОРНИКИ ===================== */
+function updateExtraSel(){ const el=document.getElementById('extraSel'); if(el) el.textContent=selExtra.size?('В поиске доп.: '+selExtra.size+' '+(selExtra.size===1?'книга':'книг')):'Доп. сборники не выбраны';
+  const tb=document.getElementById('extraBtn'); if(tb) tb.textContent= selExtra.size?('➕ Другие ('+selExtra.size+')'):'➕ Другие сборники'; }
+function renderExtraList(){
+  const inp=document.getElementById('extraSearch'); const q=(inp?inp.value:'').trim().toLowerCase();
+  const box=document.getElementById('extraList'); if(!box) return; box.innerHTML='';
+  const items=EXTRA.filter(e=> !q || (e.ru+' '+e.ar+' '+e.author+' '+e.kw+' '+e.code).toLowerCase().indexOf(q)!==-1);
+  if(!items.length){ box.innerHTML='<div class="hint" style="text-align:center;padding:16px">Не нашёл «'+esc(q)+'». Этой книги пока нет в базе — напиши владельцу, докачаем с Мактабы.</div>'; updateExtraSel(); return; }
+  items.forEach(e=>{ const on=selExtra.has(e.code);
+    const row=document.createElement('div'); row.className='exrow'+(on?' on':'');
+    row.innerHTML='<div style="min-width:0"><div style="font-weight:600">'+esc(e.ru)+'</div>'
+      +'<div style="font-size:12px;color:var(--hint)"><span dir="rtl">'+esc(e.ar)+'</span> · '+e.n.toLocaleString('ru-RU')+' хад.</div></div>'
+      +'<div class="plus">'+(on?'✓':'+')+'</div>';
+    row.onclick=()=>{ on?selExtra.delete(e.code):selExtra.add(e.code); renderExtraList(); renderCols(); };
+    box.appendChild(row); });
+  updateExtraSel();
+}
+function openExtra(){ const t=document.getElementById('extraTotal'); if(t) t.textContent=EXTRA.length; renderExtraList(); document.getElementById('extraModal').style.display='flex'; const s=document.getElementById('extraSearch'); if(s){ s.value=''; } }
+var _eb=document.getElementById('extraBtn'); if(_eb) _eb.onclick=openExtra;
+var _eb2=document.getElementById('extraBtn2'); if(_eb2) _eb2.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openExtra(); };
+var _ec=document.getElementById('extraClose'); if(_ec) _ec.onclick=()=>{ document.getElementById('extraModal').style.display='none'; };
+var _es=document.getElementById('extraSearch'); if(_es) _es.oninput=renderExtraList;
+var _ecl=document.getElementById('extraClear'); if(_ecl) _ecl.onclick=()=>{ selExtra.clear(); renderExtraList(); renderCols(); };
+
+/* ===================== M102: ЧИТАЛКА СБОРНИКА (листать подряд) ===================== */
+const READABLE=[
+  {code:'bukhari',ru:'Сахих аль-Бухари'},{code:'muslim',ru:'Сахих Муслим'},{code:'abudawud',ru:'Сунан Абу Дауд'},
+  {code:'tirmidhi',ru:'Джами ат-Тирмизи'},{code:'ibnmajah',ru:'Сунан Ибн Маджа'},{code:'nasai',ru:'Сунан ан-Насаи'},
+  {code:'malik',ru:'аль-Муватта (Малик)'},{code:'ahmad',ru:'Муснад Ахмада'},{code:'muqbil',ru:'аль-Мукбиль'},
+].concat(EXTRA.map(e=>({code:e.code,ru:e.ru})));
+let _readArr=null,_readCode='',_readIdx=0;
+async function _readLoad(code){
+  const C=COLLECTIONS.find(x=>x.code===code); const X=EXTRA_MAP[code];
+  if(code==='ahmad') return await loadAhmad();
+  if(X) return await loadExtra(code);
+  if(C&&C.file) return await loadLocal(code,C.file);
+  return await loadCollection(code);
+}
+function _readRender(){
+  if(!_readArr||!_readArr.length) return;
+  if(_readIdx<0)_readIdx=0; if(_readIdx>=_readArr.length)_readIdx=_readArr.length-1;
+  const h=_readArr[_readIdx];
+  document.getElementById('readPos').textContent='№'+(h.num!==undefined?h.num:(_readIdx+1))+'  ('+(_readIdx+1)+' из '+_readArr.length+')';
+  const body=document.getElementById('readBody'); body.innerHTML='';
+  const card=document.createElement('div'); card.className='card';
+  const ar=document.createElement('div'); ar.className='ar'; ar.innerHTML=esc(h.text||''); card.appendChild(ar);
+  const meta=document.createElement('div'); meta.className='meta';
+  meta.innerHTML='<span class="src">'+arOf(_readCode)+' · №'+(h.num!==undefined?h.num:'')+'</span>'+(h.grade?('<span class="grade">'+esc(h.grade)+'</span>'):'');
+  card.appendChild(meta); body.appendChild(card);
+}
+async function _readOpen(code,fromNum){
+  _readCode=code;
+  document.getElementById('readPick').style.display='none';
+  document.getElementById('readView').style.display='block';
+  document.getElementById('readTitle').textContent='📖 '+(ruTitle(code)||code);
+  const body=document.getElementById('readBody'); body.innerHTML='<div class="hint" style="text-align:center;padding:14px">Загружаю сборник…</div>';
+  try{ _readArr=await _readLoad(code); }catch(e){ body.innerHTML='<div class="status">Не удалось загрузить сборник.</div>'; return; }
+  _readIdx=0;
+  if(fromNum){ const qn=String(parseInt(fromNum,10)); const i=_readArr.findIndex(x=>String(x.num)===qn); if(i>=0)_readIdx=i; }
+  _readRender();
+}
+function _readToPick(){ document.getElementById('readView').style.display='none'; document.getElementById('readPick').style.display='block'; }
+function openReader(code,fromNum){
+  const sel=document.getElementById('readSel');
+  if(sel && !sel.options.length){ READABLE.forEach(r=>{ const o=document.createElement('option'); o.value=r.code; o.textContent=r.ru; sel.appendChild(o); }); }
+  _readToPick();
+  document.getElementById('readModal').style.display='flex';
+  if(code){ if(sel) sel.value=code; _readOpen(code,fromNum); }
+}
+var _rb=document.getElementById('readBtn'); if(_rb) _rb.onclick=()=>openReader();
+var _rc=document.getElementById('readClose'); if(_rc) _rc.onclick=()=>{ document.getElementById('readModal').style.display='none'; };
+var _rback=document.getElementById('readBack'); if(_rback) _rback.onclick=_readToPick;
+var _rgo=document.getElementById('readGo'); if(_rgo) _rgo.onclick=()=>{ const c=document.getElementById('readSel').value; const f=document.getElementById('readFrom').value; _readOpen(c,f); };
+var _rprev=document.getElementById('readPrev'); if(_rprev) _rprev.onclick=()=>{ _readIdx--; _readRender(); try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
+var _rnext=document.getElementById('readNext'); if(_rnext) _rnext.onclick=()=>{ _readIdx++; _readRender(); try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
+var _rjump=document.getElementById('readJump'); if(_rjump) _rjump.onkeydown=(e)=>{ if(e.key==='Enter'){ const qn=String(parseInt(_rjump.value,10)); const i=_readArr?_readArr.findIndex(x=>String(x.num)===qn):-1; if(i>=0){_readIdx=i;_readRender();} else toast('№ не найден'); } };
+
 async function boot(){
   // владелец заходит сразу (конфиг тянем в фоне для панели); остальные ждут вердикт сервера
   if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
   if(userAllowed()){
     document.getElementById('app').style.display='block';
-    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v43'; }
+    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v44'; }
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
         (st.cols||[]).forEach(c=>selCols.add(c));
