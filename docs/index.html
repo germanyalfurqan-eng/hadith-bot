@@ -141,7 +141,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v85</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v86</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -178,6 +178,10 @@
   <div id="qSugg" style="display:none;gap:10px;margin:0 0 8px">
     <div id="qSuggL" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto"></div>
     <div id="qSuggR" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto"></div>
+  </div>
+  <div id="recentBox" style="display:none;margin:0 0 8px;border:1px solid var(--border);border-radius:12px;padding:8px 10px;background:var(--card)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span class="hint" style="font-size:12px">🕐 Недавние поиски — нажми, чтобы повторить</span><span id="recentClr" style="cursor:pointer;color:var(--link);font-size:12px">очистить</span></div>
+    <div id="recentList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
   </div>
 
   <div class="modes">
@@ -245,6 +249,7 @@
     <div class="row"><span>🔡 Автоподсказки в Коране (списком при вводе номера)</span><div class="sw" id="acSw"></div></div>
     <div class="row"><span>✒️ Подпись при копировании (ссылка на приложение)</span><div class="sw" id="sigSw"></div></div>
     <div class="row"><span>🔍 Щипок-зум — увеличение экрана двумя пальцами <span style="color:var(--hint);font-size:11px">(по умолчанию выкл.)</span></span><div class="sw" id="zoomSw"></div></div>
+    <div class="row"><span>🕐 Недавние поиски (показывать при пустом поле)</span><div class="sw" id="recentSw"></div></div>
     <div class="row"><span>🎨 Тема оформления</span>
       <select id="themeSel" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 8px">
         <option value="dark">Тёмная</option>
@@ -433,7 +438,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v85';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v86';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -495,7 +500,7 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 /* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark'}, loadCfg());
+let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:true}, loadCfg());
 function applyTheme(){ document.body.classList.toggle('light', cfg.theme==='light'); }
 try{ applyTheme(); }catch(e){}
 
@@ -662,7 +667,8 @@ function gradeOf(h){ const g=h.grades&&h.grades[0]; return g?(g.grade||'').toStr
 // Степень достоверности из источника (учёные/sunnah) — ПОМЕЧАЕМ, что это НЕ наша проверка.
 const GRADE_NOTE='Оценка указана по источнику (учёные / sunnah.com), не нашей редакцией. Наша проверка будет добавлена позже.';
 function gradeBadge(g){ if(!g) return '';
-  return '<span class="grade" title="'+GRADE_NOTE+'">'+esc(g)+'</span><span class="srcchk" title="'+GRADE_NOTE+'">источник, не наша оценка</span>'; }
+  // единый понятный бейдж: оценка + ЯВНАЯ привязка, что это оценка источника (не нашей редакции)
+  return '<span class="grade" title="'+GRADE_NOTE+'">⚖️ '+esc(g)+' <span style="opacity:.72;font-weight:400;font-size:11px">· оценка источника, не наша</span></span>'; }
 const SAHIHAYN=['bukhari','muslim'];
 const NOGRADE_NOTE='Оценка достоверности будет добавлена после нашей проверки.';
 /* Достоверность на КАЖДОМ хадисе: Сахихайн → صحيح; есть оценка → она + «не наша проверка»; нет → «нет оценки — ожидайте». */
@@ -819,6 +825,25 @@ function updateQuranHelper(){
   }
 }
 document.getElementById('q').addEventListener('input', updateQuranHelper);
+/* 🕐 Недавние поиски (при тапе на пустое поле; выключается в Настройках) */
+function loadRecent(){ try{ return JSON.parse(localStorage.getItem('muslimoon_recent'))||[]; }catch(e){ return []; } }
+function saveRecent(q){ q=(q||'').trim(); if(q.length<2 || cfg.recent===false) return;
+  let a=loadRecent().filter(x=>x!==q); a.unshift(q); a=a.slice(0,12); try{ localStorage.setItem('muslimoon_recent', JSON.stringify(a)); }catch(e){} }
+function hideRecent(){ var b=document.getElementById('recentBox'); if(b) b.style.display='none'; }
+function showRecent(){ const box=document.getElementById('recentBox'), list=document.getElementById('recentList'); if(!box) return;
+  const inp=document.getElementById('q');
+  if(cfg.recent===false || (inp&&inp.value.trim())){ box.style.display='none'; return; }
+  const a=loadRecent(); if(!a.length){ box.style.display='none'; return; }
+  list.innerHTML=''; a.forEach(q=>{ const c=document.createElement('span'); c.className='chip'; c.style.cssText='cursor:pointer;font-size:13px';
+    c.textContent=q;
+    c.onclick=()=>{ inp.value=q; box.style.display='none'; runSearch(true); };
+    const x=document.createElement('span'); x.textContent=' ✕'; x.style.cssText='opacity:.5;cursor:pointer;margin-right:-2px';
+    x.onclick=(e)=>{ e.stopPropagation(); const arr=loadRecent().filter(y=>y!==q); try{localStorage.setItem('muslimoon_recent',JSON.stringify(arr));}catch(_){}; showRecent(); };
+    c.appendChild(x); list.appendChild(c); });
+  box.style.display='block'; }
+var _qel2=document.getElementById('q');
+if(_qel2){ _qel2.addEventListener('focus', showRecent); _qel2.addEventListener('input', ()=>{ if(_qel2.value.trim()) hideRecent(); else showRecent(); }); }
+var _rclr=document.getElementById('recentClr'); if(_rclr) _rclr.onclick=()=>{ try{ localStorage.removeItem('muslimoon_recent'); }catch(e){} hideRecent(); };
 document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.dataset.mode;
   if(!m) return;   // чипы без режима (⚙️ ещё, журналы) имеют свои обработчики
   if(m==='neuro'){ modes.neuro=!modes.neuro; ch.classList.toggle('on',modes.neuro);
@@ -920,6 +945,7 @@ async function runSearch(explicit){
   const seq=++_seq; groupSrc=false;   // каждый новый поиск — обычным списком (группировка — опция рядом с результатом)
   let q=document.getElementById('q').value.trim(); const shown=q;
   if(!q){ toast('Введите запрос'); return; }
+  saveRecent(shown); hideRecent();   // 🕐 запомнить запрос для «недавних»
   const res=document.getElementById('res'); res.innerHTML=''; _results=[]; _pick={items:[],sel:new Set(),excl:new Set(),kind:'',meaning:''};
   const head=info('⏳ Ищу…'); res.appendChild(head);
   document.getElementById('qSugg').style.display='none';   // спрятать подсказки на время поиска
@@ -1879,6 +1905,7 @@ function applyZoom(){ var m=document.getElementById('vpMeta'); if(!m) return;
 var _zm=document.getElementById('zoomSw'); if(_zm){ _zm.classList.toggle('on',!cfg.noZoom); _zm.onclick=()=>{ cfg.noZoom=!cfg.noZoom; saveCfg(cfg); _zm.classList.toggle('on',!cfg.noZoom); applyZoom(); if(!cfg.noZoom) toast('Зум включён 🔍'); }; }
 applyZoom();
 var _th=document.getElementById('themeSel'); if(_th){ _th.value=cfg.theme||'dark'; _th.onchange=()=>{ cfg.theme=_th.value; saveCfg(cfg); applyTheme(); toast(cfg.theme==='light'?'Светлая тема ☀️':'Тёмная тема 🌙'); }; }
+var _rcw=document.getElementById('recentSw'); if(_rcw){ _rcw.classList.toggle('on',cfg.recent!==false); _rcw.onclick=()=>{ cfg.recent=(cfg.recent===false); saveCfg(cfg); _rcw.classList.toggle('on',cfg.recent!==false); if(cfg.recent===false) hideRecent(); }; }
 applyTheme();
 /* Подсказка при попытке увеличить экран пальцами, когда зум выключен (ненавязчиво, с «не показывать» и эскалацией) */
 let _zoomTries=0, _zoomLast=0;
