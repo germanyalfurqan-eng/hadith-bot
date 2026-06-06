@@ -1878,7 +1878,11 @@ def save_access(cfg):
     return _access_cache
 
 def _norm(x):
-    return str(x).strip().lower().lstrip("@")
+    s = str(x).strip().lower()
+    m = re.match(r'^(?:id|ид|айди)[\s:\-]+(.+)$', s)   # «Id: 12345» / «ид - 12345» → 12345
+    if m:
+        s = m.group(1).strip()
+    return s.lstrip("@").strip()
 
 def _in_list(user, lst):
     if not user or not lst:
