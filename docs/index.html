@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v65</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v66</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -401,7 +401,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v65';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v66';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1154,32 +1154,104 @@ function addTr(meta,card,text,ayah,fav){
   meta.appendChild(fbb);
   card.appendChild(out);
 }
-async function doTakhrij(text, ref, out, btn){
-  // التخريج без ИИ: ищем характерную фразу матна по доступным сборникам
-  btn.disabled=true; const prev=btn.textContent; btn.textContent='ищу…';
-  out.style.display='block'; out.innerHTML='<span class="hint">Ищу, где ещё передаётся…</span>';
+/* ===== ТАХРИДЖ «Где ещё передаётся» — авторитетно (sunnah.one) + широко (ВСЕ наши сборники, мульти-фразой) + прогресс % + клик по № → читалка. Особое внимание правильной взаимосвязи хадисов. ===== */
+const TAKH_MAIN=['bukhari','muslim','abudawud','tirmidhi','ibnmajah','nasai','malik','ahmad','muqbil','muhaymin'];
+const TAKH_SMALL=['ibnmubarak','ismail','adabmufrad','humaydi','abdbinhumayd','ibnaljad','ishaq','tayalisi','darimi','ibnkhuzayma'];
+const TAKH_BIG=['ibnhibban','nasaikubra','abuyala','ibnabishayba','abuawana']; // 10–21 МБ каждый → по кнопке
+let _takhSeq=0;
+async function loadByCode(code){
+  if(code==='muhaymin') return (await loadMuhaymin()).map(x=>({num:String(x.n),text:x.text}));
+  return await _readLoad(code);
+}
+function _yield(){ return new Promise(r=>setTimeout(r,0)); }
+// Несколько характерных фраз из РАЗНЫХ частей матна (одна часто промахивается из-за вставок «رضي الله عنه» и иснада в середине)
+function matnPhrases(text){
   let matn=splitIsnad(text)[1]||text; const mq=matn.match(/«([^«»]{8,})»/); if(mq) matn=mq[1];
   const words=canon(matn).split(' ').filter(w=>w.length>1);
-  if(words.length<5){ out.innerHTML='<span class="hint">Текст коротковат для تخريج.</span>'; btn.disabled=false; btn.textContent=prev; return; }
-  const start=Math.max(0,Math.floor(words.length/2)-3); const phrase=words.slice(start,start+6).join(' ');
-  const skipCode=(ref&&ref.source)||''; const found={};
-  for(const code of ['bukhari','muslim','abudawud','tirmidhi','ibnmajah','nasai','malik','ahmad','muqbil']){
-    try{ let arr; const C=COLLECTIONS.find(x=>x.code===code); const X=EXTRA_MAP[code];
-      if(code==='ahmad') arr=await loadAhmad(); else if(X&&X.file) arr=await loadLocal(code,X.file); else if(X) arr=await loadExtra(code); else if(C&&C.file) arr=await loadLocal(code,C.file); else arr=await loadCollection(code);
-      for(const h of arr){ if((code+'')===skipCode && String(h.num)===String(ref&&ref.num)) continue;
-        if(canon(h.text).indexOf(phrase)!==-1){ (found[code]=found[code]||[]).push(h.num); if(found[code].length>=6) break; } }
-    }catch(e){}
+  const n=words.length; if(n<5) return [];
+  const len=Math.min(6, Math.max(4, Math.floor(n/3)));
+  const out=[], seen=new Set();
+  for(const f of [0.45,0.62,0.30,0.75,0.15]){ let s=Math.floor(n*f); s=Math.max(0,Math.min(s,n-len));
+    const ph=words.slice(s,s+len).join(' '); if(ph.length>=10 && !seen.has(ph)){ seen.add(ph); out.push(ph); } }
+  return out;
+}
+async function doTakhrij(text, ref, out, btn){
+  const myseq=++_takhSeq;                       // новый запуск отменяет предыдущий
+  const aborted=()=>myseq!==_takhSeq;
+  btn.disabled=true; const prev=btn.textContent; btn.textContent='ищу…'; out.style.display='block';
+  const phrases=matnPhrases(text);
+  const skipCode=(ref&&ref.source)||'', skipNum=String((ref&&ref.num)||'');
+  out.innerHTML='';
+  const mk=()=>{ const d=document.createElement('div'); out.appendChild(d); return d; };
+  const muhSec=mk(), sciSec=mk(), locHead=mk(), locBox=mk(), moreSec=mk();
+  const found={}; let muhNums=new Set();
+
+  function renderMuh(){ if(muhNums.size){ const nums=[...muhNums].join(', ');
+      muhSec.innerHTML='<div dir="ltr" style="background:#1d3a5f;border:1px solid #2f5b8f;border-radius:8px;padding:5px 8px;margin-bottom:6px;font-size:13px">📖 Есть в аль-Мухаймин — № '+esc(nums)+' <span style="color:#9fb4cc">(книга в обработке)</span></div>'; } else muhSec.innerHTML=''; }
+  function renderLoc(){ locBox.innerHTML='';
+    Object.keys(found).forEach(code=>{ const nums=found[code];
+      const row=document.createElement('div'); row.style.cssText='direction:rtl;font-size:14px;margin:2px 0';
+      const lbl=document.createElement('span'); lbl.textContent=arOf(code)+': '; row.appendChild(lbl);
+      nums.forEach((nm,i)=>{ const a=document.createElement('span'); a.textContent='№'+nm; a.title='Открыть в читалке на этом хадисе';
+        a.style.cssText='color:var(--link);cursor:pointer'; a.onclick=()=>openReader(code,nm); row.appendChild(a);
+        if(i<nums.length-1){ const s=document.createElement('span'); s.textContent='، '; row.appendChild(s); } });
+      locBox.appendChild(row); }); }
+
+  if(!phrases.length){ locHead.innerHTML='<div class="hint">Текст коротковат для надёжного تخريج.</div>'; btn.disabled=false; btn.textContent=prev; return; }
+
+  // 1) аль-Мухаймин — точная привязка по источнику+номеру (обратный индекс)
+  try{ await loadReverse(); if(reverse && ref && ref.source){ const m=reverse[ref.source+' '+ref.num]||reverse[ref.source+' '+toAr(skipNum)];
+    if(m&&m.length) m.forEach(x=>muhNums.add(String(x.m))); } }catch(e){} renderMuh();
+
+  // 2) Научный تخريج (sunnah.one) — параллельно, БЕЗ траты ключа: «أخرجه فلان…» + оценка учёных
+  sciSec.innerHTML='<div style="color:var(--hint);font-size:12px;margin:2px 0 6px">🌐 Запрашиваю научный تخريج…</div>';
+  (async()=>{
+    if(!BACKEND_URL){ sciSec.innerHTML=''; return; }
+    for(const c of phrases){ try{
+      const r=await fetch(BACKEND_URL+'/wide?q='+encodeURIComponent(c)+'&initData='+encodeURIComponent(INITDATA));
+      if(aborted()) return; const j=await r.json().catch(()=>({})); const data=j.data||[];
+      const w=data.find(x=>x.takhreej)||data[0];
+      if(w && (w.takhreej||w.hukm)){
+        sciSec.innerHTML='<div style="border:1px solid var(--border);border-radius:10px;padding:8px;margin:2px 0 8px">'
+          +'<div style="font-size:12px;margin-bottom:4px"><span style="color:#4ade80">🌐 Научный تخريج</span> <span style="color:var(--hint)">(sunnah.one · учёные)</span> '+(w.hukm?gradeBadge(w.hukm):'')+'</div>'
+          +(w.takhreej?'<div style="direction:rtl;text-align:right;font-size:14px;line-height:1.7">'+esc(w.takhreej)+'</div>':'<div class="hint" style="font-size:12px">оценка есть, развёрнутого تخريج нет</div>')
+          +'</div>'; return; }
+    }catch(e){} }
+    sciSec.innerHTML='<div style="color:var(--hint);font-size:12px;margin:2px 0 6px">🌐 Научный تخريج: точного совпадения в sunnah.one не нашлось.</div>';
+  })();
+
+  // 3) Перекрёстный поиск по НАШИМ сборникам (мульти-фразой) — точные № + клик в читалку
+  async function scan(codes){
+    const total=codes.length; let done=0;
+    for(const code of codes){ if(aborted()){ return false; } done++;
+      const pct=Math.round(done/total*100);
+      locHead.innerHTML='<div style="color:var(--hint);font-size:12px;margin:8px 0 4px">🔗 В наших сборниках — проверяю '+esc(arOf(code))+'… '+done+'/'+total+' ('+pct+'%)</div>';
+      try{ const arr=await loadByCode(code); if(aborted()) return false;
+        const hits=[];
+        for(const h of arr){ if(code===skipCode && String(h.num)===skipNum) continue;
+          if(phrases.some(p=>canon(h.text).indexOf(p)!==-1)){ hits.push(String(h.num)); if(hits.length>=8) break; } }
+        if(hits.length){ if(code==='muhaymin'){ hits.forEach(n=>muhNums.add(n)); renderMuh(); } else { found[code]=hits; renderLoc(); } }
+      }catch(e){}
+      await _yield();
+    }
+    return true;
   }
-  const entries=Object.entries(found);
-  let html='';
-  // в аль-Мухаймин? (наш обратный индекс по этому источнику+номеру)
-  try{ if(reverse && ref && ref.source){ const m=reverse[ref.source+' '+ref.num]||reverse[ref.source+' '+toAr(String(ref.num))];
-    if(m&&m.length){ const nums=[...new Set(m.map(x=>x.m))].join(', ');
-      html+='<div dir="ltr" style="background:#1d3a5f;border:1px solid #2f5b8f;border-radius:8px;padding:5px 8px;margin-bottom:6px;font-size:13px">📖 Есть в аль-Мухаймин — № '+esc(nums)+' <span style="color:#9fb4cc">(книга в обработке)</span></div>'; } } }catch(e){}
-  html+='<div style="color:var(--hint);font-size:12px;margin-bottom:4px">🔗 التخريج — также передаётся в сборниках:</div>';
-  if(!entries.length) html+='<span class="hint">совпадений не нашёл (или хадис уникален в доступных сборниках).</span>';
-  else entries.forEach(([code,nums])=>{ html+='<div style="direction:rtl;font-size:14px">'+esc(arOf(code))+': '+nums.map(n=>'№'+n).join('، ')+'</div>'; });
-  out.innerHTML=html; btn.disabled=false; btn.textContent=prev;
+  const ok=await scan(TAKH_MAIN.concat(TAKH_SMALL));
+  if(aborted()) { btn.disabled=false; btn.textContent=prev; return; }
+  const cnt=Object.keys(found).length;
+  locHead.innerHTML='<div style="color:var(--hint);font-size:12px;margin:8px 0 4px">🔗 В наших сборниках'+(cnt?' (клик по № — открыть в читалке):':' — совпадений не нашёл:')+'</div>';
+  // 4) Крупные издания (~75 МБ) — по кнопке, чтобы не качать лишнее на мобильном
+  moreSec.innerHTML='';
+  const moreBtn=document.createElement('button'); moreBtn.className='tr-btn';
+  moreBtn.style.cssText='background:transparent;border:1px solid var(--border);color:var(--link);padding:6px 11px;margin-top:6px';
+  moreBtn.textContent='➕ Искать ещё в 5 крупных изданиях (Ибн Аби Шейба, Абу Авана…)';
+  moreBtn.title='Загрузит крупные сборники (~75 МБ) и поищет в них — с прогрессом';
+  moreBtn.onclick=async()=>{ moreBtn.disabled=true; const seq2=myseq; const okb=await scan(TAKH_BIG);
+    if(seq2!==_takhSeq) return; const c2=Object.keys(found).length;
+    locHead.innerHTML='<div style="color:var(--hint);font-size:12px;margin:8px 0 4px">🔗 В наших сборниках'+(c2?' (клик по № — открыть в читалке):':' — совпадений не нашёл:')+'</div>';
+    moreSec.innerHTML='<div class="hint" style="font-size:12px;margin-top:4px">✓ Проверены и крупные издания.</div>'; };
+  moreSec.appendChild(moreBtn);
+  btn.disabled=false; btn.textContent=prev;
 }
 function hasDiac(t){ return /[ً-ْٰـ]/.test(t||''); }
 function addHelpQ(meta,txt){ const q=document.createElement('button'); q.className='tr-btn'; q.textContent='?';
