@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v70</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v71</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -402,7 +402,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v70';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v71';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -888,6 +888,28 @@ async function runSearch(explicit){
       : (done?('Ничего не найдено 🤷'+(smartNote?' — попробуй иначе':'')):'Ищу…');
     head.innerHTML = (smartNote?('<div style="color:var(--link);margin-bottom:4px;font-size:13px">'+esc(smartNote)+'</div>'):'')+n; };
   const add=(d)=>{ _results.push(d); if(count<CAP) res.appendChild(makeCard(d)); count++; };
+  // «Искать ещё в большой библиотеке» — 16 изданий + Мукбиль (не грузим по умолчанию ~127МБ; по кнопке, с прогрессом, потом кэш в сессии)
+  function addLibMore(){
+    if(tab!=='hadith') return; const res=document.getElementById('res');
+    const old=document.getElementById('libMore'); if(old) old.remove();
+    const codes=EXTRA.filter(e=>!e.soon && !selExtra.has(e.code)).map(e=>e.code);
+    if(!codes.length) return;
+    const b=document.createElement('div'); b.id='libMore';
+    b.style.cssText='display:block;margin:14px 0 6px;cursor:pointer;color:var(--link);border:1px dashed var(--border);border-radius:12px;padding:9px 12px;text-align:center;font-size:13px';
+    b.textContent='📚 Искать ещё в нашей большой библиотеке (+'+codes.length+': Ибн Аби Шейба, Ибн Хиббан, Мукбиль…)';
+    b.onclick=async()=>{ if(seq!==_seq) return; b.style.pointerEvents='none'; let done=0;
+      for(const code of codes){ if(seq!==_seq) return; done++;
+        b.textContent='📚 Ищу: '+arOf(code)+'… '+done+'/'+codes.length+' ('+Math.round(done/codes.length*100)+'%)';
+        try{ const arr=await loadByCode(code); if(seq!==_seq) return;
+          for(const h of arr){ if(docMatch(h,groups,modes)){ _results.push(code==='muhaymin'?{type:'m',h}:{type:'h',code,h}); count++; } }
+        }catch(e){}
+        await new Promise(r=>setTimeout(r,0));
+      }
+      if(seq!==_seq) return; b.remove(); groupSrc=true; renderResultsView();
+      toast('Всего найдено: '+count+' (с большой библиотекой)');
+    };
+    res.appendChild(b);
+  }
   if(tab==='hadith'){
     // Длинный вставленный ХАДИС (целиком) → сразу широкий поиск (sunnah.one). Пробуем НЕСКОЛЬКО фраз-кандидатов
     // из разных мест матна (иснад бывает и в начале, и в конце) — берём первую, что нашла.
@@ -961,6 +983,7 @@ async function runSearch(explicit){
     }
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
     if(count) ensureGrpToggle();
+    if(!numMode) addLibMore();   // кнопка «искать ещё в большой библиотеке» (16 изданий + Мукбиль)
   } else {
     try{ const arr=await loadQuran(); if(seq!==_seq) return;
       const qn=q.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
