@@ -65,6 +65,7 @@
   .tr-out{margin-top:8px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:14px;display:none}
   mark{background:var(--mark);color:#241c00;border-radius:3px;padding:0 1px}
   .isnad{color:var(--hint)}
+  .matn{color:#fff;font-weight:700}
   .status{text-align:center;color:var(--hint);padding:14px;font-size:14px}
   .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#000;color:#fff;
         padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:.2s;z-index:99;max-width:90%}
@@ -116,7 +117,7 @@
       <div class="gear" id="gear">⚙️</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v21</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v22</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -352,11 +353,15 @@ function splitIsnad(text){
   for(let i=0;i<c.length;i++){ if(c[i].indexOf('وسلم')!==-1) return [words.slice(0,i+1).join(' '), words.slice(i+1).join(' ')]; }
   return [null,text];
 }
+function markMatn(html){
+  // матн (слова Пророка/хадиса) обычно в «…» — выделяем ярче; иснад серый, комментарий обычный
+  return html.replace(/«([^«»]*)»/g,'<span class="matn">«$1»</span>');
+}
 function hl(text,groups){
   const disp=cfg.noDiac?stripDiac(text):text;
-  if(!cfg.isnad) return highlight(disp,groups,modes);
-  const sp=splitIsnad(disp); if(!sp[0]) return highlight(disp,groups,modes);
-  return '<span class="isnad">'+highlight(sp[0],groups,modes)+'</span> '+highlight(sp[1],groups,modes);
+  if(!cfg.isnad) return markMatn(highlight(disp,groups,modes));
+  const sp=splitIsnad(disp); if(!sp[0]) return markMatn(highlight(disp,groups,modes));
+  return markMatn('<span class="isnad">'+highlight(sp[0],groups,modes)+'</span> '+highlight(sp[1],groups,modes));
 }
 /* ===== копирование ===== */
 function copyText(t){ try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(()=>toast('Скопировано ✓'),()=>_fbCopy(t)); } else _fbCopy(t); }catch(e){ _fbCopy(t); } }
@@ -759,7 +764,7 @@ async function boot(){
   if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
   if(userAllowed()){
     document.getElementById('app').style.display='block';
-    if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v21 · хадисы · аяты · аль-Мухаймин'; }
+    if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v22 · хадисы · аяты · аль-Мухаймин'; }
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
         (st.cols||[]).forEach(c=>selCols.add(c));

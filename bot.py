@@ -2011,9 +2011,13 @@ async def _api_serve():
             return _ratelimited()
         try:
             text = (d.get('text') or '')[:4000]
-            tr = await loop.run_in_executor(None, ask_deepseek, "Переведи точно на русский, выдай только перевод:\n" + text, "Ты — точный переводчик арабского (хадисы/аяты).") or ""
-            tr = re.sub(r'\s*⚡.*$', '', tr, flags=re.S).strip()
-            return _cors(web.json_response({'translation': tr or ''}))
+            # НАКОПЛЕНИЕ: через translate_matn → кэш в translations.json (ветка data).
+            # Повторный перевод того же текста берётся из кэша, DeepSeek не дёргается.
+            cache = _load_trans()
+            cached = cache.get(_trans_key(text)) if cache else None
+            tr = await loop.run_in_executor(None, translate_matn, text, "", True)
+            tr = re.sub(r'\s*⚡.*$', '', (tr or ''), flags=re.S).strip()
+            return _cors(web.json_response({'translation': tr, 'cached': bool(cached)}))
         except Exception as e:
             return _cors(web.json_response({'translation': '', 'error': str(e)}))
 
