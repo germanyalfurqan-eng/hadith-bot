@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v49</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v50</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -155,7 +155,11 @@
     <input type="text" id="q" placeholder="Слова, фраза или № хадиса…" autocomplete="off" enterkeyhint="search">
     <button class="go" id="goBtn" title="Искать по запросу">Найти</button>
   </div>
-  <div id="qHelper" class="hint" style="display:none;margin:-2px 0 8px;color:var(--link)"></div>
+  <div id="qHelper" class="hint" style="display:none;margin:-2px 0 6px;color:var(--link)"></div>
+  <div id="qSugg" style="display:none;gap:10px;margin:0 0 8px">
+    <div id="qSuggL" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto"></div>
+    <div id="qSuggR" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto"></div>
+  </div>
 
   <div class="modes">
     <div class="chip" data-mode="root" title="Однокоренные: ищет все формы слова по корню (намного шире). Покажет панель форм.">جذ Однокоренные</div>
@@ -219,6 +223,7 @@
     <div class="row"><span>🔤 Коран без огласовок (تشكيل)</span><div class="sw" id="noDiacSw"></div></div>
     <div class="row"><span>🎨 Выделять иснад (цепочку) серым</span><div class="sw" id="isnadSw"></div></div>
     <div class="row"><span>🙈 Скрывать иснад (показывать только матн)</span><div class="sw" id="hideIsnadSw"></div></div>
+    <div class="row"><span>🔡 Автоподсказки в Коране (списком при вводе номера)</span><div class="sw" id="acSw"></div></div>
     <div class="row" style="opacity:.55"><span>🎨 Тема оформления</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>🌐 English / язык</span><span>скоро</span></div>
   </div>
@@ -366,7 +371,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v49';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v50';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -425,7 +430,7 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 /* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true}, loadCfg());
+let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true}, loadCfg());
 
 /* ===================== СЕРВЕРНЫЙ ДОСТУП (G9) ===================== */
 const INITDATA = (tg && tg.initData) || '';
@@ -484,7 +489,7 @@ function termMatch(term,doc,modes){
     if(!doc[wk]) doc[wk]=nf.split(' ').map(skel);
     const qs=canon(term.t).split(' ').map(skel).filter(s=>s.length>=2);
     if(!qs.length) return nf.indexOf(canon(term.t))!==-1;
-    return qs.every(q=> doc[wk].some(w=> w.length>=q.length && isSubseq(q,w)));
+    return qs.every(q=> doc[wk].some(w=> w.length>=q.length && w.indexOf(q)!==-1));  // корень = смежная подстрока скелета (не вразброс)
   }
   return nf.indexOf(canon(term.t))!==-1;
 }
@@ -663,24 +668,39 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
 });
 // M96: помощник по Корану — при вводе числа в «Аяты» подсказываем суру и число аятов
 const SURA_AYAHS=[7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,72,135,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
+const SURA_NAMES=['аль-Фатиха','аль-Бакара','Аль Имран','ан-Ниса','аль-Маида','аль-Анам','аль-Араф','аль-Анфаль','ат-Тауба','Юнус','Худ','Юсуф','ар-Раад','Ибрахим','аль-Хиджр','ан-Нахль','аль-Исра','аль-Кахф','Марьям','Та Ха','аль-Анбия','аль-Хадж','аль-Муминун','ан-Нур','аль-Фуркан','аш-Шуара','ан-Намль','аль-Касас','аль-Анкабут','ар-Рум','Лукман','ас-Саджда','аль-Ахзаб','Саба','Фатир','Йа Син','ас-Саффат','Сад','аз-Зумар','Гафир','Фуссылат','аш-Шура','аз-Зухруф','ад-Духан','аль-Джасия','аль-Ахкаф','Мухаммад','аль-Фатх','аль-Худжурат','Каф','аз-Зарият','ат-Тур','ан-Наджм','аль-Камар','ар-Рахман','аль-Вакиа','аль-Хадид','аль-Муджадиля','аль-Хашр','аль-Мумтахана','ас-Сафф','аль-Джумуа','аль-Мунафикун','ат-Тагабун','ат-Талак','ат-Тахрим','аль-Мульк','аль-Калам','аль-Хакка','аль-Мааридж','Нух','аль-Джинн','аль-Муззаммиль','аль-Муддассир','аль-Кияма','аль-Инсан','аль-Мурсалят','ан-Наба','ан-Назиат','Абаса','ат-Таквир','аль-Инфитар','аль-Мутаффифин','аль-Иншикак','аль-Бурудж','ат-Тарик','аль-Аля','аль-Гашия','аль-Фаджр','аль-Балад','аш-Шамс','аль-Лейль','ад-Духа','аш-Шарх','ат-Тин','аль-Аляк','аль-Кадр','аль-Баййина','аз-Зальзаля','аль-Адият','аль-Кариа','ат-Такасур','аль-Аср','аль-Хумаза','аль-Филь','Курайш','аль-Маун','аль-Каусар','аль-Кафирун','ан-Наср','аль-Масад','аль-Ихляс','аль-Фаляк','ан-Нас'];
+function _sgItem(label, on){ const d=document.createElement('div'); d.textContent=label;
+  d.style.cssText='background:var(--card);border:1px solid var(--border);border-radius:10px;padding:7px 10px;font-size:13px;cursor:pointer';
+  d.onmousedown=(e)=>e.preventDefault(); d.onclick=on; return d; }
+function _sgHead(t){ const h=document.createElement('div'); h.textContent=t; h.style.cssText='font-size:11px;color:var(--hint);margin-bottom:2px'; return h; }
+function _setQ(val,search){ const q=document.getElementById('q'); q.value=val; updateQuranHelper(); if(search) runSearch(); else q.focus(); }
 function updateQuranHelper(){
-  const el=document.getElementById('qHelper'); if(!el) return;
+  const cap=document.getElementById('qHelper'), box=document.getElementById('qSugg');
+  const L=document.getElementById('qSuggL'), R=document.getElementById('qSuggR');
+  if(!cap||!box) return;
+  cap.style.display='none'; box.style.display='none'; if(L)L.innerHTML=''; if(R)R.innerHTML='';
   const v=(document.getElementById('q').value||'').trim();
-  if(tab!=='quran' || !v){ el.style.display='none'; return; }
+  if(tab!=='quran' || !v) return;
   let m;
   if((m=v.match(/^(\d{1,3})$/))){
-    const s=+m[1];
-    if(s>=1&&s<=114){ el.innerHTML='📖 Сура '+s+' — в ней '+SURA_AYAHS[s-1]+' аятов. Для аята введи <b>'+s+':номер</b> (напр. '+s+':1). Сейчас покажу всю суру.'; el.style.display='block'; }
-    else { el.innerHTML='⚠️ В Коране 114 сур (ты ввёл '+s+').'; el.style.display='block'; }
+    const d=m[1], s=+d;
+    if(!cfg.ac){ cap.innerHTML = (s>=1&&s<=114) ? ('📖 '+s+' '+SURA_NAMES[s-1]+' — '+SURA_AYAHS[s-1]+' аятов · для аята введи '+s+':номер') : '⚠️ В Коране 114 сур.'; cap.style.display='block'; return; }
+    const suras=[]; for(let n=1;n<=114;n++) if(String(n).startsWith(d)) suras.push(n);
+    if(suras.length){ L.appendChild(_sgHead('Суры (нажми → выбрать):'));
+      suras.slice(0,15).forEach(n=> L.appendChild(_sgItem(n+'. '+SURA_NAMES[n-1]+' — '+SURA_AYAHS[n-1]+' аят.', ()=>_setQ(n+':',false)))); }
+    if(s>=1&&s<=114){ const tot=SURA_AYAHS[s-1]; R.appendChild(_sgHead('Аяты суры '+s+' ('+SURA_NAMES[s-1]+'):'));
+      for(let a=1;a<=Math.min(tot,30);a++) R.appendChild(_sgItem(s+':'+a, ()=>_setQ(s+':'+a,true))); }
+    if(L.children.length||R.children.length) box.style.display='flex';
   } else if((m=v.match(/^(\d{1,3})\s*:\s*(\d{0,3})$/))){
-    const s=+m[1], a=m[2]?+m[2]:0;
-    if(s<1||s>114){ el.innerHTML='⚠️ В Коране 114 сур.'; el.style.display='block'; }
-    else { const tot=SURA_AYAHS[s-1];
-      if(!a) el.innerHTML='📖 Сура '+s+' — '+tot+' аятов. Допиши номер аята (1–'+tot+').';
-      else if(a>tot) el.innerHTML='⚠️ В суре '+s+' всего '+tot+' аятов (ты ввёл '+a+').';
-      else el.innerHTML='📖 Аят '+s+':'+a+' (сура '+s+', всего в ней '+tot+' аятов).';
-      el.style.display='block'; }
-  } else { el.style.display='none'; }
+    const s=+m[1], ap=m[2];
+    if(s<1||s>114){ cap.innerHTML='⚠️ В Коране 114 сур.'; cap.style.display='block'; return; }
+    const tot=SURA_AYAHS[s-1];
+    cap.innerHTML='📖 '+s+' '+SURA_NAMES[s-1]+' — '+tot+' аятов'+(ap&&+ap>tot?(' · ⚠️ аята '+ap+' нет'):''); cap.style.display='block';
+    if(!cfg.ac) return;
+    R.appendChild(_sgHead('Аяты (нажми → открыть):'));
+    let cnt=0; for(let a=1;a<=tot;a++){ if(!ap || String(a).startsWith(ap)){ R.appendChild(_sgItem(s+':'+a, ()=>_setQ(s+':'+a,true))); if(++cnt>=40) break; } }
+    if(cnt) box.style.display='flex';
+  }
 }
 document.getElementById('q').addEventListener('input', updateQuranHelper);
 document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.dataset.mode;
@@ -724,7 +744,7 @@ function logSearch(q,tab,count){
 function collectForms(text, qSkels, forms){
   const ws=canon(text).split(' ');
   for(let i=0;i<ws.length;i++){ const w=ws[i].replace(/[^ء-ي]/g,''); if(w.length<2) continue; const sk=skel(w);
-    if(qSkels.some(qq=> sk.length>=qq.length && isSubseq(qq,sk))){ forms[w]=(forms[w]||0)+1; } }
+    if(qSkels.some(qq=> sk.length>=qq.length && sk.indexOf(qq)!==-1)){ forms[w]=(forms[w]||0)+1; } }
 }
 /* ===== Панель выбора (формы корня / фразы по смыслу) — мультивыбор ===== */
 let _pick={items:[],sel:new Set(),excl:new Set(),kind:'',meaning:''};
@@ -777,7 +797,10 @@ async function runSearch(){
   let q=document.getElementById('q').value.trim(); const shown=q;
   if(!q){ toast('Введите запрос'); return; }
   const res=document.getElementById('res'); res.innerHTML=''; _results=[]; _pick={items:[],sel:new Set(),excl:new Set(),kind:'',meaning:''};
-  const head=info('Ищу…'); res.appendChild(head);
+  const head=info('⏳ Ищу…'); res.appendChild(head);
+  document.getElementById('qSugg').style.display='none';   // спрятать подсказки на время поиска
+  await new Promise(r=>setTimeout(r,16));   // дать браузеру отрисовать «Ищу…»/нажатую кнопку ДО тяжёлого цикла (чтобы не выглядело зависшим)
+  if(seq!==_seq) return;
   let smartNote=''; let aiPhrases=null;
   // По умолчанию — обычный автоматический поиск. ИИ-подбор включается ТОЛЬКО кнопкой «🧠 По смыслу».
   if(modes.ai && !isArabic(q) && !/^\d{1,7}$/.test(q) && !/^\d{1,3}\s*[:\s]\s*\d{1,3}$/.test(q)){
@@ -1273,6 +1296,7 @@ var _qs=document.getElementById('qtrSel'); if(_qs){ _qs.value=cfg.qtr||'rus-elmi
 var _nd=document.getElementById('noDiacSw'); if(_nd){ _nd.classList.toggle('on',!!cfg.noDiac); _nd.onclick=()=>{ cfg.noDiac=!cfg.noDiac; saveCfg(cfg); _nd.classList.toggle('on',!!cfg.noDiac); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _is=document.getElementById('isnadSw'); if(_is){ _is.classList.toggle('on',!!cfg.isnad); _is.onclick=()=>{ cfg.isnad=!cfg.isnad; saveCfg(cfg); _is.classList.toggle('on',!!cfg.isnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _hi=document.getElementById('hideIsnadSw'); if(_hi){ _hi.classList.toggle('on',!!cfg.hideIsnad); _hi.onclick=()=>{ cfg.hideIsnad=!cfg.hideIsnad; saveCfg(cfg); _hi.classList.toggle('on',!!cfg.hideIsnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
+var _ac=document.getElementById('acSw'); if(_ac){ _ac.classList.toggle('on',!!cfg.ac); _ac.onclick=()=>{ cfg.ac=!cfg.ac; saveCfg(cfg); _ac.classList.toggle('on',!!cfg.ac); updateQuranHelper(); }; }
 
 /* ===================== УТИЛИТЫ ===================== */
 function setStatus(t){document.getElementById('status').textContent=t;}
