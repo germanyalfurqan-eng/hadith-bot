@@ -320,6 +320,7 @@ OWNER_CHANNEL_ID = -1001660979432
 LOG_CHAT_ID = -1003480426073
 GITHUB_REPO = "germanyalfurqan-eng/hadith-bot"
 ANNOUNCE_CHAT_ID = -1003982210885
+APP_CHANNEL_ID = -1003989206932   # @muslimoonapp — публичный канал приложения (обновления для подписчиков)
 
 GUIDE_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/bot_guide_tg.txt"
 MAIN_KB = ReplyKeyboardMarkup([["📖 Инструкция"]], resize_keyboard=True)
@@ -1183,6 +1184,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("🤔 Думаю...")
             result = ask_ai_with_memory(clean)
             await send_long(update, result)
+            await log_bot_ai(update, context)
             return
 
     # ============ G9: доступ к боту (Бухари 333, мухэймин, искать…) — по умолчанию ВСЕМ ============
@@ -1491,6 +1493,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("🤔 Думаю...")
                 result = ask_ai_with_memory(text)
                 await send_long(update, result)
+                await log_bot_ai(update, context)
                 return
 
         # В чате/канале: отвечаем ТОЛЬКО если есть "ботяра" или ответ боту
@@ -1505,6 +1508,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("🤔 Думаю...")
                 result = ask_ai_with_memory(clean)
                 await send_long(update, result)
+                await log_bot_ai(update, context)
                 return
 
         # AI на "ботяра" в группах
@@ -1518,6 +1522,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("🤔 Думаю...")
             result = ask_ai_with_memory(clean)
             await send_long(update, result)
+            await log_bot_ai(update, context)
             return
 
         # Перевод
@@ -2154,6 +2159,32 @@ def usage_log(user, feat, fresh, length=0, src="", num=""):
                            "fresh": bool(fresh), "len": length, "src": src, "num": str(num)})
     u["recent"] = u["recent"][:300]
     _journal_save(f"журнал: {feat} {name} ({'свежий' if fresh else 'из базы'})")
+
+async def log_bot_ai(update, context, feat="ботяра"):
+    """Расход ИИ из самого бота (ботяра/группы) → в journal.json + зеркало в LOG-канал.
+    Раньше это НЕ логировалось → трата в группах была не видна (ЗАМЕЧАНИЯ #13)."""
+    try:
+        user = tg_user_dict(update)
+        try:
+            await asyncio.get_event_loop().run_in_executor(None, usage_log, user, feat, True)
+        except Exception:
+            pass
+        uid = (user or {}).get("id")
+        if user and user.get("username"):
+            who = "@" + user["username"]
+        elif uid:
+            who = f"[{uid}](tg://user?id={uid})"
+        else:
+            who = "аноним"
+        ch = update.effective_chat
+        where = ""
+        if ch and getattr(ch, "type", "") != "private":
+            where = f" · в «{getattr(ch,'title','')}» ({ch.type})"
+        await context.bot.send_message(LOG_CHAT_ID,
+            f"#ии #ботяра 🤖 {feat}: {who}{where} — 🆕 свежий (DeepSeek, ключ потрачен)",
+            parse_mode="Markdown")
+    except Exception:
+        pass
 # ============ КОНЕЦ G9-БЛОКА ============
 
 async def _api_serve(application=None):
@@ -2414,6 +2445,19 @@ async def _setup(application):
         await application.bot.send_message(LOG_CHAT_ID, msg, parse_mode="Markdown")
     except Exception:
         pass
+    # Публичный канал приложения (@muslimoonapp): постим обновление, НО только если note НОВЫЙ
+    # (защита от спама при частых рестартах Railway — сравниваем с последним опубликованным).
+    try:
+        if note:
+            j = _journal_load()
+            last = (j.get("app_post") or {}).get("note", "")
+            if note != last:
+                body = (note + "\n\n———\n🔎 Открыть приложение: t.me/muslimoontt_bot")
+                await application.bot.send_message(APP_CHANNEL_ID, body, disable_web_page_preview=True)
+                j["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+                _journal_save("app_post → канал приложения")
+    except Exception as e:
+        print("app channel post failed:", e)
 
 async def start_cmd(update, context):
     """/start — приветствие + кнопка открыть мини-апп (работает у всех)."""
