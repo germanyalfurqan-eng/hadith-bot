@@ -849,8 +849,9 @@ def search_similar_hadith(arabic_text):
         return refs
     except: return []
 
-def ask_deepseek(prompt, system):
-    """Личный ответ владельцу через DeepSeek API."""
+def ask_deepseek(prompt, system, max_tokens=2000):
+    """Личный ответ владельцу через DeepSeek API. max_tokens — потолок длины ответа
+    (для перевода длинных хадисов поднимаем, иначе текст обрывается на полуслове)."""
     try:
         r = requests.post(
             "https://api.deepseek.com/chat/completions",
@@ -858,8 +859,8 @@ def ask_deepseek(prompt, system):
             json={"model": DEEPSEEK_MODEL,
                   "messages": [{"role": "system", "content": system},
                                {"role": "user", "content": prompt}],
-                  "max_tokens": 2000},
-            timeout=60)
+                  "max_tokens": max_tokens},
+            timeout=90)
         if r.status_code == 200:
             ответ = r.json()["choices"][0]["message"]["content"]
             ответ = ответ.replace("\n\n\n", "\n\n")
@@ -879,12 +880,12 @@ def deepseek_balance():
         pass
     return None
 
-def ask_ai(prompt, system=None, owner=False):
+def ask_ai(prompt, system=None, owner=False, max_tokens=None):
     if system is None:
         system = f"Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском. Сегодняшняя дата: {datetime.now().strftime('%d.%m.%Y')}."
     # для владельца — сначала его DeepSeek
     if owner and DEEPSEEK_API_KEY:
-        d = ask_deepseek(prompt, system)
+        d = ask_deepseek(prompt, system, max_tokens or 2000)
         if d is not None:
             return d
     модели = [
@@ -920,15 +921,15 @@ def ask_ai(prompt, system=None, owner=False):
                         {"role": "system", "content": system},
                         {"role": "user", "content": prompt}
                     ],
-                    "max_tokens": 1500
+                    "max_tokens": max_tokens or 1500
                 },
-                timeout=30
+                timeout=60
             )
 
             if r.status_code == 200:
                 ответ = r.json()["choices"][0]["message"]["content"]
                 имя_модели = имена.get(модель, модель)
-                if len(ответ) > 2500:
+                if max_tokens is None and len(ответ) > 2500:   # обрез только для обычного чата; перевод (max_tokens задан) — целиком
                     ответ = ответ[:2500] + "\n\n...(ответ сокращён)"
                 ответ = ответ.replace("\n\n\n", "\n\n")
                 return f"{ответ}\n\n⚡ *Модель:* {имя_модели}"
@@ -980,20 +981,22 @@ def flush_trans():
 def _trans_key(arabic):
     t = re.sub(r"[ً-ٰٟـ]", "", arabic or "")
     return "".join(c for c in t if "ء" <= c <= "ي")[:300]
-def translate_matn(arabic, src="", owner=False):
-    """Перевод матна на русский с накопительным кэшем (оригинал+перевод+источник)."""
+def translate_matn(arabic, src="", owner=False, force=False):
+    """Перевод матна на русский с накопительным кэшем (оригинал+перевод+источник).
+    force=True — переперевести заново (минуя кэш), напр. чтобы починить оборванный перевод."""
     global _trans_dirty
     if not arabic or len(arabic) < 5:
         return ""
     cache = _load_trans()
     key = _trans_key(arabic)
-    if key in cache:
+    if key in cache and not force:
         v = cache[key]
         return v.get("ru", "") if isinstance(v, dict) else v
     sysmsg = ("Ты профессиональный переводчик хадисов с арабского на русский. "
-              "Выдай ТОЛЬКО точный перевод текста на русский язык. "
+              "Выдай ТОЛЬКО точный перевод текста на русский язык, ПОЛНОСТЬЮ, до конца (не обрывай). "
               "Без вступлений, без пояснений, без арабского текста, без кавычек, без указания модели — только перевод.")
-    ru = ask_ai("Переведи на русский:\n" + arabic, sysmsg, owner=owner)
+    # max_tokens большой: длинные хадисы (напр. речь Умара) не должны обрываться на полуслове
+    ru = ask_ai("Переведи на русский:\n" + arabic, sysmsg, owner=owner, max_tokens=8000)
     if ru and not ru.startswith("❌"):
         ru = re.sub(r"\n*⚡ \*Модель:.*$", "", ru, flags=re.S).strip()
         cache[key] = {"ar": arabic[:600], "ru": ru, "src": (src or "")[:120]}
@@ -2537,19 +2540,20 @@ async def _api_serve(application=None):
         if not rate_ok('translate:' + _uid(user, r)):
             return _ratelimited()
         try:
-            text = (d.get('text') or '')[:4000]
+            text = (d.get('text') or '')[:6000]
             source = re.sub(r'[^a-z0-9_]+', '', (d.get('source') or '').lower())[:40]
             num = d.get('num')
-            # 1) УЖЕ переведено? (постоянный файл-сборник по номеру — переживает рестарты/инстансы)
+            force = bool(d.get('force'))   # «🔄 обновить перевод» — переперевести заново (минуя кэш), чинит оборванный перевод
+            # 1) УЖЕ переведено? (постоянный файл-сборник по номеру — переживает рестарты/инстансы). При force — пропускаем кэш.
             stored = None
-            if source and num not in (None, ''):
+            if not force and source and num not in (None, ''):
                 stored = await loop.run_in_executor(None, lambda: (_coll_load(source) or {}).get(str(num)))
             if stored and stored.get('ru'):
                 await loop.run_in_executor(None, usage_log, user, "перевод", False, len(text), source, str(num or ""))
                 await _notify_usage(user, "перевод", False, source, num, None)   # ♻️ из базы, ключ НЕ потрачен
                 return _cors(web.json_response({'translation': stored['ru'], 'cached': True}))
-            # 2) нет в базе → переводим один раз и копим
-            tr = await loop.run_in_executor(None, translate_matn, text, "", True)
+            # 2) нет в базе (или force) → переводим заново и копим (перезаписываем оборванный)
+            tr = await loop.run_in_executor(None, translate_matn, text, "", True, force)
             tr = re.sub(r'\s*⚡.*$', '', (tr or ''), flags=re.S).strip()
             saved = None
             if tr and source and num not in (None, ''):

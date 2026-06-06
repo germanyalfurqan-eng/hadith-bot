@@ -141,7 +141,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v94</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v95</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -443,7 +443,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v94';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v95';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1854,7 +1854,7 @@ function setTrBase(tr,e,src){ tr.textContent='♻️ Перевод'; const idx=
 const RU_TITLE={bukhari:'Сахих аль-Бухари',muslim:'Сахих Муслим',abudawud:'Сунан Абу Дауд',tirmidhi:'Джами ат-Тирмизи',ibnmajah:'Сунан Ибн Маджа',nasai:'Сунан ан-Насаи',malik:'аль-Муватта (Малик)',ahmad:'Муснад Ахмада',muhaymin:'аль-Мухаймин',muqbil:'аль-Мукбиль · ас-Сахих'};
 function ruTitle(code){ return RU_TITLE[code]||((COLLECTIONS.find(c=>c.code===code)||{}).ru)||((EXTRA_MAP[code]||{}).ru)||code; }
 function trHead(ref){ return (ref&&ref.source)?('<div style="color:var(--link);font-size:12px;margin-bottom:3px">📖 '+esc(ruTitle(ref.source))+(ref.num?(' №'+ref.num):'')+'</div>'):''; }
-async function doTranslate(text,out,btn,ref){
+async function doTranslate(text,out,btn,ref,force){
   const orig=btn.textContent, origStyle=btn.style.cssText; btn.disabled=true; btn.textContent='…';
   const lbl=(tag)=>'<span style="color:var(--hint);font-style:italic">'+tag+'</span> ';
   const restore=()=>{ btn.disabled=false; btn.textContent=orig; btn.style.cssText=origStyle; };
@@ -1868,16 +1868,21 @@ async function doTranslate(text,out,btn,ref){
     }catch(e){} }
   }
   if(!BACKEND_URL){ toast('Перевод заработает после подключения сервера (DeepSeek)'); restore(); return; }
+  if(force) btn.textContent='🔄…';
   try{ const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text, source:ref&&ref.source, num:ref&&ref.num, initData:INITDATA})});
+      body:JSON.stringify({text, source:ref&&ref.source, num:ref&&ref.num, force:!!force, initData:INITDATA})});
     const j=await r.json().catch(()=>({}));
     if(r.status===403){ toast(j.message||'Перевод тебе пока не открыт.'); restore(); return; }
     if(r.ok && j.translation){
       const src=ref&&ref.source, num=ref&&ref.num;
-      if(!j.cached && src && (num||num===0)) trMark(src,num,j.translation);   // свежий ИИ → теперь в базе
+      if((!j.cached||force) && src && (num||num===0)) trMark(src,num,j.translation);   // свежий/обновлённый ИИ → теперь в базе
       const e=(src!=null)?trHas(src,num):null;
-      const tag = j.cached ? ('♻️ Перевод (из нашей базы'+(e&&e.d?(', ИИ от '+e.d):'')+', бесплатно):') : '🧠 Перевод (сделал ИИ — возможны ошибки):';
-      out.innerHTML=trHead(ref)+lbl(tag)+esc(j.translation); out.style.display='block'; btn.disabled=false;
+      const tag = force ? '🔄 Перевод обновлён (ИИ — возможны ошибки):'
+                : (j.cached ? ('♻️ Перевод (из нашей базы'+(e&&e.d?(', ИИ от '+e.d):'')+', бесплатно):') : '🧠 Перевод (сделал ИИ — возможны ошибки):');
+      // «🔄 обновить» — переперевести заново (чинит оборванный/неточный перевод). Тратит ключ → подтверждение.
+      const redo='<span class="trRedo" style="cursor:pointer;color:var(--link);text-decoration:underline;font-size:12px;white-space:nowrap">🔄 обновить перевод</span>';
+      out.innerHTML=trHead(ref)+lbl(tag)+esc(j.translation)+'<div style="margin-top:7px;opacity:.85">'+redo+'</div>'; out.style.display='block'; btn.disabled=false;
+      const rb=out.querySelector('.trRedo'); if(rb) rb.onclick=()=>{ if(confirm('Переперевести заново нейросетью? (потратит запрос к ИИ)')) doTranslate(text,out,btn,ref,true); };
       if(src && (num||num===0)) setTrBase(btn, e||{}, src);   // дальше эта кнопка = «♻️ из базы»
       else restore();
       return;
