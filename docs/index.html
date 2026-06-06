@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
+<meta name="viewport" id="vpMeta" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
 <title>Muslimoon Bot — поиск</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v68</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v69</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -141,7 +141,7 @@
   </div>
 
   <div id="colsWrap">
-    <div class="lbl" id="colsToggle" style="cursor:pointer;user-select:none;color:var(--link)">🔎 Искать: <span id="colCount"></span> — нажми, чтобы выбрать сборники <span id="colsArrow">▾</span></div>
+    <div class="lbl" id="colsToggle" style="cursor:pointer;user-select:none;color:var(--link)">🔎 <span id="colCount"></span> <span id="colsArrow">▾</span></div>
     <div id="colsBody" style="display:none">
       <div class="cols" id="cols"></div>
       <div class="colbar">
@@ -227,6 +227,7 @@
     <div class="row"><span>🙈 Скрывать иснад (показывать только матн)</span><div class="sw" id="hideIsnadSw"></div></div>
     <div class="row"><span>🔡 Автоподсказки в Коране (списком при вводе номера)</span><div class="sw" id="acSw"></div></div>
     <div class="row"><span>✒️ Подпись при копировании (ссылка на приложение)</span><div class="sw" id="sigSw"></div></div>
+    <div class="row"><span>🔍 Щипок-зум (увеличение пальцами)</span><div class="sw" id="zoomSw"></div></div>
     <div class="row" style="opacity:.55"><span>🎨 Тема оформления</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>🌐 English / язык</span><span>скоро</span></div>
   </div>
@@ -401,7 +402,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v68';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v69';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -447,6 +448,8 @@ const EXTRA = [
   {code:'muhaymin',   muhaymin:true, warn:'⚠️ книга в обработке — возможны ошибки', short:'аль-Мухаймин', ru:'аль-Мухаймин (الموحد المهيمن) — Муршид', ar:'المهيمن', author:'مرشد بن يوسف', kw:'мухаймин мухэймин muhaymin муршид мухаймин', n:3307},
 ];
 const EXTRA_MAP={}; EXTRA.forEach(e=>EXTRA_MAP[e.code]=e);
+/* Названия сур (рус) — для группировки результатов Корана по сурам */
+const SURA_RU=[,'аль-Фатиха','аль-Бакара','Аль Имран','ан-Ниса','аль-Маида','аль-Анам','аль-Араф','аль-Анфаль','ат-Тауба','Юнус','Худ','Юсуф','ар-Раад','Ибрахим','аль-Хиджр','ан-Нахль','аль-Исра','аль-Кахф','Марьям','Та Ха','аль-Анбия','аль-Хадж','аль-Муминун','ан-Нур','аль-Фуркан','аш-Шуара','ан-Намль','аль-Касас','аль-Анкабут','ар-Рум','Лукман','ас-Саджда','аль-Ахзаб','Саба','Фатир','Йа Син','ас-Саффат','Сад','аз-Зумар','Гафир','Фуссылят','аш-Шура','аз-Зухруф','ад-Духан','аль-Джасия','аль-Ахкаф','Мухаммад','аль-Фатх','аль-Худжурат','Каф','аз-Зарият','ат-Тур','ан-Наджм','аль-Камар','ар-Рахман','аль-Вакиа','аль-Хадид','аль-Муджадила','аль-Хашр','аль-Мумтахана','ас-Сафф','аль-Джумуа','аль-Мунафикун','ат-Тагабун','ат-Талак','ат-Тахрим','аль-Мульк','аль-Калам','аль-Хакка','аль-Мааридж','Нух','аль-Джинн','аль-Музаммиль','аль-Муддассир','аль-Кияма','аль-Инсан','аль-Мурсалят','ан-Наба','ан-Назиат','Абаса','ат-Таквир','аль-Инфитар','аль-Мутаффифин','аль-Иншикак','аль-Бурудж','ат-Тарик','аль-Аля','аль-Гашия','аль-Фаджр','аль-Балад','аш-Шамс','аль-Лейль','ад-Духа','аш-Шарх','ат-Тин','аль-Аляк','аль-Кадр','аль-Беййина','аз-Зальзала','аль-Адият','аль-Кариа','ат-Такасур','аль-Аср','аль-Хумаза','аль-Филь','Курайш','аль-Маун','аль-Каусар','аль-Кафирун','ан-Наср','аль-Масад','аль-Ихлас','аль-Фаляк','ан-Нас'];
 
 /* ===================== TELEGRAM + ДОСТУП ===================== */
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -559,7 +562,7 @@ function highlight(raw,groups,modes){
     html=html.replace(new RegExp(pat,'g'), m=>'%%HL%%'+m+'%%EL%%'); }catch(e){} }
   return html.split('%%HL%%').join('<mark>').split('%%EL%%').join('</mark>');
 }
-function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function esc(s){return (s||'').replace(/�/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function splitIsnad(text){
   const words=(text||'').split(/\s+/); if(words.length<4) return [null,text];
   const c=words.map(w=>canon(w));
@@ -706,7 +709,7 @@ function renderCols(){
     d.onclick=()=>{ selExtra.delete(code); renderCols(); updateExtraSel(); };
     box.appendChild(d); });
   const total = selCols.size + selExtra.size;
-  document.getElementById('colCount').textContent = total ? ('(только выбранные: '+total+')') : '(везде)';
+  document.getElementById('colCount').textContent = total ? ('Выбрано сборников: '+total+' — изменить') : 'Искать везде — нажми, чтобы выбрать сборники';
   updateReadBtn();
 }
 // «📖 Читать сборник» → если выбран РОВНО ОДИН сборник, кнопка читает его напрямую
@@ -985,12 +988,12 @@ async function runSearch(explicit){
 function makeCard(d){ return d.type==='q'?cardAyah(d,_groups):(d.type==='m'?cardMuh(d,_groups):(d.type==='hr'?cardHadithRu(d):cardHadith(d,_groups))); }
 /* M43: группировка результатов по источникам (сворачиваемо) */
 let groupSrc=false;
-function srcKeyOf(d){ return d.type==='m'?'аль-Мухаймин':(d.type==='hr'?arOf(d.s):(d.type==='q'?'Коран':arOf(d.code))); }
+function srcKeyOf(d){ return d.type==='m'?'аль-Мухаймин':(d.type==='hr'?arOf(d.s):(d.type==='q'?('Сура '+d.v.s+(SURA_RU[d.v.s]?(' · '+SURA_RU[d.v.s]):'')):arOf(d.code))); }
 // Переключатель «по источникам» РЯДОМ с результатами (опция, по умолчанию список). Вставляется после заголовка.
 function grpToggleEl(){
   const t=document.createElement('div'); t.id='grpToggle';
   t.style.cssText='display:inline-block;margin:2px 0 8px;font-size:13px;color:var(--link);cursor:pointer;user-select:none;border:1px solid var(--border);border-radius:12px;padding:3px 10px';
-  t.textContent = groupSrc?'📋 Обычным списком':'📚 Сгруппировать по источникам';
+  t.textContent = groupSrc?'📋 Обычным списком':('📚 Сгруппировать по '+(tab==='quran'?'сурам':'источникам'));
   t.onclick=()=>{ groupSrc=!groupSrc; renderResultsView(); };
   return t;
 }
@@ -999,7 +1002,7 @@ function ensureGrpToggle(){ const res=document.getElementById('res'); if(!res.fi
 function renderResultsView(){
   const res=document.getElementById('res'); res.innerHTML='';
   const items=_results.slice(0,400);
-  res.appendChild(info(groupSrc?('📚 По источникам · найдено: '+_results.length):('Найдено: '+_results.length+(_results.length>400?' (первые 400)':''))));
+  res.appendChild(info(groupSrc?('📚 По '+(tab==='quran'?'сурам':'источникам')+' · найдено: '+_results.length):('Найдено: '+_results.length+(_results.length>400?' (первые 400)':''))));
   res.appendChild(grpToggleEl());
   if(!groupSrc){ items.forEach(d=>res.appendChild(makeCard(d))); return; }
   const groups={}; const order=[];
@@ -1186,11 +1189,11 @@ async function doTakhrij(text, ref, out, btn, force){
   const skipCode=(ref&&ref.source)||'', skipNum=String((ref&&ref.num)||'');
   out.innerHTML='';
   const mk=()=>{ const d=document.createElement('div'); out.appendChild(d); return d; };
-  const muhSec=mk(), sciSec=mk(), locHead=mk(), locBox=mk(), moreSec=mk();
+  const sciSec=mk(), locHead=mk(), locBox=mk(), muhSec=mk(), moreSec=mk();   // Мухаймин — ПОСЛЕ реальных источников
   const found={}; let muhNums=new Set(); let sciData=null;
 
   function renderMuh(){ if(muhNums.size){ const nums=[...muhNums].join(', ');
-      muhSec.innerHTML='<div dir="ltr" style="background:#1d3a5f;border:1px solid #2f5b8f;border-radius:8px;padding:5px 8px;margin-bottom:6px;font-size:13px">📖 Есть в аль-Мухаймин — № '+esc(nums)+' <span style="color:#9fb4cc">(книга в обработке)</span></div>'; } else muhSec.innerHTML=''; }
+      muhSec.innerHTML='<div dir="ltr" style="border:1px solid var(--border);border-radius:8px;padding:5px 8px;margin-top:6px;font-size:13px;color:var(--hint)">📖 Также в нашем указателе аль-Мухаймин: № '+esc(nums)+' <span style="opacity:.7">(книга в обработке)</span></div>'; } else muhSec.innerHTML=''; }
   function renderLoc(){ locBox.innerHTML='';
     Object.keys(found).forEach(code=>{ const nums=found[code];
       const row=document.createElement('div'); row.style.cssText='direction:rtl;font-size:14px;margin:2px 0';
@@ -1216,7 +1219,7 @@ async function doTakhrij(text, ref, out, btn, force){
     if(t.muh&&t.muh.length){ t.muh.forEach(n=>muhNums.add(String(n))); } renderMuh();
     if(t.sci&&(t.sci.takhreej||t.sci.hukm)){ sciData={takhreej:t.sci.takhreej||'',hukm:t.sci.hukm||''};
       sciSec.innerHTML='<div style="border:1px solid var(--border);border-radius:10px;padding:8px;margin:2px 0 8px">'
-        +'<div style="font-size:12px;margin-bottom:4px"><span style="color:#4ade80">🌐 Научный تخريج</span> <span style="color:var(--hint)">(sunnah.one · учёные)</span> '+(t.sci.hukm?gradeBadge(t.sci.hukm):'')+'</div>'
+        +'<div style="font-size:12px;margin-bottom:4px"><span style="color:#4ade80">🌐 Научный تخريج</span> <span style="color:var(--hint)">(sunnah.one · учёные)</span></div>'
         +(t.sci.takhreej?'<div style="direction:rtl;text-align:right;font-size:14px;line-height:1.7">'+esc(t.sci.takhreej)+'</div>':'')+'</div>'; }
     else sciSec.innerHTML='';
     if(t.local){ Object.keys(t.local).forEach(c=>{ found[c]=t.local[c]; }); } renderLoc();
@@ -1248,7 +1251,7 @@ async function doTakhrij(text, ref, out, btn, force){
       if(w && (w.takhreej||w.hukm)){
         sciData={takhreej:w.takhreej||'',hukm:w.hukm||''};
         sciSec.innerHTML='<div style="border:1px solid var(--border);border-radius:10px;padding:8px;margin:2px 0 8px">'
-          +'<div style="font-size:12px;margin-bottom:4px"><span style="color:#4ade80">🌐 Научный تخريج</span> <span style="color:var(--hint)">(sunnah.one · учёные)</span> '+(w.hukm?gradeBadge(w.hukm):'')+'</div>'
+          +'<div style="font-size:12px;margin-bottom:4px"><span style="color:#4ade80">🌐 Научный تخريج</span> <span style="color:var(--hint)">(sunnah.one · учёные)</span></div>'
           +(w.takhreej?'<div style="direction:rtl;text-align:right;font-size:14px;line-height:1.7">'+esc(w.takhreej)+'</div>':'<div class="hint" style="font-size:12px">оценка есть, развёрнутого تخريج нет</div>')
           +'</div>'; return; }
     }catch(e){} }
@@ -1636,6 +1639,10 @@ var _is=document.getElementById('isnadSw'); if(_is){ _is.classList.toggle('on',!
 var _hi=document.getElementById('hideIsnadSw'); if(_hi){ _hi.classList.toggle('on',!!cfg.hideIsnad); _hi.onclick=()=>{ cfg.hideIsnad=!cfg.hideIsnad; saveCfg(cfg); _hi.classList.toggle('on',!!cfg.hideIsnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _ac=document.getElementById('acSw'); if(_ac){ _ac.classList.toggle('on',!!cfg.ac); _ac.onclick=()=>{ cfg.ac=!cfg.ac; saveCfg(cfg); _ac.classList.toggle('on',!!cfg.ac); updateQuranHelper(); }; }
 var _sig=document.getElementById('sigSw'); if(_sig){ _sig.classList.toggle('on',cfg.sig!==false); _sig.onclick=()=>{ cfg.sig=(cfg.sig===false); saveCfg(cfg); _sig.classList.toggle('on',cfg.sig!==false); }; }
+function applyZoom(){ var m=document.getElementById('vpMeta'); if(!m) return;
+  m.setAttribute('content', cfg.noZoom ? 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' : 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes'); }
+var _zm=document.getElementById('zoomSw'); if(_zm){ _zm.classList.toggle('on',!cfg.noZoom); _zm.onclick=()=>{ cfg.noZoom=!cfg.noZoom; saveCfg(cfg); _zm.classList.toggle('on',!cfg.noZoom); applyZoom(); }; }
+applyZoom();
 
 /* ===================== УТИЛИТЫ ===================== */
 function setStatus(t){document.getElementById('status').textContent=t;}
