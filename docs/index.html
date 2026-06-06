@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v72</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v73</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -372,6 +372,7 @@
         <button class="chip" id="jFb" title="Отзывы и сообщения об ошибках от пользователей">💬 Отзывы</button>
         <button class="chip" id="jSrch" title="Что чаще всего ищут (аналитика запросов)">🔎 Запросы</button>
         <button class="chip" id="jUpd" title="История обновлений приложения">🆕 Обновления</button>
+        <button class="chip" id="jStats" title="Статистика приложения: запуски, пользователи, по дням">📊 Статистика</button>
       </div>
       <div id="jOut" class="hint" style="margin-top:8px">выбери журнал — покажу последние записи</div>
     </div>
@@ -402,7 +403,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v72';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v73';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1642,6 +1643,8 @@ function renderJournal(kind){
   else if(kind==='search'){ const s=DEV_DATA.searches||{}, top=s.top||[];
     html='<b>Что ищут</b> (всего поисков: '+(s.total||0)+'):<br>'+(top.map(x=>'🔎 '+esc(x[0])+' — '+(x[1].n||0)+'× ('+(x[1].tab||'')+', нашли '+(x[1].cnt||0)+')').join('<br>')||'пусто'); }
   else if(kind==='upd'){ html='Журнал обновлений (release_notes): <a style="color:var(--link);cursor:pointer" id="_updLink">открыть</a>'; }
+  else if(kind==='stats'){ const a=DEV_DATA.app||{}; const days=Object.entries(a.by_day||{});
+    html='<b>📊 Статистика приложения</b><br>🚀 Запусков всего: <b>'+(a.opens||0)+'</b><br>👥 Разных пользователей: <b>'+(a.users||0)+'</b><br><br><b>По дням (последние):</b><br>'+(days.length?days.map(([d,n])=>'• '+esc(d)+' — '+n).join('<br>'):'—')+'<br><span class="hint" style="font-size:11px">Считаются открытия приложения; уникальные — по Telegram-id. Просмотры отдельных хадисов добавлю отдельно.</span>'; }
   out.innerHTML=html;
   if(kind==='upd'){ var ul=document.getElementById('_updLink'); if(ul) ul.onclick=()=>openLink(GH_REPO+'/blob/main/release_notes.txt'); }
 }
@@ -1658,7 +1661,7 @@ async function openDev(){ document.getElementById('devModal').style.display='fle
 var _dv=document.getElementById('devBtn'); if(_dv) _dv.onclick=openDev;
 var _dc=document.getElementById('devClose'); if(_dc) _dc.onclick=()=>{ document.getElementById('devModal').style.display='none'; };
 var _bb=document.getElementById('balBtn'); if(_bb) _bb.onclick=checkBalance;
-[['jNakop','nakop'],['jUsage','usage'],['jFb','fb'],['jSrch','search'],['jUpd','upd']].forEach(p=>{ const el=document.getElementById(p[0]); if(el) el.onclick=()=>{ document.querySelectorAll('#devModal .chip').forEach(c=>c.classList.remove('on')); renderJournal(p[1]); el.classList.add('on'); }; });
+[['jNakop','nakop'],['jUsage','usage'],['jFb','fb'],['jSrch','search'],['jUpd','upd'],['jStats','stats']].forEach(p=>{ const el=document.getElementById(p[0]); if(el) el.onclick=()=>{ document.querySelectorAll('#devModal .chip').forEach(c=>c.classList.remove('on')); renderJournal(p[1]); el.classList.add('on'); }; });
 let _tasksData=null, _tasksShowDone=false;
 async function renderTasks(){
   const out=document.getElementById('jOut'); out.textContent='загружаю заявки…';
@@ -1866,6 +1869,7 @@ var _rfind=document.getElementById('readFind'); if(_rfind){ let _rft; _rfind.add
 async function boot(){
   // владелец заходит сразу (конфиг тянем в фоне для панели); остальные ждут вердикт сервера
   if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
+  if(BACKEND_URL){ try{ fetch(BACKEND_URL+'/hit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:INITDATA})}); }catch(e){} }   // G3: счётчик запусков
   if(userAllowed()){
     document.getElementById('app').style.display='block';
     if(isOwner){ var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца'; }

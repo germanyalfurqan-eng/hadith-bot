@@ -2175,8 +2175,26 @@ def _journal_load():
         j.setdefault("feedback", [])
         j.setdefault("fb_seq", 0)
         j.setdefault("searches", {"total": 0, "top": {}})
+        j.setdefault("app", {"opens": 0, "by_user": {}, "by_day": {}})
         _journal_cache = j
     return _journal_cache
+_app_dirty = 0
+def app_hit(user):
+    """Статистика приложения: запуски, уникальные пользователи, по дням."""
+    global _app_dirty
+    j = _journal_load(); a = j["app"]
+    a["opens"] = a.get("opens", 0) + 1
+    uid = str((user or {}).get("id") or "")
+    if uid:
+        bu = a["by_user"]; bu[uid] = bu.get(uid, 0) + 1
+    day = datetime.now().strftime("%d.%m.%Y")
+    a["by_day"][day] = a["by_day"].get(day, 0) + 1
+    if len(a["by_day"]) > 120:
+        a["by_day"] = dict(sorted(a["by_day"].items())[-90:])
+    _app_dirty += 1
+    if _app_dirty >= 5:
+        _journal_save("app stats"); _app_dirty = 0
+    return a
 _search_dirty = 0
 def searchlog_add(q, tab, cnt):
     """Аналитика: что ищут чаще всего (агрегируем, пишем батчами)."""
@@ -2556,6 +2574,9 @@ async def _api_serve(application=None):
             'feedback': (j.get('feedback') or [])[:25],
             'searches': {'total': j.get('searches', {}).get('total', 0),
                          'top': sorted(j.get('searches', {}).get('top', {}).items(), key=lambda x: -x[1].get('n', 0))[:25]},
+            'app': {'opens': j.get('app', {}).get('opens', 0),
+                    'users': len(j.get('app', {}).get('by_user', {})),
+                    'by_day': dict(sorted(j.get('app', {}).get('by_day', {}).items())[-14:])},
         }))
 
     async def feedback(r):
@@ -2659,6 +2680,15 @@ async def _api_serve(application=None):
         res = await loop.run_in_executor(None, search_transmitters, q, 8)
         return _cors(web.json_response({'results': res or []}))
 
+    async def hit(r):
+        # G3: счётчик запусков приложения (тихо; уникальные пользователи по id)
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not rate_ok('hit:' + _uid(user, r), limit=10, window=60):
+            return _cors(web.json_response({'ok': False}))
+        await loop.run_in_executor(None, app_hit, user)
+        return _cors(web.json_response({'ok': True}))
+
     a = web.Application()
     a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
@@ -2666,7 +2696,7 @@ async def _api_serve(application=None):
                   web.post('/api/feedback', feedback), web.post('/api/searchlog', searchlog),
                   web.post('/api/tashkeel', tashkeel),
                   web.get('/api/takhrij', takhrij_read), web.post('/api/takhrij', takhrij_save),
-                  web.get('/api/narrator', narrator),
+                  web.get('/api/narrator', narrator), web.post('/api/hit', hit),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))
