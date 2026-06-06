@@ -2540,7 +2540,7 @@ async def _api_serve(application=None):
         if not rate_ok('translate:' + _uid(user, r)):
             return _ratelimited()
         try:
-            text = (d.get('text') or '')[:6000]
+            text = (d.get('text') or '')[:12000]   # длинные хадисы (напр. №1671 ~8000 симв., 2 риваята) — не резать на входе
             source = re.sub(r'[^a-z0-9_]+', '', (d.get('source') or '').lower())[:40]
             num = d.get('num')
             force = bool(d.get('force'))   # «🔄 обновить перевод» — переперевести заново (минуя кэш), чинит оборванный перевод
