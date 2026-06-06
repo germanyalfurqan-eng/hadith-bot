@@ -25,6 +25,7 @@
         box-shadow:0 0 14px #2f7be6aa, 0 0 4px #2f7be6;}
   .brand h1{font-size:17px;margin:0;letter-spacing:.2px;white-space:nowrap}
   .brand .b{color:#3da5ff}
+  .ver{font-size:10px;color:#9fb4cc;background:#16263a;border:1px solid #2a3f59;border-radius:8px;padding:1px 5px;vertical-align:middle;font-weight:400}
   .sub{text-align:center;color:var(--hint);font-size:12px;margin-bottom:12px}
   .gear{flex:none;background:var(--card);border:1px solid var(--border);
         border-radius:10px;padding:6px 9px;font-size:12px;cursor:pointer;display:none}
@@ -42,8 +43,12 @@
   .exrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 11px;margin-bottom:6px;
          border:1px solid var(--border);border-radius:12px;background:var(--bg);cursor:pointer}
   .exrow.on{border-color:#2563eb;background:#2563eb22}
+  .exrow.our{border-color:#d4af37}
+  .exrow.our.on{background:#d4af3722;border-color:#d4af37}
+  .extag{font-size:10px;color:#d4af37;border:1px solid #d4af37;border-radius:8px;padding:1px 6px;margin-left:6px;white-space:nowrap}
   .exrow .plus{font-size:18px;color:var(--link);font-weight:700;flex:0 0 auto}
   .exrow.on .plus{color:#4ade80}
+  .exsep{font-size:11px;color:var(--hint);margin:10px 2px 4px;text-transform:uppercase;letter-spacing:.5px}
   .colbar{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
   .mini{font-size:12px;color:var(--link);cursor:pointer;background:none;border:none;padding:2px}
   .searchbar{display:flex;gap:8px;margin-bottom:8px}
@@ -118,7 +123,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v45</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block">⭐</div>
@@ -127,7 +132,7 @@
       <div class="gear" id="devBtn" style="display:none">🛠</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам и аятам · v44</div>
+  <div class="sub" id="sub">поиск по хадисам и аятам</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -151,13 +156,16 @@
   </div>
 
   <div class="modes">
-    <div class="chip" data-mode="diac">َ Огласовки точно</div>
     <div class="chip" data-mode="root">جذ Однокоренные</div>
-    <div class="chip" data-mode="matnonly" title="Искать совпадение только в тексте хадиса, не в цепочке передатчиков (иснаде)">📜 Не искать в иснаде</div>
     <div class="chip" data-mode="ai">🧠 По смыслу (ИИ)</div>
+    <div class="chip" id="moreModes" style="border-style:dashed">⚙️ ещё ▾</div>
+  </div>
+  <div class="modes" id="modesMore" style="display:none">
+    <div class="chip" data-mode="diac">َ Огласовки точно</div>
+    <div class="chip" data-mode="matnonly" title="Искать совпадение только в тексте хадиса, не в цепочке передатчиков (иснаде)">📜 Не искать в иснаде</div>
     <div class="chip" id="neuroChip" data-mode="neuro">🔬 Расширенный</div>
   </div>
-  <div class="hint">По умолчанию — обычный поиск. «🧠 По смыслу» — ИИ подберёт по смыслу (рус/eng). «…» = точная фраза · <b>|</b> = ИЛИ · -слово = исключить · <span id="helpBtn" style="color:var(--link);cursor:pointer">ⓘ как искать</span></div>
+  <div class="hint">По умолчанию — обычный поиск. «🧠 По смыслу» — ИИ подберёт по смыслу (рус/eng). «⚙️ ещё» — доп. режимы. «…» = точная фраза · <b>|</b> = ИЛИ · -слово = исключить · <span id="helpBtn" style="color:var(--link);cursor:pointer">ⓘ как искать</span></div>
 
   <div class="neuro-box" id="neuroBox">
     <div style="font-size:13px;margin-bottom:6px">🔬 Расширенный: подберу арабские фразы — можешь поправить перед поиском:</div>
@@ -337,6 +345,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
+const APPVER = 'v45';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -353,30 +362,31 @@ const COLLECTIONS = [
   {code:'nasai',ru:'Насаи',ar:'النسائي'},
   {code:'malik',ru:'Малик',ar:'مالك'},
   {code:'ahmad',ru:'Ахмад',ar:'أحمد'},
-  {code:'muhaymin',ru:'аль-Мухаймин',ar:'المهيمن',special:true,heavy:true},
-  {code:'muqbil',ru:'Мукбиль · المسند الصحيح',ar:'الصحيح مما ليس في الصحيحين',heavy:true,file:'muqbil.json'},
 ];
 
 /* ===== M44: ДРУГИЕ СБОРНИКИ (основные — чипами выше; эти — по кнопке «➕ Другие сборники») ===== */
 /* Издания лежат рядом: в превью — miniapp/editions/, в проде — docs/editions/ (GitHub Pages) */
 const EXTRA_BASE = './editions/';
 const EXTRA = [
-  {code:'ibnabishayba', short:'Ибн Аби Шейба', ru:'Ибн Аби Шейба — аль-Мусаннаф', ar:'مصنف ابن أبي شيبة', author:'Ибн Аби Шейба', kw:'мусаннаф ibnabishayba ibn abi shayba musannaf', n:37925},
-  {code:'abuawana',     short:'Абу Авана',     ru:'Абу Авана — аль-Мустахрадж',   ar:'مستخرج أبي عوانة',  author:'Абу Авана',     kw:'мустахрадж abuawana abu awana mustakhraj', n:13036},
-  {code:'nasaikubra',   short:'Насаи (Кубра)', ru:'ан-Насаи — ас-Сунан аль-Кубра', ar:'السنن الكبرى للنسائي', author:'ан-Насаи',     kw:'насаи кубра nasai kubra sunan большой', n:11943},
-  {code:'abuyala',      short:'Абу Я‘ля',      ru:'Абу Я‘ля — Муснад',            ar:'مسند أبي يعلى',     author:'Абу Я‘ля',      kw:'абу яля abuyala abu yala муснад', n:7546},
+  /* наши книги проекта (показываем сверху, золотой акцент) */
+  {code:'muhaymin',   our:true, muhaymin:true, short:'аль-Мухаймин', ru:'аль-Мухаймин (الموحد المهيمن) — Муршид', ar:'المهيمن', author:'مرشد بن يوسف', kw:'мухаймин мухэймин muhaymin муршид мухаймин', n:3307},
+  {code:'muqbil',     our:true, file:'muqbil.json', short:'Мукбиль', ru:'Мукбиль — аль-Муснад ас-Сахих', ar:'الصحيح مما ليس في الصحيحين', author:'аль-Вади‘и (Мукбиль)', kw:'мукбиль muqbil сахих вадии', n:4502},
+  /* далее — по востребованности */
   {code:'ibnhibban',    short:'Ибн Хиббан',    ru:'Ибн Хиббан — ас-Сахих',        ar:'صحيح ابن حبان',     author:'Ибн Хиббан',    kw:'ибн хиббан ibnhibban sahih сахих', n:7443},
-  {code:'darimi',       short:'Дарими',        ru:'ад-Дарими — Сунан',            ar:'سنن الدارمي',       author:'ад-Дарими',     kw:'дарими darimi sunan сунан', n:3477},
-  {code:'ibnaljad',     short:'Ибн аль-Джа‘д', ru:'Ибн аль-Джа‘д — Муснад',       ar:'مسند ابن الجعد',    author:'Ибн аль-Джа‘д', kw:'ибн джад ibnaljad jad муснад', n:3352},
   {code:'ibnkhuzayma',  short:'Ибн Хузайма',   ru:'Ибн Хузайма — ас-Сахих',       ar:'صحيح ابن خزيمة',    author:'Ибн Хузайма',   kw:'ибн хузайма ibnkhuzayma sahih сахих', n:3066},
+  {code:'darimi',       short:'Дарими',        ru:'ад-Дарими — Сунан',            ar:'سنن الدارمي',       author:'ад-Дарими',     kw:'дарими darimi sunan сунан', n:3477},
+  {code:'adabmufrad',   short:'Адаб аль-Муфрад',ru:'аль-Бухари — аль-Адаб аль-Муфрад', ar:'الأدب المفرد', author:'аль-Бухари',    kw:'адаб муфрад adabmufrad bukhari бухари нравственность', n:1322},
+  {code:'abuawana',     short:'Абу Авана',     ru:'Абу Авана — аль-Мустахрадж',   ar:'مستخرج أبي عوانة',  author:'Абу Авана',     kw:'мустахрадж abuawana abu awana mustakhraj', n:13036},
+  {code:'ibnabishayba', short:'Ибн Аби Шейба', ru:'Ибн Аби Шейба — аль-Мусаннаф', ar:'مصنف ابن أبي شيبة', author:'Ибн Аби Шейба', kw:'мусаннаф ibnabishayba ibn abi shayba musannaf', n:37925},
+  {code:'abuyala',      short:'Абу Я‘ля',      ru:'Абу Я‘ля — Муснад',            ar:'مسند أبي يعلى',     author:'Абу Я‘ля',      kw:'абу яля abuyala abu yala муснад', n:7546},
+  {code:'nasaikubra',   short:'Насаи (Кубра)', ru:'ан-Насаи — ас-Сунан аль-Кубра', ar:'السنن الكبرى للنسائي', author:'ан-Насаи',     kw:'насаи кубра nasai kubra sunan большой', n:11943},
   {code:'tayalisi',     short:'Таялиси',       ru:'Абу Дауд ат-Таялиси — Муснад',  ar:'مسند الطيالسي',     author:'ат-Таялиси',    kw:'таялиси tayalisi муснад', n:2889},
   {code:'ishaq',        short:'Исхак',         ru:'Исхак ибн Рахавайх — Муснад',   ar:'مسند إسحاق بن راهويه', author:'Исхак ибн Рахавайх', kw:'исхак рахавайх ishaq rahawayh муснад', n:2336},
   {code:'abdbinhumayd', short:'Абд ибн Хумайд',ru:'Абд ибн Хумайд — Муснад',      ar:'مسند عبد بن حميد',  author:'Абд ибн Хумайд', kw:'абд хумайд abdbinhumayd муснад', n:1594},
+  {code:'ibnaljad',     short:'Ибн аль-Джа‘д', ru:'Ибн аль-Джа‘д — Муснад',       ar:'مسند ابن الجعد',    author:'Ибн аль-Джа‘д', kw:'ибн джад ibnaljad jad муснад', n:3352},
   {code:'humaydi',      short:'Хумайди',       ru:'аль-Хумайди — Муснад',         ar:'مسند الحميدي',      author:'аль-Хумайди',   kw:'хумайди humaydi муснад', n:1334},
-  {code:'adabmufrad',   short:'Адаб аль-Муфрад',ru:'аль-Бухари — аль-Адаб аль-Муфрад', ar:'الأدب المفرد', author:'аль-Бухари',    kw:'адаб муфрад adabmufrad bukhari бухари нравственность', n:1322},
   {code:'ismail',       short:'Исмаил б. Джа‘фар', ru:'Исмаил ибн Джа‘фар — Хадисы', ar:'أحاديث إسماعيل بن جعفر', author:'Исмаил ибн Джа‘фар', kw:'исмаил джафар ismail', n:477},
   {code:'ibnmubarak',   short:'Ибн аль-Мубарак',ru:'Ибн аль-Мубарак — Муснад',    ar:'مسند ابن المبارك',  author:'Ибн аль-Мубарак', kw:'ибн мубарак ibnmubarak муснад', n:272},
-  {code:'jihad',        short:'аль-Джихад',    ru:'Ибн аль-Мубарак — аль-Джихад', ar:'الجهاد لابن المبارك', author:'Ибн аль-Мубарак', kw:'джихад jihad ибн мубарак', n:257},
 ];
 const EXTRA_MAP={}; EXTRA.forEach(e=>EXTRA_MAP[e.code]=e);
 
@@ -616,6 +626,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.getElementById('res').innerHTML=''; setStatus('');
 });
 document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.dataset.mode;
+  if(!m) return;   // чипы без режима (⚙️ ещё, журналы) имеют свои обработчики
   if(m==='neuro'){ modes.neuro=!modes.neuro; ch.classList.toggle('on',modes.neuro);
     document.getElementById('neuroBox').style.display=modes.neuro?'block':'none'; return; }
   modes[m]=!modes[m]; ch.classList.toggle('on',modes[m]);
@@ -627,6 +638,13 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.datas
 });
 document.getElementById('selAll').onclick=()=>{ COLLECTIONS.forEach(c=>selCols.add(c.code)); renderCols(); };
 document.getElementById('selNone').onclick=()=>{ selCols.clear(); renderCols(); };
+/* ⚙️ ещё — показать/скрыть доп. режимы */
+var _mm=document.getElementById('moreModes'); if(_mm) _mm.onclick=()=>{ const b=document.getElementById('modesMore'); const open=b.style.display==='none'; b.style.display=open?'flex':'none'; _mm.textContent=open?'⚙️ свернуть ▴':'⚙️ ещё ▾'; _mm.classList.toggle('on',open); };
+var _vb=document.getElementById('verBadge'); if(_vb) _vb.textContent=APPVER;
+/* Удобно убрать клавиатуру: тап по пустому месту (не по полю/кнопке) — снимает фокус → клавиатура прячется */
+document.addEventListener('pointerdown',function(e){ const ae=document.activeElement;
+  if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA') && !(e.target.closest&&e.target.closest('input,textarea,select,button,a,.chip,.col,.exrow,.tab,.gear'))) ae.blur();
+}, true);
 
 /* ===================== ПОИСК ===================== */
 function isArabic(s){ return /[؀-ۿݐ-ݿ]/.test(s); }
@@ -747,6 +765,7 @@ async function runSearch(){
           let h=null; const qn=String(parseInt(q,10));
           if(code==='muhaymin'){ const a=await loadMuhaymin(); h=a.find(x=>String(x.n)===qn); if(h) add({type:'m',h}); }
           else if(code==='ahmad'){ const a=await loadAhmad(); h=a.find(x=>x.num===qn); if(h) add({type:'h',code:'ahmad',h}); }
+          else if(X&&X.file){ const a=await loadLocal(code,X.file); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
           else if(X){ const a=await loadExtra(code); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
           else if(C&&C.file){ const a=await loadLocal(code,C.file); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
           else { h=await getOne(code,qn); if(h) add({type:'h',code,h}); }
@@ -754,6 +773,7 @@ async function runSearch(){
           let arr;
           if(code==='muhaymin') arr=await loadMuhaymin();
           else if(code==='ahmad') arr=await loadAhmad();
+          else if(X&&X.file) arr=await loadLocal(code,X.file);
           else if(X) arr=await loadExtra(code);
           else if(C&&C.file) arr=await loadLocal(code,C.file);
           else arr=await loadCollection(code);
@@ -841,7 +861,13 @@ function addTr(meta,card,text,ayah,fav){
   cp.title='Копировать';
   cp.onclick=()=>{ let s=text; if(fav&&fav.label) s+='\n— '+fav.label; const o=card.querySelector('.tr-out'); if(o&&o.style.display!=='none'&&o.textContent) s+='\n\n'+o.textContent; copyText(s); };
   meta.appendChild(cp);
-  const tr=document.createElement('button');tr.className='tr-btn';tr.textContent='Перевод';
+  const tr=document.createElement('button');tr.className='tr-btn';
+  const _ref0=ayah?null:refOf(fav); const _ready=_ref0&&READY_RU.indexOf(_ref0.source)!==-1;
+  if(ayah){ tr.textContent='Перевод'; }
+  else if(_ready){ tr.textContent='📘 Перевод'; tr.title='Готовый профессиональный перевод (бесплатно, без ИИ)';
+    tr.style.cssText='background:#10331f;border:1px solid #2e9b5b;color:#bff5d4;padding:6px 11px'; }
+  else { tr.textContent='🧠 Перевод'; tr.title='Перевод ИИ (если уже переводили — отдадим из нашей базы, бесплатно)';
+    tr.style.cssText='background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:6px 11px'; }
   const out=document.createElement('div');out.className='tr-out';
   tr.onclick=()=> ayah ? doTranslateAyah(ayah.s,ayah.a,out,tr) : doTranslate(text,out,tr,refOf(fav));
   meta.appendChild(tr);
@@ -990,23 +1016,26 @@ const RU_TITLE={bukhari:'Сахих аль-Бухари',muslim:'Сахих Му
 function ruTitle(code){ return RU_TITLE[code]||((COLLECTIONS.find(c=>c.code===code)||{}).ru)||((EXTRA_MAP[code]||{}).ru)||code; }
 function trHead(ref){ return (ref&&ref.source)?('<div style="color:var(--link);font-size:12px;margin-bottom:3px">📖 '+esc(ruTitle(ref.source))+(ref.num?(' №'+ref.num):'')+'</div>'):''; }
 async function doTranslate(text,out,btn,ref){
-  btn.disabled=true; btn.textContent='…';
+  const orig=btn.textContent; btn.disabled=true; btn.textContent='…';
+  const lbl=(tag)=>'<span style="color:var(--hint);font-style:italic">'+tag+'</span> ';
   // 1) Готовый профессиональный перевод (Бухари/Муслим/Абу Дауд) — бесплатно, мгновенно, без траты ключа
   if(ref && READY_RU.indexOf(ref.source)!==-1 && (ref.num||ref.num===0)){
     try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-'+ref.source+'/'+ref.num+'.min.json')).json();
       const h=(j.hadiths||[])[0];
-      if(h && h.text){ out.innerHTML=trHead(ref)+'<span style="color:var(--hint);font-style:italic">Перевод (готовый, проф.):</span> '+esc(h.text); out.style.display='block'; btn.disabled=false; btn.textContent='Перевод'; return; }
+      if(h && h.text){ out.innerHTML=trHead(ref)+lbl('📘 Перевод (готовый, профессиональный):')+esc(h.text); out.style.display='block'; btn.disabled=false; btn.textContent=orig; return; }
     }catch(e){}
   }
-  if(!BACKEND_URL){ toast('Перевод заработает после подключения сервера (DeepSeek)'); btn.disabled=false; btn.textContent='Перевод'; return; }
+  if(!BACKEND_URL){ toast('Перевод заработает после подключения сервера (DeepSeek)'); btn.disabled=false; btn.textContent=orig; return; }
   try{ const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({text, source:ref&&ref.source, num:ref&&ref.num, initData:INITDATA})});
     const j=await r.json().catch(()=>({}));
     if(r.status===403){ toast(j.message||'Перевод тебе пока не открыт.'); }
-    else if(r.ok && j.translation){ out.innerHTML=trHead(ref)+'<span style="color:var(--hint);font-style:italic">Перевод:</span> '+esc(j.translation); out.style.display='block'; }
+    else if(r.ok && j.translation){
+      const tag = j.cached ? '♻️ Перевод (из нашей базы, бесплатно):' : '🧠 Перевод (сделал ИИ — возможны ошибки):';
+      out.innerHTML=trHead(ref)+lbl(tag)+esc(j.translation); out.style.display='block'; }
     else { toast('Не удалось перевести'); }
   }catch(e){ toast('🔧 Сервис недоступен — возможно, идёт обновление. Попробуй через минуту.'); }
-  btn.disabled=false; btn.textContent='Перевод';
+  btn.disabled=false; btn.textContent=orig;
 }
 
 /* ===================== УПРАВЛЕНИЕ ДОСТУПОМ (G9, серверное) ===================== */
@@ -1225,13 +1254,16 @@ function renderExtraList(){
   const box=document.getElementById('extraList'); if(!box) return; box.innerHTML='';
   const items=EXTRA.filter(e=> !q || (e.ru+' '+e.ar+' '+e.author+' '+e.kw+' '+e.code).toLowerCase().indexOf(q)!==-1);
   if(!items.length){ box.innerHTML='<div class="hint" style="text-align:center;padding:16px">Не нашёл «'+esc(q)+'». Этой книги пока нет в базе — напиши владельцу, докачаем с Мактабы.</div>'; updateExtraSel(); return; }
-  items.forEach(e=>{ const on=selExtra.has(e.code);
-    const row=document.createElement('div'); row.className='exrow'+(on?' on':'');
-    row.innerHTML='<div style="min-width:0"><div style="font-weight:600">'+esc(e.ru)+'</div>'
+  const mkRow=(e)=>{ const on=selExtra.has(e.code);
+    const row=document.createElement('div'); row.className='exrow'+(on?' on':'')+(e.our?' our':'');
+    row.innerHTML='<div style="min-width:0"><div style="font-weight:600">'+esc(e.ru)+(e.our?'<span class="extag">наша</span>':'')+'</div>'
       +'<div style="font-size:12px;color:var(--hint)"><span dir="rtl">'+esc(e.ar)+'</span> · '+e.n.toLocaleString('ru-RU')+' хад.</div></div>'
       +'<div class="plus">'+(on?'✓':'+')+'</div>';
     row.onclick=()=>{ on?selExtra.delete(e.code):selExtra.add(e.code); renderExtraList(); renderCols(); };
-    box.appendChild(row); });
+    box.appendChild(row); };
+  const ours=items.filter(e=>e.our), rest=items.filter(e=>!e.our);
+  if(ours.length){ const s=document.createElement('div'); s.className='exsep'; s.textContent='⭐ Наши книги'; box.appendChild(s); ours.forEach(mkRow); }
+  if(rest.length){ const s=document.createElement('div'); s.className='exsep'; s.textContent='Остальные сборники'; box.appendChild(s); rest.forEach(mkRow); }
   updateExtraSel();
 }
 function openExtra(){ const t=document.getElementById('extraTotal'); if(t) t.textContent=EXTRA.length; renderExtraList(); document.getElementById('extraModal').style.display='flex'; const s=document.getElementById('extraSearch'); if(s){ s.value=''; } }
@@ -1245,12 +1277,13 @@ var _ecl=document.getElementById('extraClear'); if(_ecl) _ecl.onclick=()=>{ selE
 const READABLE=[
   {code:'bukhari',ru:'Сахих аль-Бухари'},{code:'muslim',ru:'Сахих Муслим'},{code:'abudawud',ru:'Сунан Абу Дауд'},
   {code:'tirmidhi',ru:'Джами ат-Тирмизи'},{code:'ibnmajah',ru:'Сунан Ибн Маджа'},{code:'nasai',ru:'Сунан ан-Насаи'},
-  {code:'malik',ru:'аль-Муватта (Малик)'},{code:'ahmad',ru:'Муснад Ахмада'},{code:'muqbil',ru:'аль-Мукбиль'},
-].concat(EXTRA.map(e=>({code:e.code,ru:e.ru})));
+  {code:'malik',ru:'аль-Муватта (Малик)'},{code:'ahmad',ru:'Муснад Ахмада'},
+].concat(EXTRA.filter(e=>e.code!=='muhaymin').map(e=>({code:e.code,ru:e.ru})));   // муфхаймин — особая структура (рв), читалкой пока не открываем
 let _readArr=null,_readCode='',_readIdx=0;
 async function _readLoad(code){
   const C=COLLECTIONS.find(x=>x.code===code); const X=EXTRA_MAP[code];
   if(code==='ahmad') return await loadAhmad();
+  if(X&&X.file) return await loadLocal(code,X.file);
   if(X) return await loadExtra(code);
   if(C&&C.file) return await loadLocal(code,C.file);
   return await loadCollection(code);
@@ -1261,11 +1294,9 @@ function _readRender(){
   const h=_readArr[_readIdx];
   document.getElementById('readPos').textContent='№'+(h.num!==undefined?h.num:(_readIdx+1))+'  ('+(_readIdx+1)+' из '+_readArr.length+')';
   const body=document.getElementById('readBody'); body.innerHTML='';
-  const card=document.createElement('div'); card.className='card';
-  const ar=document.createElement('div'); ar.className='ar'; ar.innerHTML=esc(h.text||''); card.appendChild(ar);
-  const meta=document.createElement('div'); meta.className='meta';
-  meta.innerHTML='<span class="src">'+arOf(_readCode)+' · №'+(h.num!==undefined?h.num:'')+'</span>'+(h.grade?('<span class="grade">'+esc(h.grade)+'</span>'):'');
-  card.appendChild(meta); body.appendChild(card);
+  const sg=_groups; _groups=[];                 // в читалке без подсветки запроса
+  try{ body.appendChild(cardHadith({code:_readCode,h},[])); }catch(e){ const d=document.createElement('div');d.className='ar';d.innerHTML=esc(h.text||'');body.appendChild(d); }
+  _groups=sg;
 }
 async function _readOpen(code,fromNum){
   _readCode=code;
@@ -1273,6 +1304,7 @@ async function _readOpen(code,fromNum){
   document.getElementById('readView').style.display='block';
   document.getElementById('readTitle').textContent='📖 '+(ruTitle(code)||code);
   const body=document.getElementById('readBody'); body.innerHTML='<div class="hint" style="text-align:center;padding:14px">Загружаю сборник…</div>';
+  try{ await loadReverse(); }catch(e){}
   try{ _readArr=await _readLoad(code); }catch(e){ body.innerHTML='<div class="status">Не удалось загрузить сборник.</div>'; return; }
   _readIdx=0;
   if(fromNum){ const qn=String(parseInt(fromNum,10)); const i=_readArr.findIndex(x=>String(x.num)===qn); if(i>=0)_readIdx=i; }
@@ -1299,7 +1331,7 @@ async function boot(){
   if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
   if(userAllowed()){
     document.getElementById('app').style.display='block';
-    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v44'; }
+    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца'; }
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
         (st.cols||[]).forEach(c=>selCols.add(c));

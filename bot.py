@@ -1156,8 +1156,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_reply_to_channel = False
     if update.message.reply_to_message:
         replied = update.message.reply_to_message
-        if replied.from_user and replied.from_user.is_bot and not replied.sender_chat:
-            is_reply_to_bot = True
+        # ВАЖНО: «ответ боту» = ответ ТОЛЬКО на сообщение НАШЕГО бота (по id),
+        # а не любого другого бота/канала в чате. Иначе бот влезал в чужие диалоги
+        # (кто-то ответил другому боту/каналу «🙂» — наш бот считал это обращением и тратил ключ).
+        try:
+            if replied.from_user and context.bot and replied.from_user.id == context.bot.id:
+                is_reply_to_bot = True
+        except Exception:
+            pass
         if replied.sender_chat:
             is_reply_to_channel = True
 
