@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v60</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v61</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -338,6 +338,17 @@
         <button class="go" id="accBtn" style="padding:6px 12px">Открыть</button></div>
     </div>
     <div class="accf">
+      <div class="at">🚫 Ограничить / забанить по ID</div>
+      <div class="ad">Вставь ID человека или чата (из уведомления) → бот его полностью игнорирует (бот + ИИ + вход).</div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <input type="text" id="banId" placeholder="напр. -1002477238251 или 5786344693" autocomplete="off"
+               style="flex:1;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:13px">
+        <button class="go" id="banBtn" style="padding:7px 12px;background:#5a1d1d;border:1px solid #b3502e">⛔ Бан</button>
+        <button class="mini" id="unbanBtn" style="border:1px solid var(--border);border-radius:8px;padding:3px 8px">разбан</button>
+      </div>
+      <div id="banList" class="hint" style="margin-top:8px"></div>
+    </div>
+    <div class="accf">
       <div class="ah"><div><div class="at">💳 Баланс DeepSeek</div><div class="ad">Сколько осталось на твоём ключе.</div></div>
         <button class="go" id="balBtn" style="padding:6px 12px">Проверить</button></div>
       <div id="balOut" class="hint" style="margin-top:8px">нажми «Проверить»</div>
@@ -376,11 +387,12 @@
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<div id="toTop" title="Наверх" style="display:none;position:fixed;right:14px;bottom:18px;z-index:70;width:44px;height:44px;border-radius:50%;background:var(--btn);color:var(--btn-text);font-size:22px;line-height:44px;text-align:center;cursor:pointer;box-shadow:0 4px 14px #0008">↑</div>
 
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v60';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v61';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1332,6 +1344,24 @@ async function openModal(){
 }
 var _g=document.getElementById('gear'); if(_g) _g.onclick=openModal;
 var _accB=document.getElementById('accBtn'); if(_accB) _accB.onclick=()=>{ document.getElementById('devModal').style.display='none'; openModal(); };
+function renderBanList(){ const el=document.getElementById('banList'); if(!el) return; const bl=((ACC&&ACC.blacklist)||[]).map(String);
+  el.innerHTML = bl.length ? ('⛔ В бане ('+bl.length+'): '+bl.map(esc).join(', ')) : 'Чёрный список пуст.'; }
+async function devBan(add){
+  const inp=document.getElementById('banId'); const id=(inp.value||'').trim();
+  if(!/^-?\d{3,}$/.test(id)){ toast('Введи числовой ID (для чата — с минусом)'); return; }
+  if(!ACC){ await fetchAccess(); }
+  let bl=((ACC&&ACC.blacklist)||[]).map(String);
+  if(add){ if(bl.indexOf(id)===-1) bl.push(id); } else { bl=bl.filter(x=>x!==id); }
+  try{ const r=await fetch(BACKEND_URL+'/access',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'set', config:{blacklist:bl}, initData:INITDATA})});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok&&j.ok){ if(j.config) ACC=j.config; else { ACC=ACC||{}; ACC.blacklist=bl; } toast(add?('⛔ Забанен '+id):('✅ Разбанен '+id)); inp.value=''; renderBanList(); }
+    else if(r.status===403){ toast('Менять может только владелец (через Telegram)'); }
+    else toast('Ошибка ('+(r.status||'сеть')+')'); }
+  catch(e){ toast('Сеть недоступна'); }
+}
+var _banB=document.getElementById('banBtn'); if(_banB) _banB.onclick=()=>devBan(true);
+var _unbanB=document.getElementById('unbanBtn'); if(_unbanB) _unbanB.onclick=()=>devBan(false);
 document.getElementById('modalClose').onclick=()=>{ document.getElementById('modal').style.display='none'; };
 
 /* ===================== КАБИНЕТ РАЗРАБОТЧИКА (owner) ===================== */
@@ -1371,7 +1401,7 @@ async function checkBalance(){
   const infos=b.balance_infos||[];
   out.innerHTML='Доступен: '+(b.is_available?'✅ да':'❌ нет')+infos.map(i=>'<br>• '+i.currency+': осталось <b>'+esc(String(i.total_balance))+'</b> (пополнено '+esc(String(i.topped_up_balance||'?'))+')').join('');
 }
-async function openDev(){ document.getElementById('devModal').style.display='flex'; document.getElementById('balOut').textContent='нажми «Проверить»'; document.getElementById('jOut').textContent='загружаю…'; await loadDev(); document.getElementById('jOut').textContent=(DEV_DATA&&DEV_DATA.forbidden)?'⛔ только владелец (открой через Telegram)':'выбери журнал — покажу последние записи'; }
+async function openDev(){ document.getElementById('devModal').style.display='flex'; document.getElementById('balOut').textContent='нажми «Проверить»'; document.getElementById('jOut').textContent='загружаю…'; try{ if(!ACC) await fetchAccess(); }catch(e){} renderBanList(); await loadDev(); document.getElementById('jOut').textContent=(DEV_DATA&&DEV_DATA.forbidden)?'⛔ только владелец (открой через Telegram)':'выбери журнал — покажу последние записи'; }
 var _dv=document.getElementById('devBtn'); if(_dv) _dv.onclick=openDev;
 var _dc=document.getElementById('devClose'); if(_dc) _dc.onclick=()=>{ document.getElementById('devModal').style.display='none'; };
 var _bb=document.getElementById('balBtn'); if(_bb) _bb.onclick=checkBalance;
@@ -1437,6 +1467,9 @@ document.getElementById('goBtn').onclick=()=>runSearch(true);
     t=setTimeout(()=>runSearch(true),350); });   // explicit=true → поиск идёт и по всей библиотеке (как по умолчанию)
 })();
 document.getElementById('neuroRun').onclick=neuroRun;
+/* Кнопка «наверх» (появляется при прокрутке вниз) */
+var _tt=document.getElementById('toTop'); if(_tt){ _tt.onclick=()=>{ try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){window.scrollTo(0,0);} };
+  window.addEventListener('scroll',()=>{ _tt.style.display=(window.scrollY>500)?'block':'none'; },{passive:true}); }
 function openLink(u){ try{ if(tg&&tg.openLink) tg.openLink(u); else window.open(u,'_blank'); }catch(e){ try{window.open(u,'_blank');}catch(_){} } }
 function goHome(){ document.getElementById('q').value=''; selCols.clear(); selExtra.clear();
   modes.ai=modes.root=modes.diac=modes.matnonly=modes.neuro=false;   // сброс режимов (ИИ и пр.)
