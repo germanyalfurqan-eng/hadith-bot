@@ -1041,6 +1041,21 @@ async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=LOG_CHAT_ID, text=msg)
     except: pass
 
+_AI_BAN = set()   # чёрный список (chat_id/user_id) — кого НЕ обслуживать ИИ; владелец правит командами «бан/разбан»
+
+def _ai_loop_guard(update, text):
+    """Анти-цикл и анти-спам для ИИ: не реагировать на ПЕРЕСЛАННЫЕ сообщения и на НАШИ ЖЕ лог-сообщения
+    (их пересылали в группу → бот отвечал сам себе и жёг ключ)."""
+    try:
+        if update.message and update.message.forward_origin is not None:
+            return True
+    except Exception:
+        pass
+    t = text or ""
+    if ("ключ потрачен" in t) or ("#ии" in t) or ("#ботяра" in t) or ("⚡ *Модель:*" in t) or ("Модель:* 🐬" in t):
+        return True
+    return False
+
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
@@ -1148,9 +1163,37 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
         return
 
+    # ===== Владельцу: ЧЁРНЫЙ СПИСОК (бан чата/пользователя по id) =====
+    if is_owner(update):
+        _tl = text.strip().lower()
+        if _tl in ("баны", "чёрный список", "черный список", "бан список", "блок список"):
+            cur = sorted(_AI_BAN)
+            await update.message.reply_text("⛔ Чёрный список ("+str(len(cur))+"):\n" + ("\n".join(str(x) for x in cur) if cur else "пусто") + "\n\nКоманды: «бан <id>» / «разбан <id>». id чата (минусовой) или пользователя.\nЧтобы перекрыть ВСЁ сразу — выключи рубильник «ВСЁ ВСЕМ» в ⚙️ Доступы.")
+            return
+        m = re.match(r"^(бан|разбан)\s+(-?\d{3,})$", _tl)
+        if m:
+            act, tid = m.group(1), int(m.group(2))
+            cfg = load_access(); bl = [str(x) for x in cfg.get("blacklist", [])]
+            if act == "бан":
+                if str(tid) not in bl: bl.append(str(tid))
+                save_access({"blacklist": bl})
+                await update.message.reply_text(f"⛔ Забанен {tid}. Бот его игнорирует (в личке и группах).")
+            else:
+                bl = [x for x in bl if x != str(tid)]
+                save_access({"blacklist": bl})
+                await update.message.reply_text(f"✅ Разбанен {tid}.")
+            return
+
     user_id = update.effective_user.id if update.effective_user else 0
     chat_type = update.effective_chat.type
     chat_id = update.effective_chat.id
+
+    # ЧЁРНЫЙ СПИСОК: забаненный чат/пользователь — полностью игнорируем (кроме владельца). Команды «бан/разбан».
+    if user_id != OWNER_ID:
+        try: load_access()   # подтянуть _AI_BAN (кэшируется)
+        except Exception: pass
+        if chat_id in _AI_BAN or user_id in _AI_BAN:
+            return
 
     # Проверка: ответ на сообщение бота
     is_reply_to_bot = False
@@ -1169,7 +1212,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             is_reply_to_channel = True
 
     # ============ G9: «ботяра» для белого списка (не владелец) ============
-    if user_id != OWNER_ID and text:
+    if user_id != OWNER_ID and text and not _ai_loop_guard(update, text):
         _bq = parse_botyara(text)
         _triggered = (_bq is not None) or (is_reply_to_bot and not is_reply_to_channel)
         if _triggered and feature_allowed('bot', tg_user_dict(update)):
@@ -1178,8 +1221,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 clean = update.message.reply_to_message.text
             if not clean:
                 clean = "продолжи"
-            if not rate_ok('bot:' + str(user_id), limit=15, window=60):
-                await update.message.reply_text("⏳ Слишком часто, подожди немного.")
+            # жёсткие лимиты: на пользователя И на чат (анти-спам/анти-burn ключа)
+            if (not rate_ok('bot:' + str(user_id), limit=4, window=120)) or (not rate_ok('botchat:' + str(chat_id), limit=6, window=120)):
                 return
             await update.message.reply_text("🤔 Думаю...")
             result = ask_ai_with_memory(clean)
@@ -1497,8 +1540,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
         # В чате/канале: отвечаем ТОЛЬКО если есть "ботяра" или ответ боту
-        elif chat_type != "private":
+        elif chat_type != "private" and not _ai_loop_guard(update, text):
             if "ботяра" in text.lower() or (is_reply_to_bot and not is_reply_to_channel):
+                if not rate_ok('botchat:' + str(chat_id), limit=6, window=120):
+                    return
                 clean = text.replace("ботяра", "").strip()
                 if update.message.reply_to_message and update.message.reply_to_message.text:
                     quoted = update.message.reply_to_message.text
@@ -1512,7 +1557,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
         # AI на "ботяра" в группах
-        if parse_botyara(text) is not None or is_reply_to_bot:
+        if (parse_botyara(text) is not None or is_reply_to_bot) and not _ai_loop_guard(update, text):
+            if not rate_ok('botchat:' + str(chat_id), limit=6, window=120):
+                return
             clean = text
             botyara_q = parse_botyara(text)
             if botyara_q is not None:
@@ -1966,6 +2013,7 @@ DEFAULT_ACCESS = {
     "neuro": {"public": False, "whitelist": []},           # 📱 нейро-подбор (DeepSeek)
     "bot": {"public": False, "whitelist": []},             # 🤖 ботяра (ИИ в боте)
     "botsearch": {"public": True, "whitelist": []},        # 🤖 поиск в боте (Бухари 333, мухэймин, искать…) — по умолчанию ВСЕМ
+    "blacklist": [],                                        # ⛔ чёрный список chat_id/user_id — полностью игнорируем
 }
 _access_cache = None
 
@@ -1983,17 +2031,33 @@ def _merge_access(cfg, base=None):
                     out[k]["public"] = bool(v["public"])
                 if isinstance(v.get("whitelist"), list):
                     out[k]["whitelist"] = [str(x).strip() for x in v["whitelist"] if str(x).strip()][:500]
+    # чёрный список (плоский список id) — отдельной обработкой (не {public,whitelist})
+    bl = cfg.get("blacklist") if (isinstance(cfg, dict) and isinstance(cfg.get("blacklist"), list)) else out.get("blacklist")
+    out["blacklist"] = [str(x).strip() for x in (bl or []) if str(x).strip()][:2000]
     return out
+
+def _sync_ban():
+    """Обновить in-memory _AI_BAN из access-конфига (id чатов/юзеров)."""
+    try:
+        _AI_BAN.clear()
+        for x in (_access_cache or {}).get("blacklist", []):
+            s = str(x).strip()
+            if s.lstrip("-").isdigit():
+                _AI_BAN.add(int(s))
+    except Exception:
+        pass
 
 def load_access():
     global _access_cache
     if _access_cache is None:
         _access_cache = _merge_access(_data_get(ACCESS_FILE, None))
+        _sync_ban()
     return _access_cache
 
 def save_access(cfg):
     global _access_cache
     _access_cache = _merge_access(cfg, base=load_access())   # мержим поверх текущего
+    _sync_ban()
     _data_put(ACCESS_FILE, _access_cache, "G9 access update")
     return _access_cache
 
