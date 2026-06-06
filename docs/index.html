@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v55</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v56</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -375,7 +375,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v55';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v56';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -836,12 +836,13 @@ async function runSearch(explicit){
     head.innerHTML = (smartNote?('<div style="color:var(--link);margin-bottom:4px;font-size:13px">'+esc(smartNote)+'</div>'):'')+n; };
   const add=(d)=>{ _results.push(d); if(count<CAP) res.appendChild(makeCard(d)); count++; };
   if(tab==='hadith'){
-    // Длинный вставленный ХАДИС (целиком) → сразу широкий поиск (sunnah.one): надёжно находит; локальный скан медленный/неточный для целого хадиса.
+    // Длинный вставленный ХАДИС (целиком) → сразу широкий поиск (sunnah.one). Пробуем НЕСКОЛЬКО фраз-кандидатов
+    // из разных мест матна (иснад бывает и в начале, и в конце) — берём первую, что нашла.
     if(explicit && !modes.ai && !numMode && isArabic(shown)){
       const cwAll=canon(q).split(' ').filter(w=>w.length>1);
-      if(cwAll.length>12){ res.innerHTML=''; res.appendChild(info('🔎 Ищу этот хадис по всей библиотеке…'));
-        const wq=cwAll.slice(Math.floor(cwAll.length*0.5)).slice(0,12).join(' ');   // распознаваемый кусок матна (вторая половина)
-        await appendWide(seq, wq, true); setStatus(''); logSearch(shown,tab,0); return; }
+      if(cwAll.length>12){ const N=cwAll.length;
+        const cands=[...new Set([0.45,0.6,0.3,0.75,0.5].map(p=>cwAll.slice(Math.floor(N*p),Math.floor(N*p)+6).join(' ')))].filter(s=>s.split(' ').length>=4);
+        await appendWideMulti(seq, cands); setStatus(''); logSearch(shown,tab,0); return; }
     }
     await loadReverse();
     // РУССКИЙ поиск по хадисам (готовые переводы Бухари/Муслим/Абу Дауд). ИИ выкл + кириллица + не число.
@@ -951,6 +952,24 @@ async function appendWide(seq, q, primary){
     sec.textContent=(primary?'🌐 Найдено по всей библиотеке (sunnah.one) · ':'🌐 Ещё из всей библиотеки (sunnah.one) · ')+data.length+(j.count>data.length?(' из ~'+j.count):'');
     data.forEach(x=>res.appendChild(wideCard(x)));
   }catch(e){ sec.textContent='🌐 Большая библиотека сейчас недоступна — попробуй позже.'; }
+}
+/* Длинная вставка: пробуем несколько фраз-кандидатов, берём первую с результатами */
+async function appendWideMulti(seq, cands){
+  if(!BACKEND_URL || !cands || !cands.length) return;
+  const res=document.getElementById('res'); res.innerHTML='';
+  const sec=document.createElement('div'); sec.className='hint'; sec.style.cssText='color:#4ade80;font-size:13px;margin:0 0 8px';
+  sec.textContent='🔎 Ищу этот хадис по всей библиотеке…'; res.appendChild(sec);
+  for(const c of cands){
+    try{
+      const r=await fetch(BACKEND_URL+'/wide?q='+encodeURIComponent(c)+'&initData='+encodeURIComponent(INITDATA));
+      if(seq!==_seq) return;
+      if(r.status===403){ sec.textContent='🌐 Большая библиотека: доступ пока не открыт.'; return; }
+      if(r.status===429){ sec.textContent='🌐 Слишком часто, подожди немного.'; return; }
+      const j=await r.json().catch(()=>({})); const data=j.data||[];
+      if(data.length){ sec.textContent='🌐 Найдено по всей библиотеке (sunnah.one) · '+data.length+(j.count>data.length?(' из ~'+j.count):''); data.forEach(x=>res.appendChild(wideCard(x))); return; }
+    }catch(e){}
+  }
+  sec.textContent='🤷 Точное совпадение не нашёл. Попробуй вставить характерную фразу из матна (без иснада/имён).';
 }
 
 function cardHadith(d,groups){
