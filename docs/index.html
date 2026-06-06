@@ -141,7 +141,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v83</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v84</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -419,13 +419,21 @@
     <div class="hint" style="margin-top:10px;text-align:center;font-size:12px">или напишите нам в Telegram: <a id="fbTg" style="color:var(--link);cursor:pointer">@jamaat_ru</a></div>
   </div>
 </div>
+<div class="modal" id="tafsirModal">
+  <div class="panel" style="max-width:680px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:6;background:var(--card);margin:-16px -16px 8px;padding:14px 16px 10px;border-bottom:1px solid var(--border)">
+      <b id="tafsirTitle">📖 Тафсир</b><button class="mini" id="tafsirClose" style="flex:none">закрыть ✕</button>
+    </div>
+    <div id="tafsirBody"></div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 <div id="toTop" title="Наверх" style="display:none;position:fixed;right:14px;bottom:18px;z-index:70;width:44px;height:44px;border-radius:50%;background:var(--btn);color:var(--btn-text);font-size:22px;line-height:44px;text-align:center;cursor:pointer;box-shadow:0 4px 14px #0008">↑</div>
 
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v83';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v84';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1071,6 +1079,7 @@ function grpToggleEl(){
   return t;
 }
 function ensureGrpToggle(){ const res=document.getElementById('res'); if(!res.firstChild || document.getElementById('grpToggle')) return;
+  const grp=new Set(_results.map(srcKeyOf)); if(grp.size<2) return;   // группировка только когда есть 2+ источника/суры (иначе не мозолит глаза)
   res.insertBefore(grpToggleEl(), res.children[1]||null); }
 function renderResultsView(){
   const res=document.getElementById('res'); res.innerHTML='';
@@ -1222,11 +1231,10 @@ function addTr(meta,card,text,ayah,fav){
     if(out.style.display!=='none' && (out.textContent||'').trim()){ tr.dataset.shown='1'; if(tr.dataset.t0===undefined) tr.dataset.t0=tr.title||''; tr.style.boxShadow='0 0 8px rgba(74,222,128,.6)'; tr.title='Нажми ещё раз, чтобы скрыть перевод'; }
   };
   meta.appendChild(tr);
-  if(ayah){ const tf=document.createElement('button');tf.className='tr-btn';tf.textContent='📖 Тафсир';tf.title='Тафсир аята: Ибн Касир (рус/ар) / Табари';
+  if(ayah){ const tf=document.createElement('button');tf.className='tr-btn';tf.textContent='📖 Тафсир';tf.title='Тафсир аята в отдельном окне (Ибн Касир/Табари/Саади/Мухтасар/Куртуби/Багави)';
     tf.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
-    const tfout=document.createElement('div');tfout.className='tr-out';
-    tf.onclick=()=>{ if(tf.dataset.on==='1'){ tfout.style.display='none'; tf.dataset.on=''; tf.style.boxShadow=''; return; } doTafsir(ayah.s,ayah.a,tfout,tf); tf.dataset.on='1'; tf.style.boxShadow='0 0 8px rgba(74,222,128,.5)'; };
-    meta.appendChild(tf); card.appendChild(tfout); }
+    tf.onclick=()=>openTafsir(ayah.s,ayah.a);
+    meta.appendChild(tf); }
   if(!ayah){
     if(isVocalized(text)){
       // огласовки РЕАЛЬНО есть (по доле) → простая бесплатная кнопка «убрать/вернуть» (без ИИ)
@@ -1508,6 +1516,8 @@ async function doTranslateAyah(s,a,out,btn,ed){
 }
 /* ===== ТАФСИР аятов — готовые ayah-индексы (источник учёных). Принцип: ОРИГИНАЛ (ар) + кнопка Перевод (готовый рус где есть). ===== */
 const TAFSIR_CDN='https://cdn.jsdelivr.net/gh/spa5k/tafsir_api@main/tafsir/';
+function openTafsir(s,a){ const m=document.getElementById('tafsirModal'); const body=document.getElementById('tafsirBody'); const ttl=document.getElementById('tafsirTitle');
+  if(ttl) ttl.textContent='📖 Тафсир · аят '+s+':'+a; if(m) m.style.display='flex'; doTafsir(s,a,body,null); }
 const TAFSIRS=[
   {key:'ibnkathir',nm:'Ибн Касир',ar:'ar-tafsir-ibn-kathir',ru:'ru-tafsir-ibne-kahtir'},
   {key:'tabari',   nm:'Табари',   ar:'ar-tafsir-al-tabari', ru:null},
@@ -1535,7 +1545,7 @@ async function doTafsir(s,a,out,btn,key,lang){
     out.innerHTML=html;
     out.querySelectorAll('.tfk').forEach(b=>b.onclick=()=>doTafsir(s,a,out,btn,b.dataset.k,lang));
     out.querySelectorAll('.tflang').forEach(b=>b.onclick=()=>doTafsir(s,a,out,btn,key,b.dataset.l));
-    const x=out.querySelector('.tfx'); if(x) x.onclick=()=>{ out.style.display='none'; if(btn){ btn.dataset.on=''; btn.style.boxShadow=''; } };
+    const x=out.querySelector('.tfx'); if(x) x.onclick=()=>{ var mm=document.getElementById('tafsirModal'); if(mm) mm.style.display='none'; };
   }catch(e){ out.innerHTML='<div class="hint">🔧 Не удалось загрузить тафсир — попробуй позже.</div>'; }
 }
 function toAr(s){const m={'0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩'};return String(s).replace(/[0-9]/g,d=>m[d]);}
@@ -1938,6 +1948,7 @@ document.getElementById('menuBtn').onclick=()=>{ document.getElementById('menuMo
 document.getElementById('menuClose').onclick=()=>{ document.getElementById('menuModal').style.display='none'; };
 var _setB=document.getElementById('setBtn'); if(_setB) _setB.onclick=()=>{ document.getElementById('settingsModal').style.display='flex'; };
 var _setC=document.getElementById('settingsClose'); if(_setC) _setC.onclick=()=>{ document.getElementById('settingsModal').style.display='none'; };
+var _tfC=document.getElementById('tafsirClose'); if(_tfC) _tfC.onclick=()=>{ document.getElementById('tafsirModal').style.display='none'; };
 var _rb2=document.getElementById('readBtn2'); if(_rb2) _rb2.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openReader(); };
 document.getElementById('favBtn').onclick=()=>{ renderFav('date'); document.getElementById('favModal').style.display='flex'; };
 var _fh=document.getElementById('favHdr'); if(_fh) _fh.onclick=()=>{ renderFav('date'); document.getElementById('favModal').style.display='flex'; };
