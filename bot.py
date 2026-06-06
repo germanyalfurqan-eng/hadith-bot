@@ -2189,6 +2189,19 @@ def coll_add_translation(source, num, ar, ru):
         j["translations"]["recent"] = j["translations"]["recent"][:200]
         _journal_save(f"журнал: +перевод {source} №{key}")
     return {"source": source, "num": key, "total": len(d), "new": new}
+# ---- Накопление нейро-подбора: data/neuro.json = {"<kind>|<запрос>": [фразы]} (повтор НЕ тратит ключ) ----
+_neuro_cache = None
+def _neuro_load():
+    global _neuro_cache
+    if _neuro_cache is None:
+        _neuro_cache = _data_get("neuro.json", {}) or {}
+    return _neuro_cache
+def neuro_get(key):
+    return _neuro_load().get(key)
+def neuro_put(key, phrases):
+    c = _neuro_load(); c[key] = phrases
+    _data_put("neuro.json", c, f"neuro: +{key[:40]} (всего {len(c)})")
+    return len(c)
 # ---- Кэш огласовок (تشكيل) по сборникам: data/tashkeel/<source>.json = {num: огласованный текст} ----
 _tk_cache = {}
 def _tk_path(source):
@@ -2363,15 +2376,26 @@ async def _api_serve(application=None):
             return _ratelimited()
         try:
             meaning = (d.get('meaning') or '')[:500]
+            nkey = (d.get('kind') or 'hadith') + '|' + meaning.strip().lower()
+            # 1) УЖЕ подбирали этот запрос? → из накопителя, БЕЗ траты ключа
+            cached = await loop.run_in_executor(None, neuro_get, nkey)
+            if cached:
+                await loop.run_in_executor(None, usage_log, user, "нейро", False, len(meaning), "", "")
+                await _notify_usage(user, "нейро", False, "", "", None)
+                return _cors(web.json_response({'phrases': cached, 'cached': True}))
             sysm = ("Помоги искать хадисы/аяты. Дай 4-8 ключевых АРАБСКИХ слов/фраз "
                     "(каждое с новой строки), которыми ищут по смыслу запроса; включай формы "
                     "с артиклем ال и без, синонимы. Только арабские слова, без перевода и пояснений.")
             txt = await loop.run_in_executor(None, ask_deepseek, "Запрос: " + meaning, sysm) or ""
             ph = [re.sub(r'^[\d\.\-\)\s]+', '', x).strip() for x in (txt or '').splitlines() if x.strip()]
             ph = [p for p in ph if re.search(r'[؀-ۿ]', p)][:10]
+            saved = None
+            if ph:
+                try: saved = {"new": True, "total": await loop.run_in_executor(None, neuro_put, nkey, ph)}
+                except Exception: saved = None
             await loop.run_in_executor(None, usage_log, user, "нейро", True, len(meaning), "", "")
-            await _notify_usage(user, "нейро", True, "", "", None)
-            return _cors(web.json_response({'phrases': ph}))
+            await _notify_usage(user, "нейро", True, "", "", saved)
+            return _cors(web.json_response({'phrases': ph, 'cached': False}))
         except Exception as e:
             return _cors(web.json_response({'phrases': [], 'error': str(e)}))
 
