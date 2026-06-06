@@ -1936,6 +1936,27 @@ def rate_ok(bucket, limit=20, window=60):
         return False
     q.append(now)
     return True
+# ---- НАКОПЛЕНИЕ ПЕРЕВОДОВ ПО СБОРНИКАМ ----
+# Отдельный растущий файл на каждый сборник: data/translations/<source>.json = {"<num>": {ar, ru}}.
+# Цель: по мере перевода складывается готовый набор (напр. Ахмад с переводом, Мухаймин с переводом).
+_coll_cache = {}
+def _coll_path(source):
+    return f"translations/{source}.json"
+def _coll_load(source):
+    if source not in _coll_cache:
+        _coll_cache[source] = _data_get(_coll_path(source), {}) or {}
+    return _coll_cache[source]
+def coll_add_translation(source, num, ar, ru):
+    """Сложить {номер: {ar, ru}} в накопительный JSON сборника и сохранить в ветку data."""
+    source = re.sub(r'[^a-z0-9_]+', '', (source or '').lower())
+    if not source or num in (None, '') or not ru:
+        return False
+    d = _coll_load(source)
+    key = str(num)
+    if key in d and d[key].get("ru") == ru:
+        return True  # уже есть — не перезаписываем зря
+    d[key] = {"ar": (ar or '')[:1500], "ru": ru}
+    return _data_put(_coll_path(source), d, f"translations/{source}: +№{key} (всего {len(d)})")
 # ============ КОНЕЦ G9-БЛОКА ============
 
 async def _api_serve():
@@ -2011,13 +2032,16 @@ async def _api_serve():
             return _ratelimited()
         try:
             text = (d.get('text') or '')[:4000]
-            # НАКОПЛЕНИЕ: через translate_matn → кэш в translations.json (ветка data).
-            # Повторный перевод того же текста берётся из кэша, DeepSeek не дёргается.
-            cache = _load_trans()
-            cached = cache.get(_trans_key(text)) if cache else None
+            source = (d.get('source') or '')[:40]
+            num = d.get('num')
+            # перевод (translate_matn хранит память по тексту, чтобы не звать DeepSeek дважды)
             tr = await loop.run_in_executor(None, translate_matn, text, "", True)
             tr = re.sub(r'\s*⚡.*$', '', (tr or ''), flags=re.S).strip()
-            return _cors(web.json_response({'translation': tr, 'cached': bool(cached)}))
+            # НАКОПЛЕНИЕ в сборник: data/translations/<source>.json = {номер: {ar, ru}}
+            saved = False
+            if tr and source and num not in (None, ''):
+                saved = await loop.run_in_executor(None, coll_add_translation, source, num, text, tr)
+            return _cors(web.json_response({'translation': tr, 'saved': bool(saved)}))
         except Exception as e:
             return _cors(web.json_response({'translation': '', 'error': str(e)}))
 
