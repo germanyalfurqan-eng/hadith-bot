@@ -1080,6 +1080,15 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_long(update, result)
             return
 
+    # ============ G9: доступ к боту (Бухари 333, мухэймин, искать…) — по умолчанию ВСЕМ ============
+    if user_id != OWNER_ID and not feature_allowed('botsearch', tg_user_dict(update)):
+        if chat_type == "private":
+            try:
+                await update.message.reply_text("🔒 Бот пока доступен не всем. Обратись к владельцу за доступом.")
+            except Exception:
+                pass
+        return  # в группах — тихо, чтобы не спамить
+
     # ============ ВЛАДЕЛЕЦ: РЕЕСТР ============
     if is_owner(update):
         has_media = update.message.audio or update.message.voice or update.message.video or update.message.photo or update.message.document
@@ -1839,13 +1848,14 @@ def verify_init_data(init_data, max_age=86400):
 
 # ---- Правила доступа (хранятся в data/access.json) ----
 ACCESS_FILE = "access.json"
-ACCESS_FEATURES = ["app", "translate", "neuro", "bot"]   # app = первый рубильник (вход)
+ACCESS_FEATURES = ["app", "translate", "neuro", "bot", "botsearch"]   # app = первый рубильник (вход)
 DEFAULT_ACCESS = {
     "all": {"public": False, "whitelist": []},             # public=главный рубильник «всё всем»; whitelist=полный доступ конкретным
-    "app": {"public": False, "whitelist": []},
-    "translate": {"public": False, "whitelist": []},
-    "neuro": {"public": False, "whitelist": []},
-    "bot": {"public": False, "whitelist": []},
+    "app": {"public": False, "whitelist": []},             # 📱 вход в мини-апп
+    "translate": {"public": False, "whitelist": []},       # 📱 перевод (DeepSeek)
+    "neuro": {"public": False, "whitelist": []},           # 📱 нейро-подбор (DeepSeek)
+    "bot": {"public": False, "whitelist": []},             # 🤖 ботяра (ИИ в боте)
+    "botsearch": {"public": True, "whitelist": []},        # 🤖 поиск в боте (Бухари 333, мухэймин, искать…) — по умолчанию ВСЕМ
 }
 _access_cache = None
 
