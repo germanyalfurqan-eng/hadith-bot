@@ -117,7 +117,7 @@
       <div class="gear" id="gear">⚙️</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v23</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v24</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -316,6 +316,7 @@ function parseQuery(q){
 }
 function termMatch(term,doc,modes){
   if(modes.diac) return doc.text.indexOf(term.t.replace(/\s+/g,' ').trim())!==-1;
+  if(!doc.norm) doc.norm=canon(doc.text);   // ленивая нормализация (ускоряет загрузку тяжёлых сборников)
   if(modes.root){
     if(!doc._wsk) doc._wsk=doc.norm.split(' ').map(skel);
     const qs=canon(term.t).split(' ').map(skel).filter(s=>s.length>=2);
@@ -403,25 +404,25 @@ async function loadCollection(code){
   setStatus('Загружаю: '+nameOf(code)+'…');
   const j=await (await fetch(EDITION_URL(code))).json();
   cache[code]=(j.hadiths||[]).map(h=>{ const raw=(h.text||'').replace(/\s+/g,' ').trim();
-    return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),norm:canon(raw)}; });
+    return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),norm:''}; });
   return cache[code];
 }
 let ahmadArr=null;
 async function loadAhmad(){ if(ahmadArr)return ahmadArr; setStatus('Загружаю Муснад Ахмада (большой)…');
   const j=await (await fetch(AHMAD_URL)).json();
-  ahmadArr=j.map(x=>({num:String(x.n),text:x.t||'',grade:x.g||'',norm:canon(x.t||'')})); return ahmadArr; }
+  ahmadArr=j.map(x=>({num:String(x.n),text:x.t||'',grade:x.g||'',norm:''})); return ahmadArr; }
 const _local={};
 async function loadLocal(code,file){ if(_local[code])return _local[code]; setStatus('Загружаю '+nameOf(code)+'…');
   const j=await (await fetch('./'+file)).json();
-  _local[code]=j.map(x=>{ const raw=(x.ar||x.t||'').replace(/\s+/g,' ').trim(); return {num:String(x.num),text:raw,grade:'',norm:canon(raw)}; }); return _local[code]; }
+  _local[code]=j.map(x=>{ const raw=(x.ar||x.t||'').replace(/\s+/g,' ').trim(); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }
 async function loadQuran(){ if(quran)return quran; setStatus('Загружаю Коран…');
   const j=await (await fetch(QURAN_URL)).json();
   quran=j.map(v=>{ const raw=(v.text||'').replace(/﻿/g,'').replace(/\s+/g,' ').trim();
-    return {s:v.s,a:v.a,text:raw,norm:canon(raw)}; }); return quran; }
+    return {s:v.s,a:v.a,text:raw,norm:''}; }); return quran; }
 async function loadMuhaymin(){ if(muh)return muh; setStatus('Загружаю аль-Мухаймин…');
   const j=await (await fetch(MUHAYMIN_URL)).json();
   muh=j.map(x=>{ const rv=(x.rv||[]).map(r=> typeof r==='string'?{t:r,s:''}:r); const joined=rv.map(r=>r.t).join(' ');
-    return {n:x.n,b:x.b,c:x.c,rv:rv,rc:rv.length,text:joined,norm:canon(joined)}; }); return muh; }
+    return {n:x.n,b:x.b,c:x.c,rv:rv,rc:rv.length,text:joined,norm:''}; }); return muh; }
 function nameOf(c){const x=COLLECTIONS.find(k=>k.code===c);return x?x.ru:c;}
 function arOf(c){const x=COLLECTIONS.find(k=>k.code===c);return x?x.ar:c;}
 
@@ -514,7 +515,7 @@ function makeCard(d){ return d.type==='q'?cardAyah(d,_groups):(d.type==='m'?card
 async function getOne(code,num){
   try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-'+code+'/'+num+'.min.json')).json();
     const h=(j.hadiths||[])[0]; if(h){ const raw=(h.text||'').replace(/\s+/g,' ').trim();
-      return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),norm:canon(raw)}; } }catch(e){}
+      return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),norm:''}; } }catch(e){}
   return null;
 }
 function info(t){const d=document.createElement('div');d.className='hint';d.style.textAlign='center';d.textContent=t;return d;}
@@ -760,7 +761,7 @@ document.getElementById('goBtn').onclick=runSearch;
 })();
 document.getElementById('neuroRun').onclick=neuroRun;
 function openLink(u){ try{ if(tg&&tg.openLink) tg.openLink(u); else window.open(u,'_blank'); }catch(e){ try{window.open(u,'_blank');}catch(_){} } }
-function goHome(){ document.getElementById('q').value=''; document.getElementById('res').innerHTML=''; setStatus(''); document.querySelector('.tab[data-tab="hadith"]').click(); try{window.scrollTo(0,0);}catch(e){} }
+function goHome(){ document.getElementById('q').value=''; selCols.clear(); document.getElementById('res').innerHTML=''; setStatus(''); try{localStorage.removeItem('muslimoon_state');}catch(e){} document.querySelector('.tab[data-tab="hadith"]').click(); renderCols(); try{window.scrollTo(0,0);}catch(e){} }
 document.getElementById('brand').onclick=goHome;
 document.getElementById('helpBtn').onclick=()=>{ document.getElementById('helpModal').style.display='flex'; };
 document.getElementById('helpClose').onclick=()=>{ document.getElementById('helpModal').style.display='none'; };
@@ -783,7 +784,7 @@ async function boot(){
   if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
   if(userAllowed()){
     document.getElementById('app').style.display='block';
-    if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v23 · хадисы · аяты · аль-Мухаймин'; }
+    if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v24 · хадисы · аяты · аль-Мухаймин'; }
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
         (st.cols||[]).forEach(c=>selCols.add(c));

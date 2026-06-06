@@ -867,6 +867,17 @@ def ask_deepseek(prompt, system):
         pass
     return None
 
+def deepseek_balance():
+    """Остаток баланса DeepSeek API (чтобы следить, не кончается ли)."""
+    try:
+        r = requests.get("https://api.deepseek.com/user/balance",
+                         headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}"}, timeout=15)
+        if r.status_code == 200:
+            return r.json()
+    except Exception:
+        pass
+    return None
+
 def ask_ai(prompt, system=None, owner=False):
     if system is None:
         system = f"Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском. Сегодняшняя дата: {datetime.now().strftime('%d.%m.%Y')}."
@@ -1048,6 +1059,30 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             await update.message.reply_text("Ошибка анонса: " + str(e))
         return
+    # ===== Владельцу: баланс DeepSeek + ресурсы =====
+    if is_owner(update) and text.strip().lower() in ("баланс", "баланс дипсик", "дипсик баланс", "deepseek баланс", "баланс ии"):
+        b = deepseek_balance()
+        if not b:
+            await update.message.reply_text("⚠️ Не удалось получить баланс DeepSeek (проверь ключ/сеть).\nСтраница: platform.deepseek.com/usage")
+            return
+        lines = ["💳 *Баланс DeepSeek*", f"Доступен: {'✅ да' if b.get('is_available') else '❌ НЕТ'}"]
+        for i in b.get("balance_infos", []):
+            lines.append(f"• {i.get('currency','')}: осталось *{i.get('total_balance','?')}* (пополнено {i.get('topped_up_balance','?')}, бонус {i.get('granted_balance','?')})")
+        lines.append("\n📈 Подробно: platform.deepseek.com/usage")
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown", disable_web_page_preview=True)
+        return
+    if is_owner(update) and text.strip().lower() in ("ресурсы", "рабочий стол", "ссылки", "инструменты"):
+        await update.message.reply_text(
+            "🧰 *Рабочие ресурсы*\n"
+            "• 💳 DeepSeek расход/баланс: platform.deepseek.com/usage  (команда: баланс)\n"
+            f"• 🔤 Переводы по сборникам: github.com/{GITHUB_REPO}/tree/data/translations\n"
+            f"• 📊 Журналы (расход+накопление): github.com/{GITHUB_REPO}/blob/data/journal.json\n"
+            f"• 🔐 Доступы: github.com/{GITHUB_REPO}/blob/data/access.json\n"
+            "• 📱 Мини-апп: germanyalfurqan-eng.github.io/hadith-bot/\n\n"
+            "Команды: баланс · журнал ии · накопление · ресурсы · анонс",
+            parse_mode="Markdown", disable_web_page_preview=True)
+        return
+
     # ===== Владельцу: журналы (расход ИИ и накопление) =====
     if is_owner(update) and text.strip().lower() in ("журнал ии", "расход", "статистика ии", "ии журнал", "журнал"):
         j = _journal_load(); u = j["usage"]; t = u["totals"]
@@ -1060,10 +1095,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 lines.append(f"• {info.get('name', uid)}: {info.get('calls',0)} (свежих {info.get('fresh',0)})")
         rec = u.get("recent", [])[:10]
         if rec:
-            lines.append("\n🕘 Последние:")
+            lines.append("\n🕘 Последние (кто · когда · что):")
             for x in rec:
                 loc = f" {x.get('src','')} №{x.get('num','')}" if x.get("src") else ""
-                lines.append(f"  {'🆕' if x.get('fresh') else '♻️'} {x['d']} {x['u']} · {x.get('f','')}{loc}")
+                who = x.get('u', '?'); uid_ = x.get('id', '')
+                who_full = who if (str(uid_) in ('', who)) else f"{who} [id {uid_}]"
+                lines.append(f"  {'🆕' if x.get('fresh') else '♻️'} {x['d']} · {who_full} · {x.get('f','')}{loc}")
         lines.append("\n📄 Файл: github.com/" + GITHUB_REPO + "/blob/data/journal.json")
         await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
         return
@@ -2019,7 +2056,7 @@ def coll_add_translation(source, num, ar, ru):
     if new:
         j = _journal_load()
         j["translations"]["totals"][source] = len(d)
-        j["translations"]["recent"].insert(0, {"d": datetime.now().strftime("%d.%m %H:%M"), "s": source, "n": key})
+        j["translations"]["recent"].insert(0, {"d": datetime.now().strftime("%d.%m.%Y %H:%M:%S"), "s": source, "n": key})
         j["translations"]["recent"] = j["translations"]["recent"][:200]
         _journal_save(f"журнал: +перевод {source} №{key}")
     return {"source": source, "num": key, "total": len(d), "new": new}
@@ -2039,7 +2076,7 @@ def usage_log(user, feat, fresh, length=0, src="", num=""):
     name = ("@" + user["username"]) if (user and user.get("username")) else uid
     bu = t["by_user"].setdefault(uid, {"name": name, "calls": 0, "fresh": 0})
     bu["calls"] += 1; bu["fresh"] += (1 if fresh else 0); bu["name"] = name
-    u["recent"].insert(0, {"d": datetime.now().strftime("%d.%m %H:%M"), "u": name, "f": feat,
+    u["recent"].insert(0, {"d": datetime.now().strftime("%d.%m.%Y %H:%M:%S"), "u": name, "id": uid, "f": feat,
                            "fresh": bool(fresh), "len": length, "src": src, "num": str(num)})
     u["recent"] = u["recent"][:300]
     _journal_save(f"журнал: {feat} {name} ({'свежий' if fresh else 'из базы'})")
