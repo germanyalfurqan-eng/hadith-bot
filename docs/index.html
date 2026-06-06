@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v77</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v78</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -173,7 +173,7 @@
     <div class="chip" data-mode="matnonly" title="Искать совпадение только в тексте хадиса (матн), не в цепочке передатчиков (иснаде)">📜 Не искать в иснаде</div>
     <div class="chip" id="neuroChip" data-mode="neuro" title="Расширенный: вручную подобрать/поправить арабские фразы перед поиском">🔬 Расширенный</div>
   </div>
-  <div class="hint">Просто напиши слова — найду, где есть все слова. «🧠 По смыслу» — поиск по смыслу (рус/eng). <span id="helpBtn" style="color:var(--link);cursor:pointer;font-weight:600">ⓘ Как искать — примеры</span></div>
+  <div class="hint">Просто напиши слова — найду, где есть все слова. Можно по номеру: например <b>альбухари 333</b> или <b>333 ахмад</b> (порядок не важен). «🧠 По смыслу» — поиск по смыслу (рус/eng). <span id="helpBtn" style="color:var(--link);cursor:pointer;font-weight:600">ⓘ Как искать — примеры</span></div>
 
   <div class="neuro-box" id="neuroBox">
     <div style="font-size:13px;margin-bottom:6px">🔬 Расширенный: подберу арабские фразы — можешь поправить перед поиском:</div>
@@ -265,8 +265,8 @@
 </div>
 <div class="modal" id="readModal">
   <div class="panel" style="max-width:560px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px">
-      <b id="readTitle">📖 Читать сборник</b><button class="mini" id="readClose">закрыть ✕</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:6;background:var(--card);margin:-16px -16px 8px;padding:14px 16px 10px;border-bottom:1px solid var(--border)">
+      <b id="readTitle">📖 Читать сборник</b><button class="mini" id="readClose" style="flex:none">закрыть ✕</button>
     </div>
     <div id="readPick">
       <div class="hint" style="margin:0 0 8px">Выбери сборник — открою его подряд (листать хадис за хадисом). Можно начать с номера.</div>
@@ -395,6 +395,7 @@
     <div class="hint" id="fbCtx"></div>
     <textarea id="fbText" placeholder="Что не так? Опиши ошибку или предложение…" style="width:100%;min-height:80px;margin-top:8px;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg);color:var(--text);font-size:15px;resize:vertical"></textarea>
     <button class="go" id="fbSend" style="padding:9px 16px;margin-top:8px;width:100%">Отправить разработчику</button>
+    <div class="hint" style="margin-top:10px;text-align:center;font-size:12px">или напишите нам в Telegram: <a id="fbTg" style="color:var(--link);cursor:pointer">@jamaat_ru</a></div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -403,7 +404,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v77';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v78';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -512,9 +513,13 @@ function isSubseq(a,b){ let i=0; for(let j=0;j<b.length&&i<a.length;j++) if(b[j]
 /* ===================== РАЗБОР + МАТЧ ===================== */
 // «Бухари 5063», «муслим 100», «ибн маджа 50», «дарими 12» → {code,num}. Имя сборника по-русски + номер.
 function parseRuSourceNum(s){
-  const m=(s||'').trim().match(/^(.+?)[\s:№#-]+(\d{1,7})$/); if(!m) return null;
+  s=(s||'').trim(); let rawName, num;
+  let m=s.match(/^(.+?)[\s:№#-]+(\d{1,7})$/);                 // «имя … №» (ахмад 333)
+  if(m){ rawName=m[1]; num=m[2]; }
+  else { m=s.match(/^(\d{1,7})[\s:№#-]+(.+)$/); if(m){ num=m[1]; rawName=m[2]; } }   // «№ … имя» (333 ахмад) — порядок не важен
+  if(!rawName) return null;
   const nrm=x=>(x||'').toLowerCase().replace(/^(аль|al|ал)[\s\-’']*/,'').replace(/[\s'’.\-—·()]/g,'');
-  const name=nrm(m[1]); if(name.length<3) return null; const num=m[2];
+  const name=nrm(rawName); if(name.length<3) return null;
   for(const c of COLLECTIONS.concat(EXTRA)){
     const cand=[c.ru,c.short,c.author].map(nrm).filter(Boolean);
     if(cand.some(x=> x.indexOf(name)!==-1 || name.indexOf(x)!==-1)) return {code:c.code, num:num};
@@ -624,16 +629,16 @@ const cache={}; let reverse=null, quran=null, muh=null;
 async function loadReverse(){ if(reverse)return reverse; try{ reverse=await (await fetch(REVERSE_INDEX_URL)).json(); }catch(e){ reverse={}; } return reverse; }
 function gradeOf(h){ const g=h.grades&&h.grades[0]; return g?(g.grade||'').toString():''; }
 // Степень достоверности из источника (учёные/sunnah) — ПОМЕЧАЕМ, что это НЕ наша проверка.
-const GRADE_NOTE='Степень достоверности — по источнику (учёные/sunnah.com). Это НЕ наша проверка: наша готовится, возможны уточнения. Ждите нашу отметку ✅.';
+const GRADE_NOTE='Оценка указана по источнику (учёные / sunnah.com), не нашей редакцией. Наша проверка будет добавлена позже.';
 function gradeBadge(g){ if(!g) return '';
-  return '<span class="grade" title="'+GRADE_NOTE+'">'+esc(g)+'</span><span class="srcchk" title="'+GRADE_NOTE+'">⚠ не наша проверка</span>'; }
+  return '<span class="grade" title="'+GRADE_NOTE+'">'+esc(g)+'</span><span class="srcchk" title="'+GRADE_NOTE+'">источник, не наша оценка</span>'; }
 const SAHIHAYN=['bukhari','muslim'];
-const NOGRADE_NOTE='Оценки достоверности от учёных пока нет в источнике. Наша проверка готовится — ожидайте отметку ✅.';
+const NOGRADE_NOTE='Оценка достоверности будет добавлена после нашей проверки.';
 /* Достоверность на КАЖДОМ хадисе: Сахихайн → صحيح; есть оценка → она + «не наша проверка»; нет → «нет оценки — ожидайте». */
 function authBadge(code, grade){
   if(SAHIHAYN.indexOf(code)!==-1) return '<span class="grade" style="background:#10331f;color:#bff5d4;border:1px solid #2e9b5b" title="Хадис из ас-Сахихайн (аль-Бухари/Муслим) — достоверность по согласию учёных (иджма).">صحيح · الصحيحين</span>';
   if(grade) return gradeBadge(grade);
-  return '<span class="srcchk" title="'+NOGRADE_NOTE+'" style="border:1px dashed #6b5a2e;border-radius:8px;padding:1px 6px">⚠ нет оценки — ожидайте нашу проверку</span>'; }
+  return '<span class="srcchk" title="'+NOGRADE_NOTE+'" style="border:1px dashed #6b5a2e;border-radius:8px;padding:1px 6px">⏳ ожидается наша проверка</span>'; }
 async function loadCollection(code){
   if(cache[code]) return cache[code];
   setStatus('Загружаю: '+nameOf(code)+'…');
@@ -1055,7 +1060,7 @@ function wideCard(x){ const card=document.createElement('div');card.className='c
   const ar=document.createElement('div');ar.className='ar';
   ar.innerHTML=esc(x.text||'').replace(/&lt;mark&gt;/g,'<mark>').replace(/&lt;\/mark&gt;/g,'</mark>'); card.appendChild(ar);
   const meta=document.createElement('div');meta.className='meta';
-  meta.innerHTML = x.hukm ? gradeBadge(x.hukm) : '<span class="srcchk" title="'+NOGRADE_NOTE+'" style="border:1px dashed #6b5a2e;border-radius:8px;padding:1px 6px">⚠ нет оценки — ожидайте нашу проверку</span>';
+  meta.innerHTML = x.hukm ? gradeBadge(x.hukm) : '<span class="srcchk" title="'+NOGRADE_NOTE+'" style="border:1px dashed #6b5a2e;border-radius:8px;padding:1px 6px">⏳ ожидается наша проверка</span>';
   const cp=document.createElement('button');cp.className='tr-btn';cp.textContent='⧉';cp.title='Копировать';
   cp.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
   const cleanTxt=(x.text||'').replace(/<\/?mark>/g,'');
@@ -1168,7 +1173,11 @@ function addTr(meta,card,text,ayah,fav){
     if(_ref0 && _ref0.source && (_ref0.num||_ref0.num===0)){
       ensureTrIndex(_ref0.source).then(()=>{ const e=trHas(_ref0.source,_ref0.num); if(e) setTrBase(tr,e,_ref0.source); }); } }
   const out=document.createElement('div');out.className='tr-out';
-  tr.onclick=()=> ayah ? doTranslateAyah(ayah.s,ayah.a,out,tr) : doTranslate(text,out,tr,refOf(fav));
+  tr.onclick=async()=>{
+    if(tr.dataset.shown==='1'){ out.style.display='none'; tr.dataset.shown=''; tr.style.boxShadow=''; if(tr.dataset.t0!==undefined) tr.title=tr.dataset.t0; return; }   // повторный клик — скрыть перевод
+    await (ayah ? doTranslateAyah(ayah.s,ayah.a,out,tr) : doTranslate(text,out,tr,refOf(fav)));
+    if(out.style.display!=='none' && (out.textContent||'').trim()){ tr.dataset.shown='1'; if(tr.dataset.t0===undefined) tr.dataset.t0=tr.title||''; tr.style.boxShadow='0 0 8px rgba(74,222,128,.6)'; tr.title='Нажми ещё раз, чтобы скрыть перевод'; }
+  };
   meta.appendChild(tr);
   if(!ayah){
     if(isVocalized(text)){
@@ -1757,6 +1766,7 @@ async function sendFeedback(){
 }
 var _fbc=document.getElementById('fbClose'); if(_fbc) _fbc.onclick=()=>{ document.getElementById('fbModal').style.display='none'; };
 var _fbs=document.getElementById('fbSend'); if(_fbs) _fbs.onclick=sendFeedback;
+var _fbtg=document.getElementById('fbTg'); if(_fbtg) _fbtg.onclick=()=>openLink('https://t.me/jamaat_ru');
 var _qs=document.getElementById('qtrSel'); if(_qs){ _qs.value=cfg.qtr||'rus-elmirkuliev'; _qs.onchange=()=>{ cfg.qtr=_qs.value; saveCfg(cfg); }; }
 var _nd=document.getElementById('noDiacSw'); if(_nd){ _nd.classList.toggle('on',!!cfg.noDiac); _nd.onclick=()=>{ cfg.noDiac=!cfg.noDiac; saveCfg(cfg); _nd.classList.toggle('on',!!cfg.noDiac); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _is=document.getElementById('isnadSw'); if(_is){ _is.classList.toggle('on',!!cfg.isnad); _is.onclick=()=>{ cfg.isnad=!cfg.isnad; saveCfg(cfg); _is.classList.toggle('on',!!cfg.isnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
