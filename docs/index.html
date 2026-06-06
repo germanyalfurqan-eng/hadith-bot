@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v67</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v68</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -401,7 +401,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v67';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v68';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -682,6 +682,7 @@ async function loadMuhaymin(){ if(muh)return muh; setStatus('Загружаю а
     return {n:x.n,b:x.b,c:x.c,rv:rv,rc:rv.length,text:joined,norm:''}; }); return muh; }
 function nameOf(c){const x=COLLECTIONS.find(k=>k.code===c);if(x)return x.ru;if(EXTRA_MAP[c])return EXTRA_MAP[c].short;return c;}
 function arOf(c){const x=COLLECTIONS.find(k=>k.code===c);if(x)return x.ar;if(EXTRA_MAP[c])return EXTRA_MAP[c].ar;return c;}
+function isReadable(c){ return c!=='muhaymin' && (!!COLLECTIONS.find(k=>k.code===c) || (EXTRA_MAP[c] && !EXTRA_MAP[c].soon)); }
 
 /* ===================== UI STATE ===================== */
 let tab='hadith'; var _seq=0, _results=[], _groups=[], _shown=0;
@@ -1073,8 +1074,10 @@ function cardHadith(d,groups){
   const {code,h}=d; const card=document.createElement('div');card.className='card';
   const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(h.text,groups);card.appendChild(ar);
   const meta=document.createElement('div');meta.className='meta';
-  meta.innerHTML='<span class="src">'+arOf(code)+' · №'+h.num+'</span>';
+  const canRead = !d.noNav && isReadable(code);   // M102: клик по источнику → читалка на этом хадисе
+  meta.innerHTML='<span class="src'+(canRead?' srcnav':'')+'"'+(canRead?' title="Открыть в читалке на этом хадисе">📖 ':'>')+arOf(code)+' · №'+h.num+'</span>';
   meta.innerHTML+=authBadge(code, h.grade);   // достоверность ВСЕГДА (الصحيحين / оценка+«не наша» / нет оценки)
+  if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp){ sp.style.cursor='pointer'; sp.onclick=()=>openReader(code,String(h.num)); } }
   // «في المهيمن №…» больше НЕ инлайн-бейджем — показывается в «🔗 Где ещё передаётся».
   addTr(meta,card,h.text,null,{k:'h|'+code+'|'+h.num,type:'h',coll:arOf(code),label:arOf(code)+' №'+h.num,text:(h.text||'').slice(0,200)}); card.appendChild(meta); return card;
 }
@@ -1755,7 +1758,7 @@ function _readRender(){
   document.getElementById('readPos').textContent='№'+(h.num!==undefined?h.num:(_readIdx+1))+'  ('+(_readIdx+1)+' из '+_readArr.length+')';
   const body=document.getElementById('readBody'); body.innerHTML='';
   const sg=_groups; _groups=[];                 // в читалке без подсветки запроса
-  try{ body.appendChild(cardHadith({code:_readCode,h},[])); }catch(e){ const d=document.createElement('div');d.className='ar';d.innerHTML=esc(h.text||'');body.appendChild(d); }
+  try{ body.appendChild(cardHadith({code:_readCode,h,noNav:true},[])); }catch(e){ const d=document.createElement('div');d.className='ar';d.innerHTML=esc(h.text||'');body.appendChild(d); }
   _groups=sg;
 }
 async function _readOpen(code,fromNum){
