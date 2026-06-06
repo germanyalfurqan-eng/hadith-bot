@@ -2289,6 +2289,25 @@ async def _api_serve(application=None):
         await _notify(f"#отзыв 💬 от {name}{(' · ' + ctx) if ctx else ''}:\n{txt}")
         return _cors(web.json_response({'ok': True}))
 
+    async def tashkeel(r):
+        # ИИ-огласовки (تشكيل) арабского текста; гейт — нейро (это DeepSeek)
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('neuro', user):
+            return _deny('neuro')
+        if not rate_ok('tashkeel:' + _uid(user, r)):
+            return _ratelimited()
+        text = (d.get('text') or '')[:2000]
+        if not text:
+            return _cors(web.json_response({'text': ''}))
+        sysm = ("Ты расставляешь огласовки (تشكيل) в арабском тексте. "
+                "Верни ТОТ ЖЕ текст с полной огласовкой. Без перевода, без пояснений, без кавычек — только огласованный текст.")
+        out = await loop.run_in_executor(None, ask_deepseek, text, sysm) or ""
+        out = re.sub(r'\s*⚡.*$', '', out, flags=re.S).strip()
+        await loop.run_in_executor(None, usage_log, user, "огласовки", True, len(text), "", "")
+        await _notify_usage(user, "огласовки", True, "", "", None)
+        return _cors(web.json_response({'text': out}))
+
     async def searchlog(r):
         # аналитика: что ищут (тихо, агрегируем); гейт — вход в приложение
         d = await _body(r)
@@ -2309,6 +2328,7 @@ async def _api_serve(application=None):
                   web.post('/api/translate', translate), web.get('/api/search', search),
                   web.post('/api/access', access), web.post('/api/balance', balance),
                   web.post('/api/feedback', feedback), web.post('/api/searchlog', searchlog),
+                  web.post('/api/tashkeel', tashkeel),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))

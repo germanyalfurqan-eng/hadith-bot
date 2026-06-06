@@ -118,7 +118,7 @@
       <div class="gear" id="devBtn" style="display:none">🛠</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v32</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v33</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -678,11 +678,26 @@ function addTr(meta,card,text,ayah,fav){
   const out=document.createElement('div');out.className='tr-out';
   tr.onclick=()=> ayah ? doTranslateAyah(ayah.s,ayah.a,out,tr) : doTranslate(text,out,tr,refOf(fav));
   meta.appendChild(tr);
+  if(!ayah){ const tk=document.createElement('button');tk.className='tr-btn';tk.textContent='ـَ';tk.title='Огласовки (ИИ)';
+    tk.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
+    const tkout=document.createElement('div');tkout.className='tr-out';
+    tk.onclick=()=>doTashkeel(text,tkout,tk); meta.appendChild(tk); card.appendChild(tkout); }
   const fbb=document.createElement('button');fbb.className='tr-btn';fbb.textContent='⚠️';fbb.title='Сообщить об ошибке';
   fbb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--hint);padding:6px 10px';
   fbb.onclick=()=>openFeedback((fav&&fav.label)||'');
   meta.appendChild(fbb);
   card.appendChild(out);
+}
+async function doTashkeel(text,out,btn){
+  if(!BACKEND_URL){ toast('Нужен сервер'); return; }
+  btn.disabled=true; btn.textContent='…';
+  try{ const r=await fetch(BACKEND_URL+'/tashkeel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,initData:INITDATA})});
+    const j=await r.json().catch(()=>({}));
+    if(r.status===403){ toast(j.message||'Огласовки пока не для всех'); }
+    else if(r.ok && j.text){ out.innerHTML='<div style="color:#ffb74d;font-size:12px;margin-bottom:4px">⚠️ Огласовки расставил ИИ — возможны ошибки (не от автора).</div><div class="ar" style="font-size:18px;line-height:2">'+esc(j.text)+'</div>'; out.style.display='block'; }
+    else toast('Не удалось расставить'); }
+  catch(e){ toast('🔧 Сервис недоступен — возможно, идёт обновление'); }
+  btn.disabled=false; btn.textContent='ـَ';
 }
 function refOf(fav){ if(!fav||!fav.k) return null; const p=String(fav.k).split('|');
   if(p[0]==='h') return {source:p[1], num:p[2]};
@@ -966,7 +981,7 @@ async function boot(){
   if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
   if(userAllowed()){
     document.getElementById('app').style.display='block';
-    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v32 · хадисы · аяты · аль-Мухаймин'; }
+    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v33 · хадисы · аяты · аль-Мухаймин'; }
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
         (st.cols||[]).forEach(c=>selCols.add(c));
