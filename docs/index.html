@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v53</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v54</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -173,7 +173,7 @@
     <div class="chip" data-mode="matnonly" title="Искать совпадение только в тексте хадиса (матн), не в цепочке передатчиков (иснаде)">📜 Не искать в иснаде</div>
     <div class="chip" id="neuroChip" data-mode="neuro" title="Расширенный: вручную подобрать/поправить арабские фразы перед поиском">🔬 Расширенный</div>
   </div>
-  <div class="hint">Просто напиши слова — найду, где есть все слова. «🧠 По смыслу» — поиск по смыслу (рус/eng). <span id="helpBtn" style="color:var(--link);cursor:pointer;font-weight:600">ⓘ Как искать — примеры</span></div>
+  <div class="hint">Просто напиши слова — найду, где есть все слова. «🧠 По смыслу» — поиск по смыслу (рус/eng). <span id="helpBtn" style="color:var(--link);cursor:pointer;font-weight:600">ⓘ Как искать — примеры</span> · <span id="wideBtn" style="color:#4ade80;cursor:pointer;font-weight:600" title="Искать по большому корпусу (sunnah.one): где передаётся (التخريج) + оценка достоверности">🌐 вся библиотека</span></div>
 
   <div class="neuro-box" id="neuroBox">
     <div style="font-size:13px;margin-bottom:6px">🔬 Расширенный: подберу арабские фразы — можешь поправить перед поиском:</div>
@@ -375,7 +375,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v53';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v54';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -909,6 +909,35 @@ async function getOne(code,num){
   return null;
 }
 function info(t){const d=document.createElement('div');d.className='hint';d.style.textAlign='center';d.textContent=t;return d;}
+/* ===== M127 Шаг1: широкий поиск (sunnah.one через наш /api) ===== */
+function wideCard(x){ const card=document.createElement('div');card.className='card';
+  const ar=document.createElement('div');ar.className='ar';
+  ar.innerHTML=esc(x.text||'').replace(/&lt;mark&gt;/g,'<mark>').replace(/&lt;\/mark&gt;/g,'</mark>'); card.appendChild(ar);
+  const meta=document.createElement('div');meta.className='meta';
+  if(x.hukm) meta.innerHTML=gradeBadge(x.hukm);
+  const cp=document.createElement('button');cp.className='tr-btn';cp.textContent='⧉';cp.title='Копировать';
+  cp.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
+  cp.onclick=()=>copyWithSig((x.text||'').replace(/<\/?mark>/g,'')+(x.takhreej?('\n— '+x.takhreej):''));
+  meta.appendChild(cp); card.appendChild(meta);
+  if(x.takhreej){ const tk=document.createElement('div'); tk.style.cssText='color:var(--hint);font-size:13px;margin-top:6px;direction:rtl;text-align:right'; tk.textContent='التخريج: '+x.takhreej; card.appendChild(tk); }
+  return card; }
+async function runWide(){
+  const q=document.getElementById('q').value.trim(); if(!q){ toast('Сначала введите запрос (лучше арабскую фразу хадиса)'); return; }
+  if(!BACKEND_URL){ toast('Нужен сервер'); return; }
+  const res=document.getElementById('res'); res.innerHTML=''; document.getElementById('qSugg').style.display='none';
+  const head=info('🌐 Ищу во всей библиотеке…'); res.appendChild(head);
+  try{
+    const r=await fetch(BACKEND_URL+'/wide?q='+encodeURIComponent(q)+'&initData='+encodeURIComponent(INITDATA));
+    const j=await r.json().catch(()=>({}));
+    if(r.status===403){ head.textContent='🔒 Поиск по библиотеке пока не открыт для тебя.'; return; }
+    if(r.status===429){ head.textContent='⏳ Слишком часто, подожди немного.'; return; }
+    const data=j.data||[];
+    head.innerHTML='<div style="color:#4ade80;font-size:13px;margin-bottom:4px">🌐 Вся библиотека (движок sunnah.one) · найдено ~'+(j.count||data.length)+(data.length>40?' (показаны первые 40)':'')+'</div>'+(data.length?'':'Ничего не найдено — попробуй арабскую фразу из хадиса.');
+    data.forEach(x=>res.appendChild(wideCard(x)));
+    logSearch(q,'wide',data.length);
+  }catch(e){ head.textContent='🔧 Сервис недоступен — возможно, идёт обновление. Попробуй через минуту.'; }
+}
+var _wb=document.getElementById('wideBtn'); if(_wb) _wb.onclick=runWide;
 
 function cardHadith(d,groups){
   const {code,h}=d; const card=document.createElement('div');card.className='card';

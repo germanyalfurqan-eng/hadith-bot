@@ -2187,6 +2187,29 @@ async def log_bot_ai(update, context, feat="ботяра"):
         pass
 # ============ КОНЕЦ G9-БЛОКА ============
 
+def wide_search(q):
+    """M127 Шаг 1: широкий поиск по большому корпусу через sunnah.one (turath-движок).
+    Возвращает text + hukm (достоверность) + takhreej (где передаётся, словами) + source/loc."""
+    try:
+        r = requests.get("https://search.sunnah.one/",
+                         params={"action": "search", "ver": "2", "q": q},
+                         headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        if r.status_code == 200:
+            j = r.json()
+            out = []
+            for x in (j.get("data") or [])[:40]:
+                out.append({
+                    "text": x.get("text", ""),
+                    "hukm": x.get("hukm", ""),
+                    "takhreej": x.get("takhreej", ""),
+                    "source": str(x.get("source", "")),
+                    "loc": str(x.get("source_location", "")),
+                })
+            return {"count": j.get("count", 0), "data": out}
+    except Exception as e:
+        return {"count": 0, "data": [], "error": str(e)}
+    return {"count": 0, "data": []}
+
 async def _api_serve(application=None):
     from aiohttp import web
     loop = asyncio.get_event_loop()
@@ -2323,6 +2346,17 @@ async def _api_serve(application=None):
         except Exception as e:
             return _cors(web.json_response({'results': [], 'error': str(e)}))
 
+    async def wide(r):
+        # M127: широкий поиск (sunnah.one) — гейт = вход в приложение, без траты нашего ключа
+        user = verify_init_data(r.headers.get('X-Init-Data') or r.query.get('initData'))
+        if not feature_allowed('app', user):
+            return _deny('app')
+        if not rate_ok('wide:' + _uid(user, r)):
+            return _ratelimited()
+        q = (r.query.get('q') or '')[:200]
+        res = await loop.run_in_executor(None, wide_search, q) if q else {'count': 0, 'data': []}
+        return _cors(web.json_response(res))
+
     async def balance(r):
         # только владелец: остаток DeepSeek + краткая статистика журналов для рабочего стола
         d = await _body(r)
@@ -2405,7 +2439,7 @@ async def _api_serve(application=None):
 
     a = web.Application()
     a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro),
-                  web.post('/api/translate', translate), web.get('/api/search', search),
+                  web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.post('/api/access', access), web.post('/api/balance', balance),
                   web.post('/api/feedback', feedback), web.post('/api/searchlog', searchlog),
                   web.post('/api/tashkeel', tashkeel),
