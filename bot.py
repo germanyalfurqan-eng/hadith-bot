@@ -1048,6 +1048,44 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             await update.message.reply_text("Ошибка анонса: " + str(e))
         return
+    # ===== Владельцу: журналы (расход ИИ и накопление) =====
+    if is_owner(update) and text.strip().lower() in ("журнал ии", "расход", "статистика ии", "ии журнал", "журнал"):
+        j = _journal_load(); u = j["usage"]; t = u["totals"]
+        lines = ["🧠 *Журнал ИИ (расход твоего ключа)*",
+                 f"Всего вызовов: {t.get('calls',0)} · 🆕 свежих(потрачено): {t.get('fresh',0)} · ♻️ из базы(бесплатно): {t.get('cached',0)}"]
+        bu = t.get("by_user", {})
+        if bu:
+            lines.append("\n👤 По людям:")
+            for uid, info in sorted(bu.items(), key=lambda x: -x[1].get("calls", 0))[:10]:
+                lines.append(f"• {info.get('name', uid)}: {info.get('calls',0)} (свежих {info.get('fresh',0)})")
+        rec = u.get("recent", [])[:10]
+        if rec:
+            lines.append("\n🕘 Последние:")
+            for x in rec:
+                loc = f" {x.get('src','')} №{x.get('num','')}" if x.get("src") else ""
+                lines.append(f"  {'🆕' if x.get('fresh') else '♻️'} {x['d']} {x['u']} · {x.get('f','')}{loc}")
+        lines.append("\n📄 Файл: github.com/" + GITHUB_REPO + "/blob/data/journal.json")
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        return
+    if is_owner(update) and text.strip().lower() in ("накопление", "журнал накопления", "накопления", "переводы накоплено"):
+        j = _journal_load(); tr = j["translations"]; tot = tr.get("totals", {})
+        lines = ["📚 *Накопление переводов* (растут файлы по сборникам)"]
+        if tot:
+            lines.append("Всего по сборникам:")
+            for s, c in sorted(tot.items(), key=lambda x: -x[1]):
+                lines.append(f"• {s}: {c}")
+        else:
+            lines.append("пока пусто")
+        rec = tr.get("recent", [])[:10]
+        if rec:
+            lines.append("\n➕ Последние добавленные:")
+            for x in rec:
+                lines.append(f"  {x['d']} {x['s']} №{x['n']}")
+        lines.append("\n📁 Папка: github.com/" + GITHUB_REPO + "/tree/data/translations")
+        lines.append("ℹ️ Удаляется ТОЛЬКО тобой. Копится только полезное (мусор/ошибки не пишем).")
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        return
+
     user_id = update.effective_user.id if update.effective_user else 0
     chat_type = update.effective_chat.type
     chat_id = update.effective_chat.id
@@ -1936,32 +1974,92 @@ def rate_ok(bucket, limit=20, window=60):
         return False
     q.append(now)
     return True
-# ---- НАКОПЛЕНИЕ ПЕРЕВОДОВ ПО СБОРНИКАМ ----
-# Отдельный растущий файл на каждый сборник: data/translations/<source>.json = {"<num>": {ar, ru}}.
-# Цель: по мере перевода складывается готовый набор (напр. Ахмад с переводом, Мухаймин с переводом).
+# ---- НАКОПЛЕНИЕ ПО СБОРНИКАМ + ЖУРНАЛЫ (накопление, расход ИИ) + КОНТРОЛЬ КАЧЕСТВА ----
+# Файлы (ветка data): translations/<source>.json = {"<num>":{ar,ru}}; journal.json = {translations, usage}.
+# Принципы: только ДОБАВЛЯЕМ (ничего не удаляем без владельца); копим только ПОЛЕЗНОЕ (не мусор).
 _coll_cache = {}
+_journal_cache = None
 def _coll_path(source):
     return f"translations/{source}.json"
 def _coll_load(source):
     if source not in _coll_cache:
         _coll_cache[source] = _data_get(_coll_path(source), {}) or {}
     return _coll_cache[source]
-def coll_add_translation(source, num, ar, ru):
-    """Сложить {номер: {ar, ru}} в накопительный JSON сборника и сохранить в ветку data."""
-    source = re.sub(r'[^a-z0-9_]+', '', (source or '').lower())
-    if not source or num in (None, '') or not ru:
+def _journal_load():
+    global _journal_cache
+    if _journal_cache is None:
+        j = _data_get("journal.json", None) or {}
+        j.setdefault("translations", {"totals": {}, "recent": []})
+        j.setdefault("usage", {"totals": {"calls": 0, "fresh": 0, "cached": 0, "by_user": {}}, "recent": []})
+        _journal_cache = j
+    return _journal_cache
+def _journal_save(msg):
+    if _journal_cache is not None:
+        _data_put("journal.json", _journal_cache, msg)
+def _good_ru(ru):
+    """Контроль качества: копим только осмысленный русский перевод, не ошибки/мусор."""
+    if not ru or len(ru.strip()) < 5:
         return False
-    d = _coll_load(source)
-    key = str(num)
+    low = ru.strip().lower()
+    if low.startswith("❌") or "недоступ" in low or "api-ключ" in low or "не настроен" in low:
+        return False
+    return bool(re.search(r'[а-яё]', low))
+def coll_add_translation(source, num, ar, ru):
+    """Накопить ПОЛЕЗНЫЙ перевод в сборник + журнал. Вернуть {source,num,total,new} или None."""
+    source = re.sub(r'[^a-z0-9_]+', '', (source or '').lower())
+    if not source or num in (None, '') or not _good_ru(ru):
+        return None
+    d = _coll_load(source); key = str(num)
     if key in d and d[key].get("ru") == ru:
-        return True  # уже есть — не перезаписываем зря
+        return {"source": source, "num": key, "total": len(d), "new": False}
+    new = key not in d
     d[key] = {"ar": (ar or '')[:1500], "ru": ru}
-    return _data_put(_coll_path(source), d, f"translations/{source}: +№{key} (всего {len(d)})")
+    if not _data_put(_coll_path(source), d, f"translations/{source}: +№{key} (всего {len(d)})"):
+        return None
+    if new:
+        j = _journal_load()
+        j["translations"]["totals"][source] = len(d)
+        j["translations"]["recent"].insert(0, {"d": datetime.now().strftime("%d.%m %H:%M"), "s": source, "n": key})
+        j["translations"]["recent"] = j["translations"]["recent"][:200]
+        _journal_save(f"журнал: +перевод {source} №{key}")
+    return {"source": source, "num": key, "total": len(d), "new": new}
+def was_translated(text):
+    """Уже есть перевод этого текста в памяти? (свежий vs из базы — для журнала расхода)."""
+    try:
+        return _trans_key(text) in _load_trans()
+    except Exception:
+        return False
+def usage_log(user, feat, fresh, length=0, src="", num=""):
+    """Журнал расхода ИИ: кто/когда/функция/свежий(потрачен ключ) или из базы (бесплатно)."""
+    j = _journal_load(); u = j["usage"]; t = u["totals"]
+    t["calls"] = t.get("calls", 0) + 1
+    t["fresh"] = t.get("fresh", 0) + (1 if fresh else 0)
+    t["cached"] = t.get("cached", 0) + (0 if fresh else 1)
+    uid = str((user or {}).get("id") or "аноним")
+    name = ("@" + user["username"]) if (user and user.get("username")) else uid
+    bu = t["by_user"].setdefault(uid, {"name": name, "calls": 0, "fresh": 0})
+    bu["calls"] += 1; bu["fresh"] += (1 if fresh else 0); bu["name"] = name
+    u["recent"].insert(0, {"d": datetime.now().strftime("%d.%m %H:%M"), "u": name, "f": feat,
+                           "fresh": bool(fresh), "len": length, "src": src, "num": str(num)})
+    u["recent"] = u["recent"][:300]
+    _journal_save(f"журнал: {feat} {name} ({'свежий' if fresh else 'из базы'})")
 # ============ КОНЕЦ G9-БЛОКА ============
 
-async def _api_serve():
+async def _api_serve(application=None):
     from aiohttp import web
     loop = asyncio.get_event_loop()
+    async def _notify_usage(user, feat, fresh, src, num, saved):
+        # зеркалим расход ИИ в рабочий канал-журнал (LOG_CHAT_ID)
+        if not application:
+            return
+        name = ("@" + user["username"]) if (user and user.get("username")) else str((user or {}).get("id") or "аноним")
+        tag = "🆕 свежий (DeepSeek, ключ потрачен)" if fresh else "♻️ из базы (ключ НЕ потрачен)"
+        loc = f" {src} №{num}" if (src and num not in (None, '')) else ""
+        extra = f" · накоплено (всего {saved['total']})" if (saved and saved.get("new")) else ""
+        try:
+            await application.bot.send_message(LOG_CHAT_ID, f"🤖 {feat}: {name}{loc} — {tag}{extra}")
+        except Exception:
+            pass
     def _cors(resp):
         resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
@@ -2019,6 +2117,8 @@ async def _api_serve():
             txt = await loop.run_in_executor(None, ask_deepseek, "Запрос: " + meaning, sysm) or ""
             ph = [re.sub(r'^[\d\.\-\)\s]+', '', x).strip() for x in (txt or '').splitlines() if x.strip()]
             ph = [p for p in ph if re.search(r'[؀-ۿ]', p)][:10]
+            await loop.run_in_executor(None, usage_log, user, "нейро", True, len(meaning), "", "")
+            await _notify_usage(user, "нейро", True, "", "", None)
             return _cors(web.json_response({'phrases': ph}))
         except Exception as e:
             return _cors(web.json_response({'phrases': [], 'error': str(e)}))
@@ -2034,14 +2134,15 @@ async def _api_serve():
             text = (d.get('text') or '')[:4000]
             source = (d.get('source') or '')[:40]
             num = d.get('num')
-            # перевод (translate_matn хранит память по тексту, чтобы не звать DeepSeek дважды)
+            fresh = not await loop.run_in_executor(None, was_translated, text)   # свежий vs из базы
             tr = await loop.run_in_executor(None, translate_matn, text, "", True)
             tr = re.sub(r'\s*⚡.*$', '', (tr or ''), flags=re.S).strip()
-            # НАКОПЛЕНИЕ в сборник: data/translations/<source>.json = {номер: {ar, ru}}
-            saved = False
+            saved = None  # накопление в сборник (только полезное)
             if tr and source and num not in (None, ''):
                 saved = await loop.run_in_executor(None, coll_add_translation, source, num, text, tr)
-            return _cors(web.json_response({'translation': tr, 'saved': bool(saved)}))
+            await loop.run_in_executor(None, usage_log, user, "перевод", fresh, len(text), source, str(num or ""))
+            await _notify_usage(user, "перевод", fresh, source, num, saved)
+            return _cors(web.json_response({'translation': tr}))
         except Exception as e:
             return _cors(web.json_response({'translation': '', 'error': str(e)}))
 
@@ -2083,7 +2184,7 @@ async def _setup(application):
     except Exception as e:
         print("menu button setup failed:", e)
     try:
-        asyncio.create_task(_api_serve())
+        asyncio.create_task(_api_serve(application))
     except Exception as e:
         print("api start failed:", e)
 
