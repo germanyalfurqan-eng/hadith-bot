@@ -118,7 +118,7 @@
       <div class="gear" id="gear">⚙️</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v26</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v27</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -142,12 +142,12 @@
   <div class="modes">
     <div class="chip" data-mode="diac">َ Огласовки точно</div>
     <div class="chip" data-mode="root">جذ Однокоренные</div>
-    <div class="chip" id="neuroChip" data-mode="neuro">🧠 По смыслу</div>
+    <div class="chip" id="neuroChip" data-mode="neuro">🔬 Расширенный (правка фраз)</div>
   </div>
-  <div class="hint">«…» = точная фраза · пробел = все слова · <b>|</b> = ИЛИ · -слово = исключить · <span id="helpBtn" style="color:var(--link);cursor:pointer">ⓘ как искать</span></div>
+  <div class="hint">💡 Пиши смысл на русском/eng — найдёт само (умный поиск). Или арабский текст. «…» = точная фраза · <b>|</b> = ИЛИ · -слово = исключить · <span id="helpBtn" style="color:var(--link);cursor:pointer">ⓘ как искать</span></div>
 
   <div class="neuro-box" id="neuroBox">
-    <div style="font-size:13px;margin-bottom:6px">Опиши смысл (рус/eng) — подберу арабские ключевые фразы:</div>
+    <div style="font-size:13px;margin-bottom:6px">🔬 Расширенный: подберу арабские фразы — можешь поправить перед поиском:</div>
     <textarea id="neuroIn" placeholder="напр.: намерения · терпение · права соседа"></textarea>
     <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
       <button class="go" id="neuroRun" style="padding:8px 14px">Подобрать</button>
@@ -484,19 +484,37 @@ document.getElementById('selAll').onclick=()=>{ COLLECTIONS.forEach(c=>selCols.a
 document.getElementById('selNone').onclick=()=>{ selCols.clear(); renderCols(); };
 
 /* ===================== ПОИСК ===================== */
+function isArabic(s){ return /[؀-ۿݐ-ݿ]/.test(s); }
+async function smartPhrases(meaning){
+  if(BACKEND_URL){
+    try{ const r=await fetch(BACKEND_URL+'/neuro',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({meaning,kind:tab,initData:INITDATA})});
+      if(r.ok){ const j=await r.json(); if(j.phrases&&j.phrases.length) return j.phrases; } }catch(e){}
+  }
+  return neuroLocal(meaning);
+}
 async function runSearch(){
   const seq=++_seq;
-  const q=document.getElementById('q').value.trim();
+  let q=document.getElementById('q').value.trim(); const shown=q;
   if(!q){ toast('Введите запрос'); return; }
-  const groups=parseQuery(q); _groups=groups; if(!groups.length){ toast('Пустой запрос'); return; }
   const res=document.getElementById('res'); res.innerHTML='';
   const head=info('Ищу…'); res.appendChild(head);
-  try{ localStorage.setItem('muslimoon_state',JSON.stringify({tab,q,cols:[...selCols]})); }catch(e){}
+  let smartNote='';
+  // УМНЫЙ ПОИСК по умолчанию: не-арабский смысл → ИИ под капотом подбирает арабские фразы → сразу результаты
+  if(!modes.neuro && !isArabic(q) && !/^\d{1,7}$/.test(q) && !/^\d{1,3}\s*[:\s]\s*\d{1,3}$/.test(q)){
+    head.textContent='🧠 Подбираю по смыслу…';
+    const ph=await smartPhrases(q); if(seq!==_seq) return;
+    if(ph&&ph.length){ smartNote='🧠 По смыслу «'+shown+'» → '+ph.join(' · ');
+      q=ph.map(p=> p.indexOf(' ')!==-1?('"'+p+'"'):p).join(' | '); }
+  }
+  const groups=parseQuery(q); _groups=groups; if(!groups.length){ toast('Пустой запрос'); return; }
+  try{ localStorage.setItem('muslimoon_state',JSON.stringify({tab,q:shown,cols:[...selCols]})); }catch(e){}
   const numMode=/^\d{1,7}$/.test(q);
   let count=0; const CAP=200;
-  const setHead=(done)=>{ head.textContent = count
+  const setHead=(done)=>{ const n = count
       ? ('Найдено: '+count+(count>CAP?' (показаны первые '+CAP+')':'')+(done?'':' · ищу…'))
-      : (done?'Ничего не найдено 🤷':'Ищу…'); };
+      : (done?('Ничего не найдено 🤷'+(smartNote?' — попробуй иначе':'')):'Ищу…');
+    head.innerHTML = (smartNote?('<div style="color:var(--link);margin-bottom:4px;font-size:13px">'+esc(smartNote)+'</div>'):'')+n; };
   const add=(d)=>{ if(count<CAP) res.appendChild(makeCard(d)); count++; };
   if(tab==='hadith'){
     await loadReverse();
@@ -842,7 +860,7 @@ async function boot(){
   if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
   if(userAllowed()){
     document.getElementById('app').style.display='block';
-    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v26 · хадисы · аяты · аль-Мухаймин'; }
+    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v27 · хадисы · аяты · аль-Мухаймин'; }
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
         (st.cols||[]).forEach(c=>selCols.add(c));
