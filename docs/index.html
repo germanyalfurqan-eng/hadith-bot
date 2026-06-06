@@ -114,10 +114,11 @@
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block">⭐</div>
       <div class="gear" id="menuBtn" style="display:block">☰</div>
+      <div class="gear" id="devBtn" style="display:none">🛠</div>
       <div class="gear" id="gear">⚙️</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v25</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v26</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -224,6 +225,32 @@
           <span class="exq chip" data-tab="hadith" data-q="87">№ 87</span>
           <span class="exq chip" data-tab="quran" data-q="2:255">аят 2:255</span>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal" id="devModal">
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <b>🛠 Рабочий стол разработчика</b><button class="mini" id="devClose">закрыть ✕</button>
+    </div>
+    <div class="hint">Только для владельца. Здесь — баланс ключа, статистика и рабочие ссылки.</div>
+    <div class="accf" style="margin-top:10px">
+      <div class="ah"><div><div class="at">💳 Баланс DeepSeek</div><div class="ad">Сколько осталось на твоём ключе.</div></div>
+        <button class="go" id="balBtn" style="padding:6px 12px">Проверить</button></div>
+      <div id="balOut" class="hint" style="margin-top:8px">нажми «Проверить»</div>
+    </div>
+    <div class="accf">
+      <div class="at">📊 Накопление и расход</div>
+      <div id="statOut" class="hint" style="margin-top:6px">—</div>
+    </div>
+    <div class="accf">
+      <div class="at">🔗 Рабочие ссылки</div>
+      <div style="margin-top:6px;font-size:13px;line-height:1.9">
+        <div>💳 <a id="lnkUsage" style="color:var(--link);cursor:pointer">DeepSeek расход/баланс</a></div>
+        <div>🔤 <a id="lnkTr" style="color:var(--link);cursor:pointer">Переводы по сборникам</a></div>
+        <div>📊 <a id="lnkJournal" style="color:var(--link);cursor:pointer">Журналы (расход+накопление)</a></div>
+        <div>🔐 <a id="lnkAccess" style="color:var(--link);cursor:pointer">Доступы</a></div>
       </div>
     </div>
   </div>
@@ -742,6 +769,37 @@ async function openModal(){
 }
 document.getElementById('gear').onclick=openModal;
 document.getElementById('modalClose').onclick=()=>{ document.getElementById('modal').style.display='none'; };
+
+/* ===================== РАБОЧИЙ СТОЛ РАЗРАБОТЧИКА (owner) ===================== */
+const GH_REPO='https://github.com/germanyalfurqan-eng/hadith-bot';
+async function loadDevStats(){
+  const so=document.getElementById('statOut');
+  try{ const r=await fetch(BACKEND_URL+'/balance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:INITDATA})});
+    if(r.status===403){ so.textContent='⛔ только владелец (открой через Telegram)'; return null; }
+    const j=await r.json(); const u=j.usage||{}, t=j.translations||{};
+    const trs=Object.entries(t).map(([k,v])=>k+': '+v).join(' · ')||'пусто';
+    so.innerHTML='Расход ИИ: вызовов '+(u.calls||0)+' · 🆕 свежих '+(u.fresh||0)+' · ♻️ из базы '+(u.cached||0)+'<br>Накоплено: '+trs;
+    return j;
+  }catch(e){ so.textContent='🔧 сервер недоступен'; return null; }
+}
+async function checkBalance(){
+  const out=document.getElementById('balOut'); out.textContent='проверяю…';
+  try{ const r=await fetch(BACKEND_URL+'/balance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:INITDATA})});
+    if(r.status===403){ out.textContent='⛔ только владелец (открой через Telegram)'; return; }
+    const j=await r.json(); const b=j.balance;
+    if(!b){ out.textContent='не удалось получить (проверь ключ/сеть)'; return; }
+    const infos=b.balance_infos||[];
+    out.innerHTML='Доступен: '+(b.is_available?'✅ да':'❌ нет')+infos.map(i=>'<br>• '+i.currency+': осталось <b>'+esc(String(i.total_balance))+'</b> (пополнено '+esc(String(i.topped_up_balance||'?'))+')').join('');
+  }catch(e){ out.textContent='🔧 сервер недоступен'; }
+}
+function openDev(){ document.getElementById('devModal').style.display='flex'; document.getElementById('balOut').textContent='нажми «Проверить»'; loadDevStats(); }
+var _dv=document.getElementById('devBtn'); if(_dv) _dv.onclick=openDev;
+var _dc=document.getElementById('devClose'); if(_dc) _dc.onclick=()=>{ document.getElementById('devModal').style.display='none'; };
+var _bb=document.getElementById('balBtn'); if(_bb) _bb.onclick=checkBalance;
+var _l1=document.getElementById('lnkUsage'); if(_l1) _l1.onclick=()=>openLink('https://platform.deepseek.com/usage');
+var _l2=document.getElementById('lnkTr'); if(_l2) _l2.onclick=()=>openLink(GH_REPO+'/tree/data/translations');
+var _l3=document.getElementById('lnkJournal'); if(_l3) _l3.onclick=()=>openLink(GH_REPO+'/blob/data/journal.json');
+var _l4=document.getElementById('lnkAccess'); if(_l4) _l4.onclick=()=>openLink(GH_REPO+'/blob/data/access.json');
 var _qs=document.getElementById('qtrSel'); if(_qs){ _qs.value=cfg.qtr||'rus-elmirkuliev'; _qs.onchange=()=>{ cfg.qtr=_qs.value; saveCfg(cfg); }; }
 var _nd=document.getElementById('noDiacSw'); if(_nd){ _nd.classList.toggle('on',!!cfg.noDiac); _nd.onclick=()=>{ cfg.noDiac=!cfg.noDiac; saveCfg(cfg); _nd.classList.toggle('on',!!cfg.noDiac); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _is=document.getElementById('isnadSw'); if(_is){ _is.classList.toggle('on',!!cfg.isnad); _is.onclick=()=>{ cfg.isnad=!cfg.isnad; saveCfg(cfg); _is.classList.toggle('on',!!cfg.isnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
@@ -784,7 +842,7 @@ async function boot(){
   if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
   if(userAllowed()){
     document.getElementById('app').style.display='block';
-    if(isOwner){ document.getElementById('gear').style.display='block'; document.getElementById('sub').textContent='режим владельца · v25 · хадисы · аяты · аль-Мухаймин'; }
+    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v26 · хадисы · аяты · аль-Мухаймин'; }
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
         (st.cols||[]).forEach(c=>selCols.add(c));

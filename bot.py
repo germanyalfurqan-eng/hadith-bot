@@ -2197,10 +2197,24 @@ async def _api_serve(application=None):
         except Exception as e:
             return _cors(web.json_response({'results': [], 'error': str(e)}))
 
+    async def balance(r):
+        # только владелец: остаток DeepSeek + краткая статистика журналов для рабочего стола
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not (user and str(user.get('id')) == str(OWNER_ID)):
+            return _deny('app')
+        b = await loop.run_in_executor(None, deepseek_balance)
+        j = await loop.run_in_executor(None, _journal_load)
+        return _cors(web.json_response({
+            'balance': b,
+            'usage': j.get('usage', {}).get('totals', {}),
+            'translations': j.get('translations', {}).get('totals', {}),
+        }))
+
     a = web.Application()
     a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro),
                   web.post('/api/translate', translate), web.get('/api/search', search),
-                  web.post('/api/access', access),
+                  web.post('/api/access', access), web.post('/api/balance', balance),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))
