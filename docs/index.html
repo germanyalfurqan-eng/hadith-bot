@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v58</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v59</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -281,6 +281,11 @@
         <button class="mini" id="readBack">← к выбору</button>
         <span class="hint" id="readPos" style="margin:0"></span>
       </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <input type="text" id="readFind" placeholder="🔎 поиск в этой книге…" autocomplete="off" enterkeyhint="search"
+               style="flex:1;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:7px 10px;font-size:13px">
+        <span class="hint" id="readFindInfo" style="margin:0;white-space:nowrap"></span>
+      </div>
       <div id="readBody"></div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px">
         <button class="go" id="readPrev" style="padding:8px 14px">← пред.</button>
@@ -375,7 +380,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v58';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v59';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1467,7 +1472,24 @@ const READABLE=[
   {code:'tirmidhi',ru:'Джами ат-Тирмизи'},{code:'ibnmajah',ru:'Сунан Ибн Маджа'},{code:'nasai',ru:'Сунан ан-Насаи'},
   {code:'malik',ru:'аль-Муватта (Малик)'},{code:'ahmad',ru:'Муснад Ахмада'},
 ].concat(EXTRA.filter(e=>e.code!=='muhaymin' && !e.soon).map(e=>({code:e.code,ru:e.ru})));   // муфхаймин — особая структура (рв); «скоро» — ещё нет данных
-let _readArr=null,_readCode='',_readIdx=0;
+let _readArr=null,_readCode='',_readIdx=0,_readFindM=[],_readFindPos=-1;
+/* Поиск ВНУТРИ книги (локально, бесплатно): собираем индексы совпадений, листаем по ним */
+function _readDoFind(){
+  const inp=document.getElementById('readFind'); const info=document.getElementById('readFindInfo');
+  const q=canon((inp&&inp.value||'')); _readFindM=[]; _readFindPos=-1;
+  if(!q || !_readArr){ if(info) info.textContent=''; return; }
+  for(let i=0;i<_readArr.length;i++){ if(canon(_readArr[i].text||'').indexOf(q)!==-1) _readFindM.push(i); }
+  if(!_readFindM.length){ if(info) info.textContent='0 совпадений'; return; }
+  _readFindPos=0; _readIdx=_readFindM[0]; _readRender();
+  if(info) info.textContent='1 / '+_readFindM.length;
+}
+function _readFindStep(d){
+  if(!_readFindM.length){ return false; }
+  _readFindPos=(_readFindPos+d+_readFindM.length)%_readFindM.length;
+  _readIdx=_readFindM[_readFindPos]; _readRender();
+  const info=document.getElementById('readFindInfo'); if(info) info.textContent=(_readFindPos+1)+' / '+_readFindM.length;
+  return true;
+}
 async function _readLoad(code){
   const C=COLLECTIONS.find(x=>x.code===code); const X=EXTRA_MAP[code];
   if(code==='ahmad') return await loadAhmad();
@@ -1487,7 +1509,8 @@ function _readRender(){
   _groups=sg;
 }
 async function _readOpen(code,fromNum){
-  _readCode=code;
+  _readCode=code; _readFindM=[]; _readFindPos=-1;
+  var _rf=document.getElementById('readFind'); if(_rf) _rf.value=''; var _rfi=document.getElementById('readFindInfo'); if(_rfi) _rfi.textContent='';
   document.getElementById('readPick').style.display='none';
   document.getElementById('readView').style.display='block';
   document.getElementById('readTitle').textContent='📖 '+(ruTitle(code)||code);
@@ -1510,9 +1533,10 @@ var _rb=document.getElementById('readBtn'); if(_rb) _rb.onclick=()=>{ const one=
 var _rc=document.getElementById('readClose'); if(_rc) _rc.onclick=()=>{ document.getElementById('readModal').style.display='none'; };
 var _rback=document.getElementById('readBack'); if(_rback) _rback.onclick=_readToPick;
 var _rgo=document.getElementById('readGo'); if(_rgo) _rgo.onclick=()=>{ const c=document.getElementById('readSel').value; const f=document.getElementById('readFrom').value; _readOpen(c,f); };
-var _rprev=document.getElementById('readPrev'); if(_rprev) _rprev.onclick=()=>{ _readIdx--; _readRender(); try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
-var _rnext=document.getElementById('readNext'); if(_rnext) _rnext.onclick=()=>{ _readIdx++; _readRender(); try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
-var _rjump=document.getElementById('readJump'); if(_rjump) _rjump.onkeydown=(e)=>{ if(e.key==='Enter'){ const qn=String(parseInt(_rjump.value,10)); const i=_readArr?_readArr.findIndex(x=>String(x.num)===qn):-1; if(i>=0){_readIdx=i;_readRender();} else toast('№ не найден'); } };
+var _rprev=document.getElementById('readPrev'); if(_rprev) _rprev.onclick=()=>{ if(_readFindM.length){ _readFindStep(-1); } else { _readIdx--; _readRender(); } try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
+var _rnext=document.getElementById('readNext'); if(_rnext) _rnext.onclick=()=>{ if(_readFindM.length){ _readFindStep(1); } else { _readIdx++; _readRender(); } try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
+var _rjump=document.getElementById('readJump'); if(_rjump) _rjump.onkeydown=(e)=>{ if(e.key==='Enter'){ const qn=String(parseInt(_rjump.value,10)); const i=_readArr?_readArr.findIndex(x=>String(x.num)===qn):-1; if(i>=0){_readFindM=[];_readFindPos=-1;document.getElementById('readFindInfo').textContent='';_readIdx=i;_readRender();} else toast('№ не найден'); } };
+var _rfind=document.getElementById('readFind'); if(_rfind){ let _rft; _rfind.addEventListener('input',()=>{ clearTimeout(_rft); _rft=setTimeout(_readDoFind,350); }); _rfind.addEventListener('keydown',e=>{ if(e.key==='Enter'){ clearTimeout(_rft); if(_readFindM.length) _readFindStep(1); else _readDoFind(); } }); }
 
 async function boot(){
   // владелец заходит сразу (конфиг тянем в фоне для панели); остальные ждут вердикт сервера
