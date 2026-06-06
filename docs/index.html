@@ -141,7 +141,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v82</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v83</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -425,7 +425,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v82';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v83';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -765,6 +765,11 @@ function _sgItem(label, on){ const d=document.createElement('div'); d.textConten
   d.onmousedown=(e)=>e.preventDefault(); d.onclick=on; return d; }
 function _sgHead(t){ const h=document.createElement('div'); h.textContent=t; h.style.cssText='font-size:11px;color:var(--hint);margin-bottom:2px'; return h; }
 function _setQ(val,search){ const q=document.getElementById('q'); q.value=val; updateQuranHelper(); if(search) runSearch(); else q.focus(); }
+function ayahCandidates(n){ n=String(n); const out=[];
+  for(let cut=1; cut<n.length; cut++){ const s=+n.slice(0,cut), a=+n.slice(cut);
+    if(s>=1 && s<=114 && a>=1 && SURA_AYAHS[s-1] && a<=SURA_AYAHS[s-1]) out.push({s,a}); }
+  return out;
+}
 function updateQuranHelper(){
   const cap=document.getElementById('qHelper'), box=document.getElementById('qSugg');
   const L=document.getElementById('qSuggL'), R=document.getElementById('qSuggR');
@@ -773,6 +778,18 @@ function updateQuranHelper(){
   const v=(document.getElementById('q').value||'').trim();
   if(tab!=='quran' || !v) return;
   let m;
+  // Многозначное число без двоеточия → трактуем как сура:аят (4238 → 42:38)
+  if((m=v.match(/^(\d{2,6})$/)) && (m[1].length>=4 || +m[1]>114)){
+    const cands=ayahCandidates(m[1]);
+    if(cands.length===1){ const c=cands[0];
+      cap.innerHTML='📖 Похоже, это аят <b>'+c.s+':'+c.a+'</b> — сура '+SURA_NAMES[c.s-1]+'. <span id="qHgo" style="color:var(--link);cursor:pointer;font-weight:600">открыть →</span>'; cap.style.display='block';
+      var g=document.getElementById('qHgo'); if(g) g.onclick=()=>_setQ(c.s+':'+c.a,true); return; }
+    if(cands.length>1){ cap.innerHTML='🤔 Это номер аята? Выбери вариант:'; cap.style.display='block';
+      L.appendChild(_sgHead('Возможно вы имели в виду:'));
+      cands.forEach(c=> L.appendChild(_sgItem('Аят '+c.s+':'+c.a+' — '+SURA_NAMES[c.s-1], ()=>_setQ(c.s+':'+c.a,true))));
+      box.style.display='flex'; return; }
+    cap.innerHTML='⚠️ Не распознал как «сура:аят». Введи в формате 42:38.'; cap.style.display='block'; return;
+  }
   if((m=v.match(/^(\d{1,3})$/))){
     const d=m[1], s=+d;
     if(!cfg.ac){ cap.innerHTML = (s>=1&&s<=114) ? ('📖 '+s+' '+SURA_NAMES[s-1]+' — '+SURA_AYAHS[s-1]+' аятов · для аята введи '+s+':номер') : '⚠️ В Коране 114 сур.'; cap.style.display='block'; return; }
@@ -1019,7 +1036,10 @@ async function runSearch(explicit){
       const qn=q.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
       const mref=qn.match(/^(\d{1,3})\s*[:\s]\s*(\d{1,3})$/);
       if(mref){ const s=+mref[1],a=+mref[2]; arr.filter(v=>v.s===s&&v.a===a).forEach(v=>add({type:'q',v})); }
-      else if(numMode){ const s=+q; if(s>=1&&s<=114) arr.filter(v=>v.s===s).forEach(v=>add({type:'q',v})); }
+      else if(numMode){ const s=+q;
+        if(q.length<=3 && s>=1&&s<=114) arr.filter(v=>v.s===s).forEach(v=>add({type:'q',v}));   // одиночная сура
+        else { const cands=ayahCandidates(q); if(cands.length>=1){ const c=cands[0]; arr.filter(v=>v.s===c.s&&v.a===c.a).forEach(v=>add({type:'q',v})); } }   // 4238 → 42:38
+      }
       else if(/[а-яёa-z]/i.test(shown) && !isArabic(shown)){   // поиск по РУССКОМУ переводу (Кулиев)
         const ru=await loadQuranRu(); if(seq!==_seq) return;
         const qw=shown.toLowerCase().split(/\s+/).filter(w=>w.length>1);
@@ -1375,8 +1395,11 @@ async function doTakhrij(text, ref, out, btn, force){
 }
 /* ===== M26: КАРТОЧКА ПЕРЕДАТЧИКА — разбор иснада + поиск равия (موسوعة رواة الحديث) ===== */
 function isnadNarrators(text){
-  let isn=splitIsnad(text)[0]; if(!isn) isn=(text||'').split('«')[0]||text;   // если не отделилось — до матна
-  isn=stripDiac(isn).replace(/ـ/g,'');                                          // снять огласовки ДО разбивки
+  const flat=stripDiac(text||'').replace(/ـ/g,'');
+  // нет цепочки передачи (حدثنا/أخبرنا/سمعت/ثنا/عن) во всём тексте → это матн, передатчиков нет (не выдёргивать из матна!)
+  if(!/(?:^|\s)(?:حدثنا|حدثني|حدثناه|أخبرنا|أخبرني|أنبأنا|أنبأني|سمعت|ثنا)\s/.test(flat) && !/\sعن\s/.test(flat)) return [];
+  let isn=stripDiac(splitIsnad(text)[0]||'').replace(/ـ/g,'');
+  if(!isn) isn=flat.split(/قال رسول|قال النبي|«/)[0]||flat;                     // чистый иснад без матна → до матна (или весь)
   const VERB=/\s*(?:حدثناه|حدثنا|حدثني|أخبرنا|أخبرني|أنبأنا|أنبأني|سمعت|عن|قالا|قالوا|قال|ثنا|كلهم|جميعا)\s+/u;
   const parts=[];
   isn.split(VERB).forEach(seg=>{ seg=seg.replace(/[،,.:؛«»()]/g,' ').replace(/\s+/g,' ').trim(); if(!seg) return;
