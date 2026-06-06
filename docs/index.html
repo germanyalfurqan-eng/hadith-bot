@@ -66,6 +66,7 @@
   mark{background:var(--mark);color:#241c00;border-radius:3px;padding:0 1px}
   .isnad{color:var(--hint)}
   .matn{color:#fff;font-weight:700}
+  .chip.off{opacity:.4;text-decoration:line-through}
   .status{text-align:center;color:var(--hint);padding:14px;font-size:14px}
   .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#000;color:#fff;
         padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:.2s;z-index:99;max-width:90%}
@@ -118,7 +119,7 @@
       <div class="gear" id="devBtn" style="display:none">🛠</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v34</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v35</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -142,6 +143,7 @@
   <div class="modes">
     <div class="chip" data-mode="diac">َ Огласовки точно</div>
     <div class="chip" data-mode="root">جذ Однокоренные</div>
+    <div class="chip" data-mode="matnonly">📜 Без иснада</div>
     <div class="chip" data-mode="ai">🧠 По смыслу (ИИ)</div>
     <div class="chip" id="neuroChip" data-mode="neuro">🔬 Расширенный</div>
   </div>
@@ -244,6 +246,7 @@
     <div class="accf">
       <div class="at">📊 Журналы</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+        <button class="chip" id="jTasks">📋 Заявки</button>
         <button class="chip" id="jNakop">📚 Накопление</button>
         <button class="chip" id="jUsage">🧠 Расход ИИ</button>
         <button class="chip" id="jFb">💬 Отзывы</button>
@@ -361,15 +364,18 @@ function parseQuery(q){
   }).filter(g=>g.length);
 }
 function termMatch(term,doc,modes){
-  if(modes.diac) return doc.text.indexOf(term.t.replace(/\s+/g,' ').trim())!==-1;
-  if(!doc.norm) doc.norm=canon(doc.text);   // ленивая нормализация (ускоряет загрузку тяжёлых сборников)
+  if(modes.diac){ const dt=modes.matnonly?(splitIsnad(doc.text)[1]||doc.text):doc.text; return dt.indexOf(term.t.replace(/\s+/g,' ').trim())!==-1; }
+  let nf;
+  if(modes.matnonly){ if(doc.normM===undefined) doc.normM=canon(splitIsnad(doc.text)[1]||doc.text); nf=doc.normM; }
+  else { if(!doc.norm) doc.norm=canon(doc.text); nf=doc.norm; }   // ленивая нормализация
   if(modes.root){
-    if(!doc._wsk) doc._wsk=doc.norm.split(' ').map(skel);
+    const wk=modes.matnonly?'_wskM':'_wsk';
+    if(!doc[wk]) doc[wk]=nf.split(' ').map(skel);
     const qs=canon(term.t).split(' ').map(skel).filter(s=>s.length>=2);
-    if(!qs.length) return doc.norm.indexOf(canon(term.t))!==-1;
-    return qs.every(q=> doc._wsk.some(w=> w.length>=q.length && isSubseq(q,w)));
+    if(!qs.length) return nf.indexOf(canon(term.t))!==-1;
+    return qs.every(q=> doc[wk].some(w=> w.length>=q.length && isSubseq(q,w)));
   }
-  return doc.norm.indexOf(canon(term.t))!==-1;
+  return nf.indexOf(canon(term.t))!==-1;
 }
 function docMatch(doc,groups,modes){
   return groups.some(g=>{ for(const t of g){ const hit=termMatch(t,doc,modes);
@@ -529,55 +535,60 @@ function logSearch(q,tab,count){
 }
 function collectForms(text, qSkels, forms){
   const ws=canon(text).split(' ');
-  for(let i=0;i<ws.length;i++){ const w=ws[i]; if(w.length<2) continue; const sk=skel(w);
+  for(let i=0;i<ws.length;i++){ const w=ws[i].replace(/[^ء-ي]/g,''); if(w.length<2) continue; const sk=skel(w);
     if(qSkels.some(qq=> sk.length>=qq.length && isSubseq(qq,sk))){ forms[w]=(forms[w]||0)+1; } }
 }
 /* ===== Панель выбора (формы корня / фразы по смыслу) — мультивыбор ===== */
-let _pick={items:[],sel:new Set(),kind:'',meaning:''};
+let _pick={items:[],sel:new Set(),excl:new Set(),kind:'',meaning:''};
+function _variants(s){ const c=canon(s); const n=c.replace(/^(وال|فال|بال|كال|ال)/,''); return n!==c?[c,n]:[c]; } // артикль не важен
 function finishPick(rootForms, aiPhrases, meaning){
   if(rootForms){ const fl=Object.entries(rootForms).sort((a,b)=>b[1]-a[1]).slice(0,30); if(fl.length>=2) startPick(fl,'root',''); }
   else if(aiPhrases && aiPhrases.length){ startPick(aiPhrases.map(p=>[p,null]),'ai',meaning); }
 }
-function startPick(items, kind, meaning){ _pick={items:items, sel:new Set(), kind:kind, meaning:meaning||''}; renderPickBar(); }
+function startPick(items, kind, meaning){ _pick={items:items, sel:new Set(), excl:new Set(), kind:kind, meaning:meaning||''}; renderPickBar(); }
 function renderPickBar(){
   if(!_pick.items.length) return;
   const res=document.getElementById('res');
   let bar=document.getElementById('pickBar');
   if(!bar){ bar=document.createElement('div'); bar.className='card'; bar.id='pickBar'; bar.style.cssText='padding:10px';
     res.insertBefore(bar, res.children[1]||null); }
-  const sel=_pick.sel;
+  const sel=_pick.sel, excl=_pick.excl;
   const title=_pick.kind==='ai'
-    ? ('🧠 Фразы по смыслу «'+esc(_pick.meaning)+'» — нажми (можно несколько):')
-    : ('🌿 Формы корня — нажми форму (можно несколько; ещё раз — снять):');
-  bar.innerHTML='<div class="hint" style="margin:0 0 6px">'+title+(sel.size?(' <span style="color:var(--ok)">выбрано '+sel.size+'</span>'):'')+'</div>';
+    ? ('🧠 Фразы по смыслу «'+esc(_pick.meaning)+'» — нажми = оставить только её; ✕ = убрать:')
+    : ('🌿 Формы корня — нажми = оставить только её; ✕ = убрать (артикль не важен):');
+  bar.innerHTML='<div class="hint" style="margin:0 0 6px">'+title+(sel.size?(' <span style="color:var(--ok)">только '+sel.size+'</span>'):'')+(excl.size?(' <span style="color:#ff6b6b">убрано '+excl.size+'</span>'):'')+'</div>';
   const wrap=document.createElement('div'); wrap.style.cssText='display:flex;flex-wrap:wrap;gap:6px;direction:rtl';
   _pick.items.forEach(it=>{ const label=Array.isArray(it)?it[0]:it; const cnt=Array.isArray(it)?it[1]:null;
-    const ch=document.createElement('span'); ch.className='chip'+(sel.has(label)?' on':''); ch.style.cssText='font-size:15px';
-    ch.innerHTML='<span style="font-family:\'Traditional Arabic\',serif">'+esc(label)+'</span>'+(cnt!=null?(' <b style="color:var(--mark)">'+cnt+'</b>'):'');
-    ch.onclick=()=>{ if(sel.has(label)) sel.delete(label); else sel.add(label); applyPick(); };
+    const ch=document.createElement('span'); ch.className='chip'+(sel.has(label)?' on':'')+(excl.has(label)?' off':''); ch.style.cssText='font-size:15px';
+    ch.innerHTML='<span class="ex" style="opacity:.55;margin-left:5px;cursor:pointer">✕</span><span style="font-family:\'Traditional Arabic\',serif">'+esc(label)+'</span>'+(cnt!=null?(' <b style="color:var(--mark)">'+cnt+'</b>'):'');
+    ch.onclick=(e)=>{ if(e.target.classList.contains('ex')){ excl.has(label)?excl.delete(label):excl.add(label); sel.delete(label); }
+      else { sel.has(label)?sel.delete(label):sel.add(label); excl.delete(label); } applyPick(); };
     wrap.appendChild(ch); });
   bar.appendChild(wrap);
 }
 function _docText(d){ return d.type==='q'? d.v.text : d.h.text; }
 function applyPick(){
-  const res=document.getElementById('res'); const sel=_pick.sel; const CAP=200;
+  const res=document.getElementById('res'); const sel=_pick.sel, excl=_pick.excl; const CAP=200;
   [...res.querySelectorAll('.card')].forEach(c=>{ if(c.id!=='pickBar') c.remove(); });
   let shown=0;
-  const selCanon=[...sel].map(s=>canon(s));
-  for(const d of _results){
-    const ok = !sel.size || selCanon.some(s=> canon(_docText(d)).indexOf(s)!==-1);
-    if(ok){ if(shown<CAP) res.appendChild(makeCard(d)); shown++; }
-  }
+  const selV=[...sel].map(_variants), exclV=[...excl].map(_variants);
+  const savedGroups=_groups;
+  if(sel.size) _groups=[...sel].map(s=>[{t:s,phrase:false,neg:false}]);   // подсветка выбранного жёлтым
+  for(const d of _results){ const tx=canon(_docText(d));
+    const okSel = !sel.size || selV.some(vs=> vs.some(v=> tx.indexOf(v)!==-1));
+    const okExcl = !excl.size || !exclV.some(vs=> vs.some(v=> tx.indexOf(v)!==-1));
+    if(okSel && okExcl){ if(shown<CAP) res.appendChild(makeCard(d)); shown++; } }
+  _groups=savedGroups;
   const head=res.children[0];
   if(head && head.classList.contains('hint')){ const note=_pick.kind==='ai'?('🧠 По смыслу «'+esc(_pick.meaning)+'»'):'🌿 Однокоренные';
-    head.innerHTML='<div style="color:var(--link);font-size:13px;margin-bottom:4px">'+note+(sel.size?(' · выбрано: '+[...sel].join(' · ')):'')+'</div>Найдено: '+shown+(shown>CAP?' (первые '+CAP+')':''); }
+    head.innerHTML='<div style="color:var(--link);font-size:13px;margin-bottom:4px">'+note+(sel.size?(' · только: '+[...sel].join(' · ')):'')+(excl.size?(' · без: '+[...excl].join(' · ')):'')+'</div>Найдено: '+shown+(shown>CAP?' (первые '+CAP+')':''); }
   renderPickBar();
 }
 async function runSearch(){
   const seq=++_seq;
   let q=document.getElementById('q').value.trim(); const shown=q;
   if(!q){ toast('Введите запрос'); return; }
-  const res=document.getElementById('res'); res.innerHTML=''; _results=[]; _pick={items:[],sel:new Set(),kind:'',meaning:''};
+  const res=document.getElementById('res'); res.innerHTML=''; _results=[]; _pick={items:[],sel:new Set(),excl:new Set(),kind:'',meaning:''};
   const head=info('Ищу…'); res.appendChild(head);
   let smartNote=''; let aiPhrases=null;
   // По умолчанию — обычный автоматический поиск. ИИ-подбор включается ТОЛЬКО кнопкой «🧠 По смыслу».
@@ -678,6 +689,9 @@ function cardMuh(d,groups){
     head.appendChild(lab); head.appendChild(cp); card.appendChild(head);
     const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(t,groups);card.appendChild(ar);
   });
+  const warn=document.createElement('div'); warn.className='hint'; warn.style.cssText='margin:6px 0 0;color:#ffb74d;font-size:12px';
+  warn.textContent='⚠️ Книга в обработке — возможны ошибки распознавания. Автор: مرشد بن يوسف.';
+  card.appendChild(warn);
   const meta=document.createElement('div');meta.className='meta';
   meta.innerHTML='<span class="badge muh">المهيمن №'+h.n+' · مرشد بن يوسف</span>'+
     '<span class="src" style="direction:rtl">'+esc(h.b||'')+' › '+esc(h.c||'')+'</span>';
@@ -704,26 +718,31 @@ function addTr(meta,card,text,ayah,fav){
   const out=document.createElement('div');out.className='tr-out';
   tr.onclick=()=> ayah ? doTranslateAyah(ayah.s,ayah.a,out,tr) : doTranslate(text,out,tr,refOf(fav));
   meta.appendChild(tr);
-  if(!ayah){ const tk=document.createElement('button');tk.className='tr-btn';tk.textContent='ـَ';tk.title='Огласовки (ИИ)';
+  if(!ayah && !hasDiac(text)){ const tk=document.createElement('button');tk.className='tr-btn';tk.textContent='ـَ Огласовки';tk.title='Расставить огласовки через ИИ (там, где их нет)';
     tk.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
     const tkout=document.createElement('div');tkout.className='tr-out';
-    tk.onclick=()=>doTashkeel(text,tkout,tk); meta.appendChild(tk); card.appendChild(tkout); }
+    tk.onclick=()=>doTashkeel(text,tkout,tk,refOf(fav)); meta.appendChild(tk); card.appendChild(tkout);
+    addHelpQ(meta,'«ـَ Огласовки»: ИИ расставит огласовки (تشكيل) там, где их нет. Может ошибаться. Один раз — потом из базы.'); }
   const fbb=document.createElement('button');fbb.className='tr-btn';fbb.textContent='⚠️';fbb.title='Сообщить об ошибке';
   fbb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--hint);padding:6px 10px';
   fbb.onclick=()=>openFeedback((fav&&fav.label)||'');
   meta.appendChild(fbb);
   card.appendChild(out);
 }
-async function doTashkeel(text,out,btn){
+function hasDiac(t){ return /[ً-ْٰـ]/.test(t||''); }
+function addHelpQ(meta,txt){ const q=document.createElement('button'); q.className='tr-btn'; q.textContent='?';
+  q.style.cssText='background:transparent;border:1px solid var(--border);color:var(--hint);padding:6px 9px';
+  q.title=txt; q.onclick=()=>toast(txt); meta.appendChild(q); }
+async function doTashkeel(text,out,btn,ref){
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }
-  btn.disabled=true; btn.textContent='…';
-  try{ const r=await fetch(BACKEND_URL+'/tashkeel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,initData:INITDATA})});
+  btn.disabled=true; const prev=btn.textContent; btn.textContent='…';
+  try{ const r=await fetch(BACKEND_URL+'/tashkeel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text, source:ref&&ref.source, num:ref&&ref.num, initData:INITDATA})});
     const j=await r.json().catch(()=>({}));
     if(r.status===403){ toast(j.message||'Огласовки пока не для всех'); }
     else if(r.ok && j.text){ out.innerHTML='<div style="color:#ffb74d;font-size:12px;margin-bottom:4px">⚠️ Огласовки расставил ИИ — возможны ошибки (не от автора).</div><div class="ar" style="font-size:18px;line-height:2">'+esc(j.text)+'</div>'; out.style.display='block'; }
     else toast('Не удалось расставить'); }
   catch(e){ toast('🔧 Сервис недоступен — возможно, идёт обновление'); }
-  btn.disabled=false; btn.textContent='ـَ';
+  btn.disabled=false; btn.textContent=prev;
 }
 function refOf(fav){ if(!fav||!fav.k) return null; const p=String(fav.k).split('|');
   if(p[0]==='h') return {source:p[1], num:p[2]};
@@ -941,7 +960,22 @@ async function openDev(){ document.getElementById('devModal').style.display='fle
 var _dv=document.getElementById('devBtn'); if(_dv) _dv.onclick=openDev;
 var _dc=document.getElementById('devClose'); if(_dc) _dc.onclick=()=>{ document.getElementById('devModal').style.display='none'; };
 var _bb=document.getElementById('balBtn'); if(_bb) _bb.onclick=checkBalance;
-[['jNakop','nakop'],['jUsage','usage'],['jFb','fb'],['jSrch','search'],['jUpd','upd']].forEach(p=>{ const el=document.getElementById(p[0]); if(el) el.onclick=()=>{ renderJournal(p[1]); el.classList.add('on'); }; });
+[['jNakop','nakop'],['jUsage','usage'],['jFb','fb'],['jSrch','search'],['jUpd','upd']].forEach(p=>{ const el=document.getElementById(p[0]); if(el) el.onclick=()=>{ document.querySelectorAll('#devModal .chip').forEach(c=>c.classList.remove('on')); renderJournal(p[1]); el.classList.add('on'); }; });
+let _tasksData=null, _tasksShowDone=false;
+async function renderTasks(){
+  const out=document.getElementById('jOut'); out.textContent='загружаю заявки…';
+  try{ _tasksData=await (await fetch('./tasks.json?'+Date.now())).json(); }catch(e){ if(!_tasksData){ out.textContent='не удалось загрузить заявки'; return; } }
+  const tasks=(_tasksData&&_tasksData.tasks)||[];
+  const open=tasks.filter(t=>t.s!=='done'), done=tasks.filter(t=>t.s==='done');
+  let html='<div style="margin-bottom:6px"><button class="mini" id="tToggle">'+(_tasksShowDone?'↩ скрыть выполненные':'✅ показать выполненные ('+done.length+')')+'</button></div>';
+  html+='<b>🔧 Не сделано / в работе ('+open.length+'):</b>';
+  open.forEach(t=>{ const ic=t.s==='wip'?'🟡':'🔴';
+    html+='<div style="margin:7px 0;padding-bottom:6px;border-bottom:1px solid var(--border)">'+ic+' <b>'+esc(t.id)+'</b> — '+esc(t.t)+(t.why?('<br><span style="color:var(--hint)">↳ '+esc(t.why)+'</span>'):'')+'</div>'; });
+  if(_tasksShowDone){ html+='<br><b>✅ Сделано ('+done.length+'):</b>'; done.forEach(t=>{ html+='<div style="margin:3px 0;color:var(--hint)">✅ '+esc(t.id)+' — '+esc(t.t)+'</div>'; }); }
+  out.innerHTML=html;
+  var tt=document.getElementById('tToggle'); if(tt) tt.onclick=()=>{ _tasksShowDone=!_tasksShowDone; renderTasks(); };
+}
+var _jt=document.getElementById('jTasks'); if(_jt) _jt.onclick=()=>{ document.querySelectorAll('#devModal .chip').forEach(c=>c.classList.remove('on')); _jt.classList.add('on'); renderTasks(); };
 var _at=document.getElementById('advToggle'); if(_at) _at.onclick=()=>{ const a=document.getElementById('advLinks'); a.style.display=(a.style.display==='none'?'block':'none'); };
 var _l1=document.getElementById('lnkUsage'); if(_l1) _l1.onclick=()=>openLink('https://platform.deepseek.com/usage');
 var _l2=document.getElementById('lnkTr'); if(_l2) _l2.onclick=()=>openLink(GH_REPO+'/tree/data/translations');
@@ -1007,7 +1041,7 @@ async function boot(){
   if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
   if(userAllowed()){
     document.getElementById('app').style.display='block';
-    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v34 · хадисы · аяты · аль-Мухаймин'; }
+    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v35 · хадисы · аяты · аль-Мухаймин'; }
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
         (st.cols||[]).forEach(c=>selCols.add(c));

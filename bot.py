@@ -2111,6 +2111,20 @@ def coll_add_translation(source, num, ar, ru):
         j["translations"]["recent"] = j["translations"]["recent"][:200]
         _journal_save(f"журнал: +перевод {source} №{key}")
     return {"source": source, "num": key, "total": len(d), "new": new}
+# ---- Кэш огласовок (تشكيل) по сборникам: data/tashkeel/<source>.json = {num: огласованный текст} ----
+_tk_cache = {}
+def _tk_path(source):
+    return f"tashkeel/{source}.json"
+def _tk_load(source):
+    if source not in _tk_cache:
+        _tk_cache[source] = _data_get(_tk_path(source), {}) or {}
+    return _tk_cache[source]
+def tashkeel_add(source, num, vocalized):
+    source = re.sub(r'[^a-z0-9_]+', '', (source or '').lower())
+    if not source or num in (None, '') or not vocalized:
+        return
+    d = _tk_load(source); d[str(num)] = vocalized
+    _data_put(_tk_path(source), d, f"tashkeel/{source}: +№{num} (всего {len(d)})")
 def was_translated(text):
     """Уже есть перевод этого текста в памяти? (свежий vs из базы — для журнала расхода)."""
     try:
@@ -2140,13 +2154,19 @@ async def _api_serve(application=None):
         # зеркалим расход ИИ в рабочий канал-журнал (LOG_CHAT_ID)
         if not application:
             return
-        name = ("@" + user["username"]) if (user and user.get("username")) else str((user or {}).get("id") or "аноним")
+        uid = (user or {}).get("id")
+        if user and user.get("username"):
+            who = "@" + user["username"]
+        elif uid:
+            who = f"[{uid}](tg://user?id={uid})"   # кликабельно: перейти к человеку по ID
+        else:
+            who = "аноним"
         tag = "🆕 свежий (DeepSeek, ключ потрачен)" if fresh else "♻️ из базы (ключ НЕ потрачен)"
         loc = f" {src} №{num}" if (src and num not in (None, '')) else ""
         extra = f" · накоплено (всего {saved['total']})" if (saved and saved.get("new")) else ""
-        htag = "#нейро" if feat == "нейро" else "#перевод"
+        ftag = {"перевод": "#перевод", "нейро": "#нейро", "огласовки": "#огласовки"}.get(feat, "#" + re.sub(r"\s+", "", feat))
         try:
-            await application.bot.send_message(LOG_CHAT_ID, f"{htag} 🤖 {feat}: {name}{loc} — {tag}{extra}")
+            await application.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} 🤖 {feat}: {who}{loc} — {tag}{extra}", parse_mode="Markdown")
         except Exception:
             pass
     async def _notify(text):
@@ -2306,15 +2326,27 @@ async def _api_serve(application=None):
         if not rate_ok('tashkeel:' + _uid(user, r)):
             return _ratelimited()
         text = (d.get('text') or '')[:2000]
+        source = re.sub(r'[^a-z0-9_]+', '', (d.get('source') or '').lower())[:40]
+        num = d.get('num')
         if not text:
             return _cors(web.json_response({'text': ''}))
+        # уже расставляли? (накопление, без повторной траты ключа)
+        cached = None
+        if source and num not in (None, ''):
+            cached = await loop.run_in_executor(None, lambda: (_tk_load(source) or {}).get(str(num)))
+        if cached:
+            await loop.run_in_executor(None, usage_log, user, "огласовки", False, len(text), source, str(num or ""))
+            await _notify_usage(user, "огласовки", False, source, num, None)
+            return _cors(web.json_response({'text': cached, 'cached': True}))
         sysm = ("Ты расставляешь огласовки (تشكيل) в арабском тексте. "
                 "Верни ТОТ ЖЕ текст с полной огласовкой. Без перевода, без пояснений, без кавычек — только огласованный текст.")
         out = await loop.run_in_executor(None, ask_deepseek, text, sysm) or ""
         out = re.sub(r'\s*⚡.*$', '', out, flags=re.S).strip()
-        await loop.run_in_executor(None, usage_log, user, "огласовки", True, len(text), "", "")
-        await _notify_usage(user, "огласовки", True, "", "", None)
-        return _cors(web.json_response({'text': out}))
+        if out and source and num not in (None, ''):
+            await loop.run_in_executor(None, tashkeel_add, source, num, out)
+        await loop.run_in_executor(None, usage_log, user, "огласовки", True, len(text), source, str(num or ""))
+        await _notify_usage(user, "огласовки", True, source, num, None)
+        return _cors(web.json_response({'text': out, 'cached': False}))
 
     async def searchlog(r):
         # аналитика: что ищут (тихо, агрегируем); гейт — вход в приложение
