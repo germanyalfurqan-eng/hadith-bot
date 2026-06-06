@@ -1183,6 +1183,37 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 save_access({"blacklist": bl})
                 await update.message.reply_text(f"✅ Разбанен {tid}.")
             return
+        # ===== Режим групп =====
+        if _tl in ("группы", "группа список", "список групп"):
+            a = load_access(); mode = "ВСЕМ (любые группы)" if a.get("group_open", True) else "ТОЛЬКО разрешённые"
+            wl = a.get("group_wl", [])
+            await update.message.reply_text(
+                "👥 Режим групп: *" + mode + "*\nРазрешённые ("+str(len(wl))+"): " + (", ".join(wl) if wl else "—") +
+                "\n\nКоманды:\n• «группы только свои» — бот работает лишь в разрешённых\n• «группы всем» — в любых\n"
+                "• «группа разреши <id>» / «группа запрети <id>»\n• «покинь <id>» — выйти из группы\n• «бан <id>» — полностью игнорировать",
+                parse_mode="Markdown")
+            return
+        if _tl in ("группы только свои", "группы свои", "группы только разрешенные", "группы только разрешённые"):
+            save_access({"group_open": False}); await update.message.reply_text("👥 Готово: бот работает ТОЛЬКО в разрешённых группах. Разреши нужные: «группа разреши <id>»."); return
+        if _tl in ("группы всем", "группы все", "группы открыть"):
+            save_access({"group_open": True}); await update.message.reply_text("👥 Готово: бот работает в ЛЮБЫХ группах (по доступу)."); return
+        mg = re.match(r"^группа\s+(разреши|запрети)\s+(-?\d{3,})$", _tl)
+        if mg:
+            act, gid = mg.group(1), mg.group(2); a = load_access(); wl = [str(x) for x in a.get("group_wl", [])]
+            if act == "разреши":
+                if gid not in wl: wl.append(gid)
+                save_access({"group_wl": wl}); await update.message.reply_text(f"✅ Группа {gid} разрешена.")
+            else:
+                wl = [x for x in wl if x != gid]; save_access({"group_wl": wl}); await update.message.reply_text(f"🚫 Группа {gid} убрана из разрешённых.")
+            return
+        ml = re.match(r"^покинь\s+(-?\d{3,})$", _tl)
+        if ml:
+            gid = int(ml.group(1))
+            try:
+                await context.bot.leave_chat(gid); await update.message.reply_text(f"➖ Вышел из чата {gid}.")
+            except Exception as e:
+                await update.message.reply_text(f"Не удалось выйти из {gid}: {e}")
+            return
 
     user_id = update.effective_user.id if update.effective_user else 0
     chat_type = update.effective_chat.type
@@ -1194,6 +1225,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception: pass
         if chat_id in _AI_BAN or user_id in _AI_BAN:
             return
+        # Режим «только свои группы»: в неразрешённой группе бот полностью молчит
+        if chat_type in ("group", "supergroup"):
+            acc = _access_cache or {}
+            if not acc.get("group_open", True) and str(chat_id) not in (acc.get("group_wl") or []):
+                return
 
     # Проверка: ответ на сообщение бота
     is_reply_to_bot = False
@@ -2014,6 +2050,8 @@ DEFAULT_ACCESS = {
     "bot": {"public": False, "whitelist": []},             # 🤖 ботяра (ИИ в боте)
     "botsearch": {"public": True, "whitelist": []},        # 🤖 поиск в боте (Бухари 333, мухэймин, искать…) — по умолчанию ВСЕМ
     "blacklist": [],                                        # ⛔ чёрный список chat_id/user_id — полностью игнорируем
+    "group_open": True,                                      # 👥 True=бот работает в любых группах; False=только в group_wl
+    "group_wl": [],                                          # 👥 разрешённые группы (id) при group_open=False
 }
 _access_cache = None
 
@@ -2034,6 +2072,13 @@ def _merge_access(cfg, base=None):
     # чёрный список (плоский список id) — отдельной обработкой (не {public,whitelist})
     bl = cfg.get("blacklist") if (isinstance(cfg, dict) and isinstance(cfg.get("blacklist"), list)) else out.get("blacklist")
     out["blacklist"] = [str(x).strip() for x in (bl or []) if str(x).strip()][:2000]
+    # режим групп
+    if isinstance(cfg, dict) and "group_open" in cfg:
+        out["group_open"] = bool(cfg["group_open"])
+    elif "group_open" not in out:
+        out["group_open"] = True
+    gw = cfg.get("group_wl") if (isinstance(cfg, dict) and isinstance(cfg.get("group_wl"), list)) else out.get("group_wl")
+    out["group_wl"] = [str(x).strip() for x in (gw or []) if str(x).strip()][:2000]
     return out
 
 def _sync_ban():
@@ -2628,7 +2673,12 @@ async def _chat_seen(update, context):
 async def _bot_member(update, context):
     try:
         ch = update.effective_chat; st = update.my_chat_member.new_chat_member.status
-        await context.bot.send_message(LOG_CHAT_ID, f"🤖 Бот: {st} в «{ch.title}» (id={ch.id}, {ch.type})")
+        info = f"🤖 Бот: {st} в «{ch.title}» (id={ch.id}, {ch.type})"
+        if st in ("member", "administrator") and ch.type in ("group", "supergroup"):
+            a = load_access(); ok = a.get("group_open", True) or (str(ch.id) in (a.get("group_wl") or []))
+            info += "\n" + ("✅ работает (группы открыты для всех)" if ok else "⛔ НЕ работает тут (режим «только свои группы»)")
+            info += f"\n• Разрешить: `группа разреши {ch.id}`\n• Выйти: `покинь {ch.id}`\n• Бан: `бан {ch.id}`"
+        await context.bot.send_message(LOG_CHAT_ID, info, parse_mode="Markdown")
     except Exception:
         pass
 app.add_handler(MessageHandler(filters.ChatType.CHANNEL, _chat_seen))
