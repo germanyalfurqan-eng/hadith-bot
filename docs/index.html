@@ -123,7 +123,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v46</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v47</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -348,7 +348,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v46';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v47';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -619,8 +619,18 @@ function renderCols(){
     d.innerHTML=esc(e.short)+' ✕';
     d.onclick=()=>{ selExtra.delete(code); renderCols(); updateExtraSel(); };
     box.appendChild(d); });
-  const cc = selCols.size? (selCols.size+' выбрано') : 'везде';
-  document.getElementById('colCount').textContent = '('+cc+(selExtra.size?(' + доп. '+selExtra.size):'')+')';
+  const total = selCols.size + selExtra.size;
+  document.getElementById('colCount').textContent = total ? ('(только выбранные: '+total+')') : '(везде)';
+  updateReadBtn();
+}
+// «📖 Читать сборник» → если выбран РОВНО ОДИН сборник, кнопка читает его напрямую
+function updateReadBtn(){
+  const rb=document.getElementById('readBtn'); if(!rb) return;
+  const sel=[...selCols, ...selExtra];
+  if(sel.length===1 && sel[0]!=='muhaymin'){
+    rb.dataset.one=sel[0]; rb.textContent='📖 Читать: '+nameOf(sel[0]);
+    rb.title='Открыть «'+nameOf(sel[0])+'» и листать подряд';
+  } else { rb.dataset.one=''; rb.textContent='📖 Читать сборник'; rb.title='Открыть сборник и листать хадисы подряд (с любого номера)'; }
 }
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); t.classList.add('active');
@@ -750,7 +760,7 @@ async function runSearch(){
     if(!numMode && !modes.ai && /[а-яё]/i.test(shown) && !isArabic(shown)){
       try{ const ru=await loadHadithRu(); if(seq!==_seq) return;
         const qw=shown.toLowerCase().split(/\s+/).filter(w=>w.length>1);
-        const allow = selCols.size ? selCols : null;
+        const allow = (selCols.size||selExtra.size) ? new Set([...selCols,...selExtra]) : null;
         if(qw.length){ for(const x of ru){ if(allow && !allow.has(x.s)) continue;
           if(qw.every(w=>x.norm.indexOf(w)!==-1)) add({type:'hr',s:x.s,n:x.n,ru:x.t,rq:shown}); } }
       }catch(e){}
@@ -758,7 +768,10 @@ async function runSearch(){
       if(!count){ res.innerHTML='<div class="status">По-русски не нашёл. Готовый перевод есть для Бухари/Муслим/Абу Дауд; для остальных включи 🧠 По смыслу.</div>'; }
       return;
     }
-    const codes=COLLECTIONS.map(c=>c.code).filter(c=>{ const C=COLLECTIONS.find(x=>x.code===c); return selCols.size? selCols.has(c) : !C.heavy; })
+    // Любой выбор (основной чип ИЛИ доп.сборник) = искать ТОЛЬКО в выбранном.
+    // Ничего не выбрано = везде (основные нетяжёлые).
+    const anySel = selCols.size>0 || selExtra.size>0;
+    const codes=COLLECTIONS.map(c=>c.code).filter(c=>{ const C=COLLECTIONS.find(x=>x.code===c); return anySel ? selCols.has(c) : !C.heavy; })
       .sort((a,b)=>((COLLECTIONS.find(x=>x.code===a).heavy?1:0)-(COLLECTIONS.find(x=>x.code===b).heavy?1:0)))
       .concat([...selExtra]);   // M44: выбранные «другие сборники» — в конец (могут быть тяжёлыми)
     for(const code of codes){
@@ -1326,7 +1339,7 @@ function openReader(code,fromNum){
   document.getElementById('readModal').style.display='flex';
   if(code){ if(sel) sel.value=code; _readOpen(code,fromNum); }
 }
-var _rb=document.getElementById('readBtn'); if(_rb) _rb.onclick=()=>openReader();
+var _rb=document.getElementById('readBtn'); if(_rb) _rb.onclick=()=>{ const one=_rb.dataset.one; one?openReader(one):openReader(); };
 var _rc=document.getElementById('readClose'); if(_rc) _rc.onclick=()=>{ document.getElementById('readModal').style.display='none'; };
 var _rback=document.getElementById('readBack'); if(_rback) _rback.onclick=_readToPick;
 var _rgo=document.getElementById('readGo'); if(_rgo) _rgo.onclick=()=>{ const c=document.getElementById('readSel').value; const f=document.getElementById('readFrom').value; _readOpen(c,f); };
