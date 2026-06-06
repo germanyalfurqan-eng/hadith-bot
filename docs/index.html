@@ -141,7 +141,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v92</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v93</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -442,7 +442,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v92';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v93';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1227,7 +1227,19 @@ async function appendWideMulti(seq, cands){
 
 function cardHadith(d,groups){
   const {code,h}=d; const card=document.createElement('div');card.className='card';
-  const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(h.text,groups);card.appendChild(ar);
+  // Муслим (Абд аль-Баки): несколько риваятов одного номера (⚬) → ОТДЕЛЬНЫЕ блоки-посты
+  const riw = (code==='muslim' && (h.text||'').indexOf('⚬')!==-1) ? h.text.split('⚬').map(s=>s.trim()).filter(s=>s.length>5) : null;
+  if(riw && riw.length>1){
+    riw.forEach((t,i)=>{
+      const lab=document.createElement('div'); lab.style.cssText='display:flex;justify-content:space-between;align-items:center;color:var(--hint);font-size:12px;margin:'+(i?'12px':'2px')+' 0 2px'+(i?';border-top:1px solid var(--border);padding-top:9px':'');
+      const ls=document.createElement('span'); ls.textContent='📜 риваят '+(i+1)+' из '+riw.length+' · مسلم №'+h.num;
+      const cp=document.createElement('button'); cp.className='mini'; cp.textContent='⧉ копир.'; cp.onclick=()=>copyWithSig(t+'\n— مسلم №'+h.num+' (риваят '+(i+1)+')');
+      lab.appendChild(ls); lab.appendChild(cp); card.appendChild(lab);
+      const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(t,groups);card.appendChild(ar);
+    });
+  } else {
+    const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(h.text,groups);card.appendChild(ar);
+  }
   const meta=document.createElement('div');meta.className='meta';
   const canRead = !d.noNav && isReadable(code);   // M102: клик по источнику → читалка на этом хадисе
   meta.innerHTML='<span class="src'+(canRead?' srcnav':'')+'"'+(canRead?' title="Открыть в читалке на этом хадисе">📖 ':'>')+arOf(code)+' · №'+h.num+'</span>';
