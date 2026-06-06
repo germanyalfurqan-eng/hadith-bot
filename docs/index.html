@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v69</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v70</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -402,7 +402,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v69';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v70';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1001,18 +1001,21 @@ function ensureGrpToggle(){ const res=document.getElementById('res'); if(!res.fi
   res.insertBefore(grpToggleEl(), res.children[1]||null); }
 function renderResultsView(){
   const res=document.getElementById('res'); res.innerHTML='';
-  const items=_results.slice(0,400);
   res.appendChild(info(groupSrc?('📚 По '+(tab==='quran'?'сурам':'источникам')+' · найдено: '+_results.length):('Найдено: '+_results.length+(_results.length>400?' (первые 400)':''))));
   res.appendChild(grpToggleEl());
-  if(!groupSrc){ items.forEach(d=>res.appendChild(makeCard(d))); return; }
+  if(!groupSrc){ _results.slice(0,400).forEach(d=>res.appendChild(makeCard(d))); return; }
+  // группируем по ВСЕМ результатам → видны ВСЕ сборники/суры (не только первые 400)
   const groups={}; const order=[];
-  items.forEach(d=>{ const k=srcKeyOf(d); if(!groups[k]){groups[k]=[];order.push(k);} groups[k].push(d); });
+  _results.forEach(d=>{ const k=srcKeyOf(d); if(!groups[k]){groups[k]=[];order.push(k);} groups[k].push(d); });
   order.forEach(k=>{ const arr=groups[k];
     const h=document.createElement('div'); h.className='col'; h.style.cssText='display:block;margin:10px 0 4px;cursor:pointer;font-weight:600';
     const body=document.createElement('div'); body.style.display='none';
     const lbl=()=>'📕 '+esc(k)+' ('+arr.length+') '+(body.style.display==='none'?'▾':'▴'); h.innerHTML=lbl();
-    h.onclick=()=>{ body.style.display=(body.style.display==='none')?'block':'none'; h.innerHTML=lbl(); };
-    arr.forEach(d=>body.appendChild(makeCard(d)));
+    h.onclick=()=>{ const willOpen=body.style.display==='none';
+      if(willOpen && !body.dataset.filled){ arr.slice(0,80).forEach(d=>body.appendChild(makeCard(d)));   // ленивый рендер при раскрытии
+        if(arr.length>80){ const m=document.createElement('div'); m.className='hint'; m.style.cssText='font-size:12px;padding:4px 2px'; m.textContent='…и ещё '+(arr.length-80)+' — уточни запрос, чтобы сузить'; body.appendChild(m); }
+        body.dataset.filled='1'; }
+      body.style.display=willOpen?'block':'none'; h.innerHTML=lbl(); };
     res.appendChild(h); res.appendChild(body); });
 }
 async function getOne(code,num){
