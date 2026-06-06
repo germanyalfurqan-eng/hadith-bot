@@ -1103,7 +1103,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines = ["💬 *Отзывы / ошибки (последние)*"]
         for x in fb[:15]:
             c = f" · {x['ctx']}" if x.get("ctx") else ""
-            lines.append(f"\n{x['d']} · {x['u']}{c}\n  «{x['t']}»")
+            lines.append(f"\n*№{x.get('id','?')}* · {x['d']} · {x['u']}{c}\n  «{x['t']}»")
         await update.message.reply_text("\n".join(lines)[:3900], parse_mode="Markdown")
         return
 
@@ -2053,6 +2053,7 @@ def _journal_load():
         j.setdefault("translations", {"totals": {}, "recent": []})
         j.setdefault("usage", {"totals": {"calls": 0, "fresh": 0, "cached": 0, "by_user": {}}, "recent": []})
         j.setdefault("feedback", [])
+        j.setdefault("fb_seq", 0)
         j.setdefault("searches", {"total": 0, "top": {}})
         _journal_cache = j
     return _journal_cache
@@ -2073,14 +2074,16 @@ def searchlog_add(q, tab, cnt):
     if _search_dirty >= 8:
         _journal_save("searches"); _search_dirty = 0
 def feedback_add(user, ctx, txt):
-    """Отзыв/ошибка от пользователя → отдельный журнал комментариев разработчику."""
+    """Отзыв/ошибка → нумерованный журнал (каждому свой № для поиска в журналах/Telegram)."""
     j = _journal_load()
+    j["fb_seq"] = j.get("fb_seq", 0) + 1
+    fid = j["fb_seq"]
     name = ("@" + user["username"]) if (user and user.get("username")) else str((user or {}).get("id") or "аноним")
-    j["feedback"].insert(0, {"d": datetime.now().strftime("%d.%m.%Y %H:%M"), "u": name,
-                             "id": str((user or {}).get("id") or ""), "ctx": (ctx or "")[:200], "t": (txt or "")[:1000]})
+    j["feedback"].insert(0, {"id": fid, "d": datetime.now().strftime("%d.%m.%Y %H:%M"), "u": name,
+                             "uid": str((user or {}).get("id") or ""), "ctx": (ctx or "")[:200], "t": (txt or "")[:1000]})
     j["feedback"] = j["feedback"][:500]
-    _journal_save(f"отзыв от {name}")
-    return True
+    _journal_save(f"отзыв #{fid} от {name}")
+    return fid
 def _journal_save(msg):
     if _journal_cache is not None:
         _data_put("journal.json", _journal_cache, msg)
@@ -2312,10 +2315,10 @@ async def _api_serve(application=None):
         ctx = (d.get('context') or '')[:200]
         if not txt:
             return _cors(web.json_response({'ok': False}))
-        await loop.run_in_executor(None, feedback_add, user, ctx, txt)
+        fid = await loop.run_in_executor(None, feedback_add, user, ctx, txt)
         name = ("@" + user["username"]) if (user and user.get("username")) else str((user or {}).get("id") or "аноним")
-        await _notify(f"#отзыв 💬 от {name}{(' · ' + ctx) if ctx else ''}:\n{txt}")
-        return _cors(web.json_response({'ok': True}))
+        await _notify(f"#отзыв 💬 №{fid} от {name}{(' · ' + ctx) if ctx else ''}:\n{txt}")
+        return _cors(web.json_response({'ok': True, 'id': fid}))
 
     async def tashkeel(r):
         # ИИ-огласовки (تشكيل) арабского текста; гейт — нейро (это DeepSeek)

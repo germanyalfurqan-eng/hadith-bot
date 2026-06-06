@@ -119,7 +119,7 @@
       <div class="gear" id="devBtn" style="display:none">🛠</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v36</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v37</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -741,11 +741,37 @@ function addTr(meta,card,text,ayah,fav){
       addHelpQ(meta,'«🧠 Заказать огласовки»: ИИ расставит تشكيل (там, где их нет). Может ошибаться. Тратит ключ ОДИН раз — дальше из базы для всех.');
     }
   }
-  const fbb=document.createElement('button');fbb.className='tr-btn';fbb.textContent='⚠️';fbb.title='Сообщить об ошибке';
-  fbb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--hint);padding:6px 10px';
+  if(!ayah){ const tx=document.createElement('button');tx.className='tr-btn';tx.textContent='🔗 Где ещё';tx.title='Где ещё передаётся этот хадис (التخريج) — по нашим сборникам';
+    tx.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
+    const txout=document.createElement('div');txout.className='tr-out';
+    tx.onclick=()=>doTakhrij(text, refOf(fav), txout, tx); meta.appendChild(tx); card.appendChild(txout); }
+  const fbb=document.createElement('button');fbb.className='tr-btn';fbb.textContent='✍️ Сообщить нам';fbb.title='Написать нам об ошибке/замечании';
+  fbb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--link);padding:6px 10px';
   fbb.onclick=()=>openFeedback((fav&&fav.label)||'');
   meta.appendChild(fbb);
   card.appendChild(out);
+}
+async function doTakhrij(text, ref, out, btn){
+  // التخريج без ИИ: ищем характерную фразу матна по нашим сборникам
+  btn.disabled=true; const prev=btn.textContent; btn.textContent='ищу…';
+  out.style.display='block'; out.innerHTML='<span class="hint">Ищу, где ещё передаётся…</span>';
+  let matn=splitIsnad(text)[1]||text; const mq=matn.match(/«([^«»]{8,})»/); if(mq) matn=mq[1];
+  const words=canon(matn).split(' ').filter(w=>w.length>1);
+  if(words.length<5){ out.innerHTML='<span class="hint">Текст коротковат для تخريج.</span>'; btn.disabled=false; btn.textContent=prev; return; }
+  const start=Math.max(0,Math.floor(words.length/2)-3); const phrase=words.slice(start,start+6).join(' ');
+  const skipCode=(ref&&ref.source)||''; const found={};
+  for(const code of ['bukhari','muslim','abudawud','tirmidhi','ibnmajah','nasai','malik','ahmad','muqbil']){
+    try{ let arr; const C=COLLECTIONS.find(x=>x.code===code);
+      if(code==='ahmad') arr=await loadAhmad(); else if(C&&C.file) arr=await loadLocal(code,C.file); else arr=await loadCollection(code);
+      for(const h of arr){ if((code+'')===skipCode && String(h.num)===String(ref&&ref.num)) continue;
+        if(canon(h.text).indexOf(phrase)!==-1){ (found[code]=found[code]||[]).push(h.num); if(found[code].length>=6) break; } }
+    }catch(e){}
+  }
+  const entries=Object.entries(found);
+  let html='<div style="color:var(--hint);font-size:12px;margin-bottom:4px">🔗 التخريج — также передаётся в наших сборниках:</div>';
+  if(!entries.length) html+='<span class="hint">совпадений не нашёл (или хадис уникален в нашей базе).</span>';
+  else entries.forEach(([code,nums])=>{ html+='<div style="direction:rtl;font-size:14px">'+esc(arOf(code))+': '+nums.map(n=>'№'+n).join('، ')+'</div>'; });
+  out.innerHTML=html; btn.disabled=false; btn.textContent=prev;
 }
 function hasDiac(t){ return /[ً-ْٰـ]/.test(t||''); }
 function addHelpQ(meta,txt){ const q=document.createElement('button'); q.className='tr-btn'; q.textContent='?';
@@ -958,7 +984,7 @@ function renderJournal(kind){
   else if(kind==='usage'){ const u=DEV_DATA.usage||{}, tot=u.totals||{}, rec=u.recent||[];
     html='<b>Расход:</b> вызовов '+(tot.calls||0)+' · 🆕 свежих '+(tot.fresh||0)+' · ♻️ из базы '+(tot.cached||0)+'<br><b>Последние:</b><br>'+(rec.map(x=>(x.fresh?'🆕':'♻️')+' '+x.d+' '+esc(x.u||'')+' · '+esc(x.f||'')+(x.src?(' '+x.src+' №'+x.num):'')).join('<br>')||'—'); }
   else if(kind==='fb'){ const fb=DEV_DATA.feedback||[];
-    html='<b>Отзывы:</b><br>'+(fb.map(x=>'💬 '+x.d+' '+esc(x.u||'')+(x.ctx?(' · '+esc(x.ctx)):'')+'<br>&nbsp;&nbsp;«'+esc(x.t||'')+'»').join('<br>')||'пусто'); }
+    html='<b>Отзывы:</b><br>'+(fb.map(x=>'💬 <b>№'+(x.id||'?')+'</b> '+x.d+' '+esc(x.u||'')+(x.ctx?(' · '+esc(x.ctx)):'')+'<br>&nbsp;&nbsp;«'+esc(x.t||'')+'»').join('<br>')||'пусто'); }
   else if(kind==='search'){ const s=DEV_DATA.searches||{}, top=s.top||[];
     html='<b>Что ищут</b> (всего поисков: '+(s.total||0)+'):<br>'+(top.map(x=>'🔎 '+esc(x[0])+' — '+(x[1].n||0)+'× ('+(x[1].tab||'')+', нашли '+(x[1].cnt||0)+')').join('<br>')||'пусто'); }
   else if(kind==='upd'){ html='Журнал обновлений (release_notes): <a style="color:var(--link);cursor:pointer" id="_updLink">открыть</a>'; }
@@ -1009,7 +1035,8 @@ async function sendFeedback(){
   const btn=document.getElementById('fbSend'); btn.disabled=true; btn.textContent='Отправляю…';
   try{ const r=await fetch(BACKEND_URL+'/feedback',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({text:t, context:_fbCtx, initData:INITDATA})});
-    if(r.ok){ toast('Спасибо! Отправлено разработчику ✅'); document.getElementById('fbModal').style.display='none'; }
+    const j=await r.json().catch(()=>({}));
+    if(r.ok&&j.ok){ toast('Спасибо! Отзыв №'+(j.id||'')+' отправлен ✅'); document.getElementById('fbModal').style.display='none'; }
     else if(r.status===403){ toast('Сначала войди в приложение (из Telegram)'); }
     else toast('Не удалось отправить'); }
   catch(e){ toast('🔧 Сервер недоступен — попробуй позже'); }
@@ -1059,7 +1086,7 @@ async function boot(){
   if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
   if(userAllowed()){
     document.getElementById('app').style.display='block';
-    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v36 · хадисы · аяты · аль-Мухаймин'; }
+    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v37 · хадисы · аяты · аль-Мухаймин'; }
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
         (st.cols||[]).forEach(c=>selCols.add(c));
