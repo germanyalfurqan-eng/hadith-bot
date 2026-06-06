@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v63</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v64</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -171,7 +171,6 @@
   </div>
   <div class="modes" id="modesMore" style="display:none">
     <div class="chip" data-mode="matnonly" title="Искать совпадение только в тексте хадиса (матн), не в цепочке передатчиков (иснаде)">📜 Не искать в иснаде</div>
-    <div class="chip" id="grpBtn" title="Сгруппировать результаты по источникам (свернуть номера под каждый сборник)">📚 По источникам</div>
     <div class="chip" id="neuroChip" data-mode="neuro" title="Расширенный: вручную подобрать/поправить арабские фразы перед поиском">🔬 Расширенный</div>
   </div>
   <div class="hint">Просто напиши слова — найду, где есть все слова. «🧠 По смыслу» — поиск по смыслу (рус/eng). <span id="helpBtn" style="color:var(--link);cursor:pointer;font-weight:600">ⓘ Как искать — примеры</span></div>
@@ -393,7 +392,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v63';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v64';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -847,7 +846,7 @@ function applyPick(){
   renderPickBar();
 }
 async function runSearch(explicit){
-  const seq=++_seq;
+  const seq=++_seq; groupSrc=false;   // каждый новый поиск — обычным списком (группировка — опция рядом с результатом)
   let q=document.getElementById('q').value.trim(); const shown=q;
   if(!q){ toast('Введите запрос'); return; }
   const res=document.getElementById('res'); res.innerHTML=''; _results=[]; _pick={items:[],sel:new Set(),excl:new Set(),kind:'',meaning:''};
@@ -948,7 +947,7 @@ async function runSearch(explicit){
       if(seq!==_seq) return; setHead(false);
     }
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
-    if(groupSrc && _results.length) renderResultsView();
+    if(count) ensureGrpToggle();
   } else {
     try{ const arr=await loadQuran(); if(seq!==_seq) return;
       const qn=q.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
@@ -964,7 +963,7 @@ async function runSearch(explicit){
       else { for(const v of arr){ if(docMatch(v,groups,modes)){ add({type:'q',v}); if(rootMode) collectForms(v.text,qSkels,rootForms); } } }
     }catch(e){}
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
-    if(groupSrc && _results.length) renderResultsView();
+    if(count) ensureGrpToggle();
   }
   setStatus('');
   logSearch(shown, tab, count);
@@ -977,11 +976,22 @@ function makeCard(d){ return d.type==='q'?cardAyah(d,_groups):(d.type==='m'?card
 /* M43: группировка результатов по источникам (сворачиваемо) */
 let groupSrc=false;
 function srcKeyOf(d){ return d.type==='m'?'аль-Мухаймин':(d.type==='hr'?arOf(d.s):(d.type==='q'?'Коран':arOf(d.code))); }
+// Переключатель «по источникам» РЯДОМ с результатами (опция, по умолчанию список). Вставляется после заголовка.
+function grpToggleEl(){
+  const t=document.createElement('div'); t.id='grpToggle';
+  t.style.cssText='display:inline-block;margin:2px 0 8px;font-size:13px;color:var(--link);cursor:pointer;user-select:none;border:1px solid var(--border);border-radius:12px;padding:3px 10px';
+  t.textContent = groupSrc?'📋 Обычным списком':'📚 Сгруппировать по источникам';
+  t.onclick=()=>{ groupSrc=!groupSrc; renderResultsView(); };
+  return t;
+}
+function ensureGrpToggle(){ const res=document.getElementById('res'); if(!res.firstChild || document.getElementById('grpToggle')) return;
+  res.insertBefore(grpToggleEl(), res.children[1]||null); }
 function renderResultsView(){
   const res=document.getElementById('res'); res.innerHTML='';
   const items=_results.slice(0,400);
-  if(!groupSrc){ res.appendChild(info('Найдено: '+_results.length+(_results.length>400?' (показаны первые 400)':''))); items.forEach(d=>res.appendChild(makeCard(d))); return; }
-  res.appendChild(info('📚 По источникам · найдено: '+_results.length));
+  res.appendChild(info(groupSrc?('📚 По источникам · найдено: '+_results.length):('Найдено: '+_results.length+(_results.length>400?' (первые 400)':''))));
+  res.appendChild(grpToggleEl());
+  if(!groupSrc){ items.forEach(d=>res.appendChild(makeCard(d))); return; }
   const groups={}; const order=[];
   items.forEach(d=>{ const k=srcKeyOf(d); if(!groups[k]){groups[k]=[];order.push(k);} groups[k].push(d); });
   order.forEach(k=>{ const arr=groups[k];
@@ -992,7 +1002,6 @@ function renderResultsView(){
     arr.forEach(d=>body.appendChild(makeCard(d)));
     res.appendChild(h); res.appendChild(body); });
 }
-var _grp=document.getElementById('grpBtn'); if(_grp) _grp.onclick=()=>{ groupSrc=!groupSrc; _grp.classList.toggle('on',groupSrc); if(_results&&_results.length) renderResultsView(); };
 async function getOne(code,num){
   try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-'+code+'/'+num+'.min.json')).json();
     const h=(j.hadiths||[])[0]; if(h){ const raw=(h.text||'').replace(/\s+/g,' ').trim();
