@@ -2737,7 +2737,8 @@ async def _api_serve(application=None):
         top = j.get('searches', {}).get('top', {})
         items = sorted(top.items(), key=lambda x: -x[1].get('n', 0))
         out = [{'q': k, 'tab': v.get('tab', ''), 'n': v.get('n', 0)}
-               for k, v in items if v.get('n', 0) >= 2 and v.get('cnt', 0) > 0][:15]
+               for k, v in items
+               if v.get('n', 0) >= 2 and v.get('cnt', 0) > 0 and len(k) <= 28][:15]   # без длинных вставок хадисов
         return _cors(web.json_response({'items': out}))
 
     async def hit(r):
