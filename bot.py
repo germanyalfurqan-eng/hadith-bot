@@ -2262,6 +2262,46 @@ def tashkeel_add(source, num, vocalized):
         return
     d = _tk_load(source); d[str(num)] = vocalized
     _data_put(_tk_path(source), d, f"tashkeel/{source}: +№{num} (всего {len(d)})")
+# ---- Накопление تخريج (ВЗАИМОСВЯЗЬ хадисов): data/takhrij/<source>.json = {num:{sci,local,muh,d}} ----
+# sci = {takhreej,hukm} (sunnah.one), local = {code:[№...]} (наши сборники), muh = [№... в аль-Мухаймин].
+# Нашли раз → дальше отдаём мгновенно/бесплатно. Только ДОБАВЛЯЕМ (не удаляем).
+_takh_cache = {}
+def _takh_path(source):
+    return f"takhrij/{source}.json"
+def _takh_load(source):
+    if source not in _takh_cache:
+        _takh_cache[source] = _data_get(_takh_path(source), {}) or {}
+    return _takh_cache[source]
+def takhrij_get(source, num):
+    source = re.sub(r'[^a-z0-9_]+', '', (source or '').lower())
+    if not source or num in (None, ''):
+        return None
+    return (_takh_load(source) or {}).get(str(num))
+def _clean_local(loc):
+    out = {}
+    if isinstance(loc, dict):
+        for k, v in list(loc.items())[:40]:
+            kk = re.sub(r'[^a-z0-9_]+', '', str(k).lower())[:40]
+            if kk and isinstance(v, list):
+                out[kk] = [str(x)[:12] for x in v[:12]]
+    return out
+def takhrij_put(source, num, sci, local, muh):
+    source = re.sub(r'[^a-z0-9_]+', '', (source or '').lower())
+    if not source or num in (None, ''):
+        return None
+    d = _takh_load(source); key = str(num); prev = d.get(key) or {}
+    sci_c = {}
+    if isinstance(sci, dict) and (sci.get("takhreej") or sci.get("hukm")):
+        sci_c = {"takhreej": str(sci.get("takhreej") or "")[:800], "hukm": str(sci.get("hukm") or "")[:60]}
+    local_c = _clean_local(local) or (prev.get("local") or {})
+    muh_c = [str(x)[:12] for x in (muh or [])[:120] if x] or (prev.get("muh") or [])
+    sci_c = sci_c or (prev.get("sci") or {})
+    if not sci_c and not local_c and not muh_c:
+        return None
+    d[key] = {"sci": sci_c, "local": local_c, "muh": muh_c, "d": prev.get("d") or datetime.now().strftime("%d.%m.%Y")}
+    if not _data_put(_takh_path(source), d, f"takhrij/{source}: +№{key} (всего {len(d)})"):
+        return None
+    return {"source": source, "num": key, "total": len(d)}
 def was_translated(text):
     """Уже есть перевод этого текста в памяти? (свежий vs из базы — для журнала расхода)."""
     try:
@@ -2581,12 +2621,38 @@ async def _api_serve(application=None):
             await loop.run_in_executor(None, searchlog_add, q, tab, cnt)
         return _cors(web.json_response({'ok': True}))
 
+    async def takhrij_read(r):
+        # M67h: отдать накопленный تخريج (взаимосвязь) по source+num; гейт = вход в приложение
+        user = verify_init_data(r.headers.get('X-Init-Data') or r.query.get('initData'))
+        if not feature_allowed('app', user):
+            return _deny('app')
+        source = re.sub(r'[^a-z0-9_]+', '', (r.query.get('source') or '').lower())[:40]
+        num = r.query.get('num')
+        if not source or num in (None, ''):
+            return _cors(web.json_response({'cached': False}))
+        data = await loop.run_in_executor(None, takhrij_get, source, num)
+        return _cors(web.json_response({'cached': bool(data), 'takhrij': data} if data else {'cached': False}))
+
+    async def takhrij_save(r):
+        # M67h: сохранить найденный تخريج в нашу базу (накопление); гейт = вход в приложение
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('app', user):
+            return _deny('app')
+        if not rate_ok('takhsave:' + _uid(user, r), limit=20, window=120):
+            return _ratelimited()
+        source = re.sub(r'[^a-z0-9_]+', '', (d.get('source') or '').lower())[:40]
+        num = d.get('num')
+        saved = await loop.run_in_executor(None, takhrij_put, source, num, d.get('sci'), d.get('local'), d.get('muh'))
+        return _cors(web.json_response({'ok': bool(saved), 'saved': saved}))
+
     a = web.Application()
     a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.post('/api/access', access), web.post('/api/balance', balance),
                   web.post('/api/feedback', feedback), web.post('/api/searchlog', searchlog),
                   web.post('/api/tashkeel', tashkeel),
+                  web.get('/api/takhrij', takhrij_read), web.post('/api/takhrij', takhrij_save),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))
