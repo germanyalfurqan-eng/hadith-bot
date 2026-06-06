@@ -141,7 +141,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v86</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v87</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -438,7 +438,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v86';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v87';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1485,12 +1485,29 @@ async function showNarratorBio(name, out){
     let html='<div style="border:1px solid var(--border);border-radius:12px;padding:10px;margin:6px 0;background:rgba(108,92,231,.06)">'
       +'<div style="font-weight:700;direction:rtl;font-size:16px">'+esc(main.title)+'</div>'
       +'<div style="color:var(--hint);font-size:12px;margin:4px 0 8px">📖 Источник: <b>موسوعة رواة الحديث</b> — биография · الطبقة · الوفاة · أقوال العلماء</div>'
-      +'<button class="nlink" data-u="'+esc(main.url)+'" style="background:var(--btn);color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:12.5px;cursor:pointer">📖 Открыть карточку (моусу‘а)</button> <span class="hint" style="font-size:11px">(откроется в браузере)</span>';
+      +'<button class="nlink" data-u="'+esc(main.url)+'" style="background:var(--btn);color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:12.5px;cursor:pointer">📖 Открыть карточку (моусу‘а)</button> '
+      +'<button class="naiBtn" style="background:#3a2d5e;color:#e0d7ff;border:1px solid #6c5ce7;border-radius:8px;padding:5px 10px;font-size:12.5px;cursor:pointer">🧠 ИИ: кто это + оценка</button>';
     if(rs.length>1) html+='<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--hint);font-size:12px">Другие совпадения ('+(rs.length-1)+')</summary>'+rs.slice(1,6).map(x=>'<div style="direction:rtl;margin:4px 0;font-size:14px"><span class="nlink" data-u="'+esc(x.url)+'" style="color:var(--link);cursor:pointer">• '+esc(x.title)+'</span></div>').join('')+'</details>';
-    html+='</div>';
+    html+='<div class="naiOut" style="margin-top:8px"></div></div>';
     out.innerHTML=html;
     out.querySelectorAll('.nlink').forEach(b=>b.onclick=()=>openLink(b.dataset.u));
+    const nai=out.querySelector('.naiBtn'), naiOut=out.querySelector('.naiOut');
+    if(nai) nai.onclick=()=>doNarratorAI(name, naiOut, nai);
   }catch(e){ out.innerHTML='<div class="hint">🔧 Сервис недоступен — попробуй позже.</div>'; }
+}
+async function doNarratorAI(name, out, btn){
+  if(!BACKEND_URL){ toast('Нужен сервер'); return; }
+  btn.disabled=true; const prev=btn.textContent; btn.textContent='ИИ думает…';
+  out.innerHTML='<span class="hint">🧠 Собираю справку об «'+esc(name)+'» (ИИ)…</span>';
+  try{ const r=await fetch(BACKEND_URL+'/narrator_ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name, initData:INITDATA})});
+    if(r.status===403){ out.innerHTML='<span class="hint">ИИ-справка тебе пока не открыта.</span>'; }
+    else { const j=await r.json().catch(()=>({})); if(j.bio){
+      out.innerHTML='<div style="border:1px solid #6c5ce7;border-radius:10px;padding:9px;margin-top:4px;background:rgba(108,92,231,.08);font-size:13.5px;line-height:1.55">'
+        +'<div style="color:#b9a9ff;font-size:11px;margin-bottom:4px">🧠 Справка собрана ИИ '+(j.cached?'(из базы, бесплатно)':'')+' — возможны ошибки, сверяйте с источниками</div>'
+        +esc(j.bio).replace(/\n+/g,'<br>')+'</div>'; }
+      else out.innerHTML='<span class="hint">ИИ не дал ответа — попробуй полную карточку.</span>'; }
+  }catch(e){ out.innerHTML='<span class="hint">🔧 Сервис недоступен.</span>'; }
+  btn.disabled=false; btn.textContent=prev;
 }
 async function doNarrators(text, out, btn){
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }

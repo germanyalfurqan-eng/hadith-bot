@@ -2266,6 +2266,21 @@ def neuro_put(key, phrases):
     c = _neuro_load(); c[key] = phrases
     _data_put("neuro.json", c, f"neuro: +{key[:40]} (всего {len(c)})")
     return len(c)
+# ---- Накопление ИИ-справок о равиях: data/rijal_ai.json = {имя: текст} (повтор НЕ тратит ключ) ----
+_rijal_cache = None
+def _rijal_load():
+    global _rijal_cache
+    if _rijal_cache is None:
+        _rijal_cache = _data_get("rijal_ai.json", {}) or {}
+    return _rijal_cache
+def rijal_ai_get(name):
+    return _rijal_load().get((name or '').strip())
+def rijal_ai_put(name, bio):
+    name = (name or '').strip()
+    if not name or not bio:
+        return
+    c = _rijal_load(); c[name] = bio
+    _data_put("rijal_ai.json", c, f"rijal_ai: +{name[:30]} (всего {len(c)})")
 # ---- Кэш огласовок (تشكيل) по сборникам: data/tashkeel/<source>.json = {num: огласованный текст} ----
 _tk_cache = {}
 def _tk_path(source):
@@ -2686,6 +2701,33 @@ async def _api_serve(application=None):
         res = await loop.run_in_executor(None, search_transmitters, q, 8)
         return _cors(web.json_response({'results': res or []}))
 
+    async def narrator_ai(r):
+        # ИИ-справка о равии (кто это + оценка учёных + источник), с накоплением; гейт — нейро (тратит ключ)
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('neuro', user):
+            return _deny('neuro')
+        if not rate_ok('rijalai:' + _uid(user, r), limit=12, window=120):
+            return _ratelimited()
+        name = (d.get('name') or '').strip()[:80]
+        if len(name) < 3:
+            return _cors(web.json_response({'bio': '', 'cached': False}))
+        cached = await loop.run_in_executor(None, rijal_ai_get, name)
+        if cached:
+            await loop.run_in_executor(None, usage_log, user, "равий-ИИ", False, len(name), "", "")
+            return _cors(web.json_response({'bio': cached, 'cached': True}))
+        sysm = ("Ты знаток науки о передатчиках хадисов (الجرح والتعديل والرواة). Дай КРАТКУЮ справку о равии по-русски: "
+                "полное имя; кунья; когда жил/умер (если известно); кем был (сподвижник/таби'/..); и ОЦЕНКА достоверности "
+                "словами имамов (ثقة/صدوق/ضعيف и т.п.) — КТО так оценил и в какой книге (تقريب التهذيب لابن حجر، "
+                "الجرح والتعديل لابن أبي حاتم، تهذيب الكمال للمزي). 4-7 строк, без воды. "
+                "В конце с новой строки: «⚠️ Справку собрал ИИ — сверяйте с первоисточниками (الجرح والتعديل، تقريب التهذيب).»")
+        bio = await loop.run_in_executor(None, ask_deepseek, "Передатчик хадисов: " + name, sysm) or ""
+        bio = bio.strip()
+        if bio and len(bio) > 15:
+            await loop.run_in_executor(None, rijal_ai_put, name, bio)
+        await loop.run_in_executor(None, usage_log, user, "равий-ИИ", True, len(name), "", "")
+        return _cors(web.json_response({'bio': bio, 'cached': False}))
+
     async def hit(r):
         # G3: счётчик запусков приложения (тихо; уникальные пользователи по id)
         d = await _body(r)
@@ -2702,7 +2744,7 @@ async def _api_serve(application=None):
                   web.post('/api/feedback', feedback), web.post('/api/searchlog', searchlog),
                   web.post('/api/tashkeel', tashkeel),
                   web.get('/api/takhrij', takhrij_read), web.post('/api/takhrij', takhrij_save),
-                  web.get('/api/narrator', narrator), web.post('/api/hit', hit),
+                  web.get('/api/narrator', narrator), web.post('/api/narrator_ai', narrator_ai), web.post('/api/hit', hit),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))
