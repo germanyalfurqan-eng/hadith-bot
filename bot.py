@@ -2646,6 +2646,19 @@ async def _api_serve(application=None):
         saved = await loop.run_in_executor(None, takhrij_put, source, num, d.get('sci'), d.get('local'), d.get('muh'))
         return _cors(web.json_response({'ok': bool(saved), 'saved': saved}))
 
+    async def narrator(r):
+        # M26: карточка передатчика — поиск равия в موسوعة رواة الحديث (hawramani); гейт = вход в приложение
+        user = verify_init_data(r.headers.get('X-Init-Data') or r.query.get('initData'))
+        if not feature_allowed('app', user):
+            return _deny('app')
+        if not rate_ok('narr:' + _uid(user, r), limit=30, window=60):
+            return _ratelimited()
+        q = (r.query.get('q') or '').strip()[:80]
+        if not q:
+            return _cors(web.json_response({'results': []}))
+        res = await loop.run_in_executor(None, search_transmitters, q, 8)
+        return _cors(web.json_response({'results': res or []}))
+
     a = web.Application()
     a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
@@ -2653,6 +2666,7 @@ async def _api_serve(application=None):
                   web.post('/api/feedback', feedback), web.post('/api/searchlog', searchlog),
                   web.post('/api/tashkeel', tashkeel),
                   web.get('/api/takhrij', takhrij_read), web.post('/api/takhrij', takhrij_save),
+                  web.get('/api/narrator', narrator),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))

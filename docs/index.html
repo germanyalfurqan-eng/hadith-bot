@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v71</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v72</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -402,7 +402,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v71';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v72';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1180,6 +1180,10 @@ function addTr(meta,card,text,ayah,fav){
     tx.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
     const txout=document.createElement('div');txout.className='tr-out';
     tx.onclick=()=>doTakhrij(text, refOf(fav), txout, tx); meta.appendChild(tx); card.appendChild(txout); }
+  if(!ayah){ const nb=document.createElement('button');nb.className='tr-btn';nb.textContent='👤 Передатчики';nb.title='Разобрать цепочку (иснад): кто передатчики + слова учёных о них';
+    nb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
+    const nbout=document.createElement('div');nbout.className='tr-out';
+    nb.onclick=()=>doNarrators(text, nbout, nb); meta.appendChild(nb); card.appendChild(nbout); }
   const fbb=document.createElement('button');fbb.className='tr-btn';fbb.textContent='✍️ Сообщить нам';fbb.title='Написать нам об ошибке/замечании';
   fbb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--link);padding:6px 10px';
   fbb.onclick=()=>openFeedback((fav&&fav.label)||'');
@@ -1318,6 +1322,41 @@ async function doTakhrij(text, ref, out, btn, force){
   btn.disabled=false; btn.textContent=prev;
   // накопление в фоне: дождаться научного تخريج (до ~2.5с) и сохранить взаимосвязь в нашу базу (дальше — мгновенно/бесплатно)
   (async()=>{ for(let i=0;i<10 && sciData===null && !aborted();i++){ await new Promise(r=>setTimeout(r,250)); } if(!aborted()) saveTakh(); })();
+}
+/* ===== M26: КАРТОЧКА ПЕРЕДАТЧИКА — разбор иснада + поиск равия (موسوعة رواة الحديث) ===== */
+function isnadNarrators(text){
+  let isn=splitIsnad(text)[0]; if(!isn) isn=(text||'').split('«')[0]||text;   // если не отделилось — до матна
+  isn=stripDiac(isn).replace(/ـ/g,'');                                          // снять огласовки ДО разбивки
+  const VERB=/\s*(?:حدثناه|حدثنا|حدثني|أخبرنا|أخبرني|أنبأنا|أنبأني|سمعت|عن|قالا|قالوا|قال|ثنا|كلهم|جميعا)\s+/u;
+  const parts=[];
+  isn.split(VERB).forEach(seg=>{ seg=seg.replace(/[،,.:؛«»()]/g,' ').replace(/\s+/g,' ').trim(); if(!seg) return;
+    seg.split(/\s+(?=و\S)/).forEach(p=>{ p=p.replace(/^و/,'').trim();          // разделить совместных передатчиков по «و»
+      const w=p.split(' ').filter(Boolean).length;
+      if(p.length>3 && w>=1 && w<=6 && !/رسول الله|النبي|صلى الله|وسلم/.test(p)) parts.push(p); });
+  });
+  return [...new Set(parts)].slice(0,12);
+}
+async function doNarrators(text, out, btn){
+  if(!BACKEND_URL){ toast('Нужен сервер'); return; }
+  btn.disabled=true; const prev=btn.textContent; btn.textContent='…'; out.style.display='block';
+  const names=isnadNarrators(text);
+  if(!names.length){ out.innerHTML='<span class="hint">Не удалось выделить цепочку передатчиков из этого текста.</span>'; btn.disabled=false; btn.textContent=prev; return; }
+  out.innerHTML='<div style="color:var(--hint);font-size:12px;margin-bottom:6px">👤 Цепочка передатчиков — нажми на имя: кто это и слова учёных (موسوعة رواة الحديث):</div>';
+  const wrap=document.createElement('div'); wrap.style.cssText='display:flex;flex-wrap:wrap;gap:6px;direction:rtl'; out.appendChild(wrap);
+  const box=document.createElement('div'); box.style.cssText='margin-top:8px'; out.appendChild(box);
+  names.forEach(nm=>{ const c=document.createElement('span'); c.className='chip'; c.textContent=nm; c.style.cssText='cursor:pointer;font-size:14px';
+    c.onclick=async()=>{ [...wrap.children].forEach(x=>x.classList.remove('on')); c.classList.add('on');
+      box.innerHTML='<span class="hint">Ищу «'+esc(nm)+'»…</span>';
+      try{ const r=await fetch(BACKEND_URL+'/narrator?q='+encodeURIComponent(nm)+'&initData='+encodeURIComponent(INITDATA));
+        const j=await r.json().catch(()=>({})); const rs=j.results||[];
+        if(!rs.length){ box.innerHTML='<span class="hint">В энциклопедии равиев не нашёл по «'+esc(nm)+'». Попробуй другое имя из цепочки (имена бывают сокращены).</span>'; return; }
+        box.innerHTML='<div style="color:var(--hint);font-size:12px;margin-bottom:4px">📖 Нашёл в موسوعة رواة الحديث — нажми, чтобы открыть биографию и оценки учёных:</div>';
+        rs.forEach(x=>{ const d=document.createElement('div'); d.style.cssText='direction:rtl;margin:3px 0;font-size:14px';
+          const a=document.createElement('span'); a.textContent='• '+x.title; a.style.cssText='color:var(--link);cursor:pointer'; a.onclick=()=>openLink(x.url); d.appendChild(a); box.appendChild(d); });
+      }catch(e){ box.innerHTML='<span class="hint">🔧 Сервис недоступен — попробуй позже.</span>'; }
+    };
+    wrap.appendChild(c); });
+  btn.disabled=false; btn.textContent=prev;
 }
 function hasDiac(t){ return /[ً-ْٰـ]/.test(t||''); }
 function addHelpQ(meta,txt){ const q=document.createElement('button'); q.className='tr-btn'; q.textContent='?';
