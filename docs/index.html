@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v59</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v60</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -141,7 +141,7 @@
   </div>
 
   <div id="colsWrap">
-    <div class="lbl" id="colsToggle" style="cursor:pointer;user-select:none">🔎 Искать в: <span id="colCount"></span> <span id="colsArrow">▾</span></div>
+    <div class="lbl" id="colsToggle" style="cursor:pointer;user-select:none;color:var(--link)">🔎 Искать: <span id="colCount"></span> — нажми, чтобы выбрать сборники <span id="colsArrow">▾</span></div>
     <div id="colsBody" style="display:none">
       <div class="cols" id="cols"></div>
       <div class="colbar">
@@ -380,7 +380,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v59';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v60';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -485,6 +485,18 @@ function skel(w){ let s=w.replace(/^(وال|بال|كال|فال|ال)/,'').repl
 function isSubseq(a,b){ let i=0; for(let j=0;j<b.length&&i<a.length;j++) if(b[j]===a[i]) i++; return i===a.length; }
 
 /* ===================== РАЗБОР + МАТЧ ===================== */
+// «Бухари 5063», «муслим 100», «ибн маджа 50», «дарими 12» → {code,num}. Имя сборника по-русски + номер.
+function parseRuSourceNum(s){
+  const m=(s||'').trim().match(/^(.+?)[\s:№#-]+(\d{1,7})$/); if(!m) return null;
+  const nrm=x=>(x||'').toLowerCase().replace(/^(аль|al|ал)[\s\-’']*/,'').replace(/[\s'’.\-—·()]/g,'');
+  const name=nrm(m[1]); if(name.length<3) return null; const num=m[2];
+  for(const c of COLLECTIONS.concat(EXTRA)){
+    const cand=[c.ru,c.short,c.author].map(nrm).filter(Boolean);
+    if(cand.some(x=> x.indexOf(name)!==-1 || name.indexOf(x)!==-1)) return {code:c.code, num:num};
+    if(c.kw && c.kw.toLowerCase().split(/\s+/).some(k=> nrm(k)===name)) return {code:c.code, num:num};
+  }
+  return null;
+}
 function parseQuery(q){
   return q.split('|').map(g=>{
     const terms=[]; const re=/"([^"]+)"|(\S+)/g; let m;
@@ -835,7 +847,7 @@ async function runSearch(explicit){
   if(modes.ai && !isArabic(q) && !/^\d{1,7}$/.test(q) && !/^\d{1,3}\s*[:\s]\s*\d{1,3}$/.test(q)){
     head.textContent='🧠 Подбираю по смыслу…';
     const ph=await smartPhrases(q); if(seq!==_seq) return;
-    if(ph&&ph.length){ aiPhrases=ph; smartNote='🧠 По смыслу «'+shown+'» → '+ph.join(' · ');
+    if(ph&&ph.length){ aiPhrases=ph; smartNote='🧠 По смыслу «'+shown+'» (фразы ниже — нажми, чтобы оставить нужное)';
       q=ph.map(p=> p.indexOf(' ')!==-1?('"'+p+'"'):p).join(' | '); }
   }
   let wideQ = shown;
@@ -861,6 +873,23 @@ async function runSearch(explicit){
         await appendWideMulti(seq, cands); setStatus(''); logSearch(shown,tab,0); return; }
     }
     await loadReverse();
+    // «Бухари 5063» / «муслим 100» / «ибн маджа 50» — русское имя сборника + № → поиск по номеру в нём
+    if(!modes.ai && /[а-яё]/i.test(shown) && /\d/.test(shown)){
+      const rs=parseRuSourceNum(shown);
+      if(rs){ const code=rs.code, qn=String(parseInt(rs.num,10));
+        const C=COLLECTIONS.find(x=>x.code===code), X=EXTRA_MAP[code]; let h=null;
+        try{
+          if(code==='muhaymin'){ const a=await loadMuhaymin(); h=a.find(x=>String(x.n)===qn); if(h) add({type:'m',h}); }
+          else if(code==='ahmad'){ const a=await loadAhmad(); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
+          else if(X&&X.file){ const a=await loadLocal(code,X.file); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
+          else if(X){ const a=await loadExtra(code); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
+          else if(C&&C.file){ const a=await loadLocal(code,C.file); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
+          else { h=await getOne(code,qn); if(h) add({type:'h',code,h}); }
+        }catch(e){}
+        if(seq!==_seq) return; setHead(true); setStatus(''); logSearch(shown,tab,count);
+        if(!count) res.innerHTML='<div class="status">'+esc(nameOf(code))+' №'+qn+' — не нашёл. Проверь номер.</div>';
+        return; }
+    }
     // РУССКИЙ поиск по хадисам (готовые переводы Бухари/Муслим/Абу Дауд). ИИ выкл + кириллица + не число.
     if(!numMode && !modes.ai && /[а-яё]/i.test(shown) && !isArabic(shown)){
       try{ const ru=await loadHadithRu(); if(seq!==_seq) return;
@@ -1094,7 +1123,7 @@ async function doTakhrij(text, ref, out, btn){
   // в аль-Мухаймин? (наш обратный индекс по этому источнику+номеру)
   try{ if(reverse && ref && ref.source){ const m=reverse[ref.source+' '+ref.num]||reverse[ref.source+' '+toAr(String(ref.num))];
     if(m&&m.length){ const nums=[...new Set(m.map(x=>x.m))].join(', ');
-      html+='<div style="background:#1d3a5f;border:1px solid #2f5b8f;border-radius:8px;padding:5px 8px;margin-bottom:6px;font-size:13px">📖 Есть в аль-Мухаймин (الموحد المهيمن): №'+esc(nums)+' <span style="color:#9fb4cc">(книга в обработке)</span></div>'; } } }catch(e){}
+      html+='<div dir="ltr" style="background:#1d3a5f;border:1px solid #2f5b8f;border-radius:8px;padding:5px 8px;margin-bottom:6px;font-size:13px">📖 Есть в аль-Мухаймин — № '+esc(nums)+' <span style="color:#9fb4cc">(книга в обработке)</span></div>'; } } }catch(e){}
   html+='<div style="color:var(--hint);font-size:12px;margin-bottom:4px">🔗 التخريج — также передаётся в сборниках:</div>';
   if(!entries.length) html+='<span class="hint">совпадений не нашёл (или хадис уникален в доступных сборниках).</span>';
   else entries.forEach(([code,nums])=>{ html+='<div style="direction:rtl;font-size:14px">'+esc(arOf(code))+': '+nums.map(n=>'№'+n).join('، ')+'</div>'; });
@@ -1405,11 +1434,17 @@ document.getElementById('goBtn').onclick=()=>runSearch(true);
   el.addEventListener('input',()=>{ clearTimeout(t); const v=el.value.trim();
     if(v.length<2){ if(!v){document.getElementById('res').innerHTML='';setStatus('');} return; }
     if(modes.ai) return;   // режим «По смыслу (ИИ)»: НЕ дёргать ИИ на каждую букву (тратит ключ) — только по «Найти»/Enter
-    t=setTimeout(runSearch,350); });
+    t=setTimeout(()=>runSearch(true),350); });   // explicit=true → поиск идёт и по всей библиотеке (как по умолчанию)
 })();
 document.getElementById('neuroRun').onclick=neuroRun;
 function openLink(u){ try{ if(tg&&tg.openLink) tg.openLink(u); else window.open(u,'_blank'); }catch(e){ try{window.open(u,'_blank');}catch(_){} } }
-function goHome(){ document.getElementById('q').value=''; selCols.clear(); selExtra.clear(); document.getElementById('res').innerHTML=''; setStatus(''); try{localStorage.removeItem('muslimoon_state');}catch(e){} document.querySelector('.tab[data-tab="hadith"]').click(); renderCols(); updateExtraSel(); try{window.scrollTo(0,0);}catch(e){} }
+function goHome(){ document.getElementById('q').value=''; selCols.clear(); selExtra.clear();
+  modes.ai=modes.root=modes.diac=modes.matnonly=modes.neuro=false;   // сброс режимов (ИИ и пр.)
+  document.querySelectorAll('.modes .chip').forEach(c=>c.classList.remove('on'));
+  var _nb=document.getElementById('neuroBox'); if(_nb) _nb.style.display='none';
+  var _mm2=document.getElementById('modesMore'); if(_mm2) _mm2.style.display='none'; var _mmb=document.getElementById('moreModes'); if(_mmb){ _mmb.textContent='⚙️ ещё ▾'; _mmb.classList.remove('on'); }
+  document.getElementById('q').placeholder='Слова, фраза или № хадиса…';
+  document.getElementById('res').innerHTML=''; setStatus(''); try{localStorage.removeItem('muslimoon_state');}catch(e){} document.querySelector('.tab[data-tab="hadith"]').click(); renderCols(); updateExtraSel(); var _qh=document.getElementById('qHelper'); if(_qh)_qh.style.display='none'; var _qs=document.getElementById('qSugg'); if(_qs)_qs.style.display='none'; try{window.scrollTo(0,0);}catch(e){} }
 document.getElementById('brand').onclick=goHome;
 document.getElementById('helpBtn').onclick=()=>{ document.getElementById('helpModal').style.display='flex'; };
 document.getElementById('helpClose').onclick=()=>{ document.getElementById('helpModal').style.display='none'; };
