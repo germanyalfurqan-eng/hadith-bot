@@ -118,7 +118,7 @@
       <div class="gear" id="devBtn" style="display:none">🛠</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v33</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v34</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -532,33 +532,59 @@ function collectForms(text, qSkels, forms){
   for(let i=0;i<ws.length;i++){ const w=ws[i]; if(w.length<2) continue; const sk=skel(w);
     if(qSkels.some(qq=> sk.length>=qq.length && isSubseq(qq,sk))){ forms[w]=(forms[w]||0)+1; } }
 }
-function renderFormsBar(forms){
-  const entries=Object.entries(forms).sort((a,b)=>b[1]-a[1]).slice(0,30);
-  if(entries.length<2) return;
+/* ===== Панель выбора (формы корня / фразы по смыслу) — мультивыбор ===== */
+let _pick={items:[],sel:new Set(),kind:'',meaning:''};
+function finishPick(rootForms, aiPhrases, meaning){
+  if(rootForms){ const fl=Object.entries(rootForms).sort((a,b)=>b[1]-a[1]).slice(0,30); if(fl.length>=2) startPick(fl,'root',''); }
+  else if(aiPhrases && aiPhrases.length){ startPick(aiPhrases.map(p=>[p,null]),'ai',meaning); }
+}
+function startPick(items, kind, meaning){ _pick={items:items, sel:new Set(), kind:kind, meaning:meaning||''}; renderPickBar(); }
+function renderPickBar(){
+  if(!_pick.items.length) return;
   const res=document.getElementById('res');
-  const bar=document.createElement('div'); bar.className='card'; bar.style.cssText='padding:10px';
-  const total=entries.reduce((s,e)=>s+e[1],0);
-  bar.innerHTML='<div class="hint" style="margin:0 0 6px">🌿 Формы корня ('+entries.length+' видов, '+total+' вхожд.) — нажми, чтобы оставить только одну:</div>';
+  let bar=document.getElementById('pickBar');
+  if(!bar){ bar=document.createElement('div'); bar.className='card'; bar.id='pickBar'; bar.style.cssText='padding:10px';
+    res.insertBefore(bar, res.children[1]||null); }
+  const sel=_pick.sel;
+  const title=_pick.kind==='ai'
+    ? ('🧠 Фразы по смыслу «'+esc(_pick.meaning)+'» — нажми (можно несколько):')
+    : ('🌿 Формы корня — нажми форму (можно несколько; ещё раз — снять):');
+  bar.innerHTML='<div class="hint" style="margin:0 0 6px">'+title+(sel.size?(' <span style="color:var(--ok)">выбрано '+sel.size+'</span>'):'')+'</div>';
   const wrap=document.createElement('div'); wrap.style.cssText='display:flex;flex-wrap:wrap;gap:6px;direction:rtl';
-  entries.forEach(([w,c])=>{ const ch=document.createElement('span'); ch.className='chip'; ch.style.cssText='font-size:15px';
-    ch.innerHTML='<span style="font-family:\'Traditional Arabic\',serif">'+esc(w)+'</span> <b style="color:var(--mark)">'+c+'</b>';
-    ch.onclick=()=>{ document.getElementById('q').value=w; const rc=document.querySelector('.chip[data-mode="root"]'); modes.root=false; if(rc) rc.classList.remove('on'); runSearch(); };
+  _pick.items.forEach(it=>{ const label=Array.isArray(it)?it[0]:it; const cnt=Array.isArray(it)?it[1]:null;
+    const ch=document.createElement('span'); ch.className='chip'+(sel.has(label)?' on':''); ch.style.cssText='font-size:15px';
+    ch.innerHTML='<span style="font-family:\'Traditional Arabic\',serif">'+esc(label)+'</span>'+(cnt!=null?(' <b style="color:var(--mark)">'+cnt+'</b>'):'');
+    ch.onclick=()=>{ if(sel.has(label)) sel.delete(label); else sel.add(label); applyPick(); };
     wrap.appendChild(ch); });
   bar.appendChild(wrap);
-  res.insertBefore(bar, res.children[1]||null);
+}
+function _docText(d){ return d.type==='q'? d.v.text : d.h.text; }
+function applyPick(){
+  const res=document.getElementById('res'); const sel=_pick.sel; const CAP=200;
+  [...res.querySelectorAll('.card')].forEach(c=>{ if(c.id!=='pickBar') c.remove(); });
+  let shown=0;
+  const selCanon=[...sel].map(s=>canon(s));
+  for(const d of _results){
+    const ok = !sel.size || selCanon.some(s=> canon(_docText(d)).indexOf(s)!==-1);
+    if(ok){ if(shown<CAP) res.appendChild(makeCard(d)); shown++; }
+  }
+  const head=res.children[0];
+  if(head && head.classList.contains('hint')){ const note=_pick.kind==='ai'?('🧠 По смыслу «'+esc(_pick.meaning)+'»'):'🌿 Однокоренные';
+    head.innerHTML='<div style="color:var(--link);font-size:13px;margin-bottom:4px">'+note+(sel.size?(' · выбрано: '+[...sel].join(' · ')):'')+'</div>Найдено: '+shown+(shown>CAP?' (первые '+CAP+')':''); }
+  renderPickBar();
 }
 async function runSearch(){
   const seq=++_seq;
   let q=document.getElementById('q').value.trim(); const shown=q;
   if(!q){ toast('Введите запрос'); return; }
-  const res=document.getElementById('res'); res.innerHTML='';
+  const res=document.getElementById('res'); res.innerHTML=''; _results=[]; _pick={items:[],sel:new Set(),kind:'',meaning:''};
   const head=info('Ищу…'); res.appendChild(head);
-  let smartNote='';
+  let smartNote=''; let aiPhrases=null;
   // По умолчанию — обычный автоматический поиск. ИИ-подбор включается ТОЛЬКО кнопкой «🧠 По смыслу».
   if(modes.ai && !isArabic(q) && !/^\d{1,7}$/.test(q) && !/^\d{1,3}\s*[:\s]\s*\d{1,3}$/.test(q)){
     head.textContent='🧠 Подбираю по смыслу…';
     const ph=await smartPhrases(q); if(seq!==_seq) return;
-    if(ph&&ph.length){ smartNote='🧠 По смыслу «'+shown+'» → '+ph.join(' · ');
+    if(ph&&ph.length){ aiPhrases=ph; smartNote='🧠 По смыслу «'+shown+'» → '+ph.join(' · ');
       q=ph.map(p=> p.indexOf(' ')!==-1?('"'+p+'"'):p).join(' | '); }
   }
   const groups=parseQuery(q); _groups=groups; if(!groups.length){ toast('Пустой запрос'); return; }
@@ -572,7 +598,7 @@ async function runSearch(){
       ? ('Найдено: '+count+(count>CAP?' (показаны первые '+CAP+')':'')+(done?'':' · ищу…'))
       : (done?('Ничего не найдено 🤷'+(smartNote?' — попробуй иначе':'')):'Ищу…');
     head.innerHTML = (smartNote?('<div style="color:var(--link);margin-bottom:4px;font-size:13px">'+esc(smartNote)+'</div>'):'')+n; };
-  const add=(d)=>{ if(count<CAP) res.appendChild(makeCard(d)); count++; };
+  const add=(d)=>{ _results.push(d); if(count<CAP) res.appendChild(makeCard(d)); count++; };
   if(tab==='hadith'){
     await loadReverse();
     const codes=COLLECTIONS.map(c=>c.code).filter(c=>{ const C=COLLECTIONS.find(x=>x.code===c); return selCols.size? selCols.has(c) : !C.heavy; })
@@ -599,7 +625,7 @@ async function runSearch(){
       }catch(e){}
       if(seq!==_seq) return; setHead(false);
     }
-    setHead(true); if(rootMode) renderFormsBar(rootForms);
+    setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
   } else {
     try{ const arr=await loadQuran(); if(seq!==_seq) return;
       const qn=q.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
@@ -614,7 +640,7 @@ async function runSearch(){
       }
       else { for(const v of arr){ if(docMatch(v,groups,modes)){ add({type:'q',v}); if(rootMode) collectForms(v.text,qSkels,rootForms); } } }
     }catch(e){}
-    setHead(true); if(rootMode) renderFormsBar(rootForms);
+    setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
   }
   setStatus('');
   logSearch(shown, tab, count);
@@ -981,7 +1007,7 @@ async function boot(){
   if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
   if(userAllowed()){
     document.getElementById('app').style.display='block';
-    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v33 · хадисы · аяты · аль-Мухаймин'; }
+    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v34 · хадисы · аяты · аль-Мухаймин'; }
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
         (st.cols||[]).forEach(c=>selCols.add(c));

@@ -2227,17 +2227,25 @@ async def _api_serve(application=None):
             return _ratelimited()
         try:
             text = (d.get('text') or '')[:4000]
-            source = (d.get('source') or '')[:40]
+            source = re.sub(r'[^a-z0-9_]+', '', (d.get('source') or '').lower())[:40]
             num = d.get('num')
-            fresh = not await loop.run_in_executor(None, was_translated, text)   # свежий vs из базы
+            # 1) УЖЕ переведено? (постоянный файл-сборник по номеру — переживает рестарты/инстансы)
+            stored = None
+            if source and num not in (None, ''):
+                stored = await loop.run_in_executor(None, lambda: (_coll_load(source) or {}).get(str(num)))
+            if stored and stored.get('ru'):
+                await loop.run_in_executor(None, usage_log, user, "перевод", False, len(text), source, str(num or ""))
+                await _notify_usage(user, "перевод", False, source, num, None)   # ♻️ из базы, ключ НЕ потрачен
+                return _cors(web.json_response({'translation': stored['ru'], 'cached': True}))
+            # 2) нет в базе → переводим один раз и копим
             tr = await loop.run_in_executor(None, translate_matn, text, "", True)
             tr = re.sub(r'\s*⚡.*$', '', (tr or ''), flags=re.S).strip()
-            saved = None  # накопление в сборник (только полезное)
+            saved = None
             if tr and source and num not in (None, ''):
                 saved = await loop.run_in_executor(None, coll_add_translation, source, num, text, tr)
-            await loop.run_in_executor(None, usage_log, user, "перевод", fresh, len(text), source, str(num or ""))
-            await _notify_usage(user, "перевод", fresh, source, num, saved)
-            return _cors(web.json_response({'translation': tr}))
+            await loop.run_in_executor(None, usage_log, user, "перевод", True, len(text), source, str(num or ""))
+            await _notify_usage(user, "перевод", True, source, num, saved)
+            return _cors(web.json_response({'translation': tr, 'cached': False}))
         except Exception as e:
             return _cors(web.json_response({'translation': '', 'error': str(e)}))
 
@@ -2353,7 +2361,16 @@ async def _setup(application):
     except Exception as e:
         print("api start failed:", e)
     try:
-        await application.bot.send_message(LOG_CHAT_ID, "#деплой ✅ Бот обновлён и снова в эфире.")
+        note = ""
+        try:
+            rr = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_note.txt",
+                              headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
+            if rr.status_code == 200:
+                note = base64.b64decode(rr.json().get("content", "")).decode("utf-8").strip()
+        except Exception:
+            pass
+        msg = "#деплой ✅ *Обновление готово!*\n" + (note if note else "Бот снова в эфире.")
+        await application.bot.send_message(LOG_CHAT_ID, msg, parse_mode="Markdown")
     except Exception:
         pass
 
