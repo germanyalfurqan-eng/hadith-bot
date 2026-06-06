@@ -141,7 +141,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v93</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v94</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -175,6 +175,7 @@
     <button class="go" id="goBtn" title="Искать по запросу">Найти</button>
   </div>
   <div id="qHelper" class="hint" style="display:none;margin:-2px 0 6px;color:var(--link)"></div>
+  <div id="tlSugg" style="display:none;margin:-2px 0 8px"></div>
   <div id="qSugg" style="display:none;gap:10px;margin:0 0 8px">
     <div id="qSuggL" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto"></div>
     <div id="qSuggR" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto"></div>
@@ -442,7 +443,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v93';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v94';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -834,6 +835,33 @@ function updateQuranHelper(){
   }
 }
 document.getElementById('q').addEventListener('input', updateQuranHelper);
+/* 🔤 Живые подсказки транскрипции под полем: рус/лат → арабское слово (локально, без ключа) */
+let _tlT;
+function updateTranslitSugg(){
+  const box=document.getElementById('tlSugg'); if(!box) return;
+  const v=(document.getElementById('q').value||'').trim();
+  // показываем только для НЕ-арабского ТЕКСТОВОГО запроса (не число, не сура:аят, есть буквы)
+  if(!v || v.length<2 || isArabic(v) || /^\d/.test(v) || /[٠-٩]/.test(v) || !/[a-zа-яё]/i.test(v)){ box.style.display='none'; box.innerHTML=''; return; }
+  clearTimeout(_tlT);
+  _tlT=setTimeout(async()=>{
+    if(((document.getElementById('q').value||'').trim())!==v) return;   // успел поменяться
+    let ws=[]; try{ ws=await translitSuggest(v, true); }catch(e){}   // живые подсказки — только точные (без шума на темах)
+    if(((document.getElementById('q').value||'').trim())!==v) return;
+    if(!ws.length){ box.style.display='none'; box.innerHTML=''; return; }
+    box.innerHTML='';
+    const cap=document.createElement('span'); cap.textContent='🔤 по-арабски:';
+    cap.style.cssText='font-size:12px;color:var(--hint);margin-inline-end:6px;vertical-align:middle';
+    box.appendChild(cap);
+    ws.forEach(w=>{ const ch=document.createElement('span'); ch.className='chip';
+      ch.style.cssText="font-family:'Traditional Arabic','Amiri',serif;font-size:18px;cursor:pointer;margin:0 4px 4px 0";
+      ch.textContent=w;
+      ch.onclick=()=>{ const q=document.getElementById('q'); q.value=w; box.style.display='none'; box.innerHTML='';
+        try{hideRecent();}catch(e){} updateQuranHelper(); runSearch(true); };
+      box.appendChild(ch); });
+    box.style.display='block';
+  }, 220);
+}
+document.getElementById('q').addEventListener('input', updateTranslitSugg);
 /* 🕐 Недавние поиски (при тапе на пустое поле; выключается в Настройках) */
 function loadRecent(){ try{ return JSON.parse(localStorage.getItem('muslimoon_recent'))||[]; }catch(e){ return []; } }
 function saveRecent(q){ q=(q||'').trim(); if(q.length<2 || cfg.recent===false) return;
@@ -974,15 +1002,19 @@ async function runSearch(explicit){
   const res=document.getElementById('res'); res.innerHTML=''; _results=[]; _pick={items:[],sel:new Set(),excl:new Set(),kind:'',meaning:''};
   const head=info('⏳ Ищу…'); res.appendChild(head);
   document.getElementById('qSugg').style.display='none';   // спрятать подсказки на время поиска
+  // tlSugg (живые транскрипт-подсказки) НЕ гасим здесь: live-search зовёт runSearch(true) на каждый ввод и затёр бы их.
+  // Скрытием управляет сам обработчик ввода (по содержимому) и клик по чипу.
   await new Promise(r=>setTimeout(r,16));   // дать браузеру отрисовать «Ищу…»/нажатую кнопку ДО тяжёлого цикла (чтобы не выглядело зависшим)
   if(seq!==_seq) return;
   let smartNote=''; let aiPhrases=null;
   // По умолчанию — обычный автоматический поиск. ИИ-подбор включается ТОЛЬКО кнопкой «🧠 По смыслу».
   if(modes.ai && !isArabic(q) && !/^\d{1,7}$/.test(q) && !/^\d{1,3}\s*[:\s]\s*\d{1,3}$/.test(q)){
     head.textContent='🧠 Подбираю по смыслу…';
+    let local=[]; try{ local=await translitSuggest(shown); }catch(e){}   // транскрипция → реальные слова (первыми, бесплатно)
     const ph=await smartPhrases(q); if(seq!==_seq) return;
-    if(ph&&ph.length){ aiPhrases=ph; smartNote='🧠 По смыслу «'+shown+'» (фразы ниже — нажми, чтобы оставить нужное)';
-      q=ph.map(p=> p.indexOf(' ')!==-1?('"'+p+'"'):p).join(' | '); }
+    const merged=[...local]; if(ph&&ph.length) ph.forEach(p=>{ if(!merged.includes(p)) merged.push(p); });
+    if(merged.length){ aiPhrases=merged; smartNote='🧠 По смыслу «'+shown+'» (фразы ниже — нажми, чтобы оставить нужное)';
+      q=merged.map(p=> p.indexOf(' ')!==-1?('"'+p+'"'):p).join(' | '); }
   }
   let wideQ = shown;
   const groups=parseQuery(q); _groups=groups; if(!groups.length){ toast('Пустой запрос'); return; }
@@ -1672,6 +1704,94 @@ const MEANING = {
   'прощ':['المغفرة','يغفر'], 'forgive':['المغفرة'], 'братств':['الأخوة'], 'brother':['الأخ'],
   'улыб':['تبسم'], 'smile':['تبسم'], 'добр':['الإحسان','الخير'], 'good':['الخير'],
 };
+/* ===== ТРАНСЛИТЕРАЦИЯ рус/лат → арабское слово (ЛОКАЛЬНО, без ключа) =====
+   Принцип владельца: сначала нормальная база (реальные слова Корана), ИИ — слой поверх.
+   Идея: и арабский скелет, и транскрипцию приводим к класс-строке СОГЛАСНЫХ (огрублённо,
+   эмфатические/гомофоны схлопнуты), потом матчим (точно + edit-distance≤1). */
+function _phonAr(sk){   // арабский скелет → класс-строка согласных
+  const M={'ب':'b','ف':'f','م':'m','ن':'n','ل':'l','ر':'r','ج':'j','د':'d','ض':'d',
+    'ت':'t','ط':'t','س':'s','ص':'s','ث':'s','ش':'x','ز':'z','ذ':'z','ظ':'z',
+    'ك':'k','ق':'k','ح':'h','خ':'h','ه':'h','غ':'g','و':'w','ي':'y'};   // ع — опускаем (в транскрипции часто нет)
+  let o=''; for(const ch of sk){ const c=M[ch]; if(c) o+=c; } return o;
+}
+function _phonRu(s){   // рус/лат транскрипция → класс-строка согласных (гласные опускаем)
+  s=' '+s.toLowerCase()+' ';
+  s=s.replace(/sh|sch|ш|щ|ч/g,'Q').replace(/kh|х/g,'X').replace(/gh/g,'G')
+     .replace(/th/g,'C').replace(/dh/g,'Z').replace(/dj|дж|j|ж/g,'J');
+  let o='';
+  for(const ch of s){ let c='';
+    if('бbпp'.includes(ch)) c='b';
+    else if('вvw'.includes(ch)) c='w';
+    else if('фf'.includes(ch)) c='f';
+    else if('мm'.includes(ch)) c='m';
+    else if('нn'.includes(ch)) c='n';
+    else if('лl'.includes(ch)) c='l';
+    else if('рr'.includes(ch)) c='r';
+    else if('кkq'.includes(ch)) c='k';
+    else if('гg'.includes(ch)) c='g';
+    else if('дd'.includes(ch)) c='d';
+    else if('тt'.includes(ch)) c='t';
+    else if('сcs'.includes(ch)) c='s';
+    else if('зz'.includes(ch)) c='z';
+    else if('йy'.includes(ch)) c='y';
+    else if(ch==='h') c='h';
+    else if(ch==='Q') c='x';
+    else if(ch==='X') c='h';
+    else if(ch==='G') c='g';
+    else if(ch==='C') c='s';
+    else if(ch==='Z') c='z';
+    else if(ch==='J') c='j';
+    o+=c; }   // гласные/ъ/ь/апостроф/ع/прочее → '' (опускаем)
+  return o;
+}
+function _ed1(a,b){   // edit-distance ≤ 1
+  if(a===b) return true; const la=a.length, lb=b.length; if(Math.abs(la-lb)>1) return false;
+  let i=0,j=0,d=0;
+  while(i<la&&j<lb){ if(a[i]===b[j]){i++;j++;} else { d++; if(d>1) return false; if(la>lb)i++; else if(lb>la)j++; else {i++;j++;} } }
+  if(i<la||j<lb) d++; return d<=1;
+}
+// Курируемый сид частых терминов (могут быть редки/отсутствовать в Коране). Получают высокий вес → выходят первыми.
+const TRANSLIT_SEED={'بدعة':5,'البدعة':5,'اجتهاد':6,'الاجتهاد':6,'التوحيد':7,'توحيد':7,'المعازف':5,'معازف':4,
+ 'الغناء':5,'الوضوء':5,'التيمم':4,'الجهاد':7,'جهاد':6,'السنة':7,'الصلاة':9,'الزكاة':7,'الصيام':6,'الصوم':6,
+ 'الحج':7,'العقيدة':5,'الحديث':8,'لهو':6,'الربا':5,'الطلاق':5,'النكاح':5,'الجنة':9,'النار':9,'الصبر':8,
+ 'الإخلاص':6,'التقوى':7,'الذكر':7,'الدعاء':8,'التوبة':7,'الشرك':7,'الكفر':7,'الإيمان':9,'الإحسان':6,'النية':7,
+ 'الفتنة':5,'الشفاعة':5,'الجمعة':6,'المسجد':6,'القرآن':9,'الرسول':8,'النبي':8,'الملائكة':6,'الشيطان':7};
+let _arVocabFull=null, _arVocabBuilding=false;
+function _buildVocab(withQuran){
+  const v=new Map();   // классСкелет → Map(слово_для_показа → вес)
+  const add=(raw,f)=>{ const k=canon(raw).replace(/[^ء-ي]/g,''); if(k.length<2) return; const sk=skel(k); if(sk.length<2) return;
+    const ph=_phonAr(sk); if(ph.length<2) return; const disp=stripDiac(raw).replace(/[^ء-ي]/g,''); if(disp.length<2) return;   // показываем естественную форму (ة، أ، ء)
+    let m=v.get(ph); if(!m){ m=new Map(); v.set(ph,m); } m.set(disp,(m.get(disp)||0)+f); };
+  for(const w in TRANSLIT_SEED) add(w, 1000+TRANSLIT_SEED[w]);   // сид: вес 1000+ → впереди слов Корана
+  if(withQuran && quran){ for(const a of quran){ for(const w of (a.text||'').split(' ')) add(w,1); } }
+  return v;
+}
+async function buildArVocab(){
+  if(_arVocabFull) return _arVocabFull;
+  if(quran){ _arVocabFull=_buildVocab(true); return _arVocabFull; }   // Коран загружен → полный словарь (кэшируем)
+  if(!_arVocabBuilding){ _arVocabBuilding=true; loadQuran().then(()=>{_arVocabBuilding=false;}).catch(()=>{_arVocabBuilding=false;}); }
+  return _buildVocab(false);   // пока Коран грузится — отдаём сид (мгновенно)
+}
+async function translitSuggest(query, exactOnly){
+  const v=await buildArVocab();
+  const toks=(query||'').toLowerCase().split(/[\s,.;:!?()"'«»\/\-+|]+/).filter(t=>t.length>=2 && /[a-zа-яё]/i.test(t));
+  if(!toks.length) return [];
+  const out=[]; const seen=new Set();
+  for(const t of toks){
+    const ph=_phonRu(t); if(ph.length<2) continue;
+    // ТОЧНЫЕ совпадения класс-скелета — приоритет. ed1 — только если точных нет (иначе сид-ed1 перебивает точный матч).
+    const exact=[]; const ex=v.get(ph); if(ex){ for(const e of ex.entries()) exact.push(e); }
+    let ranked;
+    if(exact.length){ exact.sort((a,b)=>b[1]-a[1]); ranked=exact; }
+    else if(!exactOnly && ph.length>=3){ const approx=[];
+      for(const [k,m] of v){ if(k!==ph && Math.abs(k.length-ph.length)<=1 && _ed1(k,ph)){ for(const e of m.entries()) approx.push(e); } }
+      approx.sort((a,b)=>b[1]-a[1]); ranked=approx;
+    } else ranked=[];
+    let added=0; for(const [w] of ranked){ if(seen.has(w)) continue; seen.add(w); out.push(w); if(++added>=3) break; }
+    if(out.length>=6) break;
+  }
+  return out.slice(0,6);
+}
 function neuroLocal(meaning){
   const toks=meaning.toLowerCase().split(/[\s.,;:!?()"'«»\/\-]+/).filter(t=>t.length>=3);
   const set=new Set();
@@ -2029,7 +2149,7 @@ function goHome(){ document.getElementById('q').value=''; selCols.clear(); selEx
   var _nb=document.getElementById('neuroBox'); if(_nb) _nb.style.display='none';
   var _mm2=document.getElementById('modesMore'); if(_mm2) _mm2.style.display='none'; var _mmb=document.getElementById('moreModes'); if(_mmb){ _mmb.textContent='⚙️ ещё ▾'; _mmb.classList.remove('on'); }
   document.getElementById('q').placeholder='Слова, фраза или № хадиса…';
-  document.getElementById('res').innerHTML=''; setStatus(''); try{localStorage.removeItem('muslimoon_state');}catch(e){} document.querySelector('.tab[data-tab="hadith"]').click(); renderCols(); updateExtraSel(); var _qh=document.getElementById('qHelper'); if(_qh)_qh.style.display='none'; var _qs=document.getElementById('qSugg'); if(_qs)_qs.style.display='none'; try{window.scrollTo(0,0);}catch(e){} }
+  document.getElementById('res').innerHTML=''; setStatus(''); try{localStorage.removeItem('muslimoon_state');}catch(e){} document.querySelector('.tab[data-tab="hadith"]').click(); renderCols(); updateExtraSel(); var _qh=document.getElementById('qHelper'); if(_qh)_qh.style.display='none'; var _qs=document.getElementById('qSugg'); if(_qs)_qs.style.display='none'; var _tl=document.getElementById('tlSugg'); if(_tl){_tl.style.display='none';_tl.innerHTML='';} try{window.scrollTo(0,0);}catch(e){} }
 document.getElementById('brand').onclick=goHome;
 document.getElementById('helpBtn').onclick=()=>{ document.getElementById('helpModal').style.display='flex'; };
 document.getElementById('helpClose').onclick=()=>{ document.getElementById('helpModal').style.display='none'; };
