@@ -119,7 +119,7 @@
       <div class="gear" id="devBtn" style="display:none">🛠</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v37</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v38</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -862,9 +862,17 @@ function applyPhrases(ph){
 }
 
 /* ===================== ПЕРЕВОД ===================== */
+const READY_RU=['bukhari','muslim','abudawud'];   // готовый проф. перевод (rus-* в hadith-api) — без ИИ
 async function doTranslate(text,out,btn,ref){
-  if(!BACKEND_URL){ toast('Перевод заработает после подключения сервера (DeepSeek)'); return; }
   btn.disabled=true; btn.textContent='…';
+  // 1) Готовый профессиональный перевод (Бухари/Муслим/Абу Дауд) — бесплатно, мгновенно, без траты ключа
+  if(ref && READY_RU.indexOf(ref.source)!==-1 && (ref.num||ref.num===0)){
+    try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-'+ref.source+'/'+ref.num+'.min.json')).json();
+      const h=(j.hadiths||[])[0];
+      if(h && h.text){ out.innerHTML='<span style="color:var(--hint);font-style:italic">Перевод (готовый, проф.):</span> '+esc(h.text); out.style.display='block'; btn.disabled=false; btn.textContent='Перевод'; return; }
+    }catch(e){}
+  }
+  if(!BACKEND_URL){ toast('Перевод заработает после подключения сервера (DeepSeek)'); btn.disabled=false; btn.textContent='Перевод'; return; }
   try{ const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({text, source:ref&&ref.source, num:ref&&ref.num, initData:INITDATA})});
     const j=await r.json().catch(()=>({}));
@@ -1086,7 +1094,7 @@ async function boot(){
   if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
   if(userAllowed()){
     document.getElementById('app').style.display='block';
-    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v37 · хадисы · аяты · аль-Мухаймин'; }
+    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v38 · хадисы · аяты · аль-Мухаймин'; }
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
         (st.cols||[]).forEach(c=>selCols.add(c));
