@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
 <title>Muslimoon Bot — поиск</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v62</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v63</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -171,6 +171,7 @@
   </div>
   <div class="modes" id="modesMore" style="display:none">
     <div class="chip" data-mode="matnonly" title="Искать совпадение только в тексте хадиса (матн), не в цепочке передатчиков (иснаде)">📜 Не искать в иснаде</div>
+    <div class="chip" id="grpBtn" title="Сгруппировать результаты по источникам (свернуть номера под каждый сборник)">📚 По источникам</div>
     <div class="chip" id="neuroChip" data-mode="neuro" title="Расширенный: вручную подобрать/поправить арабские фразы перед поиском">🔬 Расширенный</div>
   </div>
   <div class="hint">Просто напиши слова — найду, где есть все слова. «🧠 По смыслу» — поиск по смыслу (рус/eng). <span id="helpBtn" style="color:var(--link);cursor:pointer;font-weight:600">ⓘ Как искать — примеры</span></div>
@@ -392,7 +393,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v62';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v63';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -947,6 +948,7 @@ async function runSearch(explicit){
       if(seq!==_seq) return; setHead(false);
     }
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
+    if(groupSrc && _results.length) renderResultsView();
   } else {
     try{ const arr=await loadQuran(); if(seq!==_seq) return;
       const qn=q.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
@@ -962,6 +964,7 @@ async function runSearch(explicit){
       else { for(const v of arr){ if(docMatch(v,groups,modes)){ add({type:'q',v}); if(rootMode) collectForms(v.text,qSkels,rootForms); } } }
     }catch(e){}
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
+    if(groupSrc && _results.length) renderResultsView();
   }
   setStatus('');
   logSearch(shown, tab, count);
@@ -971,6 +974,25 @@ async function runSearch(explicit){
   if(wideWill) await appendWide(seq, wideQ);
 }
 function makeCard(d){ return d.type==='q'?cardAyah(d,_groups):(d.type==='m'?cardMuh(d,_groups):(d.type==='hr'?cardHadithRu(d):cardHadith(d,_groups))); }
+/* M43: группировка результатов по источникам (сворачиваемо) */
+let groupSrc=false;
+function srcKeyOf(d){ return d.type==='m'?'аль-Мухаймин':(d.type==='hr'?arOf(d.s):(d.type==='q'?'Коран':arOf(d.code))); }
+function renderResultsView(){
+  const res=document.getElementById('res'); res.innerHTML='';
+  const items=_results.slice(0,400);
+  if(!groupSrc){ res.appendChild(info('Найдено: '+_results.length+(_results.length>400?' (показаны первые 400)':''))); items.forEach(d=>res.appendChild(makeCard(d))); return; }
+  res.appendChild(info('📚 По источникам · найдено: '+_results.length));
+  const groups={}; const order=[];
+  items.forEach(d=>{ const k=srcKeyOf(d); if(!groups[k]){groups[k]=[];order.push(k);} groups[k].push(d); });
+  order.forEach(k=>{ const arr=groups[k];
+    const h=document.createElement('div'); h.className='col'; h.style.cssText='display:block;margin:10px 0 4px;cursor:pointer;font-weight:600';
+    const body=document.createElement('div'); body.style.display='none';
+    const lbl=()=>'📕 '+esc(k)+' ('+arr.length+') '+(body.style.display==='none'?'▾':'▴'); h.innerHTML=lbl();
+    h.onclick=()=>{ body.style.display=(body.style.display==='none')?'block':'none'; h.innerHTML=lbl(); };
+    arr.forEach(d=>body.appendChild(makeCard(d)));
+    res.appendChild(h); res.appendChild(body); });
+}
+var _grp=document.getElementById('grpBtn'); if(_grp) _grp.onclick=()=>{ groupSrc=!groupSrc; _grp.classList.toggle('on',groupSrc); if(_results&&_results.length) renderResultsView(); };
 async function getOne(code,num){
   try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-'+code+'/'+num+'.min.json')).json();
     const h=(j.hadiths||[])[0]; if(h){ const raw=(h.text||'').replace(/\s+/g,' ').trim();
@@ -1472,7 +1494,7 @@ var _tt=document.getElementById('toTop'); if(_tt){ _tt.onclick=()=>{ try{window.
   window.addEventListener('scroll',()=>{ _tt.style.display=(window.scrollY>500)?'block':'none'; },{passive:true}); }
 function openLink(u){ try{ if(tg&&tg.openLink) tg.openLink(u); else window.open(u,'_blank'); }catch(e){ try{window.open(u,'_blank');}catch(_){} } }
 function goHome(){ document.getElementById('q').value=''; selCols.clear(); selExtra.clear();
-  modes.ai=modes.root=modes.diac=modes.matnonly=modes.neuro=false;   // сброс режимов (ИИ и пр.)
+  modes.ai=modes.root=modes.diac=modes.matnonly=modes.neuro=false; groupSrc=false;   // сброс режимов (ИИ и пр.)
   document.querySelectorAll('.modes .chip').forEach(c=>c.classList.remove('on'));
   var _nb=document.getElementById('neuroBox'); if(_nb) _nb.style.display='none';
   var _mm2=document.getElementById('modesMore'); if(_mm2) _mm2.style.display='none'; var _mmb=document.getElementById('moreModes'); if(_mmb){ _mmb.textContent='⚙️ ещё ▾'; _mmb.classList.remove('on'); }
