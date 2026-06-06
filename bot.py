@@ -1083,6 +1083,18 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown", disable_web_page_preview=True)
         return
 
+    if is_owner(update) and text.strip().lower() in ("запросы", "что ищут", "аналитика", "статистика поиска"):
+        j = _journal_load(); s = j.get("searches", {})
+        top = sorted(s.get("top", {}).items(), key=lambda x: -x[1].get("n", 0))[:20]
+        lines = [f"🔎 *Что ищут* (всего поисков: {s.get('total', 0)})"]
+        if top:
+            for q, e in top:
+                lines.append(f"• {q} — {e.get('n', 0)}× ({e.get('tab', '')}, нашли {e.get('cnt', 0)})")
+        else:
+            lines.append("пока пусто")
+        await update.message.reply_text("\n".join(lines)[:3900], parse_mode="Markdown")
+        return
+
     if is_owner(update) and text.strip().lower() in ("отзывы", "обратная связь", "комментарии", "ошибки людей"):
         j = _journal_load(); fb = j.get("feedback", [])
         if not fb:
@@ -2041,8 +2053,25 @@ def _journal_load():
         j.setdefault("translations", {"totals": {}, "recent": []})
         j.setdefault("usage", {"totals": {"calls": 0, "fresh": 0, "cached": 0, "by_user": {}}, "recent": []})
         j.setdefault("feedback", [])
+        j.setdefault("searches", {"total": 0, "top": {}})
         _journal_cache = j
     return _journal_cache
+_search_dirty = 0
+def searchlog_add(q, tab, cnt):
+    """Аналитика: что ищут чаще всего (агрегируем, пишем батчами)."""
+    global _search_dirty
+    key = (q or "").strip().lower()[:60]
+    if not key:
+        return
+    j = _journal_load(); s = j["searches"]
+    s["total"] = s.get("total", 0) + 1
+    e = s["top"].setdefault(key, {"n": 0, "tab": tab, "cnt": 0})
+    e["n"] += 1; e["tab"] = tab; e["cnt"] = cnt
+    if len(s["top"]) > 800:
+        s["top"] = dict(sorted(s["top"].items(), key=lambda x: -x[1]["n"])[:500])
+    _search_dirty += 1
+    if _search_dirty >= 8:
+        _journal_save("searches"); _search_dirty = 0
 def feedback_add(user, ctx, txt):
     """Отзыв/ошибка от пользователя → отдельный журнал комментариев разработчику."""
     j = _journal_load()
@@ -2239,6 +2268,8 @@ async def _api_serve(application=None):
             'usage': {'totals': j.get('usage', {}).get('totals', {}), 'recent': (j.get('usage', {}).get('recent') or [])[:25]},
             'translations': {'totals': j.get('translations', {}).get('totals', {}), 'recent': (j.get('translations', {}).get('recent') or [])[:25]},
             'feedback': (j.get('feedback') or [])[:25],
+            'searches': {'total': j.get('searches', {}).get('total', 0),
+                         'top': sorted(j.get('searches', {}).get('top', {}).items(), key=lambda x: -x[1].get('n', 0))[:25]},
         }))
 
     async def feedback(r):
@@ -2258,11 +2289,26 @@ async def _api_serve(application=None):
         await _notify(f"#отзыв 💬 от {name}{(' · ' + ctx) if ctx else ''}:\n{txt}")
         return _cors(web.json_response({'ok': True}))
 
+    async def searchlog(r):
+        # аналитика: что ищут (тихо, агрегируем); гейт — вход в приложение
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('app', user):
+            return _cors(web.json_response({'ok': False}))
+        if not rate_ok('slog:' + _uid(user, r), limit=40, window=60):
+            return _cors(web.json_response({'ok': False}))
+        q = (d.get('q') or '')[:60]; tab = (d.get('tab') or '')[:10]
+        try: cnt = int(d.get('count') or 0)
+        except Exception: cnt = 0
+        if q:
+            await loop.run_in_executor(None, searchlog_add, q, tab, cnt)
+        return _cors(web.json_response({'ok': True}))
+
     a = web.Application()
     a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro),
                   web.post('/api/translate', translate), web.get('/api/search', search),
                   web.post('/api/access', access), web.post('/api/balance', balance),
-                  web.post('/api/feedback', feedback),
+                  web.post('/api/feedback', feedback), web.post('/api/searchlog', searchlog),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))

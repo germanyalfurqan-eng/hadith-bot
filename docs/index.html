@@ -118,7 +118,7 @@
       <div class="gear" id="devBtn" style="display:none">🛠</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v31</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v32</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -247,6 +247,7 @@
         <button class="chip" id="jNakop">📚 Накопление</button>
         <button class="chip" id="jUsage">🧠 Расход ИИ</button>
         <button class="chip" id="jFb">💬 Отзывы</button>
+        <button class="chip" id="jSrch">🔎 Запросы</button>
         <button class="chip" id="jUpd">🆕 Обновления</button>
       </div>
       <div id="jOut" class="hint" style="margin-top:8px">выбери журнал — покажу последние записи</div>
@@ -519,6 +520,13 @@ async function smartPhrases(meaning){
   }
   return neuroLocal(meaning);
 }
+let _logT2;
+function logSearch(q,tab,count){
+  if(!BACKEND_URL || !q || q.length<3) return;
+  clearTimeout(_logT2);
+  _logT2=setTimeout(()=>{ try{ fetch(BACKEND_URL+'/searchlog',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({q:q,tab:tab,count:count,initData:INITDATA})}).catch(()=>{}); }catch(e){} }, 1300);
+}
 function collectForms(text, qSkels, forms){
   const ws=canon(text).split(' ');
   for(let i=0;i<ws.length;i++){ const w=ws[i]; if(w.length<2) continue; const sk=skel(w);
@@ -609,6 +617,7 @@ async function runSearch(){
     setHead(true); if(rootMode) renderFormsBar(rootForms);
   }
   setStatus('');
+  logSearch(shown, tab, count);
   if(!count && seq===_seq){ res.innerHTML='<div class="status">Ничего не найдено 🤷</div>'; }
 }
 function makeCard(d){ return d.type==='q'?cardAyah(d,_groups):(d.type==='m'?cardMuh(d,_groups):cardHadith(d,_groups)); }
@@ -872,6 +881,8 @@ function renderJournal(kind){
     html='<b>Расход:</b> вызовов '+(tot.calls||0)+' · 🆕 свежих '+(tot.fresh||0)+' · ♻️ из базы '+(tot.cached||0)+'<br><b>Последние:</b><br>'+(rec.map(x=>(x.fresh?'🆕':'♻️')+' '+x.d+' '+esc(x.u||'')+' · '+esc(x.f||'')+(x.src?(' '+x.src+' №'+x.num):'')).join('<br>')||'—'); }
   else if(kind==='fb'){ const fb=DEV_DATA.feedback||[];
     html='<b>Отзывы:</b><br>'+(fb.map(x=>'💬 '+x.d+' '+esc(x.u||'')+(x.ctx?(' · '+esc(x.ctx)):'')+'<br>&nbsp;&nbsp;«'+esc(x.t||'')+'»').join('<br>')||'пусто'); }
+  else if(kind==='search'){ const s=DEV_DATA.searches||{}, top=s.top||[];
+    html='<b>Что ищут</b> (всего поисков: '+(s.total||0)+'):<br>'+(top.map(x=>'🔎 '+esc(x[0])+' — '+(x[1].n||0)+'× ('+(x[1].tab||'')+', нашли '+(x[1].cnt||0)+')').join('<br>')||'пусто'); }
   else if(kind==='upd'){ html='Журнал обновлений (release_notes): <a style="color:var(--link);cursor:pointer" id="_updLink">открыть</a>'; }
   out.innerHTML=html;
   if(kind==='upd'){ var ul=document.getElementById('_updLink'); if(ul) ul.onclick=()=>openLink(GH_REPO+'/blob/main/release_notes.txt'); }
@@ -889,7 +900,7 @@ async function openDev(){ document.getElementById('devModal').style.display='fle
 var _dv=document.getElementById('devBtn'); if(_dv) _dv.onclick=openDev;
 var _dc=document.getElementById('devClose'); if(_dc) _dc.onclick=()=>{ document.getElementById('devModal').style.display='none'; };
 var _bb=document.getElementById('balBtn'); if(_bb) _bb.onclick=checkBalance;
-[['jNakop','nakop'],['jUsage','usage'],['jFb','fb'],['jUpd','upd']].forEach(p=>{ const el=document.getElementById(p[0]); if(el) el.onclick=()=>{ renderJournal(p[1]); el.classList.add('on'); }; });
+[['jNakop','nakop'],['jUsage','usage'],['jFb','fb'],['jSrch','search'],['jUpd','upd']].forEach(p=>{ const el=document.getElementById(p[0]); if(el) el.onclick=()=>{ renderJournal(p[1]); el.classList.add('on'); }; });
 var _at=document.getElementById('advToggle'); if(_at) _at.onclick=()=>{ const a=document.getElementById('advLinks'); a.style.display=(a.style.display==='none'?'block':'none'); };
 var _l1=document.getElementById('lnkUsage'); if(_l1) _l1.onclick=()=>openLink('https://platform.deepseek.com/usage');
 var _l2=document.getElementById('lnkTr'); if(_l2) _l2.onclick=()=>openLink(GH_REPO+'/tree/data/translations');
@@ -955,7 +966,7 @@ async function boot(){
   if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
   if(userAllowed()){
     document.getElementById('app').style.display='block';
-    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v31 · хадисы · аяты · аль-Мухаймин'; }
+    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v32 · хадисы · аяты · аль-Мухаймин'; }
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
         (st.cols||[]).forEach(c=>selCols.add(c));
