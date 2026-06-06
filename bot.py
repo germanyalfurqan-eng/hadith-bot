@@ -2236,9 +2236,9 @@ async def _api_serve(application=None):
         j = await loop.run_in_executor(None, _journal_load)
         return _cors(web.json_response({
             'balance': b,
-            'usage': j.get('usage', {}).get('totals', {}),
-            'translations': j.get('translations', {}).get('totals', {}),
-            'feedback': (j.get('feedback') or [])[:30],
+            'usage': {'totals': j.get('usage', {}).get('totals', {}), 'recent': (j.get('usage', {}).get('recent') or [])[:25]},
+            'translations': {'totals': j.get('translations', {}).get('totals', {}), 'recent': (j.get('translations', {}).get('recent') or [])[:25]},
+            'feedback': (j.get('feedback') or [])[:25],
         }))
 
     async def feedback(r):
