@@ -2224,6 +2224,10 @@ async def _setup(application):
         asyncio.create_task(_api_serve(application))
     except Exception as e:
         print("api start failed:", e)
+    try:
+        await application.bot.send_message(LOG_CHAT_ID, "✅ Бот обновлён и снова в эфире.")
+    except Exception:
+        pass
 
 async def start_cmd(update, context):
     """/start — приветствие + кнопка открыть мини-апп (работает у всех)."""
