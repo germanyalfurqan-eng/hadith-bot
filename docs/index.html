@@ -85,6 +85,10 @@
   .card{background:rgba(20,30,44,.62);backdrop-filter:blur(9px) saturate(1.1);-webkit-backdrop-filter:blur(9px) saturate(1.1);
         border:1px solid rgba(120,150,200,.16);border-radius:14px;padding:12px;margin-bottom:10px;box-shadow:0 4px 18px #0006}
   .ar{font-size:19px;line-height:2;direction:rtl;text-align:right;font-family:"Traditional Arabic","Amiri",serif}
+  .qw{cursor:pointer;border-radius:4px;padding:0 1px}
+  .qw:hover,.qw:active{background:rgba(74,158,255,.28)}
+  .qw.hit{background:var(--mark);color:#241c00}
+  #wordPop b{font-family:"Traditional Arabic","Amiri",serif}
   .meta{margin-top:8px;font-size:13px;color:var(--hint);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
   .src{color:var(--link);font-weight:600}
   .badge{background:#1d3a5f;color:#cfe3ff;border:1px solid #2f5b8f;border-radius:8px;padding:2px 8px;font-size:12px;font-weight:600}
@@ -141,7 +145,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v99</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v100</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -252,6 +256,7 @@
     <div class="row"><span>🎨 Выделять иснад (цепочку) серым</span><div class="sw" id="isnadSw"></div></div>
     <div class="row"><span>🙈 Скрывать иснад (показывать только матн)</span><div class="sw" id="hideIsnadSw"></div></div>
     <div class="row"><span>🔡 Автоподсказки в Коране (списком при вводе номера)</span><div class="sw" id="acSw"></div></div>
+    <div class="row"><span>🌿 Тап по слову аята → корень + все места в Коране</span><div class="sw" id="wtSw"></div></div>
     <div class="row"><span>✒️ Подпись при копировании (ссылка на приложение)</span><div class="sw" id="sigSw"></div></div>
     <div class="row"><span>🔍 Щипок-зум — увеличение экрана двумя пальцами <span style="color:var(--hint);font-size:11px">(по умолчанию выкл.)</span></span><div class="sw" id="zoomSw"></div></div>
     <div class="row"><span>🕐 Недавние поиски (показывать при пустом поле)</span><div class="sw" id="recentSw"></div></div>
@@ -443,7 +448,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v99';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v100';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -505,7 +510,7 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 /* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:true}, loadCfg());
+let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:true,wordTap:true}, loadCfg());
 function applyTheme(){ document.body.classList.toggle('light', cfg.theme==='light'); }
 try{ applyTheme(); }catch(e){}
 
@@ -1312,9 +1317,62 @@ function cardMuh(d,groups){
   if(rv.length>1) meta.innerHTML+='<span class="grade">риваятов: '+rv.length+'</span>';
   addTr(meta,card,h.text,null,{k:'m|'+h.n,type:'m',coll:'المهيمن',label:'المهيمن №'+h.n,text:((rv[0]&&rv[0].t)||'').slice(0,200)}); card.appendChild(meta); return card;
 }
+/* ===== 🌿 СЛОВО → КОРЕНЬ → все места в Коране (M18/M28/M20) — настоящие корни Quranic Arabic Corpus ===== */
+let _roots=null, _rootsP=null;
+async function loadRoots(){ if(_roots) return _roots; if(_rootsP) return _rootsP;
+  _rootsP=(async()=>{ try{ const j=await (await fetch('./quran_roots.json')).json(); _roots=j; return j; }
+    catch(e){ _roots={f:{},r:{}}; return _roots; } })(); return _rootsP; }
+function rootKey(w){ return canon(w).replace(/[^ء-ي]/g,''); }   // ключ как в quran_roots.json
+// аят словами-кнопками: подсветка поисковых слов и (в режиме «места корня») слов нужного корня
+function qWordsHTML(text, groups, rootHi){
+  const disp=cfg.noDiac?stripDiac(text):text;
+  const terms=[]; (groups||[]).forEach(g=>g.forEach(t=>{ if(!t.neg){ const c=canon(t.t); if(c) terms.push(c); } }));
+  return disp.split(/\s+/).filter(Boolean).map(w=>{ const c=canon(w); let hit=false;
+    if(terms.length && c) hit=terms.some(t=>c.indexOf(t)!==-1);
+    if(!hit && rootHi && _roots){ if(_roots.f[c.replace(/[^ء-ي]/g,'')]===rootHi) hit=true; }
+    return '<span class="qw'+(hit?' hit':'')+'">'+esc(w)+'</span>'; }).join(' ');
+}
+function closeWordPopup(){ const p=document.getElementById('wordPop'); if(p) p.remove(); }
+async function onWordTap(word, el){
+  const R=await loadRoots(); const root=R.f[rootKey(word)]||'';
+  showWordPopup(el, word, root);
+}
+function showWordPopup(el, word, root){
+  closeWordPopup();
+  const n = root ? ((_roots.r[root]||[]).length) : 0;
+  const pop=document.createElement('div'); pop.id='wordPop'; pop.className='card';
+  pop.style.cssText='position:absolute;z-index:300;max-width:280px;padding:11px 13px;font-size:14px;box-shadow:0 8px 28px rgba(0,0,0,.55)';
+  pop.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b style="font-size:21px">'+esc(word)+'</b><span id="wpX" style="cursor:pointer;color:var(--hint);font-size:18px">✕</span></div>'+
+    (root ? ('<div style="margin-top:6px">🌿 Корень: <b style="font-size:18px;color:var(--mark)">'+esc(root)+'</b></div>'+
+             '<div id="wpAll" style="margin-top:9px;color:var(--link);cursor:pointer;font-weight:600">📍 Все места этого корня в Коране ('+n+')</div>')
+          : '<div style="margin-top:6px;color:var(--hint)">корень не найден (служебное слово — частица/местоимение)</div>');
+  document.body.appendChild(pop);
+  const r=el.getBoundingClientRect();
+  const left=Math.max(8, Math.min(window.scrollX+r.left-40, window.scrollX+document.documentElement.clientWidth-288));
+  pop.style.left=left+'px'; pop.style.top=(window.scrollY+r.bottom+6)+'px';
+  const x=pop.querySelector('#wpX'); if(x) x.onclick=closeWordPopup;
+  const all=pop.querySelector('#wpAll'); if(all) all.onclick=()=>{ closeWordPopup(); showRootPlaces(root); };
+}
+document.addEventListener('click',e=>{ if(!(e.target.closest&&(e.target.closest('#wordPop')||e.target.closest('.qw')))) closeWordPopup(); }, true);
+async function showRootPlaces(root){
+  if(!root) return; const R=await loadRoots(); const arr=await loadQuran();
+  const places=R.r[root]||[]; const set=new Set(places);
+  const res=document.getElementById('res'); res.innerHTML=''; _results=[]; _groups=[];
+  const head=document.createElement('div'); head.className='hint';
+  head.innerHTML='🌿 Корень <b style="font-family:\'Traditional Arabic\',\'Amiri\',serif;font-size:18px;color:var(--mark)">'+esc(root)+'</b> — мест в Коране: <b>'+places.length+'</b> <span style="color:var(--hint)">(подсвечены слова этого корня)</span>';
+  res.appendChild(head);
+  let n=0; const CAP=300;
+  for(const v of arr){ if(set.has(v.s+':'+v.a)){ const d={type:'q',v,_root:root}; _results.push(d); if(n<CAP) res.appendChild(cardAyah(d,[])); n++; } }
+  if(n>CAP){ const m=document.createElement('div'); m.className='hint'; m.style.marginTop='8px'; m.textContent='(показаны первые '+CAP+' из '+n+')'; res.appendChild(m); }
+  try{ document.getElementById('res').scrollIntoView({block:'start'}); window.scrollTo(0,0); }catch(e){}
+}
 function cardAyah(d,groups){
   const {v}=d; const card=document.createElement('div');card.className='card';
-  const ar=document.createElement('div');ar.className='ar';ar.innerHTML=highlight(cfg.noDiac?stripDiac(v.text):v.text,groups,modes);card.appendChild(ar);
+  const ar=document.createElement('div');ar.className='ar';
+  if(cfg.wordTap!==false){ loadRoots(); ar.innerHTML=qWordsHTML(v.text,groups,d._root);
+    ar.addEventListener('click',e=>{ const sp=e.target.closest&&e.target.closest('.qw'); if(sp){ e.stopPropagation(); onWordTap(sp.textContent, sp); } });
+  } else { ar.innerHTML=highlight(cfg.noDiac?stripDiac(v.text):v.text,groups,modes); }
+  card.appendChild(ar);
   if(d.ru){ const ru=document.createElement('div'); ru.style.cssText='margin-top:6px;font-size:14px;color:var(--text)';
     ru.innerHTML='<span style="color:var(--hint);font-style:italic">Кулиев:</span> '+hlRu(d.ru, d.rq||''); card.appendChild(ru); }
   const meta=document.createElement('div');meta.className='meta';
@@ -2119,6 +2177,7 @@ var _nd=document.getElementById('noDiacSw'); if(_nd){ _nd.classList.toggle('on',
 var _is=document.getElementById('isnadSw'); if(_is){ _is.classList.toggle('on',!!cfg.isnad); _is.onclick=()=>{ cfg.isnad=!cfg.isnad; saveCfg(cfg); _is.classList.toggle('on',!!cfg.isnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _hi=document.getElementById('hideIsnadSw'); if(_hi){ _hi.classList.toggle('on',!!cfg.hideIsnad); _hi.onclick=()=>{ cfg.hideIsnad=!cfg.hideIsnad; saveCfg(cfg); _hi.classList.toggle('on',!!cfg.hideIsnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _ac=document.getElementById('acSw'); if(_ac){ _ac.classList.toggle('on',!!cfg.ac); _ac.onclick=()=>{ cfg.ac=!cfg.ac; saveCfg(cfg); _ac.classList.toggle('on',!!cfg.ac); updateQuranHelper(); }; }
+var _wt=document.getElementById('wtSw'); if(_wt){ _wt.classList.toggle('on',cfg.wordTap!==false); _wt.onclick=()=>{ cfg.wordTap=(cfg.wordTap===false); saveCfg(cfg); _wt.classList.toggle('on',cfg.wordTap!==false); if(document.getElementById('q').value.trim()&&tab==='quran') runSearch(); }; }
 var _sig=document.getElementById('sigSw'); if(_sig){ _sig.classList.toggle('on',cfg.sig!==false); _sig.onclick=()=>{ cfg.sig=(cfg.sig===false); saveCfg(cfg); _sig.classList.toggle('on',cfg.sig!==false); }; }
 function applyZoom(){ var m=document.getElementById('vpMeta'); if(!m) return;
   m.setAttribute('content', cfg.noZoom ? 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' : 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes'); }
