@@ -2243,10 +2243,20 @@ async def log_bot_ai(update, context, feat="ботяра"):
         ch = update.effective_chat
         where = ""
         if ch and getattr(ch, "type", "") != "private":
-            where = f" · в «{getattr(ch,'title','')}» ({ch.type})"
+            title = (getattr(ch, "title", "") or "чат").replace("[", "(").replace("]", ")")
+            mid = getattr(update.message, "message_id", None)
+            link = ""
+            try:
+                if getattr(ch, "username", None):
+                    link = f"https://t.me/{ch.username}/{mid}" if mid else f"https://t.me/{ch.username}"
+                elif str(ch.id).startswith("-100"):
+                    link = f"https://t.me/c/{str(ch.id)[4:]}/{mid}" if mid else ""
+            except Exception:
+                link = ""
+            where = (f" · в [{title}]({link})" if link else f" · в «{title}»") + f" ({ch.type}, id={ch.id})"
         await context.bot.send_message(LOG_CHAT_ID,
-            f"#ии #ботяра 🤖 {feat}: {who}{where} — 🆕 свежий (DeepSeek, ключ потрачен)",
-            parse_mode="Markdown")
+            f"#ии #ботяра 🤖 {feat}: 👤 {who}{where} — 🆕 свежий (DeepSeek, ключ потрачен)\n⛔ забанить: `бан {(update.effective_user.id if update.effective_user else '')}`" + (f" · `бан {ch.id}`" if (ch and getattr(ch,'type','')!='private') else ""),
+            parse_mode="Markdown", disable_web_page_preview=True)
     except Exception:
         pass
 # ============ КОНЕЦ G9-БЛОКА ============
