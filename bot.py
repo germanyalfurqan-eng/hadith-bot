@@ -1083,6 +1083,18 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown", disable_web_page_preview=True)
         return
 
+    if is_owner(update) and text.strip().lower() in ("отзывы", "обратная связь", "комментарии", "ошибки людей"):
+        j = _journal_load(); fb = j.get("feedback", [])
+        if not fb:
+            await update.message.reply_text("Отзывов пока нет.")
+            return
+        lines = ["💬 *Отзывы / ошибки (последние)*"]
+        for x in fb[:15]:
+            c = f" · {x['ctx']}" if x.get("ctx") else ""
+            lines.append(f"\n{x['d']} · {x['u']}{c}\n  «{x['t']}»")
+        await update.message.reply_text("\n".join(lines)[:3900], parse_mode="Markdown")
+        return
+
     # ===== Владельцу: журналы (расход ИИ и накопление) =====
     if is_owner(update) and text.strip().lower() in ("журнал ии", "расход", "статистика ии", "ии журнал", "журнал"):
         j = _journal_load(); u = j["usage"]; t = u["totals"]
@@ -2028,8 +2040,18 @@ def _journal_load():
         j = _data_get("journal.json", None) or {}
         j.setdefault("translations", {"totals": {}, "recent": []})
         j.setdefault("usage", {"totals": {"calls": 0, "fresh": 0, "cached": 0, "by_user": {}}, "recent": []})
+        j.setdefault("feedback", [])
         _journal_cache = j
     return _journal_cache
+def feedback_add(user, ctx, txt):
+    """Отзыв/ошибка от пользователя → отдельный журнал комментариев разработчику."""
+    j = _journal_load()
+    name = ("@" + user["username"]) if (user and user.get("username")) else str((user or {}).get("id") or "аноним")
+    j["feedback"].insert(0, {"d": datetime.now().strftime("%d.%m.%Y %H:%M"), "u": name,
+                             "id": str((user or {}).get("id") or ""), "ctx": (ctx or "")[:200], "t": (txt or "")[:1000]})
+    j["feedback"] = j["feedback"][:500]
+    _journal_save(f"отзыв от {name}")
+    return True
 def _journal_save(msg):
     if _journal_cache is not None:
         _data_put("journal.json", _journal_cache, msg)
@@ -2093,10 +2115,17 @@ async def _api_serve(application=None):
         tag = "🆕 свежий (DeepSeek, ключ потрачен)" if fresh else "♻️ из базы (ключ НЕ потрачен)"
         loc = f" {src} №{num}" if (src and num not in (None, '')) else ""
         extra = f" · накоплено (всего {saved['total']})" if (saved and saved.get("new")) else ""
+        htag = "#нейро" if feat == "нейро" else "#перевод"
         try:
-            await application.bot.send_message(LOG_CHAT_ID, f"🤖 {feat}: {name}{loc} — {tag}{extra}")
+            await application.bot.send_message(LOG_CHAT_ID, f"{htag} 🤖 {feat}: {name}{loc} — {tag}{extra}")
         except Exception:
             pass
+    async def _notify(text):
+        if application:
+            try:
+                await application.bot.send_message(LOG_CHAT_ID, text)
+            except Exception:
+                pass
     def _cors(resp):
         resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
@@ -2209,12 +2238,31 @@ async def _api_serve(application=None):
             'balance': b,
             'usage': j.get('usage', {}).get('totals', {}),
             'translations': j.get('translations', {}).get('totals', {}),
+            'feedback': (j.get('feedback') or [])[:30],
         }))
+
+    async def feedback(r):
+        # отзыв/ошибка от тестера → журнал комментариев + пост в канал (#отзыв)
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('app', user):
+            return _deny('app')
+        if not rate_ok('fb:' + _uid(user, r), limit=6, window=120):
+            return _ratelimited()
+        txt = (d.get('text') or '').strip()[:1000]
+        ctx = (d.get('context') or '')[:200]
+        if not txt:
+            return _cors(web.json_response({'ok': False}))
+        await loop.run_in_executor(None, feedback_add, user, ctx, txt)
+        name = ("@" + user["username"]) if (user and user.get("username")) else str((user or {}).get("id") or "аноним")
+        await _notify(f"#отзыв 💬 от {name}{(' · ' + ctx) if ctx else ''}:\n{txt}")
+        return _cors(web.json_response({'ok': True}))
 
     a = web.Application()
     a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro),
                   web.post('/api/translate', translate), web.get('/api/search', search),
                   web.post('/api/access', access), web.post('/api/balance', balance),
+                  web.post('/api/feedback', feedback),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))
@@ -2239,7 +2287,7 @@ async def _setup(application):
     except Exception as e:
         print("api start failed:", e)
     try:
-        await application.bot.send_message(LOG_CHAT_ID, "✅ Бот обновлён и снова в эфире.")
+        await application.bot.send_message(LOG_CHAT_ID, "#деплой ✅ Бот обновлён и снова в эфире.")
     except Exception:
         pass
 
