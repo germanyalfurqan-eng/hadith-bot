@@ -2224,7 +2224,8 @@ def coll_add_translation(source, num, ar, ru):
     if key in d and d[key].get("ru") == ru:
         return {"source": source, "num": key, "total": len(d), "new": False}
     new = key not in d
-    d[key] = {"ar": (ar or '')[:1500], "ru": ru}
+    prev_d = (d.get(key) or {}).get("d")   # сохраняем ДАТУ ПЕРВОГО перевода, не перетираем
+    d[key] = {"ar": (ar or '')[:1500], "ru": ru, "d": prev_d or datetime.now().strftime("%d.%m.%Y")}
     if not _data_put(_coll_path(source), d, f"translations/{source}: +№{key} (всего {len(d)})"):
         return None
     if new:

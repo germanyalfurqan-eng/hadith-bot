@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v64</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v65</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -314,6 +314,15 @@
       • <b>جذ Однокоренные</b> — ищет однокоренные (приблизительно).<br>
       • <b>🧠 По смыслу</b> — опиши смысл (рус/eng), подберёт арабские фразы.<br>
       • <b>Искать в:</b> ничего не выбрано = искать ВЕЗДЕ; выбрал сборники = только в них.
+      <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;margin-bottom:2px">
+        <div style="color:var(--hint);font-size:12px;margin-bottom:6px">Кнопка «Перевод» — цвет подсказывает заранее:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:13px">
+          <span style="background:#10331f;border:1px solid #2e9b5b;color:#bff5d4;padding:3px 9px;border-radius:8px">📘 готовый</span>
+          <span style="background:#1b2430;border:1px solid #3a4b5e;color:#9fb4cc;padding:3px 9px;border-radius:8px">♻️ из базы</span>
+          <span style="background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:3px 9px;border-radius:8px">🧠 ИИ</span>
+        </div>
+        <div style="color:var(--hint);font-size:12px;margin-top:6px">📘 — готовый профессиональный (бесплатно) · ♻️ — кто-то уже переводил, отдадим из нашей базы (бесплатно, с датой) · 🧠 — перевода ещё нет, сделает ИИ один раз (потом станет ♻️ для всех).</div>
+      </div>
       <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
         <div style="color:var(--hint);font-size:12px;margin-bottom:6px">Примеры — нажми, чтобы попробовать:</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">
@@ -392,7 +401,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v64';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v65';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1108,11 +1117,11 @@ function addTr(meta,card,text,ayah,fav){
   meta.appendChild(cp);
   const tr=document.createElement('button');tr.className='tr-btn';
   const _ref0=ayah?null:refOf(fav); const _ready=_ref0&&READY_RU.indexOf(_ref0.source)!==-1;
-  if(ayah){ tr.textContent='Перевод'; }
-  else if(_ready){ tr.textContent='📘 Перевод'; tr.title='Готовый профессиональный перевод (бесплатно, без ИИ)';
-    tr.style.cssText='background:#10331f;border:1px solid #2e9b5b;color:#bff5d4;padding:6px 11px'; }
-  else { tr.textContent='🧠 Перевод'; tr.title='Перевод ИИ (если уже переводили — отдадим из нашей базы, бесплатно)';
-    tr.style.cssText='background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:6px 11px'; }
+  if(ayah){ setTrReady(tr); tr.title='Перевод аята (Кулиев/Абу Адель) — бесплатно'; }
+  else if(_ready){ setTrReady(tr); }
+  else { setTrAI(tr);   // по умолчанию «ИИ» (ярко); если найдём в базе — перекрасим в ♻️
+    if(_ref0 && _ref0.source && (_ref0.num||_ref0.num===0)){
+      ensureTrIndex(_ref0.source).then(()=>{ const e=trHas(_ref0.source,_ref0.num); if(e) setTrBase(tr,e,_ref0.source); }); } }
   const out=document.createElement('div');out.className='tr-out';
   tr.onclick=()=> ayah ? doTranslateAyah(ayah.s,ayah.a,out,tr) : doTranslate(text,out,tr,refOf(fav));
   meta.appendChild(tr);
@@ -1262,30 +1271,66 @@ function applyPhrases(ph){
 
 /* ===================== ПЕРЕВОД ===================== */
 const READY_RU=['bukhari','muslim','abudawud'];   // готовый проф. перевод (rus-* в hadith-api) — без ИИ
+/* --- Индекс уже накопленных переводов (ветка data, jsDelivr): translations/<src>.json = {num:{ar,ru,d}} ---
+   Нужен, чтобы ДО клика показать «♻️ из базы» (бесплатно) vs «🧠 ИИ» (потратит). */
+const DATA_CDN='https://cdn.jsdelivr.net/gh/germanyalfurqan-eng/hadith-bot@data';
+const _trIdx={};      // src -> {map:{num:{ru,d}}, count} | false(нет файла/ошибка)
+const _trIdxP={};     // src -> Promise (дедуп параллельных запросов)
+function ensureTrIndex(src){
+  if(!src) return Promise.resolve(false);
+  if(src in _trIdx) return Promise.resolve(_trIdx[src]);
+  if(_trIdxP[src]) return _trIdxP[src];
+  _trIdxP[src]=fetch(DATA_CDN+'/translations/'+src+'.json')
+    .then(r=> r.ok ? r.json() : null)
+    .then(d=>{ const idx = (d&&typeof d==='object') ? {map:d, count:Object.keys(d).length} : false; _trIdx[src]=idx; return idx; })
+    .catch(()=>{ _trIdx[src]=false; return false; });
+  return _trIdxP[src];
+}
+function trHas(src,num){ const idx=_trIdx[src]; if(!idx||!idx.map) return null; return idx.map[String(num)]||null; }
+function trMark(src,num,ru){ // только что перевели свежим ИИ → пометить, чтобы дальше было ♻️
+  let idx=_trIdx[src]; if(!idx||!idx.map){ idx=_trIdx[src]={map:{},count:0}; }
+  const k=String(num); if(!(k in idx.map)){ idx.count=(idx.count||0)+1; }
+  idx.map[k]={ru:ru||'', d:idx.map[k]&&idx.map[k].d||_today()}; }
+function _today(){ const z=n=>String(n).padStart(2,'0'); const t=new Date(); return z(t.getDate())+'.'+z(t.getMonth()+1)+'.'+t.getFullYear(); }
+/* 3 визуальных состояния кнопки «Перевод» (до клика) */
+function setTrReady(tr){ tr.textContent='📘 Перевод'; tr.title='Готовый профессиональный перевод — бесплатно, без ИИ';
+  tr.style.cssText='background:#10331f;border:1px solid #2e9b5b;color:#bff5d4;padding:6px 11px'; }
+function setTrAI(tr){ tr.textContent='🧠 Перевод'; tr.title='Перевода ещё нет — сделает ИИ (потратит ключ ОДИН раз). Потом станет бесплатным для всех.';
+  tr.style.cssText='background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:6px 11px;box-shadow:0 0 8px rgba(108,92,231,.45)'; }
+function setTrBase(tr,e,src){ tr.textContent='♻️ Перевод'; const idx=_trIdx[src]; const cnt=(idx&&idx.count)||0;
+  tr.title=(e&&e.d?('Перевод ИИ от '+e.d+'. '):'Уже в нашей базе. ')+'Отдадим бесплатно (из базы)'+(cnt?(' · в этом сборнике уже '+cnt+' переводов'):'')+'.';
+  tr.style.cssText='background:#1b2430;border:1px solid #3a4b5e;color:#9fb4cc;padding:6px 11px'; }
 const RU_TITLE={bukhari:'Сахих аль-Бухари',muslim:'Сахих Муслим',abudawud:'Сунан Абу Дауд',tirmidhi:'Джами ат-Тирмизи',ibnmajah:'Сунан Ибн Маджа',nasai:'Сунан ан-Насаи',malik:'аль-Муватта (Малик)',ahmad:'Муснад Ахмада',muhaymin:'аль-Мухаймин',muqbil:'аль-Мукбиль · ас-Сахих'};
 function ruTitle(code){ return RU_TITLE[code]||((COLLECTIONS.find(c=>c.code===code)||{}).ru)||((EXTRA_MAP[code]||{}).ru)||code; }
 function trHead(ref){ return (ref&&ref.source)?('<div style="color:var(--link);font-size:12px;margin-bottom:3px">📖 '+esc(ruTitle(ref.source))+(ref.num?(' №'+ref.num):'')+'</div>'):''; }
 async function doTranslate(text,out,btn,ref){
-  const orig=btn.textContent; btn.disabled=true; btn.textContent='…';
+  const orig=btn.textContent, origStyle=btn.style.cssText; btn.disabled=true; btn.textContent='…';
   const lbl=(tag)=>'<span style="color:var(--hint);font-style:italic">'+tag+'</span> ';
+  const restore=()=>{ btn.disabled=false; btn.textContent=orig; btn.style.cssText=origStyle; };
   // 1) Готовый профессиональный перевод (Бухари/Муслим/Абу Дауд) — бесплатно, мгновенно, без траты ключа
   if(ref && READY_RU.indexOf(ref.source)!==-1 && (ref.num||ref.num===0)){
     try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-'+ref.source+'/'+ref.num+'.min.json')).json();
       const h=(j.hadiths||[])[0];
-      if(h && h.text){ out.innerHTML=trHead(ref)+lbl('📘 Перевод (готовый, профессиональный):')+esc(cleanRu(h.text)); out.style.display='block'; btn.disabled=false; btn.textContent=orig; return; }
+      if(h && h.text){ out.innerHTML=trHead(ref)+lbl('📘 Перевод (готовый, профессиональный):')+esc(cleanRu(h.text)); out.style.display='block'; restore(); return; }
     }catch(e){}
   }
-  if(!BACKEND_URL){ toast('Перевод заработает после подключения сервера (DeepSeek)'); btn.disabled=false; btn.textContent=orig; return; }
+  if(!BACKEND_URL){ toast('Перевод заработает после подключения сервера (DeepSeek)'); restore(); return; }
   try{ const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({text, source:ref&&ref.source, num:ref&&ref.num, initData:INITDATA})});
     const j=await r.json().catch(()=>({}));
-    if(r.status===403){ toast(j.message||'Перевод тебе пока не открыт.'); }
-    else if(r.ok && j.translation){
-      const tag = j.cached ? '♻️ Перевод (из нашей базы, бесплатно):' : '🧠 Перевод (сделал ИИ — возможны ошибки):';
-      out.innerHTML=trHead(ref)+lbl(tag)+esc(j.translation); out.style.display='block'; }
-    else { toast('Не удалось перевести'); }
-  }catch(e){ toast('🔧 Сервис недоступен — возможно, идёт обновление. Попробуй через минуту.'); }
-  btn.disabled=false; btn.textContent=orig;
+    if(r.status===403){ toast(j.message||'Перевод тебе пока не открыт.'); restore(); return; }
+    if(r.ok && j.translation){
+      const src=ref&&ref.source, num=ref&&ref.num;
+      if(!j.cached && src && (num||num===0)) trMark(src,num,j.translation);   // свежий ИИ → теперь в базе
+      const e=(src!=null)?trHas(src,num):null;
+      const tag = j.cached ? ('♻️ Перевод (из нашей базы'+(e&&e.d?(', ИИ от '+e.d):'')+', бесплатно):') : '🧠 Перевод (сделал ИИ — возможны ошибки):';
+      out.innerHTML=trHead(ref)+lbl(tag)+esc(j.translation); out.style.display='block'; btn.disabled=false;
+      if(src && (num||num===0)) setTrBase(btn, e||{}, src);   // дальше эта кнопка = «♻️ из базы»
+      else restore();
+      return;
+    }
+    toast('Не удалось перевести'); restore();
+  }catch(e){ toast('🔧 Сервис недоступен — возможно, идёт обновление. Попробуй через минуту.'); restore(); }
 }
 
 /* ===================== УПРАВЛЕНИЕ ДОСТУПОМ (G9, серверное) ===================== */
