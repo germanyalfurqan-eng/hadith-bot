@@ -119,7 +119,7 @@
       <div class="gear" id="devBtn" style="display:none">🛠</div>
     </div>
   </div>
-  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v35</div>
+  <div class="sub" id="sub">поиск по хадисам, аятам и базе аль-Мухаймин · v36</div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hadith">📚 Хадисы</div>
@@ -411,7 +411,7 @@ function markMatn(html){
   return html.replace(/«([^«»]*)»/g,'<span class="matn">«$1»</span>');
 }
 function hl(text,groups){
-  const disp=cfg.noDiac?stripDiac(text):text;
+  const disp=text;   // хадисы — всегда как есть; «Коран без огласовок» относится ТОЛЬКО к аятам (своя кнопка на карточке)
   if(!cfg.isnad) return markMatn(highlight(disp,groups,modes));
   const sp=splitIsnad(disp); if(!sp[0]) return markMatn(highlight(disp,groups,modes));
   return markMatn('<span class="isnad">'+highlight(sp[0],groups,modes)+'</span> '+highlight(sp[1],groups,modes));
@@ -511,6 +511,10 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.datas
   if(m==='neuro'){ modes.neuro=!modes.neuro; ch.classList.toggle('on',modes.neuro);
     document.getElementById('neuroBox').style.display=modes.neuro?'block':'none'; return; }
   modes[m]=!modes[m]; ch.classList.toggle('on',modes[m]);
+  if(m==='ai'){ const inp=document.getElementById('q');
+    inp.placeholder = modes.ai ? 'Опиши смысл точнее, напр.: хадис о запрете нововведений'
+                               : (tab==='hadith'?'Слова или смысл хадиса…':'Слова или смысл аята…');
+    if(modes.ai && !inp.value.trim()) toast('Пиши осмысленно, напр.: «хадис о запрете нововведений»'); }
   if(document.getElementById('q').value.trim()) runSearch();   // сразу пересчитать с новым режимом
 });
 document.getElementById('selAll').onclick=()=>{ COLLECTIONS.forEach(c=>selCols.add(c.code)); renderCols(); };
@@ -554,9 +558,9 @@ function renderPickBar(){
     res.insertBefore(bar, res.children[1]||null); }
   const sel=_pick.sel, excl=_pick.excl;
   const title=_pick.kind==='ai'
-    ? ('🧠 Фразы по смыслу «'+esc(_pick.meaning)+'» — нажми = оставить только её; ✕ = убрать:')
-    : ('🌿 Формы корня — нажми = оставить только её; ✕ = убрать (артикль не важен):');
-  bar.innerHTML='<div class="hint" style="margin:0 0 6px">'+title+(sel.size?(' <span style="color:var(--ok)">только '+sel.size+'</span>'):'')+(excl.size?(' <span style="color:#ff6b6b">убрано '+excl.size+'</span>'):'')+'</div>';
+    ? '🧠 Фразы по смыслу. Нажми слово — оставить ТОЛЬКО его · ✕ — скрыть лишнее.'
+    : '🌿 Формы корня. Нажми слово — оставить ТОЛЬКО его · ✕ — скрыть лишнее. (артикль не важен)';
+  bar.innerHTML='<div class="hint" style="margin:0 0 6px">'+title+'</div>';
   const wrap=document.createElement('div'); wrap.style.cssText='display:flex;flex-wrap:wrap;gap:6px;direction:rtl';
   _pick.items.forEach(it=>{ const label=Array.isArray(it)?it[0]:it; const cnt=Array.isArray(it)?it[1]:null;
     const ch=document.createElement('span'); ch.className='chip'+(sel.has(label)?' on':'')+(excl.has(label)?' off':''); ch.style.cssText='font-size:15px';
@@ -718,11 +722,25 @@ function addTr(meta,card,text,ayah,fav){
   const out=document.createElement('div');out.className='tr-out';
   tr.onclick=()=> ayah ? doTranslateAyah(ayah.s,ayah.a,out,tr) : doTranslate(text,out,tr,refOf(fav));
   meta.appendChild(tr);
-  if(!ayah && !hasDiac(text)){ const tk=document.createElement('button');tk.className='tr-btn';tk.textContent='ـَ Огласовки';tk.title='Расставить огласовки через ИИ (там, где их нет)';
-    tk.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
-    const tkout=document.createElement('div');tkout.className='tr-out';
-    tk.onclick=()=>doTashkeel(text,tkout,tk,refOf(fav)); meta.appendChild(tk); card.appendChild(tkout);
-    addHelpQ(meta,'«ـَ Огласовки»: ИИ расставит огласовки (تشكيل) там, где их нет. Может ошибаться. Один раз — потом из базы.'); }
+  if(!ayah){
+    if(hasDiac(text)){
+      // огласовки ЕСТЬ → простая бесплатная кнопка «убрать/вернуть» (без ИИ)
+      const sd=document.createElement('button');sd.className='tr-btn';sd.textContent='ـْ убрать огласовки';sd.title='Показать без огласовок (бесплатно)';
+      sd.style.cssText='background:transparent;border:1px solid var(--border);color:var(--hint);padding:6px 11px';
+      const arDivs=[...card.querySelectorAll('.ar')]; let stripped=false;
+      sd.onclick=()=>{ stripped=!stripped;
+        arDivs.forEach(ad=>{ if(stripped){ if(!ad.dataset.full) ad.dataset.full=ad.innerHTML; ad.innerHTML=highlight(stripDiac(ad.textContent),_groups,modes); } else if(ad.dataset.full!==undefined){ ad.innerHTML=ad.dataset.full; } });
+        sd.textContent=stripped?'ـَ вернуть огласовки':'ـْ убрать огласовки'; };
+      meta.appendChild(sd);
+    } else {
+      // огласовок НЕТ → заказ у ИИ (другой цвет = мозг, чтобы понятно что это трата)
+      const tk=document.createElement('button');tk.className='tr-btn';tk.textContent='🧠 Заказать огласовки';tk.title='ИИ расставит огласовки (тратит ключ один раз, потом из базы)';
+      tk.style.cssText='background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:6px 11px';
+      const tkout=document.createElement('div');tkout.className='tr-out';
+      tk.onclick=()=>doTashkeel(text,tkout,tk,refOf(fav)); meta.appendChild(tk); card.appendChild(tkout);
+      addHelpQ(meta,'«🧠 Заказать огласовки»: ИИ расставит تشكيل (там, где их нет). Может ошибаться. Тратит ключ ОДИН раз — дальше из базы для всех.');
+    }
+  }
   const fbb=document.createElement('button');fbb.className='tr-btn';fbb.textContent='⚠️';fbb.title='Сообщить об ошибке';
   fbb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--hint);padding:6px 10px';
   fbb.onclick=()=>openFeedback((fav&&fav.label)||'');
@@ -1041,7 +1059,7 @@ async function boot(){
   if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
   if(userAllowed()){
     document.getElementById('app').style.display='block';
-    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v35 · хадисы · аяты · аль-Мухаймин'; }
+    if(isOwner){ document.getElementById('gear').style.display='block'; var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца · v36 · хадисы · аяты · аль-Мухаймин'; }
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
         (st.cols||[]).forEach(c=>selCols.add(c));
