@@ -13,7 +13,7 @@ from datetime import datetime
 from html import unescape
 from urllib.parse import parse_qsl
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler
 
 # ============ АЛЬ-МУХАЙМИН (الموحد المهيمن) — наша выверенная база ============
 # Плоский индекс: { "907": {book, chapter, riwayat:[{text, short_ref, sources}], verified}, ... }
@@ -2038,10 +2038,10 @@ async def _api_serve():
 async def _setup(application):
     try:
         from telegram import MenuButtonWebApp, WebAppInfo
-        await application.bot.set_chat_menu_button(
-            chat_id=OWNER_ID,
-            menu_button=MenuButtonWebApp(text="🔎 Поиск", web_app=WebAppInfo(url=WEBAPP_URL)),
-        )
+        btn = MenuButtonWebApp(text="🔎 Поиск", web_app=WebAppInfo(url=WEBAPP_URL))
+        # кнопка «🔎 Поиск» по умолчанию для ВСЕХ (доступ внутри решает сервер G9)
+        await application.bot.set_chat_menu_button(menu_button=btn)
+        await application.bot.set_chat_menu_button(chat_id=OWNER_ID, menu_button=btn)
     except Exception as e:
         print("menu button setup failed:", e)
     try:
@@ -2049,7 +2049,28 @@ async def _setup(application):
     except Exception as e:
         print("api start failed:", e)
 
+async def start_cmd(update, context):
+    """/start — приветствие + кнопка открыть мини-апп (работает у всех)."""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+    try:
+        is_private = update.effective_chat and update.effective_chat.type == "private"
+        if is_private:
+            btn = InlineKeyboardButton("🔎 Открыть поиск", web_app=WebAppInfo(url=WEBAPP_URL))
+        else:
+            btn = InlineKeyboardButton("🔎 Открыть поиск", url=WEBAPP_URL)  # web_app-инлайн нельзя в группах
+        await update.message.reply_text(
+            "Добро пожаловать в *Muslimoon Bot*! 🌙\n\n"
+            "🔎 Поиск по хадисам, аятам и базе аль-Мухаймин — жми кнопку ниже.\n"
+            "Также прямо в чате: «Бухари 333» · «мухэймин 5» · «коран 2:255» · «искать الصبر».",
+            reply_markup=InlineKeyboardMarkup([[btn]]), parse_mode="Markdown")
+    except Exception as e:
+        try:
+            await update.message.reply_text("🔎 Открой поиск: " + WEBAPP_URL)
+        except Exception:
+            pass
+
 app = ApplicationBuilder().token(TOKEN).post_init(_setup).build()
+app.add_handler(CommandHandler("start", start_cmd))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
 app.add_handler(ChatMemberHandler(track_member, ChatMemberHandler.CHAT_MEMBER))
