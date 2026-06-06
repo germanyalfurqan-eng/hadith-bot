@@ -141,7 +141,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v81</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v82</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -425,7 +425,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v81';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v82';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1483,21 +1483,36 @@ async function doTranslateAyah(s,a,out,btn,ed){
   catch(e){ toast('Не удалось загрузить перевод'); }
   btn.disabled=false; btn.textContent=ot;
 }
-/* ===== ТАФСИР аятов (Ибн Касир рус/ар, Табари ар) — готовые ayah-индексы, источник учёных ===== */
-const TAFSIRS=[{id:'ru-tafsir-ibne-kahtir',nm:'Ибн Касир (рус)'},{id:'ar-tafsir-ibn-kathir',nm:'Ибн Касир (ар)'},{id:'ar-tafsir-al-tabari',nm:'Табари (ар)'}];
-async function doTafsir(s,a,out,btn,ed){
-  ed = ed || 'ru-tafsir-ibne-kahtir';
+/* ===== ТАФСИР аятов — готовые ayah-индексы (источник учёных). Принцип: ОРИГИНАЛ (ар) + кнопка Перевод (готовый рус где есть). ===== */
+const TAFSIR_CDN='https://cdn.jsdelivr.net/gh/spa5k/tafsir_api@main/tafsir/';
+const TAFSIRS=[
+  {key:'ibnkathir',nm:'Ибн Касир',ar:'ar-tafsir-ibn-kathir',ru:'ru-tafsir-ibne-kahtir'},
+  {key:'tabari',   nm:'Табари',   ar:'ar-tafsir-al-tabari', ru:null},
+  {key:'saadi',    nm:'Саади',    ar:'ar-tafseer-al-saddi', ru:'ru-tafseer-al-saddi'},
+  {key:'mukhtasar',nm:'Мухтасар', ar:'ar-tafsir-al-mukhtasar', ru:'russian-mokhtasar'},
+  {key:'qurtubi',  nm:'Куртуби',  ar:'ar-tafseer-al-qurtubi', ru:null},
+  {key:'baghawi',  nm:'Багави',   ar:'ar-tafsir-al-baghawi', ru:null},
+];
+async function doTafsir(s,a,out,btn,key,lang){
+  const tf=TAFSIRS.find(t=>t.key===key)||TAFSIRS[0]; key=tf.key;
+  lang = lang || 'ar'; if(lang==='ru' && !tf.ru) lang='ar';      // принцип: оригинал по умолчанию
+  const ed = lang==='ru' ? tf.ru : tf.ar; const isAr = lang==='ar';
   out.style.display='block'; out.innerHTML='<span class="hint">Загружаю тафсир…</span>';
   try{
-    const j=await (await fetch('https://cdn.jsdelivr.net/gh/spa5k/tafsir_api@main/tafsir/'+ed+'/'+s+'/'+a+'.json')).json();
-    let txt=(j.text||'').replace(/\[\[[^\]]*\]\]/g,'').replace(/\(\d+\)/g,'').trim();   // убрать редакторские [[…]]
-    const isAr=ed.indexOf('ar-')===0; const cur=(TAFSIRS.find(t=>t.id===ed)||{}).nm||'';
+    const j=await (await fetch(TAFSIR_CDN+ed+'/'+s+'/'+a+'.json')).json();
+    let txt=(j.text||'').replace(/\[\[[^\]]*\]\]/g,'').trim();
     let html='<div style="margin:6px 0">'
-      +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">'+TAFSIRS.map(t=>'<span class="tfsw chip" data-ed="'+t.id+'" style="cursor:pointer;font-size:12px'+(t.id===ed?';background:var(--btn);color:#fff;border-color:var(--btn)':'')+'">'+t.nm+'</span>').join('')+'</div>'
-      +'<div style="color:var(--hint);font-size:12px;margin-bottom:4px">📖 Тафсир «'+esc(cur)+'» · аят '+s+':'+a+' <span style="opacity:.8">(источник учёных, не наша проверка)</span></div>'
-      +'<div style="'+(isAr?'direction:rtl;text-align:right;font-size:17px;line-height:1.9':'font-size:14px;line-height:1.65')+';max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:10px">'+(txt?esc(txt).replace(/\n+/g,'<br>'):'Для этого аята тафсир не найден в этом издании.')+'</div></div>';
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="color:var(--hint);font-size:12px">📖 Тафсир · аят '+s+':'+a+' <span style="opacity:.8">(толкование учёных)</span></span><span class="tfx" style="cursor:pointer;color:var(--link);font-size:12px">✕ закрыть</span></div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">'+TAFSIRS.map(t=>'<span class="tfk chip" data-k="'+t.key+'" style="cursor:pointer;font-size:12px'+(t.key===key?';background:var(--btn);color:#fff;border-color:var(--btn)':'')+'">'+t.nm+'</span>').join('')+'</div>'
+      +'<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center">'
+        +'<span class="tflang chip" data-l="ar" style="cursor:pointer;font-size:12px'+(isAr?';background:#2e5b3a;color:#fff;border-color:#2e9b5b':'')+'">📖 Оригинал (ар)</span>'
+        +(tf.ru?('<span class="tflang chip" data-l="ru" style="cursor:pointer;font-size:12px'+(!isAr?';background:#10331f;color:#bff5d4;border-color:#2e9b5b':'')+'">📘 Перевод (рус, готовый)</span>'):'<span class="hint" style="font-size:11px">перевод этого тафсира — скоро (ИИ + накопление)</span>')
+      +'</div>'
+      +'<div style="'+(isAr?'direction:rtl;text-align:right;font-size:17px;line-height:1.9':'font-size:14px;line-height:1.65')+';max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:10px">'+(txt?esc(txt).replace(/\n+/g,'<br>'):'Для этого аята в этом тафсире нет текста.')+'</div></div>';
     out.innerHTML=html;
-    out.querySelectorAll('.tfsw').forEach(b=>b.onclick=()=>doTafsir(s,a,out,btn,b.dataset.ed));
+    out.querySelectorAll('.tfk').forEach(b=>b.onclick=()=>doTafsir(s,a,out,btn,b.dataset.k,lang));
+    out.querySelectorAll('.tflang').forEach(b=>b.onclick=()=>doTafsir(s,a,out,btn,key,b.dataset.l));
+    const x=out.querySelector('.tfx'); if(x) x.onclick=()=>{ out.style.display='none'; if(btn){ btn.dataset.on=''; btn.style.boxShadow=''; } };
   }catch(e){ out.innerHTML='<div class="hint">🔧 Не удалось загрузить тафсир — попробуй позже.</div>'; }
 }
 function toAr(s){const m={'0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩'};return String(s).replace(/[0-9]/g,d=>m[d]);}
