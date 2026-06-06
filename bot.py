@@ -2728,6 +2728,18 @@ async def _api_serve(application=None):
         await loop.run_in_executor(None, usage_log, user, "равий-ИИ", True, len(name), "", "")
         return _cors(web.json_response({'bio': bio, 'cached': False}))
 
+    async def popular(r):
+        # 🔥 Популярное: топ запросов (из накопленного searchlog), гейт = вход в приложение
+        user = verify_init_data(r.headers.get('X-Init-Data') or r.query.get('initData'))
+        if not feature_allowed('app', user):
+            return _deny('app')
+        j = await loop.run_in_executor(None, _journal_load)
+        top = j.get('searches', {}).get('top', {})
+        items = sorted(top.items(), key=lambda x: -x[1].get('n', 0))
+        out = [{'q': k, 'tab': v.get('tab', ''), 'n': v.get('n', 0)}
+               for k, v in items if v.get('n', 0) >= 2 and v.get('cnt', 0) > 0][:15]
+        return _cors(web.json_response({'items': out}))
+
     async def hit(r):
         # G3: счётчик запусков приложения (тихо; уникальные пользователи по id)
         d = await _body(r)
@@ -2745,6 +2757,7 @@ async def _api_serve(application=None):
                   web.post('/api/tashkeel', tashkeel),
                   web.get('/api/takhrij', takhrij_read), web.post('/api/takhrij', takhrij_save),
                   web.get('/api/narrator', narrator), web.post('/api/narrator_ai', narrator_ai), web.post('/api/hit', hit),
+                  web.get('/api/popular', popular),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))

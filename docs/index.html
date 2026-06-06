@@ -141,7 +141,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v88</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v89</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -182,6 +182,10 @@
   <div id="recentBox" style="display:none;margin:0 0 8px;border:1px solid var(--border);border-radius:12px;padding:8px 10px;background:var(--card)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span class="hint" style="font-size:12px">🕐 Недавние поиски — нажми, чтобы повторить</span><span id="recentClr" style="cursor:pointer;color:var(--link);font-size:12px">очистить</span></div>
     <div id="recentList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+  </div>
+  <div id="popularBox" style="display:none;margin:0 0 8px;border:1px solid var(--border);border-radius:12px;padding:8px 10px;background:var(--card)">
+    <div class="hint" style="font-size:12px;margin-bottom:6px">🔥 Популярное — что чаще ищут</div>
+    <div id="popularList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
   </div>
 
   <div class="modes">
@@ -438,7 +442,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v88';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v89';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -829,18 +833,34 @@ document.getElementById('q').addEventListener('input', updateQuranHelper);
 function loadRecent(){ try{ return JSON.parse(localStorage.getItem('muslimoon_recent'))||[]; }catch(e){ return []; } }
 function saveRecent(q){ q=(q||'').trim(); if(q.length<2 || cfg.recent===false) return;
   let a=loadRecent().filter(x=>x!==q); a.unshift(q); a=a.slice(0,12); try{ localStorage.setItem('muslimoon_recent', JSON.stringify(a)); }catch(e){} }
-function hideRecent(){ var b=document.getElementById('recentBox'); if(b) b.style.display='none'; }
+function hideRecent(){ var b=document.getElementById('recentBox'); if(b) b.style.display='none'; var p=document.getElementById('popularBox'); if(p) p.style.display='none'; }
 function showRecent(){ const box=document.getElementById('recentBox'), list=document.getElementById('recentList'); if(!box) return;
   const inp=document.getElementById('q');
-  if(cfg.recent===false || (inp&&inp.value.trim())){ box.style.display='none'; return; }
-  const a=loadRecent(); if(!a.length){ box.style.display='none'; return; }
-  list.innerHTML=''; a.forEach(q=>{ const c=document.createElement('span'); c.className='chip'; c.style.cssText='cursor:pointer;font-size:13px';
+  if(cfg.recent===false || (inp&&inp.value.trim())){ box.style.display='none'; var pb0=document.getElementById('popularBox'); if(pb0) pb0.style.display='none'; return; }
+  const a=loadRecent();
+  if(!a.length){ box.style.display='none'; }
+  else { list.innerHTML=''; a.forEach(q=>{ const c=document.createElement('span'); c.className='chip'; c.style.cssText='cursor:pointer;font-size:13px';
     c.textContent=q;
-    c.onclick=()=>{ inp.value=q; box.style.display='none'; runSearch(true); };
+    c.onclick=()=>{ inp.value=q; hideRecent(); runSearch(true); };
     const x=document.createElement('span'); x.textContent=' ✕'; x.style.cssText='opacity:.5;cursor:pointer;margin-right:-2px';
     x.onclick=(e)=>{ e.stopPropagation(); const arr=loadRecent().filter(y=>y!==q); try{localStorage.setItem('muslimoon_recent',JSON.stringify(arr));}catch(_){}; showRecent(); };
     c.appendChild(x); list.appendChild(c); });
-  box.style.display='block'; }
+    box.style.display='block'; }
+  loadPopular(); var pb=document.getElementById('popularBox'); if(pb && document.getElementById('popularList').children.length) pb.style.display='block';
+}
+let _popLoaded=false;
+async function loadPopular(){
+  if(_popLoaded || !BACKEND_URL) return; _popLoaded=true;
+  try{ const r=await fetch(BACKEND_URL+'/popular?initData='+encodeURIComponent(INITDATA)); const j=await r.json().catch(()=>({}));
+    const items=(j.items||[]); const list=document.getElementById('popularList'); if(!list||!items.length) return;
+    list.innerHTML=''; items.forEach(it=>{ const c=document.createElement('span'); c.className='chip'; c.style.cssText='cursor:pointer;font-size:13px';
+      c.textContent=it.q;
+      c.onclick=()=>{ if(it.tab && it.tab!==tab){ const tb=[...document.querySelectorAll('.tab')].find(t=>t.dataset.tab===it.tab); if(tb) tb.click(); }
+        document.getElementById('q').value=it.q; hideRecent(); runSearch(true); };
+      list.appendChild(c); });
+    const inp=document.getElementById('q'); if(inp && !inp.value.trim()){ const pb=document.getElementById('popularBox'); if(pb) pb.style.display='block'; }
+  }catch(e){}
+}
 var _qel2=document.getElementById('q');
 if(_qel2){ _qel2.addEventListener('focus', showRecent); _qel2.addEventListener('input', ()=>{ if(_qel2.value.trim()) hideRecent(); else showRecent(); }); }
 var _rclr=document.getElementById('recentClr'); if(_rclr) _rclr.onclick=()=>{ try{ localStorage.removeItem('muslimoon_recent'); }catch(e){} hideRecent(); };
