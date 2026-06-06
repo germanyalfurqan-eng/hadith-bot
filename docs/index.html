@@ -124,7 +124,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v75</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v76</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -227,7 +227,7 @@
     <div class="row"><span>🙈 Скрывать иснад (показывать только матн)</span><div class="sw" id="hideIsnadSw"></div></div>
     <div class="row"><span>🔡 Автоподсказки в Коране (списком при вводе номера)</span><div class="sw" id="acSw"></div></div>
     <div class="row"><span>✒️ Подпись при копировании (ссылка на приложение)</span><div class="sw" id="sigSw"></div></div>
-    <div class="row"><span>🔍 Щипок-зум (увеличение пальцами)</span><div class="sw" id="zoomSw"></div></div>
+    <div class="row"><span>🔍 Щипок-зум — увеличение экрана двумя пальцами <span style="color:var(--hint);font-size:11px">(по умолчанию выкл.)</span></span><div class="sw" id="zoomSw"></div></div>
     <div class="row" style="opacity:.55"><span>🎨 Тема оформления</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>🌐 English / язык</span><span>скоро</span></div>
   </div>
@@ -403,7 +403,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v75';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v76';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -465,7 +465,7 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 /* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true}, loadCfg());
+let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true}, loadCfg());
 
 /* ===================== СЕРВЕРНЫЙ ДОСТУП (G9) ===================== */
 const INITDATA = (tg && tg.initData) || '';
@@ -1171,8 +1171,8 @@ function addTr(meta,card,text,ayah,fav){
   tr.onclick=()=> ayah ? doTranslateAyah(ayah.s,ayah.a,out,tr) : doTranslate(text,out,tr,refOf(fav));
   meta.appendChild(tr);
   if(!ayah){
-    if(hasDiac(text)){
-      // огласовки ЕСТЬ → простая бесплатная кнопка «убрать/вернуть» (без ИИ)
+    if(isVocalized(text)){
+      // огласовки РЕАЛЬНО есть (по доле) → простая бесплатная кнопка «убрать/вернуть» (без ИИ)
       const sd=document.createElement('button');sd.className='tr-btn';sd.textContent='ـْ Убрать огласовки';sd.title='Показать без огласовок (бесплатно)';
       sd.style.cssText='background:transparent;border:1px solid var(--border);color:var(--hint);padding:6px 11px';
       const arDivs=[...card.querySelectorAll('.ar')]; let stripped=false;
@@ -1375,6 +1375,8 @@ async function doNarrators(text, out, btn){
   btn.disabled=false; btn.textContent=prev;
 }
 function hasDiac(t){ return /[ً-ْٰـ]/.test(t||''); }
+/* по-настоящему ли огласован текст (а не пара случайных значков): доля огласованных букв */
+function isVocalized(t){ t=t||''; const letters=(t.match(/[ء-ي]/g)||[]).length; const diac=(t.match(/[ً-ْٰ]/g)||[]).length; return letters>0 && (diac/letters)>=0.15; }
 function addHelpQ(meta,txt){ const q=document.createElement('button'); q.className='tr-btn'; q.textContent='?';
   q.style.cssText='background:transparent;border:1px solid var(--border);color:var(--hint);padding:6px 9px';
   q.title=txt; q.onclick=()=>toast(txt); meta.appendChild(q); }
@@ -1724,8 +1726,41 @@ var _ac=document.getElementById('acSw'); if(_ac){ _ac.classList.toggle('on',!!cf
 var _sig=document.getElementById('sigSw'); if(_sig){ _sig.classList.toggle('on',cfg.sig!==false); _sig.onclick=()=>{ cfg.sig=(cfg.sig===false); saveCfg(cfg); _sig.classList.toggle('on',cfg.sig!==false); }; }
 function applyZoom(){ var m=document.getElementById('vpMeta'); if(!m) return;
   m.setAttribute('content', cfg.noZoom ? 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' : 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes'); }
-var _zm=document.getElementById('zoomSw'); if(_zm){ _zm.classList.toggle('on',!cfg.noZoom); _zm.onclick=()=>{ cfg.noZoom=!cfg.noZoom; saveCfg(cfg); _zm.classList.toggle('on',!cfg.noZoom); applyZoom(); }; }
+var _zm=document.getElementById('zoomSw'); if(_zm){ _zm.classList.toggle('on',!cfg.noZoom); _zm.onclick=()=>{ cfg.noZoom=!cfg.noZoom; saveCfg(cfg); _zm.classList.toggle('on',!cfg.noZoom); applyZoom(); if(!cfg.noZoom) toast('Зум включён 🔍'); }; }
 applyZoom();
+/* Подсказка при попытке увеличить экран пальцами, когда зум выключен (ненавязчиво, с «не показывать» и эскалацией) */
+let _zoomTries=0, _zoomLast=0;
+function showZoomBanner(strong){
+  let el=document.getElementById('zoomBanner');
+  if(!el){ el=document.createElement('div'); el.id='zoomBanner';
+    el.style.cssText='position:fixed;left:50%;bottom:74px;transform:translateX(-50%);max-width:92%;z-index:130;background:#1b2430;border:1px solid var(--border);border-radius:14px;padding:11px 13px;font-size:13px;line-height:1.5;box-shadow:0 8px 24px #000b;animation:fadeIn .2s';
+    document.body.appendChild(el); }
+  el.innerHTML='';
+  const msg=document.createElement('div');
+  msg.innerHTML = strong
+    ? '👀 Вижу, что вы настойчиво увеличиваете экран. Зум пальцами сейчас <b>выключен</b>. Включить — в ⚙️ Настройки → «Щипок-зум». Если это ошибка/неудобно — напишите нам.'
+    : '🔍 Увеличение пальцами выключено. Хотите его — включите в ⚙️ Настройки → «Щипок-зум».';
+  el.appendChild(msg);
+  const row=document.createElement('div'); row.style.cssText='display:flex;gap:8px;margin-top:9px;flex-wrap:wrap';
+  const mk=(t,fn,col)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=t; if(col)b.style.color=col; b.onclick=fn; row.appendChild(b); };
+  mk('⚙️ Настройки',()=>{ el.remove(); var s=document.getElementById('settingsModal'); if(s) s.style.display='flex'; });
+  mk('Больше не показывать',()=>{ localStorage.setItem('zoomHintOff','1'); el.remove(); });
+  if(strong) mk('✍️ Сообщить нам',()=>{ el.remove(); try{ openFeedback('зум/увеличение экрана'); }catch(e){} },'var(--link)');
+  mk('✕',()=>el.remove());
+  el.appendChild(row);
+  clearTimeout(el._t); el._t=setTimeout(()=>{ if(el&&el.parentNode) el.remove(); }, strong?13000:7000);
+}
+function pinchAttempt(){
+  if(!cfg.noZoom) return;
+  const now=new Date().getTime(); if(now-_zoomLast<1500) return; _zoomLast=now; _zoomTries++;
+  const dismissed=localStorage.getItem('zoomHintOff')==='1';
+  const strong = _zoomTries>=4;                 // упорно пытается → жёстче + «сообщить»
+  if(dismissed && !strong) return;              // уважили «не показывать», но при упорстве всё же подскажем
+  showZoomBanner(strong);
+}
+document.addEventListener('touchmove', e=>{ if(e.touches && e.touches.length>=2) pinchAttempt(); }, {passive:true});
+document.addEventListener('gesturestart', e=>{ if(cfg.noZoom){ try{ e.preventDefault(); }catch(_){} pinchAttempt(); } }, {passive:false});
+document.addEventListener('wheel', e=>{ if(cfg.noZoom && e.ctrlKey){ pinchAttempt(); } }, {passive:true});
 
 /* ===================== УТИЛИТЫ ===================== */
 function setStatus(t){document.getElementById('status').textContent=t;}
