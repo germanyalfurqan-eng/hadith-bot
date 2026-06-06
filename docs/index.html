@@ -16,6 +16,12 @@
        color:var(--text);font-size:16px;line-height:1.5;background:#070a10}
   body::before{content:'';position:fixed;inset:0;z-index:-2;background:url('./bg.jpg') no-repeat center top;background-size:cover}
   body::after{content:'';position:fixed;inset:0;z-index:-1;background:linear-gradient(rgba(9,13,21,.74),rgba(6,9,14,.90))}
+  /* Светлая тема */
+  body.light{ --bg:#eef2f7; --text:#16202c; --hint:#5a6b7c; --link:#1565c0; --btn:#1e6fd6; --btn-text:#fff; --card:#ffffff; --border:#d3dce6; --mark:#ffcf40; background:#e9eef4 }
+  body.light::after{ background:linear-gradient(rgba(244,247,251,.88),rgba(235,240,246,.95)) }
+  body.light .col,body.light .chip,body.light .tab,body.light input[type=text]{ box-shadow:0 1px 4px #0001 }
+  body.light .ver{ background:#dde8f4;color:#33597e;border-color:#bcd2e8 }
+  body.light .matn{ color:#0b1320 }
   .col,.chip,.tab,input[type=text]{box-shadow:0 2px 8px #0006}
   .wrap{max-width:820px;margin:0 auto;padding:12px;padding-top:calc(28px + env(safe-area-inset-top,0px))}
   /* шапка/бренд */
@@ -124,7 +130,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v78</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v79</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -228,7 +234,11 @@
     <div class="row"><span>🔡 Автоподсказки в Коране (списком при вводе номера)</span><div class="sw" id="acSw"></div></div>
     <div class="row"><span>✒️ Подпись при копировании (ссылка на приложение)</span><div class="sw" id="sigSw"></div></div>
     <div class="row"><span>🔍 Щипок-зум — увеличение экрана двумя пальцами <span style="color:var(--hint);font-size:11px">(по умолчанию выкл.)</span></span><div class="sw" id="zoomSw"></div></div>
-    <div class="row" style="opacity:.55"><span>🎨 Тема оформления</span><span>скоро</span></div>
+    <div class="row"><span>🎨 Тема оформления</span>
+      <select id="themeSel" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 8px">
+        <option value="dark">Тёмная</option>
+        <option value="light">Светлая</option>
+      </select></div>
     <div class="row" style="opacity:.55"><span>🌐 English / язык</span><span>скоро</span></div>
   </div>
 </div>
@@ -404,7 +414,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v78';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v79';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -466,7 +476,9 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 /* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true}, loadCfg());
+let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark'}, loadCfg());
+function applyTheme(){ document.body.classList.toggle('light', cfg.theme==='light'); }
+try{ applyTheme(); }catch(e){}
 
 /* ===================== СЕРВЕРНЫЙ ДОСТУП (G9) ===================== */
 const INITDATA = (tg && tg.initData) || '';
@@ -1443,13 +1455,17 @@ function refOf(fav){ if(!fav||!fav.k) return null; const p=String(fav.k).split('
   if(p[0]==='h') return {source:p[1], num:p[2]};
   if(p[0]==='m') return {source:'muhaymin', num:p[1]};
   return null; }
-async function doTranslateAyah(s,a,out,btn){
-  btn.disabled=true; btn.textContent='…';
-  const ed=cfg.qtr||'rus-elmirkuliev'; const nm=ed==='rus-abuadel'?'Абу Адель':'Э. Кулиев';
+async function doTranslateAyah(s,a,out,btn,ed){
+  ed = ed || cfg.qtr || 'rus-elmirkuliev';
+  btn.disabled=true; const ot=btn.textContent; btn.textContent='…';
+  const nm=ed==='rus-abuadel'?'Абу Адель':'Э. Кулиев';
+  const other=ed==='rus-abuadel'?'rus-elmirkuliev':'rus-abuadel'; const otherNm=other==='rus-abuadel'?'Абу Адель':'Кулиев';
   try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/'+ed+'/'+s+'/'+a+'.min.json')).json();
-    out.innerHTML='<span style="color:var(--hint);font-style:italic">Перевод ('+nm+'):</span> '+esc(j.text||'—'); out.style.display='block'; }
+    out.innerHTML='<span style="color:var(--hint);font-style:italic">Перевод ('+nm+'):</span> '+esc(j.text||'—')+' <span class="qsw" style="color:var(--link);cursor:pointer;font-size:12px;white-space:nowrap">⇄ '+otherNm+'</span>';
+    out.style.display='block';
+    const sw=out.querySelector('.qsw'); if(sw) sw.onclick=()=>doTranslateAyah(s,a,out,btn,other); }
   catch(e){ toast('Не удалось загрузить перевод'); }
-  btn.disabled=false; btn.textContent='Перевод';
+  btn.disabled=false; btn.textContent=ot;
 }
 function toAr(s){const m={'0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩'};return String(s).replace(/[0-9]/g,d=>m[d]);}
 
@@ -1777,6 +1793,8 @@ function applyZoom(){ var m=document.getElementById('vpMeta'); if(!m) return;
   m.setAttribute('content', cfg.noZoom ? 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' : 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes'); }
 var _zm=document.getElementById('zoomSw'); if(_zm){ _zm.classList.toggle('on',!cfg.noZoom); _zm.onclick=()=>{ cfg.noZoom=!cfg.noZoom; saveCfg(cfg); _zm.classList.toggle('on',!cfg.noZoom); applyZoom(); if(!cfg.noZoom) toast('Зум включён 🔍'); }; }
 applyZoom();
+var _th=document.getElementById('themeSel'); if(_th){ _th.value=cfg.theme||'dark'; _th.onchange=()=>{ cfg.theme=_th.value; saveCfg(cfg); applyTheme(); toast(cfg.theme==='light'?'Светлая тема ☀️':'Тёмная тема 🌙'); }; }
+applyTheme();
 /* Подсказка при попытке увеличить экран пальцами, когда зум выключен (ненавязчиво, с «не показывать» и эскалацией) */
 let _zoomTries=0, _zoomLast=0;
 function showZoomBanner(strong){
