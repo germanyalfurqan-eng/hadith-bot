@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v125</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v126</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -455,7 +455,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v125';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v126';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -529,7 +529,7 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 /* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:true,wordTap:true,popular:true,arabus:true}, loadCfg());
+let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:true,wordTap:true,popular:true,arabus:false}, loadCfg());
 function applyTheme(){ document.body.classList.toggle('light', cfg.theme==='light'); }
 try{ applyTheme(); }catch(e){}
 
@@ -768,7 +768,7 @@ function cardHadithRu(d){ const card=document.createElement('div');card.classNam
     if(ar){ const ad=document.createElement('div'); ad.className='ar'; ad.style.marginTop='10px'; ad.innerHTML=hl(ar,[]);
       card.insertBefore(ad, meta);   // арабский — над строкой кнопок (русский остаётся сверху)
       addTr(meta, card, ar, null, fav);   // Перевод/Arabus/огласовки/Где ещё передаётся/Передатчики/копир/Сообщить
-      if(card.dataset.arabOn==='1'){ try{ loadRoots(); enableArabusTap(ad); ad.style.cursor='pointer'; }catch(e){} }
+      try{ enableArabusTap(ad); if(_arabusOn){ loadRoots(); ad.style.cursor='pointer'; } }catch(e){}   // сквозной Arabus
     } else {
       addStar(meta,fav);
       const cp=document.createElement('button');cp.className='tr-btn';cp.textContent='⧉';cp.title='Копировать';
@@ -1396,7 +1396,9 @@ async function runSearch(explicit){
   // Поиск по ВСЕЙ библиотеке: наши книги выше (если нашлись), ниже — остальной корпус (sunnah.one). Только при явном «Найти»/Enter.
   if(wideWill) await appendWide(seq, wideQ);
 }
-function makeCard(d){ return d.type==='q'?cardAyah(d,_groups):(d.type==='m'?cardMuh(d,_groups):(d.type==='hr'?cardHadithRu(d):cardHadith(d,_groups))); }
+function makeCard(d){ const c=d.type==='q'?cardAyah(d,_groups):(d.type==='m'?cardMuh(d,_groups):(d.type==='hr'?cardHadithRu(d):cardHadith(d,_groups)));
+  try{ c.querySelectorAll('.ar').forEach(a=>{ enableArabusTap(a); if(_arabusOn) a.style.cursor='pointer'; }); }catch(e){}   // сквозной Arabus
+  return c; }
 // имя сборника (рус/ар/лат от ИИ) → код нашего сборника
 function _srcToCode(name){ if(!name) return ''; const s=(''+name).toLowerCase().trim();
   const map=[['bukhari',['бухари','البخاري','bukhari','альбухари']],['muslim',['муслим','مسلم','muslim']],
@@ -1612,10 +1614,15 @@ function _wordAtPoint(x,y){
   const w=t.slice(s,e).trim(); if(w.length<1) return null;
   return {w, node, s, e};
 }
+let _arabusOn = (cfg.arabus===true);   // СКВОЗНОЙ режим: включил на одном посту → работает на всех
+function updateArabusButtons(){
+  document.querySelectorAll('.arabusToggle').forEach(b=>{ b.style.boxShadow=_arabusOn?'0 0 8px rgba(127,227,191,.7)':''; b.style.background=_arabusOn?'#173d30':'transparent'; });
+  document.querySelectorAll('.ar').forEach(d=>{ enableArabusTap(d); d.style.cursor=_arabusOn?'pointer':'default'; });
+}
 function enableArabusTap(arDiv){
   if(!arDiv || arDiv.dataset.arab) return; arDiv.dataset.arab='1';
   arDiv.addEventListener('click', ev=>{
-    const card=arDiv.closest('.card'); if(card && card.dataset.arabOn!=='1') return;   // включается кнопкой Arabus на карточке
+    if(!_arabusOn) return;   // сквозной режим (кнопка Arabus на любом посту)
     if(ev.target.closest && ev.target.closest('.qw')) return;   // у аятов свои слова-кнопки
     const r=_wordAtPoint(ev.clientX, ev.clientY); if(!r) return;
     ev.stopPropagation();
@@ -1800,16 +1807,16 @@ function addTr(meta,card,text,ayah,fav){
     if(out.style.display!=='none' && (out.textContent||'').trim()){ tr.dataset.shown='1'; if(tr.dataset.t0===undefined) tr.dataset.t0=tr.title||''; tr.style.boxShadow='0 0 8px rgba(74,222,128,.6)'; tr.title='Нажми ещё раз, чтобы скрыть перевод'; }
   };
   meta.appendChild(tr);
-  if(!ayah){   // 📕 Arabus — тумблер на карточке: нажал → тапай любое слово → корень/значения (наш словарь)
-    const ab=document.createElement('button'); ab.className='tr-btn';
-    ab.style.cssText='background:transparent;border:1px solid #1e7d5a;color:#7fe3bf;padding:6px 9px;display:inline-flex;align-items:center;gap:5px';
+  if(!ayah){   // 📕 Arabus — СКВОЗНОЙ тумблер: включил на любом посту → работает на всех (и нижних)
+    const ab=document.createElement('button'); ab.className='tr-btn arabusToggle';
+    ab.style.cssText='border:1px solid #1e7d5a;color:#7fe3bf;padding:6px 9px;display:inline-flex;align-items:center;gap:5px;background:'+(_arabusOn?'#173d30':'transparent');
+    if(_arabusOn) ab.style.boxShadow='0 0 8px rgba(127,227,191,.7)';
     ab.innerHTML='<img src="https://arabus.ru/img/logo_icon.png" alt="" style="height:15px;width:15px;border-radius:3px;object-fit:contain" onerror="this.replaceWith(document.createTextNode(\'\\uD83D\\uDCD5\'))"> Arabus';
-    ab.title='Разбор слов: нажми, затем тапни любое слово в тексте → корень и значения';
-    ab.onclick=()=>{ const on=card.dataset.arabOn!=='1'; card.dataset.arabOn=on?'1':'';
+    ab.title='Разбор слов (для ВСЕХ постов): включи и тапай любое слово → корень и значения';
+    ab.onclick=()=>{ _arabusOn=!_arabusOn; cfg.arabus=_arabusOn; saveCfg(cfg);
       try{ loadRoots(); }catch(e){}
-      card.querySelectorAll('.ar').forEach(d=>{ enableArabusTap(d); d.style.cursor=on?'pointer':'default'; });
-      ab.style.boxShadow=on?'0 0 8px rgba(127,227,191,.7)':''; ab.style.background=on?'#173d30':'transparent';
-      toast(on?'📕 Тапни любое слово в тексте':'Arabus выкл'); };
+      updateArabusButtons();
+      toast(_arabusOn?'📕 Режим Arabus ВКЛ — тапай любое слово в любом посту':'Arabus выкл'); };
     meta.appendChild(ab);
   }
   if(ayah){ const tf=document.createElement('button');tf.className='tr-btn';tf.textContent='📖 Тафсир';tf.title='Тафсир аята в отдельном окне (Ибн Касир/Табари/Саади/Мухтасар/Куртуби/Багави)';
