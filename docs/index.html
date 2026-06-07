@@ -145,7 +145,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v107</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v108</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -449,7 +449,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v107';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v108';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1051,6 +1051,7 @@ async function runSearch(explicit){
     head.textContent='🧠 Подбираю по смыслу…';
     let local=[], lphrase=''; try{ local=await translitSuggest(shown); lphrase=await translitPhrase(shown); }catch(e){}   // транскрипция → реальные слова/фраза (первыми, бесплатно)
     const merged=[]; if(lphrase) merged.push(lphrase); local.forEach(w=>{ if(!merged.includes(w)) merged.push(w); });
+    try{ neuroLocal(shown).forEach(p=>{ if(!merged.includes(p)) merged.push(p); }); }catch(e){}   // 🔑 курируемый словарь (free) — ГАРАНТ знаменитых: «дела по намерениям»→إنما الأعمال بالنيات (Бухари 1)
     const ph=await smartPhrases(q); if(seq!==_seq) return;
     if(ph&&ph.length) ph.forEach(p=>{ if(!merged.includes(p)) merged.push(p); });
     if(merged.length){ aiPhrases=merged; smartNote='🧠 По смыслу «'+shown+'» (фразы ниже — нажми, чтобы оставить нужное)';
@@ -1188,7 +1189,9 @@ async function runSearch(explicit){
   }
   setStatus('');
   logSearch(shown, tab, count);
-  const wideWill = (tab==='hadith' && explicit && !numMode && isArabic(shown));
+  // в ИИ-режиме при малом числе результатов тоже добираем по всей библиотеке (по арабской фразе ИИ)
+  if(modes.ai && aiPhrases && aiPhrases.length){ const ap=aiPhrases.find(p=>isArabic(p)); if(ap) wideQ=ap; }
+  const wideWill = (tab==='hadith' && explicit && !numMode && (isArabic(shown) || (modes.ai && count<5)));
   if(!count && seq===_seq){ res.innerHTML='<div class="status">'+(wideWill?'🔎 В наших книгах точного совпадения нет — ищу по всей библиотеке…':'Ничего не найдено 🤷')+'</div>'; }
   // Поиск по ВСЕЙ библиотеке: наши книги выше (если нашлись), ниже — остальной корпус (sunnah.one). Только при явном «Найти»/Enter.
   if(wideWill) await appendWide(seq, wideQ);
