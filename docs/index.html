@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v114</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v115</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -455,7 +455,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v114';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v115';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1112,14 +1112,14 @@ function nearestWord(word, vocab){ if(word.length<3 || vocab.has(word)) return n
   return bestW; }
 // По словам запроса вернуть исправления: {changed:[{from,to}], corrected:[слова]}.
 function correctQuery(words, vocab){ const changed=[]; const corrected=words.map(w=>{ const c=nearestWord(w,vocab); if(c){ changed.push({from:w,to:c}); return c; } return w; }); return {changed, corrected}; }
-// Баннер «🔤 Возможно, вы искали: …» (клик → искать исправленный запрос).
-function correctBanner(changed, correctedPhrase){
+// Баннер автоисправления (Яндекс-стиль): УЖЕ показаны результаты для исправленного +
+// «искать именно как ввёл» (настоять на своём запросе, даже с опечаткой → строгий режим).
+function autoCorrectBanner(orig, corrected){
   const res=document.getElementById('res');
   const b=document.createElement('div'); b.className='hint'; b.style.cssText='color:var(--accent,#7cf);font-size:13px;margin:2px 0 8px';
-  b.innerHTML='🔤 Возможно, вы искали: <span class="corrGo" style="cursor:pointer;text-decoration:underline;font-weight:600">'+esc(correctedPhrase)+'</span>'
-    + ' <span style="opacity:.7">('+changed.map(c=>esc(c.from)+'→'+esc(c.to)).join(', ')+')</span>';
+  b.innerHTML='🔤 Исправлено — показаны результаты для <b>'+esc(corrected)+'</b> · <span class="corrGo" style="cursor:pointer;text-decoration:underline">искать именно «'+esc(orig)+'»</span>';
   res.insertBefore(b, res.children[1]||null);
-  const cg=b.querySelector('.corrGo'); if(cg) cg.onclick=()=>{ document.getElementById('q').value=correctedPhrase; _strictSearch=false; runSearch(true); };
+  const cg=b.querySelector('.corrGo'); if(cg) cg.onclick=()=>{ _strictSearch=true; document.getElementById('q').value=orig; runSearch(true); };
 }
 // M172 для арабского/общего поиска (группы parseQuery). Работает на ОДНОМ массиве (Коран/сборник).
 // Одна группа, ≥2 позитивных терма → убираем самый частый терм, оставляя редкие; neg-термы сохраняем.
@@ -1281,12 +1281,13 @@ async function runSearch(explicit){
         const qw=shown.toLowerCase().split(/\s+/).filter(w=>w.length>1);
         const allow = (selCols.size||selExtra.size) ? new Set([...selCols,...selExtra]) : null;
         const pool = allow ? ru.filter(x=>allow.has(x.s)) : ru;
-        if(qw.length){ relax=relaxSearch(qw, x=>x.norm, pool, strict);   // M172: ослабление при нуле по всем словам
-          for(const x of relax.hits) add({type:'hr',s:x.s,n:x.n,ru:x.t,rq:relax.used.join(' ')});
-          if(!strict) corr=correctQuery(qw, ruVocabFrom('h', ru.map(x=>x.norm))); }   // M173: опечатки
+        if(qw.length){ let useWords=qw;
+          if(!strict){ corr=correctQuery(qw, ruVocabFrom('h', ru.map(x=>x.norm))); if(corr.changed.length) useWords=corr.corrected; }   // M173: автоисправление (Яндекс)
+          relax=relaxSearch(useWords, x=>x.norm, pool, strict);   // M172: ослабление при нуле по всем словам
+          for(const x of relax.hits) add({type:'hr',s:x.s,n:x.n,ru:x.t,rq:relax.used.join(' ')}); }
       }catch(e){}
       if(seq!==_seq) return; setHead(true);
-      if(corr && corr.changed.length) correctBanner(corr.changed, corr.corrected.join(' '));   // M173: «возможно, вы искали…»
+      if(corr && corr.changed.length) autoCorrectBanner(shown, corr.corrected.join(' '));   // M173: «показаны результаты для X · искать как ввёл»
       if(relax && relax.dropped.length && count) relaxBanner(relax.dropped, relax.used);   // честно: что убрали + «строго»
       setStatus(''); logSearch(shown,tab,count);
       if(!count){ const s=document.createElement('div'); s.className='status';   // append, чтобы не стереть баннер исправления (M173)
@@ -1345,16 +1346,16 @@ async function runSearch(explicit){
       else if(!modes.ai && /[а-яёa-z]/i.test(shown) && !isArabic(shown)){   // поиск по РУССКОМУ переводу (Кулиев) — НЕ в ИИ-режиме (там ищем по арабским фразам q)
         const ru=await loadQuranRu(); if(seq!==_seq) return;
         const qw=shown.toLowerCase().split(/\s+/).filter(w=>w.length>1);
-        if(qw.length){ const gn=v=>(ru[v.s+':'+v.a]||'').toLowerCase();
-          relaxQ=relaxSearch(qw, gn, arr, strict);   // M172: ослабление при нуле по всем словам
-          for(const v of relaxQ.hits) add({type:'q',v,ru:ru[v.s+':'+v.a],rq:relaxQ.used.join(' ')});
-          if(!strict) corrQ=correctQuery(qw, ruVocabFrom('q', Object.values(ru))); }   // M173: опечатки
+        if(qw.length){ const gn=v=>(ru[v.s+':'+v.a]||'').toLowerCase(); let useWords=qw;
+          if(!strict){ corrQ=correctQuery(qw, ruVocabFrom('q', Object.values(ru))); if(corrQ.changed.length) useWords=corrQ.corrected; }   // M173: автоисправление (Яндекс)
+          relaxQ=relaxSearch(useWords, gn, arr, strict);   // M172: ослабление при нуле по всем словам
+          for(const v of relaxQ.hits) add({type:'q',v,ru:ru[v.s+':'+v.a],rq:relaxQ.used.join(' ')}); }
       }
       else { relaxQ=relaxGroupsArr(arr, groups, modes, strict);   // M172: ослабление арабского/общего поиска по Корану
         for(const v of relaxQ.hits){ add({type:'q',v}); if(rootMode) collectForms(v.text,qSkels,rootForms); } }
     }catch(e){}
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
-    if(corrQ && corrQ.changed.length) correctBanner(corrQ.changed, corrQ.corrected.join(' '));   // M173: «возможно, вы искали…»
+    if(corrQ && corrQ.changed.length) autoCorrectBanner(shown, corrQ.corrected.join(' '));   // M173: «показаны результаты для X · искать как ввёл»
     if(relaxQ && relaxQ.dropped.length && count) relaxBanner(relaxQ.dropped, relaxQ.used);   // M172: честно показать что убрали
     if(count) ensureGrpToggle();
   }
@@ -1748,6 +1749,34 @@ const TAKH_MAIN=['bukhari','muslim','abudawud','tirmidhi','ibnmajah','nasai','ma
 const TAKH_SMALL=['ibnmubarak','ismail','adabmufrad','humaydi','abdbinhumayd','ibnaljad','ishaq','tayalisi','darimi','ibnkhuzayma'];
 const TAKH_BIG=['ibnhibban','nasaikubra','abuyala','ibnabishayba','abuawana']; // 10–21 МБ каждый → по кнопке
 let _takhSeq=0;
+/* ===== ПОЛНЫЙ تخريج: разбор поля takhreej (sunnah.one) в структурные ссылки «сборник №номер» =====
+   takhreej от учёных уже структурный: «أخرجه مسلم (٢٣٦٣)، وأحمد (١٢٥٤٤)، وأبو يعلى (٣٤٨٠)، وابن حبان (٢٢)…»
+   Парсим имя+номер для КАЖДОГО упомянутого сборника → даёт полные متابعات (Ибн Маджа/Ахмад и др.). */
+const TKNAME=[
+  [/الأدب المفرد/,'adabmufrad'],[/البخاري/,'bukhari'],[/مسلم/,'muslim'],
+  [/(أبي|أبو|ابي|ابو) داو?د/,'abudawud'],[/الترمذي|الترمذى/,'tirmidhi'],[/ابن ماج(ه|ة)/,'ibnmajah'],
+  [/(الكبرى للنسائي|النسائي في ?\(\(?الكبرى)/,'nasaikubra'],[/النسائي|النسائى/,'nasai'],
+  [/الموطأ|^مالك| مالك/,'malik'],[/أحمد|احمد/,'ahmad'],[/الدارمي/,'darimi'],
+  [/ابن حبان/,'ibnhibban'],[/ابن خزيمة/,'ibnkhuzayma'],[/(أبي|أبو|ابي|ابو) يعلى/,'abuyala'],
+  [/ابن (أبي|ابي) شيبة/,'ibnabishayba'],[/(أبي|أبو|ابي|ابو) عوانة/,'abuawana'],[/الحميدي/,'humaydi'],
+  [/الطيالسي/,'tayalisi'],[/(ابن راهويه|اسحاق|إسحاق)/,'ishaq'],[/عبد بن حميد/,'abdbinhumayd'],
+  [/ابن الجعد/,'ibnaljad'],[/ابن المبارك/,'ibnmubarak'],
+];
+function tkCode(name){ for(const [re,c] of TKNAME){ if(re.test(name)) return c; } return null; }
+const _toLatN=s=>(s||'').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+// Разобрать строку تخريج → [{code, name, nums:[...]}] (только сборники, что мы умеем сопоставить).
+function parseTakhreej(str){
+  if(!str) return []; const out=[];
+  for(const [re,code] of TKNAME){ const r=new RegExp(re.source,'g'); let m;
+    while((m=r.exec(str))){
+      const after=str.slice(m.index+m[0].length, m.index+m[0].length+70);   // первое (число) после имени
+      const nm=after.match(/\(([\d٠-٩][\d٠-٩،, ]*)\)/); if(!nm) continue;
+      const nums=nm[1].split(/[،,]/).map(x=>_toLatN(x).replace(/[^\d]/g,'')).filter(Boolean);
+      if(nums.length) out.push({code, name:m[0].trim(), nums, pos:m.index});
+    } }
+  const seen=new Set(), res=[]; out.sort((a,b)=>a.pos-b.pos).forEach(o=>{ const k=o.code+'|'+o.nums.join(','); if(!seen.has(k)){ seen.add(k); res.push(o); } });
+  return res;
+}
 async function loadByCode(code){
   if(code==='muhaymin') return (await loadMuhaymin()).map(x=>({num:String(x.n),text:x.text}));
   return await _readLoad(code);
@@ -1785,6 +1814,27 @@ async function doTakhrij(text, ref, out, btn, force){
         a.style.cssText='color:var(--link);cursor:pointer'; a.onclick=()=>openReader(code,nm); row.appendChild(a);
         if(i<nums.length-1){ const s=document.createElement('span'); s.textContent='، '; row.appendChild(s); } });
       locBox.appendChild(row); }); }
+  // ПОЛНЫЙ научный تخريج: парсим prose в кликабельные «сборник №№» (по ВСЕМ риватаям) + хукм + полный текст.
+  function renderSci(prose, hukm){
+    const refs=parseTakhreej(prose||''); const byCode={};
+    refs.forEach(r=>{ byCode[r.code]=byCode[r.code]||new Set(); r.nums.forEach(n=>byCode[r.code].add(n)); });
+    const codes=Object.keys(byCode);
+    let html='<div style="border:1px solid var(--border);border-radius:10px;padding:8px;margin:2px 0 8px">'
+      +'<div style="font-size:12px;margin-bottom:4px"><span style="color:#4ade80">🌐 Научный تخريج</span> <span style="color:var(--hint)">(sunnah.one · учёные)</span>'+(hukm?' · <span style="color:#4ade80">'+esc(hukm)+'</span>':'')+'</div>';
+    if(codes.length) html+='<div style="font-size:12px;color:var(--hint);margin-bottom:3px">📋 Передаётся также (клик по № — читалка):</div><div id="sciRefs"></div>';
+    if(prose) html+='<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--hint);font-size:12px">📜 Полный текст تخريج (учёные)</summary><div style="direction:rtl;text-align:right;font-size:14px;line-height:1.7;margin-top:4px">'+esc(prose)+'</div></details>';
+    html+='</div>'; sciSec.innerHTML=html;
+    const host=sciSec.querySelector('#sciRefs');
+    if(host) codes.forEach(code=>{ const nums=[...byCode[code]];
+      const row=document.createElement('div'); row.style.cssText='direction:rtl;font-size:14px;margin:2px 0';
+      const lbl=document.createElement('span'); lbl.textContent=arOf(code)+': '; row.appendChild(lbl);
+      const readable=isReadable(code);
+      nums.forEach((nm,i)=>{ const a=document.createElement('span'); a.textContent='№'+nm;
+        if(readable){ a.style.cssText='color:var(--link);cursor:pointer'; a.title='Открыть в читалке'; a.onclick=()=>openReader(code,String(nm)); }
+        else { a.style.cssText='color:var(--hint)'; }
+        row.appendChild(a); if(i<nums.length-1){ const s=document.createElement('span'); s.textContent='، '; row.appendChild(s); } });
+      host.appendChild(row); });
+  }
 
   // --- M67h: накопление تخريج (взаимосвязь хадисов) в нашу базу: нашли раз → дальше мгновенно/бесплатно ---
   const tkSrc=skipCode, tkNum=skipNum;
@@ -1801,9 +1851,7 @@ async function doTakhrij(text, ref, out, btn, force){
   function renderFromCache(t){
     if(t.muh&&t.muh.length){ t.muh.forEach(n=>muhNums.add(String(n))); } renderMuh();
     if(t.sci&&(t.sci.takhreej||t.sci.hukm)){ sciData={takhreej:t.sci.takhreej||'',hukm:t.sci.hukm||''};
-      sciSec.innerHTML='<div style="border:1px solid var(--border);border-radius:10px;padding:8px;margin:2px 0 8px">'
-        +'<div style="font-size:12px;margin-bottom:4px"><span style="color:#4ade80">🌐 Научный تخريج</span> <span style="color:var(--hint)">(sunnah.one · учёные)</span></div>'
-        +(t.sci.takhreej?'<div style="direction:rtl;text-align:right;font-size:14px;line-height:1.7">'+esc(t.sci.takhreej)+'</div>':'')+'</div>'; }
+      renderSci(t.sci.takhreej||'', t.sci.hukm||''); }   // структурный تخريج и из кэша
     else sciSec.innerHTML='';
     if(t.local){ Object.keys(t.local).forEach(c=>{ found[c]=t.local[c]; }); } renderLoc();
     const cnt=Object.keys(found).length;
@@ -1827,18 +1875,19 @@ async function doTakhrij(text, ref, out, btn, force){
   sciSec.innerHTML='<div style="color:var(--hint);font-size:12px;margin:2px 0 6px">🌐 Запрашиваю научный تخريج…</div>';
   (async()=>{
     if(!BACKEND_URL){ sciSec.innerHTML=''; return; }
-    for(const c of phrases){ try{
-      const r=await fetch(BACKEND_URL+'/wide?q='+encodeURIComponent(c)+'&initData='+encodeURIComponent(INITDATA));
-      if(aborted()) return; const j=await r.json().catch(()=>({})); const data=j.data||[];
-      const w=data.find(x=>x.takhreej)||data[0];
-      if(w && (w.takhreej||w.hukm)){
-        sciData={takhreej:w.takhreej||'',hukm:w.hukm||''};
-        sciSec.innerHTML='<div style="border:1px solid var(--border);border-radius:10px;padding:8px;margin:2px 0 8px">'
-          +'<div style="font-size:12px;margin-bottom:4px"><span style="color:#4ade80">🌐 Научный تخريج</span> <span style="color:var(--hint)">(sunnah.one · учёные)</span></div>'
-          +(w.takhreej?'<div style="direction:rtl;text-align:right;font-size:14px;line-height:1.7">'+esc(w.takhreej)+'</div>':'<div class="hint" style="font-size:12px">оценка есть, развёрнутого تخريج нет</div>')
-          +'</div>'; return; }
-    }catch(e){} }
-    sciSec.innerHTML='<div style="color:var(--hint);font-size:12px;margin:2px 0 6px">🌐 Научный تخريج: точного совпадения в sunnah.one не нашлось.</div>';
+    const seenTk=new Set(); const proseParts=[]; let hukm='';
+    for(const c of phrases){ if(aborted()) return;
+      try{ const r=await fetch(BACKEND_URL+'/wide?q='+encodeURIComponent(c)+'&initData='+encodeURIComponent(INITDATA));
+        if(aborted()) return; const j=await r.json().catch(()=>({})); const data=j.data||[];
+        for(const w of data){ const tk=(w.takhreej||'').trim();   // ПОЛНЫЙ تخريج: собираем по ВСЕМ риватаям (разные матны → разные takhreej)
+          if(w.hukm && !hukm) hukm=(''+w.hukm).trim();
+          if(tk && !seenTk.has(tk)){ seenTk.add(tk); proseParts.push(tk); } }
+      }catch(e){}
+      if(proseParts.length>=4) break;   // достаточно риваятов для полноты
+    }
+    if(aborted()) return; const prose=proseParts.join('  ⸱  ');
+    if(prose || hukm){ sciData={takhreej:prose, hukm}; renderSci(prose, hukm); }
+    else sciSec.innerHTML='<div style="color:var(--hint);font-size:12px;margin:2px 0 6px">🌐 Научный تخريج: точного совпадения в sunnah.one не нашлось.</div>';
   })();
 
   // 3) Перекрёстный поиск по НАШИМ сборникам (мульти-фразой) — точные № + клик в читалку
