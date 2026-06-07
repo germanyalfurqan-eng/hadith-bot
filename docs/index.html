@@ -145,7 +145,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v103</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v104</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -203,7 +203,7 @@
     <div class="chip" data-mode="matnonly" title="Искать совпадение только в тексте хадиса (матн), не в цепочке передатчиков (иснаде)">📜 Не искать в иснаде</div>
     <div class="chip" id="neuroChip" data-mode="neuro" title="Расширенный: вручную подобрать/поправить арабские фразы перед поиском">🔬 Расширенный</div>
   </div>
-  <div class="hint">Просто напиши слова — найду, где есть все слова. Можно по номеру: например <b>альбухари 333</b> или <b>333 ахмад</b> (порядок не важен). «🧠 По смыслу» — поиск по смыслу (рус/eng). <span id="helpBtn" style="color:var(--link);cursor:pointer;font-weight:600">ⓘ Как искать — примеры</span></div>
+  <div class="hint">Напиши слова или № (напр. <b>2:255</b>, <b>бухари 333</b>). <span id="helpBtn" style="color:var(--link);cursor:pointer;font-weight:600">ⓘ Как искать — примеры и операторы</span></div>
 
   <div class="neuro-box" id="neuroBox">
     <div style="font-size:13px;margin-bottom:6px">🔬 Расширенный: подберу арабские фразы — можешь поправить перед поиском:</div>
@@ -448,7 +448,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v103';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v104';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -787,6 +787,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   var _mo=document.querySelector('.chip[data-mode="matnonly"]'); if(_mo) _mo.style.display = tab==='hadith'?'':'none';  // «не искать в иснаде» — только хадисы
   document.getElementById('q').placeholder = tab==='hadith'?'Слова, фраза или № хадиса…':'Слова, фраза или № суры (напр. 2 или 2:255)…';
   document.getElementById('res').innerHTML=''; setStatus(''); updateQuranHelper();
+  try{ showRecent(); }catch(e){}   // Недавние/Популярное — раздельные по вкладке
 });
 // M96: помощник по Корану — при вводе числа в «Аяты» подсказываем суру и число аятов
 const SURA_AYAHS=[7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,72,135,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
@@ -878,40 +879,50 @@ function updateTranslitSugg(){
 }
 document.getElementById('q').addEventListener('input', updateTranslitSugg);
 /* 🕐 Недавние поиски (при тапе на пустое поле; выключается в Настройках) */
-function loadRecent(){ try{ return JSON.parse(localStorage.getItem('muslimoon_recent'))||[]; }catch(e){ return []; } }
+function _recentKey(){ return 'muslimoon_recent_'+tab; }   // РАЗДЕЛЬНО для Аятов и Хадисов
+function loadRecent(){ try{ return JSON.parse(localStorage.getItem(_recentKey()))||[]; }catch(e){ return []; } }
 function saveRecent(q){ q=(q||'').trim(); if(q.length<2 || cfg.recent===false) return;
-  let a=loadRecent().filter(x=>x!==q); a.unshift(q); a=a.slice(0,12); try{ localStorage.setItem('muslimoon_recent', JSON.stringify(a)); }catch(e){} }
+  let a=loadRecent().filter(x=>x!==q); a.unshift(q); a=a.slice(0,12); try{ localStorage.setItem(_recentKey(), JSON.stringify(a)); }catch(e){} }
 function hideRecent(){ var b=document.getElementById('recentBox'); if(b) b.style.display='none'; var p=document.getElementById('popularBox'); if(p) p.style.display='none'; }
 function showRecent(){ const box=document.getElementById('recentBox'), list=document.getElementById('recentList'); if(!box) return;
   const inp=document.getElementById('q');
   if(cfg.recent===false || (inp&&inp.value.trim())){ box.style.display='none'; var pb0=document.getElementById('popularBox'); if(pb0) pb0.style.display='none'; return; }
   const a=loadRecent();
+  const rcap=document.querySelector('#recentBox .hint'); if(rcap) rcap.textContent='🕐 Недавние ('+(tab==='quran'?'аяты':'хадисы')+') — нажми, чтобы повторить';
   if(!a.length){ box.style.display='none'; }
   else { list.innerHTML=''; a.forEach(q=>{ const c=document.createElement('span'); c.className='chip'; c.style.cssText='cursor:pointer;font-size:13px';
     c.textContent=q;
     c.onclick=()=>{ inp.value=q; hideRecent(); runSearch(true); };
     const x=document.createElement('span'); x.textContent=' ✕'; x.style.cssText='opacity:.5;cursor:pointer;margin-right:-2px';
-    x.onclick=(e)=>{ e.stopPropagation(); const arr=loadRecent().filter(y=>y!==q); try{localStorage.setItem('muslimoon_recent',JSON.stringify(arr));}catch(_){}; showRecent(); };
+    x.onclick=(e)=>{ e.stopPropagation(); const arr=loadRecent().filter(y=>y!==q); try{localStorage.setItem(_recentKey(),JSON.stringify(arr));}catch(_){}; showRecent(); };
     c.appendChild(x); list.appendChild(c); });
     box.style.display='block'; }
-  loadPopular(); var pb=document.getElementById('popularBox'); if(pb && document.getElementById('popularList').children.length) pb.style.display='block';
+  loadPopular();
 }
-let _popLoaded=false;
+let _popItems=null, _popFetched=false;
 async function loadPopular(){
-  if(_popLoaded || !BACKEND_URL) return; _popLoaded=true;
-  try{ const r=await fetch(BACKEND_URL+'/popular?initData='+encodeURIComponent(INITDATA)); const j=await r.json().catch(()=>({}));
-    const items=(j.items||[]); const list=document.getElementById('popularList'); if(!list||!items.length) return;
-    list.innerHTML=''; items.forEach(it=>{ const c=document.createElement('span'); c.className='chip'; c.style.cssText='cursor:pointer;font-size:13px';
-      c.textContent=it.q;
-      c.onclick=()=>{ if(it.tab && it.tab!==tab){ const tb=[...document.querySelectorAll('.tab')].find(t=>t.dataset.tab===it.tab); if(tb) tb.click(); }
-        document.getElementById('q').value=it.q; hideRecent(); runSearch(true); };
-      list.appendChild(c); });
-    const inp=document.getElementById('q'); if(inp && !inp.value.trim()){ const pb=document.getElementById('popularBox'); if(pb) pb.style.display='block'; }
-  }catch(e){}
+  if(!BACKEND_URL) return;
+  if(!_popFetched){ _popFetched=true;
+    try{ const r=await fetch(BACKEND_URL+'/popular?initData='+encodeURIComponent(INITDATA)); const j=await r.json().catch(()=>({})); _popItems=(j.items||[]); }catch(e){ _popItems=[]; }
+  }
+  renderPopular();
+}
+function renderPopular(){
+  const list=document.getElementById('popularList'), pb=document.getElementById('popularBox'); if(!list||!pb||!_popItems) return;
+  const inp=document.getElementById('q'); if(inp&&inp.value.trim()){ pb.style.display='none'; return; }
+  const items=_popItems.filter(it=>!it.tab || it.tab===tab).slice(0,12);   // РАЗДЕЛЬНО по вкладке
+  const cap=pb.querySelector('.hint'); if(cap) cap.textContent='🔥 Популярное ('+(tab==='quran'?'аяты':'хадисы')+') — что чаще ищут';
+  if(!items.length){ pb.style.display='none'; return; }
+  list.innerHTML=''; items.forEach(it=>{ const c=document.createElement('span'); c.className='chip'; c.style.cssText='cursor:pointer;font-size:13px';
+    c.textContent=it.q;
+    c.onclick=()=>{ if(it.tab && it.tab!==tab){ const tb=[...document.querySelectorAll('.tab')].find(t=>t.dataset.tab===it.tab); if(tb) tb.click(); }
+      document.getElementById('q').value=it.q; hideRecent(); runSearch(true); };
+    list.appendChild(c); });
+  pb.style.display='block';
 }
 var _qel2=document.getElementById('q');
 if(_qel2){ _qel2.addEventListener('focus', showRecent); _qel2.addEventListener('input', ()=>{ if(_qel2.value.trim()) hideRecent(); else showRecent(); }); }
-var _rclr=document.getElementById('recentClr'); if(_rclr) _rclr.onclick=()=>{ try{ localStorage.removeItem('muslimoon_recent'); }catch(e){} hideRecent(); };
+var _rclr=document.getElementById('recentClr'); if(_rclr) _rclr.onclick=()=>{ try{ localStorage.removeItem(_recentKey()); }catch(e){} hideRecent(); };
 document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.dataset.mode;
   if(!m) return;   // чипы без режима (⚙️ ещё, журналы) имеют свои обработчики
   if(m==='neuro'){ modes.neuro=!modes.neuro; ch.classList.toggle('on',modes.neuro);
