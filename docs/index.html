@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v112</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v113</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -455,7 +455,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v112';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v113';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1090,6 +1090,37 @@ function relaxBanner(dropped, used){
   res.insertBefore(b, res.children[1]||null);
   const sg=b.querySelector('.strictGo'); if(sg) sg.onclick=()=>{ _strictSearch=true; runSearch(true); };
 }
+/* ===== M173: автоисправление опечаток БЕЗ ИИ (Яндекс-стиль «возможно, вы искали…») ===== */
+// Словарь строим из УЖЕ загруженного корпуса (рус. Коран/хадисы) → free, накопительно, без ключа.
+let _ruVocab={};
+function ruVocabFrom(key, texts){ if(_ruVocab[key]) return _ruVocab[key];
+  const m=new Map();
+  for(const t of texts){ const ws=(t||'').toLowerCase().match(/[а-яё]{3,}/g); if(ws) for(const w of ws) m.set(w,(m.get(w)||0)+1); }
+  _ruVocab[key]=m; return m; }
+// Расстояние Левенштейна с ранним выходом при >max (быстро отсекаем заведомо далёкие слова).
+function levLE(a,b,max){ if(Math.abs(a.length-b.length)>max) return max+1; const n=b.length;
+  let prev=Array.from({length:n+1},(_,i)=>i);
+  for(let i=1;i<=a.length;i++){ const cur=[i]; let best=i;
+    for(let j=1;j<=n;j++){ const c=a[i-1]===b[j-1]?0:1; const v=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+c); cur[j]=v; if(v<best)best=v; }
+    if(best>max) return max+1; prev=cur; }
+  return prev[n]; }
+// Ближайшее слово словаря к опечатке (dist≤2, длиннее 2 букв); тай-брейк: меньше dist, затем чаще встречается.
+function nearestWord(word, vocab){ if(word.length<3 || vocab.has(word)) return null;
+  const max=word.length<=4?1:2; let bestW=null,bestD=max+1,bestF=-1;
+  for(const [w,f] of vocab){ if(Math.abs(w.length-word.length)>max) continue;
+    const d=levLE(word,w,max); if(d<=max && (d<bestD || (d===bestD && f>bestF))){ bestW=w; bestD=d; bestF=f; } }
+  return bestW; }
+// По словам запроса вернуть исправления: {changed:[{from,to}], corrected:[слова]}.
+function correctQuery(words, vocab){ const changed=[]; const corrected=words.map(w=>{ const c=nearestWord(w,vocab); if(c){ changed.push({from:w,to:c}); return c; } return w; }); return {changed, corrected}; }
+// Баннер «🔤 Возможно, вы искали: …» (клик → искать исправленный запрос).
+function correctBanner(changed, correctedPhrase){
+  const res=document.getElementById('res');
+  const b=document.createElement('div'); b.className='hint'; b.style.cssText='color:var(--accent,#7cf);font-size:13px;margin:2px 0 8px';
+  b.innerHTML='🔤 Возможно, вы искали: <span class="corrGo" style="cursor:pointer;text-decoration:underline;font-weight:600">'+esc(correctedPhrase)+'</span>'
+    + ' <span style="opacity:.7">('+changed.map(c=>esc(c.from)+'→'+esc(c.to)).join(', ')+')</span>';
+  res.insertBefore(b, res.children[1]||null);
+  const cg=b.querySelector('.corrGo'); if(cg) cg.onclick=()=>{ document.getElementById('q').value=correctedPhrase; _strictSearch=false; runSearch(true); };
+}
 async function runSearch(explicit){
   const strict=_strictSearch; _strictSearch=false;   // M173: захватываем флаг строгого режима на этот запуск
   const seq=++_seq; groupSrc=false;   // каждый новый поиск — обычным списком (группировка — опция рядом с результатом)
@@ -1202,18 +1233,22 @@ async function runSearch(explicit){
     }
     // РУССКИЙ поиск по хадисам (готовые переводы Бухари/Муслим/Абу Дауд). ИИ выкл + кириллица + не число.
     if(!numMode && !modes.ai && /[а-яё]/i.test(shown) && !isArabic(shown)){
-      let relax=null;
+      let relax=null, corr=null;
       try{ const ru=await loadHadithRu(); if(seq!==_seq) return;
         const qw=shown.toLowerCase().split(/\s+/).filter(w=>w.length>1);
         const allow = (selCols.size||selExtra.size) ? new Set([...selCols,...selExtra]) : null;
         const pool = allow ? ru.filter(x=>allow.has(x.s)) : ru;
         if(qw.length){ relax=relaxSearch(qw, x=>x.norm, pool, strict);   // M172: ослабление при нуле по всем словам
-          for(const x of relax.hits) add({type:'hr',s:x.s,n:x.n,ru:x.t,rq:relax.used.join(' ')}); }
+          for(const x of relax.hits) add({type:'hr',s:x.s,n:x.n,ru:x.t,rq:relax.used.join(' ')});
+          if(!strict) corr=correctQuery(qw, ruVocabFrom('h', ru.map(x=>x.norm))); }   // M173: опечатки
       }catch(e){}
       if(seq!==_seq) return; setHead(true);
+      if(corr && corr.changed.length) correctBanner(corr.changed, corr.corrected.join(' '));   // M173: «возможно, вы искали…»
       if(relax && relax.dropped.length && count) relaxBanner(relax.dropped, relax.used);   // честно: что убрали + «строго»
       setStatus(''); logSearch(shown,tab,count);
-      if(!count){ res.innerHTML='<div class="status">По-русски не нашёл'+(strict?' (строгий режим — как ввёл)':'')+'. Готовый перевод есть для Бухари/Муслим/Абу Дауд; для остальных включи 🧠 По смыслу.</div>'; }
+      if(!count){ const s=document.createElement('div'); s.className='status';   // append, чтобы не стереть баннер исправления (M173)
+        s.textContent='По-русски не нашёл'+(strict?' (строгий режим — как ввёл)':'')+'. Готовый перевод есть для Бухари/Муслим/Абу Дауд; для остальных включи 🧠 По смыслу.';
+        res.appendChild(s); }
       return;
     }
     // Любой выбор (основной чип ИЛИ доп.сборник) = искать ТОЛЬКО в выбранном.
@@ -1252,7 +1287,7 @@ async function runSearch(explicit){
     if(count) ensureGrpToggle();
     if(!numMode) addLibMore();   // кнопка «искать ещё в большой библиотеке» (16 изданий + Мукбиль)
   } else {
-    let relaxQ=null;
+    let relaxQ=null, corrQ=null;
     try{ const arr=await loadQuran(); if(seq!==_seq) return;
       const qn=q.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
       const mref=qn.match(/^(\d{1,3})\s*[:\s]\s*(\d{1,3})$/);
@@ -1266,11 +1301,13 @@ async function runSearch(explicit){
         const qw=shown.toLowerCase().split(/\s+/).filter(w=>w.length>1);
         if(qw.length){ const gn=v=>(ru[v.s+':'+v.a]||'').toLowerCase();
           relaxQ=relaxSearch(qw, gn, arr, strict);   // M172: ослабление при нуле по всем словам
-          for(const v of relaxQ.hits) add({type:'q',v,ru:ru[v.s+':'+v.a],rq:relaxQ.used.join(' ')}); }
+          for(const v of relaxQ.hits) add({type:'q',v,ru:ru[v.s+':'+v.a],rq:relaxQ.used.join(' ')});
+          if(!strict) corrQ=correctQuery(qw, ruVocabFrom('q', Object.values(ru))); }   // M173: опечатки
       }
       else { for(const v of arr){ if(docMatch(v,groups,modes)){ add({type:'q',v}); if(rootMode) collectForms(v.text,qSkels,rootForms); } } }
     }catch(e){}
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
+    if(corrQ && corrQ.changed.length) correctBanner(corrQ.changed, corrQ.corrected.join(' '));   // M173: «возможно, вы искали…»
     if(relaxQ && relaxQ.dropped.length && count) relaxBanner(relaxQ.dropped, relaxQ.used);   // M172: честно показать что убрали
     if(count) ensureGrpToggle();
   }
@@ -1279,7 +1316,10 @@ async function runSearch(explicit){
   // в ИИ-режиме при малом числе результатов тоже добираем по всей библиотеке (по арабской фразе ИИ)
   if(modes.ai && aiPhrases && aiPhrases.length){ const ap=aiPhrases.find(p=>isArabic(p)); if(ap) wideQ=ap; }
   const wideWill = (tab==='hadith' && explicit && !numMode && (isArabic(shown) || (modes.ai && count<5)));
-  if(!count && seq===_seq){ res.innerHTML='<div class="status">'+(wideWill?'🔎 В наших книгах точного совпадения нет — ищу по всей библиотеке…':'Ничего не найдено 🤷')+'</div>'; }
+  if(!count && seq===_seq){
+    if(wideWill){ res.innerHTML='<div class="status">🔎 В наших книгах точного совпадения нет — ищу по всей библиотеке…</div>'; }
+    else if(!res.querySelector('.corrGo')){ res.innerHTML='<div class="status">Ничего не найдено 🤷</div>'; }   // M173: не затирать баннер «возможно, вы искали…»
+  }
   // Поиск по ВСЕЙ библиотеке: наши книги выше (если нашлись), ниже — остальной корпус (sunnah.one). Только при явном «Найти»/Enter.
   if(wideWill) await appendWide(seq, wideQ);
 }
