@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v113</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v114</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -455,7 +455,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v113';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v114';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1121,6 +1121,49 @@ function correctBanner(changed, correctedPhrase){
   res.insertBefore(b, res.children[1]||null);
   const cg=b.querySelector('.corrGo'); if(cg) cg.onclick=()=>{ document.getElementById('q').value=correctedPhrase; _strictSearch=false; runSearch(true); };
 }
+// M172 для арабского/общего поиска (группы parseQuery). Работает на ОДНОМ массиве (Коран/сборник).
+// Одна группа, ≥2 позитивных терма → убираем самый частый терм, оставляя редкие; neg-термы сохраняем.
+function relaxGroupsArr(arr, groups, modes, strict){
+  let hits=arr.filter(d=>docMatch(d,groups,modes));
+  if(hits.length || strict || groups.length!==1) return {hits, dropped:[], used:[]};
+  const g=groups[0]; const pos=g.filter(t=>!t.neg); const neg=g.filter(t=>t.neg);
+  if(pos.length<2) return {hits:[], dropped:[], used:[]};
+  const df=new Map(pos.map(t=>[t,0]));
+  for(const d of arr) for(const t of pos) if(termMatch(t,d,modes)) df.set(t,df.get(t)+1);
+  const dropped=[]; let keep=pos.filter(t=>df.get(t)>0);            // ① убрать термы, которых нет в текстах (df=0)
+  pos.filter(t=>df.get(t)===0).forEach(t=>dropped.push(t));
+  if(dropped.length && keep.length){ hits=arr.filter(d=>docMatch(d,[keep.concat(neg)],modes));
+    if(hits.length) return {hits, dropped:dropped.map(t=>t.t), used:keep.map(t=>t.t)}; }
+  if(!keep.length) return {hits:[], dropped:dropped.map(t=>t.t), used:[]};
+  const order=[...keep].sort((a,b)=>df.get(b)-df.get(a)); let cur=keep.slice();   // ② убрать самые частые
+  for(const drop of order){ if(cur.length<=1) break; cur=cur.filter(t=>t!==drop); dropped.push(drop);
+    hits=arr.filter(d=>docMatch(d,[cur.concat(neg)],modes));
+    if(hits.length) return {hits, dropped:dropped.map(t=>t.t), used:cur.map(t=>t.t)}; }
+  return {hits:[], dropped:dropped.map(t=>t.t), used:cur.map(t=>t.t)};
+}
+// M172 для хадисов по нескольким сборникам: df по кэшированным сборникам → убрать самый частый терм → дозаполнить add().
+async function relaxArabicHadith(codes, groups, modes, seq, add){
+  if(groups.length!==1) return null;
+  const g=groups[0]; const pos=g.filter(t=>!t.neg); const neg=g.filter(t=>t.neg);
+  if(pos.length<2) return null;
+  const loadArr=async code=>{ const C=COLLECTIONS.find(x=>x.code===code), X=EXTRA_MAP[code];
+    if(code==='muhaymin') return await loadMuhaymin(); if(code==='ahmad') return await loadAhmad();
+    if(X&&X.file) return await loadLocal(code,X.file); if(X) return await loadExtra(code);
+    if(C&&C.file) return await loadLocal(code,C.file); return await loadCollection(code); };
+  const arrs={}; const df=new Map(pos.map(t=>[t,0]));
+  for(const code of codes){ if(seq!==_seq) return null; let arr; try{ arr=await loadArr(code); }catch(e){ continue; }
+    arrs[code]=arr; for(const doc of arr) for(const t of pos) if(termMatch(t,doc,modes)) df.set(t,df.get(t)+1); await _yield(); }
+  const tryScan=async rg=>{ let found=0; for(const code of codes){ if(seq!==_seq) return -1; const arr=arrs[code]; if(!arr) continue;
+      for(const doc of arr){ if(docMatch(doc,rg,modes)){ add(code==='muhaymin'?{type:'m',h:doc}:{type:'h',code,h:doc}); found++; } } await _yield(); } return found; };
+  const dropped=[]; let keep=pos.filter(t=>df.get(t)>0);            // ① убрать термы с df=0 (их нет в текстах)
+  pos.filter(t=>df.get(t)===0).forEach(t=>dropped.push(t));
+  if(!keep.length) return {dropped:dropped.map(t=>t.t), used:[]};
+  if(dropped.length){ const f=await tryScan([keep.concat(neg)]); if(f<0) return null; if(f) return {dropped:dropped.map(t=>t.t), used:keep.map(t=>t.t)}; }
+  const order=[...keep].sort((a,b)=>df.get(b)-df.get(a)); let cur=keep.slice();   // ② убрать самые частые
+  for(const drop of order){ if(cur.length<=1) break; cur=cur.filter(t=>t!==drop); dropped.push(drop);
+    const f=await tryScan([cur.concat(neg)]); if(f<0) return null; if(f) return {dropped:dropped.map(t=>t.t), used:cur.map(t=>t.t)}; }
+  return {dropped:dropped.map(t=>t.t), used:cur.map(t=>t.t)};
+}
 async function runSearch(explicit){
   const strict=_strictSearch; _strictSearch=false;   // M173: захватываем флаг строгого режима на этот запуск
   const seq=++_seq; groupSrc=false;   // каждый новый поиск — обычным списком (группировка — опция рядом с результатом)
@@ -1283,7 +1326,10 @@ async function runSearch(explicit){
       }catch(e){}
       if(seq!==_seq) return; setHead(false);
     }
+    let relaxA=null;   // M172: по всем словам 0 → ослабить группу (арабский/общий поиск по сборникам)
+    if(!count && !modes.ai && !numMode && !strict){ relaxA=await relaxArabicHadith(codes, groups, modes, seq, add); if(seq!==_seq) return; }
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
+    if(relaxA && relaxA.dropped.length && count) relaxBanner(relaxA.dropped, relaxA.used);
     if(count) ensureGrpToggle();
     if(!numMode) addLibMore();   // кнопка «искать ещё в большой библиотеке» (16 изданий + Мукбиль)
   } else {
@@ -1304,7 +1350,8 @@ async function runSearch(explicit){
           for(const v of relaxQ.hits) add({type:'q',v,ru:ru[v.s+':'+v.a],rq:relaxQ.used.join(' ')});
           if(!strict) corrQ=correctQuery(qw, ruVocabFrom('q', Object.values(ru))); }   // M173: опечатки
       }
-      else { for(const v of arr){ if(docMatch(v,groups,modes)){ add({type:'q',v}); if(rootMode) collectForms(v.text,qSkels,rootForms); } } }
+      else { relaxQ=relaxGroupsArr(arr, groups, modes, strict);   // M172: ослабление арабского/общего поиска по Корану
+        for(const v of relaxQ.hits){ add({type:'q',v}); if(rootMode) collectForms(v.text,qSkels,rootForms); } }
     }catch(e){}
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
     if(corrQ && corrQ.changed.length) correctBanner(corrQ.changed, corrQ.corrected.join(' '));   // M173: «возможно, вы искали…»
