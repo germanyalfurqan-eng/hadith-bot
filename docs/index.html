@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v117</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v118</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -456,7 +456,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v117';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v118';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -744,20 +744,35 @@ let hadithRu=null;
 async function loadHadithRu(){ if(hadithRu)return hadithRu; setStatus('Загружаю русские переводы хадисов…');
   const j=await (await fetch('./hadith_ru.json')).json();
   hadithRu=j.map(x=>{ const t=cleanRu(x.t); return {s:x.s,n:x.n,t:t,norm:t.toLowerCase()}; }); return hadithRu; }
+// арабский оригинал хадиса по коду+номеру (для русских карточек: тахридж/передатчики/Arabus/огласовки)
+async function getArabicHadith(code,num){
+  try{ const arr=await loadByCode(code); const h=arr.find(x=>String(x.num)===String(num)); return h?(h.text||''):''; }catch(e){ return ''; }
+}
 function cardHadithRu(d){ const card=document.createElement('div');card.className='card';
-  const ru=document.createElement('div');ru.style.cssText='font-size:16px;line-height:1.7';ru.innerHTML=hlRu(d.ru,d.rq||'');card.appendChild(ru);
+  const ru=document.createElement('div');ru.className='ru-out';ru.style.cssText='font-size:16px;line-height:1.7';ru.innerHTML=hlRu(d.ru,d.rq||'');card.appendChild(ru);
   const meta=document.createElement('div');meta.className='meta';
-  const canRead = isReadable(d.s);   // M102: клик по источнику → читалка на этом хадисе (как в арабских карточках)
+  const canRead = isReadable(d.s);   // M102: клик по источнику → читалка на этом хадисе
   meta.innerHTML='<span class="src'+(canRead?' srcnav" style="cursor:pointer" title="Открыть в читалке на этом хадисе">📖 ':'">')+arOf(d.s)+' · №'+d.n+'</span><span class="grade">рус. перевод</span>';
   if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp) sp.onclick=()=>openReader(d.s,String(d.n)); }
-  addStar(meta,{k:'h|'+d.s+'|'+d.n,type:'h',coll:arOf(d.s),label:arOf(d.s)+' №'+d.n,text:(d.ru||'').slice(0,200)});
-  const cp=document.createElement('button');cp.className='tr-btn';cp.textContent='⧉';cp.title='Копировать';
-  cp.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
-  cp.onclick=()=>copyWithSig(d.ru+'\n— '+arOf(d.s)+' №'+d.n); meta.appendChild(cp);
-  const fbb=document.createElement('button');fbb.className='tr-btn';fbb.textContent='✍️ Сообщить нам';
-  fbb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--link);padding:6px 10px';
-  fbb.onclick=()=>openFeedback(arOf(d.s)+' №'+d.n); meta.appendChild(fbb);
-  card.appendChild(meta); return card; }
+  const fav={k:'h|'+d.s+'|'+d.n,type:'h',coll:arOf(d.s),label:arOf(d.s)+' №'+d.n,text:(d.ru||'').slice(0,200)};
+  card.appendChild(meta);
+  // подтянуть арабский оригинал → арабский текст + ПОЛНЫЙ набор кнопок (как у обычных постов)
+  getArabicHadith(d.s,d.n).then(ar=>{
+    if(ar){ const ad=document.createElement('div'); ad.className='ar'; ad.style.marginTop='10px'; ad.innerHTML=hl(ar,[]);
+      card.insertBefore(ad, meta);   // арабский — над строкой кнопок (русский остаётся сверху)
+      if(cfg.arabus){ try{ loadRoots(); enableArabusTap(ad); }catch(e){} }
+      addTr(meta, card, ar, null, fav);   // Перевод/Arabus/огласовки/Где ещё передаётся/Передатчики/копир/Сообщить
+    } else {
+      addStar(meta,fav);
+      const cp=document.createElement('button');cp.className='tr-btn';cp.textContent='⧉';cp.title='Копировать';
+      cp.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
+      cp.onclick=()=>copyWithSig(d.ru+'\n— '+arOf(d.s)+' №'+d.n); meta.appendChild(cp);
+      const fbb=document.createElement('button');fbb.className='tr-btn';fbb.textContent='✍️ Сообщить нам';
+      fbb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--link);padding:6px 10px';
+      fbb.onclick=()=>openFeedback(arOf(d.s)+' №'+d.n); meta.appendChild(fbb);
+    }
+  });
+  return card; }
 function hlRu(text,q){ let html=esc(text); const ws=q.toLowerCase().split(/\s+/).filter(w=>w.length>1).sort((a,b)=>b.length-a.length);
   for(const w of ws){ try{ html=html.replace(new RegExp('('+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'%%H%%$1%%E%%'); }catch(e){} }
   return html.split('%%H%%').join('<mark>').split('%%E%%').join('</mark>'); }
