@@ -2398,23 +2398,42 @@ def _arabus_clean(x):
     for a, b in (('&quot;', '"'), ('&amp;', '&'), ('&gt;', '>'), ('&lt;', '<'), ('&#39;', "'"), ('&nbsp;', ' ')):
         x = x.replace(a, b)
     return re.sub(r'\s+', ' ', x).strip()
-def arabus_fetch(word):
-    global _arabus_cache
-    key = _arabus_key(word)
-    if not key:
-        return {"word": "", "count": 0, "entries": []}
-    if _arabus_cache is None:
-        _arabus_cache = _data_get("arabus.json", {}) or {}
-    if key in _arabus_cache:
-        return _arabus_cache[key]
+def _arabus_variants(w):
+    # словарь Баранова ищет по корню/основе → не нашли точное слово, пробуем убрать приставки/окончания/корень
+    w = re.sub(r'[ً-ْٰـ]', '', (w or '')).strip()
+    out = []; seen = set()
+    def add(x):
+        x = (x or '').strip()
+        if 2 <= len(x) <= 24 and x not in seen:
+            seen.add(x); out.append(x)
+    if w:
+        add(w)
+    pres = ['وال', 'فال', 'بال', 'كال', 'لل', 'ال', 'و', 'ف', 'ب', 'ك', 'ل', 'أ', 'است', 'سي', 'ست', 'ي', 'ت', 'ن']
+    bases = [w] + [w[len(p):] for p in pres if w.startswith(p) and len(w) - len(p) >= 2]
+    sufs = ['تموها', 'نا', 'وا', 'تم', 'تن', 'هما', 'كما', 'تما', 'هم', 'هن', 'كم', 'كن', 'ها', 'تها', 'ته', 'ون', 'ين', 'ان', 'ات', 'ة', 'ه', 'ك', 'ت', 'ي']
+    for b in bases:
+        add(b)
+        for s in sufs:
+            if b.endswith(s) and len(b) - len(s) >= 2:
+                add(b[:-len(s)])
+    for b in list(seen):
+        sk = re.sub(r'[اويىءآإأ]', '', b)
+        if len(sk) >= 3:
+            add(sk)
+        if b[:1] in 'أإا' and len(b) >= 4:
+            add(b[1:])
+    return out[:9]
+
+def _arabus_scrape(word):
+    # вернуть (ok, entries): ok=True если ответ 200 (даже если статей 0); ошибка сети → ok=False
     try:
-        url = "https://arabus.ru/search/" + requests.utils.quote(key)
-        rr = requests.get(url, headers={"User-Agent": "Mozilla/5.0", "Referer": "https://arabus.ru/"}, timeout=20)
+        rr = requests.get("https://arabus.ru/search/" + requests.utils.quote(word),
+                          headers={"User-Agent": "Mozilla/5.0", "Referer": "https://arabus.ru/"}, timeout=18)
         if rr.status_code != 200:
-            return {"word": key, "count": 0, "entries": []}
+            return False, []
         html = rr.text
     except Exception:
-        return {"word": key, "count": 0, "entries": []}
+        return False, []
     entries = []
     for ch in html.split('class="word_in_list"')[1:]:
         ar = re.search(r'word_db">(.*?)</div>', ch, re.S)
@@ -2427,10 +2446,29 @@ def arabus_fetch(word):
             entries.append(e)
         if len(entries) >= 30:
             break
-    res = {"word": key, "count": len(entries), "entries": entries, "d": datetime.now().strftime("%d.%m.%Y")}
-    if entries:
-        _arabus_cache[key] = res
-        _data_put("arabus.json", _arabus_cache, f"arabus: +{key} ({len(entries)})")
+    return True, entries
+
+def arabus_fetch(word):
+    global _arabus_cache
+    key = _arabus_key(word)
+    if not key:
+        return {"word": "", "count": 0, "entries": []}
+    if _arabus_cache is None:
+        _arabus_cache = _data_get("arabus.json", {}) or {}
+    if key in _arabus_cache:
+        return _arabus_cache[key]
+    matched = None; entries = []; any_ok = False
+    for cand in _arabus_variants(key):
+        ok, ents = _arabus_scrape(cand)
+        any_ok = any_ok or ok
+        if ents:
+            matched = cand; entries = ents; break
+    if not any_ok:                       # сеть недоступна — не кэшируем (чтобы потом перепроверить)
+        return {"word": key, "count": 0, "entries": []}
+    res = {"word": key, "matched": matched or key, "count": len(entries), "entries": entries,
+           "d": datetime.now().strftime("%d.%m.%Y")}
+    _arabus_cache[key] = res            # кэшируем и пустой (слово реально не в словаре — частицы и т.п.)
+    _data_put("arabus.json", _arabus_cache, f"arabus: +{key}→{matched or '∅'} ({len(entries)})")
     return res
 def was_translated(text):
     """Уже есть перевод этого текста в памяти? (свежий vs из базы — для журнала расхода)."""

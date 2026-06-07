@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v120</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v121</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -203,7 +203,6 @@
     <div class="chip" data-mode="root" title="Однокоренные: ищет все формы слова по корню (намного шире). Покажет панель форм.">جذ Однокоренные</div>
     <div class="chip" data-mode="diac" title="Огласовки точно: совпадение с учётом تشكيل (как набрано в запросе).">َ Огласовки точно</div>
     <div class="chip" data-mode="ai" title="По смыслу (ИИ): опиши смысл на русском/англ. — ИИ подберёт арабские фразы и найдёт хадисы/аяты. Текст всегда из реальной базы.">🧠 По смыслу (ИИ)</div>
-    <div class="chip" data-mode="arabus" id="arabusChip" title="Режим Arabus: при включении КАЖДОЕ слово в постах (хадисы и аяты) активно — тапни слово → корень, перевод и все варианты значений">📕 Arabus</div>
     <div class="chip" id="moreModes" style="border-style:dashed" title="Дополнительные режимы поиска">⚙️ ещё ▾</div>
   </div>
   <div class="modes" id="modesMore" style="display:none">
@@ -456,7 +455,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v120';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v121';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -752,7 +751,7 @@ function cardHadithRu(d){ const card=document.createElement('div');card.classNam
   const ru=document.createElement('div');ru.className='ru-out';ru.style.cssText='font-size:16px;line-height:1.7';ru.innerHTML=hlRu(d.ru,d.rq||'');card.appendChild(ru);
   const meta=document.createElement('div');meta.className='meta';
   const canRead = isReadable(d.s);   // M102: клик по источнику → читалка на этом хадисе
-  meta.innerHTML='<span class="src'+(canRead?' srcnav" style="cursor:pointer" title="Открыть в читалке на этом хадисе">📖 ':'">')+arOf(d.s)+' · №'+d.n+'</span><span class="grade">рус. перевод</span>';
+  meta.innerHTML='<span class="src'+(canRead?' srcnav" style="cursor:pointer" title="Открыть в читалке на этом хадисе">📖 ':'">')+arOf(d.s)+' · №'+d.n+'</span>';
   if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp) sp.onclick=()=>openReader(d.s,String(d.n)); }
   const fav={k:'h|'+d.s+'|'+d.n,type:'h',coll:arOf(d.s),label:arOf(d.s)+' №'+d.n,text:(d.ru||'').slice(0,200)};
   card.appendChild(meta);
@@ -760,8 +759,8 @@ function cardHadithRu(d){ const card=document.createElement('div');card.classNam
   getArabicHadith(d.s,d.n).then(ar=>{
     if(ar){ const ad=document.createElement('div'); ad.className='ar'; ad.style.marginTop='10px'; ad.innerHTML=hl(ar,[]);
       card.insertBefore(ad, meta);   // арабский — над строкой кнопок (русский остаётся сверху)
-      if(cfg.arabus){ try{ loadRoots(); enableArabusTap(ad); }catch(e){} }
       addTr(meta, card, ar, null, fav);   // Перевод/Arabus/огласовки/Где ещё передаётся/Передатчики/копир/Сообщить
+      if(card.dataset.arabOn==='1'){ try{ loadRoots(); enableArabusTap(ad); ad.style.cursor='pointer'; }catch(e){} }
     } else {
       addStar(meta,fav);
       const cp=document.createElement('button');cp.className='tr-btn';cp.textContent='⧉';cp.title='Копировать';
@@ -972,9 +971,6 @@ var _rcls=document.getElementById('recentClose'); if(_rcls) _rcls.onclick=()=>{ 
 var _pcls=document.getElementById('popClose'); if(_pcls) _pcls.onclick=()=>{ _popClosed=true; var p=document.getElementById('popularBox'); if(p) p.style.display='none'; };
 document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.dataset.mode;
   if(!m) return;   // чипы без режима (⚙️ ещё, журналы) имеют свои обработчики
-  if(m==='arabus'){ cfg.arabus=!cfg.arabus; saveCfg(cfg); ch.classList.toggle('on',cfg.arabus);
-    toast(cfg.arabus?'📕 Arabus вкл — тапни любое слово в посте':'Arabus выкл');
-    if(document.getElementById('q').value.trim()) runSearch(); return; }
   if(m==='neuro'){ modes.neuro=!modes.neuro; ch.classList.toggle('on',modes.neuro);
     document.getElementById('neuroBox').style.display=modes.neuro?'block':'none'; return; }
   modes[m]=!modes[m]; ch.classList.toggle('on',modes[m]);
@@ -984,7 +980,6 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.datas
     if(modes.ai && !inp.value.trim()) toast('Пиши осмысленно, напр.: «хадис о запрете нововведений»'); }
   if(document.getElementById('q').value.trim()) runSearch();   // сразу пересчитать с новым режимом
 });
-(function(){var a=document.getElementById('arabusChip'); if(a) a.classList.toggle('on',!!cfg.arabus);})();
 var _ct=document.getElementById('colsToggle'); if(_ct) _ct.onclick=()=>{ const b=document.getElementById('colsBody'); const open=b.style.display==='none'; b.style.display=open?'block':'none'; var a=document.getElementById('colsArrow'); if(a) a.textContent=open?'▴':'▾'; };
 document.getElementById('selAll').onclick=()=>{ COLLECTIONS.forEach(c=>selCols.add(c.code)); renderCols(); };
 document.getElementById('selNone').onclick=()=>{ selCols.clear(); renderCols(); };
@@ -1393,9 +1388,7 @@ async function runSearch(explicit){
   // Поиск по ВСЕЙ библиотеке: наши книги выше (если нашлись), ниже — остальной корпус (sunnah.one). Только при явном «Найти»/Enter.
   if(wideWill) await appendWide(seq, wideQ);
 }
-function makeCard(d){ const c=d.type==='q'?cardAyah(d,_groups):(d.type==='m'?cardMuh(d,_groups):(d.type==='hr'?cardHadithRu(d):cardHadith(d,_groups)));
-  if(cfg.arabus){ try{ loadRoots(); c.querySelectorAll('.ar').forEach(enableArabusTap); }catch(e){} }   // режим Arabus: каждое слово активно
-  return c; }
+function makeCard(d){ return d.type==='q'?cardAyah(d,_groups):(d.type==='m'?cardMuh(d,_groups):(d.type==='hr'?cardHadithRu(d):cardHadith(d,_groups))); }
 // имя сборника (рус/ар/лат от ИИ) → код нашего сборника
 function _srcToCode(name){ if(!name) return ''; const s=(''+name).toLowerCase().trim();
   const map=[['bukhari',['бухари','البخاري','bukhari','альбухари']],['muslim',['муслим','مسلم','muslim']],
@@ -1612,8 +1605,9 @@ function _wordAtPoint(x,y){
   return {w, node, s, e};
 }
 function enableArabusTap(arDiv){
-  if(!arDiv || arDiv.dataset.arab) return; arDiv.dataset.arab='1'; arDiv.style.cursor='pointer';
+  if(!arDiv || arDiv.dataset.arab) return; arDiv.dataset.arab='1';
   arDiv.addEventListener('click', ev=>{
+    const card=arDiv.closest('.card'); if(card && card.dataset.arabOn!=='1') return;   // включается кнопкой Arabus на карточке
     if(ev.target.closest && ev.target.closest('.qw')) return;   // у аятов свои слова-кнопки
     const r=_wordAtPoint(ev.clientX, ev.clientY); if(!r) return;
     ev.stopPropagation();
@@ -1752,7 +1746,9 @@ async function showArabusInline(word, host){
     const r=await fetch(BACKEND_URL+'/arabus?word='+encodeURIComponent(word)+'&initData='+encodeURIComponent(INITDATA));
     const j=await r.json();
     if(!j.entries||!j.entries.length){ host.innerHTML='<span class="hint">📕 Arabus: не нашёл «'+esc(word)+'». <span class="arabusExt" style="color:var(--link);cursor:pointer;text-decoration:underline">открыть на arabus.ru</span></span>'; const a=host.querySelector('.arabusExt'); if(a) a.onclick=()=>openArabus(word); return; }
-    let h='<div style="max-height:240px;overflow:auto;margin-top:2px">';
+    let h='';
+    if(j.matched && j.matched!==word) h+='<div style="font-size:11px;color:var(--hint);margin-bottom:2px">по основе «'+esc(j.matched)+'»</div>';
+    h+='<div style="max-height:240px;overflow:auto;margin-top:2px">';
     j.entries.forEach(e=>{ h+='<div style="border-top:1px solid var(--border);padding:5px 0"><div style="direction:rtl;text-align:right"><b style="font-size:18px;'+_AF+'">'+esc(e.ar||'')+'</b>'+(e.gram?(' <span style="color:var(--hint);font-size:12px">'+esc(e.gram)+'</span>'):'')+'</div>'+(e.ru?('<div style="font-size:13px;margin-top:2px;line-height:1.5">'+esc(e.ru)+'</div>'):'')+'</div>'; });
     h+='</div><div style="margin-top:4px;font-size:11px;color:var(--hint)">📕 Arabus · в нашей базе'+(j.d?(' · '+esc(j.d)):'')+'</div>';
     host.innerHTML=h;
@@ -1794,6 +1790,18 @@ function addTr(meta,card,text,ayah,fav){
     if(out.style.display!=='none' && (out.textContent||'').trim()){ tr.dataset.shown='1'; if(tr.dataset.t0===undefined) tr.dataset.t0=tr.title||''; tr.style.boxShadow='0 0 8px rgba(74,222,128,.6)'; tr.title='Нажми ещё раз, чтобы скрыть перевод'; }
   };
   meta.appendChild(tr);
+  if(!ayah){   // 📕 Arabus — тумблер на карточке: нажал → тапай любое слово → корень/значения (наш словарь)
+    const ab=document.createElement('button'); ab.className='tr-btn';
+    ab.style.cssText='background:transparent;border:1px solid #1e7d5a;color:#7fe3bf;padding:6px 9px;display:inline-flex;align-items:center;gap:5px';
+    ab.innerHTML='<img src="https://arabus.ru/img/logo_icon.png" alt="" style="height:15px;width:15px;border-radius:3px;object-fit:contain" onerror="this.replaceWith(document.createTextNode(\'\\uD83D\\uDCD5\'))"> Arabus';
+    ab.title='Разбор слов: нажми, затем тапни любое слово в тексте → корень и значения';
+    ab.onclick=()=>{ const on=card.dataset.arabOn!=='1'; card.dataset.arabOn=on?'1':'';
+      try{ loadRoots(); }catch(e){}
+      card.querySelectorAll('.ar').forEach(d=>{ enableArabusTap(d); d.style.cursor=on?'pointer':'default'; });
+      ab.style.boxShadow=on?'0 0 8px rgba(127,227,191,.7)':''; ab.style.background=on?'#173d30':'transparent';
+      toast(on?'📕 Тапни любое слово в тексте':'Arabus выкл'); };
+    meta.appendChild(ab);
+  }
   if(ayah){ const tf=document.createElement('button');tf.className='tr-btn';tf.textContent='📖 Тафсир';tf.title='Тафсир аята в отдельном окне (Ибн Касир/Табари/Саади/Мухтасар/Куртуби/Багави)';
     tf.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
     tf.onclick=()=>openTafsir(ayah.s,ayah.a);
