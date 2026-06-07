@@ -145,7 +145,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v105</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v106</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -260,6 +260,7 @@
     <div class="row"><span>✒️ Подпись при копировании (ссылка на приложение)</span><div class="sw" id="sigSw"></div></div>
     <div class="row"><span>🔍 Щипок-зум — увеличение экрана двумя пальцами <span style="color:var(--hint);font-size:11px">(по умолчанию выкл.)</span></span><div class="sw" id="zoomSw"></div></div>
     <div class="row"><span>🕐 Недавние поиски (показывать при пустом поле)</span><div class="sw" id="recentSw"></div></div>
+    <div class="row"><span>🔥 Популярное (что чаще ищут, при пустом поле)</span><div class="sw" id="popSw"></div></div>
     <div class="row"><span>🎨 Тема оформления</span>
       <select id="themeSel" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 8px">
         <option value="dark">Тёмная</option>
@@ -448,7 +449,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v105';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v106';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -510,7 +511,7 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 /* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:true,wordTap:true}, loadCfg());
+let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:true,wordTap:true,popular:true}, loadCfg());
 function applyTheme(){ document.body.classList.toggle('light', cfg.theme==='light'); }
 try{ applyTheme(); }catch(e){}
 
@@ -917,6 +918,7 @@ async function loadPopular(){
 }
 function renderPopular(){
   const list=document.getElementById('popularList'), pb=document.getElementById('popularBox'); if(!list||!pb||!_popItems) return;
+  if(cfg.popular===false){ pb.style.display='none'; return; }   // отключено в Настройках
   const inp=document.getElementById('q'); if(inp&&inp.value.trim()){ pb.style.display='none'; return; }
   const items=_popItems.filter(it=>!it.tab || it.tab===tab).slice(0,12);   // РАЗДЕЛЬНО по вкладке
   const cap=pb.querySelector('.hint'); if(cap) cap.textContent='🔥 Популярное ('+(tab==='quran'?'аяты':'хадисы')+') — что чаще ищут';
@@ -2272,6 +2274,7 @@ var _zm=document.getElementById('zoomSw'); if(_zm){ _zm.classList.toggle('on',!c
 applyZoom();
 var _th=document.getElementById('themeSel'); if(_th){ _th.value=cfg.theme||'dark'; _th.onchange=()=>{ cfg.theme=_th.value; saveCfg(cfg); applyTheme(); toast(cfg.theme==='light'?'Светлая тема ☀️':'Тёмная тема 🌙'); }; }
 var _rcw=document.getElementById('recentSw'); if(_rcw){ _rcw.classList.toggle('on',cfg.recent!==false); _rcw.onclick=()=>{ cfg.recent=(cfg.recent===false); saveCfg(cfg); _rcw.classList.toggle('on',cfg.recent!==false); if(cfg.recent===false) hideRecent(); }; }
+var _psw=document.getElementById('popSw'); if(_psw){ _psw.classList.toggle('on',cfg.popular!==false); _psw.onclick=()=>{ cfg.popular=(cfg.popular===false); saveCfg(cfg); _psw.classList.toggle('on',cfg.popular!==false); var pb=document.getElementById('popularBox'); if(cfg.popular===false&&pb){pb.style.display='none';} else { try{renderPopular();}catch(e){} } }; }
 applyTheme();
 /* Подсказка при попытке увеличить экран пальцами, когда зум выключен (ненавязчиво, с «не показывать» и эскалацией) */
 let _zoomTries=0, _zoomLast=0;

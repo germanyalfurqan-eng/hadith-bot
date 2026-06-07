@@ -849,9 +849,36 @@ def search_similar_hadith(arabic_text):
         return refs
     except: return []
 
+# ===== 🚨 АВТО-РУБИЛЬНИК ЗАЩИТЫ КЛЮЧА (анти-спам ИИ) =====
+# Если за окно слишком много вызовов ИИ — АВТО-выключаем ИИ и ждём владельца (защита баланса DeepSeek).
+_AI_CALLS = []
+_AI_KILL = False           # авто-выключение (спам)
+_AI_KILL_MANUAL = False    # ручное выключение владельцем
+_AI_KILL_PENDING = None    # текст уведомления владельцу (отправится при следующем апдейте)
+AI_RATE_LIMIT = 35         # >35 вызовов ИИ за окно → авария
+AI_RATE_WINDOW = 120       # секунд
+def ai_kill_active():
+    return _AI_KILL or _AI_KILL_MANUAL
+def ai_note_call():
+    """Учесть вызов ИИ; вернуть False, если ИИ выключен или сработал авто-рубильник (спам)."""
+    global _AI_KILL, _AI_KILL_PENDING
+    if _AI_KILL or _AI_KILL_MANUAL:
+        return False
+    now = time.time(); _AI_CALLS.append(now)
+    while _AI_CALLS and now - _AI_CALLS[0] > AI_RATE_WINDOW:
+        _AI_CALLS.pop(0)
+    if len(_AI_CALLS) > AI_RATE_LIMIT:
+        _AI_KILL = True
+        _AI_KILL_PENDING = (f"🚨 АВТО-РУБИЛЬНИК: {len(_AI_CALLS)} запросов к ИИ за {AI_RATE_WINDOW}с — похоже на спам. "
+                            f"ИИ ВЫКЛЮЧЕН автоматически (защита баланса DeepSeek). Включить: «ии вкл».")
+        return False
+    return True
+
 def ask_deepseek(prompt, system, max_tokens=2000):
     """Личный ответ владельцу через DeepSeek API. max_tokens — потолок длины ответа
     (для перевода длинных хадисов поднимаем, иначе текст обрывается на полуслове)."""
+    if not ai_note_call():   # 🚨 защита: ИИ выключен/спам → не тратим ключ
+        return None
     try:
         r = requests.post(
             "https://api.deepseek.com/chat/completions",
@@ -881,6 +908,8 @@ def deepseek_balance():
     return None
 
 def ask_ai(prompt, system=None, owner=False, max_tokens=None):
+    if ai_kill_active():   # 🚨 авто-рубильник: ИИ выключен (спам/вручную) — не дёргаем ни DeepSeek, ни бесплатные
+        return "⏸ ИИ временно на паузе (защита от спама). Включит владелец."
     if system is None:
         system = f"Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском. Сегодняшняя дата: {datetime.now().strftime('%d.%m.%Y')}."
     # для владельца — сначала его DeepSeek
@@ -1000,7 +1029,7 @@ def translate_matn(arabic, src="", owner=False, force=False):
               "Без вступлений, без пояснений, без арабского текста, без кавычек, без указания модели — только перевод.")
     # max_tokens большой: длинные хадисы (напр. речь Умара) не должны обрываться на полуслове
     ru = ask_ai("Переведи на русский:\n" + arabic, sysmsg, owner=owner, max_tokens=8000)
-    if ru and not ru.startswith("❌"):
+    if ru and not ru.startswith("❌") and not ru.startswith("⏸"):
         ru = re.sub(r"\n*⚡ \*Модель:.*$", "", ru, flags=re.S).strip()
         cache[key] = {"ar": arabic[:600], "ru": ru, "src": (src or "")[:120]}
         _trans_dirty += 1
@@ -1068,6 +1097,23 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text or ""
     text = text.strip()
+
+    # 🚨 авто-рубильник ИИ (защита баланса DeepSeek): уведомить владельца о срабатывании + команды управления
+    global _AI_KILL, _AI_KILL_MANUAL, _AI_KILL_PENDING
+    if _AI_KILL_PENDING:
+        _m = _AI_KILL_PENDING; _AI_KILL_PENDING = None
+        try: await context.bot.send_message(OWNER_ID, _m)
+        except Exception: pass
+        try: await context.bot.send_message(LOG_CHAT_ID, _m)
+        except Exception: pass
+    if is_owner(update) and text.lower() in ("ии вкл", "ии включи", "включи ии", "ai on"):
+        _AI_KILL = False; _AI_KILL_MANUAL = False; _AI_CALLS.clear()
+        await update.message.reply_text("✅ ИИ снова включён."); return
+    if is_owner(update) and text.lower() in ("ии выкл", "выключи ии", "ai off", "ии стоп"):
+        _AI_KILL_MANUAL = True
+        await update.message.reply_text("⏸ ИИ выключен вручную. Включить: «ии вкл»."); return
+    if is_owner(update) and text.lower() in ("ии статус", "статус ии", "ai status"):
+        await update.message.reply_text(f"ИИ: {'⏸ ВЫКЛ' if ai_kill_active() else '✅ вкл'}\nВызовов за {AI_RATE_WINDOW}с: {len(_AI_CALLS)}/{AI_RATE_LIMIT}\nавто-выкл={_AI_KILL} · ручной={_AI_KILL_MANUAL}"); return
 
     if text in ("📖 Инструкция", "инструкция", "путеводитель", "гайд", "/guide"):
         await send_long(update, get_guide())
