@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v111</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v112</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -455,7 +455,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v111';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v112';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1056,7 +1056,42 @@ function applyPick(){
     head.innerHTML='<div style="color:var(--link);font-size:13px;margin-bottom:4px">'+note+(sel.size?(' · только: '+[...sel].join(' · ')):'')+(excl.size?(' · без: '+[...excl].join(' · ')):'')+'</div>Найдено: '+shown+(shown>CAP?' (первые '+CAP+')':''); }
   renderPickBar();
 }
+/* ===== M172/M173: двуступенчатый поиск БЕЗ ИИ (ослабление по словам + «искать строго») ===== */
+let _strictSearch=false;   // M173: пользователь настоял на точном запросе → не ослаблять
+// words: слова запроса (lowercase, len>1); getNorm(item)->норм.текст; pool: массив элементов; strict: не ослаблять.
+// Возвращает {hits,dropped,used}: сначала ВСЕ слова; пусто → убрать слова, которых нет в текстах,
+// затем самые редкие по одному, пока что-то не найдётся. dropped — что убрали (честно показать).
+function relaxSearch(words, getNorm, pool, strict){
+  const test=(ws,it)=>ws.every(w=>getNorm(it).indexOf(w)!==-1);
+  let hits=pool.filter(it=>test(words,it));
+  if(hits.length || words.length<2 || strict) return {hits, dropped:[], used:words};
+  const df={}; words.forEach(w=>df[w]=0);
+  for(const it of pool){ const t=getNorm(it); for(const w of words) if(t.indexOf(w)!==-1) df[w]++; }
+  const dropped=[]; let used=words.slice();
+  // ① убрать слова, которых вообще нет в текстах
+  const zero=words.filter(w=>df[w]===0);
+  if(zero.length){ used=words.filter(w=>df[w]>0); dropped.push(...zero);
+    if(used.length){ hits=pool.filter(it=>test(used,it)); if(hits.length) return {hits,dropped,used}; } }
+  if(!used.length) return {hits:[], dropped, used:[]};
+  // ② убирать самые ЧАСТЫЕ (малоинформативные) по одному, оставляя редкие/специфичные
+  //    («марьям финики»: убрать частое «марьям», оставить редкое «финики»)
+  const order=[...used].sort((a,b)=>df[b]-df[a]); let cur=used.slice();
+  for(const w of order){ if(cur.length<=1) break; cur=cur.filter(x=>x!==w); dropped.push(w);
+    hits=pool.filter(it=>test(cur,it)); if(hits.length) return {hits,dropped,used:cur}; }
+  return {hits:[], dropped, used:cur};
+}
+// Баннер «искал без …» + кнопка «искать строго как ввёл» (M173). Вставляется сразу под шапкой результатов.
+function relaxBanner(dropped, used){
+  const res=document.getElementById('res');
+  const b=document.createElement('div'); b.className='hint'; b.style.cssText='color:var(--link);font-size:13px;margin:2px 0 8px';
+  b.innerHTML='🔎 По всем словам точного совпадения нет — показываю без: <b>'+dropped.map(esc).join(', ')+'</b>'
+    + (used.length?(' (искал: '+used.map(esc).join(' ')+')'):'')
+    + ' · <span class="strictGo" style="cursor:pointer;text-decoration:underline;white-space:nowrap">🔒 искать строго как ввёл</span>';
+  res.insertBefore(b, res.children[1]||null);
+  const sg=b.querySelector('.strictGo'); if(sg) sg.onclick=()=>{ _strictSearch=true; runSearch(true); };
+}
 async function runSearch(explicit){
+  const strict=_strictSearch; _strictSearch=false;   // M173: захватываем флаг строгого режима на этот запуск
   const seq=++_seq; groupSrc=false;   // каждый новый поиск — обычным списком (группировка — опция рядом с результатом)
   let q=document.getElementById('q').value.trim(); const shown=q;
   if(!q){ toast('Введите запрос'); return; }
@@ -1167,14 +1202,18 @@ async function runSearch(explicit){
     }
     // РУССКИЙ поиск по хадисам (готовые переводы Бухари/Муслим/Абу Дауд). ИИ выкл + кириллица + не число.
     if(!numMode && !modes.ai && /[а-яё]/i.test(shown) && !isArabic(shown)){
+      let relax=null;
       try{ const ru=await loadHadithRu(); if(seq!==_seq) return;
         const qw=shown.toLowerCase().split(/\s+/).filter(w=>w.length>1);
         const allow = (selCols.size||selExtra.size) ? new Set([...selCols,...selExtra]) : null;
-        if(qw.length){ for(const x of ru){ if(allow && !allow.has(x.s)) continue;
-          if(qw.every(w=>x.norm.indexOf(w)!==-1)) add({type:'hr',s:x.s,n:x.n,ru:x.t,rq:shown}); } }
+        const pool = allow ? ru.filter(x=>allow.has(x.s)) : ru;
+        if(qw.length){ relax=relaxSearch(qw, x=>x.norm, pool, strict);   // M172: ослабление при нуле по всем словам
+          for(const x of relax.hits) add({type:'hr',s:x.s,n:x.n,ru:x.t,rq:relax.used.join(' ')}); }
       }catch(e){}
-      if(seq!==_seq) return; setHead(true); setStatus(''); logSearch(shown,tab,count);
-      if(!count){ res.innerHTML='<div class="status">По-русски не нашёл. Готовый перевод есть для Бухари/Муслим/Абу Дауд; для остальных включи 🧠 По смыслу.</div>'; }
+      if(seq!==_seq) return; setHead(true);
+      if(relax && relax.dropped.length && count) relaxBanner(relax.dropped, relax.used);   // честно: что убрали + «строго»
+      setStatus(''); logSearch(shown,tab,count);
+      if(!count){ res.innerHTML='<div class="status">По-русски не нашёл'+(strict?' (строгий режим — как ввёл)':'')+'. Готовый перевод есть для Бухари/Муслим/Абу Дауд; для остальных включи 🧠 По смыслу.</div>'; }
       return;
     }
     // Любой выбор (основной чип ИЛИ доп.сборник) = искать ТОЛЬКО в выбранном.
@@ -1213,6 +1252,7 @@ async function runSearch(explicit){
     if(count) ensureGrpToggle();
     if(!numMode) addLibMore();   // кнопка «искать ещё в большой библиотеке» (16 изданий + Мукбиль)
   } else {
+    let relaxQ=null;
     try{ const arr=await loadQuran(); if(seq!==_seq) return;
       const qn=q.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
       const mref=qn.match(/^(\d{1,3})\s*[:\s]\s*(\d{1,3})$/);
@@ -1224,12 +1264,14 @@ async function runSearch(explicit){
       else if(!modes.ai && /[а-яёa-z]/i.test(shown) && !isArabic(shown)){   // поиск по РУССКОМУ переводу (Кулиев) — НЕ в ИИ-режиме (там ищем по арабским фразам q)
         const ru=await loadQuranRu(); if(seq!==_seq) return;
         const qw=shown.toLowerCase().split(/\s+/).filter(w=>w.length>1);
-        if(qw.length){ for(const v of arr){ const rt=(ru[v.s+':'+v.a]||'').toLowerCase();
-          if(qw.every(w=>rt.indexOf(w)!==-1)) add({type:'q',v,ru:ru[v.s+':'+v.a],rq:shown}); } }
+        if(qw.length){ const gn=v=>(ru[v.s+':'+v.a]||'').toLowerCase();
+          relaxQ=relaxSearch(qw, gn, arr, strict);   // M172: ослабление при нуле по всем словам
+          for(const v of relaxQ.hits) add({type:'q',v,ru:ru[v.s+':'+v.a],rq:relaxQ.used.join(' ')}); }
       }
       else { for(const v of arr){ if(docMatch(v,groups,modes)){ add({type:'q',v}); if(rootMode) collectForms(v.text,qSkels,rootForms); } } }
     }catch(e){}
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
+    if(relaxQ && relaxQ.dropped.length && count) relaxBanner(relaxQ.dropped, relaxQ.used);   // M172: честно показать что убрали
     if(count) ensureGrpToggle();
   }
   setStatus('');
