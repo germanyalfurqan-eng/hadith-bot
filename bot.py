@@ -2387,6 +2387,51 @@ def takhrij_put(source, num, sci, local, muh):
     if not _data_put(_takh_path(source), d, f"takhrij/{source}: +№{key} (всего {len(d)})"):
         return None
     return {"source": source, "num": key, "total": len(d)}
+
+# ---- Arabus (арабско-русский словарь Баранова): прокси+кэш arabus.ru/search/<слово> → корень/значения ----
+# Накопление в data/arabus.json = {слово:{count,entries:[{ar,gram,ru}],d}}. CORS у arabus закрыт → тянем сервером.
+_arabus_cache = None
+def _arabus_key(w):
+    return re.sub(r'[ً-ْٰـ]', '', (w or '')).strip()[:60]   # без огласовок/تطويل
+def _arabus_clean(x):
+    x = re.sub(r'<[^>]+>', '', x or '')
+    for a, b in (('&quot;', '"'), ('&amp;', '&'), ('&gt;', '>'), ('&lt;', '<'), ('&#39;', "'"), ('&nbsp;', ' ')):
+        x = x.replace(a, b)
+    return re.sub(r'\s+', ' ', x).strip()
+def arabus_fetch(word):
+    global _arabus_cache
+    key = _arabus_key(word)
+    if not key:
+        return {"word": "", "count": 0, "entries": []}
+    if _arabus_cache is None:
+        _arabus_cache = _data_get("arabus.json", {}) or {}
+    if key in _arabus_cache:
+        return _arabus_cache[key]
+    try:
+        url = "https://arabus.ru/search/" + requests.utils.quote(key)
+        rr = requests.get(url, headers={"User-Agent": "Mozilla/5.0", "Referer": "https://arabus.ru/"}, timeout=20)
+        if rr.status_code != 200:
+            return {"word": key, "count": 0, "entries": []}
+        html = rr.text
+    except Exception:
+        return {"word": key, "count": 0, "entries": []}
+    entries = []
+    for ch in html.split('class="word_in_list"')[1:]:
+        ar = re.search(r'word_db">(.*?)</div>', ch, re.S)
+        gram = re.search(r'other_db">(.*?)</div>', ch, re.S)
+        mean = re.search(r'meaning_db">(.*?)</p>', ch, re.S)
+        e = {"ar": _arabus_clean(ar.group(1)) if ar else "",
+             "gram": _arabus_clean(gram.group(1)) if gram else "",
+             "ru": _arabus_clean(mean.group(1)) if mean else ""}
+        if e["ar"] or e["ru"]:
+            entries.append(e)
+        if len(entries) >= 30:
+            break
+    res = {"word": key, "count": len(entries), "entries": entries, "d": datetime.now().strftime("%d.%m.%Y")}
+    if entries:
+        _arabus_cache[key] = res
+        _data_put("arabus.json", _arabus_cache, f"arabus: +{key} ({len(entries)})")
+    return res
 def was_translated(text):
     """Уже есть перевод этого текста в памяти? (свежий vs из базы — для журнала расхода)."""
     try:
@@ -2832,6 +2877,19 @@ async def _api_serve(application=None):
         await loop.run_in_executor(None, app_hit, user)
         return _cors(web.json_response({'ok': True}))
 
+    async def arabus(r):
+        # Arabus: корень+значения слова (прокси+кэш arabus.ru); гейт = вход в приложение
+        user = verify_init_data(r.headers.get('X-Init-Data') or r.query.get('initData'))
+        if not feature_allowed('app', user):
+            return _deny('app')
+        if not rate_ok('arabus:' + _uid(user, r), limit=40, window=60):
+            return _ratelimited()
+        w = (r.query.get('word') or r.query.get('q') or '')[:60]
+        if not w:
+            return _cors(web.json_response({'word': '', 'count': 0, 'entries': []}))
+        res = await loop.run_in_executor(None, arabus_fetch, w)
+        return _cors(web.json_response(res))
+
     a = web.Application()
     a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
@@ -2840,7 +2898,7 @@ async def _api_serve(application=None):
                   web.post('/api/tashkeel', tashkeel),
                   web.get('/api/takhrij', takhrij_read), web.post('/api/takhrij', takhrij_save),
                   web.get('/api/narrator', narrator), web.post('/api/narrator_ai', narrator_ai), web.post('/api/hit', hit),
-                  web.get('/api/popular', popular),
+                  web.get('/api/popular', popular), web.get('/api/arabus', arabus),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))

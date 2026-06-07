@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v118</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v119</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -456,7 +456,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v118';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v119';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1672,8 +1672,8 @@ function showWordPopup(el, word, root, lemma, gram){
   if(lemma && rootKey(lemma)!==rootKey(word)) h+='<div style="margin-top:3px;color:var(--hint);font-size:13px">лемма: <b style="'+_AF+'">'+esc(lemma)+'</b></div>';
   if(root){ h+='<div style="margin-top:6px">🌿 Корень: <b style="font-size:19px;color:var(--mark);'+_AF+'">'+esc(root)+'</b></div>'+
     '<div id="wpAll" style="margin-top:9px;color:var(--link);cursor:pointer;font-weight:600">📍 Все места этого корня в Коране ('+n+')</div>'; }
-  else h+='<div style="margin-top:6px;color:var(--hint)">корень/значения — жми «📕 Все варианты (Arabus)» ниже</div>';
-  h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><span id="wpTr" style="color:var(--link);cursor:pointer;font-weight:600">🧠 перевод слова</span> · <span id="wpArabus" style="color:#7fe3bf;cursor:pointer;font-weight:600">📕 Все варианты (Arabus)</span><div id="wpTrOut" style="margin-top:5px"></div></div>';
+  else h+='<div style="margin-top:6px;color:var(--hint)">значения — жми «📕 Значения (Arabus)» ниже</div>';
+  h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><span id="wpTr" style="color:var(--link);cursor:pointer;font-weight:600">🧠 перевод слова</span> · <span id="wpArabus" style="color:#7fe3bf;cursor:pointer;font-weight:600">📕 Значения (Arabus)</span><div id="wpTrOut" style="margin-top:5px"></div><div id="wpArabusOut" style="margin-top:5px"></div></div>';
   pop.innerHTML=h; document.body.appendChild(pop);
   const r=el.getBoundingClientRect();
   const left=Math.max(8, Math.min(window.scrollX+r.left-40, window.scrollX+document.documentElement.clientWidth-308));
@@ -1681,7 +1681,7 @@ function showWordPopup(el, word, root, lemma, gram){
   const x=pop.querySelector('#wpX'); if(x) x.onclick=closeWordPopup;
   const all=pop.querySelector('#wpAll'); if(all) all.onclick=()=>{ closeWordPopup(); showRootPlaces(root); };
   const trb=pop.querySelector('#wpTr'); if(trb) trb.onclick=()=>wpTranslate(word, pop.querySelector('#wpTrOut'), trb);
-  const ab=pop.querySelector('#wpArabus'); if(ab) ab.onclick=()=>{ closeWordPopup(); openArabus(word); };
+  const ab=pop.querySelector('#wpArabus'); if(ab) ab.onclick=()=>showArabusInline(word, pop.querySelector('#wpArabusOut'));
 }
 document.addEventListener('click',e=>{ if(!(e.target.closest&&(e.target.closest('#wordPop')||e.target.closest('.qw')))) closeWordPopup(); }, true);
 let _rootView={root:'',sort:'order',form:''};
@@ -1741,6 +1741,23 @@ function openArabus(word){
   const url='https://arabus.ru/?search_word='+encodeURIComponent(word);
   try{ if(tg&&tg.openLink) tg.openLink(url); else window.open(url,'_blank'); }catch(e){ try{window.open(url,'_blank');}catch(_){ } }
 }
+// inline-показ Arabus в поп-апе слова (через наш бэкенд-прокси + накопление в нашей базе)
+async function showArabusInline(word, host){
+  if(!host) return;
+  word=(word||'').replace(/[ً-ْٰـ]/g,'').trim();
+  if(!word){ host.innerHTML=''; return; }
+  if(!BACKEND_URL){ openArabus(word); return; }
+  host.innerHTML='<span class="hint">📕 Ищу в Arabus…</span>';
+  try{
+    const r=await fetch(BACKEND_URL+'/arabus?word='+encodeURIComponent(word)+'&initData='+encodeURIComponent(INITDATA));
+    const j=await r.json();
+    if(!j.entries||!j.entries.length){ host.innerHTML='<span class="hint">📕 Arabus: не нашёл «'+esc(word)+'». <span class="arabusExt" style="color:var(--link);cursor:pointer;text-decoration:underline">открыть на arabus.ru</span></span>'; const a=host.querySelector('.arabusExt'); if(a) a.onclick=()=>openArabus(word); return; }
+    let h='<div style="max-height:240px;overflow:auto;margin-top:2px">';
+    j.entries.forEach(e=>{ h+='<div style="border-top:1px solid var(--border);padding:5px 0"><div style="direction:rtl;text-align:right"><b style="font-size:18px;'+_AF+'">'+esc(e.ar||'')+'</b>'+(e.gram?(' <span style="color:var(--hint);font-size:12px">'+esc(e.gram)+'</span>'):'')+'</div>'+(e.ru?('<div style="font-size:13px;margin-top:2px;line-height:1.5">'+esc(e.ru)+'</div>'):'')+'</div>'; });
+    h+='</div><div style="margin-top:4px;font-size:11px;color:var(--hint)">📕 Arabus · в нашей базе'+(j.d?(' · '+esc(j.d)):'')+'</div>';
+    host.innerHTML=h;
+  }catch(e){ host.innerHTML='<span class="hint">📕 Arabus недоступен сейчас. <span class="arabusExt" style="color:var(--link);cursor:pointer;text-decoration:underline">открыть на arabus.ru</span></span>'; const a=host.querySelector('.arabusExt'); if(a) a.onclick=()=>openArabus(word); }
+}
 function arabusBtn(card){
   const b=document.createElement('button'); b.className='tr-btn';
   b.title='Выдели слово в арабском тексте этого поста и нажми — корень, значения и переводы (arabus.ru)';
@@ -1763,7 +1780,6 @@ function addTr(meta,card,text,ayah,fav){
     if(out && out.style.display!=='none'){ const trv=(out.dataset.tr||'').trim()||(out.textContent||'').trim(); if(trv) s+='\n\n'+trv; }
     copyWithSig(s); };
   meta.appendChild(cp);
-  meta.appendChild(arabusBtn(card));   // Arabus: выдели слово → корень/значения/переводы
   const tr=document.createElement('button');tr.className='tr-btn';
   const _ref0=ayah?null:refOf(fav); const _ready=_ref0&&READY_RU.indexOf(_ref0.source)!==-1;
   if(ayah){ setTrReady(tr); tr.title='Перевод аята (Кулиев/Абу Адель) — бесплатно'; }
