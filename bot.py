@@ -2464,16 +2464,26 @@ def arabus_fetch(word, root=""):
         return {"word": "", "count": 0, "entries": []}
     if _arabus_cache is None:
         _arabus_cache = _data_get("arabus.json", {}) or {}
+    # 1) есть подсказка-корень → отдаём ВСЮ СЕМЬЮ КОРНЯ (как в Arabus), кэш по корню
+    rk = _arabus_key(root)
+    if rk and 2 <= len(rk) <= 6:
+        ckey = "r:" + rk
+        c = _arabus_cache.get(ckey)
+        if c and c.get("count"):
+            return {**c, "word": key}
+        for cand in [rk] + ([rk[0] + m + rk[2] for m in ('و', 'ا', 'ي')] if len(rk) == 3 else []):
+            ok, ents = _arabus_scrape(cand)
+            if ents:
+                res = {"word": key, "matched": cand, "count": len(ents), "entries": ents,
+                       "fv": _ARABUS_FV, "d": datetime.now().strftime("%d.%m.%Y")}
+                _arabus_cache[ckey] = res
+                _data_put("arabus.json", _arabus_cache, f"arabus: +r:{rk} ({len(ents)})")
+                return {**res, "word": key}
+    # 2) по самому слову (кэш по слову)
     cached = _arabus_cache.get(key)
     if cached and (cached.get("count") or cached.get("fv") == _ARABUS_FV):
         return cached            # есть статьи ИЛИ пусто, но проверено текущим фолбэком
-    # кандидаты: сначала подсказка-корень (для слабых глаголов это решает), потом морфо-варианты слова
     cands = []
-    rk = _arabus_key(root)
-    if rk:
-        cands.append(rk)
-        if len(rk) == 3:
-            cands += [rk[0] + m + rk[2] for m in ('و', 'ا', 'ي')]
     for c in _arabus_variants(key):
         if c not in cands:
             cands.append(c)
