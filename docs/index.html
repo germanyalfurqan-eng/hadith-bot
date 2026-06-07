@@ -145,7 +145,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v104</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v105</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -448,7 +448,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v104';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v105';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -616,13 +616,21 @@ function highlight(raw,groups,modes){
 }
 function esc(s){return (s||'').replace(/�/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function splitIsnad(text){
-  const words=(text||'').split(/\s+/); if(words.length<4) return [null,text];
+  // КОНСЕРВАТИВНО: красим иснад только когда УВЕРЕНЫ (принцип владельца «не уверен — не выделяй»).
+  const words=(text||'').split(/\s+/); if(words.length<5) return [null,text];
   const c=words.map(w=>canon(w));
+  // 1) текст должен НАЧИНАТЬСЯ с маркера передачи (иначе это уже матн/комментарий — не трогаем)
+  const OPEN=['حدثنا','حدثني','حدثناه','اخبرنا','اخبرني','انبانا','انباني','ثنا','سمعت','حدثهم'];
+  const startsIsnad = OPEN.some(o=>c[0]===o||c[0].indexOf(o)===0) || (c[0]==='عن' && words.length>=6);
+  if(!startsIsnad) return [null,text];
+  // 2) граница матна: «قال/أن رسول الله | النبي»
   for(let i=1;i<c.length;i++){ const w=c[i],p=c[i-1];
-    if((w.indexOf('رسول')===0||w.indexOf('النبي')===0)&&(p.indexOf('قال')===0||p.indexOf('ان')===0||p.indexOf('عن')===0))
+    if((w.indexOf('رسول')===0||w.indexOf('النبي')===0)&&(p.indexOf('قال')===0||p.indexOf('ان')===0))
       return [words.slice(0,i-1).join(' '), words.slice(i-1).join(' ')]; }
-  for(let i=0;i<c.length;i++){ if(c[i].indexOf('وسلم')!==-1) return [words.slice(0,i+1).join(' '), words.slice(i+1).join(' ')]; }
-  return [null,text];
+  // 3) конец иснада по «صلى الله عليه وسلم» — но только если он в ПЕРВЫХ 60% (иначе это внутри матна)
+  const lim=Math.floor(c.length*0.6);
+  for(let i=0;i<lim;i++){ if(c[i].indexOf('وسلم')!==-1) return [words.slice(0,i+1).join(' '), words.slice(i+1).join(' ')]; }
+  return [null,text];   // не уверены → не выделяем
 }
 function markMatn(html){
   // матн (слова Пророка/хадиса) обычно в «…» — выделяем ярче; иснад серый, комментарий обычный
