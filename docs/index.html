@@ -145,7 +145,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v101</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v102</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -448,7 +448,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v101';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v102';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1333,6 +1333,20 @@ function qWordsHTML(text, groups, rootHi){
     return '<span class="qw'+(hit?' hit':'')+'">'+esc(w)+'</span>'; }).join(' ');
 }
 function closeWordPopup(){ const p=document.getElementById('wordPop'); if(p) p.remove(); }
+// перевод ОДНОГО слова (накопительно: source=quranword, ключ=нормформа) — повтор бесплатно
+async function wpTranslate(word, host, btn){
+  if(!host) return; if(!BACKEND_URL){ host.textContent='перевод заработает на сервере'; return; }
+  host.textContent='…'; if(btn) btn.style.pointerEvents='none';
+  try{ const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text:word, source:'quranword', num:rootKey(word), initData:INITDATA})});
+    const j=await r.json().catch(()=>({}));
+    if(r.status===403){ host.textContent=(j&&j.message)||'перевод слова пока не открыт'; return; }
+    if(j&&j.translation){ if(btn) btn.style.display='none';
+      host.innerHTML='<span style="color:var(--hint)">'+(j.cached?'♻️':'🧠')+' перевод:</span> '+esc(j.translation); }
+    else host.textContent='не удалось перевести';
+  }catch(e){ host.textContent='🔧 сервис недоступен'; }
+  finally{ if(btn) btn.style.pointerEvents=''; }
+}
 const _AF='font-family:\'Traditional Arabic\',\'Amiri\',serif';
 // грамматика слова на РУССКОМ из кода корпуса (V|IMPF|VF:4|3MP|MOOD:IND и т.п.)
 function gramRu(code){
@@ -1371,12 +1385,14 @@ function showWordPopup(el, word, root, lemma, gram){
   if(root){ h+='<div style="margin-top:6px">🌿 Корень: <b style="font-size:19px;color:var(--mark);'+_AF+'">'+esc(root)+'</b></div>'+
     '<div id="wpAll" style="margin-top:9px;color:var(--link);cursor:pointer;font-weight:600">📍 Все места этого корня в Коране ('+n+')</div>'; }
   else h+='<div style="margin-top:6px;color:var(--hint)">корня нет (служебное слово)</div>';
+  h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><span id="wpTr" style="color:var(--link);cursor:pointer;font-weight:600">🧠 перевод слова</span><div id="wpTrOut" style="margin-top:5px"></div></div>';
   pop.innerHTML=h; document.body.appendChild(pop);
   const r=el.getBoundingClientRect();
   const left=Math.max(8, Math.min(window.scrollX+r.left-40, window.scrollX+document.documentElement.clientWidth-308));
   pop.style.left=left+'px'; pop.style.top=(window.scrollY+r.bottom+6)+'px';
   const x=pop.querySelector('#wpX'); if(x) x.onclick=closeWordPopup;
   const all=pop.querySelector('#wpAll'); if(all) all.onclick=()=>{ closeWordPopup(); showRootPlaces(root); };
+  const trb=pop.querySelector('#wpTr'); if(trb) trb.onclick=()=>wpTranslate(word, pop.querySelector('#wpTrOut'), trb);
 }
 document.addEventListener('click',e=>{ if(!(e.target.closest&&(e.target.closest('#wordPop')||e.target.closest('.qw')))) closeWordPopup(); }, true);
 let _rootView={root:'',sort:'order',form:''};
