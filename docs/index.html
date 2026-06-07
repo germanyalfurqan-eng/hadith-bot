@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v116</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v117</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -203,6 +203,7 @@
     <div class="chip" data-mode="root" title="Однокоренные: ищет все формы слова по корню (намного шире). Покажет панель форм.">جذ Однокоренные</div>
     <div class="chip" data-mode="diac" title="Огласовки точно: совпадение с учётом تشكيل (как набрано в запросе).">َ Огласовки точно</div>
     <div class="chip" data-mode="ai" title="По смыслу (ИИ): опиши смысл на русском/англ. — ИИ подберёт арабские фразы и найдёт хадисы/аяты. Текст всегда из реальной базы.">🧠 По смыслу (ИИ)</div>
+    <div class="chip" data-mode="arabus" id="arabusChip" title="Режим Arabus: при включении КАЖДОЕ слово в постах (хадисы и аяты) активно — тапни слово → корень, перевод и все варианты значений">📕 Arabus</div>
     <div class="chip" id="moreModes" style="border-style:dashed" title="Дополнительные режимы поиска">⚙️ ещё ▾</div>
   </div>
   <div class="modes" id="modesMore" style="display:none">
@@ -455,7 +456,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v116';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v117';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -521,7 +522,7 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 /* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:true,wordTap:true,popular:true}, loadCfg());
+let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:true,wordTap:true,popular:true,arabus:false}, loadCfg());
 function applyTheme(){ document.body.classList.toggle('light', cfg.theme==='light'); }
 try{ applyTheme(); }catch(e){}
 
@@ -916,6 +917,7 @@ function showRecent(){ const box=document.getElementById('recentBox'), list=docu
     else { list.innerHTML=''; a.slice(0,6).forEach(q=>{   // компактные строки (Google-стиль), максимум 6
       const c=document.createElement('div'); c.className='sugRow';
       c.innerHTML='<span class="ic">🕐</span><span class="tx">'+esc(q)+'</span><span class="rx">✕</span>';
+      c.addEventListener('mousedown',e=>e.preventDefault());   // мобайл: не терять фокус поля до клика (иначе подсказка прячется)
       c.onclick=()=>{ inp.value=q; hideRecent(); runSearch(true); };
       c.querySelector('.rx').onclick=(e)=>{ e.stopPropagation(); const arr=loadRecent().filter(y=>y!==q); try{localStorage.setItem(_recentKey(),JSON.stringify(arr));}catch(_){}; showRecent(); };
       list.appendChild(c); });
@@ -941,6 +943,7 @@ function renderPopular(){
   if(!items.length){ pb.style.display='none'; return; }
   list.innerHTML=''; items.forEach(it=>{ const c=document.createElement('div'); c.className='sugRow';
     c.innerHTML='<span class="ic">🔥</span><span class="tx">'+esc(it.q)+'</span>';
+    c.addEventListener('mousedown',e=>e.preventDefault());   // мобайл: не терять фокус поля до клика
     c.onclick=()=>{ if(it.tab && it.tab!==tab){ const tb=[...document.querySelectorAll('.tab')].find(t=>t.dataset.tab===it.tab); if(tb) tb.click(); }
       document.getElementById('q').value=it.q; hideRecent(); runSearch(true); };
     list.appendChild(c); });
@@ -954,6 +957,9 @@ var _rcls=document.getElementById('recentClose'); if(_rcls) _rcls.onclick=()=>{ 
 var _pcls=document.getElementById('popClose'); if(_pcls) _pcls.onclick=()=>{ _popClosed=true; var p=document.getElementById('popularBox'); if(p) p.style.display='none'; };
 document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.dataset.mode;
   if(!m) return;   // чипы без режима (⚙️ ещё, журналы) имеют свои обработчики
+  if(m==='arabus'){ cfg.arabus=!cfg.arabus; saveCfg(cfg); ch.classList.toggle('on',cfg.arabus);
+    toast(cfg.arabus?'📕 Arabus вкл — тапни любое слово в посте':'Arabus выкл');
+    if(document.getElementById('q').value.trim()) runSearch(); return; }
   if(m==='neuro'){ modes.neuro=!modes.neuro; ch.classList.toggle('on',modes.neuro);
     document.getElementById('neuroBox').style.display=modes.neuro?'block':'none'; return; }
   modes[m]=!modes[m]; ch.classList.toggle('on',modes[m]);
@@ -963,6 +969,7 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.datas
     if(modes.ai && !inp.value.trim()) toast('Пиши осмысленно, напр.: «хадис о запрете нововведений»'); }
   if(document.getElementById('q').value.trim()) runSearch();   // сразу пересчитать с новым режимом
 });
+(function(){var a=document.getElementById('arabusChip'); if(a) a.classList.toggle('on',!!cfg.arabus);})();
 var _ct=document.getElementById('colsToggle'); if(_ct) _ct.onclick=()=>{ const b=document.getElementById('colsBody'); const open=b.style.display==='none'; b.style.display=open?'block':'none'; var a=document.getElementById('colsArrow'); if(a) a.textContent=open?'▴':'▾'; };
 document.getElementById('selAll').onclick=()=>{ COLLECTIONS.forEach(c=>selCols.add(c.code)); renderCols(); };
 document.getElementById('selNone').onclick=()=>{ selCols.clear(); renderCols(); };
@@ -1371,7 +1378,9 @@ async function runSearch(explicit){
   // Поиск по ВСЕЙ библиотеке: наши книги выше (если нашлись), ниже — остальной корпус (sunnah.one). Только при явном «Найти»/Enter.
   if(wideWill) await appendWide(seq, wideQ);
 }
-function makeCard(d){ return d.type==='q'?cardAyah(d,_groups):(d.type==='m'?cardMuh(d,_groups):(d.type==='hr'?cardHadithRu(d):cardHadith(d,_groups))); }
+function makeCard(d){ const c=d.type==='q'?cardAyah(d,_groups):(d.type==='m'?cardMuh(d,_groups):(d.type==='hr'?cardHadithRu(d):cardHadith(d,_groups)));
+  if(cfg.arabus){ try{ loadRoots(); c.querySelectorAll('.ar').forEach(enableArabusTap); }catch(e){} }   // режим Arabus: каждое слово активно
+  return c; }
 // имя сборника (рус/ар/лат от ИИ) → код нашего сборника
 function _srcToCode(name){ if(!name) return ''; const s=(''+name).toLowerCase().trim();
   const map=[['bukhari',['бухари','البخاري','bukhari','альбухари']],['muslim',['муслим','مسلم','muslim']],
@@ -1571,6 +1580,32 @@ function qWordsHTML(text, groups, rootHi){
     return '<span class="qw'+(hit?' hit':'')+'">'+esc(w)+'</span>'; }).join(' ');
 }
 function closeWordPopup(){ const p=document.getElementById('wordPop'); if(p) p.remove(); }
+/* Arabus-режим: тап по любому слову в тексте поста (включая хадисы) → определяем слово по точке тапа */
+function _wordAtPoint(x,y){
+  let range=null;
+  try{
+    if(document.caretRangeFromPoint) range=document.caretRangeFromPoint(x,y);
+    else if(document.caretPositionFromPoint){ const p=document.caretPositionFromPoint(x,y); if(p){ range=document.createRange(); range.setStart(p.offsetNode,p.offset); range.collapse(true); } }
+  }catch(e){}
+  if(!range) return null;
+  const node=range.startContainer; if(!node || node.nodeType!==3) return null;
+  const t=node.nodeValue||''; const isW=c=>!!c && /[؀-ۿ]/.test(c);
+  let s=range.startOffset, e=s;
+  if(!isW(t[s]) && !isW(t[s-1])) return null;
+  while(s>0 && isW(t[s-1])) s--; while(e<t.length && isW(t[e])) e++;
+  const w=t.slice(s,e).trim(); if(w.length<1) return null;
+  return {w, node, s, e};
+}
+function enableArabusTap(arDiv){
+  if(!arDiv || arDiv.dataset.arab) return; arDiv.dataset.arab='1'; arDiv.style.cursor='pointer';
+  arDiv.addEventListener('click', ev=>{
+    if(ev.target.closest && ev.target.closest('.qw')) return;   // у аятов свои слова-кнопки
+    const r=_wordAtPoint(ev.clientX, ev.clientY); if(!r) return;
+    ev.stopPropagation();
+    const fakeEl={getBoundingClientRect:()=>{ try{ const rng=document.createRange(); rng.setStart(r.node,r.s); rng.setEnd(r.node,r.e); return rng.getBoundingClientRect(); }catch(e){ return arDiv.getBoundingClientRect(); } }};
+    onWordTap(r.w, fakeEl);
+  });
+}
 // перевод ОДНОГО слова (накопительно: source=quranword, ключ=нормформа) — повтор бесплатно
 async function wpTranslate(word, host, btn){
   if(!host) return; if(!BACKEND_URL){ host.textContent='перевод заработает на сервере'; return; }
@@ -1622,8 +1657,8 @@ function showWordPopup(el, word, root, lemma, gram){
   if(lemma && rootKey(lemma)!==rootKey(word)) h+='<div style="margin-top:3px;color:var(--hint);font-size:13px">лемма: <b style="'+_AF+'">'+esc(lemma)+'</b></div>';
   if(root){ h+='<div style="margin-top:6px">🌿 Корень: <b style="font-size:19px;color:var(--mark);'+_AF+'">'+esc(root)+'</b></div>'+
     '<div id="wpAll" style="margin-top:9px;color:var(--link);cursor:pointer;font-weight:600">📍 Все места этого корня в Коране ('+n+')</div>'; }
-  else h+='<div style="margin-top:6px;color:var(--hint)">корня нет (служебное слово)</div>';
-  h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><span id="wpTr" style="color:var(--link);cursor:pointer;font-weight:600">🧠 перевод слова</span> · <span id="wpArabus" style="color:#7fe3bf;cursor:pointer;font-weight:600">📕 Arabus (значения)</span><div id="wpTrOut" style="margin-top:5px"></div></div>';
+  else h+='<div style="margin-top:6px;color:var(--hint)">корень/значения — жми «📕 Все варианты (Arabus)» ниже</div>';
+  h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><span id="wpTr" style="color:var(--link);cursor:pointer;font-weight:600">🧠 перевод слова</span> · <span id="wpArabus" style="color:#7fe3bf;cursor:pointer;font-weight:600">📕 Все варианты (Arabus)</span><div id="wpTrOut" style="margin-top:5px"></div></div>';
   pop.innerHTML=h; document.body.appendChild(pop);
   const r=el.getBoundingClientRect();
   const left=Math.max(8, Math.min(window.scrollX+r.left-40, window.scrollX+document.documentElement.clientWidth-308));
