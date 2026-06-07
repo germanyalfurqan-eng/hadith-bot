@@ -121,7 +121,7 @@
   .gate h2{font-size:20px;margin:14px 0 6px}
   .gate p{color:var(--hint);max-width:360px}
   /* modal управление */
-  .modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:80;padding:14px}
+  .modal{position:fixed;inset:0;background:#000a;display:none;align-items:flex-start;justify-content:center;z-index:80;padding:14px;padding-top:calc(16px + env(safe-area-inset-top,0px));overflow:auto}
   .modal .panel{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;max-width:460px;width:100%;max-height:90vh;overflow:auto}
   .row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:8px}
   .sw{width:46px;height:26px;border-radius:14px;background:#3a4658;position:relative;cursor:pointer;flex:none}
@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v109</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v110</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -455,7 +455,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v109';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v110';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -802,7 +802,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   var _mo=document.querySelector('.chip[data-mode="matnonly"]'); if(_mo) _mo.style.display = tab==='hadith'?'':'none';  // «не искать в иснаде» — только хадисы
   document.getElementById('q').placeholder = tab==='hadith'?'Слова, фраза или № хадиса…':'Слова, фраза или № суры (напр. 2 или 2:255)…';
   document.getElementById('res').innerHTML=''; setStatus(''); updateQuranHelper();
-  try{ showRecent(); }catch(e){}   // Недавние/Популярное — раздельные по вкладке
+  try{ if(document.activeElement===document.getElementById('q')) showRecent(); else hideRecent(); }catch(e){}   // подсказки — ТОЛЬКО если поле в фокусе (не вылазить при загрузке/переключении)
 });
 // M96: помощник по Корану — при вводе числа в «Аяты» подсказываем суру и число аятов
 const SURA_AYAHS=[7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,72,135,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
@@ -941,7 +941,8 @@ function renderPopular(){
   pb.style.display='block';
 }
 var _qel2=document.getElementById('q');
-if(_qel2){ _qel2.addEventListener('focus', showRecent); _qel2.addEventListener('input', ()=>{ if(_qel2.value.trim()) hideRecent(); else showRecent(); }); }
+if(_qel2){ _qel2.addEventListener('focus', showRecent); _qel2.addEventListener('input', ()=>{ if(_qel2.value.trim()) hideRecent(); else showRecent(); });
+  _qel2.addEventListener('blur', ()=>{ setTimeout(()=>{ if(document.activeElement!==_qel2) hideRecent(); }, 200); }); }   // ушёл из поля → спрятать (задержка для клика по подсказке)
 var _rclr=document.getElementById('recentClr'); if(_rclr) _rclr.onclick=()=>{ try{ localStorage.removeItem(_recentKey()); }catch(e){} hideRecent(); };
 var _rcls=document.getElementById('recentClose'); if(_rcls) _rcls.onclick=()=>{ _recClosed=true; var b=document.getElementById('recentBox'); if(b) b.style.display='none'; };
 var _pcls=document.getElementById('popClose'); if(_pcls) _pcls.onclick=()=>{ _popClosed=true; var p=document.getElementById('popularBox'); if(p) p.style.display='none'; };
@@ -1067,29 +1068,33 @@ async function runSearch(explicit){
     head.textContent='🧠 Понимаю запрос…';
     const sr=await smartSearch(shown); if(seq!==_seq) return;   // {phrases, quran, note, fixed}
     const fixNote = (sr.fixed?('✅ исправлено: «'+esc(sr.fixed)+'»'):'') + (sr.note?((sr.fixed?' · ':'')+esc(sr.note)):'');
-    // ① ИИ указал конкретные АЯТЫ (напр. «зарезать корову»→2:67) — показываем их НАПРЯМУЮ, точнее некуда
-    if(sr.quran && sr.quran.length){
+    const redoBtn='<span class="redoAi" style="cursor:pointer;text-decoration:underline;white-space:nowrap">🔄 повторить глубже (ИИ)</span>';
+    // ① АЯТЫ напрямую — ТОЛЬКО на вкладке Аяты (чтобы аяты не лезли в раздел Хадисов)
+    if(tab==='quran' && sr.quran && sr.quran.length){
       try{ const arr=await loadQuran(); if(seq!==_seq) return; const rs=new Set(sr.quran);
         res.innerHTML=''; _results=[]; _groups=[];
         const hd=document.createElement('div'); hd.className='hint';
-        hd.innerHTML='🧠 '+(fixNote||'аяты по смыслу «'+esc(shown)+'»')+' — Коран:';
+        hd.innerHTML='🧠 '+(fixNote||'аяты по смыслу «'+esc(shown)+'»')+' — Коран: '+redoBtn;
         res.appendChild(hd);
         let nq=0; for(const v of arr){ if(rs.has(v.s+':'+v.a)){ const dd={type:'q',v}; _results.push(dd); res.appendChild(cardAyah(dd,[])); nq++; } }
         if(nq){ setStatus(''); logSearch(shown,tab,nq); return; }
       }catch(e){}
     }
-    // ② КОНКРЕТНЫЕ хадисы по источнику+номеру (как DeepSeek: «Бухари 3437») — показываем напрямую, с проверкой
-    if(sr.hadiths && sr.hadiths.length){ try{ const shownN=await showHadithRefs(sr.hadiths, sr, shown, seq); if(seq!==_seq) return; if(shownN){ return; } }catch(e){} }
+    // ② КОНКРЕТНЫЕ хадисы по источнику+номеру (как DeepSeek) — ТОЛЬКО на вкладке Хадисы, с проверкой
+    if(tab==='hadith' && sr.hadiths && sr.hadiths.length){ try{ const shownN=await showHadithRefs(sr.hadiths, sr, shown, seq); if(seq!==_seq) return; if(shownN){ return; } }catch(e){} }
+    // на вкладке Хадисы аяты НЕ показываем результатом — только лёгкая подсказка «также в Коране»
+    let quranHint=''; if(tab==='hadith' && sr.quran && sr.quran.length){ quranHint=' · 💡 в Коране: '+sr.quran.slice(0,4).join(', '); }
     // ③ иначе — характерная фраза(ы): транслит + наш словарь (гарант знаменитых) + фразы ИИ
     let local=[], lphrase=''; try{ local=await translitSuggest(shown); lphrase=await translitPhrase(shown); }catch(e){}
     const merged=[]; if(lphrase) merged.push(lphrase); local.forEach(w=>{ if(!merged.includes(w)) merged.push(w); });
     try{ neuroLocal(shown).forEach(p=>{ if(!merged.includes(p)) merged.push(p); }); }catch(e){}
     (sr.phrases||[]).forEach(p=>{ if(!merged.includes(p)) merged.push(p); });
-    if(merged.length){ aiPhrases=merged; smartNote='🧠 '+(fixNote?fixNote+' · ':'')+'по смыслу «'+shown+'» (фразы ниже — нажми нужную)';
+    if(merged.length){ aiPhrases=merged; smartNote='🧠 '+(fixNote?fixNote+' · ':'')+'по смыслу «'+shown+'»'+quranHint+' (фразы ниже — нажми нужную)';
       // для ПОИСКА берём СПЕЦИФИЧНЫЕ (многословные) фразы — чтобы не взрывать выдачу общими словами (النبي/رسول الله)
       const multi=merged.filter(p=>p.trim().indexOf(' ')!==-1);
       const useForQ=multi.length?multi:merged;
       q=useForQ.map(p=> p.indexOf(' ')!==-1?('"'+p+'"'):p).join(' | '); }
+    else if(quranHint){ smartNote='🧠 '+(fixNote?fixNote+' · ':'')+'по смыслу «'+shown+'»'+quranHint; }
   }
   let wideQ = shown;
   const groups=parseQuery(q); _groups=groups; if(!groups.length){ toast('Пустой запрос'); return; }
@@ -1102,7 +1107,7 @@ async function runSearch(explicit){
   const setHead=(done)=>{ const n = count
       ? ('Найдено: '+count+(count>CAP?' (показаны первые '+CAP+')':'')+(done?'':' · ищу…'))
       : (done?('Ничего не найдено 🤷'+(smartNote?' — попробуй иначе':'')):'Ищу…');
-    head.innerHTML = (smartNote?('<div style="color:var(--link);margin-bottom:4px;font-size:13px">'+esc(smartNote)+' <span class="redoAi" style="cursor:pointer;text-decoration:underline;white-space:nowrap">🔄 заново (ИИ)</span></div>'):'')+n; };
+    head.innerHTML = (smartNote?('<div style="color:var(--link);margin-bottom:4px;font-size:13px">'+esc(smartNote)+' <span class="redoAi" style="cursor:pointer;text-decoration:underline;white-space:nowrap">🔄 повторить глубже (ИИ)</span></div>'):'')+n; };
   const add=(d)=>{ _results.push(d); if(count<CAP) res.appendChild(makeCard(d)); count++; };
   // «Искать ещё в большой библиотеке» — 16 изданий + Мукбиль (не грузим по умолчанию ~127МБ; по кнопке, с прогрессом, потом кэш в сессии)
   function addLibMore(){
@@ -1878,6 +1883,23 @@ const TAFSIRS=[
   {key:'qurtubi',  nm:'Куртуби',  ar:'ar-tafseer-al-qurtubi', ru:null},
   {key:'baghawi',  nm:'Багави',   ar:'ar-tafsir-al-baghawi', ru:null},
 ];
+// 🧠 перевод ТАФСИРА (для толкований без готового рус) — накопительно (source=tafsir_<key>), по абзацам
+async function translateTafsir(txt, key, s, a, host, btn){
+  if(!host) return; if(!BACKEND_URL){ host.textContent='перевод заработает на сервере'; return; }
+  host.innerHTML='<span class="hint">🧠 Перевожу тафсир (по абзацам)…</span>'; if(btn){ btn.style.pointerEvents='none'; btn.textContent='…'; }
+  const restore=()=>{ if(btn){ btn.style.pointerEvents=''; btn.textContent='🧠 Перевести (ИИ)'; } };
+  try{ const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text:(txt||'').slice(0,11000), source:'tafsir_'+key, num:s+':'+a, initData:INITDATA})});
+    const j=await r.json().catch(()=>({}));
+    if(r.status===403){ host.innerHTML='<span class="hint">'+((j&&j.message)||'перевод пока не открыт')+'</span>'; restore(); return; }
+    if(j&&j.translation){ if(btn) btn.style.display='none';
+      const paras=j.translation.split(/\n+/).filter(p=>p.trim());
+      host.innerHTML='<div style="border:1px solid #6c5ce7;border-radius:10px;padding:10px;background:rgba(108,92,231,.08);font-size:14px;line-height:1.75">'
+        +'<div style="color:#b9a9ff;font-size:11px;margin-bottom:6px">'+(j.cached?'♻️ Перевод тафсира (из базы, бесплатно)':'🧠 Перевод тафсира (ИИ — возможны ошибки, сверяйте)')+'</div>'
+        +paras.map(p=>'<p style="margin:0 0 8px">'+esc(p)+'</p>').join('')+'</div>';
+    } else { host.innerHTML='<span class="hint">не удалось перевести</span>'; restore(); }
+  }catch(e){ host.innerHTML='<span class="hint">🔧 сервис недоступен</span>'; restore(); }
+}
 async function doTafsir(s,a,out,btn,key,lang){
   const tf=TAFSIRS.find(t=>t.key===key)||TAFSIRS[0]; key=tf.key;
   lang = lang || 'ar'; if(lang==='ru' && !tf.ru) lang='ar';      // принцип: оригинал по умолчанию
@@ -1890,13 +1912,15 @@ async function doTafsir(s,a,out,btn,key,lang){
       +'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">'+TAFSIRS.map(t=>'<span class="tfk chip" data-k="'+t.key+'" style="cursor:pointer;font-size:12px'+(t.key===key?';background:var(--btn);color:#fff;border-color:var(--btn)':'')+'">'+t.nm+'</span>').join('')+'</div>'
       +'<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center">'
         +'<span class="tflang chip" data-l="ar" style="cursor:pointer;font-size:12px'+(isAr?';background:#2e5b3a;color:#fff;border-color:#2e9b5b':'')+'">📖 Оригинал (ар)</span>'
-        +(tf.ru?('<span class="tflang chip" data-l="ru" style="cursor:pointer;font-size:12px'+(!isAr?';background:#10331f;color:#bff5d4;border-color:#2e9b5b':'')+'">📘 Перевод (рус, готовый)</span>'):'<span class="hint" style="font-size:11px">перевод этого тафсира — скоро (ИИ + накопление)</span>')
+        +(tf.ru?('<span class="tflang chip" data-l="ru" style="cursor:pointer;font-size:12px'+(!isAr?';background:#10331f;color:#bff5d4;border-color:#2e9b5b':'')+'">📘 Перевод (рус, готовый)</span>')
+               :(isAr?'<span class="tftr chip" style="cursor:pointer;font-size:12px;background:#3a2d5e;border-color:#6c5ce7;color:#e0d7ff">🧠 Перевести (ИИ)</span>':''))
       +'</div>'
       +'<div style="display:flex;gap:6px;margin-bottom:6px"><input class="tfFind" placeholder="🔎 найти слово в этом толковании…" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:13px"><span class="tfFindInfo hint" style="font-size:11px;align-self:center;white-space:nowrap"></span></div>'
-      +'<div class="tafsirText" style="'+(isAr?'direction:rtl;text-align:right;font-size:17px;line-height:1.9':'font-size:14px;line-height:1.65')+';max-height:340px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:10px">'+(txt?esc(txt).replace(/\n+/g,'<br>'):'Для этого аята в этом тафсире нет текста.')+'</div></div>';
+      +'<div class="tafsirText" style="'+(isAr?'direction:rtl;text-align:right;font-size:17px;line-height:1.9':'font-size:14px;line-height:1.65')+';max-height:340px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:10px">'+(txt?esc(txt).replace(/\n+/g,'<br>'):'Для этого аята в этом тафсире нет текста.')+'</div><div class="tftrOut" style="margin-top:8px"></div></div>';
     out.innerHTML=html;
     out.querySelectorAll('.tfk').forEach(b=>b.onclick=()=>doTafsir(s,a,out,btn,b.dataset.k,lang));
     out.querySelectorAll('.tflang').forEach(b=>b.onclick=()=>doTafsir(s,a,out,btn,key,b.dataset.l));
+    { const tb=out.querySelector('.tftr'); if(tb && txt) tb.onclick=()=>translateTafsir(txt, key, s, a, out.querySelector('.tftrOut'), tb); }
     const x=out.querySelector('.tfx'); if(x) x.onclick=()=>{ var mm=document.getElementById('tafsirModal'); if(mm) mm.style.display='none'; };
     const tDiv=out.querySelector('.tafsirText'), fInp=out.querySelector('.tfFind'), fInfo=out.querySelector('.tfFindInfo'), rawT=txt;   // поиск ВНУТРИ тафсира
     if(fInp&&tDiv) fInp.oninput=()=>{ const term=fInp.value.trim();
