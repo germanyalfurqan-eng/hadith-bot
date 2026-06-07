@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v110</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v111</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -455,7 +455,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v110';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v111';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -497,6 +497,10 @@ const EXTRA = [
   {code:'humaydi',      short:'Хумайди',       ru:'аль-Хумайди — Муснад',         ar:'مسند الحميدي',      author:'аль-Хумайди',   kw:'хумайди humaydi муснад', n:1334},
   {code:'ismail',       short:'Исмаил б. Джа‘фар', ru:'Исмаил ибн Джа‘фар — Хадисы', ar:'أحاديث إسماعيل بن جعفر', author:'Исмаил ибн Джа‘фар', kw:'исмаил джафар ismail', n:477},
   {code:'ibnmubarak',   short:'Ибн аль-Мубарак',ru:'Ибн аль-Мубарак — Муснад',    ar:'مسند ابن المبارك',  author:'Ибн аль-Мубарак', kw:'ибн мубарак ibnmubarak муснад', n:272},
+  /* тематические/«сорок» — грузятся с CDN (fawazahmed0, нумерация sunnah) */
+  {code:'nawawi',  cdn:true, short:'40 Навави',      ru:'40 хадисов имама ан-Навави',      ar:'الأربعون النووية',  author:'имам ан-Навави',  kw:'навави nawawi сорок арбаин 40', n:42},
+  {code:'qudsi',   cdn:true, short:'Хадисы Кудси',   ru:'Священные хадисы (аль-Кудсия)',   ar:'الأحاديث القدسية',  author:'—',               kw:'кудси qudsi священные кудсий хадисы', n:40},
+  {code:'dehlawi', cdn:true, short:'40 ад-Дехлеви',  ru:'40 хадисов Шаха Валиуллы ад-Дехлеви', ar:'أربعون الدهلوي', author:'Шах Валиулла ад-Дехлеви', kw:'дехлеви dehlawi шах валиулла сорок арбаин', n:40},
   /* аль-Мухаймин — В КОНЦЕ: книга ещё НЕ обработана разработчиками (возможны ошибки) */
   {code:'muhaymin',   muhaymin:true, warn:'⚠️ книга в обработке — возможны ошибки', short:'аль-Мухаймин', ru:'аль-Мухаймин (الموحد المهيمن) — Муршид', ar:'المهيمن', author:'مرشد بن يوسف', kw:'мухаймин мухэймин muhaymin муршид мухаймин', n:3307},
 ];
@@ -723,6 +727,8 @@ async function loadLocal(code,file){ if(_local[code])return _local[code]; setSta
   const j=await (await fetch('./'+file)).json();
   _local[code]=j.map(x=>{ const raw=(x.ar||x.t||'').replace(/\s+/g,' ').trim(); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }
 async function loadExtra(code){ if(_local[code])return _local[code]; const e=EXTRA_MAP[code]; setStatus('Загружаю '+(e?e.short:code)+'…');
+  if(e&&e.cdn){ const j=await (await fetch(EDITION_URL(code))).json();
+    _local[code]=(j.hadiths||[]).map(h=>({num:String(h.hadithnumber),text:(h.text||'').replace(/\s+/g,' ').trim(),grade:gradeOf(h),norm:''})); return _local[code]; }
   const j=await (await fetch(EXTRA_BASE+code+'.json')).json();
   _local[code]=j.map(x=>{ const raw=(x.ar||x.t||'').replace(/\s+/g,' ').trim(); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }
 async function loadQuran(){ if(quran)return quran; setStatus('Загружаю Коран…');
