@@ -145,7 +145,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v100</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v101</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -448,7 +448,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v100';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v101';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -1321,7 +1321,7 @@ function cardMuh(d,groups){
 let _roots=null, _rootsP=null;
 async function loadRoots(){ if(_roots) return _roots; if(_rootsP) return _rootsP;
   _rootsP=(async()=>{ try{ const j=await (await fetch('./quran_roots.json')).json(); _roots=j; return j; }
-    catch(e){ _roots={f:{},r:{}}; return _roots; } })(); return _rootsP; }
+    catch(e){ _roots={f:{},r:{},rf:{},ro:{}}; return _roots; } })(); return _rootsP; }
 function rootKey(w){ return canon(w).replace(/[^ء-ي]/g,''); }   // ключ как в quran_roots.json
 // аят словами-кнопками: подсветка поисковых слов и (в режиме «места корня») слов нужного корня
 function qWordsHTML(text, groups, rootHi){
@@ -1329,42 +1329,91 @@ function qWordsHTML(text, groups, rootHi){
   const terms=[]; (groups||[]).forEach(g=>g.forEach(t=>{ if(!t.neg){ const c=canon(t.t); if(c) terms.push(c); } }));
   return disp.split(/\s+/).filter(Boolean).map(w=>{ const c=canon(w); let hit=false;
     if(terms.length && c) hit=terms.some(t=>c.indexOf(t)!==-1);
-    if(!hit && rootHi && _roots){ if(_roots.f[c.replace(/[^ء-ي]/g,'')]===rootHi) hit=true; }
+    if(!hit && rootHi && _roots && _roots.f){ const e=_roots.f[c.replace(/[^ء-ي]/g,'')]; if(e && e[0]===rootHi) hit=true; }
     return '<span class="qw'+(hit?' hit':'')+'">'+esc(w)+'</span>'; }).join(' ');
 }
 function closeWordPopup(){ const p=document.getElementById('wordPop'); if(p) p.remove(); }
-async function onWordTap(word, el){
-  const R=await loadRoots(); const root=R.f[rootKey(word)]||'';
-  showWordPopup(el, word, root);
+const _AF='font-family:\'Traditional Arabic\',\'Amiri\',serif';
+// грамматика слова на РУССКОМ из кода корпуса (V|IMPF|VF:4|3MP|MOOD:IND и т.п.)
+function gramRu(code){
+  if(!code) return '';
+  const t=code.split('|'); const pos=t[0]; const has=x=>t.indexOf(x)!==-1; const out=[];
+  const POS={V:'глагол',N:'имя (сущ.)',PN:'имя собственное',ADJ:'прилагательное',PRON:'местоимение',
+    DEM:'указат. местоимение',REL:'относит. местоимение',P:'частица/предлог',PREP:'предлог',ADV:'наречие',
+    T:'обст. времени',LOC:'обст. места',CONJ:'союз',SUB:'подчинит. союз',DET:'артикль',NEG:'отрицание',
+    INTG:'вопросит. частица',COND:'условная частица',ACC:'частица «инна»',CERT:'частица',EMPH:'усилит. частица',
+    EXP:'частица','INL':'буквы (мукатта‘ат)',VOC:'звательная частица',REM:'возобновит. частица',
+    RES:'ограничит. частица',FUT:'частица буд. вр.',EXH:'побудит. частица',PRP:'частица цели',AMD:'частица',SUR:'частица'};
+  out.push(POS[pos]||'слово');
+  for(const x of t){ const m=/^VF:(\d+)$/.exec(x); if(m){ const R=['','I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'][+m[1]]||m[1]; out.push('порода '+R); } }
+  if(has('PERF')) out.push('прош. время'); if(has('IMPF')) out.push('наст./буд. время'); if(has('IMPV')) out.push('повелит. наклонение');
+  if(has('PASS')) out.push('страд. залог');
+  for(const x of t){ let m=/^([123])(M|F)?(S|D|P)$/.exec(x); if(m){ const p={'1':'1-е л.','2':'2-е л.','3':'3-е л.'}[m[1]];
+      const g=m[2]==='M'?'муж.':m[2]==='F'?'жен.':''; const n=m[3]==='S'?'ед.ч.':m[3]==='D'?'дв.ч.':'мн.ч.'; out.push([p,g,n].filter(Boolean).join(' ')); continue; }
+    m=/^(M|F)(S|D|P)?$/.exec(x); if(m){ const g=m[1]==='M'?'муж.':'жен.'; const n=m[2]==='S'?'ед.ч.':m[2]==='D'?'дв.ч.':m[2]==='P'?'мн.ч.':''; out.push([g,n].filter(Boolean).join(' ')); } }
+  if(has('NOM')) out.push('им. падеж'); if(has('GEN')) out.push('род. падеж'); if(has('ACC')&&pos!=='ACC') out.push('вин. падеж');
+  if(has('MOOD:SUBJ')) out.push('сослагат.'); if(has('MOOD:JUS')) out.push('усечён.');
+  return [...new Set(out)].join(', ');
 }
-function showWordPopup(el, word, root){
+async function onWordTap(word, el){
+  const R=await loadRoots(); const e=R.f[rootKey(word)]||['','',''];
+  showWordPopup(el, word, e[0], e[1], e[2]);
+}
+function showWordPopup(el, word, root, lemma, gram){
   closeWordPopup();
   const n = root ? ((_roots.r[root]||[]).length) : 0;
+  const g = gramRu(gram);
   const pop=document.createElement('div'); pop.id='wordPop'; pop.className='card';
-  pop.style.cssText='position:absolute;z-index:300;max-width:280px;padding:11px 13px;font-size:14px;box-shadow:0 8px 28px rgba(0,0,0,.55)';
-  pop.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b style="font-size:21px">'+esc(word)+'</b><span id="wpX" style="cursor:pointer;color:var(--hint);font-size:18px">✕</span></div>'+
-    (root ? ('<div style="margin-top:6px">🌿 Корень: <b style="font-size:18px;color:var(--mark)">'+esc(root)+'</b></div>'+
-             '<div id="wpAll" style="margin-top:9px;color:var(--link);cursor:pointer;font-weight:600">📍 Все места этого корня в Коране ('+n+')</div>')
-          : '<div style="margin-top:6px;color:var(--hint)">корень не найден (служебное слово — частица/местоимение)</div>');
-  document.body.appendChild(pop);
+  pop.style.cssText='position:absolute;z-index:300;max-width:300px;padding:11px 13px;font-size:14px;box-shadow:0 8px 28px rgba(0,0,0,.55)';
+  let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b style="font-size:22px;'+_AF+'">'+esc(word)+'</b><span id="wpX" style="cursor:pointer;color:var(--hint);font-size:18px">✕</span></div>';
+  if(g) h+='<div style="margin-top:6px;color:var(--text)">📝 '+esc(g)+'</div>';
+  if(lemma && rootKey(lemma)!==rootKey(word)) h+='<div style="margin-top:3px;color:var(--hint);font-size:13px">лемма: <b style="'+_AF+'">'+esc(lemma)+'</b></div>';
+  if(root){ h+='<div style="margin-top:6px">🌿 Корень: <b style="font-size:19px;color:var(--mark);'+_AF+'">'+esc(root)+'</b></div>'+
+    '<div id="wpAll" style="margin-top:9px;color:var(--link);cursor:pointer;font-weight:600">📍 Все места этого корня в Коране ('+n+')</div>'; }
+  else h+='<div style="margin-top:6px;color:var(--hint)">корня нет (служебное слово)</div>';
+  pop.innerHTML=h; document.body.appendChild(pop);
   const r=el.getBoundingClientRect();
-  const left=Math.max(8, Math.min(window.scrollX+r.left-40, window.scrollX+document.documentElement.clientWidth-288));
+  const left=Math.max(8, Math.min(window.scrollX+r.left-40, window.scrollX+document.documentElement.clientWidth-308));
   pop.style.left=left+'px'; pop.style.top=(window.scrollY+r.bottom+6)+'px';
   const x=pop.querySelector('#wpX'); if(x) x.onclick=closeWordPopup;
   const all=pop.querySelector('#wpAll'); if(all) all.onclick=()=>{ closeWordPopup(); showRootPlaces(root); };
 }
 document.addEventListener('click',e=>{ if(!(e.target.closest&&(e.target.closest('#wordPop')||e.target.closest('.qw')))) closeWordPopup(); }, true);
-async function showRootPlaces(root){
+let _rootView={root:'',sort:'order',form:''};
+async function showRootPlaces(root, opts){
   if(!root) return; const R=await loadRoots(); const arr=await loadQuran();
-  const places=R.r[root]||[]; const set=new Set(places);
+  _rootView={root:root, sort:(opts&&opts.sort)||'order', form:(opts&&opts.form)||''};
+  const places=R.r[root]||[]; const rf=(R.rf&&R.rf[root])||[]; const occ=(R.ro&&R.ro[root])||places.length;
+  const set=new Set(places);
   const res=document.getElementById('res'); res.innerHTML=''; _results=[]; _groups=[];
-  const head=document.createElement('div'); head.className='hint';
-  head.innerHTML='🌿 Корень <b style="font-family:\'Traditional Arabic\',\'Amiri\',serif;font-size:18px;color:var(--mark)">'+esc(root)+'</b> — мест в Коране: <b>'+places.length+'</b> <span style="color:var(--hint)">(подсвечены слова этого корня)</span>';
+  closeWordPopup();
+  const head=document.createElement('div'); head.className='card'; head.style.padding='11px';
+  head.innerHTML='<div style="font-size:14px">🌿 Корень <b style="'+_AF+';font-size:20px;color:var(--mark)">'+esc(root)+'</b> — встречается <b>'+occ+'</b> раз · аятов <b>'+places.length+'</b> · форм <b>'+rf.length+'</b></div>';
+  // сортировка
+  const st=document.createElement('div'); st.style.cssText='margin-top:9px;display:flex;gap:8px;flex-wrap:wrap';
+  st.innerHTML='<span class="chip'+(_rootView.sort==='order'?' on':'')+'" data-s="order" style="cursor:pointer;font-size:13px">↕ по порядку сур</span>'+
+               '<span class="chip'+(_rootView.sort==='form'?' on':'')+'" data-s="form" style="cursor:pointer;font-size:13px">🔤 по формам</span>';
+  head.appendChild(st);
+  // формы корня (как corpus): леммы с подсчётом, клик = фильтр
+  if(rf.length){ const fb=document.createElement('div'); fb.style.cssText='margin-top:9px;display:flex;gap:6px;flex-wrap:wrap';
+    const ac=document.createElement('span'); ac.className='chip'+(_rootView.form?'':' on'); ac.style.cssText='cursor:pointer;font-size:13px'; ac.textContent='Все формы';
+    ac.onclick=()=>showRootPlaces(root,{sort:_rootView.sort,form:''}); fb.appendChild(ac);
+    rf.forEach(it=>{ const lem=it[0],lab=it[1],cnt=it[2]; const c=document.createElement('span'); c.className='chip'+(_rootView.form===lem?' on':''); c.style.cssText='cursor:pointer;font-size:13px';
+      c.innerHTML='<span style="'+_AF+';font-size:17px">'+esc(lem)+'</span> <span style="color:var(--hint);font-size:11px">'+esc(lab)+'</span> · <b style="color:var(--mark)">'+cnt+'</b>';
+      c.onclick=()=>showRootPlaces(root,{sort:_rootView.sort,form:lem}); fb.appendChild(c); });
+    head.appendChild(fb);
+  }
   res.appendChild(head);
-  let n=0; const CAP=300;
-  for(const v of arr){ if(set.has(v.s+':'+v.a)){ const d={type:'q',v,_root:root}; _results.push(d); if(n<CAP) res.appendChild(cardAyah(d,[])); n++; } }
+  st.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>showRootPlaces(root,{sort:b.getAttribute('data-s'),form:_rootView.form}));
+  const lemOf=v=>{ for(const w of v.text.split(/\s+/)){ const e=R.f[rootKey(w)]; if(e&&e[0]===root&&e[1]) return e[1]; } return ''; };
+  let items=arr.filter(v=>set.has(v.s+':'+v.a));
+  if(_rootView.form) items=items.filter(v=>v.text.split(/\s+/).some(w=>{ const e=R.f[rootKey(w)]; return e&&e[1]===_rootView.form; }));
+  if(_rootView.sort==='form'){ const ord={}; rf.forEach((it,i)=>ord[it[0]]=i);
+    items=items.map(v=>({v,l:lemOf(v)})).sort((x,y)=>{ const a=ord[x.l]; const b=ord[y.l]; return (a===undefined?99:a)-(b===undefined?99:b); }).map(o=>o.v); }
+  let n=0; const CAP=400;
+  for(const v of items){ const d={type:'q',v,_root:root}; _results.push(d); if(n<CAP) res.appendChild(cardAyah(d,[])); n++; }
   if(n>CAP){ const m=document.createElement('div'); m.className='hint'; m.style.marginTop='8px'; m.textContent='(показаны первые '+CAP+' из '+n+')'; res.appendChild(m); }
-  try{ document.getElementById('res').scrollIntoView({block:'start'}); window.scrollTo(0,0); }catch(e){}
+  try{ window.scrollTo(0,0); }catch(e){}
 }
 function cardAyah(d,groups){
   const {v}=d; const card=document.createElement('div');card.className='card';
@@ -2232,6 +2281,8 @@ document.getElementById('goBtn').onclick=()=>runSearch(true);
   el.addEventListener('input',()=>{ clearTimeout(t); const v=el.value.trim();
     if(v.length<2){ if(!v){document.getElementById('res').innerHTML='';setStatus('');} return; }
     if(modes.ai) return;   // режим «По смыслу (ИИ)»: НЕ дёргать ИИ на каждую букву (тратит ключ) — только по «Найти»/Enter
+    // НЕ авто-искать НЕОДНОЗНАЧНЫЙ номер аята (235 → 2:35 / 23:5): пусть помощник покажет варианты, юзер выберет
+    if(tab==='quran'){ const mn=v.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)); if(/^\d{2,6}$/.test(mn) && (mn.length>=4 || +mn>114) && ayahCandidates(mn).length>1){ return; } }
     t=setTimeout(()=>runSearch(true),350); });   // explicit=true → поиск идёт и по всей библиотеке (как по умолчанию)
 })();
 document.getElementById('neuroRun').onclick=neuroRun;
