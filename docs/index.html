@@ -145,7 +145,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v106</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v107</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -449,7 +449,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v106';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v107';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -862,7 +862,7 @@ function updateTranslitSugg(){
   clearTimeout(_tlT);
   _tlT=setTimeout(async()=>{
     if(((document.getElementById('q').value||'').trim())!==v) return;   // успел поменяться
-    let ws=[], phrase=''; try{ ws=await translitSuggest(v); phrase=await translitPhrase(v); }catch(e){}
+    let ws=[], phrase=''; try{ ws=await translitSuggest(v,true); phrase=await translitPhrase(v,true); }catch(e){}   // true=строгий (без мусора на рус.словах)
     if(((document.getElementById('q').value||'').trim())!==v) return;
     if(!ws.length && !phrase){ box.style.display='none'; box.innerHTML=''; return; }
     const pick=(val)=>{ const q=document.getElementById('q'); q.value=val; box.style.display='none'; box.innerHTML='';
@@ -1943,32 +1943,40 @@ async function buildArVocab(){
 }
 // русское слово-ТЕМА (по морфологии) — НЕ транскрипция арабского (его ведёт «🧠 По смыслу», не транслит)
 function _ruThemeWord(t){ return /([ае]ни[еяй]|ость|ости|ство|ства|ству|стве|ция|ции|цию|изм|вание|ование|ельность|еность|ться|чение|шение|щение)$/.test(t); }
+// русские стоп-слова: если есть в запросе → это русская ФРАЗА (не транскрипция) → подсказки не показываем
+const _RU_STOP=new Set(['по','в','на','и','о','об','от','до','для','что','как','это','я','не','он','она','они','мы','вы','за','со','из','у','к','с','про','при','без','над','под','между','или','либо','тоже','также','если','когда','чтобы','же','бы','ли','да','нет','а','но','то','раз','чем','кто','где','уже','ещё','еще','их','его','её','мне','нам','вам','был','быть']);
+function _hasRuStop(query){ return (query||'').toLowerCase().split(/[\s,.;:!?()"'«»\/\-+|]+/).some(t=>_RU_STOP.has(t)); }
 // top-N арабских слов для ОДНОГО токена: точные совпадения класс-скелета → ed1 (якорь по 1-й букве, режет шум).
-function _tokTop(v, token, n){
+function _tokTop(v, token, n, live){
+  // live=строгий режим (живые подсказки): показываем только СИД-слова или точный матч ≥3 согласных,
+  // чтобы русские слова (дела/по/намерениям) НЕ давали мусор. live=false — широко (для ИИ-режима).
   const ph=_phonRu(token); if(ph.length<2) return [];
-  const exact=[]; const ex=v.get(ph); if(ex){ for(const e of ex.entries()) exact.push(e); }
+  const exact=[]; const ex=v.get(ph);
+  if(ex){ for(const e of ex.entries()){ if(live && e[1]<1000 && ph.length<3) continue; exact.push(e); } }
   let ranked;
   if(exact.length){ exact.sort((a,b)=>b[1]-a[1]); ranked=exact; }
   else if(ph.length>=3){ const approx=[];   // ed1 только при совпадении ПЕРВОЙ согласной (халифату→خليفة да, терпение→ربنا нет)
-    for(const [k,m] of v){ if(k!==ph && k[0]===ph[0] && Math.abs(k.length-ph.length)<=1 && _ed1(k,ph)){ for(const e of m.entries()) approx.push(e); } }
+    for(const [k,m] of v){ if(k!==ph && k[0]===ph[0] && Math.abs(k.length-ph.length)<=1 && _ed1(k,ph)){ for(const e of m.entries()){ if(live && e[1]<1000) continue; approx.push(e); } } }
     approx.sort((a,b)=>b[1]-a[1]); ranked=approx;
   } else ranked=[];
   return ranked.slice(0,n).map(e=>e[0]);
 }
-async function translitSuggest(query){
+async function translitSuggest(query, live){
+  if(_hasRuStop(query)) return [];   // русская фраза → не транскрипция
   const v=await buildArVocab();
   const toks=(query||'').toLowerCase().split(/[\s,.;:!?()"'«»\/\-+|]+/).filter(t=>t.length>=2 && /[a-zа-яё]/i.test(t) && !_ruThemeWord(t));
   if(!toks.length) return [];
   const out=[]; const seen=new Set();
-  for(const t of toks){ for(const w of _tokTop(v,t,3)){ if(seen.has(w)) continue; seen.add(w); out.push(w); if(out.length>=6) break; } if(out.length>=6) break; }
+  for(const t of toks){ for(const w of _tokTop(v,t,3,live)){ if(seen.has(w)) continue; seen.add(w); out.push(w); if(out.length>=6) break; } if(out.length>=6) break; }
   return out.slice(0,6);
 }
 // ФРАЗА целиком: для 2+ слов — лучшее арабское на каждый токен, склеенное. '' если хоть одно слово не опознано.
-async function translitPhrase(query){
+async function translitPhrase(query, live){
+  if(_hasRuStop(query)) return '';   // русская фраза → не транскрипция
   const toks=(query||'').toLowerCase().split(/[\s,.;:!?()"'«»\/\-+|]+/).filter(t=>t.length>=2 && /[a-zа-яё]/i.test(t));
   if(toks.length<2 || toks.some(_ruThemeWord)) return '';   // русское слово-тема → не фраза-транскрипция
   const v=await buildArVocab(); const parts=[];
-  for(const t of toks){ const top=_tokTop(v,t,1); if(!top.length) return ''; parts.push(top[0]); }
+  for(const t of toks){ const top=_tokTop(v,t,1,live); if(!top.length) return ''; parts.push(top[0]); }
   return parts.join(' ');
 }
 function neuroLocal(meaning){
