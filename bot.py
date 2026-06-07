@@ -2422,7 +2422,15 @@ def _arabus_variants(w):
             add(sk)
         if b[:1] in 'أإا' and len(b) >= 4:
             add(b[1:])
-    return out[:9]
+    # слабые глаголы (корень с و/ي в середине): из 3-буквенной основы подставить و/ا/ي
+    for c in list(out):
+        if len(c) == 3:
+            for mid in ('و', 'ا', 'ي'):
+                add(c[0] + mid + c[2])
+        elif len(c) == 2:
+            for mid in ('و', 'ا', 'ي'):
+                add(c[0] + mid + c[1])
+    return out[:16]
 
 def _arabus_scrape(word):
     # вернуть (ok, entries): ok=True если ответ 200 (даже если статей 0); ошибка сети → ok=False
@@ -2448,26 +2456,38 @@ def _arabus_scrape(word):
             break
     return True, entries
 
-def arabus_fetch(word):
+_ARABUS_FV = 3   # версия фолбэка: при росте — перепроверяем старые ПУСТЫЕ кэши
+def arabus_fetch(word, root=""):
     global _arabus_cache
     key = _arabus_key(word)
     if not key:
         return {"word": "", "count": 0, "entries": []}
     if _arabus_cache is None:
         _arabus_cache = _data_get("arabus.json", {}) or {}
-    if key in _arabus_cache:
-        return _arabus_cache[key]
+    cached = _arabus_cache.get(key)
+    if cached and (cached.get("count") or cached.get("fv") == _ARABUS_FV):
+        return cached            # есть статьи ИЛИ пусто, но проверено текущим фолбэком
+    # кандидаты: сначала подсказка-корень (для слабых глаголов это решает), потом морфо-варианты слова
+    cands = []
+    rk = _arabus_key(root)
+    if rk:
+        cands.append(rk)
+        if len(rk) == 3:
+            cands += [rk[0] + m + rk[2] for m in ('و', 'ا', 'ي')]
+    for c in _arabus_variants(key):
+        if c not in cands:
+            cands.append(c)
     matched = None; entries = []; any_ok = False
-    for cand in _arabus_variants(key):
+    for cand in cands[:18]:
         ok, ents = _arabus_scrape(cand)
         any_ok = any_ok or ok
         if ents:
             matched = cand; entries = ents; break
-    if not any_ok:                       # сеть недоступна — не кэшируем (чтобы потом перепроверить)
+    if not any_ok:                       # сеть недоступна — не кэшируем (перепроверим позже)
         return {"word": key, "count": 0, "entries": []}
     res = {"word": key, "matched": matched or key, "count": len(entries), "entries": entries,
-           "d": datetime.now().strftime("%d.%m.%Y")}
-    _arabus_cache[key] = res            # кэшируем и пустой (слово реально не в словаре — частицы и т.п.)
+           "fv": _ARABUS_FV, "d": datetime.now().strftime("%d.%m.%Y")}
+    _arabus_cache[key] = res
     _data_put("arabus.json", _arabus_cache, f"arabus: +{key}→{matched or '∅'} ({len(entries)})")
     return res
 def was_translated(text):
@@ -2923,9 +2943,10 @@ async def _api_serve(application=None):
         if not rate_ok('arabus:' + _uid(user, r), limit=40, window=60):
             return _ratelimited()
         w = (r.query.get('word') or r.query.get('q') or '')[:60]
+        root = (r.query.get('root') or '')[:20]
         if not w:
             return _cors(web.json_response({'word': '', 'count': 0, 'entries': []}))
-        res = await loop.run_in_executor(None, arabus_fetch, w)
+        res = await loop.run_in_executor(None, arabus_fetch, w, root)
         return _cors(web.json_response(res))
 
     a = web.Application()

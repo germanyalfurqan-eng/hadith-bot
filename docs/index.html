@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v122</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v123</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -455,7 +455,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v122';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v123';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1674,16 +1674,15 @@ function showWordPopup(el, word, root, lemma, gram){
   if(lemma && rootKey(lemma)!==rootKey(word)) h+='<div style="margin-top:3px;color:var(--hint);font-size:13px">лемма: <b style="'+_AF+'">'+esc(lemma)+'</b></div>';
   if(root){ h+='<div style="margin-top:6px">🌿 Корень: <b style="font-size:19px;color:var(--mark);'+_AF+'">'+esc(root)+'</b></div>'+
     '<div id="wpAll" style="margin-top:9px;color:var(--link);cursor:pointer;font-weight:600">📍 Все места этого корня в Коране ('+n+')</div>'; }
-  else h+='<div style="margin-top:6px;color:var(--hint)">значения — жми «📕 Значения (Arabus)» ниже</div>';
-  h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><span id="wpTr" style="color:var(--link);cursor:pointer;font-weight:600">🧠 перевод слова</span> · <span id="wpArabus" style="color:#7fe3bf;cursor:pointer;font-weight:600">📕 Значения (Arabus)</span><div id="wpTrOut" style="margin-top:5px"></div><div id="wpArabusOut" style="margin-top:5px"></div></div>';
+  ;   // корня в нашей базе нет — значения подтянет Arabus ниже
+  h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><div style="color:#7fe3bf;font-weight:700;margin-bottom:4px">📕 Значения и формы (Arabus)</div><div id="wpArabusOut" style="margin-top:3px"></div></div>';
   pop.innerHTML=h; document.body.appendChild(pop);
   const r=el.getBoundingClientRect();
   const left=Math.max(8, Math.min(window.scrollX+r.left-40, window.scrollX+document.documentElement.clientWidth-308));
   pop.style.left=left+'px'; pop.style.top=(window.scrollY+r.bottom+6)+'px';
   const x=pop.querySelector('#wpX'); if(x) x.onclick=closeWordPopup;
   const all=pop.querySelector('#wpAll'); if(all) all.onclick=()=>{ closeWordPopup(); showRootPlaces(root); };
-  const trb=pop.querySelector('#wpTr'); if(trb) trb.onclick=()=>wpTranslate(word, pop.querySelector('#wpTrOut'), trb);
-  const ab=pop.querySelector('#wpArabus'); if(ab) ab.onclick=()=>showArabusInline(word, pop.querySelector('#wpArabusOut'));
+  showArabusInline(word, pop.querySelector('#wpArabusOut'), root);   // авто-загрузка значений+форм Arabus (с подсказкой-корнем)
 }
 document.addEventListener('click',e=>{ if(!(e.target.closest&&(e.target.closest('#wordPop')||e.target.closest('.qw')))) closeWordPopup(); }, true);
 let _rootView={root:'',sort:'order',form:''};
@@ -1744,14 +1743,14 @@ function openArabus(word){
   try{ if(tg&&tg.openLink) tg.openLink(url); else window.open(url,'_blank'); }catch(e){ try{window.open(url,'_blank');}catch(_){ } }
 }
 // inline-показ Arabus в поп-апе слова (через наш бэкенд-прокси + накопление в нашей базе)
-async function showArabusInline(word, host){
+async function showArabusInline(word, host, root){
   if(!host) return;
   word=(word||'').replace(/[ً-ْٰـ]/g,'').trim();
   if(!word){ host.innerHTML=''; return; }
   if(!BACKEND_URL){ openArabus(word); return; }
-  host.innerHTML='<span class="hint">📕 Ищу в Arabus…</span>';
+  host.innerHTML='<span class="hint">📕 Ищу значения…</span>';
   try{
-    const r=await fetch(BACKEND_URL+'/arabus?word='+encodeURIComponent(word)+'&initData='+encodeURIComponent(INITDATA));
+    const r=await fetch(BACKEND_URL+'/arabus?word='+encodeURIComponent(word)+(root?('&root='+encodeURIComponent(root)):'')+'&initData='+encodeURIComponent(INITDATA));
     const j=await r.json();
     if(!j.entries||!j.entries.length){ host.innerHTML='<span class="hint">📕 Arabus: не нашёл «'+esc(word)+'». <span class="arabusExt" style="color:var(--link);cursor:pointer;text-decoration:underline">открыть на arabus.ru</span></span>'; const a=host.querySelector('.arabusExt'); if(a) a.onclick=()=>openArabus(word); return; }
     let h='';
