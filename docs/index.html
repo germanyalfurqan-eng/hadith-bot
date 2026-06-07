@@ -145,7 +145,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v102</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v103</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -448,7 +448,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v102';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v103';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -937,10 +937,13 @@ document.addEventListener('pointerdown',function(e){ const ae=document.activeEle
 /* ===================== ПОИСК ===================== */
 function isArabic(s){ return /[؀-ۿݐ-ݿ]/.test(s); }
 const _aiCache={};   // кэш ИИ-подбора по запросу: повтор того же не тратит ключ
+let _lastNeuro=0;    // фронт-кулдаун: защита ключа от частых вызовов
 async function smartPhrases(meaning, force){
   const key=tab+'|'+(meaning||'').trim().toLowerCase();
   if(!force && _aiCache[key]) return _aiCache[key];
-  if(BACKEND_URL){
+  const _nowt=Date.now();
+  if(!force && _nowt-_lastNeuro<2200){ return neuroLocal(meaning); }   // не дёргать ключ чаще ~раза в 2с
+  if(BACKEND_URL){ _lastNeuro=_nowt;
     try{ const r=await fetch(BACKEND_URL+'/neuro',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({meaning,kind:tab,force:!!force,initData:INITDATA})});
       if(r.ok){ const j=await r.json(); if(j.phrases&&j.phrases.length){ _aiCache[key]=j.phrases; return j.phrases; } } }catch(e){}

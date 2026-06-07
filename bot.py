@@ -943,7 +943,10 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None):
 
 def ask_ai_with_memory(prompt, owner=True):
     memory = load_memory()
-    system = f"Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском. Сегодняшняя дата: {datetime.now().strftime('%d.%m.%Y')}."
+    system = (f"Ты — исламский ассистент в Телеграм-боте Muslimoon. Отвечай по-русски. Сегодня {datetime.now().strftime('%d.%m.%Y')}.\n"
+              "Отвечай ЛАКОНИЧНО и ПО СУЩЕСТВУ: обычно 2–6 предложений, без воды, без длинных вступлений и "
+              "заключений, без повторов вопроса. Где уместно — короткий довод (аят/хадис/правило). "
+              "Списком — только если он реально нужен. НЕ выдумывай хадисы и факты; если не уверен — честно скажи.")
     if memory:
         memory_text = "\n".join([f"- [{m.get('date','—')}] {m.get('text','')}" for m in memory])
         system += f"\n\nЧто ты знаешь о владельце и контексте:\n{memory_text}"
@@ -2494,7 +2497,7 @@ async def _api_serve(application=None):
         user = verify_init_data(d.get('initData'))
         if not feature_allowed('neuro', user):
             return _deny('neuro')
-        if not rate_ok('neuro:' + _uid(user, r)):
+        if not rate_ok('neuro:' + _uid(user, r), 10, 60):   # защита нейронки: жёстче (10/60), чтобы не жечь ключ
             return _ratelimited()
         try:
             meaning = (d.get('meaning') or '').strip()[:500]
