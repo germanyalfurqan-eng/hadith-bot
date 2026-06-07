@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v119</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v120</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -456,7 +456,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v119';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v120';   // единый источник версии (бейдж у имени + подзаголовок)
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
@@ -522,7 +522,7 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 /* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:true,wordTap:true,popular:true,arabus:false}, loadCfg());
+let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:true,wordTap:true,popular:true,arabus:true}, loadCfg());
 function applyTheme(){ document.body.classList.toggle('light', cfg.theme==='light'); }
 try{ applyTheme(); }catch(e){}
 
@@ -932,9 +932,9 @@ function showRecent(){ const box=document.getElementById('recentBox'), list=docu
     else { list.innerHTML=''; a.slice(0,6).forEach(q=>{   // компактные строки (Google-стиль), максимум 6
       const c=document.createElement('div'); c.className='sugRow';
       c.innerHTML='<span class="ic">🕐</span><span class="tx">'+esc(q)+'</span><span class="rx">✕</span>';
-      c.addEventListener('mousedown',e=>e.preventDefault());   // мобайл: не терять фокус поля до клика (иначе подсказка прячется)
-      c.onclick=()=>{ inp.value=q; hideRecent(); runSearch(true); };
-      c.querySelector('.rx').onclick=(e)=>{ e.stopPropagation(); const arr=loadRecent().filter(y=>y!==q); try{localStorage.setItem(_recentKey(),JSON.stringify(arr));}catch(_){}; showRecent(); };
+      // мобайл: pointerdown срабатывает на касании СРАЗУ (до blur/прятанья) → подсказка реагирует
+      c.addEventListener('pointerdown',e=>{ if(e.target.closest&&e.target.closest('.rx')) return; e.preventDefault(); inp.value=q; hideRecent(); runSearch(true); });
+      c.querySelector('.rx').addEventListener('pointerdown',(e)=>{ e.preventDefault(); e.stopPropagation(); const arr=loadRecent().filter(y=>y!==q); try{localStorage.setItem(_recentKey(),JSON.stringify(arr));}catch(_){}; showRecent(); });
       list.appendChild(c); });
       box.style.display='block'; }
   }
@@ -958,9 +958,9 @@ function renderPopular(){
   if(!items.length){ pb.style.display='none'; return; }
   list.innerHTML=''; items.forEach(it=>{ const c=document.createElement('div'); c.className='sugRow';
     c.innerHTML='<span class="ic">🔥</span><span class="tx">'+esc(it.q)+'</span>';
-    c.addEventListener('mousedown',e=>e.preventDefault());   // мобайл: не терять фокус поля до клика
-    c.onclick=()=>{ if(it.tab && it.tab!==tab){ const tb=[...document.querySelectorAll('.tab')].find(t=>t.dataset.tab===it.tab); if(tb) tb.click(); }
-      document.getElementById('q').value=it.q; hideRecent(); runSearch(true); };
+    c.addEventListener('pointerdown',e=>{ e.preventDefault();
+      if(it.tab && it.tab!==tab){ const tb=[...document.querySelectorAll('.tab')].find(t=>t.dataset.tab===it.tab); if(tb) tb.click(); }
+      document.getElementById('q').value=it.q; hideRecent(); runSearch(true); });
     list.appendChild(c); });
   pb.style.display='block';
 }
