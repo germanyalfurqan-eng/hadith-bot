@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v131</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v132</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -266,6 +266,7 @@
     <div class="row"><span>✒️ Подпись при копировании (ссылка на приложение)</span><div class="sw" id="sigSw"></div></div>
     <div class="row"><span>🔍 Щипок-зум — увеличение экрана двумя пальцами <span style="color:var(--hint);font-size:11px">(по умолчанию выкл.)</span></span><div class="sw" id="zoomSw"></div></div>
     <div class="row"><span>🕐 Недавние поиски (показывать при пустом поле)</span><div class="sw" id="recentSw"></div></div>
+    <div class="row"><span>⬇️ Авто-переход к переводу тафсира (когда он ниже)</span><div class="sw" id="tafJumpSw"></div></div>
     <div class="row"><span>🔥 Популярное (что чаще ищут, при пустом поле)</span><div class="sw" id="popSw"></div></div>
     <div class="row"><span>🎨 Тема оформления</span>
       <select id="themeSel" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 8px">
@@ -455,7 +456,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v131';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v132';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2269,11 +2270,14 @@ async function translateTafsir(txt, key, s, a, host, btn){
       body:JSON.stringify({text:(txt||'').slice(0,11000), source:'tafsir_'+key, num:s+':'+a, initData:INITDATA})});
     const j=await r.json().catch(()=>({}));
     if(r.status===403){ host.innerHTML='<span class="hint">'+((j&&j.message)||'перевод пока не открыт')+'</span>'; restore(); return; }
-    if(j&&j.translation){ if(btn) btn.style.display='none';
+    if(j&&j.translation){
       const paras=j.translation.split(/\n+/).filter(p=>p.trim());
       host.innerHTML='<div style="border:1px solid #6c5ce7;border-radius:10px;padding:10px;background:rgba(108,92,231,.08);font-size:14px;line-height:1.75">'
         +'<div style="color:#b9a9ff;font-size:11px;margin-bottom:6px">'+(j.cached?'♻️ Перевод тафсира (из базы, бесплатно)':'🧠 Перевод тафсира (ИИ — возможны ошибки, сверяйте)')+'</div>'
         +paras.map(p=>'<p style="margin:0 0 8px">'+esc(p)+'</p>').join('')+'</div>';
+      // M205: перевод появляется НИЖЕ длинного оригинала — кнопка становится указателем «к переводу» + авто-прокрутка
+      if(btn){ btn.style.pointerEvents=''; btn.textContent='⬇️ К переводу'; btn.title='Перейти к переводу (ниже)'; btn.onclick=()=>{ try{ host.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} }; }
+      if(cfg.tafJump!==false){ setTimeout(()=>{ try{ host.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} }, 60); }
     } else { host.innerHTML='<span class="hint">не удалось перевести</span>'; restore(); }
   }catch(e){ host.innerHTML='<span class="hint">🔧 сервис недоступен</span>'; restore(); }
 }
@@ -2763,6 +2767,7 @@ var _zm=document.getElementById('zoomSw'); if(_zm){ _zm.classList.toggle('on',!c
 applyZoom();
 var _th=document.getElementById('themeSel'); if(_th){ _th.value=cfg.theme||'dark'; _th.onchange=()=>{ cfg.theme=_th.value; saveCfg(cfg); applyTheme(); toast(cfg.theme==='light'?'Светлая тема ☀️':'Тёмная тема 🌙'); }; }
 var _rcw=document.getElementById('recentSw'); if(_rcw){ _rcw.classList.toggle('on',cfg.recent!==false); _rcw.onclick=()=>{ cfg.recent=(cfg.recent===false); saveCfg(cfg); _rcw.classList.toggle('on',cfg.recent!==false); if(cfg.recent===false) hideRecent(); }; }
+var _tjw=document.getElementById('tafJumpSw'); if(_tjw){ _tjw.classList.toggle('on',cfg.tafJump!==false); _tjw.onclick=()=>{ cfg.tafJump=(cfg.tafJump===false); saveCfg(cfg); _tjw.classList.toggle('on',cfg.tafJump!==false); }; }
 var _psw=document.getElementById('popSw'); if(_psw){ _psw.classList.toggle('on',cfg.popular!==false); _psw.onclick=()=>{ cfg.popular=(cfg.popular===false); saveCfg(cfg); _psw.classList.toggle('on',cfg.popular!==false); var pb=document.getElementById('popularBox'); if(cfg.popular===false&&pb){pb.style.display='none';} else { try{renderPopular();}catch(e){} } }; }
 applyTheme();
 /* Подсказка при попытке увеличить экран пальцами, когда зум выключен (ненавязчиво, с «не показывать» и эскалацией) */
