@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v150</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v151</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -468,7 +468,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v150';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v151';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1598,11 +1598,14 @@ function ensureGrpToggle(){ const res=document.getElementById('res'); if(!res.fi
 function shareResults(){
   if(!_results||!_results.length){ toast('Сначала найди что-нибудь'); return; }
   const LIM=10; const parts=[];
+  // M239: помечаем найденные слова запроса «‹…›» — видно, что совпало
+  const mark=(t)=>{ t=(t||'').replace(/\s+/g,' '); if(_lastQueryTerms&&_lastQueryTerms.length){ try{ const sk=_lastQueryTerms.filter(w=>w.length>=3).sort((a,b)=>b.length-a.length).slice(0,6); for(const w of sk){ const re=new RegExp('('+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','g'); t=t.replace(re,'‹$1›'); } }catch(e){} } return t; };
   _results.slice(0,LIM).forEach(d=>{
-    if(d.type==='q'){ const v=d.v; parts.push('📖 Коран '+v.s+':'+v.a+'\n'+(v.text||'').replace(/\s+/g,' ').slice(0,360)); }
-    else { const h=d.h, code=d.code||(d.type==='m'?'muhaymin':''), num=(h&&(h.num||h.n))||''; parts.push('📗 '+arOf(code)+(num?(' №'+num):'')+'\n'+((h&&h.text)||'').replace(/\s+/g,' ').slice(0,360)); }
+    if(d.type==='q'){ const v=d.v; parts.push('📖 Коран '+v.s+':'+v.a+'\n'+mark((v.text||'')).slice(0,420)); }
+    else { const h=d.h, code=d.code||(d.type==='m'?'muhaymin':''), num=(h&&(h.num||h.n))||''; parts.push('📗 '+arOf(code)+(num?(' №'+num):'')+'\n'+mark((h&&h.text)||'').slice(0,420)); }
   });
-  let txt=parts.join('\n\n———\n\n');
+  const qv=(document.getElementById('q').value||'').trim();
+  let txt=(qv?('🔎 Искали: «'+qv+'»\n\n'):'')+parts.join('\n\n———\n\n');
   if(_results.length>LIM) txt+='\n\n…и ещё '+(_results.length-LIM)+' (смотри в приложении)';
   txt+='\n\n📗 Muslimoon — Коран и хадисы\n'+APP_LINK;
   if(txt.length>3800) txt=txt.slice(0,3800)+'…';
@@ -1612,7 +1615,7 @@ function shareResults(){
 function ensureShareBtn(){ const res=document.getElementById('res'); if(!res.firstChild || document.getElementById('shareBtn') || !_results.length) return;
   const b=document.createElement('span'); b.id='shareBtn';
   b.style.cssText='display:inline-block;margin:2px 0 8px 8px;font-size:13px;color:var(--link);cursor:pointer;user-select:none;border:1px solid var(--border);border-radius:12px;padding:3px 10px';
-  b.textContent='📤 Поделиться'; b.onclick=shareResults;
+  b.textContent='📤 Поделиться найденным'; b.title='Отправить подборку найденного (что искал + совпадения помечены ‹…›) со ссылкой на приложение'; b.onclick=shareResults;
   const gt=document.getElementById('grpToggle'); if(gt&&gt.parentNode) gt.parentNode.insertBefore(b, gt.nextSibling); else res.insertBefore(b, res.children[1]||null); }
 function renderResultsView(){
   const res=document.getElementById('res'); _clearRenderQ(); res.innerHTML='';
