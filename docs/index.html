@@ -153,7 +153,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v210</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v211</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -487,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v210';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v211';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2855,6 +2855,25 @@ async function _qrLoad(){
   nav.appendChild(cog); nav.appendChild(sp);
   if(_qrView.a){ const tgt=body.querySelector('#qr-'+_qrView.a); if(tgt) setTimeout(()=>{ try{ tgt.scrollIntoView({block:'center'}); }catch(e){} },60); } else { body.scrollTop=0; }
   try{ applyFontScale(); }catch(e){}
+  // предупреждение когда уходишь с играющего аята: баннер «↪ к аяту · ⏹ выключить» (в панели, над текстом)
+  const panel=m.querySelector('.panel');
+  let bn=m.querySelector('#qrPlayBanner');
+  if(!bn && panel){ bn=document.createElement('div'); bn.id='qrPlayBanner';
+    bn.style.cssText='display:none;margin:0 0 8px;padding:7px 10px;background:#11306b;border:1px solid #2f7be6;border-radius:10px;font-size:13px;color:#fff;align-items:center;gap:8px;justify-content:space-between';
+    bn.innerHTML='<span id="qrbTxt">🔊 Чтение идёт ниже</span><span style="display:flex;gap:8px;flex:none"><button id="qrbGo" class="mini" style="border:1px solid #fff;color:#fff;background:transparent;padding:4px 9px">↪ к аяту</button><button id="qrbStop" class="mini" style="border:none;background:#fff;color:#11306b;padding:4px 9px">⏹ выключить</button><button id="qrbKeep" class="mini" style="border:none;background:transparent;color:#cfe0ff;padding:4px 6px">оставить ✕</button></span>';
+    panel.insertBefore(bn, body);
+    bn.querySelector('#qrbGo').onclick=()=>{ const n=window._qrNow; if(n){ const t=document.getElementById('qr-'+n.a); if(t) t.scrollIntoView({block:'center',behavior:'smooth'}); } };
+    bn.querySelector('#qrbStop').onclick=()=>{ try{ window._qrStopped=true; if(window._qrAudio){window._qrAudio.onended=null;window._qrAudio.pause();window._qrAudio=null;} _qrWordStop(); }catch(e){} bn.style.display='none'; try{_miniSync();}catch(e){} };
+    bn.querySelector('#qrbKeep').onclick=()=>{ bn.dataset.dismiss=String(Date.now()); bn.style.display='none'; };
+    body.addEventListener('scroll',()=>{ try{ const n=window._qrNow; const playing=(window._qrAudio&&!window._qrAudio.paused)||(window._qrWordAudio);
+      if(!n||!playing||window._qrStopped){ bn.style.display='none'; return; }
+      const blk=document.getElementById('qr-'+n.a); if(!blk){ bn.style.display='none'; return; }
+      const br=blk.getBoundingClientRect(), cr=body.getBoundingClientRect();
+      const visible=br.bottom>cr.top+10 && br.top<cr.bottom-10;
+      bn.querySelector('#qrbTxt').textContent='🔊 Идёт чтение: '+n.s+':'+n.a;
+      bn.style.display=visible?'none':'flex';
+    }catch(e){} },{passive:true});
+  }
 }
 function cardAyah(d,groups){
   const {v}=d; const card=document.createElement('div');card.className='card';
