@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v133</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v134</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -456,7 +456,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v133';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v134';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1499,9 +1499,18 @@ async function getOne(code,num){
 }
 function info(t){const d=document.createElement('div');d.className='hint';d.style.textAlign='center';d.textContent=t;return d;}
 /* ===== M127 Шаг1: широкий поиск (sunnah.one через наш /api) ===== */
+// M211: карта turath book_id → название (из shamela_catalog), чтобы в wide-выдаче показывать ИМЯ книги
+let _booksMap=null,_booksMapP=null;
+function loadBooksMap(){ if(_booksMap) return Promise.resolve(_booksMap); if(_booksMapP) return _booksMapP;
+  _booksMapP=fetch('./books_map.json').then(r=>r.ok?r.json():null).then(j=>{_booksMap=j||{};return _booksMap;}).catch(()=>{_booksMap={};return _booksMap;}); return _booksMapP; }
+function bookName(id){ id=String(id||''); return (_booksMap&&_booksMap[id])||''; }
 function wideCard(x){ const card=document.createElement('div');card.className='card';
+  const nm=bookName(x.source); const loc=x.loc||x.source_location||'';
+  if(nm||x.source){ const sh=document.createElement('div'); sh.style.cssText='font-size:13px;color:var(--link);margin-bottom:5px;direction:rtl;text-align:right;font-weight:600';
+    sh.innerHTML='📖 '+esc(nm||('источник №'+x.source))+(loc?(' · <span style="color:var(--hint);font-weight:400">'+esc(String(loc))+'</span>'):''); card.appendChild(sh); }
   const ar=document.createElement('div');ar.className='ar';
   ar.innerHTML=esc(x.text||'').replace(/&lt;mark&gt;/g,'<mark>').replace(/&lt;\/mark&gt;/g,'</mark>'); card.appendChild(ar);
+  try{ enableArabusTap(ar); if(_arabusOn) ar.style.cursor='pointer'; }catch(e){}   // M211: Arabus и в большой библиотеке
   const meta=document.createElement('div');meta.className='meta';
   meta.innerHTML = x.hukm ? gradeBadge(x.hukm) : '<span class="srcchk" title="'+NOGRADE_NOTE+'" style="border:1px dashed #6b5a2e;border-radius:8px;padding:1px 6px">⏳ ожидается наша проверка</span>';
   const cp=document.createElement('button');cp.className='tr-btn';cp.textContent='⧉';cp.title='Копировать';
@@ -1517,6 +1526,11 @@ function wideCard(x){ const card=document.createElement('div');card.className='c
   nw.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
   const nwout=document.createElement('div');nwout.className='tr-out';
   nw.onclick=()=>doNarrators(cleanTxt,nwout,nw); meta.appendChild(nw);
+  const ab=document.createElement('button'); ab.className='tr-btn arabusToggle'; ab.title='Разбор слов: включи и тапай любое слово в тексте → корень и значения';
+  ab.style.cssText='border:1px solid #1e7d5a;color:#7fe3bf;padding:6px 9px;background:'+(_arabusOn?'#173d30':'transparent');
+  ab.textContent='📕 Arabus';
+  ab.onclick=()=>{ _arabusOn=!_arabusOn; cfg.arabus=_arabusOn; saveCfg(cfg); try{ loadRoots(); if(_arabusOn) loadArabusLocal(); }catch(e){} updateArabusButtons(); toast(_arabusOn?'📕 Arabus ВКЛ — тапай любое слово':'Arabus выкл'); };
+  meta.appendChild(ab);
   card.appendChild(meta);
   if(x.takhreej){ const tk=document.createElement('div'); tk.style.cssText='color:var(--hint);font-size:13px;margin-top:6px;direction:rtl;text-align:right'; tk.textContent='التخريج: '+x.takhreej; card.appendChild(tk); }
   card.appendChild(twout); card.appendChild(nwout);
@@ -1564,6 +1578,7 @@ async function appendWide(seq, q, primary){
     if(r.status===429){ sec.textContent='🌐 Большая библиотека: слишком часто, подожди.'; return; }
     const data=j.data||[];
     if(!data.length){ sec.textContent=primary?'🤷 По всей библиотеке не нашёл. Попробуй характерную фразу из матна хадиса.':'🌐 В большой библиотеке дополнительно ничего не нашлось.'; return; }
+    await loadBooksMap();   // M211: имена книг
     sec.textContent=(primary?'🌐 Найдено по всей библиотеке (sunnah.one) · ':'🌐 Ещё из всей библиотеки (sunnah.one) · ')+data.length+(j.count>data.length?(' из ~'+j.count):'');
     data.forEach(x=>res.appendChild(wideCard(x)));
     res.appendChild(wideMoreBtn(seq, q, {page:(j.page||1), shown:data.length, count:(j.count||data.length)}));
@@ -1582,7 +1597,7 @@ async function appendWideMulti(seq, cands){
       if(r.status===403){ sec.textContent='🌐 Большая библиотека: доступ пока не открыт.'; return; }
       if(r.status===429){ sec.textContent='🌐 Слишком часто, подожди немного.'; return; }
       const j=await r.json().catch(()=>({})); const data=j.data||[];
-      if(data.length){ sec.textContent='🌐 Найдено по всей библиотеке (sunnah.one) · '+data.length+(j.count>data.length?(' из ~'+j.count):''); data.forEach(x=>res.appendChild(wideCard(x))); res.appendChild(wideMoreBtn(seq, c, {page:(j.page||1), shown:data.length, count:(j.count||data.length)})); return; }
+      if(data.length){ await loadBooksMap(); sec.textContent='🌐 Найдено по всей библиотеке (sunnah.one) · '+data.length+(j.count>data.length?(' из ~'+j.count):''); data.forEach(x=>res.appendChild(wideCard(x))); res.appendChild(wideMoreBtn(seq, c, {page:(j.page||1), shown:data.length, count:(j.count||data.length)})); return; }
     }catch(e){}
   }
   sec.textContent='🤷 Точное совпадение не нашёл. Попробуй вставить характерную фразу из матна (без иснада/имён).';
