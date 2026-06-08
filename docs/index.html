@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v147</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v148</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -458,7 +458,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v147';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v148';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1220,6 +1220,9 @@ function _flushRender(){ _flushT=null; const res=document.getElementById('res');
   let n=0; while(_renderQ.length && n<30){ try{ res.appendChild(makeCard(_renderQ.shift())); }catch(e){} n++; }
   if(_renderQ.length) _flushT=setTimeout(_flushRender,0); }
 function _clearRenderQ(){ _renderQ=[]; if(_flushT){ clearTimeout(_flushT); _flushT=null; } }
+// M230: «9 знамений» — отдельная цифра терялась (фильтр length>1). Разворачиваем 1-2-значные числа в слова.
+const _RUNUM={'0':'ноль','1':'один','2':'два','3':'три','4':'четыре','5':'пять','6':'шесть','7':'семь','8':'восемь','9':'девять','10':'десять','11':'одиннадцать','12':'двенадцать','40':'сорок','70':'семьдесят'};
+function _ruNumExpand(s){ return (s||'').replace(/\b(\d{1,2})\b/g,(m,d)=>_RUNUM[d]||m); }
 // M196: браузер корней Корана — выбрать буквы корня (как Quran Dictionary corpus.quran.com) → аяты
 async function openRootBrowser(){
   const R=await loadRoots(); const roots=Object.keys(R.r||{}).filter(k=>k && !k.startsWith('r:'));
@@ -1395,7 +1398,7 @@ async function runSearch(explicit){
     if(!numMode && !modes.ai && /[а-яё]/i.test(shown) && !isArabic(shown)){
       let relax=null, corr=null;
       try{ const ru=await loadHadithRu(); if(seq!==_seq) return;
-        const qw=shown.toLowerCase().split(/\s+/).filter(w=>w.length>1);
+        const qw=_ruNumExpand(shown).toLowerCase().split(/\s+/).filter(w=>w.length>1);
         const allow = (selCols.size||selExtra.size) ? new Set([...selCols,...selExtra]) : null;
         const pool = allow ? ru.filter(x=>allow.has(x.s)) : ru;
         if(qw.length){ let useWords=qw;
@@ -1462,7 +1465,7 @@ async function runSearch(explicit){
       }
       else if(!modes.ai && /[а-яёa-z]/i.test(shown) && !isArabic(shown)){   // поиск по РУССКОМУ переводу (Кулиев) — НЕ в ИИ-режиме (там ищем по арабским фразам q)
         const ru=await loadQuranRu(); if(seq!==_seq) return;
-        const qw=shown.toLowerCase().split(/\s+/).filter(w=>w.length>1);
+        const qw=_ruNumExpand(shown).toLowerCase().split(/\s+/).filter(w=>w.length>1);
         if(qw.length){ const gn=v=>(ru[v.s+':'+v.a]||'').toLowerCase(); let useWords=qw;
           if(!strict){ corrQ=correctQuery(qw, ruVocabFrom('q', Object.values(ru))); if(corrQ.changed.length) useWords=corrQ.corrected; }   // M173: автоисправление (Яндекс)
           relaxQ=relaxSearch(useWords, gn, arr, strict);   // M172: ослабление при нуле по всем словам
