@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v157</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v158</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -468,7 +468,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v157';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v158';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2027,6 +2027,42 @@ async function showRootPlaces(root, opts){
   if(n>CAP){ const m=document.createElement('div'); m.className='hint'; m.style.marginTop='8px'; m.textContent='(показаны первые '+CAP+' из '+n+')'; res.appendChild(m); }
   try{ window.scrollTo(0,0); }catch(e){}
 }
+// M166: читалка Корана — клик «Коран · X:Y» → вся сура для чтения (листать суры, перевод, Arabus)
+let _qrView={s:1,a:0};
+async function openQuranReader(s,a){
+  s=+s||1; if(s<1)s=1; if(s>114)s=114; _qrView={s:s,a:+a||0};
+  let m=document.getElementById('qrModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='qrModal';
+    m.innerHTML='<div class="panel" style="max-width:680px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:6;background:var(--card);margin:-16px -16px 8px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b id="qrTitle" style="font-size:14px">📖 Коран</b><button class="mini" id="qrClose" style="flex:none">закрыть ✕</button></div><div id="qrNav" style="display:flex;gap:6px;align-items:center;justify-content:center;margin-bottom:8px;flex-wrap:wrap"></div><div id="qrBody" style="max-height:62vh;overflow:auto"></div></div>';
+    document.body.appendChild(m);
+    m.querySelector('#qrClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+  }
+  m.style.display='flex'; await _qrLoad();
+}
+async function _qrLoad(){
+  const m=document.getElementById('qrModal'); if(!m) return;
+  const body=m.querySelector('#qrBody'), nav=m.querySelector('#qrNav'), ttl=m.querySelector('#qrTitle'); const s=_qrView.s;
+  ttl.textContent='📖 Сура '+s+' · '+(SURA_NAMES[s-1]||'');
+  body.innerHTML='<div class="hint">Загружаю…</div>';
+  const arr=await loadQuran(); let ru={}; try{ ru=await loadQuranRu(); }catch(e){}
+  const ayahs=arr.filter(x=>x.s===s).sort((x,y)=>x.a-y.a);
+  body.innerHTML='';
+  ayahs.forEach(v=>{ const blk=document.createElement('div'); blk.id='qr-'+v.a;
+    blk.style.cssText='border-bottom:1px solid var(--border);padding:9px 4px'+(v.a===_qrView.a?';background:rgba(74,222,128,.10);border-radius:8px':'');
+    const ar=document.createElement('div'); ar.className='ar'; ar.style.cssText='direction:rtl;text-align:right;font-size:19px;line-height:2';
+    ar.innerHTML=esc(v.text)+' <span style="color:var(--mark);font-size:15px">۝'+toAr(v.a)+'</span>';
+    try{ enableArabusTap(ar); if(_arabusOn) ar.style.cursor='pointer'; }catch(e){}
+    blk.appendChild(ar);
+    const t=ru[s+':'+v.a]; if(t){ const rd=document.createElement('div'); rd.style.cssText='font-size:13px;color:var(--hint);margin-top:4px;line-height:1.5'; rd.textContent=v.a+'. '+t; blk.appendChild(rd); }
+    body.appendChild(blk);
+  });
+  nav.innerHTML='';
+  const mk=(t,fn,dis)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=t; if(dis)b.disabled=true; b.onclick=fn; return b; };
+  nav.appendChild(mk('← пред. сура', ()=>{ _qrView={s:s-1,a:0}; _qrLoad(); }, s<=1));
+  nav.appendChild(mk('след. сура →', ()=>{ _qrView={s:s+1,a:0}; _qrLoad(); }, s>=114));
+  if(_qrView.a){ const tgt=body.querySelector('#qr-'+_qrView.a); if(tgt) setTimeout(()=>{ try{ tgt.scrollIntoView({block:'center'}); }catch(e){} },60); } else { body.scrollTop=0; }
+}
 function cardAyah(d,groups){
   const {v}=d; const card=document.createElement('div');card.className='card';
   const ar=document.createElement('div');ar.className='ar';
@@ -2037,7 +2073,8 @@ function cardAyah(d,groups){
   if(d.ru){ const ru=document.createElement('div'); ru.style.cssText='margin-top:6px;font-size:14px;color:var(--text)';
     ru.innerHTML='<span style="color:var(--hint);font-style:italic">Кулиев:</span> '+hlRu(d.ru, d.rq||''); card.appendChild(ru); }
   const meta=document.createElement('div');meta.className='meta';
-  meta.innerHTML='<span class="src">Коран · '+v.s+':'+v.a+'</span>';
+  meta.innerHTML='<span class="src srcnav" title="Открыть суру для чтения" style="cursor:pointer">📖 Коран · '+v.s+':'+v.a+'</span>';
+  { const sn=meta.querySelector('.src'); if(sn) sn.onclick=()=>openQuranReader(v.s, v.a); }   // M166: → читалка суры
   addTr(meta,card,v.text,{s:v.s,a:v.a},{k:'q|'+v.s+':'+v.a,type:'q',coll:'Коран',label:'Коран '+v.s+':'+v.a,text:(v.text||'').slice(0,200)}); card.appendChild(meta); return card;
 }
 /* ===== Arabus: выдели слово в тексте поста → корень, значения, переводы (arabus.ru) ===== */
