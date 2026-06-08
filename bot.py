@@ -1219,21 +1219,51 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_owner(update):
         _tl = text.strip().lower()
         if _tl in ("баны", "чёрный список", "черный список", "бан список", "блок список"):
-            cur = sorted(_AI_BAN)
-            await update.message.reply_text("⛔ Чёрный список ("+str(len(cur))+"):\n" + ("\n".join(str(x) for x in cur) if cur else "пусто") + "\n\nКоманды: «бан <id>» / «разбан <id>». id чата (минусовой) или пользователя.\nЧтобы перекрыть ВСЁ сразу — выключи рубильник «ВСЁ ВСЕМ» в ⚙️ Доступы.")
+            cfg0 = load_access(); cur = [str(x) for x in cfg0.get("blacklist", [])]; notes0 = cfg0.get("ban_notes", {}) or {}
+            lines = []
+            for x in cur:
+                nt = notes0.get(str(x), "")
+                lines.append("• "+str(x)+(" — "+nt if nt else ""))
+            await update.message.reply_text("⛔ Чёрный список ("+str(len(cur))+"):\n" + ("\n".join(lines) if lines else "пусто") + "\n\nКоманды: «бан <id> [причина]» (можно несколько id, или ОТВЕТЬ «бан» на уведомление) / «разбан <id>».")
             return
-        m = re.match(r"^(бан|разбан)\s+(-?\d{3,})$", _tl)
-        if m:
-            act, tid = m.group(1), int(m.group(2))
-            cfg = load_access(); bl = [str(x) for x in cfg.get("blacklist", [])]
+        # БАН/РАЗБАН: несколько id, бан по ответу на уведомление (id берём из него), причина-комментарий
+        if re.match(r"^(бан|разбан)\b", _tl):
+            act = "разбан" if _tl.startswith("разбан") else "бан"
+            ids = re.findall(r"-?\d{3,}", text)
+            reason = ""
+            rep = update.message.reply_to_message
+            if not ids and rep and (rep.text or rep.caption):
+                rtxt = rep.text or rep.caption or ""
+                ids = re.findall(r"-?\d{3,}", rtxt)
+                reason = re.sub(r"\s+", " ", rtxt).strip()[:200]
+            if not reason:
+                rest = re.sub(r"^(бан|разбан)", "", text, flags=re.I)
+                rest = re.sub(r"-?\d{3,}", "", rest).strip(" :—-,.\n\t")
+                reason = rest[:200]
+            ids = list(dict.fromkeys(ids))
+            if not ids:
+                await update.message.reply_text("Укажи id: «бан 123456» (можно несколько: «бан 111 222»), либо ОТВЕТЬ «бан» на уведомление с id.")
+                return
+            cfg = load_access(); bl = [str(x) for x in cfg.get("blacklist", [])]; notes = dict(cfg.get("ban_notes", {}) or {})
+            done = []
+            for tid in ids:
+                tid = str(tid)
+                if act == "бан":
+                    if tid not in bl: bl.append(tid)
+                    notes[tid] = reason or notes.get(tid, "") or "вручную"
+                    done.append(tid)
+                else:
+                    bl = [x for x in bl if x != tid]; notes.pop(tid, None); done.append(tid)
+            save_access({"blacklist": bl, "ban_notes": notes})
             if act == "бан":
-                if str(tid) not in bl: bl.append(str(tid))
-                save_access({"blacklist": bl})
-                await update.message.reply_text(f"⛔ Забанен {tid}. Бот его игнорирует (в личке и группах).")
+                await update.message.reply_text("⛔ Забанено: " + ", ".join(done) + (("\n📝 " + reason) if reason else "") + "\nВсего в ЧС: " + str(len(bl)))
+                try:
+                    jrn = "⛔ ЧЁРНЫЙ СПИСОК +" + ", ".join(done) + (("\n📝 причина: " + reason) if reason else "") + "\nВсего в бане: " + str(len(bl))
+                    if update.effective_chat and update.effective_chat.id != LOG_CHAT_ID:
+                        await context.bot.send_message(LOG_CHAT_ID, jrn)
+                except Exception: pass
             else:
-                bl = [x for x in bl if x != str(tid)]
-                save_access({"blacklist": bl})
-                await update.message.reply_text(f"✅ Разбанен {tid}.")
+                await update.message.reply_text("✅ Разбанено: " + ", ".join(done) + "\nВ ЧС осталось: " + str(len(bl)))
             return
         # ===== Режим групп =====
         if _tl in ("группы", "группа список", "список групп"):
@@ -2102,6 +2132,7 @@ DEFAULT_ACCESS = {
     "bot": {"public": False, "whitelist": []},             # 🤖 ботяра (ИИ в боте)
     "botsearch": {"public": True, "whitelist": []},        # 🤖 поиск в боте (Бухари 333, мухэймин, искать…) — по умолчанию ВСЕМ
     "blacklist": [],                                        # ⛔ чёрный список chat_id/user_id — полностью игнорируем
+    "ban_notes": {},                                        # ⛔ комментарии к банам {id: "причина"} — журнал ЧС
     "group_open": True,                                      # 👥 True=бот работает в любых группах; False=только в group_wl
     "group_wl": [],                                          # 👥 разрешённые группы (id) при group_open=False
 }
@@ -2124,6 +2155,9 @@ def _merge_access(cfg, base=None):
     # чёрный список (плоский список id) — отдельной обработкой (не {public,whitelist})
     bl = cfg.get("blacklist") if (isinstance(cfg, dict) and isinstance(cfg.get("blacklist"), list)) else out.get("blacklist")
     out["blacklist"] = [str(x).strip() for x in (bl or []) if str(x).strip()][:2000]
+    # комментарии к банам {id: причина}
+    bn = cfg.get("ban_notes") if (isinstance(cfg, dict) and isinstance(cfg.get("ban_notes"), dict)) else out.get("ban_notes")
+    out["ban_notes"] = {str(k).strip(): str(v)[:300] for k, v in (bn or {}).items() if str(k).strip()}
     # режим групп
     if isinstance(cfg, dict) and "group_open" in cfg:
         out["group_open"] = bool(cfg["group_open"])
