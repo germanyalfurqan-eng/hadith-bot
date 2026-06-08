@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v177</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v178</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="homeBtn" style="display:block" title="🏠 На главную — сброс поиска">🏠</div>
@@ -486,7 +486,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v177';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v178';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -504,10 +504,13 @@ const APPVER = 'v177';   // единый источник версии (бейд
       const go=document.createElement('button'); go.textContent='Обновить';
       go.style.cssText='background:#2f7be6;color:#fff;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:14px;font-weight:700';
       go.addEventListener('click',e=>{ e.preventDefault(); e.stopPropagation(); doReload(); });
+      const wn=document.createElement('button'); wn.textContent='💬 Что нового'; wn.title='Посмотреть пункты обновления и оставить замечание по каждому';
+      wn.style.cssText='background:transparent;color:#cfe0ff;border:1px solid #2f7be6;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:13px';
+      wn.addEventListener('click',e=>{ e.stopPropagation(); try{ window.showUpdateNotes(latest); }catch(err){} });
       const x=document.createElement('button'); x.textContent='✕';
       x.style.cssText='background:transparent;color:#fff;border:none;cursor:pointer;opacity:.7;font-size:16px;padding:4px 6px';
       x.addEventListener('click',e=>{ e.stopPropagation(); b.remove(); });
-      b.appendChild(txt); b.appendChild(go); b.appendChild(x);
+      b.appendChild(txt); b.appendChild(go); b.appendChild(wn); b.appendChild(x);
       (document.body||document.documentElement).appendChild(b);
     }catch(e){} }
 }catch(e){} })();
@@ -3297,6 +3300,29 @@ function addNotFoundBtn(res, q){ try{ if(!res) return; const w=document.createEl
   b.onclick=()=>{ try{ openFeedback('поиск не дал результата: «'+(q||'').slice(0,120)+'»'); }catch(e){} };
   w.appendChild(b); res.appendChild(w); }catch(e){} }
 function openFeedback(ctx){ _fbCtx=ctx||''; var c=document.getElementById('fbCtx'); if(c) c.textContent=ctx?('Контекст: '+ctx):'Общее замечание'; var t=document.getElementById('fbText'); if(t) t.value=''; var m=document.getElementById('fbModal'); m.style.zIndex='10000'; m.style.display='flex'; }
+// M30/#30: «Что нового» — пункты обновления, у каждого кнопка 💬 чтобы оставить замечание ПО ЭТОМУ пункту
+window.showUpdateNotes=async function(ver){
+  ver=ver||APPVER;
+  let m=document.getElementById('wnModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='wnModal';
+    m.innerHTML='<div class="panel" style="max-width:600px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px"><b id="wnTitle">🆕 Что нового</b><button class="mini" id="wnClose" style="flex:none">закрыть ✕</button></div><div id="wnBody"></div><div class="hint" style="font-size:12px;margin-top:8px">💬 у каждого пункта — оставить замечание именно по нему (передумал / неверно / уточнение).</div></div>';
+    document.body.appendChild(m); m.style.zIndex='10001';
+    m.querySelector('#wnClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+  }
+  m.querySelector('#wnTitle').textContent='🆕 Что нового ('+ver+')';
+  const body=m.querySelector('#wnBody'); body.innerHTML='<div class="hint">Загружаю…</div>'; m.style.display='flex';
+  let txt=''; try{ const r=await fetch('update_note.txt?cb='+Date.now(),{cache:'no-store'}); if(r.ok) txt=await r.text(); }catch(e){}
+  // строки-пункты: непустые, кроме заголовка «🆕 Обновление…»
+  const lines=(txt||'').split('\n').map(s=>s.replace(/\s+$/,'')).filter(s=>s.trim() && !/^🆕\s*Обновление/i.test(s));
+  body.innerHTML='';
+  if(!lines.length){ body.innerHTML='<div class="hint">Описание пунктов пока недоступно.</div>'; }
+  lines.forEach(line=>{ const row=document.createElement('div'); row.style.cssText='display:flex;gap:8px;align-items:flex-start;border-bottom:1px solid var(--border);padding:8px 2px';
+    const tx=document.createElement('div'); tx.style.cssText='flex:1;font-size:13px;line-height:1.5'; tx.textContent=line.trim();
+    const cm=document.createElement('button'); cm.className='mini'; cm.textContent='💬'; cm.title='Замечание по этому пункту'; cm.style.flex='none';
+    cm.onclick=()=>{ m.style.display='none'; try{ openFeedback('по обновлению '+ver+' → «'+line.trim().slice(0,140)+'»'); }catch(e){} };
+    row.appendChild(tx); row.appendChild(cm); body.appendChild(row); });
+};
 async function sendFeedback(){
   const t=document.getElementById('fbText').value.trim(); if(!t){ toast('Напиши замечание'); return; }
   if(!BACKEND_URL){ toast('Нет связи с сервером'); return; }
@@ -3398,6 +3424,7 @@ function goHome(){ document.getElementById('q').value=''; selCols.clear(); selEx
   document.getElementById('res').innerHTML=''; setStatus(''); try{localStorage.removeItem('muslimoon_state');}catch(e){} document.querySelector('.tab[data-tab="hadith"]').click(); renderCols(); updateExtraSel(); var _qh=document.getElementById('qHelper'); if(_qh)_qh.style.display='none'; var _qs=document.getElementById('qSugg'); if(_qs)_qs.style.display='none'; var _tl=document.getElementById('tlSugg'); if(_tl){_tl.style.display='none';_tl.innerHTML='';} try{window.scrollTo(0,0);}catch(e){} }
 document.getElementById('brand').onclick=goHome;
 var _hb=document.getElementById('homeBtn'); if(_hb) _hb.onclick=goHome;
+var _vb=document.getElementById('verBadge'); if(_vb){ _vb.style.cursor='pointer'; _vb.title='🆕 Что нового — нажми'; _vb.onclick=(e)=>{ e.stopPropagation(); try{ window.showUpdateNotes(APPVER); }catch(err){} }; }   // #30: бейдж версии → что нового + комменты по пунктам
 // M254/#11: нативная кнопка «Назад» Telegram — закрывает верхнюю открытую модалку (читалка/настройки/каталог…)
 function _visModals(){ return [...document.querySelectorAll('.modal')].filter(m=>{ const d=m.style.display; return d && d!=='none'; }); }
 function _closeTopModal(){ const ms=_visModals(); if(!ms.length) return false; const m=ms[ms.length-1];
