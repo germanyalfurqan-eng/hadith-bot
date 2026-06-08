@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v136</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v137</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -457,7 +457,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v136';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v137';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1213,6 +1213,27 @@ async function relaxArabicHadith(codes, groups, modes, seq, add){
     const f=await tryScan([cur.concat(neg)]); if(f<0) return null; if(f) return {dropped:dropped.map(t=>t.t), used:cur.map(t=>t.t)}; }
   return {dropped:dropped.map(t=>t.t), used:cur.map(t=>t.t)};
 }
+// M212: корневой фолбэк для Корана — точного слова нет (напр. بدعة), но корень есть (بدع → بديع/ابتدعوها/بدعا)
+async function tryRootFallback(q, seq){
+  try{
+    q=(q||'').trim(); if(!q || /[|"\-]/.test(q)) return false;   // не для операторов/фраз
+    const words=q.split(/\s+/).filter(w=>/[ء-ي]/.test(w)); if(words.length!==1) return false;   // одно арабское слово
+    const R=await loadRoots(); if(seq!==_seq) return false;
+    const base=canon(words[0]).replace(/[^ء-ي]/g,'').replace(/^(وال|بال|كال|فال|لل|ال)/,'');   // без ال/предлогов
+    const cands=[]; const add=c=>{ if(c && c.length>=3 && c.length<=5 && cands.indexOf(c)===-1) cands.push(c); };
+    add(base.replace(/[ةه]$/,''));                 // بدعة → بدع
+    add(skel(base).replace(/[ةه]$/,''));
+    add(base.replace(/[اويىءؤئةه]/g,''));           // скелет согласных
+    add(skel(base)); add(base);
+    for(const c of cands){ if(R.r && R.r[c] && R.r[c].length){
+      await showRootPlaces(c); if(seq!==_seq) return true;
+      const res=document.getElementById('res'); const note=document.createElement('div'); note.className='hint';
+      note.style.cssText='margin:0 0 8px;color:var(--hint);font-size:13px';
+      note.innerHTML='🔎 Точного слова «'+esc(q)+'» в Коране нет — показываю аяты по корню <b style="'+_AF+'">'+esc(c)+'</b>';
+      res.insertBefore(note, res.firstChild); return true; } }
+  }catch(e){}
+  return false;
+}
 async function runSearch(explicit){
   const strict=_strictSearch; _strictSearch=false;   // M173: захватываем флаг строгого режима на этот запуск
   const seq=++_seq; groupSrc=false;   // каждый новый поиск — обычным списком (группировка — опция рядом с результатом)
@@ -1414,7 +1435,8 @@ async function runSearch(explicit){
   if(modes.ai && aiPhrases && aiPhrases.length){ const ap=aiPhrases.find(p=>isArabic(p)); if(ap) wideQ=ap; }
   const wideWill = (tab==='hadith' && explicit && !numMode && (isArabic(shown) || (modes.ai && count<5)));
   if(!count && seq===_seq){
-    if(wideWill){ res.innerHTML='<div class="status">🔎 В наших книгах точного совпадения нет — ищу по всей библиотеке…</div>'; }
+    if(tab==='quran' && await tryRootFallback(shown, seq)){ /* M212: показал аяты по корню */ }
+    else if(wideWill){ res.innerHTML='<div class="status">🔎 В наших книгах точного совпадения нет — ищу по всей библиотеке…</div>'; }
     else if(!res.querySelector('.corrGo')){ res.innerHTML='<div class="status">Ничего не найдено 🤷</div>'; }   // M173: не затирать баннер «возможно, вы искали…»
   }
   // Поиск по ВСЕЙ библиотеке: наши книги выше (если нашлись), ниже — остальной корпус (sunnah.one). Только при явном «Найти»/Enter.
