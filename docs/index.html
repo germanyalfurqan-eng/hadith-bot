@@ -153,7 +153,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v208</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v209</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -487,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v208';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v209';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2567,34 +2567,31 @@ let _qrView={s:1,a:0};
 let _qcTimings={};   // кэш: recId_s → {audio_url, byA}
 const _QC_REC={Alafasy_128kbps:7,Husary_128kbps:6,Abdul_Basit_Murattal_192kbps:1,Minshawi_Murattal_128kbps:9,'Saood_ash-Shuraym_128kbps':10};
 function _qrWordStop(){ try{ if(window._qrWordAudio){ window._qrWordAudio.pause(); window._qrWordAudio.ontimeupdate=null; window._qrWordAudio.onended=null; window._qrWordAudio=null; window._qrStopped=true; } document.querySelectorAll('.qwnow').forEach(x=>x.classList.remove('qwnow')); document.querySelectorAll('#qrBody [data-qrhl]').forEach(b=>{b.style.outline='';b.style.background='';b.removeAttribute('data-qrhl');}); }catch(e){} }
+let _wtData={};   // кэш скачанной разметки по словам (Хусари): s → {audio, v:{ayah:{f,t,s}}}
 async function _qrWordPlay(s, a){
-  if(!BACKEND_URL){ toast('Работает на сервере'); return; }
-  if(cfg.wordTap===false){ toast('Включи «тап по словам» в ⚙️ Настройках для подсветки'); }
-  let rid=_QC_REC[cfg.reciter||'']; let note='';
-  if(!rid){ rid=7; note=' (у выбранного чтеца нет разметки — включил Афаси)'; }
   try{ if(window._qrAudio){window._qrAudio.onended=null;window._qrAudio.pause();window._qrAudio=null;} }catch(e){}
   _qrWordStop();
-  toast('✨ Готовлю чтение по словам…'+note);
-  const ck=rid+'_'+s; let data=_qcTimings[ck];
-  if(!data){ try{ const r=await fetch(BACKEND_URL+'/qaudio?reciter='+rid+'&chapter='+s+'&initData='+encodeURIComponent(INITDATA));
-      const j=await r.json().catch(()=>({})); if(!j.audio_url||!j.timings||!j.timings.length){ toast('Пословная подсветка недоступна'+(j.error?(': '+j.error):(r.status===403?' (нет доступа)':' (сервер обновляется — попробуй позже)'))); return; }
-      const byA={}; j.timings.forEach(t=>byA[t.a]=t); data={audio_url:j.audio_url, byA:byA}; _qcTimings[ck]=data;
-    }catch(e){ toast('🔧 разметка недоступна: '+(e&&e.message||e)); return; } }
-  const t0=data.byA[a]||data.byA[1]; if(!t0){ toast('Нет тайминга'); return; }
-  let curA=t0.a||a, curWord=-1; window._qrNow={s:s,a:curA,mode:'word'};
+  toast('✨ Чтение по словам (Хусари)…');
+  let data=_wtData[s];
+  if(!data){ try{ const r=await fetch('./wordtimings/'+s+'.json'); const j=await r.json(); if(!j.audio||!j.v){ toast('Разметка недоступна'); return; } data=j; _wtData[s]=j; }
+    catch(e){ toast('🔧 разметка не загрузилась'); return; } }
+  const V=data.v; const t0=V[a]||V['1']; if(!t0){ toast('Нет тайминга'); return; }
+  let curA=(V[a]?a:1), curWord=-1; window._qrNow={s:s,a:curA,mode:'word'};
   const hiAyah=(aa)=>{ document.querySelectorAll('#qrBody [data-qrhl]').forEach(b=>{b.style.outline='';b.style.background='';b.removeAttribute('data-qrhl');});
     document.querySelectorAll('.qwnow').forEach(x=>x.classList.remove('qwnow'));
     const blk=document.getElementById('qr-'+aa); if(blk){ blk.style.background='rgba(74,222,128,.14)'; blk.style.outline='2px solid #2e9b5b'; blk.style.borderRadius='8px'; blk.setAttribute('data-qrhl','1'); try{ blk.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){} } };
-  const au=new Audio(data.audio_url); try{au.setAttribute('playsinline','');}catch(e){} window._qrWordAudio=au; window._qrStopped=false; au.currentTime=(t0.from||0)/1000; hiAyah(curA);
+  const _off=(aa,segLen)=>{ // у аята 1 (кроме Фатихи/Тауба) разметка может включать слова басмалы — сдвигаем
+    if(aa===1 && s!==1 && s!==9){ const blk=document.getElementById('qr-1'); const n=blk?blk.querySelectorAll('.qw').length:segLen; return Math.max(0, segLen-n); } return 0; };
+  const au=new Audio(data.audio); try{au.setAttribute('playsinline','');}catch(e){} window._qrWordAudio=au; window._qrStopped=false; try{au.currentTime=(t0.f||0)/1000;}catch(e){} hiAyah(curA);
   au.onplaying=()=>{ try{_miniSync();}catch(e){} }; au.onpause=()=>{ try{_miniSync();}catch(e){} };
   au.ontimeupdate=()=>{ if(window._qrWordAudio!==au) return; const ms=au.currentTime*1000;
-    let tc=data.byA[curA];
-    if(tc && ms>=tc.to){ let na=curA+1; while(data.byA[na] && ms>=data.byA[na].to) na++; if(data.byA[na]){ curA=na; curWord=-1; window._qrNow={s:s,a:curA,mode:'word'}; try{_miniSync();}catch(e){} hiAyah(curA); tc=data.byA[curA]; } }
-    if(!tc||!tc.segs) return;
-    let wi=-1; for(const sg of tc.segs){ if(ms>=sg[1] && ms<sg[2]){ wi=sg[0]; break; } }
-    if(wi!==curWord){ curWord=wi; const blk=document.getElementById('qr-'+curA); if(blk){ const qws=blk.querySelectorAll('.qw'); qws.forEach(x=>x.classList.remove('qwnow')); if(wi>0 && qws[wi-1]) qws[wi-1].classList.add('qwnow'); } } };
+    let tc=V[curA];
+    if(tc && ms>=tc.t){ let na=curA+1; while(V[na] && ms>=V[na].t) na++; if(V[na]){ curA=na; curWord=-1; window._qrNow={s:s,a:curA,mode:'word'}; try{_miniSync();}catch(e){} hiAyah(curA); tc=V[curA]; } else { return; } }
+    if(!tc||!tc.s) return;
+    let wi=-1; for(const sg of tc.s){ if(ms>=sg[1] && ms<sg[2]){ wi=sg[0]; break; } }
+    if(wi!==curWord){ curWord=wi; const blk=document.getElementById('qr-'+curA); if(blk){ const qws=blk.querySelectorAll('.qw'); qws.forEach(x=>x.classList.remove('qwnow')); const off=_off(curA, tc.s.length); const idx=wi-1-off; if(wi>0 && qws[idx]) qws[idx].classList.add('qwnow'); } } };
   au.onended=()=>{ if(window._qrWordAudio===au) _qrWordStop(); };
-  au.play().then(()=>toast('✨ Чтение по словам'+note)).catch(()=>{ toast('Аудио недоступно'); });
+  au.play().then(()=>toast('✨ Чтение по словам — Хусари')).catch(()=>{ toast('Аудио недоступно'); });
 }
 // Анализ реального аудио аята: слова распределяются по ФАКТИЧЕСКОЙ речи (паузы держат слово) → ровнее «в слог»
 let _wtCache={};
@@ -2616,11 +2613,7 @@ async function _analyzeWordEnds(url, wordLens){
   }catch(e){ return null; }
 }
 // M114+: аудио с подсветкой текущего аята + авто-переход к следующему (поаятная «дорожка чтения»)
-function _qrPlay(s, a){
-  // у чтецов quran.com (Афаси/Хусари/Абдуль-Басит/Миншави/Шурайм) есть ТОЧНАЯ разметка слов —
-  // обычное ▶ сразу читает точно по словам. Для Худайфи/Гамиди → everyayah + анализ голоса.
-  if(typeof _QC_REC!=='undefined' && _QC_REC[cfg.reciter||''] && cfg.qrExact!==false){ try{ _qrWordPlay(s, a); return; }catch(e){} }
-  _qrWordStop();
+function _qrPlay(s, a){ _qrWordStop();
   try{ if(window._qrAudio){ window._qrAudio.onended=null; window._qrAudio.pause(); } }catch(e){}
   const body=document.getElementById('qrBody'); if(!body) return;
   body.querySelectorAll('.qrPlay').forEach(b=>b.textContent='▶');
