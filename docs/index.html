@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v132</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v133</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -456,7 +456,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v132';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v133';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -710,9 +710,20 @@ function gradeBadge(g){ if(!g) return '';
   return '<span class="grade" title="'+GRADE_NOTE+'">⚖️ '+esc(g)+' <span style="opacity:.72;font-weight:400;font-size:11px">· оценка источника, не наша</span></span>'; }
 const SAHIHAYN=['bukhari','muslim'];
 const NOGRADE_NOTE='Оценка достоверности будет добавлена после нашей проверки.';
-/* Достоверность на КАЖДОМ хадисе: Сахихайн → صحيح; есть оценка → она + «не наша проверка»; нет → «нет оценки — ожидайте». */
-function authBadge(code, grade){
-  if(SAHIHAYN.indexOf(code)!==-1) return '<span class="grade" style="background:#10331f;color:#bff5d4;border:1px solid #2e9b5b" title="Хадис из ас-Сахихайн (аль-Бухари/Муслим) — достоверность по согласию учёных (иджма).">صحيح · الصحيحين</span>';
+/* 🅼 НАША оценка достоверности на ОТДЕЛЬНЫХ хадисах (приоритет над всем). Ключ: code|номер. */
+const CUSTOM_GRADES={
+  'bukhari|5590':{txt:'недостоверно', note:'Наша оценка: этот хадис (о музыкальных инструментах) мы считаем недостоверным. Смотри разбор.', link:'https://www.youtube.com/watch?v=vKQz1ylshoI', linkText:'📺 разбор'},
+  'muslim|78':{txt:'недостоверно', note:'Наша оценка: считаем недостоверным. Разбор будет добавлен.', soon:true}
+};
+function ourGradeBadge(c){
+  let h='<span class="grade" style="background:#3a1414;color:#ffb3b3;border:1px solid #b54b4b" title="'+esc(c.note||'')+'">🅼 '+esc(c.txt)+' · наша оценка</span>';
+  if(c.link) h+=' <a href="'+esc(c.link)+'" target="_blank" rel="noopener" style="color:var(--link);font-size:12px;text-decoration:underline">'+esc(c.linkText||'разбор')+'</a>';
+  else if(c.soon) h+=' <span style="color:var(--hint);font-size:11px">· разбор скоро</span>';
+  return h; }
+/* Достоверность: НАША оценка (приоритет) → Бухари/Муслим без значка (общеизвестно достоверны) → оценка источника → «ожидается». */
+function authBadge(code, grade, num){
+  const c=CUSTOM_GRADES[code+'|'+String(num)]; if(c) return ourGradeBadge(c);
+  if(SAHIHAYN.indexOf(code)!==-1) return '';   // аль-Бухари/Муслим — достоверность общеизвестна, значок не нужен
   if(grade) return gradeBadge(grade);
   return '<span class="srcchk" title="'+NOGRADE_NOTE+'" style="border:1px dashed #6b5a2e;border-radius:8px;padding:1px 6px">⏳ ожидается наша проверка</span>'; }
 async function loadCollection(code){
@@ -1440,7 +1451,7 @@ async function showHadithRefs(refs, sr, shown, seq){
   hd.innerHTML='🧠 '+(sr.fixed?('✅ исправлено: «'+esc(sr.fixed)+'» · '):'')+(sr.note?esc(sr.note)+' · ':'')+'нашёл конкретный хадис'+(anyText?' (текст совпал ✅)':' (по номеру от ИИ)')+':';
   res.appendChild(hd);
   let n=0, verified=0; for(const o of out){ const d=(o.code==='muhaymin')?{type:'m',h:o.h}:{type:'h',code:o.code,h:o.h}; _results.push(d);
-    const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:11px;margin:8px 0 -3px;color:var(--hint)';
+    const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:11px;margin:10px 0 4px;color:var(--hint)';
     lbl.textContent = o.by==='text' ? '🔎 найден ПО ТЕКСТУ (номер от ИИ мог отличаться)' : (o.by==='both' ? '✅ номер от ИИ + текст совпал' : '🔢 по номеру от ИИ (текст не сверял — проверь)');
     res.appendChild(lbl); res.appendChild(makeCard(d)); n++; if(o.verified) verified++; }
   _groups=[]; setStatus(''); logSearch(shown,tab,n); try{window.scrollTo(0,0);}catch(e){}
@@ -1595,7 +1606,7 @@ function cardHadith(d,groups){
   const meta=document.createElement('div');meta.className='meta';
   const canRead = !d.noNav && isReadable(code);   // M102: клик по источнику → читалка на этом хадисе
   meta.innerHTML='<span class="src'+(canRead?' srcnav':'')+'"'+(canRead?' title="Открыть в читалке на этом хадисе">📖 ':'>')+arOf(code)+' · №'+h.num+'</span>';
-  meta.innerHTML+=authBadge(code, h.grade);   // достоверность ВСЕГДА (الصحيحين / оценка+«не наша» / нет оценки)
+  meta.innerHTML+=authBadge(code, h.grade, (h.num||h.n));   // достоверность: НАША оценка (по номеру) → иначе оценка источника
   if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp){ sp.style.cursor='pointer'; sp.onclick=()=>openReader(code,String(h.num)); } }
   // «في المهيمن №…» больше НЕ инлайн-бейджем — показывается в «🔗 Где ещё передаётся».
   addTr(meta,card,h.text,null,{k:'h|'+code+'|'+h.num,type:'h',coll:arOf(code),label:arOf(code)+' №'+h.num,text:(h.text||'').slice(0,200)}); card.appendChild(meta); return card;
