@@ -2500,6 +2500,24 @@ def arabus_fetch(word, root=""):
     _arabus_cache[key] = res
     _data_put("arabus.json", _arabus_cache, f"arabus: +{key}→{matched or '∅'} ({len(entries)})")
     return res
+# ---- ИИ-перевод/проверка ОДНОГО арабского слова: точный перевод+корень; ИИ имеет приоритет над Arabus;
+#      накопление в data/wordai.json = {ключ:{ru,root,gram,d,w}} + уведомление владельцу (проверь ИИ vs Arabus) ----
+_wordai_cache = None
+def _wordai_key(w):
+    return re.sub(r'[ً-ْٰـ]', '', (w or '')).strip()[:60]
+def wordai_get(key):
+    global _wordai_cache
+    if _wordai_cache is None:
+        _wordai_cache = _data_get("wordai.json", {}) or {}
+    return _wordai_cache.get(key)
+def wordai_put(key, val):
+    global _wordai_cache
+    if _wordai_cache is None:
+        _wordai_cache = _data_get("wordai.json", {}) or {}
+    _wordai_cache[key] = val
+    _data_put("wordai.json", _wordai_cache, f"wordai: +{key}")
+    return len(_wordai_cache)
+
 def was_translated(text):
     """Уже есть перевод этого текста в памяти? (свежий vs из базы — для журнала расхода)."""
     try:
@@ -2544,10 +2562,12 @@ async def log_bot_ai(update, context, feat="ботяра"):
             mid = getattr(update.message, "message_id", None)
             link = ""
             try:
-                if getattr(ch, "username", None):
+                # для супергрупп (-100) канонический /c/<short>/<mid> всегда рабочий для участника;
+                # ch.username часто = username привязанного КАНАЛА (ссылка била, как "jamaatru")
+                if str(ch.id).startswith("-100"):
+                    link = f"https://t.me/c/{str(ch.id)[4:]}/{mid}" if mid else (f"https://t.me/{ch.username}" if getattr(ch, "username", None) else "")
+                elif getattr(ch, "username", None):
                     link = f"https://t.me/{ch.username}/{mid}" if mid else f"https://t.me/{ch.username}"
-                elif str(ch.id).startswith("-100"):
-                    link = f"https://t.me/c/{str(ch.id)[4:]}/{mid}" if mid else ""
             except Exception:
                 link = ""
             where = (f" · в [{title}]({link})" if link else f" · в «{title}»") + f" ({ch.type}, id={ch.id})"
@@ -2724,6 +2744,65 @@ async def _api_serve(application=None):
             return _cors(web.json_response(out))
         except Exception as e:
             return _cors(web.json_response({'phrases': [], 'error': str(e)}))
+
+    async def wordai(r):
+        # ИИ-перевод/проверка ОДНОГО слова: точный перевод + настоящий корень (надёжнее Arabus).
+        # Накопление в data/wordai.json + уведомление владельцу (ИИ vs Arabus — проверь). Гейт = нейро.
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('neuro', user):
+            return _deny('neuro')
+        if not rate_ok('wordai:' + _uid(user, r), 15, 60):
+            return _ratelimited()
+        try:
+            word = (d.get('word') or '').strip()[:60]
+            ctx = (d.get('ctx') or '').strip()[:300]
+            root_hint = (d.get('root') or '').strip()[:12]
+            force = bool(d.get('force'))
+            key = _wordai_key(word)
+            if not key:
+                return _cors(web.json_response({'ru': '', 'root': '', 'gram': ''}))
+            cached = None if force else await loop.run_in_executor(None, wordai_get, key)
+            if cached:
+                await loop.run_in_executor(None, usage_log, user, "слово-ии", False, len(word), "", "")
+                out = dict(cached); out['cached'] = True
+                return _cors(web.json_response(out))
+            sysm = ("Ты — точный арабско-русский словарь. Дано АРАБСКОЕ слово (как в тексте Корана/хадиса), "
+                    "возможно с контекстом. Дай перевод ИМЕННО ЭТОГО слова/формы по контексту (НЕ список "
+                    "однокоренных, НЕ другое слово того же корня), его НАСТОЯЩИЙ корень и часть речи. "
+                    "Ответь СТРОГО 3 строки (метки именно так):\n"
+                    "ПЕРЕВОД: <короткий точный перевод этого слова>\n"
+                    "КОРЕНЬ: <корень арабскими буквами>\n"
+                    "ГРАММ: <часть речи/форма кратко по-русски>\n"
+                    "Пример: «لِكُلِّ» (контекст: لكل نبي دعوة) → ПЕРЕВОД: для каждого / КОРЕНЬ: كلل / "
+                    "ГРАММ: предлог لـ + имя كل в род. падеже. Выведи ТОЛЬКО эти 3 строки.")
+            prompt = "Слово: " + word + (("\nКорень (подсказка): " + root_hint) if root_hint else "") + (("\nКонтекст: " + ctx) if ctx else "")
+            txt = await loop.run_in_executor(None, ask_deepseek, prompt, sysm) or ""
+            def _g(lbl):
+                m = re.search(lbl + r'\s*[:：]\s*(.+)', txt); return m.group(1).strip() if m else ''
+            ru = _g('ПЕРЕВОД')[:200]; root = _g('КОРЕНЬ')[:12]; gram = _g('ГРАММ')[:140]
+            if not ru:
+                return _cors(web.json_response({'ru': '', 'root': '', 'gram': '', 'error': 'no-ai'}))
+            val = {'ru': ru, 'root': root, 'gram': gram, 'd': datetime.now().strftime('%d.%m.%Y'), 'w': word}
+            total = await loop.run_in_executor(None, wordai_put, key, val)
+            await loop.run_in_executor(None, usage_log, user, "слово-ии", True, len(word), "", "")
+            # уведомление ВЛАДЕЛЬЦУ: ИИ-перевод слова — проверь (может ИИ ошибся, а Arabus прав)
+            if application:
+                try:
+                    uid = (user or {}).get('id')
+                    who = ("@" + user["username"]) if (user and user.get("username")) else (f"[{uid}](tg://user?id={uid})" if uid else "аноним")
+                    await application.bot.send_message(
+                        OWNER_ID,
+                        f"#ии #слово 🔤 ИИ-перевод слова: *{word}*\nПеревод: {ru}\nКорень (ИИ): {root}\n"
+                        + (f"Контекст: {ctx}\n" if ctx else "") + f"Кто: {who} · всего слов: {total}\n"
+                        "⚠️ Сверь ИИ↔Arabus: если ИИ ошибся — напиши «слово <слово> = <верный перевод>».",
+                        parse_mode="Markdown", disable_web_page_preview=True)
+                except Exception:
+                    pass
+            out = dict(val); out['cached'] = False
+            return _cors(web.json_response(out))
+        except Exception as e:
+            return _cors(web.json_response({'ru': '', 'error': str(e)}))
 
     async def translate(r):
         d = await _body(r)
@@ -2979,6 +3058,7 @@ async def _api_serve(application=None):
                   web.get('/api/takhrij', takhrij_read), web.post('/api/takhrij', takhrij_save),
                   web.get('/api/narrator', narrator), web.post('/api/narrator_ai', narrator_ai), web.post('/api/hit', hit),
                   web.get('/api/popular', popular), web.get('/api/arabus', arabus),
+                  web.post('/api/wordai', wordai),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))

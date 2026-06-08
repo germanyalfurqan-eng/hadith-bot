@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v129</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v130</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -455,7 +455,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v129';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v130';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -529,7 +529,8 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 /* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:true,wordTap:true,popular:true,arabus:false}, loadCfg());
+let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:false,wordTap:true,popular:false,arabus:false}, loadCfg());
+if(!cfg._rpoff){ cfg.recent=false; cfg.popular=false; cfg._rpoff=1; saveCfg(cfg); }   // разовое: выключить Недавнее/Популярное по умолчанию (можно вернуть в Настройках)
 function applyTheme(){ document.body.classList.toggle('light', cfg.theme==='light'); }
 try{ applyTheme(); }catch(e){}
 
@@ -1712,6 +1713,7 @@ function showWordPopup(el, word, root, lemma, gram){
   if(root){ h+='<div style="margin-top:6px">🌿 Корень: <b style="font-size:19px;color:var(--mark);'+_AF+'">'+esc(root)+'</b></div>'+
     '<div id="wpAll" style="margin-top:9px;color:var(--link);cursor:pointer;font-weight:600">📍 Все места этого корня в Коране ('+n+')</div>'; }
   ;   // корня в нашей базе нет — значения подтянет Arabus ниже
+  h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><button id="wpAiBtn" class="tr-btn" style="background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:6px 10px;font-size:13px;width:100%">🧠 Перевод слова (ИИ) — проверить</button><div id="wpAiOut" style="margin-top:5px"></div></div>';
   h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><div style="color:#7fe3bf;font-weight:700;margin-bottom:4px">📕 Значения и формы (Arabus)</div><div id="wpArabusOut" style="margin-top:3px"></div></div>';
   pop.innerHTML=h; document.body.appendChild(pop);
   const r=el.getBoundingClientRect();
@@ -1719,7 +1721,27 @@ function showWordPopup(el, word, root, lemma, gram){
   pop.style.left=left+'px'; pop.style.top=(window.scrollY+r.bottom+6)+'px';
   const x=pop.querySelector('#wpX'); if(x) x.onclick=closeWordPopup;
   const all=pop.querySelector('#wpAll'); if(all) all.onclick=()=>{ closeWordPopup(); showRootPlaces(root); };
+  const aib=pop.querySelector('#wpAiBtn'); if(aib) aib.onclick=()=>wordAi(word, root, pop.querySelector('#wpAiOut'), aib);
   showArabusInline(word, pop.querySelector('#wpArabusOut'), root);   // авто-загрузка значений+форм Arabus (с подсказкой-корнем)
+}
+// ИИ-перевод/проверка ОДНОГО слова (точный перевод+корень, приоритет над Arabus; копится; владельцу уведомление)
+async function wordAi(word, root, host, btn){
+  if(!host) return; if(!BACKEND_URL){ host.textContent='ИИ-перевод работает на сервере'; return; }
+  host.innerHTML='<span class="hint">🧠 Спрашиваю ИИ…</span>'; if(btn){ btn.disabled=true; btn.style.opacity=.6; }
+  try{
+    const r=await fetch(BACKEND_URL+'/wordai',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({word:word, root:root||'', initData:INITDATA})});
+    const j=await r.json().catch(()=>({}));
+    if(r.status===403){ host.textContent=(j&&j.message)||'функция пока не открыта'; return; }
+    if(r.status===429){ host.textContent='⏳ слишком часто — подожди немного'; if(btn){btn.disabled=false;btn.style.opacity='';} return; }
+    if(j&&j.ru){
+      host.innerHTML='<div style="background:#1d1830;border:1px solid #6c5ce7;border-radius:8px;padding:7px 9px">'
+        +'<div><b style="color:#c9b8ff">🧠 ИИ-перевод'+(j.cached?' ♻️':'')+':</b> '+esc(j.ru)+'</div>'
+        +(j.root?('<div style="margin-top:3px">🌿 корень (ИИ): <b style="font-size:17px;color:var(--mark);'+_AF+'">'+esc(j.root)+'</b></div>'):'')
+        +(j.gram?('<div style="margin-top:2px;color:var(--hint);font-size:12px">'+esc(j.gram)+'</div>'):'')
+        +'<div style="margin-top:3px;color:var(--hint);font-size:11px">проверено ИИ · сохранено в нашу базу'+(j.d?(' · '+esc(j.d)):'')+'</div></div>';
+    } else { host.textContent='ИИ не дал перевод — попробуй ещё раз'; if(btn){btn.disabled=false;btn.style.opacity='';} }
+  }catch(e){ host.textContent='🔧 сервис недоступен'; if(btn){btn.disabled=false;btn.style.opacity='';} }
 }
 document.addEventListener('click',e=>{ if(!(e.target.closest&&(e.target.closest('#wordPop')||e.target.closest('.qw')))) closeWordPopup(); }, true);
 let _rootView={root:'',sort:'order',form:''};
@@ -2260,6 +2282,7 @@ async function doTafsir(s,a,out,btn,key,lang){
         +'<span class="tflang chip" data-l="ar" style="cursor:pointer;font-size:12px'+(isAr?';background:#2e5b3a;color:#fff;border-color:#2e9b5b':'')+'">📖 Оригинал (ар)</span>'
         +(tf.ru?('<span class="tflang chip" data-l="ru" style="cursor:pointer;font-size:12px'+(!isAr?';background:#10331f;color:#bff5d4;border-color:#2e9b5b':'')+'">📘 Перевод (рус, готовый)</span>')
                :(isAr?'<span class="tftr chip" style="cursor:pointer;font-size:12px;background:#3a2d5e;border-color:#6c5ce7;color:#e0d7ff">🧠 Перевести (ИИ)</span>':''))
+        +'<span class="tfcopy chip" title="Скопировать текст толкования" style="cursor:pointer;font-size:12px">⧉ Копировать</span>'
       +'</div>'
       +'<div style="display:flex;gap:6px;margin-bottom:6px"><input class="tfFind" placeholder="🔎 найти слово в этом толковании…" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:13px"><span class="tfFindInfo hint" style="font-size:11px;align-self:center;white-space:nowrap"></span></div>'
       +'<div class="tafsirText" style="'+(isAr?'direction:rtl;text-align:right;font-size:17px;line-height:1.9':'font-size:14px;line-height:1.65')+';max-height:340px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:10px">'+(txt?esc(txt).replace(/\n+/g,'<br>'):'Для этого аята в этом тафсире нет текста.')+'</div><div class="tftrOut" style="margin-top:8px"></div></div>';
@@ -2267,6 +2290,7 @@ async function doTafsir(s,a,out,btn,key,lang){
     out.querySelectorAll('.tfk').forEach(b=>b.onclick=()=>doTafsir(s,a,out,btn,b.dataset.k,lang));
     out.querySelectorAll('.tflang').forEach(b=>b.onclick=()=>doTafsir(s,a,out,btn,key,b.dataset.l));
     { const tb=out.querySelector('.tftr'); if(tb && txt) tb.onclick=()=>translateTafsir(txt, key, s, a, out.querySelector('.tftrOut'), tb); }
+    { const cpb=out.querySelector('.tfcopy'); if(cpb) cpb.onclick=()=>{ let t=((out.querySelector('.tafsirText')||{}).innerText||txt||'').trim(); const tr=((out.querySelector('.tftrOut')||{}).innerText||'').trim(); copyWithSig((t+(tr?('\n\n'+tr):'')).trim()); }; }
     const x=out.querySelector('.tfx'); if(x) x.onclick=()=>{ var mm=document.getElementById('tafsirModal'); if(mm) mm.style.display='none'; };
     const tDiv=out.querySelector('.tafsirText'), fInp=out.querySelector('.tfFind'), fInfo=out.querySelector('.tfFindInfo'), rawT=txt;   // поиск ВНУТРИ тафсира
     if(fInp&&tDiv) fInp.oninput=()=>{ const term=fInp.value.trim();
