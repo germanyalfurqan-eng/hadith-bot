@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v126</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v127</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -455,7 +455,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v126';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v127';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1751,24 +1751,46 @@ function openArabus(word){
   const url='https://arabus.ru/?search_word='+encodeURIComponent(word);
   try{ if(tg&&tg.openLink) tg.openLink(url); else window.open(url,'_blank'); }catch(e){ try{window.open(url,'_blank');}catch(_){ } }
 }
-// inline-показ Arabus в поп-апе слова (через наш бэкенд-прокси + накопление в нашей базе)
+// M191: офлайн-снапшот словаря Arabus (./arabus.json) — мгновенно, без Railway. Прокси — фолбэк.
+let _arabusLocal=null, _arabusLocalP=null;
+function loadArabusLocal(){
+  if(_arabusLocal) return Promise.resolve(_arabusLocal);
+  if(_arabusLocalP) return _arabusLocalP;
+  _arabusLocalP=fetch('./arabus.json').then(r=>r.ok?r.json():null).then(j=>{ _arabusLocal=j||{}; return _arabusLocal; }).catch(()=>{ _arabusLocal={}; return _arabusLocal; });
+  return _arabusLocalP;
+}
+function arabusLocalLookup(word, root){   // word уже очищен от огласовок; ключи файла — тоже
+  const db=_arabusLocal; if(!db) return null;
+  const rk=(root||'').replace(/[ً-ْٰـ]/g,'').trim();
+  if(rk.length>=2 && rk.length<=6){ const c=db['r:'+rk]; if(c && c.count) return c; }   // семья корня
+  const c=db[word]; if(c && c.count) return c;
+  return null;
+}
+function renderArabus(j, host, offline, word){
+  let h='';
+  if(j.matched && j.matched!==word) h+='<div style="font-size:11px;color:var(--hint);margin-bottom:2px">по основе «'+esc(j.matched)+'»</div>';
+  if(j.entries.length>1) h+='<div style="font-size:12px;color:var(--hint);margin-bottom:2px">🌿 Однокоренные ('+j.entries.length+'):</div>';
+  h+='<div style="max-height:260px;overflow:auto;margin-top:2px">';
+  j.entries.forEach(e=>{ h+='<div style="border-top:1px solid var(--border);padding:5px 0"><div style="direction:rtl;text-align:right"><b style="font-size:18px;'+_AF+'">'+esc(e.ar||'')+'</b>'+(e.gram?(' <span style="color:var(--hint);font-size:12px">'+esc(e.gram)+'</span>'):'')+'</div>'+(e.ru?('<div style="font-size:13px;margin-top:2px;line-height:1.5">'+esc(e.ru)+'</div>'):'')+'</div>'; });
+  h+='</div><div style="margin-top:4px;font-size:11px;color:var(--hint)">📕 Arabus · '+(offline?'офлайн-словарь':'в нашей базе')+(j.d?(' · '+esc(j.d)):'')+'</div>';
+  host.innerHTML=h;
+}
+function arabusNotFound(word, host){
+  host.innerHTML='<span class="hint">📕 Arabus: не нашёл «'+esc(word)+'». <span class="arabusExt" style="color:var(--link);cursor:pointer;text-decoration:underline">открыть на arabus.ru</span></span>'; const a=host.querySelector('.arabusExt'); if(a) a.onclick=()=>openArabus(word);
+}
+// inline-показ Arabus в поп-апе слова: офлайн-снапшот → бэкенд-прокси (накопление) → внешняя ссылка
 async function showArabusInline(word, host, root){
   if(!host) return;
   word=(word||'').replace(/[ً-ْٰـ]/g,'').trim();
   if(!word){ host.innerHTML=''; return; }
-  if(!BACKEND_URL){ openArabus(word); return; }
   host.innerHTML='<span class="hint">📕 Ищу значения…</span>';
+  try{ await loadArabusLocal(); const loc=arabusLocalLookup(word, root); if(loc && loc.entries && loc.entries.length){ renderArabus(loc, host, true, word); return; } }catch(e){}
+  if(!BACKEND_URL){ arabusNotFound(word, host); return; }   // нет прокси → слова нет в офлайн-словаре
   try{
     const r=await fetch(BACKEND_URL+'/arabus?word='+encodeURIComponent(word)+(root?('&root='+encodeURIComponent(root)):'')+'&initData='+encodeURIComponent(INITDATA));
     const j=await r.json();
-    if(!j.entries||!j.entries.length){ host.innerHTML='<span class="hint">📕 Arabus: не нашёл «'+esc(word)+'». <span class="arabusExt" style="color:var(--link);cursor:pointer;text-decoration:underline">открыть на arabus.ru</span></span>'; const a=host.querySelector('.arabusExt'); if(a) a.onclick=()=>openArabus(word); return; }
-    let h='';
-    if(j.matched && j.matched!==word) h+='<div style="font-size:11px;color:var(--hint);margin-bottom:2px">по основе «'+esc(j.matched)+'»</div>';
-    if(j.entries.length>1) h+='<div style="font-size:12px;color:var(--hint);margin-bottom:2px">🌿 Однокоренные ('+j.entries.length+'):</div>';
-    h+='<div style="max-height:260px;overflow:auto;margin-top:2px">';
-    j.entries.forEach(e=>{ h+='<div style="border-top:1px solid var(--border);padding:5px 0"><div style="direction:rtl;text-align:right"><b style="font-size:18px;'+_AF+'">'+esc(e.ar||'')+'</b>'+(e.gram?(' <span style="color:var(--hint);font-size:12px">'+esc(e.gram)+'</span>'):'')+'</div>'+(e.ru?('<div style="font-size:13px;margin-top:2px;line-height:1.5">'+esc(e.ru)+'</div>'):'')+'</div>'; });
-    h+='</div><div style="margin-top:4px;font-size:11px;color:var(--hint)">📕 Arabus · в нашей базе'+(j.d?(' · '+esc(j.d)):'')+'</div>';
-    host.innerHTML=h;
+    if(!j.entries||!j.entries.length){ arabusNotFound(word, host); return; }
+    renderArabus(j, host, false, word);
   }catch(e){ host.innerHTML='<span class="hint">📕 Arabus недоступен сейчас. <span class="arabusExt" style="color:var(--link);cursor:pointer;text-decoration:underline">открыть на arabus.ru</span></span>'; const a=host.querySelector('.arabusExt'); if(a) a.onclick=()=>openArabus(word); }
 }
 function arabusBtn(card){
@@ -1814,7 +1836,7 @@ function addTr(meta,card,text,ayah,fav){
     ab.innerHTML='<img src="https://arabus.ru/img/logo_icon.png" alt="" style="height:15px;width:15px;border-radius:3px;object-fit:contain" onerror="this.replaceWith(document.createTextNode(\'\\uD83D\\uDCD5\'))"> Arabus';
     ab.title='Разбор слов (для ВСЕХ постов): включи и тапай любое слово → корень и значения';
     ab.onclick=()=>{ _arabusOn=!_arabusOn; cfg.arabus=_arabusOn; saveCfg(cfg);
-      try{ loadRoots(); }catch(e){}
+      try{ loadRoots(); if(_arabusOn) loadArabusLocal(); }catch(e){}   // M191: префетч офлайн-словаря
       updateArabusButtons();
       toast(_arabusOn?'📕 Режим Arabus ВКЛ — тапай любое слово в любом посту':'Arabus выкл'); };
     meta.appendChild(ab);
