@@ -3043,6 +3043,33 @@ async def _api_serve(application=None):
         except Exception as e:
             return _cors(web.json_response({'error': str(e)}))
 
+    async def structure_results(r):
+        # «Помочь с результатами»: ИИ структурирует/осмысляет текущую выдачу поиска (без накопления).
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('neuro', user):
+            return _deny('neuro')
+        if not rate_ok('structure:' + _uid(user, r), 8, 60):
+            return _ratelimited()
+        try:
+            q = (d.get('q') or '').strip()[:200]
+            items = d.get('items') or []
+            items = [str(x)[:200] for x in items if str(x).strip()][:18]
+            if not items:
+                return _cors(web.json_response({'text': ''}))
+            numbered = "\n".join(f"{i+1}. {t}" for i, t in enumerate(items))
+            sysm = ("Ты помогаешь пользователю осмыслить результаты поиска по хадисам/книгам. Дан запрос и список "
+                    "найденного. Кратко и структурированно по-русски:\n"
+                    "• что в целом нашлось (1-2 фразы),\n"
+                    "• сгруппируй по смыслу/источнику (короткими пунктами),\n"
+                    "• подскажи, что выбрать под запрос и как уточнить поиск.\n"
+                    "Без воды, маркированно. Не выдумывай того, чего нет в списке.")
+            txt = await loop.run_in_executor(None, ask_deepseek, "Запрос: " + q + "\nНайдено:\n" + numbered, sysm) or ""
+            await loop.run_in_executor(None, usage_log, user, "структурировать", True, len(q), "", "")
+            return _cors(web.json_response({'text': txt.strip()[:2500]}))
+        except Exception as e:
+            return _cors(web.json_response({'text': '', 'error': str(e)}))
+
     async def narrator_rijal(r):
         # Разбор ПЕРЕДАТЧИКА (ильм риджаль): что говорят учёные — джарх/тадиль. Кэш data/narrators.json.
         d = await _body(r)
@@ -3635,6 +3662,7 @@ async def _api_serve(application=None):
                   web.post('/api/booktrans', booktrans), web.post('/api/bookinfo', bookinfo),
                   web.post('/api/authorinfo', authorinfo), web.get('/api/qaudio', qaudio),
                   web.post('/api/errlog', errlog), web.post('/api/narrator_rijal', narrator_rijal),
+                  web.post('/api/structure', structure_results),
                   web.get('/api/book_page', book_page), web.post('/api/isnad_ai', isnad_ai_h),
                   web.post('/api/devfeedback', devfeedback),
                   web.options('/api/{t:.*}', opt)])

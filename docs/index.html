@@ -153,7 +153,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v196</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v197</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -487,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v196';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v197';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1575,7 +1575,7 @@ async function runSearch(explicit){
     if(!count && !modes.ai && !numMode && !strict){ relaxA=await relaxArabicHadith(codes, groups, modes, seq, add); if(seq!==_seq) return; }
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
     if(relaxA && relaxA.dropped.length && count) relaxBanner(relaxA.dropped, relaxA.used);
-    if(count){ if(relMode && count>2){ renderResultsView(); } else { ensureGrpToggle(); ensureShareBtn(); ensureUniqToggle(); ensureRelToggle(); } }
+    if(count){ if(relMode && count>2){ renderResultsView(); } else { ensureGrpToggle(); ensureShareBtn(); ensureUniqToggle(); ensureRelToggle(); } try{ensureStructureBtn();}catch(e){} }
     if(!numMode) addLibMore();   // кнопка «искать ещё в большой библиотеке» (16 изданий + Мукбиль)
   } else {
     let relaxQ=null, corrQ=null;
@@ -1601,7 +1601,7 @@ async function runSearch(explicit){
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
     if(corrQ && corrQ.changed.length) autoCorrectBanner(shown, corrQ.corrected.join(' '));   // M173: «показаны результаты для X · искать как ввёл»
     if(relaxQ && relaxQ.dropped.length && count) relaxBanner(relaxQ.dropped, relaxQ.used);   // M172: честно показать что убрали
-    if(count){ if(relMode && count>2){ renderResultsView(); } else { ensureGrpToggle(); ensureShareBtn(); ensureUniqToggle(); ensureRelToggle(); } }
+    if(count){ if(relMode && count>2){ renderResultsView(); } else { ensureGrpToggle(); ensureShareBtn(); ensureUniqToggle(); ensureRelToggle(); } try{ensureStructureBtn();}catch(e){} }
   }
   setStatus('');
   logSearch(shown, tab, count);
@@ -2313,6 +2313,24 @@ function maybeNarratorChip(q){ try{
   c.onclick=()=>openNarratorRijal(v);
   res.insertBefore(c, res.firstChild);
 }catch(e){} }
+function _resultSnippets(){ const out=[]; (_results||[]).slice(0,18).forEach(d=>{ try{
+  if(d.type==='q'&&d.v) out.push('Коран '+d.v.s+':'+d.v.a+' — '+(d.v.text||'').replace(/\s+/g,' ').slice(0,60));
+  else if(d.type==='m'&&d.h) out.push('аль-Мухаймин №'+(d.h.n||'')+' — '+((d.h.text||d.h.ar||'')).replace(/\s+/g,' ').slice(0,70));
+  else if(d.h) out.push((d.code||'')+' №'+(d.h.num||d.h.n||'')+' — '+((d.h.text||d.h.ar||'')).replace(/\s+/g,' ').slice(0,70));
+}catch(e){} }); return out; }
+function ensureStructureBtn(){ const res=document.getElementById('res'); if(!res||document.getElementById('structBtn')) return;
+  if(!(_results&&_results.length>=3)) return;
+  const b=document.createElement('button'); b.id='structBtn'; b.className='mini'; b.textContent='🧠 Помочь с результатами (структурировать)';
+  b.style.cssText='margin:6px 0;border:1px solid #6c5ce7;color:#e0d7ff;background:#3a2d5e;padding:7px 12px;font-size:13px';
+  const out=document.createElement('div'); out.id='structOut'; out.style.cssText='display:none;margin:6px 0;font-size:13px;line-height:1.55;border:1px solid var(--border);border-radius:10px;padding:9px;background:var(--bg)';
+  b.onclick=async()=>{ if(!BACKEND_URL){toast('Нужен сервер');return;} const items=_resultSnippets(); if(!items.length){toast('Нет результатов');return;}
+    out.style.display='block'; out.innerHTML='<span class="hint">🧠 Структурирую…</span>';
+    try{ const r=await fetch(BACKEND_URL+'/structure',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:(document.getElementById('q').value||''),items:items,initData:INITDATA})});
+      const j=await r.json().catch(()=>({})); if(r.status===403){ out.innerHTML='<span class="hint">функция пока не открыта</span>'; return; }
+      out.innerHTML=j.text?('<div style="white-space:pre-wrap">'+esc(j.text)+'</div><div style="margin-top:5px;font-size:11px;color:var(--hint)">🧠 ИИ — вспомогательно, проверяй</div>'):'<span class="hint">не удалось</span>';
+    }catch(e){ out.innerHTML='<span class="hint">🔧 сервис недоступен</span>'; } };
+  res.insertBefore(out, res.firstChild); res.insertBefore(b, out);
+}
 // === 📜 Наука хадиса (мусталях): правила достоверности + 48 мутабарун + труды риджаль ===
 let _hadRule=null, _rijal=null;
 async function openHadithScience(){
