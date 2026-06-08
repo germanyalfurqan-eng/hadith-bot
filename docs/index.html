@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v175</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v176</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="homeBtn" style="display:block" title="🏠 На главную — сброс поиска">🏠</div>
@@ -485,7 +485,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v175';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v176';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2082,6 +2082,7 @@ async function showRootPlaces(root, opts){
 let _catalog=null,_catalogP=null;
 function loadCatalog(){ if(_catalog) return Promise.resolve(_catalog); if(_catalogP) return _catalogP;
   _catalogP=fetch('./catalog.json').then(r=>r.ok?r.json():null).then(j=>{_catalog=j||[];return _catalog;}).catch(()=>{_catalog=[];return _catalog;}); return _catalogP; }
+function _catNotFound(list,q){ try{ addNotFoundBtn(list,'книга в Мактабе: «'+(q||'').slice(0,120)+'»'); }catch(e){} }
 async function openCatalog(){
   const cat=await loadCatalog();
   let m=document.getElementById('catModal');
@@ -2091,6 +2092,7 @@ async function openCatalog(){
     m.innerHTML='<div class="panel" style="max-width:640px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:6;background:var(--card);margin:-16px -16px 8px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b id="catTitle" style="font-size:14px">📚 Мактаба аш-Шамиля (المكتبة الشاملة) · '+cat.length+'</b><button class="mini" id="catClose" style="flex:none">закрыть ✕</button></div>'
      +'<input id="catSearch" placeholder="🔎 название или автор…" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:14px;margin-bottom:6px">'
      +'<select id="catCat" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:13px;margin-bottom:8px"><option value="">— все разделы —</option>'+cats.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('')+'</select>'
+     +'<div style="display:flex;gap:6px;margin-bottom:8px"><button class="mini" id="catAi" style="flex:1;border:1px solid var(--btn);color:var(--btn);background:transparent">🧠 Подобрать книгу (ИИ) — опиши своими словами</button></div>'
      +'<div id="catList" style="max-height:54vh;overflow:auto"></div></div>';
     document.body.appendChild(m);
     m.querySelector('#catClose').onclick=()=>m.style.display='none';
@@ -2103,9 +2105,29 @@ async function openCatalog(){
       arr.slice(0,200).forEach(b=>{ const it=document.createElement('div'); it.style.cssText='border-bottom:1px solid var(--border);padding:8px 4px;cursor:pointer;direction:rtl;text-align:right';
         it.innerHTML='<div style="font-weight:600;color:var(--link);font-size:15px">'+esc(b.n)+'</div>'+(b.a?('<div style="font-size:12px;color:var(--hint)">'+esc(b.a)+(b.c?(' · '+esc(b.c)):'')+'</div>'):'');
         it.onclick=()=>{ m.style.display='none'; openBook(b.i); }; list.appendChild(it); });
+      if(!arr.length && q){ const tip=document.createElement('div'); tip.className='hint'; tip.style.cssText='font-size:13px;margin:8px 0'; tip.textContent='Ничего по названию/автору. Попробуй «🧠 Подобрать книгу (ИИ)» — опиши своими словами.'; list.appendChild(tip); _catNotFound(list,(m.querySelector('#catSearch').value||'')); }
     };
     let _ct; m.querySelector('#catSearch').addEventListener('input',()=>{ clearTimeout(_ct); _ct=setTimeout(render,200); });
     m.querySelector('#catCat').addEventListener('change',render);
+    // M-flood #21/#22: умный ИИ-поиск книги своими словами на русском → арабское название
+    m.querySelector('#catAi').onclick=async()=>{ const inp=m.querySelector('#catSearch'); const q=(inp.value||'').trim();
+      if(q.length<2){ inp.focus(); toast('Напиши своими словами, что за книга (напр.: недуги сердца ибн каим)'); return; }
+      if(!BACKEND_URL){ toast('Нужен сервер'); return; }
+      const list=m.querySelector('#catList'); list.innerHTML='<div class="hint">🧠 ИИ подбирает книгу…</div>';
+      try{ const rr=await fetch(BACKEND_URL+'/booksearch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:q,initData:INITDATA})});
+        const j=await rr.json().catch(()=>({})); const terms=[].concat(j.ar||[],j.author||[]).filter(Boolean);
+        if(!terms.length){ list.innerHTML='<div class="hint">🤷 ИИ не распознал книгу.</div>'; _catNotFound(list,q); return; }
+        const fterms=terms.map(t=>canon(t));
+        let arr=cat.filter(b=>{ const nm=canon(b.n||''), au=canon(b.a||''); return fterms.some(t=>t&&(nm.indexOf(t)!==-1||au.indexOf(t)!==-1)); });
+        // если по полному термину пусто — пробуем по словам термина (частичное совпадение)
+        if(!arr.length){ const words=fterms.join(' ').split(' ').filter(w=>w.length>=3); arr=cat.filter(b=>{ const nm=canon(b.n||''); return words.some(w=>nm.indexOf(w)!==-1); }); }
+        list.innerHTML='<div class="hint" style="font-size:12px;margin-bottom:5px">🧠 ИИ: '+esc(j.note||terms[0])+' · по «'+esc(terms.slice(0,3).join(' / '))+'» найдено: '+arr.length+'</div>';
+        arr.slice(0,60).forEach(b=>{ const it=document.createElement('div'); it.style.cssText='border-bottom:1px solid var(--border);padding:8px 4px;cursor:pointer;direction:rtl;text-align:right';
+          it.innerHTML='<div style="font-weight:600;color:var(--link);font-size:15px">'+esc(b.n)+'</div>'+(b.a?('<div style="font-size:12px;color:var(--hint)">'+esc(b.a)+(b.c?(' · '+esc(b.c)):'')+'</div>'):'');
+          it.onclick=()=>{ m.style.display='none'; openBook(b.i); }; list.appendChild(it); });
+        if(!arr.length) _catNotFound(list,q);
+      }catch(e){ list.innerHTML='<div class="hint">🔧 ИИ недоступен сейчас.</div>'; }
+    };
     m._render=render;
   }
   m.style.display='flex'; if(m._render) m._render();

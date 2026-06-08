@@ -2317,6 +2317,18 @@ def neuro_get(key):
 def neuro_put(key, phrases):
     c = _neuro_load(); c[key] = phrases
     _data_put("neuro.json", c, f"neuro: +{key[:40]} (всего {len(c)})")
+# ---- Накопление умного ИИ-поиска КНИГ Мактабы: data/booksearch.json = {"<рус.запрос>": {ar,author,note}} ----
+_bsearch_cache = None
+def _bsearch_load():
+    global _bsearch_cache
+    if _bsearch_cache is None:
+        _bsearch_cache = _data_get("booksearch.json", {}) or {}
+    return _bsearch_cache
+def bsearch_get(key):
+    return _bsearch_load().get(key)
+def bsearch_put(key, val):
+    c = _bsearch_load(); c[key] = val
+    _data_put("booksearch.json", c, f"booksearch: +{key[:40]} (всего {len(c)})")
     return len(c)
 # ---- Накопление ИИ-справок о равиях: data/rijal_ai.json = {имя: текст} (повтор НЕ тратит ключ) ----
 _rijal_cache = None
@@ -2792,6 +2804,60 @@ async def _api_serve(application=None):
         except Exception as e:
             return _cors(web.json_response({'phrases': [], 'error': str(e)}))
 
+    async def booksearch(r):
+        # Умный ИИ-поиск КНИГИ Мактабы своими словами на русском → арабское название + автор + ключевые слова.
+        # Накопление в data/booksearch.json (повтор не тратит ключ). Гейт = нейро.
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('neuro', user):
+            return _deny('neuro')
+        if not rate_ok('booksearch:' + _uid(user, r), 12, 60):
+            return _ratelimited()
+        try:
+            q = (d.get('q') or '').strip()[:300]
+            if len(q) < 2:
+                return _cors(web.json_response({'ar': [], 'author': [], 'cached': False}))
+            force = bool(d.get('force'))
+            key = q.lower()
+            cached = None if force else await loop.run_in_executor(None, bsearch_get, key)
+            if cached:
+                await loop.run_in_executor(None, usage_log, user, "поиск книги", False, len(q), "", "")
+                out = dict(cached); out['cached'] = True
+                return _cors(web.json_response(out))
+            sysm = ("Ты — каталог исламской библиотеки «المكتبة الشاملة» (тысячи книг). Запрос на русском "
+                    "(своими словами, ВОЗМОЖНЫ ОПЕЧАТКИ) описывает КНИГУ и/или АВТОРА. Определи, какую книгу хотят, "
+                    "и ответь СТРОГО 4 строками (метки именно так):\n"
+                    "НАЗВАНИЕ: <точные арабские названия книги, 1-3 варианта через ; как пишутся в библиотеке>\n"
+                    "АВТОР: <арабское имя автора, если ясно; иначе ->\n"
+                    "КЛЮЧИ: <2-5 арабских ключевых слов из названия для поиска; через ;>\n"
+                    "ЗАМЕТКА: <очень кратко по-русски, что это за книга>\n"
+                    "Примеры:\n"
+                    "«недуги сердца ибн каим» → НАЗВАНИЕ: أمراض القلوب وشفاؤها / АВТОР: ابن قيم الجوزية / КЛЮЧИ: أمراض القلوب ; شفاؤها / ЗАМЕТКА: трактат Ибн аль-Каййима о болезнях сердца\n"
+                    "«сахих бухари» → НАЗВАНИЕ: صحيح البخاري ; الجامع الصحيح / АВТОР: محمد بن إسماعيل البخاري / КЛЮЧИ: صحيح البخاري ; الجامع الصحيح / ЗАМЕТКА: сборник достоверных хадисов\n"
+                    "«рийад салихин» → НАЗВАНИЕ: رياض الصالحين / АВТОР: النووي / КЛЮЧИ: رياض الصالحين / ЗАМЕТКА: сборник Навави\n"
+                    "Бери РЕАЛЬНЫЕ арабские названия как в каталоге. Выведи ТОЛЬКО эти 4 строки.")
+            txt = await loop.run_in_executor(None, ask_deepseek, "Запрос: " + q, sysm) or ""
+            def _grab(lbl):
+                m = re.search(lbl + r'\s*[:：]\s*(.+)', txt); return m.group(1).strip() if m else ''
+            naml, autl, keyl, notel = _grab('НАЗВАНИЕ'), _grab('АВТОР'), _grab('КЛЮЧИ'), _grab('ЗАМЕТКА')
+            def _arlist(s):
+                return [re.sub(r'^[\d\.\-\)\s]+', '', x).strip() for x in re.split(r'[;\n،]', s or '') if re.search(r'[؀-ۿ]', x)][:6]
+            ar = _arlist(naml) + _arlist(keyl)
+            seen = set(); ar = [x for x in ar if not (x in seen or seen.add(x))][:8]
+            author = _arlist(autl)
+            note = '' if notel in ('', '-', '—', '–') else notel[:200]
+            result = {'ar': ar, 'author': author, 'note': note}
+            saved = None
+            if ar or author:
+                try: saved = {"new": True, "total": await loop.run_in_executor(None, bsearch_put, key, result)}
+                except Exception: saved = None
+            await loop.run_in_executor(None, usage_log, user, "поиск книги", True, len(q), "", "")
+            await _notify_usage(user, "поиск книги", True, "", "", saved)
+            out = dict(result); out['cached'] = False
+            return _cors(web.json_response(out))
+        except Exception as e:
+            return _cors(web.json_response({'ar': [], 'author': [], 'error': str(e)}))
+
     async def wordai(r):
         # ИИ-перевод/проверка ОДНОГО слова: точный перевод + настоящий корень (надёжнее Arabus).
         # Накопление в data/wordai.json + уведомление владельцу (ИИ vs Arabus — проверь). Гейт = нейро.
@@ -3212,6 +3278,7 @@ async def _api_serve(application=None):
                   web.get('/api/narrator', narrator), web.post('/api/narrator_ai', narrator_ai), web.post('/api/hit', hit),
                   web.get('/api/popular', popular), web.get('/api/arabus', arabus),
                   web.post('/api/wordai', wordai), web.post('/api/explain', explain),
+                  web.post('/api/booksearch', booksearch),
                   web.get('/api/book_page', book_page), web.post('/api/isnad_ai', isnad_ai_h),
                   web.post('/api/devfeedback', devfeedback),
                   web.options('/api/{t:.*}', opt)])
