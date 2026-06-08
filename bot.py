@@ -2872,6 +2872,38 @@ async def _api_serve(application=None):
         res = await loop.run_in_executor(None, turath_page, r.query.get('id'), r.query.get('pg') or '1')
         return _cors(web.json_response(res))
 
+    async def devfeedback(r):
+        # M238: замечание/правка для разработчика от ВЛАДЕЛЬЦА → data/devfeedback.json + LOG-канал (+ скрин).
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not (user and str(user.get('id')) == str(OWNER_ID)):
+            return _deny('app')
+        text = (d.get('text') or '').strip()[:2000]
+        ctx = (d.get('ctx') or '').strip()[:300]
+        img = d.get('img') or ''
+        if not text and not img:
+            return _cors(web.json_response({'ok': False}))
+        try:
+            fb = _data_get('devfeedback.json', []) or []
+            fb.append({'text': text, 'ctx': ctx, 'd': datetime.now().strftime('%d.%m.%Y %H:%M'), 'img': bool(img), 'done': False})
+            await loop.run_in_executor(None, _data_put, 'devfeedback.json', fb[-500:], 'devfeedback +1')
+        except Exception:
+            pass
+        if application:
+            try:
+                cap = "#замечание 🛠 От владельца Claude:\n" + text + (("\n📍 " + ctx) if ctx else "")
+                if img and isinstance(img, str) and img.startswith('data:image'):
+                    import base64
+                    from io import BytesIO
+                    raw = base64.b64decode(img.split(',', 1)[1])
+                    bio = BytesIO(raw); bio.name = 'feedback.jpg'
+                    await application.bot.send_photo(LOG_CHAT_ID, photo=bio, caption=cap[:1000])
+                else:
+                    await application.bot.send_message(LOG_CHAT_ID, cap, disable_web_page_preview=True)
+            except Exception:
+                pass
+        return _cors(web.json_response({'ok': True}))
+
     async def explain(r):
         # M208: нейро-объяснение «простыми словами» (шарх/тафсир) хадиса/аята. Накопление в expl_<code>. Гейт = нейро.
         d = await _body(r)
@@ -3169,6 +3201,7 @@ async def _api_serve(application=None):
                   web.get('/api/popular', popular), web.get('/api/arabus', arabus),
                   web.post('/api/wordai', wordai), web.post('/api/explain', explain),
                   web.get('/api/book_page', book_page), web.post('/api/isnad_ai', isnad_ai_h),
+                  web.post('/api/devfeedback', devfeedback),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))

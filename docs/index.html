@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v149</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v150</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -394,6 +394,16 @@
         <button class="go" id="accBtn" style="padding:6px 12px">Открыть</button></div>
     </div>
     <div class="accf">
+      <div class="at">📝 Замечание / правка для Claude</div>
+      <div class="ad">Опиши ошибку или пожелание — улетит ко мне (в журнал разработки), внесу в заявки и отчитаюсь. Можно приложить скрин.</div>
+      <textarea id="dfText" placeholder="Что не так / что добавить…" style="width:100%;box-sizing:border-box;min-height:70px;margin-top:8px;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg);color:var(--text);font-size:14px;resize:vertical"></textarea>
+      <div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap">
+        <input type="file" id="dfImg" accept="image/*" style="font-size:12px;color:var(--hint);max-width:62%">
+        <button class="go" id="dfSend" style="padding:7px 14px">📤 Отправить Claude</button>
+      </div>
+      <div id="dfOut" class="hint" style="margin-top:6px"></div>
+    </div>
+    <div class="accf">
       <div class="at">🚫 Ограничить / забанить по ID</div>
       <div class="ad">Вставь ID человека или чата (из уведомления) → бот его полностью игнорирует (бот + ИИ + вход).</div>
       <div style="display:flex;gap:6px;margin-top:8px">
@@ -458,7 +468,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v149';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v150';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2977,6 +2987,24 @@ async function openDev(){ document.getElementById('devModal').style.display='fle
 var _dv=document.getElementById('devBtn'); if(_dv) _dv.onclick=openDev;
 var _dc=document.getElementById('devClose'); if(_dc) _dc.onclick=()=>{ document.getElementById('devModal').style.display='none'; };
 var _bb=document.getElementById('balBtn'); if(_bb) _bb.onclick=checkBalance;
+// M238: замечание/правка для Claude (владелец → журнал разработки → заявки)
+var _dfS=document.getElementById('dfSend'); if(_dfS) _dfS.onclick=async()=>{
+  const t=(document.getElementById('dfText').value||'').trim(); const out=document.getElementById('dfOut');
+  const f=document.getElementById('dfImg').files[0];
+  if(!t && !f){ out.textContent='Напиши замечание или приложи скрин.'; return; }
+  if(!BACKEND_URL){ out.textContent='Нужен сервер.'; return; }
+  _dfS.disabled=true; out.textContent='Отправляю…';
+  const ctx='app '+APPVER+' · '+(tab==='quran'?'Аяты':'Хадисы')+(document.getElementById('q').value?(' · запрос: «'+document.getElementById('q').value.slice(0,80)+'»'):'');
+  let img='';
+  try{ if(f && f.size<3500000){ img=await new Promise((res,rej)=>{ const rd=new FileReader(); rd.onload=()=>res(rd.result); rd.onerror=rej; rd.readAsDataURL(f); }); } }catch(e){}
+  try{ const r=await fetch(BACKEND_URL+'/devfeedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t, ctx, img, initData:INITDATA})});
+    const j=await r.json().catch(()=>({}));
+    if(r.status===403){ out.textContent='Только владелец (открой через Telegram).'; }
+    else if(j && j.ok){ out.textContent='✅ Отправлено Claude — внесу в заявки.'; document.getElementById('dfText').value=''; document.getElementById('dfImg').value=''; }
+    else out.textContent='Не отправилось — попробуй ещё раз.';
+  }catch(e){ out.textContent='🔧 Сервис недоступен.'; }
+  _dfS.disabled=false;
+};
 [['jNakop','nakop'],['jUsage','usage'],['jFb','fb'],['jSrch','search'],['jUpd','upd'],['jStats','stats']].forEach(p=>{ const el=document.getElementById(p[0]); if(el) el.onclick=()=>{ document.querySelectorAll('#devModal .chip').forEach(c=>c.classList.remove('on')); renderJournal(p[1]); el.classList.add('on'); }; });
 let _tasksData=null, _tasksShowDone=false;
 async function renderTasks(){
