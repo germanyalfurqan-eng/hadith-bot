@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v155</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v156</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -468,7 +468,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v155';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v156';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1276,6 +1276,22 @@ async function openRootBrowser(){
   m.querySelector('#rootClear').onclick=()=>{ cur=''; refresh(); };
   refresh();
 }
+// M224: аяты по ТЕМЕ через ИИ (для понятия типа «бида»: нововведение/искажение религии — неважно корень)
+async function thematicAyat(q){
+  if(!BACKEND_URL){ toast('Работает на сервере'); return; }
+  const res=document.getElementById('res'); toast('🧠 Подбираю аяты по теме…');
+  try{
+    const sr=await smartSearch(q, true); const nums=(sr&&sr.quran)||[];
+    if(!nums.length){ toast('ИИ не нашёл аятов по этой теме — попробуй описать словами'); return; }
+    const arr=await loadQuran(); const rs=new Set(nums);
+    res.innerHTML=''; _results=[]; _groups=[];
+    const hd=document.createElement('div'); hd.className='hint'; hd.innerHTML='🧠 Аяты по теме «'+esc(q)+'»'+(sr.note?(' · '+esc(sr.note)):'')+' <span style="opacity:.7">(подобрал ИИ)</span>';
+    res.appendChild(hd);
+    let n=0; for(const num of nums){ const v=arr.find(a=>(a.s+':'+a.a)===num); if(v){ const d={type:'q',v}; _results.push(d); res.appendChild(cardAyah(d,[])); n++; } }
+    if(!n) toast('Аяты по теме не нашлись в Коране');
+    else { setStatus(''); try{window.scrollTo(0,0);}catch(e){} }
+  }catch(e){ toast('🔧 ИИ недоступен'); }
+}
 // M212: корневой фолбэк для Корана — точного слова нет (напр. بدعة), но корень есть (بدع → بديع/ابتدعوها/بدعا)
 async function tryRootFallback(q, seq){
   try{
@@ -1292,8 +1308,9 @@ async function tryRootFallback(q, seq){
       await showRootPlaces(c); if(seq!==_seq) return true;
       const res=document.getElementById('res'); const note=document.createElement('div'); note.className='hint';
       note.style.cssText='margin:0 0 8px;color:var(--hint);font-size:13px';
-      note.innerHTML='🔎 Точного слова «'+esc(q)+'» в Коране нет — показываю аяты по корню <b style="'+_AF+'">'+esc(c)+'</b> · <span class="strictRoot" style="color:var(--link);cursor:pointer;text-decoration:underline">🔒 искать строго «'+esc(q)+'»</span>';
+      note.innerHTML='🔎 Точного слова «'+esc(q)+'» в Коране нет — показываю аяты по корню <b style="'+_AF+'">'+esc(c)+'</b> · <span class="themeAi" style="color:#c9b8ff;cursor:pointer;text-decoration:underline">🧠 аяты по теме (ИИ)</span> · <span class="strictRoot" style="color:var(--link);cursor:pointer;text-decoration:underline">🔒 строго «'+esc(q)+'»</span>';
       const sr=note.querySelector('.strictRoot'); if(sr) sr.onclick=()=>{ _strictSearch=true; runSearch(true); };
+      const th=note.querySelector('.themeAi'); if(th) th.onclick=()=>thematicAyat(q);
       res.insertBefore(note, res.firstChild); return true; } }
   }catch(e){}
   return false;
