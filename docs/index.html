@@ -153,7 +153,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v191</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v192</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -279,6 +279,7 @@
     <div class="row"><span>🔍 Щипок-зум — увеличение экрана двумя пальцами <span style="color:var(--hint);font-size:11px">(по умолчанию выкл.)</span></span><div class="sw" id="zoomSw"></div></div>
     <div class="row"><span>🕐 Недавние поиски (показывать при пустом поле)</span><div class="sw" id="recentSw"></div></div>
     <div class="row"><span>⬇️ Авто-переход к переводу тафсира (когда он ниже)</span><div class="sw" id="tafJumpSw"></div></div>
+    <div class="row"><span>📳 Тактильная отдача (вибро) на действия</span><div class="sw" id="hapticSw"></div></div>
     <div class="row"><span>🔥 Популярное (что чаще ищут, при пустом поле)</span><div class="sw" id="popSw"></div></div>
     <div class="row"><span>🎨 Тема оформления</span>
       <select id="themeSel" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 8px">
@@ -302,6 +303,7 @@
     <div class="hint" style="margin:8px 0 2px;font-size:12px">🔎 Поиск</div>
     <div class="row"><span>➕ Добавить сборники в ПОИСК (выбор)</span><button class="go" id="extraBtn2" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>🌿 Корни Корана (выбрать корень → аяты)</span><button class="go" id="rootBrowBtn" style="padding:5px 12px">Открыть</button></div>
+    <div class="row"><span>📜 Наука хадиса (мусталях) — правила достоверности</span><button class="go" id="hadScienceBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row" style="opacity:.55"><span>📌 Фетвы и ответы (нумерованные)</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>📚 Полезные ресурсы</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>🔊 Озвучка аятов</span><span>скоро</span></div>
@@ -485,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v191';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v192';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -566,11 +568,17 @@ const SURA_RU=[,'аль-Фатиха','аль-Бакара','Аль Имран',
 
 /* ===================== TELEGRAM + ДОСТУП ===================== */
 const tg = window.Telegram && window.Telegram.WebApp;
-// тактильная отдача (haptic) — только на ключевые действия, не на каждый клик
-function hap(kind){ try{ const h=tg&&tg.HapticFeedback; if(!h) return;
+// тактильная отдача (haptic) — только на ключевые действия; защита: троттл + авто-выкл при сбоях + настройка
+let _hapLast=0, _hapErr=0;
+function hap(kind){ try{
+  if(typeof cfg!=='undefined' && cfg.haptic===false) return;   // выключено в ⚙️ Настройках
+  if(_hapErr>3) return;                                         // после нескольких сбоев — больше не дёргаем (защита)
+  const now=Date.now(); if(now-_hapLast<70) return;             // троттл ~14/сек — вибро не «зависнет»
+  _hapLast=now; const h=tg&&tg.HapticFeedback; if(!h) return;
   if(kind==='ok') h.notificationOccurred('success'); else if(kind==='err') h.notificationOccurred('error');
   else if(kind==='sel') h.selectionChanged(); else if(kind==='light') h.impactOccurred('light');
-  else if(kind==='soft') h.impactOccurred('soft'); else h.impactOccurred('medium'); }catch(e){} }
+  else if(kind==='soft') h.impactOccurred('soft'); else h.impactOccurred('medium');
+}catch(e){ _hapErr++; } }
 let USER=null;
 if (tg){ try{ tg.ready(); tg.expand();
   try{ tg.disableVerticalSwipes && tg.disableVerticalSwipes(); }catch(e){}   // M258: чтобы выделение текста не «тянуло» приложение к сворачиванию
@@ -2193,7 +2201,11 @@ async function _bookInfo(b,out,btn){
     const j=await r.json().catch(()=>({}));
     if(r.status===403){ out.innerHTML='<span class="hint">'+((j&&j.message)||'функция пока не открыта')+'</span>'; return; }
     if(!j.desc){ out.innerHTML='<span class="hint">Не удалось получить описание.</span>'; return; }
-    let html=(j.ru?('<b>'+esc(j.ru)+'</b><br>'):'')+esc(j.desc);
+    const row=(lbl,val)=>val?('<div style="margin-top:3px"><span style="color:var(--hint)">'+lbl+':</span> '+esc(val)+'</div>'):'';
+    let html=(j.ru?('<b>'+esc(j.ru)+'</b>'):'')
+      +row('Автор',j.author)+row('Составлена',j.composed)
+      +'<div style="margin-top:5px">'+esc(j.desc)+'</div>'
+      +row('Среда',j.env)+row('Оценка',j['eval']);
     const links=[]; if(j.wiki_author) links.push('<a href="'+esc(j.wiki_author)+'" target="_blank" style="color:var(--link)">📖 Википедия: автор</a>');
     if(j.wiki_book) links.push('<a href="'+esc(j.wiki_book)+'" target="_blank" style="color:var(--link)">📘 Википедия: книга</a>');
     if(links.length) html+='<div style="margin-top:6px">'+links.join(' · ')+'</div>';
@@ -2247,6 +2259,57 @@ async function openAuthor(authorName){
     drawList(); };
   m.style.display='flex';
 }
+// === 📜 Наука хадиса (мусталях): правила достоверности + 48 мутабарун + труды риджаль ===
+let _hadRule=null, _rijal=null;
+async function openHadithScience(){
+  let m=document.getElementById('hadModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='hadModal';
+    m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 12px;padding:14px 16px 11px;border-bottom:1px solid var(--border)"><b style="font-size:15px">📜 Наука хадиса · мусталях</b><button class="mini" id="hadClose" style="flex:none">закрыть ✕</button></div><div id="hadBody" style="max-height:74vh;overflow:auto"></div></div>';
+    document.body.appendChild(m); m.querySelector('#hadClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+  }
+  m.style.zIndex='10002'; m.style.display='flex';
+  const body=m.querySelector('#hadBody'); body.innerHTML='<div class="hint">Загружаю…</div>';
+  try{ if(!_hadRule) _hadRule=await (await fetch('./hadith/rule_01_tawthiq_critics.json?'+Date.now())).json(); }catch(e){ body.innerHTML='<div class="hint">Не удалось загрузить правила.</div>'; return; }
+  try{ if(!_rijal) _rijal=await (await fetch('./hadith/rijal_books.json?'+Date.now())).json(); }catch(e){}
+  body.innerHTML='';
+  // ПРАВИЛО 1
+  const rb=document.createElement('div'); rb.style.cssText='border:1px solid #2e9b5b;border-radius:12px;padding:11px;background:rgba(46,155,91,.08);margin-bottom:12px';
+  rb.innerHTML='<div style="font-weight:700;color:#bff5d4;margin-bottom:5px">Правило 1. '+esc(_hadRule.title||'')+'</div><div style="font-size:14px;line-height:1.6">'+esc(_hadRule.rule||'')+'</div>';
+  body.appendChild(rb);
+  // 48 МУТАБАРУН (кликабельны → Википедия + биография ИИ)
+  const ch=document.createElement('div'); ch.innerHTML='<div style="font-weight:700;margin:6px 0 6px">📋 Мутабарун — свидетели надёжности ('+((_hadRule.critics||[]).length)+'):</div>'; body.appendChild(ch);
+  (_hadRule.critics||[]).forEach(c=>{ const it=document.createElement('div'); it.style.cssText='border-bottom:1px solid var(--border);padding:8px 2px';
+    it.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><div><b>'+c.n+'.</b> '+esc(c.ru)+' <span style="'+_AF+';font-size:17px;color:var(--mark)">'+esc(c.ar||'')+'</span></div><div style="color:var(--hint);font-size:12px;flex:none">'+esc(c.years||'')+'</div></div>';
+    const tools=document.createElement('div'); tools.style.cssText='display:flex;gap:10px;margin-top:4px;font-size:12px';
+    tools.innerHTML='<a href="'+esc(c.wiki||'#')+'" target="_blank" style="color:var(--link)">📖 Википедия</a><span class="hbio" style="color:#c9b8ff;cursor:pointer">📜 Биография (ИИ)</span>';
+    const bio=document.createElement('div'); bio.style.cssText='display:none;margin-top:5px;font-size:13px;line-height:1.5;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg)';
+    tools.querySelector('.hbio').onclick=()=>{ try{ _critBio(c, bio, tools.querySelector('.hbio')); }catch(e){} };
+    it.appendChild(tools); it.appendChild(bio); ch.appendChild(it); });
+  // ТРУДЫ РИДЖАЛЬ
+  if(_rijal && _rijal.critics){ const rj=document.createElement('div'); rj.style.cssText='margin-top:14px';
+    rj.innerHTML='<div style="font-weight:700;margin:6px 0">📚 Труды по передатчикам (ильм риджаль) — нажми книгу, чтобы читать:</div>';
+    _rijal.critics.forEach(cr=>{ const g=document.createElement('div'); g.style.cssText='margin:6px 0;border-bottom:1px solid var(--border);padding-bottom:6px';
+      let h='<div style="font-weight:600;color:#bff5d4">'+esc(cr.name)+'</div>';
+      g.innerHTML=h;
+      (cr.books||[]).forEach(bk=>{ const a=document.createElement('div'); a.style.cssText='font-size:13px;color:var(--link);cursor:pointer;direction:rtl;text-align:right;padding:3px 0';
+        a.textContent='• '+bk.title;
+        a.onclick=()=>{ const t=String(bk.turath||''); if(/^\d+$/.test(t)){ m.style.display='none'; openBook(t); } else if(t.indexOf('author/')===0){ openLink('https://app.turath.io/'+t); } };
+        g.appendChild(a); });
+      rj.appendChild(g); });
+    body.appendChild(rj); }
+}
+async function _critBio(c, host, btn){
+  if(btn.dataset.shown==='1'){ host.style.display='none'; btn.dataset.shown=''; return; }
+  host.style.display='block'; host.innerHTML='<span class="hint">📜 ИИ готовит биографию…</span>'; btn.dataset.shown='1';
+  if(!BACKEND_URL){ host.innerHTML='<span class="hint">Работает на сервере. Открой Википедию ссылкой.</span>'; return; }
+  try{ const r=await fetch(BACKEND_URL+'/authorinfo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({author:(c.ar||c.ru),initData:INITDATA})});
+    const j=await r.json().catch(()=>({})); if(!j.bio){ host.innerHTML='<span class="hint">Биография недоступна — открой Википедию ссылкой 📖.</span>'; return; }
+    let html=(j.ru?('<b>'+esc(j.ru)+'</b>'):'')+(j.years?(' <span style="color:var(--hint)">('+esc(j.years)+')</span>'):'')+'<br>'+esc(j.bio);
+    if(j.wiki) html+='<div style="margin-top:5px"><a href="'+esc(j.wiki)+'" target="_blank" style="color:var(--link)">📖 Википедия</a></div>';
+    html+='<div style="margin-top:4px;font-size:11px;color:var(--hint)">🧠 ИИ '+(j.cached?'(из базы)':'')+' — возможны неточности</div>'; host.innerHTML=html;
+  }catch(e){ host.innerHTML='<span class="hint">🔧 сервис недоступен</span>'; }
+}
 async function openCatalog(){
   const cat=await loadCatalog();
   let m=document.getElementById('catModal');
@@ -2256,9 +2319,7 @@ async function openCatalog(){
      +'<input id="catSearch" placeholder="🔎 Введите название книги или автора…" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:2px solid var(--btn);border-radius:10px;padding:10px 12px;font-size:15px;margin-bottom:7px">'
      +'<select id="catCat" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 9px;font-size:15px;margin-bottom:8px"><option value="">— все разделы —</option>'+cats.map(c=>'<option value="'+esc(c)+'">'+esc(catLabel(c))+'</option>').join('')+'</select>'
      +'<div style="display:flex;gap:6px;margin-bottom:6px"><button class="mini" id="catAi" style="flex:1;background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:9px 11px;font-size:14px">🧠 Умный поиск книги (ИИ)</button></div>'
-     +'<div style="display:flex;gap:6px;margin-bottom:6px"><button class="mini" id="catTr" style="flex:1;border:1px solid var(--border);color:var(--text);padding:8px 11px;font-size:13px">🌐 Перевести названия (ИИ)</button></div>'
-     +'<div style="display:flex;gap:6px;margin-bottom:6px"><button class="mini" id="catOur" style="flex:1;border:1px solid #2e7d5a;color:#bff5d4;background:#11261f;padding:8px 11px;font-size:13px">⭐ Наши сборники и избранное (Мукбиль · аль-Мухаймин · первоисточники)</button></div>'
-     +'<div class="hint" id="catAiHint" style="font-size:11px;color:var(--hint);margin:-2px 0 8px">Опиши своими словами: «ибн каим», «недуги сердца ибн каим», «альбани сильсиля» — ИИ найдёт.</div>'
+     +'<div class="hint" id="catAiHint" style="font-size:11px;color:var(--hint);margin:-2px 0 8px">Опиши своими словами: «ибн каим», «альбани», «недуги сердца ибн каим» — ИИ найдёт. По умолчанию ниже — первоисточники хадисов.</div>'
      +'<div id="catList" style="max-height:50vh;overflow:auto"></div></div>';
     document.body.appendChild(m);
     m.querySelector('#catClose').onclick=()=>m.style.display='none';
@@ -2278,27 +2339,31 @@ async function openCatalog(){
       const iout=document.createElement('div'); iout.style.cssText='display:none;margin-top:5px;font-size:13px;line-height:1.5;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg)';
       info.onclick=(e)=>{ e.stopPropagation(); _bookInfo(b,iout,info); };
       tools.appendChild(info); it.appendChild(main); it.appendChild(tools); it.appendChild(iout); return it; };
-    const showList=(arr,headHtml,isSearch)=>{ const list=m.querySelector('#catList'); _lastArr=arr.slice(0,200); list.innerHTML='';
-      const h=document.createElement('div'); h.className='hint'; h.style.cssText='font-size:12px;margin-bottom:4px'; h.innerHTML=headHtml; list.appendChild(h);
-      _lastArr.forEach(b=>list.appendChild(_bookRow(b)));
-      // перевод названий доступен только когда есть результаты поиска (не на стартовом списке)
-      const tb=m.querySelector('#catTr'); if(tb){ tb.disabled=!isSearch; tb.style.opacity=isSearch?'1':'.45'; tb.title=isSearch?'':'Сначала найди книги (поиск/раздел/ИИ) — потом перевод названий'; }
-      if(isSearch && _catTr.on) _catTranslateVisible();   // если перевод вкл — подтянуть переводы видимых
+    let _lastHead='', _lastSearch=false;
+    const _rebuildRows=()=>{ const list=m.querySelector('#catList'); list.innerHTML='';
+      const h=document.createElement('div'); h.className='hint'; h.style.cssText='font-size:12px;margin-bottom:4px'; h.innerHTML=_lastHead; list.appendChild(h);
+      if(_lastSearch){ const tw=document.createElement('div'); tw.style.cssText='margin:2px 0 8px';
+        const tb=document.createElement('button'); tb.className='mini'; tb.id='catTrBtn';
+        tb.style.cssText='border:1px solid '+(_catTr.on?'#2e9b5b':'var(--border)')+';color:'+(_catTr.on?'#bff5d4':'var(--text)')+';background:'+(_catTr.on?'#173d30':'transparent')+';padding:6px 11px;font-size:13px';
+        tb.textContent=_catTr.on?'🌐 Перевод названий ВКЛ ✓':'🌐 Перевести названия (ИИ) — рус. рядом с книгой';
+        tb.onclick=()=>{ _catTr.on=!_catTr.on; if(_catTr.on){ _catTranslateVisible(); } else { _rebuildRows(); } };
+        tw.appendChild(tb); list.appendChild(tw); }
+      _lastArr.forEach(b=>list.appendChild(_bookRow(b))); };
+    const showList=(arr,headHtml,isSearch)=>{ _lastArr=arr.slice(0,200); _lastHead=headHtml; _lastSearch=!!isSearch;
+      _rebuildRows();
+      if(isSearch && _catTr.on) _catTranslateVisible();
     };
     // перевести названия видимых книг (ИИ, накопление); потом перерисовать с RU + огласовками
     async function _catTranslateVisible(){
-      if(!BACKEND_URL || !_lastArr.length) return;
+      if(!BACKEND_URL || !_lastArr.length){ _rebuildRows(); return; }
       const need=_lastArr.map(b=>b.n).filter(n=>n && !_catTr.map[n]).slice(0,40);
-      const h=m.querySelector('#catList .hint'); if(need.length && h) h.innerHTML+=' · 🌐 перевожу…';
-      if(!need.length){ _redrawTitles(); return; }
+      if(!need.length){ _rebuildRows(); return; }
+      const h=m.querySelector('#catList .hint'); if(h) h.innerHTML+=' · 🌐 перевожу…';
       try{ const r=await fetch(BACKEND_URL+'/booktrans',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({titles:need,initData:INITDATA})});
         const j=await r.json().catch(()=>({})); if(j.map) Object.assign(_catTr.map,j.map);
       }catch(e){}
-      _redrawTitles();
+      _rebuildRows();
     }
-    function _redrawTitles(){ if(!_catTr.on) return; const list=m.querySelector('#catList');
-      const h=list.querySelector('.hint'); const head=h?h.outerHTML:''; list.innerHTML=head;
-      _lastArr.forEach(b=>list.appendChild(_bookRow(b))); }
     const render=()=>{ const qc=m.querySelector('#catCat').value; let arr=cat;
       if(qc) arr=arr.filter(b=>b.c===qc);
       const ql=(m.querySelector('#catSearch').value||'').toLowerCase().trim();
@@ -2308,13 +2373,6 @@ async function openCatalog(){
     };
     let _ct; m.querySelector('#catSearch').addEventListener('input',()=>{ clearTimeout(_ct); _ct=setTimeout(render,200); });
     m.querySelector('#catCat').addEventListener('change',render);
-    // перевод названий (ИИ) с накоплением: тумблер
-    m.querySelector('#catTr').onclick=()=>{ _catTr.on=!_catTr.on; const b=m.querySelector('#catTr');
-      b.style.background=_catTr.on?'#173d30':''; b.style.borderColor=_catTr.on?'#2e9b5b':'var(--border)'; b.style.color=_catTr.on?'#bff5d4':'var(--text)';
-      b.textContent=_catTr.on?'🌐 Перевод названий ВКЛ ✓':'🌐 Перевести названия (ИИ)';
-      const list=m.querySelector('#catList'); list.innerHTML=''; const h=document.createElement('div'); h.className='hint'; h.style.cssText='font-size:12px;margin-bottom:4px'; h.textContent=_catTr.on?('перевод: '+_lastArr.length+' назв.'):('найдено: '+_lastArr.length); list.appendChild(h);
-      _lastArr.forEach(bb=>list.appendChild(_bookRow(bb)));
-      if(_catTr.on) _catTranslateVisible(); };
     // умный ИИ-поиск книги/автора своими словами
     m.querySelector('#catAi').onclick=async()=>{ const inp=m.querySelector('#catSearch'); const q=(inp.value||'').trim();
       if(q.length<2){ inp.focus(); toast('Напиши своими словами: «ибн каим», «альбани сильсиля»…'); return; }
@@ -3610,6 +3668,7 @@ applyZoom();
 var _th=document.getElementById('themeSel'); if(_th){ _th.value=cfg.theme||'dark'; _th.onchange=()=>{ cfg.theme=_th.value; saveCfg(cfg); applyTheme(); toast(cfg.theme==='light'?'Светлая тема ☀️':'Тёмная тема 🌙'); }; }
 var _rcw=document.getElementById('recentSw'); if(_rcw){ _rcw.classList.toggle('on',cfg.recent!==false); _rcw.onclick=()=>{ cfg.recent=(cfg.recent===false); saveCfg(cfg); _rcw.classList.toggle('on',cfg.recent!==false); if(cfg.recent===false) hideRecent(); }; }
 var _tjw=document.getElementById('tafJumpSw'); if(_tjw){ _tjw.classList.toggle('on',cfg.tafJump!==false); _tjw.onclick=()=>{ cfg.tafJump=(cfg.tafJump===false); saveCfg(cfg); _tjw.classList.toggle('on',cfg.tafJump!==false); }; }
+var _hpw=document.getElementById('hapticSw'); if(_hpw){ _hpw.classList.toggle('on',cfg.haptic!==false); _hpw.onclick=()=>{ cfg.haptic=(cfg.haptic===false); saveCfg(cfg); _hpw.classList.toggle('on',cfg.haptic!==false); if(cfg.haptic!==false){ _hapErr=0; hap('light'); } }; }
 var _psw=document.getElementById('popSw'); if(_psw){ _psw.classList.toggle('on',cfg.popular!==false); _psw.onclick=()=>{ cfg.popular=(cfg.popular===false); saveCfg(cfg); _psw.classList.toggle('on',cfg.popular!==false); var pb=document.getElementById('popularBox'); if(cfg.popular===false&&pb){pb.style.display='none';} else { try{renderPopular();}catch(e){} } }; }
 applyTheme();
 /* Подсказка при попытке увеличить экран пальцами, когда зум выключен (ненавязчиво, с «не показывать» и эскалацией) */
@@ -3767,6 +3826,7 @@ var _setC=document.getElementById('settingsClose'); if(_setC) _setC.onclick=()=>
 var _tfC=document.getElementById('tafsirClose'); if(_tfC) _tfC.onclick=()=>{ document.getElementById('tafsirModal').style.display='none'; };
 var _rb2=document.getElementById('readBtn2'); if(_rb2) _rb2.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openReader(); };
 var _rbr=document.getElementById('rootBrowBtn'); if(_rbr) _rbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openRootBrowser(); };
+var _hsb=document.getElementById('hadScienceBtn'); if(_hsb) _hsb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openHadithScience(); };
 var _cbr=document.getElementById('catBrowBtn'); if(_cbr) _cbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openCatalog(); };
 var _qro=document.getElementById('qrOpenBtn'); if(_qro) _qro.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openQuranReader(_qrView.s||1, 0); };
 var _qrb=document.getElementById('quranReadBtn'); if(_qrb) _qrb.onclick=()=>openQuranReader(_qrView.s||1, 0);

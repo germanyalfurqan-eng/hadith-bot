@@ -3009,20 +3009,29 @@ async def _api_serve(application=None):
             if cached:
                 out = dict(cached); out['cached'] = True
                 return _cors(web.json_response(out))
-            sysm = ("Дай справку об исламской книге. Ответь СТРОГО 4 строками (метки именно так):\n"
+            sysm = ("Дай КРАТКУЮ структурированную справку об исламской книге. Ответь СТРОГО этими строками (метки точно так, без лишнего):\n"
                     "НАЗВАНИЕ_РУ: <русский перевод названия>\n"
-                    "ОПИСАНИЕ: <2-4 предложения: о чём книга, тематика, значение, автор и его эпоха>\n"
-                    "ВИКИ_АВТОР: <URL статьи Википедии об авторе (ru.wikipedia.org или ar.wikipedia.org), если уверен; иначе ->\n"
-                    "ВИКИ_КНИГА: <URL статьи Википедии о книге, если уверена существует; иначе ->\n"
-                    "Не выдумывай ссылки — если не уверен, ставь -. Выведи только эти 4 строки.")
+                    "АВТОР: <имя автора (рус.) + годы жизни по хиджре/григ., если знаешь>\n"
+                    "СОСТАВЛЕНА: <примерная дата/век написания и место (город/страна), если известно; иначе ->\n"
+                    "ОПИСАНИЕ: <2-3 предложения: о чём книга, тематика, значение>\n"
+                    "СРЕДА: <в какой среде/течении используется и ценится: суннизм (и какой мазхаб/манхадж), суфизм, шиизм, и т.п.; кратко>\n"
+                    "ОЦЕНКА: <как оценивают учёные: похвала и/или критика, кратко и по делу>\n"
+                    "ВИКИ_АВТОР: <URL Википедии об авторе (ru.wikipedia.org или ar.wikipedia.org), если уверен; иначе ->\n"
+                    "ВИКИ_КНИГА: <URL Википедии о книге, если уверен; иначе ->\n"
+                    "Не выдумывай ссылки и факты — если не уверен, ставь -. Будь точен и лаконичен. Выведи ТОЛЬКО эти строки.")
             txt = await loop.run_in_executor(None, ask_deepseek, f"Книга: {title}\nАвтор: {author}", sysm) or ""
             def _grab(lbl):
                 m = re.search(lbl + r'\s*[:：]\s*(.+)', txt); return m.group(1).strip() if m else ''
             ru = _grab('НАЗВАНИЕ_РУ'); desc = _grab('ОПИСАНИЕ')
+            author = _grab('АВТОР'); composed = _grab('СОСТАВЛЕНА'); env = _grab('СРЕДА'); evl = _grab('ОЦЕНКА')
             wa = _grab('ВИКИ_АВТОР'); wb = _grab('ВИКИ_КНИГА')
             def _url(s):
                 m = re.search(r'https?://[^\s\)]+', s or ''); return m.group(0) if m else ''
-            result = {'ru': ru[:200], 'desc': desc[:700], 'wiki_author': _url(wa), 'wiki_book': _url(wb)}
+            def _cl(s):
+                return '' if (s or '').strip() in ('', '-', '—', '–') else s.strip()
+            result = {'ru': ru[:200], 'author': _cl(author)[:200], 'composed': _cl(composed)[:200],
+                      'desc': desc[:700], 'env': _cl(env)[:250], 'eval': _cl(evl)[:300],
+                      'wiki_author': _url(wa), 'wiki_book': _url(wb)}
             saved = None
             if desc:
                 try: saved = {"new": True, "total": await loop.run_in_executor(None, binfo_put, key, result)}
