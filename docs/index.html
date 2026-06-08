@@ -25,8 +25,9 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
        color:var(--text);font-size:16px;line-height:1.5;background:#070a10}
-  body::before{content:'';position:fixed;inset:0;z-index:-2;background:url('./bg.jpg') no-repeat center top;background-size:cover}
-  body::after{content:'';position:fixed;inset:0;z-index:-1;background:linear-gradient(rgba(9,13,21,.74),rgba(6,9,14,.90))}
+  /* фон закреплён по ВЫСОТЕ экрана (100vh), а не inset:0 — иначе при появлении клавиатуры низ «съезжает» и фон/лого прыгает */
+  body::before{content:'';position:fixed;top:0;left:0;right:0;height:100vh;z-index:-2;background:url('./bg.jpg') no-repeat center top;background-size:cover}
+  body::after{content:'';position:fixed;top:0;left:0;right:0;height:100vh;z-index:-1;background:linear-gradient(rgba(9,13,21,.74),rgba(6,9,14,.90))}
   /* Светлая тема */
   body.light{ --bg:#eef2f7; --text:#16202c; --hint:#5a6b7c; --link:#1565c0; --btn:#1e6fd6; --btn-text:#fff; --card:#ffffff; --border:#d3dce6; --mark:#ffcf40; background:#e9eef4 }
   body.light::after{ background:linear-gradient(rgba(244,247,251,.88),rgba(235,240,246,.95)) }
@@ -151,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v134</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v135</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -456,14 +457,24 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v134';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v135';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
+  // отмечаем, что человек уже начал работать (фокус/ввод/скролл/тап) — тогда НЕ дёргаем перезагрузкой
+  ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
   const r=await fetch('ver.txt?cb='+Date.now(),{cache:'no-store'}); if(!r.ok) return;
   const latest=(await r.text()).trim();
   if(latest && latest!==APPVER){ sessionStorage.setItem('verReloaded','1');
-    location.replace(location.pathname+'?v='+encodeURIComponent(latest)+location.hash); }
+    const doReload=()=>location.replace(location.pathname+'?v='+encodeURIComponent(latest)+location.hash);
+    if(!window.__interacted){ doReload(); return; }   // только открыл, ничего не делал → безопасно обновить сразу
+    // уже ищет/читает → НЕ сбиваем в начало: мягкий баннер «обновить, когда удобно»
+    try{ const b=document.createElement('div');
+      b.style.cssText='position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:200;background:#11306b;color:#fff;border:1px solid #2f7be6;border-radius:12px;padding:10px 14px;font-size:13px;box-shadow:0 6px 20px #000b;max-width:92%;display:flex;gap:12px;align-items:center';
+      b.innerHTML='🔄 Готово обновление ('+latest+'). <span style="text-decoration:underline;cursor:pointer;white-space:nowrap">Обновить</span><span style="opacity:.7;cursor:pointer">✕</span>';
+      const sp=b.querySelectorAll('span'); sp[0].onclick=doReload; sp[1].onclick=()=>b.remove();
+      (document.body||document.documentElement).appendChild(b);
+    }catch(e){} }
 }catch(e){} })();
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
