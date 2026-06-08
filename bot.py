@@ -2558,12 +2558,17 @@ async def log_bot_ai(update, context, feat="ботяра"):
         pass
 # ============ КОНЕЦ G9-БЛОКА ============
 
-def wide_search(q):
+def wide_search(q, page=1):
     """M127 Шаг 1: широкий поиск по большому корпусу через sunnah.one (turath-движок).
-    Возвращает text + hukm (достоверность) + takhreej (где передаётся, словами) + source/loc."""
+    Возвращает text + hukm (достоверность) + takhreej (где передаётся, словами) + source/loc.
+    Постранично: sunnah.one отдаёт 20 результатов на страницу, параметр page=N (M189-пагинация)."""
+    try:
+        page = max(1, int(page))
+    except Exception:
+        page = 1
     try:
         r = requests.get("https://search.sunnah.one/",
-                         params={"action": "search", "ver": "2", "q": q},
+                         params={"action": "search", "ver": "2", "q": q, "page": str(page)},
                          headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
         if r.status_code == 200:
             j = r.json()
@@ -2576,10 +2581,10 @@ def wide_search(q):
                     "source": str(x.get("source", "")),
                     "loc": str(x.get("source_location", "")),
                 })
-            return {"count": j.get("count", 0), "data": out}
+            return {"count": j.get("count", 0), "data": out, "page": page}
     except Exception as e:
-        return {"count": 0, "data": [], "error": str(e)}
-    return {"count": 0, "data": []}
+        return {"count": 0, "data": [], "error": str(e), "page": page}
+    return {"count": 0, "data": [], "page": page}
 
 async def _api_serve(application=None):
     from aiohttp import web
@@ -2772,7 +2777,11 @@ async def _api_serve(application=None):
         if not rate_ok('wide:' + _uid(user, r)):
             return _ratelimited()
         q = (r.query.get('q') or '')[:200]
-        res = await loop.run_in_executor(None, wide_search, q) if q else {'count': 0, 'data': []}
+        try:
+            page = max(1, min(200, int(r.query.get('page') or 1)))
+        except Exception:
+            page = 1
+        res = await loop.run_in_executor(None, wide_search, q, page) if q else {'count': 0, 'data': [], 'page': 1}
         return _cors(web.json_response(res))
 
     async def balance(r):
