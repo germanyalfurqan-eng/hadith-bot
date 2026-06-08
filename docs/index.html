@@ -152,9 +152,10 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v173</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v174</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
+      <div class="gear" id="homeBtn" style="display:block" title="🏠 На главную — сброс поиска">🏠</div>
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
       <div class="gear" id="setBtn" style="display:block" title="⚙️ Настройки (перевод Корана, огласовки, иснад, тема)">⚙️</div>
       <div class="gear" id="menuBtn" style="display:block" title="☰ Ещё — дополнительные функции и сервисы">☰</div>
@@ -484,7 +485,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v173';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v174';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2000,7 +2001,7 @@ function showWordPopup(el, word, root, lemma, gram, ctx){
   const n = root ? ((_roots.r[root]||[]).length) : 0;
   const g = gramRu(gram);
   const pop=document.createElement('div'); pop.id='wordPop'; pop.className='card';
-  pop.style.cssText='position:absolute;z-index:300;max-width:300px;padding:11px 13px;font-size:14px;box-shadow:0 8px 28px rgba(0,0,0,.55)';
+  pop.style.cssText='position:absolute;z-index:300;max-width:min(340px,94vw);padding:11px 13px;font-size:14px;box-shadow:0 8px 28px rgba(0,0,0,.55)';
   let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b style="font-size:22px;'+_AF+'">'+esc(word)+'</b><span id="wpX" style="cursor:pointer;color:var(--hint);font-size:18px">✕</span></div>';
   if(g) h+='<div style="margin-top:6px;color:var(--text)">📝 '+esc(g)+'</div>';
   if(lemma && rootKey(lemma)!==rootKey(word)) h+='<div style="margin-top:3px;color:var(--hint);font-size:13px">лемма: <b style="'+_AF+'">'+esc(lemma)+'</b></div>';
@@ -2084,7 +2085,8 @@ async function openCatalog(){
   const cat=await loadCatalog();
   let m=document.getElementById('catModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='catModal';
-    const cats=[...new Set(cat.map(b=>b.c).filter(Boolean))].sort();
+    const _catPrio=['كتب السنة','شروح الحديث','علوم الحديث','التخريج والأطراف','التفسير','علوم القرآن وأصول التفسير','العقيدة','الفرق والردود','أصول الفقه'];   // приоритет разделов (сунна → шарх → тафсир → …)
+    const cats=[...new Set(cat.map(b=>b.c).filter(Boolean))].sort((a,b)=>{ const ia=_catPrio.indexOf(a), ib=_catPrio.indexOf(b); if(ia<0&&ib<0) return a.localeCompare(b); if(ia<0) return 1; if(ib<0) return -1; return ia-ib; });
     m.innerHTML='<div class="panel" style="max-width:640px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:6;background:var(--card);margin:-16px -16px 8px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b id="catTitle" style="font-size:14px">📚 Мактаба аш-Шамиля (المكتبة الشاملة) · '+cat.length+'</b><button class="mini" id="catClose" style="flex:none">закрыть ✕</button></div>'
      +'<input id="catSearch" placeholder="🔎 название или автор…" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:14px;margin-bottom:6px">'
      +'<select id="catCat" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:13px;margin-bottom:8px"><option value="">— все разделы —</option>'+cats.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('')+'</select>'
@@ -3348,6 +3350,7 @@ function goHome(){ document.getElementById('q').value=''; selCols.clear(); selEx
   document.getElementById('q').placeholder='Слова, фраза или № хадиса…';
   document.getElementById('res').innerHTML=''; setStatus(''); try{localStorage.removeItem('muslimoon_state');}catch(e){} document.querySelector('.tab[data-tab="hadith"]').click(); renderCols(); updateExtraSel(); var _qh=document.getElementById('qHelper'); if(_qh)_qh.style.display='none'; var _qs=document.getElementById('qSugg'); if(_qs)_qs.style.display='none'; var _tl=document.getElementById('tlSugg'); if(_tl){_tl.style.display='none';_tl.innerHTML='';} try{window.scrollTo(0,0);}catch(e){} }
 document.getElementById('brand').onclick=goHome;
+var _hb=document.getElementById('homeBtn'); if(_hb) _hb.onclick=goHome;
 try{ if(!localStorage.getItem('hint_home')){ setTimeout(()=>{ try{ toast('💡 Лого «Muslimoon» вверху — вернуться на главную / сбросить'); localStorage.setItem('hint_home','1'); }catch(e){} }, 2800); } }catch(e){}   // M245 одноразовый хинт
 document.getElementById('helpBtn').onclick=()=>{ document.getElementById('helpModal').style.display='flex'; };
 document.getElementById('helpClose').onclick=()=>{ document.getElementById('helpModal').style.display='none'; };
