@@ -2690,9 +2690,13 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'error': 'rate', 'message': 'Слишком часто, подожди немного.'}, status=429))
     async def _body(r):
         try:
-            return await r.json()
+            raw = await r.read()
+            return json.loads(raw.decode('utf-8'))   # форсируем UTF-8 (иначе aiohttp может decode как cp1251 → мохибейк кириллицы)
         except Exception:
-            return {}
+            try:
+                return await r.json()
+            except Exception:
+                return {}
     def _uid(user, r):
         return str(user.get('id')) if user else ('ip:' + (r.remote or '?'))
 
