@@ -151,7 +151,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v130</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v131</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -455,7 +455,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v130';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v131';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1222,7 +1222,7 @@ async function runSearch(explicit){
       }catch(e){}
     }
     // ② КОНКРЕТНЫЕ хадисы по источнику+номеру (как DeepSeek) — ТОЛЬКО на вкладке Хадисы, с проверкой
-    if(tab==='hadith' && sr.hadiths && sr.hadiths.length){ try{ const shownN=await showHadithRefs(sr.hadiths, sr, shown, seq); if(seq!==_seq) return; if(shownN){ return; } }catch(e){} }
+    if(tab==='hadith' && sr.hadiths && sr.hadiths.length){ try{ const rr=await showHadithRefs(sr.hadiths, sr, shown, seq); if(seq!==_seq) return; if(rr && rr.shown){ return; } }catch(e){} }
     // на вкладке Хадисы аяты НЕ показываем результатом — только лёгкая подсказка «также в Коране»
     let quranHint=''; if(tab==='hadith' && sr.quran && sr.quran.length){ quranHint=' · 💡 в Коране: '+sr.quran.slice(0,4).join(', '); }
     // ③ иначе — характерная фраза(ы): транслит + наш словарь (гарант знаменитых) + фразы ИИ
@@ -1411,30 +1411,39 @@ function _srcToCode(name){ if(!name) return ''; const s=(''+name).toLowerCase().
 // показать КОНКРЕТНЫЕ хадисы по источнику+номеру от ИИ (как DeepSeek), с проверкой по фразе (защита от чужой нумерации)
 async function showHadithRefs(refs, sr, shown, seq){
   const res=document.getElementById('res'); const phr=(sr.phrases||[]).map(p=>canon(p)).filter(p=>p.length>=4);
-  const out=[];
+  const matchPhr=(tx)=>{ if(!phr.length) return false; for(const p of phr){ if(tx.indexOf(p)!==-1) return true; const w=p.split(' ').filter(x=>x.length>2); if(w.length && w.filter(x=>tx.indexOf(x)!==-1).length>=Math.ceil(w.length*0.6)) return true; } return false; };
+  const out=[]; const seen=new Set();
   for(const rf of (refs||[]).slice(0,8)){ const code=_srcToCode(rf.src); const num=String(rf.num||'').replace(/[^0-9]/g,''); if(!code||!num) continue;
-    try{ let h=null; const C=COLLECTIONS.find(x=>x.code===code), X=EXTRA_MAP[code];
-      if(code==='muhaymin'){ const a=await loadMuhaymin(); h=a.find(x=>String(x.n)===num); }
-      else if(code==='ahmad'){ const a=await loadAhmad(); h=a.find(x=>x.num===num); }
-      else if(X&&X.file){ const a=await loadLocal(code,X.file); h=a.find(x=>x.num===num); }
-      else if(X){ const a=await loadExtra(code); h=a.find(x=>x.num===num); }
-      else if(C&&C.file){ const a=await loadLocal(code,C.file); h=a.find(x=>x.num===num); }
+    try{ let h=null, a=null; const C=COLLECTIONS.find(x=>x.code===code), X=EXTRA_MAP[code];
+      if(code==='muhaymin'){ a=await loadMuhaymin(); h=a.find(x=>String(x.n)===num); }
+      else if(code==='ahmad'){ a=await loadAhmad(); h=a.find(x=>x.num===num); }
+      else if(X&&X.file){ a=await loadLocal(code,X.file); h=a.find(x=>x.num===num); }
+      else if(X){ a=await loadExtra(code); h=a.find(x=>x.num===num); }
+      else if(C&&C.file){ a=await loadLocal(code,C.file); h=a.find(x=>x.num===num); }
       else { h=await getOne(code,num); }
-      if(seq!==_seq) return 0;
-      if(h){ const tx=canon(h.text||''); let ok=!phr.length;
-        for(const p of phr){ if(tx.indexOf(p)!==-1){ ok=true; break; } const w=p.split(' ').filter(x=>x.length>2); if(w.length && w.filter(x=>tx.indexOf(x)!==-1).length>=Math.ceil(w.length*0.6)){ ok=true; break; } }
-        out.push({code,h,verified:ok}); }
+      if(seq!==_seq) return {shown:0,verified:0};
+      if(h){ const ok=matchPhr(canon(h.text||'')); const k=code+'|'+(h.num||h.n);
+        if(!seen.has(k)){ seen.add(k); out.push({code,h,verified:ok,by:(ok?(phr.length?'both':'num'):'num')}); }
+        // M207: номер от ИИ дал НЕ тот текст, но книга загружена целиком → ищем ПО ТЕКСТУ в этой же книге
+        if(!ok && a && phr.length){ for(const p of phr){ if(p.indexOf(' ')===-1) continue;
+          const hit=a.find(x=>canon(x.text||'').indexOf(p)!==-1); if(hit){ const kk=code+'|'+(hit.num||hit.n);
+            if(!seen.has(kk)){ seen.add(kk); out.push({code,h:hit,verified:true,by:'text'}); } break; } } }
+      }
     }catch(e){}
   }
-  if(!out.length) return 0;
+  if(!out.length) return {shown:0,verified:0};
   out.sort((a,b)=>(b.verified?1:0)-(a.verified?1:0));
-  res.innerHTML=''; _results=[]; _groups=(sr.phrases||[]).map(p=>[{t:p,phrase:false,neg:false}]);
+  res.innerHTML=''; _results=[]; _groups=[];
+  const anyText=out.some(o=>o.by==='text'||o.by==='both');
   const hd=document.createElement('div'); hd.className='hint';
-  hd.innerHTML='🧠 '+(sr.fixed?('✅ исправлено: «'+esc(sr.fixed)+'» · '):'')+(sr.note?esc(sr.note)+' · ':'')+'нашёл конкретный хадис:';
+  hd.innerHTML='🧠 '+(sr.fixed?('✅ исправлено: «'+esc(sr.fixed)+'» · '):'')+(sr.note?esc(sr.note)+' · ':'')+'нашёл конкретный хадис'+(anyText?' (текст совпал ✅)':' (по номеру от ИИ)')+':';
   res.appendChild(hd);
-  let n=0; for(const o of out){ const d=(o.code==='muhaymin')?{type:'m',h:o.h}:{type:'h',code:o.code,h:o.h}; _results.push(d); res.appendChild(makeCard(d)); n++; }
+  let n=0, verified=0; for(const o of out){ const d=(o.code==='muhaymin')?{type:'m',h:o.h}:{type:'h',code:o.code,h:o.h}; _results.push(d);
+    const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:11px;margin:8px 0 -3px;color:var(--hint)';
+    lbl.textContent = o.by==='text' ? '🔎 найден ПО ТЕКСТУ (номер от ИИ мог отличаться)' : (o.by==='both' ? '✅ номер от ИИ + текст совпал' : '🔢 по номеру от ИИ (текст не сверял — проверь)');
+    res.appendChild(lbl); res.appendChild(makeCard(d)); n++; if(o.verified) verified++; }
   _groups=[]; setStatus(''); logSearch(shown,tab,n); try{window.scrollTo(0,0);}catch(e){}
-  return n;
+  return {shown:n,verified:verified};
 }
 /* M43: группировка результатов по источникам (сворачиваемо) */
 let groupSrc=false;
