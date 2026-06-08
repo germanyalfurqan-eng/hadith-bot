@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v146</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v147</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -286,6 +286,7 @@
     <div class="row"><span>⭐ Закладки / избранное</span><button class="go" id="favBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>📚 Другие сборники (Дарими, Ибн Хиббан…)</span><button class="go" id="extraBtn2" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>📖 Читать сборник</span><button class="go" id="readBtn2" style="padding:5px 12px">Открыть</button></div>
+    <div class="row"><span>🌿 Корни Корана (выбрать корень → аяты)</span><button class="go" id="rootBrowBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row" style="opacity:.55"><span>📌 Фетвы и ответы (нумерованные)</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>📚 Полезные ресурсы</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>🔊 Озвучка аятов</span><span>скоро</span></div>
@@ -457,7 +458,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v146';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v147';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1219,6 +1220,41 @@ function _flushRender(){ _flushT=null; const res=document.getElementById('res');
   let n=0; while(_renderQ.length && n<30){ try{ res.appendChild(makeCard(_renderQ.shift())); }catch(e){} n++; }
   if(_renderQ.length) _flushT=setTimeout(_flushRender,0); }
 function _clearRenderQ(){ _renderQ=[]; if(_flushT){ clearTimeout(_flushT); _flushT=null; } }
+// M196: браузер корней Корана — выбрать буквы корня (как Quran Dictionary corpus.quran.com) → аяты
+async function openRootBrowser(){
+  const R=await loadRoots(); const roots=Object.keys(R.r||{}).filter(k=>k && !k.startsWith('r:'));
+  let m=document.getElementById('rootModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='rootModal';
+    m.innerHTML='<div class="panel" style="max-width:560px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;background:var(--card);margin:-16px -16px 8px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b>🌿 Корни Корана ('+roots.length+')</b><button class="mini" id="rootClose" style="flex:none">закрыть ✕</button></div>'
+     +'<div style="font-size:13px;color:var(--hint);margin-bottom:6px">Нажимай буквы корня — внизу появятся подходящие корни. Нажми корень → все аяты с ним.</div>'
+     +'<div id="rootCur" style="text-align:center;font-size:26px;'+_AF+';min-height:34px;color:var(--mark);direction:rtl"></div>'
+     +'<div id="rootLetters" style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;direction:rtl;margin:6px 0"></div>'
+     +'<div style="display:flex;gap:8px;justify-content:center;margin-bottom:8px"><button class="mini" id="rootBack">⌫ стереть</button><button class="mini" id="rootClear">очистить</button></div>'
+     +'<div id="rootList" style="display:flex;flex-wrap:wrap;gap:6px;direction:rtl;max-height:42vh;overflow:auto"></div></div>';
+    document.body.appendChild(m);
+    m.querySelector('#rootClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+  }
+  m.style.display='flex';
+  let cur='';
+  const curEl=m.querySelector('#rootCur'), listEl=m.querySelector('#rootList'), lettersEl=m.querySelector('#rootLetters');
+  function refresh(){
+    curEl.textContent=cur||'—';
+    if(!cur){ listEl.innerHTML='<span class="hint" style="font-size:12px">Выбери первую букву корня…</span>'; return; }
+    const matches=roots.filter(r=>r.indexOf(cur)===0).sort();
+    listEl.innerHTML='';
+    if(!matches.length){ listEl.innerHTML='<span class="hint" style="font-size:12px">Нет корней на «'+esc(cur)+'»</span>'; return; }
+    matches.slice(0,300).forEach(r=>{ const c=document.createElement('span'); c.className='chip'; c.style.cssText='cursor:pointer;font-size:18px;'+_AF;
+      c.innerHTML=esc(r)+' <span style="font-size:11px;color:var(--hint)">'+(R.r[r]||[]).length+'</span>';
+      c.onclick=()=>{ m.style.display='none'; if(tab!=='quran'){ try{ document.querySelector('.tab[data-tab="quran"]').click(); }catch(e){} } showRootPlaces(r); }; listEl.appendChild(c); });
+  }
+  lettersEl.innerHTML='';
+  'ابتثجحخدذرزسشصضطظعغفقكلمنهوي'.split('').forEach(L=>{ const b=document.createElement('span'); b.className='chip'; b.textContent=L; b.style.cssText='cursor:pointer;font-size:18px;'+_AF;
+    b.onclick=()=>{ if(cur.length<5) cur+=L; refresh(); }; lettersEl.appendChild(b); });
+  m.querySelector('#rootBack').onclick=()=>{ cur=cur.slice(0,-1); refresh(); };
+  m.querySelector('#rootClear').onclick=()=>{ cur=''; refresh(); };
+  refresh();
+}
 // M212: корневой фолбэк для Корана — точного слова нет (напр. بدعة), но корень есть (بدع → بديع/ابتدعوها/بدعا)
 async function tryRootFallback(q, seq){
   try{
@@ -3051,6 +3087,7 @@ var _setB=document.getElementById('setBtn'); if(_setB) _setB.onclick=()=>{ docum
 var _setC=document.getElementById('settingsClose'); if(_setC) _setC.onclick=()=>{ document.getElementById('settingsModal').style.display='none'; };
 var _tfC=document.getElementById('tafsirClose'); if(_tfC) _tfC.onclick=()=>{ document.getElementById('tafsirModal').style.display='none'; };
 var _rb2=document.getElementById('readBtn2'); if(_rb2) _rb2.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openReader(); };
+var _rbr=document.getElementById('rootBrowBtn'); if(_rbr) _rbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openRootBrowser(); };
 document.getElementById('favBtn').onclick=()=>{ renderFav('date'); document.getElementById('favModal').style.display='flex'; };
 var _fh=document.getElementById('favHdr'); if(_fh) _fh.onclick=()=>{ renderFav('date'); document.getElementById('favModal').style.display='flex'; };
 document.getElementById('favClose').onclick=()=>{ document.getElementById('favModal').style.display='none'; };
