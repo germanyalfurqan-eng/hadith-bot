@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v148</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v149</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -458,7 +458,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v148';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v149';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -470,10 +470,16 @@ const APPVER = 'v148';   // единый источник версии (бейд
     const doReload=()=>location.replace(location.pathname+'?v='+encodeURIComponent(latest)+location.hash);
     if(!window.__interacted){ doReload(); return; }   // только открыл, ничего не делал → безопасно обновить сразу
     // уже ищет/читает → НЕ сбиваем в начало: мягкий баннер «обновить, когда удобно»
-    try{ const b=document.createElement('div');
-      b.style.cssText='position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:200;background:#11306b;color:#fff;border:1px solid #2f7be6;border-radius:12px;padding:10px 14px;font-size:13px;box-shadow:0 6px 20px #000b;max-width:92%;display:flex;gap:12px;align-items:center';
-      b.innerHTML='🔄 Готово обновление ('+latest+'). <span style="text-decoration:underline;cursor:pointer;white-space:nowrap">Обновить</span><span style="opacity:.7;cursor:pointer">✕</span>';
-      const sp=b.querySelectorAll('span'); sp[0].onclick=doReload; sp[1].onclick=()=>b.remove();
+    try{ const b=document.createElement('div'); b.id='updBanner';
+      b.style.cssText='position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:9999;background:#11306b;color:#fff;border:1px solid #2f7be6;border-radius:12px;padding:10px 14px;font-size:13px;box-shadow:0 6px 20px #000b;max-width:92%;display:flex;gap:10px;align-items:center';
+      const txt=document.createElement('span'); txt.textContent='🔄 Обновление ('+latest+')';
+      const go=document.createElement('button'); go.textContent='Обновить';
+      go.style.cssText='background:#2f7be6;color:#fff;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:14px;font-weight:700';
+      go.addEventListener('click',e=>{ e.preventDefault(); e.stopPropagation(); doReload(); });
+      const x=document.createElement('button'); x.textContent='✕';
+      x.style.cssText='background:transparent;color:#fff;border:none;cursor:pointer;opacity:.7;font-size:16px;padding:4px 6px';
+      x.addEventListener('click',e=>{ e.stopPropagation(); b.remove(); });
+      b.appendChild(txt); b.appendChild(go); b.appendChild(x);
       (document.body||document.documentElement).appendChild(b);
     }catch(e){} }
 }catch(e){} })();
@@ -1281,7 +1287,7 @@ async function tryRootFallback(q, seq){
 }
 async function runSearch(explicit){
   const strict=_strictSearch; _strictSearch=false;   // M173: захватываем флаг строгого режима на этот запуск
-  const seq=++_seq; groupSrc=false; uniqMode=false;   // каждый новый поиск — обычным списком (группировка/уникальные — опции рядом с результатом)
+  const seq=++_seq; groupSrc=false; uniqMode=false; relMode=false; _lastQueryTerms=[];   // новый поиск — сброс режимов вывода
   _arabusOn=false;   // M-fix: новый поиск → Arabus сброшен в ВЫКЛ (по умолчанию выключен)
   let q=document.getElementById('q').value.trim(); const shown=q;
   if(!q){ toast('Введите запрос'); return; }
@@ -1324,7 +1330,8 @@ async function runSearch(explicit){
       // для ПОИСКА берём СПЕЦИФИЧНЫЕ (многословные) фразы — чтобы не взрывать выдачу общими словами (النبي/رسول الله)
       const multi=merged.filter(p=>p.trim().indexOf(' ')!==-1);
       // выкидываем СЛИШКОМ ОБЩИЕ фразы (رسول الله/النبي/قال…) — иначе выдача взрывается (десятки тысяч)
-      const GEN=['رسول الله','النبي','رسول','الله','نبي','قال','عن','حدثنا','صلى الله عليه وسلم','عليه السلام','رضي الله عنه','عن النبي','عن رسول الله'].map(x=>canon(x));
+      const GEN=['رسول الله','النبي','رسول','الله','نبي','قال','عن','حدثنا','صلى الله عليه وسلم','عليه السلام','رضي الله عنه','عن النبي','عن رسول الله',
+        'ابن عباس','ابن عمر','ابي هريرة','أبي هريرة','ابو هريرة','أبو هريرة','ابن مسعود','عائشة','انس','أنس','انس بن مالك','جابر','ابن عمرو','عمر','ابي بكر','أبي بكر','علي','عثمان','حدثني','أخبرنا','سمعت','يقول'].map(x=>canon(x));
       const specific=multi.filter(p=>{ const c=canon(p); return GEN.indexOf(c)===-1 && c.replace(/\s/g,'').length>=6; });
       const useForQ=specific.length?specific:(multi.length?multi:merged);
       q=useForQ.map(p=> p.indexOf(' ')!==-1?('"'+p+'"'):p).join(' | '); }
@@ -1332,6 +1339,8 @@ async function runSearch(explicit){
   }
   let wideQ = shown;
   const groups=parseQuery(q); _groups=groups; if(!groups.length){ toast('Пустой запрос'); return; }
+  // M189: термины для оценки релевантности (слова запроса); ИИ-поиск → сразу по релевантности (лучшие вперёд)
+  try{ _lastQueryTerms=[...new Set(groups.flat().filter(x=>!x.neg).flatMap(x=>canon(x.t).split(/\s+/)).filter(w=>w.length>=3))]; if(aiPhrases) relMode=true; }catch(e){}
   try{ localStorage.setItem('muslimoon_state',JSON.stringify({tab,q:shown,cols:[...selCols]})); }catch(e){}
   const numMode=/^\d{1,7}$/.test(q);
   const rootMode = modes.root && !numMode;
@@ -1451,7 +1460,7 @@ async function runSearch(explicit){
     if(!count && !modes.ai && !numMode && !strict){ relaxA=await relaxArabicHadith(codes, groups, modes, seq, add); if(seq!==_seq) return; }
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
     if(relaxA && relaxA.dropped.length && count) relaxBanner(relaxA.dropped, relaxA.used);
-    if(count){ ensureGrpToggle(); ensureShareBtn(); ensureUniqToggle(); }
+    if(count){ if(relMode && count>2){ renderResultsView(); } else { ensureGrpToggle(); ensureShareBtn(); ensureUniqToggle(); ensureRelToggle(); } }
     if(!numMode) addLibMore();   // кнопка «искать ещё в большой библиотеке» (16 изданий + Мукбиль)
   } else {
     let relaxQ=null, corrQ=null;
@@ -1477,7 +1486,7 @@ async function runSearch(explicit){
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
     if(corrQ && corrQ.changed.length) autoCorrectBanner(shown, corrQ.corrected.join(' '));   // M173: «показаны результаты для X · искать как ввёл»
     if(relaxQ && relaxQ.dropped.length && count) relaxBanner(relaxQ.dropped, relaxQ.used);   // M172: честно показать что убрали
-    if(count){ ensureGrpToggle(); ensureShareBtn(); ensureUniqToggle(); }
+    if(count){ if(relMode && count>2){ renderResultsView(); } else { ensureGrpToggle(); ensureShareBtn(); ensureUniqToggle(); ensureRelToggle(); } }
   }
   setStatus('');
   logSearch(shown, tab, count);
@@ -1541,8 +1550,18 @@ async function showHadithRefs(refs, sr, shown, seq){
   return {shown:n,verified:verified};
 }
 /* M43: группировка результатов по источникам (сворачиваемо) */
-let groupSrc=false, uniqMode=false;   // M203: uniqMode — скрыть дубли матна (один и тот же хадис из разных книг)
+let groupSrc=false, uniqMode=false, relMode=false;   // M203 uniq · M189 relMode — сортировка по релевантности
+let _lastQueryTerms=[];   // термины запроса (для оценки релевантности)
 function srcKeyOf(d){ return d.type==='m'?'аль-Мухаймин':(d.type==='hr'?arOf(d.s):(d.type==='q'?('Сура '+d.v.s+(SURA_RU[d.v.s]?(' · '+SURA_RU[d.v.s]):'')):arOf(d.code))); }
+function _relScore(d){ if(!_lastQueryTerms.length) return 0; const t=canon(_matnText(d)); let s=0; for(const w of _lastQueryTerms){ if(w && t.indexOf(w)!==-1) s++; } return s; }
+function relToggleEl(){ const t=document.createElement('div'); t.id='relToggle';
+  t.style.cssText='display:inline-block;margin:2px 0 8px 8px;font-size:13px;color:var(--link);cursor:pointer;user-select:none;border:1px solid '+(relMode?'#2f7be6':'var(--border)')+';border-radius:12px;padding:3px 10px';
+  t.textContent=relMode?'🎯 По релевантности (вкл)':'🎯 По релевантности';
+  t.title='Сортировать: сначала самые подходящие (где больше слов запроса)';
+  t.onclick=()=>{ relMode=!relMode; renderResultsView(); }; return t; }
+function ensureRelToggle(){ const res=document.getElementById('res'); if(!res.firstChild||document.getElementById('relToggle')||!_results.length||!_lastQueryTerms.length) return;
+  const anchor=document.getElementById('uniqToggle')||document.getElementById('shareBtn')||document.getElementById('grpToggle');
+  if(anchor&&anchor.parentNode) anchor.parentNode.insertBefore(relToggleEl(), anchor.nextSibling); else res.insertBefore(relToggleEl(), res.children[1]||null); }
 function _matnText(d){ return d.type==='hr'?(d.ru||''):((d.h&&d.h.text)||(d.v&&d.v.text)||''); }
 function _matnKey(d){ const t=canon(_matnText(d)).replace(/\s+/g,' ').trim(); return t.split(' ').slice(0,12).join(' '); }   // первые 12 слов канона матна
 function dedupResults(arr){ const seen=new Set(), out=[]; let hid=0; arr.forEach(d=>{ const k=_matnKey(d); if(k && seen.has(k)){ hid++; return; } if(k) seen.add(k); out.push(d); }); return {list:out, hidden:hid}; }
@@ -1588,10 +1607,11 @@ function ensureShareBtn(){ const res=document.getElementById('res'); if(!res.fir
 function renderResultsView(){
   const res=document.getElementById('res'); _clearRenderQ(); res.innerHTML='';
   let list=_results, hid=0;
-  if(uniqMode){ const dd=dedupResults(_results); list=dd.list; hid=dd.hidden; }
-  const cnt='найдено: '+_results.length+(uniqMode?(' · уникальных '+list.length+(hid?(' · скрыто дублей '+hid):'')):'');
+  if(relMode && _lastQueryTerms.length){ list=_results.map((d,i)=>[d,_relScore(d),i]).sort((a,b)=>(b[1]-a[1])||(a[2]-b[2])).map(x=>x[0]); }
+  if(uniqMode){ const dd=dedupResults(list); list=dd.list; hid=dd.hidden; }
+  const cnt='найдено: '+_results.length+(relMode?' · по релевантности':'')+(uniqMode?(' · уникальных '+list.length+(hid?(' · скрыто дублей '+hid):'')):'');
   res.appendChild(info((groupSrc?('📚 По '+(tab==='quran'?'сурам':'источникам')+' · '):'')+cnt+((!groupSrc&&list.length>400)?' (первые 400)':'')));
-  res.appendChild(grpToggleEl()); res.appendChild(uniqToggleEl()); ensureShareBtn();
+  res.appendChild(grpToggleEl()); res.appendChild(uniqToggleEl()); res.appendChild(relToggleEl()); ensureShareBtn();
   if(!groupSrc){ list.slice(0,400).forEach(d=>res.appendChild(makeCard(d))); return; }
   // группируем по ВСЕМ результатам → видны ВСЕ сборники/суры (не только первые 400)
   const groups={}; const order=[];
