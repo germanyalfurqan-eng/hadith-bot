@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v144</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v145</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -457,7 +457,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v144';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v145';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2066,12 +2066,12 @@ function addTr(meta,card,text,ayah,fav){
   if(!ayah){
     if(isVocalized(text)){
       // огласовки РЕАЛЬНО есть (по доле) → простая бесплатная кнопка «убрать/вернуть» (без ИИ)
-      const sd=document.createElement('button');sd.className='tr-btn';sd.textContent='ـْ Убрать огласовки';sd.title='Показать без огласовок (бесплатно)';
+      const sd=document.createElement('button');sd.className='tr-btn';sd.textContent='اَ→ا Убрать огласовки';sd.title='Показать без огласовок (бесплатно)';
       sd.style.cssText='background:transparent;border:1px solid var(--border);color:var(--hint);padding:6px 11px';
       const arDivs=[...card.querySelectorAll('.ar')]; let stripped=false;
       sd.onclick=()=>{ stripped=!stripped;
         arDivs.forEach(ad=>{ if(stripped){ if(!ad.dataset.full) ad.dataset.full=ad.innerHTML; ad.innerHTML=hl(stripDiac(ad.textContent),_groups); } else if(ad.dataset.full!==undefined){ ad.innerHTML=ad.dataset.full; } });
-        sd.textContent=stripped?'ـَ Вернуть огласовки':'ـْ Убрать огласовки'; };
+        sd.textContent=stripped?'ا→اَ Вернуть огласовки':'اَ→ا Убрать огласовки'; };
       meta.appendChild(sd);
     } else {
       // огласовок НЕТ → заказ у ИИ (другой цвет = мозг, чтобы понятно что это трата)
@@ -2364,8 +2364,12 @@ async function doNarrators(text, out, btn){
   if(!btn.dataset.on){
     // 1-й клик — подсветить имена ПРЯМО в тексте иснада (клик по имени → биография)
     btn.dataset.on='1'; btn.style.background='rgba(108,92,231,.20)'; btn.textContent='👤 Список передатчиков';
-    arDivs.forEach(ad=>highlightNarratorsInDiv(ad, names, nm=>showNarratorBio(nm,out)));
+    arDivs.forEach(ad=>{ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML; highlightNarratorsInDiv(ad, names, nm=>showNarratorBio(nm,out)); });
     out.style.display='block'; out.innerHTML='<div class="hint" style="font-size:12px">👆 Передатчики в тексте <b style="color:#ffd479">подсвечены</b> — нажми на имя: кто это + слова учёных. Кнопка ещё раз — список именами.</div>';
+    const vb=document.createElement('button'); vb.className='tr-btn'; vb.textContent='🧠 Проверить полноту цепочки (ИИ)';
+    vb.style.cssText='background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:6px 10px;margin-top:7px;font-size:13px';
+    vb.title='ИИ перепроверит и дополнит выделение передатчиков (если эвристика кого-то пропустила)';
+    vb.onclick=()=>verifyIsnadAI(text, names, arDivs, out, vb); out.appendChild(vb);
   } else {
     // 2-й клик — список именами (тоже кликаются → биография)
     out.style.display='block';
@@ -2374,6 +2378,26 @@ async function doNarrators(text, out, btn){
     const box=document.createElement('div'); box.style.marginTop='8px'; out.appendChild(box);
     names.forEach(nm=>{ const c=document.createElement('span'); c.className='chip'; c.textContent=nm; c.style.cssText='cursor:pointer;font-size:14px'; c.onclick=()=>{ [...wrap.children].forEach(x=>x.classList.remove('on')); c.classList.add('on'); showNarratorBio(nm,box); }; wrap.appendChild(c); });
   }
+}
+// M201: ИИ перепроверяет/дополняет цепочку передатчиков (эвристика иногда пропускает)
+async function verifyIsnadAI(text, names, arDivs, out, btn){
+  if(!BACKEND_URL){ toast('Нужен сервер'); return; }
+  btn.disabled=true; const p=btn.textContent; btn.textContent='🧠 Проверяю цепочку…';
+  try{
+    const r=await fetch(BACKEND_URL+'/isnad_ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text, initData:INITDATA})});
+    const j=await r.json().catch(()=>({}));
+    if(r.status===403){ toast(j.message||'функция пока не открыта'); btn.disabled=false; btn.textContent=p; return; }
+    if(r.status===429){ toast('⏳ слишком часто — подожди'); btn.disabled=false; btn.textContent=p; return; }
+    const aiNames=(j.names||[]).filter(Boolean);
+    if(!aiNames.length){ toast('ИИ не нашёл дополнительных имён'); btn.disabled=false; btn.textContent=p; return; }
+    const merged=[...new Set([...(names||[]), ...aiNames])];
+    arDivs.forEach(ad=>{ if(ad.dataset.narrOrig!==undefined) ad.innerHTML=ad.dataset.narrOrig; highlightNarratorsInDiv(ad, merged, nm=>showNarratorBio(nm,out)); });
+    const added=aiNames.filter(n=>!(names||[]).includes(n)).length;
+    btn.textContent='✅ Проверено ИИ'+(j.cached?' ♻️':'')+(added?(' · +'+added):'');
+    const lst=document.createElement('div'); lst.style.cssText='margin-top:7px;font-size:12px;color:var(--hint);direction:rtl;text-align:right';
+    lst.innerHTML='<span style="direction:ltr;color:#c9b8ff">🧠 Цепочка по ИИ:</span> '+aiNames.map(esc).join(' ← ')+' <span style="opacity:.7;direction:ltr;display:inline-block">(разметка ИИ, возможны ошибки)</span>';
+    out.appendChild(lst);
+  }catch(e){ toast('🔧 сервис недоступен'); btn.disabled=false; btn.textContent=p; }
 }
 function hasDiac(t){ return /[ً-ْٰـ]/.test(t||''); }
 /* по-настоящему ли огласован текст (а не пара случайных значков): доля огласованных букв */
