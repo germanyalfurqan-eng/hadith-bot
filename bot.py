@@ -2255,6 +2255,12 @@ def tg_user_dict(update):
 
 # ---- Rate-limit (в памяти, на пользователя+функцию) ----
 _rl = collections.defaultdict(list)
+# ---- ЧАСОВОЙ лимит ИИ (контроль расхода ключа): аноним << app-юзер < whitelist < владелец(∞) ----
+AI_HOUR_ANON = 12      # анонимный (без Telegram-апп / ip) — намного меньше
+AI_HOUR_USER = 40      # обычный пользователь Telegram-приложения
+AI_HOUR_WL   = 100     # в белом списке (персональный лимит от разработчиков)
+HELP_CHAT_LINK = "https://t.me/jamaat_ru"
+_ai_limit_notif = {}   # uid -> время последнего уведомления владельцу (не спамить)
 def rate_ok(bucket, limit=20, window=60):
     now = time.time()
     q = _rl[bucket]
@@ -2780,6 +2786,28 @@ async def _api_serve(application=None):
              'message': 'Эта функция тебе пока не открыта. Попроси доступ у владельца.'}, status=403))
     def _ratelimited():
         return _cors(web.json_response({'error': 'rate', 'message': 'Слишком часто, подожди немного.'}, status=429))
+    async def _ai_quota(user, r):
+        # часовой лимит ИИ; None=можно, иначе вернуть 429 с сообщением. Владелец — без лимита.
+        if user and str(user.get('id')) == str(OWNER_ID):
+            return None
+        acc = load_access()
+        wl = _in_list(user, acc.get('all', {}).get('whitelist')) or _in_list(user, acc.get('neuro', {}).get('whitelist'))
+        known = bool(user and user.get('id'))
+        lim = AI_HOUR_WL if wl else (AI_HOUR_USER if known else AI_HOUR_ANON)
+        uid = _uid(user, r)
+        if rate_ok('aihour:' + uid, lim, 3600):
+            return None
+        now = time.time()
+        if now - _ai_limit_notif.get(uid, 0) > 1800:
+            _ai_limit_notif[uid] = now
+            who = ('@' + user['username']) if (user and user.get('username')) else uid
+            tier = 'whitelist' if wl else ('app-юзер' if known else 'аноним')
+            try: await _notify(f"⏰ #лимитии ЛИМИТ ИИ исчерпан: {who} ({tier} · {lim}/час). Для статистики/решения о персональном лимите. Разбан/лимит: правь whitelist «neuro».")
+            except Exception: pass
+        msg = ('⏳ Лимит ИИ-запросов на этот час исчерпан'
+               + ((' — у анонимных запросов лимит НАМНОГО меньше, чем через Telegram-приложение. Откройте приложение для большего лимита.') if not known else '.')
+               + '\nРазработчики могут выдать вам ПЕРСОНАЛЬНЫЙ лимит — напишите в чат: ' + HELP_CHAT_LINK)
+        return _cors(web.json_response({'error': 'ai_quota', 'message': msg}, status=429))
     async def _body(r):
         try:
             raw = await r.read()
@@ -2822,6 +2850,8 @@ async def _api_serve(application=None):
             return _deny('neuro')
         if not rate_ok('neuro:' + _uid(user, r), 10, 60):   # защита нейронки: жёстче (10/60), чтобы не жечь ключ
             return _ratelimited()
+        _q = await _ai_quota(user, r)
+        if _q: return _q
         try:
             meaning = (d.get('meaning') or '').strip()[:500]
             if len(meaning) < 2:   # пустой/слишком короткий запрос — не зовём ИИ и НЕ кэшируем (фикс мусора «hadith|»)
@@ -2896,6 +2926,8 @@ async def _api_serve(application=None):
             return _deny('neuro')
         if not rate_ok('booksearch:' + _uid(user, r), 12, 60):
             return _ratelimited()
+        _q = await _ai_quota(user, r)
+        if _q: return _q
         try:
             q = (d.get('q') or '').strip()[:300]
             if len(q) < 2:
@@ -2952,6 +2984,8 @@ async def _api_serve(application=None):
             return _deny('neuro')
         if not rate_ok('booktrans:' + _uid(user, r), 20, 60):
             return _ratelimited()
+        _q = await _ai_quota(user, r)
+        if _q: return _q
         try:
             titles = d.get('titles') or []
             titles = [str(t).strip()[:200] for t in titles if str(t).strip()][:40]
@@ -2998,6 +3032,8 @@ async def _api_serve(application=None):
             return _deny('neuro')
         if not rate_ok('bookinfo:' + _uid(user, r), 15, 60):
             return _ratelimited()
+        _q = await _ai_quota(user, r)
+        if _q: return _q
         try:
             title = (d.get('title') or '').strip()[:200]
             author = (d.get('author') or '').strip()[:120]
@@ -3051,6 +3087,8 @@ async def _api_serve(application=None):
             return _deny('neuro')
         if not rate_ok('structure:' + _uid(user, r), 8, 60):
             return _ratelimited()
+        _q = await _ai_quota(user, r)
+        if _q: return _q
         try:
             q = (d.get('q') or '').strip()[:200]
             items = d.get('items') or []
@@ -3078,6 +3116,8 @@ async def _api_serve(application=None):
             return _deny('neuro')
         if not rate_ok('narr_rijal:' + _uid(user, r), 12, 60):
             return _ratelimited()
+        _q = await _ai_quota(user, r)
+        if _q: return _q
         try:
             name = (d.get('name') or '').strip()[:160]
             if len(name) < 2:
@@ -3203,6 +3243,8 @@ async def _api_serve(application=None):
             return _deny('neuro')
         if not rate_ok('authorinfo:' + _uid(user, r), 15, 60):
             return _ratelimited()
+        _q = await _ai_quota(user, r)
+        if _q: return _q
         try:
             author = (d.get('author') or '').strip()[:160]
             if not author:
@@ -3247,6 +3289,8 @@ async def _api_serve(application=None):
             return _deny('neuro')
         if not rate_ok('wordai:' + _uid(user, r), 15, 60):
             return _ratelimited()
+        _q = await _ai_quota(user, r)
+        if _q: return _q
         try:
             word = (d.get('word') or '').strip()[:60]
             ctx = (d.get('ctx') or '').strip()[:300]
@@ -3305,6 +3349,8 @@ async def _api_serve(application=None):
             return _deny('neuro')
         if not rate_ok('isnadai:' + _uid(user, r), 12, 60):
             return _ratelimited()
+        _q = await _ai_quota(user, r)
+        if _q: return _q
         text = (d.get('text') or '')[:3000]
         if len(text) < 5:
             return _cors(web.json_response({'names': []}))
@@ -3370,6 +3416,8 @@ async def _api_serve(application=None):
             return _deny('neuro')
         if not rate_ok('explain:' + _uid(user, r), 8, 60):
             return _ratelimited()
+        _q = await _ai_quota(user, r)
+        if _q: return _q
         try:
             text = (d.get('text') or '')[:6000]
             source = re.sub(r'[^a-z0-9_]+', '', (d.get('source') or '').lower())[:40] or 'x'
@@ -3410,6 +3458,8 @@ async def _api_serve(application=None):
             return _deny('translate')
         if not rate_ok('translate:' + _uid(user, r)):
             return _ratelimited()
+        _q = await _ai_quota(user, r)
+        if _q: return _q
         try:
             text = (d.get('text') or '')[:12000]   # длинные хадисы (напр. №1671 ~8000 симв., 2 риваята) — не резать на входе
             source = re.sub(r'[^a-z0-9_]+', '', (d.get('source') or '').lower())[:40]
@@ -3509,6 +3559,8 @@ async def _api_serve(application=None):
             return _deny('neuro')
         if not rate_ok('tashkeel:' + _uid(user, r)):
             return _ratelimited()
+        _q = await _ai_quota(user, r)
+        if _q: return _q
         text = (d.get('text') or '')[:2000]
         source = re.sub(r'[^a-z0-9_]+', '', (d.get('source') or '').lower())[:40]
         num = d.get('num')
