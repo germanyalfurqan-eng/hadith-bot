@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v166</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v167</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -181,8 +181,9 @@
     </div>
   </div>
 
-  <div class="searchbar">
+  <div class="searchbar" style="position:relative">
     <input type="text" id="q" placeholder="Слова, фраза или № хадиса…" autocomplete="off" enterkeyhint="search">
+    <button id="qClear" title="Очистить поиск" style="display:none;position:absolute;right:94px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--hint);font-size:20px;cursor:pointer;padding:4px 8px;z-index:3">✕</button>
     <button class="go" id="goBtn" title="Искать по запросу">Найти</button>
   </div>
   <div id="quranReadRow" style="display:none;margin:4px 0 8px"><button id="quranReadBtn" style="background:#10331f;border:1px solid #2e9b5b;color:#bff5d4;padding:8px 16px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;width:100%">📖 Читать Коран (сура целиком · аудио · перевод)</button></div>
@@ -473,7 +474,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v166';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v167';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -554,6 +555,7 @@ const SURA_RU=[,'аль-Фатиха','аль-Бакара','Аль Имран',
 const tg = window.Telegram && window.Telegram.WebApp;
 let USER=null;
 if (tg){ try{ tg.ready(); tg.expand();
+  try{ tg.disableVerticalSwipes && tg.disableVerticalSwipes(); }catch(e){}   // M258: чтобы выделение текста не «тянуло» приложение к сворачиванию
   USER = tg.initDataUnsafe && tg.initDataUnsafe.user;
   const p=tg.themeParams||{};
 }catch(e){} }
@@ -3269,6 +3271,11 @@ let toastT; function toast(t){const el=document.getElementById('toast');el.textC
 
 /* ===================== СТАРТ ===================== */
 document.getElementById('goBtn').onclick=()=>runSearch(true);
+// M254: кнопка очистки поиска ✕
+(function(){ var qc=document.getElementById('qClear'), qi=document.getElementById('q'); if(!qc||!qi) return;
+  var upd=()=>{ qc.style.display=qi.value?'block':'none'; }; qi.addEventListener('input',upd); upd();
+  qc.onclick=()=>{ qi.value=''; upd(); var r=document.getElementById('res'); if(r) r.innerHTML=''; try{setStatus('');}catch(e){}
+    var tl=document.getElementById('tlSugg'); if(tl){tl.style.display='none';tl.innerHTML='';} var qh=document.getElementById('qHelper'); if(qh) qh.style.display='none'; qi.focus(); }; })();
 (function(){ let t; const el=document.getElementById('q');
   el.addEventListener('keydown',e=>{ if(e.key==='Enter'){ clearTimeout(t); runSearch(true); } });
   el.addEventListener('input',()=>{ clearTimeout(t); const v=el.value.trim();
