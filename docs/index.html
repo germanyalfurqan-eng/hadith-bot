@@ -153,7 +153,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v198</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v199</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -487,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v198';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v199';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2197,11 +2197,13 @@ function _catFavSave(a){ try{ localStorage.setItem('cat_favs', JSON.stringify([.
 function _catFavToggle(id){ id=String(id); let a=_catFavs(); if(a.indexOf(id)!==-1){ a=a.filter(x=>x!==id); } else { a.push(id); } _catFavSave(a); return a.indexOf(id)!==-1; }
 let _firstSrc=null;   // 40 первоисточников (загружается)
 async function loadFirstSrc(){ if(_firstSrc) return _firstSrc; try{ const j=await (await fetch('./hadith/first_sources.json?'+Date.now())).json(); _firstSrc=j.sources||[]; }catch(e){ _firstSrc=[]; } return _firstSrc; }
-// найти лучшую книгу каталога под первоисточник (по токенам автора + названия)
-function _matchSource(cat, src){ const ak=canon(src.author_key), tk=canon(src.title_key);
+// найти лучшую книгу каталога под первоисточник (по токенам автора + названия; артикль ال не важен)
+function _dial(s){ return canon(s||'').split(/\s+/).map(w=>w.replace(/^ال/,'')).join(' ').trim(); }  // снять артикль ال у каждого токена
+function _matchSource(cat, src){ const ak=_dial(src.author_key), tk=_dial(src.title_key);
+  const tkw=tk.split(' ').filter(w=>w.length>=3);
   let best=null, bestScore=-1;
-  for(const b of cat){ const au=canon(b.a||''), nm=canon(b.n||''); if(au.indexOf(ak)===-1) continue;
-    let sc=0; if(nm.indexOf(tk)!==-1) sc+=3; tk.split(' ').forEach(w=>{ if(w.length>=3&&nm.indexOf(w)!==-1) sc++; });
+  for(const b of cat){ const au=_dial(b.a||''), nm=_dial(b.n||''); if(ak && au.indexOf(ak)===-1) continue;
+    let sc=0; if(tk && nm.indexOf(tk)!==-1) sc+=4; tkw.forEach(w=>{ if(nm.indexOf(w)!==-1) sc++; });
     if(sc>bestScore){ bestScore=sc; best=b; } }
   return bestScore>=1?best:null; }
 // описание книги (ИИ) + ссылки на Википедию (накопление на сервере)
@@ -2389,8 +2391,8 @@ async function openCatalog(){
     const cats=[...new Set(cat.map(b=>b.c).filter(Boolean))].sort((a,b)=>{ const ia=(_CAT_IDX[a]?_CAT_IDX[a].ord:999), ib=(_CAT_IDX[b]?_CAT_IDX[b].ord:999); if(ia===ib) return a.localeCompare(b); return ia-ib; });
     m.innerHTML='<div class="panel" style="max-width:640px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 12px;padding:14px 16px 11px;border-bottom:1px solid var(--border)"><b id="catTitle" style="font-size:14px;line-height:1.3">📚 Мактаба аш-Шамиля<br><span style="font-size:11px;color:var(--hint);font-weight:400">المكتبة الشاملة · '+cat.length+' книг</span></b><button class="mini" id="catClose" style="flex:none">закрыть ✕</button></div>'
      +'<input id="catSearch" placeholder="🔎 Введите название книги или автора…" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:2px solid var(--btn);border-radius:10px;padding:10px 12px;font-size:15px;margin-bottom:7px">'
-     +'<select id="catCat" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 9px;font-size:15px;margin-bottom:8px"><option value="__first40__">📜 40 первоисточников хадисов</option><option value="__fav__">⭐ Моё избранное</option><option value="">— все разделы —</option>'+cats.map(c=>'<option value="'+esc(c)+'">'+esc(catLabel(c))+'</option>').join('')+'</select>'
-     +'<div style="display:flex;gap:6px;margin-bottom:6px"><button class="mini" id="catAi" style="flex:1;background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:9px 11px;font-size:14px">🧠 Умный поиск книги (ИИ)</button></div>'
+     +'<select id="catCat" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 9px;font-size:15px;margin-bottom:8px"><option value="__first40__">📜 Первоисточники хадисов</option><option value="__fav__">⭐ Моё избранное</option><option value="">— все разделы —</option>'+cats.map(c=>'<option value="'+esc(c)+'">'+esc(catLabel(c))+'</option>').join('')+'</select>'
+     +'<div style="display:flex;gap:6px;margin-bottom:6px"><button class="mini" id="catAi" style="flex:1.6;background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:9px 11px;font-size:14px">🧠 Умный поиск книги (ИИ)</button><button class="mini" id="catFavBtn" style="flex:1;border:1px solid #a8862e;color:#ffd75e;background:transparent;padding:9px 11px;font-size:14px">⭐ Избранное</button></div>'
      +'<div class="hint" id="catAiHint" style="font-size:11px;color:var(--hint);margin:-2px 0 8px">Опиши своими словами: «ибн каим», «альбани», «недуги сердца ибн каим» — ИИ найдёт. По умолчанию ниже — первоисточники хадисов.</div>'
      +'<div id="catList" style="max-height:50vh;overflow:auto"></div></div>';
     document.body.appendChild(m);
@@ -2445,7 +2447,7 @@ async function openCatalog(){
       if(qc==='__fav__'){ const fv=_catFavs(); arr=cat.filter(b=>fv.indexOf(String(b.i))!==-1); headPrefix='⭐ Избранное · '; }
       else if(qc==='__first40__'){ const src=await loadFirstSrc(); const seen={}; const list40=[];
         src.forEach(s=>{ const b=_matchSource(cat,s); if(b && !seen[b.i]){ seen[b.i]=1; b.__srcRu=s.ru; list40.push(b); } });
-        arr=list40; headPrefix='📜 40 первоисточников · '; }
+        arr=list40; headPrefix='📜 Первоисточники · '; }
       else if(qc){ arr=arr.filter(b=>b.c===qc); }
       if(ql){ const cq=canon(ql);
         arr=arr.filter(b=>((b.n||'').toLowerCase().indexOf(ql)!==-1)||((b.a||'').toLowerCase().indexOf(ql)!==-1)||canon(b.n||'').indexOf(cq)!==-1||canon(b.a||'').indexOf(cq)!==-1);
@@ -2469,6 +2471,7 @@ async function openCatalog(){
       else render(); }
     let _ct; m.querySelector('#catSearch').addEventListener('input',()=>{ clearTimeout(_ct); _ct=setTimeout(_onCatInput,250); });
     m.querySelector('#catCat').addEventListener('change',render);
+    const _cfb=m.querySelector('#catFavBtn'); if(_cfb) _cfb.onclick=()=>{ m.querySelector('#catSearch').value=''; m.querySelector('#catCat').value='__fav__'; render(); };
     // умный ИИ-поиск книги/автора своими словами
     m.querySelector('#catAi').onclick=async()=>{ const inp=m.querySelector('#catSearch'); const q=(inp.value||'').trim();
       if(q.length<2){ inp.focus(); toast('Напиши своими словами: «ибн каим», «альбани сильсиля»…'); return; }
