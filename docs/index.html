@@ -153,7 +153,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v202</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v203</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -487,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v202';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v203';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2684,7 +2684,8 @@ async function _qrLoad(){
   if(s!==1 && s!==9){ const bh=document.createElement('div'); bh.style.cssText='text-align:center;font-size:21px;'+_AF+';color:var(--mark);padding:8px 0 10px;border-bottom:1px solid var(--border);margin-bottom:6px;direction:rtl'; bh.textContent='بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ'; body.appendChild(bh); }
   ayahs.forEach(v=>{ const blk=document.createElement('div'); blk.id='qr-'+v.a;
     blk.style.cssText='border-bottom:1px solid var(--border);padding:9px 4px'+(v.a===_qrView.a?';background:rgba(74,222,128,.10);border-radius:8px':'');
-    const _vtext=(v.a===1 && s!==1 && s!==9)?_stripBasmala(v.text):v.text;   // у аята 1 убрать приклеенную басмалу
+    let _vtext=(v.a===1 && s!==1 && s!==9)?_stripBasmala(v.text):v.text;   // у аята 1 убрать приклеенную басмалу
+    if(cfg.qrNoDiac) _vtext=stripDiac(_vtext);   // убрать огласовки (настройка чтения)
     const ar=document.createElement('div'); ar.className='ar'; ar.style.cssText='direction:rtl;text-align:right;font-size:19px;line-height:2';
     // #11: слова-кнопки как в результатах поиска — тап по слову → корень/места в Коране/Arabus/перевод
     if(cfg.wordTap!==false){ try{ loadRoots(); }catch(e){} ar.innerHTML=qWordsHTML(_vtext,[],null)+' <span style="color:var(--mark);font-size:15px">۝'+toAr(v.a)+'</span>';
@@ -2719,28 +2720,33 @@ async function _qrLoad(){
   for(let i=1;i<=114;i++){ const o=document.createElement('option'); o.value=i; o.textContent=i+'. '+(SURA_NAMES[i-1]||''); if(i===s) o.selected=true; ss.appendChild(o); }
   ss.onchange=()=>{ _qrView={s:+ss.value,a:0}; _qrLoad(); };
   nav.appendChild(ss);
-  // 📕 Arabus тумблер для всей суры (тап по слову → корень/значения)
-  const ab=document.createElement('button'); ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus';
-  ab.style.cssText='border:1px solid #1e7d5a;border-radius:10px;padding:9px 14px;font-size:14px;cursor:pointer;margin:0 4px;color:#7fe3bf;background:'+(_arabusOn?'#173d30':'transparent');
-  ab.onclick=()=>{ _arabusOn=!_arabusOn; try{ loadRoots(); if(_arabusOn) loadArabusLocal(); }catch(e){} ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus'; ab.style.background=_arabusOn?'#173d30':'transparent'; body.querySelectorAll('.ar').forEach(a=>a.style.cursor=_arabusOn?'pointer':'default'); toast(_arabusOn?'📕 Arabus ВКЛ — тапай слово в аяте':'Arabus выкл'); };
-  nav.appendChild(ab);
-  // выбор чтеца (everyayah)
+  // ⚙️ Настройки чтения — одна кнопка, разгружает экран (чтец · по словам · огласовки · Arabus · таджвид)
+  const cog=document.createElement('button'); cog.className='mini'; cog.textContent='⚙️ Настройки чтения'; cog.style.cssText='border:1px solid var(--border);color:var(--text);padding:9px 14px;border-radius:10px;font-size:14px;cursor:pointer;margin:0 4px';
+  const sp=document.createElement('div'); sp.id='qrReadSet'; sp.style.cssText='display:none;width:100%;margin-top:8px;border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--bg)';
+  cog.onclick=()=>{ sp.style.display=sp.style.display==='none'?'block':'none'; };
+  // чтец
   const RECITERS=[['Hudhaify_128kbps','Али аль-Худайфи'],['Alafasy_128kbps','Мишари аль-Афаси'],['Husary_128kbps','Махмуд аль-Хусари'],['Abdul_Basit_Murattal_192kbps','Абдуль-Басит'],['Minshawi_Murattal_128kbps','аль-Миншави'],['Saood_ash-Shuraym_128kbps','Сауд аш-Шурайм'],['Ghamadi_40kbps','аль-Гамиди']];
-  const rs=document.createElement('select'); rs.style.cssText='background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px;font-size:13px;margin:0 4px';
-  RECITERS.forEach(rc=>{ const o=document.createElement('option'); o.value=rc[0]; o.textContent='🔊 '+rc[1]; if((cfg.reciter||'Hudhaify_128kbps')===rc[0]) o.selected=true; rs.appendChild(o); });
-  rs.onchange=()=>{ cfg.reciter=rs.value; saveCfg(cfg); toast('Чтец: '+rs.options[rs.selectedIndex].textContent.replace('🔊 ',''));
-    // сразу переключить чтеца на ТЕКУЩЕМ аяте (а не со следующего нажатия)
+  const WORDREC={Alafasy_128kbps:1,Husary_128kbps:1,Abdul_Basit_Murattal_192kbps:1,Minshawi_Murattal_128kbps:1,'Saood_ash-Shuraym_128kbps':1};
+  const rrow=document.createElement('div'); rrow.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:9px;flex-wrap:wrap'; rrow.innerHTML='<span style="font-size:13px;color:var(--hint)">🔊 Чтец:</span>';
+  const rs=document.createElement('select'); rs.style.cssText='flex:1;min-width:160px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px;font-size:14px';
+  RECITERS.forEach(rc=>{ const o=document.createElement('option'); o.value=rc[0]; o.textContent='🔊 '+rc[1]+(WORDREC[rc[0]]?' · ✨подсветка':''); if((cfg.reciter||'Hudhaify_128kbps')===rc[0]) o.selected=true; rs.appendChild(o); });
+  rs.onchange=()=>{ cfg.reciter=rs.value; saveCfg(cfg); toast('Чтец: '+rs.options[rs.selectedIndex].textContent.replace('🔊 ','').split(' · ')[0]);
     try{ const now=window._qrNow;
       if(now && now.mode==='word' && window._qrWordAudio){ _qrWordStop(); _qrWordPlay(now.s, now.a); }
       else if(now && window._qrAudio && !window._qrAudio.paused){ const ws=now.s, wa=now.a; try{window._qrAudio.onended=null;window._qrAudio.pause();}catch(e){} _qrPlay(ws, wa); }
     }catch(e){} };
-  nav.appendChild(rs);
-  // #13: интерактивное чтение с пословной подсветкой (quran.com тайминги) — НЕ называем «караоке»
-  const wb=document.createElement('button'); wb.className='mini'; wb.textContent='✨ Читать по словам';
-  wb.title='Интерактивное чтение: слово подсвечивается по мере чтения. Доступно для части чтецов (для остальных — обычное чтение по аятам).';
-  wb.style.cssText='border:1px solid #3a5b9b;color:#bcd2ff;background:#1d2b4a;padding:9px 14px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;margin:0 4px';
-  wb.onclick=()=>_qrWordPlay(s, _qrView.a||1);
-  nav.appendChild(wb);
+  rrow.appendChild(rs); sp.appendChild(rrow);
+  // ✨ читать по словам
+  const wb=document.createElement('button'); wb.className='mini'; wb.textContent='✨ Читать по словам (подсветка)'; wb.style.cssText='width:100%;border:1px solid #3a5b9b;color:#bcd2ff;background:#1d2b4a;padding:9px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:9px';
+  wb.onclick=()=>{ sp.style.display='none'; _qrWordPlay(s, _qrView.a||1); }; sp.appendChild(wb);
+  // тумблеры: убрать огласовки · Arabus · таджвид(скоро)
+  const tg2=(label,on,fn)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=(on?'✓ ':'')+label; b.style.cssText='border:1px solid '+(on?'#2e9b5b':'var(--border)')+';color:'+(on?'#bff5d4':'var(--text)')+';background:'+(on?'#173d30':'transparent')+';padding:8px 11px;font-size:13px;margin:0 6px 0 0'; b.onclick=()=>fn(b); return b; };
+  const trow=document.createElement('div'); trow.style.cssText='display:flex;flex-wrap:wrap;gap:6px;align-items:center';
+  trow.appendChild(tg2('◌ Без огласовок', !!cfg.qrNoDiac, (b)=>{ cfg.qrNoDiac=!cfg.qrNoDiac; saveCfg(cfg); _qrLoad(); }));
+  trow.appendChild(tg2('📕 Arabus (тап слова)', _arabusOn, (b)=>{ _arabusOn=!_arabusOn; try{ loadRoots(); if(_arabusOn) loadArabusLocal(); }catch(e){} body.querySelectorAll('.ar').forEach(a=>a.style.cursor=_arabusOn?'pointer':'default'); b.textContent=(_arabusOn?'✓ ':'')+'📕 Arabus (тап слова)'; b.style.background=_arabusOn?'#173d30':'transparent'; b.style.color=_arabusOn?'#bff5d4':'var(--text)'; b.style.borderColor=_arabusOn?'#2e9b5b':'var(--border)'; toast(_arabusOn?'📕 Arabus ВКЛ — тапай слово':'Arabus выкл'); }));
+  const tj=document.createElement('span'); tj.style.cssText='font-size:13px;color:var(--hint);opacity:.7;padding:8px 6px'; tj.textContent='🎨 Таджвид (цветной) — скоро'; trow.appendChild(tj);
+  sp.appendChild(trow);
+  nav.appendChild(cog); nav.appendChild(sp);
   if(_qrView.a){ const tgt=body.querySelector('#qr-'+_qrView.a); if(tgt) setTimeout(()=>{ try{ tgt.scrollIntoView({block:'center'}); }catch(e){} },60); } else { body.scrollTop=0; }
   try{ applyFontScale(); }catch(e){}
 }
