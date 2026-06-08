@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v176</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v177</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="homeBtn" style="display:block" title="🏠 На главную — сброс поиска">🏠</div>
@@ -191,6 +191,7 @@
   <div id="quranReadRow" style="display:none;margin:4px 0 8px;gap:8px">
     <button id="quranReadBtn" style="background:#10331f;border:1px solid #2e9b5b;color:#bff5d4;padding:8px 14px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;flex:1">📖 Читать Коран</button>
     <button id="quranRandBtn" title="Слушать Коран со случайного аята → дальше подряд" style="background:#1d2b4a;border:1px solid #3a5b9b;color:#bcd2ff;padding:8px 14px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;flex:none">🔀 Слушать со случайного</button>
+    <button id="quranRootBtn" title="Найти все слова Корана от одного корня (напр. نصر → все производные)" style="background:#2e1d4a;border:1px solid #6c5ce7;color:#d9ccff;padding:8px 14px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;flex:none">🌳 Поиск по корню</button>
   </div>
   <div id="hadithReadRow" style="display:none;margin:4px 0 8px;gap:8px">
     <button id="hadithReadBtn" title="Поиск по автору/названию → читать любую книгу" style="background:#11261f;border:1px solid #2e7d5a;color:#bff5d4;padding:8px 12px;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;flex:1">📚 Мактаба аш-Шамиля (8589 книг)</button>
@@ -485,7 +486,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v176';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v177';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1289,7 +1290,7 @@ async function openRootBrowser(){
      +'<div style="font-size:13px;color:var(--hint);margin-bottom:6px">Нажимай буквы корня — внизу появятся подходящие корни. Нажми корень → все аяты с ним.</div>'
      +'<div id="rootCur" style="text-align:center;font-size:26px;'+_AF+';min-height:34px;color:var(--mark);direction:rtl"></div>'
      +'<div id="rootLetters" style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;direction:rtl;margin:6px 0"></div>'
-     +'<div style="display:flex;gap:8px;justify-content:center;margin-bottom:8px"><button class="mini" id="rootBack">⌫ стереть</button><button class="mini" id="rootClear">очистить</button></div>'
+     +'<div style="display:flex;gap:8px;justify-content:center;margin-bottom:8px;flex-wrap:wrap"><button class="mini" id="rootBack">⌫ стереть</button><button class="mini" id="rootClear">очистить</button><button class="mini" id="rootDemo" style="border:1px solid #6c5ce7;color:#d9ccff">▶ пример (نصر)</button></div>'
      +'<div id="rootList" style="display:flex;flex-wrap:wrap;gap:6px;direction:rtl;max-height:42vh;overflow:auto"></div></div>';
     document.body.appendChild(m);
     m.querySelector('#rootClose').onclick=()=>m.style.display='none';
@@ -1313,7 +1314,11 @@ async function openRootBrowser(){
     b.onclick=()=>{ if(cur.length<5) cur+=L; refresh(); }; lettersEl.appendChild(b); });
   m.querySelector('#rootBack').onclick=()=>{ cur=cur.slice(0,-1); refresh(); };
   m.querySelector('#rootClear').onclick=()=>{ cur=''; refresh(); };
+  curEl.style.transition='transform .18s';
+  async function demo(){ cur=''; refresh(); for(const L of ['ن','ص','ر']){ await new Promise(r=>setTimeout(r,460)); cur+=L; refresh(); curEl.style.transform='scale(1.2)'; setTimeout(()=>{curEl.style.transform='';},190); } try{ toast('💡 Так набираешь корень буква за буквой → жми нужный корень → все аяты'); }catch(e){} }
+  m.querySelector('#rootDemo').onclick=demo;
   refresh();
+  try{ if(!localStorage.getItem('demo_root')){ localStorage.setItem('demo_root','1'); setTimeout(demo,500); } }catch(e){}
 }
 // M224: аяты по ТЕМЕ через ИИ (для понятия типа «бида»: нововведение/искажение религии — неважно корень)
 async function thematicAyat(q){
@@ -3393,6 +3398,14 @@ function goHome(){ document.getElementById('q').value=''; selCols.clear(); selEx
   document.getElementById('res').innerHTML=''; setStatus(''); try{localStorage.removeItem('muslimoon_state');}catch(e){} document.querySelector('.tab[data-tab="hadith"]').click(); renderCols(); updateExtraSel(); var _qh=document.getElementById('qHelper'); if(_qh)_qh.style.display='none'; var _qs=document.getElementById('qSugg'); if(_qs)_qs.style.display='none'; var _tl=document.getElementById('tlSugg'); if(_tl){_tl.style.display='none';_tl.innerHTML='';} try{window.scrollTo(0,0);}catch(e){} }
 document.getElementById('brand').onclick=goHome;
 var _hb=document.getElementById('homeBtn'); if(_hb) _hb.onclick=goHome;
+// M254/#11: нативная кнопка «Назад» Telegram — закрывает верхнюю открытую модалку (читалка/настройки/каталог…)
+function _visModals(){ return [...document.querySelectorAll('.modal')].filter(m=>{ const d=m.style.display; return d && d!=='none'; }); }
+function _closeTopModal(){ const ms=_visModals(); if(!ms.length) return false; const m=ms[ms.length-1];
+  const c=m.querySelector('[id$="Close"]'); if(c){ try{ c.click(); return true; }catch(e){} } m.style.display='none'; return true; }
+function _syncBack(){ try{ if(!tg||!tg.BackButton) return; if(_visModals().length) tg.BackButton.show(); else tg.BackButton.hide(); }catch(e){} }
+if(tg && tg.BackButton){ try{ tg.BackButton.onClick(()=>{ if(!_closeTopModal()){ try{goHome();}catch(e){} } setTimeout(_syncBack,60); }); }catch(e){}
+  document.addEventListener('click',()=>setTimeout(_syncBack,90),true);
+  setInterval(_syncBack, 600); }
 // M-flood #26+#28: плавающая панель справа — размер текста (A+/A−) и «вверх»
 function applyFontScale(){ try{ const z=(cfg.fontScale||1); ['res','qrBody','bookText'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.zoom=z; }); document.querySelectorAll('.tr-out').forEach(el=>el.style.zoom=z); const lbl=document.getElementById('fsLbl'); if(lbl) lbl.textContent=Math.round(z*100)+'%'; }catch(e){} }
 (function(){ const wrap=document.createElement('div'); wrap.id='floatTools';
@@ -3427,6 +3440,7 @@ var _cbr=document.getElementById('catBrowBtn'); if(_cbr) _cbr.onclick=()=>{ docu
 var _qro=document.getElementById('qrOpenBtn'); if(_qro) _qro.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openQuranReader(_qrView.s||1, 0); };
 var _qrb=document.getElementById('quranReadBtn'); if(_qrb) _qrb.onclick=()=>openQuranReader(_qrView.s||1, 0);
 var _qrn=document.getElementById('quranRandBtn'); if(_qrn) _qrn.onclick=_qrRandom;
+var _qroot=document.getElementById('quranRootBtn'); if(_qroot) _qroot.onclick=()=>openRootBrowser();   // #2: поиск по корню заметной кнопкой в Аятах
 var _hrb=document.getElementById('hadithReadBtn'); if(_hrb) _hrb.onclick=()=>openCatalog();
 var _hro=document.getElementById('hadithReadOurBtn'); if(_hro) _hro.onclick=()=>{ try{ openReader(); }catch(e){} };
 var _rcb=document.getElementById('recentBtn'); if(_rcb) _rcb.onclick=()=>{ var b=document.getElementById('recentBox'); if(b&&b.style.display==='block'){ hideRecent(); } else { showRecent(true); } };   // M256: 🕐 переключает недавние
