@@ -2977,6 +2977,44 @@ async def _api_serve(application=None):
         except Exception as e:
             return _cors(web.json_response({'error': str(e)}))
 
+    async def qaudio(r):
+        # Прокси quran.com (qurancdn): пословные тайминги суры для интерактивной подсветки чтения.
+        # Возвращает {audio_url, timings:[{a, from, to, segs:[[word,startMs,endMs]...]}]}. Кэш в памяти процесса.
+        user = verify_init_data(r.query.get('initData'))
+        if not feature_allowed('app', user):
+            return _deny('app')
+        try:
+            rec = re.sub(r'[^0-9]', '', r.query.get('reciter') or '7') or '7'
+            ch = re.sub(r'[^0-9]', '', r.query.get('chapter') or '')
+            if not ch or not (1 <= int(ch) <= 114):
+                return _cors(web.json_response({'error': 'bad chapter'}))
+            ck = rec + '_' + ch
+            global _QAUDIO_CACHE
+            try: _QAUDIO_CACHE
+            except NameError: _QAUDIO_CACHE = {}
+            if ck in _QAUDIO_CACHE:
+                return _cors(web.json_response(_QAUDIO_CACHE[ck]))
+            url = f"https://api.qurancdn.com/api/qdc/audio/reciters/{rec}/audio_files?chapter={ch}&segments=true"
+            def _fetch():
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'})
+                return json.loads(urllib.request.urlopen(req, timeout=25).read().decode('utf-8'))
+            d = await loop.run_in_executor(None, _fetch)
+            af = (d.get('audio_files') or [{}])[0]
+            timings = []
+            for v in (af.get('verse_timings') or []):
+                vk = v.get('verse_key') or ''
+                a = vk.split(':')[1] if ':' in vk else ''
+                timings.append({'a': int(a) if a.isdigit() else 0,
+                                'from': v.get('timestamp_from') or 0,
+                                'to': v.get('timestamp_to') or 0,
+                                'segs': v.get('segments') or []})
+            out = {'audio_url': af.get('audio_url') or '', 'timings': timings}
+            if out['audio_url'] and timings:
+                _QAUDIO_CACHE[ck] = out
+            return _cors(web.json_response(out))
+        except Exception as e:
+            return _cors(web.json_response({'error': str(e)}))
+
     async def authorinfo(r):
         # Биография автора (ИИ) + Википедия. Накопление data/bookinfo.json под ключом «author|<имя>».
         d = await _body(r)
@@ -3442,7 +3480,7 @@ async def _api_serve(application=None):
                   web.post('/api/wordai', wordai), web.post('/api/explain', explain),
                   web.post('/api/booksearch', booksearch),
                   web.post('/api/booktrans', booktrans), web.post('/api/bookinfo', bookinfo),
-                  web.post('/api/authorinfo', authorinfo),
+                  web.post('/api/authorinfo', authorinfo), web.get('/api/qaudio', qaudio),
                   web.get('/api/book_page', book_page), web.post('/api/isnad_ai', isnad_ai_h),
                   web.post('/api/devfeedback', devfeedback),
                   web.options('/api/{t:.*}', opt)])

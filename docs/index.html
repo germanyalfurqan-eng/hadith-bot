@@ -89,6 +89,7 @@
   .qw{cursor:pointer;border-radius:4px;padding:0 1px}
   .qw:hover,.qw:active{background:rgba(74,158,255,.28)}
   .qw.hit{background:var(--mark);color:#241c00}
+  .qw.qwnow{background:#2e9b5b;color:#fff;box-shadow:0 0 8px rgba(74,222,128,.7)}
   #wordPop b{font-family:"Traditional Arabic","Amiri",serif}
   .sugRow{display:flex;align-items:center;gap:9px;padding:7px 11px;font-size:14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04)}
   .sugRow:last-child{border-bottom:none}
@@ -152,7 +153,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v187</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v188</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="homeBtn" style="display:block" title="🏠 На главную — сброс поиска">🏠</div>
@@ -486,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v187';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v188';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2330,8 +2331,40 @@ async function openCatalog(){
 }
 // M166: читалка Корана — клик «Коран · X:Y» → вся сура для чтения (листать суры, перевод, Arabus)
 let _qrView={s:1,a:0};
+// #13: интерактивное чтение с ПОСЛОВНОЙ подсветкой (quran.com тайминги). Доступно для части чтецов.
+let _qcTimings={};   // кэш: recId_s → {audio_url, byA}
+const _QC_REC={Alafasy_128kbps:7,Husary_128kbps:6,Abdul_Basit_Murattal_192kbps:1,Minshawi_Murattal_128kbps:9,'Saood_ash-Shuraym_128kbps':10};
+function _qrWordStop(){ try{ if(window._qrWordAudio){ window._qrWordAudio.pause(); window._qrWordAudio.ontimeupdate=null; window._qrWordAudio.onended=null; window._qrWordAudio=null; } document.querySelectorAll('.qwnow').forEach(x=>x.classList.remove('qwnow')); document.querySelectorAll('#qrBody [data-qrhl]').forEach(b=>{b.style.outline='';b.style.background='';b.removeAttribute('data-qrhl');}); }catch(e){} }
+async function _qrWordPlay(s, a){
+  if(!BACKEND_URL){ toast('Работает на сервере'); return; }
+  if(cfg.wordTap===false){ toast('Включи «тап по словам» в ⚙️ Настройках для подсветки'); }
+  let rid=_QC_REC[cfg.reciter||'']; let note='';
+  if(!rid){ rid=7; note=' (у выбранного чтеца нет разметки — включил Афаси)'; }
+  try{ if(window._qrAudio){window._qrAudio.onended=null;window._qrAudio.pause();window._qrAudio=null;} }catch(e){}
+  _qrWordStop();
+  toast('✨ Готовлю чтение по словам…'+note);
+  const ck=rid+'_'+s; let data=_qcTimings[ck];
+  if(!data){ try{ const r=await fetch(BACKEND_URL+'/qaudio?reciter='+rid+'&chapter='+s+'&initData='+encodeURIComponent(INITDATA));
+      const j=await r.json().catch(()=>({})); if(!j.audio_url||!j.timings||!j.timings.length){ toast('Пословная разметка недоступна для этой суры'); return; }
+      const byA={}; j.timings.forEach(t=>byA[t.a]=t); data={audio_url:j.audio_url, byA:byA}; _qcTimings[ck]=data;
+    }catch(e){ toast('🔧 разметка недоступна'); return; } }
+  const t0=data.byA[a]||data.byA[1]; if(!t0){ toast('Нет тайминга'); return; }
+  let curA=t0.a||a, curWord=-1;
+  const hiAyah=(aa)=>{ document.querySelectorAll('#qrBody [data-qrhl]').forEach(b=>{b.style.outline='';b.style.background='';b.removeAttribute('data-qrhl');});
+    document.querySelectorAll('.qwnow').forEach(x=>x.classList.remove('qwnow'));
+    const blk=document.getElementById('qr-'+aa); if(blk){ blk.style.background='rgba(74,222,128,.14)'; blk.style.outline='2px solid #2e9b5b'; blk.style.borderRadius='8px'; blk.setAttribute('data-qrhl','1'); try{ blk.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){} } };
+  const au=new Audio(data.audio_url); window._qrWordAudio=au; au.currentTime=(t0.from||0)/1000; hiAyah(curA);
+  au.ontimeupdate=()=>{ if(window._qrWordAudio!==au) return; const ms=au.currentTime*1000;
+    let tc=data.byA[curA];
+    if(tc && ms>=tc.to){ let na=curA+1; while(data.byA[na] && ms>=data.byA[na].to) na++; if(data.byA[na]){ curA=na; curWord=-1; hiAyah(curA); tc=data.byA[curA]; } }
+    if(!tc||!tc.segs) return;
+    let wi=-1; for(const sg of tc.segs){ if(ms>=sg[1] && ms<sg[2]){ wi=sg[0]; break; } }
+    if(wi!==curWord){ curWord=wi; const blk=document.getElementById('qr-'+curA); if(blk){ const qws=blk.querySelectorAll('.qw'); qws.forEach(x=>x.classList.remove('qwnow')); if(wi>0 && qws[wi-1]) qws[wi-1].classList.add('qwnow'); } } };
+  au.onended=()=>{ if(window._qrWordAudio===au) _qrWordStop(); };
+  au.play().then(()=>toast('✨ Чтение по словам'+note)).catch(()=>{ toast('Аудио недоступно'); });
+}
 // M114+: аудио с подсветкой текущего аята + авто-переход к следующему (поаятная «дорожка чтения»)
-function _qrPlay(s, a){
+function _qrPlay(s, a){ _qrWordStop();
   try{ if(window._qrAudio){ window._qrAudio.onended=null; window._qrAudio.pause(); } }catch(e){}
   const body=document.getElementById('qrBody'); if(!body) return;
   body.querySelectorAll('.qrPlay').forEach(b=>b.textContent='▶');
@@ -2366,7 +2399,7 @@ async function openQuranReader(s,a){
      +'<div id="qrSugg" style="display:none;flex-wrap:wrap;gap:6px;margin:-3px 0 9px"></div>'
      +'<div id="qrNav" style="display:flex;gap:6px;align-items:center;justify-content:center;margin:2px 0 10px;flex-wrap:wrap"></div><div id="qrBody" style="max-height:58vh;overflow:auto"></div></div>';
     document.body.appendChild(m);
-    const stopA=()=>{ try{ if(window._qrAudio){ window._qrAudio.pause(); window._qrAudio=null; } }catch(e){} };
+    const stopA=()=>{ try{ if(window._qrAudio){ window._qrAudio.pause(); window._qrAudio=null; } _qrWordStop(); }catch(e){} };
     m.querySelector('#qrClose').onclick=()=>{ stopA(); m.style.display='none'; };
     m.addEventListener('click',e=>{ if(e.target===m){ stopA(); m.style.display='none'; } });
     const qs=m.querySelector('#qrSearch'); qs.addEventListener('keydown',e=>{ if(e.key==='Enter') _qrSearchGo(qs.value); });
@@ -2451,6 +2484,12 @@ async function _qrLoad(){
   RECITERS.forEach(rc=>{ const o=document.createElement('option'); o.value=rc[0]; o.textContent='🔊 '+rc[1]; if((cfg.reciter||'Hudhaify_128kbps')===rc[0]) o.selected=true; rs.appendChild(o); });
   rs.onchange=()=>{ cfg.reciter=rs.value; saveCfg(cfg); toast('Чтец: '+rs.options[rs.selectedIndex].textContent.replace('🔊 ','')); };
   nav.appendChild(rs);
+  // #13: интерактивное чтение с пословной подсветкой (quran.com тайминги) — НЕ называем «караоке»
+  const wb=document.createElement('button'); wb.className='mini'; wb.textContent='✨ Читать по словам';
+  wb.title='Интерактивное чтение: слово подсвечивается по мере чтения. Доступно для части чтецов (для остальных — обычное чтение по аятам).';
+  wb.style.cssText='border:1px solid #3a5b9b;color:#bcd2ff;background:#1d2b4a;padding:9px 14px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;margin:0 4px';
+  wb.onclick=()=>_qrWordPlay(s, _qrView.a||1);
+  nav.appendChild(wb);
   if(_qrView.a){ const tgt=body.querySelector('#qr-'+_qrView.a); if(tgt) setTimeout(()=>{ try{ tgt.scrollIntoView({block:'center'}); }catch(e){} },60); } else { body.scrollTop=0; }
   try{ applyFontScale(); }catch(e){}
 }
