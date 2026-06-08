@@ -153,7 +153,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v189</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v190</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -485,7 +485,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v189';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v190';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -585,6 +585,13 @@ try{ applyTheme(); }catch(e){}
 
 /* ===================== СЕРВЕРНЫЙ ДОСТУП (G9) ===================== */
 const INITDATA = (tg && tg.initData) || '';
+// #16 Журнал ошибок: ловим клиентские ошибки → /api/errlog (троттлинг + дедуп); владелец читает «ошибки» в боте
+(function(){ const _sent={}; let _cnt=0;
+  function _report(msg, where, stack){ try{ if(!BACKEND_URL||!msg||_cnt>12) return; const k=(msg+'|'+where).slice(0,160); if(_sent[k]) return; _sent[k]=1; _cnt++;
+    fetch(BACKEND_URL+'/errlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:String(msg).slice(0,300),where:String(where||'').slice(0,120),stack:String(stack||'').slice(0,600),ver:(typeof APPVER!=='undefined'?APPVER:''),initData:INITDATA})}).catch(()=>{}); }catch(e){} }
+  window.addEventListener('error', e=>{ try{ _report(e.message||'error',(e.filename||'').split('/').pop()+':'+(e.lineno||''), e.error&&e.error.stack); }catch(_){} });
+  window.addEventListener('unhandledrejection', e=>{ try{ const r=e.reason; _report((r&&r.message)||String(r)||'promise rejection','unhandledrejection', r&&r.stack); }catch(_){} });
+})();
 let ALLOW=null;   // {app,translate,neuro,bot} с сервера
 let ACC=null;     // полный конфиг доступа (для owner-панели)
 let ME=null;      // {id,username,owner,verified}

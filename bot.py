@@ -1218,6 +1218,29 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ===== Владельцу: ЧЁРНЫЙ СПИСОК (бан чата/пользователя по id) =====
     if is_owner(update):
         _tl = text.strip().lower()
+        if _tl in ("ошибки", "журнал ошибок", "errors"):
+            errs = _data_get("errors.json", []) or []
+            open_errs = [e for e in errs if not e.get('fixed')]
+            if not errs:
+                await update.message.reply_text("✅ Журнал ошибок пуст.")
+            else:
+                lines = ["🐞 Журнал ошибок — открытых: " + str(len(open_errs)) + " / всего: " + str(len(errs))]
+                for e in sorted(errs, key=lambda x: -x.get('count', 1))[:20]:
+                    mark = "✅" if e.get('fixed') else "•"
+                    lines.append(f"{mark} [{e.get('ver','')}] {e.get('where','')}: {e.get('msg','')[:120]} (×{e.get('count',1)})")
+                lines.append("\nКоманда: «ошибка решена <часть текста>» — пометить исправленной.")
+                await update.message.reply_text("\n".join(lines)[:3900])
+            return
+        _mfix = re.match(r"^ошибка\s+(решена|исправлена)\s+(.+)$", _tl)
+        if _mfix:
+            frag = _mfix.group(2).strip()
+            errs = _data_get("errors.json", []) or []; n = 0
+            for e in errs:
+                if frag in (e.get('msg', '') + ' ' + e.get('where', '')).lower():
+                    e['fixed'] = True; n += 1
+            _data_put("errors.json", errs, "errlog: помечено решённым")
+            await update.message.reply_text(f"✅ Помечено решёнными: {n}.")
+            return
         if _tl in ("баны", "чёрный список", "черный список", "бан список", "блок список"):
             cfg0 = load_access(); cur = [str(x) for x in cfg0.get("blacklist", [])]; notes0 = cfg0.get("ban_notes", {}) or {}
             lines = []
@@ -3011,6 +3034,41 @@ async def _api_serve(application=None):
         except Exception as e:
             return _cors(web.json_response({'error': str(e)}))
 
+    async def errlog(r):
+        # Журнал ошибок приложения: клиент шлёт ошибку → data/errors.json (с дедупом) + уведомление владельцу.
+        try:
+            d = await _body(r)
+            user = verify_init_data(d.get('initData'))
+            msg = (d.get('msg') or '').strip()[:300]
+            if not msg:
+                return _cors(web.json_response({'ok': False}))
+            where = (d.get('where') or '').strip()[:120]
+            ver = (d.get('ver') or '').strip()[:20]
+            stack = (d.get('stack') or '').strip()[:600]
+            uid = _uid(user, r)
+            if not rate_ok('errlog:' + uid, 8, 60):
+                return _cors(web.json_response({'ok': False, 'rate': True}))
+            cur = _data_get("errors.json", []) or []
+            if not isinstance(cur, list): cur = []
+            key = (msg + '|' + where + '|' + ver)[:200]
+            existing = None
+            for e in cur:
+                if e.get('key') == key: existing = e; break
+            if existing:
+                existing['count'] = (existing.get('count', 1)) + 1
+                existing['last_ver'] = ver
+            else:
+                cur.append({'key': key, 'msg': msg, 'where': where, 'ver': ver, 'stack': stack,
+                            'uid': str(uid)[:24], 'count': 1, 'fixed': False})
+                cur = cur[-400:]
+                try:
+                    await _notify(f"🐞 НОВАЯ ОШИБКА (app {ver})\n{where}: {msg}\n(в журнале ошибок, всего: {len(cur)})")
+                except Exception: pass
+            await loop.run_in_executor(None, _data_put, "errors.json", cur, f"errlog: {msg[:40]}")
+            return _cors(web.json_response({'ok': True}))
+        except Exception as e:
+            return _cors(web.json_response({'ok': False, 'error': str(e)}))
+
     async def qaudio(r):
         # Прокси quran.com (qurancdn): пословные тайминги суры для интерактивной подсветки чтения.
         # Возвращает {audio_url, timings:[{a, from, to, segs:[[word,startMs,endMs]...]}]}. Кэш в памяти процесса.
@@ -3515,6 +3573,7 @@ async def _api_serve(application=None):
                   web.post('/api/booksearch', booksearch),
                   web.post('/api/booktrans', booktrans), web.post('/api/bookinfo', bookinfo),
                   web.post('/api/authorinfo', authorinfo), web.get('/api/qaudio', qaudio),
+                  web.post('/api/errlog', errlog),
                   web.get('/api/book_page', book_page), web.post('/api/isnad_ai', isnad_ai_h),
                   web.post('/api/devfeedback', devfeedback),
                   web.options('/api/{t:.*}', opt)])
