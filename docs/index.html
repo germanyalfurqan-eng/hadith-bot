@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v143</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v144</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -457,7 +457,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v143';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v144';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1213,6 +1213,12 @@ async function relaxArabicHadith(codes, groups, modes, seq, add){
     const f=await tryScan([cur.concat(neg)]); if(f<0) return null; if(f) return {dropped:dropped.map(t=>t.t), used:cur.map(t=>t.t)}; }
   return {dropped:dropped.map(t=>t.t), used:cur.map(t=>t.t)};
 }
+// M229: порционный (нелокирующий) рендер карточек — чтобы поиск не блокировал ввод
+let _renderQ=[], _flushT=null;
+function _flushRender(){ _flushT=null; const res=document.getElementById('res'); if(!res){ _renderQ=[]; return; }
+  let n=0; while(_renderQ.length && n<30){ try{ res.appendChild(makeCard(_renderQ.shift())); }catch(e){} n++; }
+  if(_renderQ.length) _flushT=setTimeout(_flushRender,0); }
+function _clearRenderQ(){ _renderQ=[]; if(_flushT){ clearTimeout(_flushT); _flushT=null; } }
 // M212: корневой фолбэк для Корана — точного слова нет (напр. بدعة), но корень есть (بدع → بديع/ابتدعوها/بدعا)
 async function tryRootFallback(q, seq){
   try{
@@ -1241,7 +1247,7 @@ async function runSearch(explicit){
   let q=document.getElementById('q').value.trim(); const shown=q;
   if(!q){ toast('Введите запрос'); return; }
   saveRecent(shown); hideRecent();   // 🕐 запомнить запрос для «недавних»
-  const res=document.getElementById('res'); res.innerHTML=''; _results=[]; _pick={items:[],sel:new Set(),excl:new Set(),kind:'',meaning:''};
+  const res=document.getElementById('res'); _clearRenderQ(); res.innerHTML=''; _results=[]; _pick={items:[],sel:new Set(),excl:new Set(),kind:'',meaning:''};
   const head=info('⏳ Ищу…'); res.appendChild(head);
   document.getElementById('qSugg').style.display='none';   // спрятать подсказки на время поиска
   // tlSugg (живые транскрипт-подсказки) НЕ гасим здесь: live-search зовёт runSearch(true) на каждый ввод и затёр бы их.
@@ -1297,7 +1303,8 @@ async function runSearch(explicit){
       ? ('Найдено: '+count+(count>CAP?' (показаны первые '+CAP+')':'')+(done?'':' · ищу…'))
       : (done?('Ничего не найдено 🤷'+(smartNote?' — попробуй иначе':'')):'Ищу…');
     head.innerHTML = (smartNote?('<div style="color:var(--link);margin-bottom:4px;font-size:13px">'+esc(smartNote)+' <span class="redoAi" style="cursor:pointer;text-decoration:underline;white-space:nowrap">🔄 повторить глубже (ИИ)</span></div>'):'')+n; };
-  const add=(d)=>{ _results.push(d); if(count<CAP) res.appendChild(makeCard(d)); count++; };
+  // M229: первые 40 — сразу (мгновенно видно), остальные до CAP — порциями (не блокирует ввод/исправление)
+  const add=(d)=>{ _results.push(d); count++; if(count<=40) res.appendChild(makeCard(d)); else if(count<=CAP){ _renderQ.push(d); if(!_flushT) _flushT=setTimeout(_flushRender,0); } };
   // «Искать ещё в большой библиотеке» — 16 изданий + Мукбиль (не грузим по умолчанию ~127МБ; по кнопке, с прогрессом, потом кэш в сессии)
   function addLibMore(){
     if(tab!=='hadith') return; const res=document.getElementById('res');
@@ -1529,7 +1536,7 @@ function ensureShareBtn(){ const res=document.getElementById('res'); if(!res.fir
   b.textContent='📤 Поделиться'; b.onclick=shareResults;
   const gt=document.getElementById('grpToggle'); if(gt&&gt.parentNode) gt.parentNode.insertBefore(b, gt.nextSibling); else res.insertBefore(b, res.children[1]||null); }
 function renderResultsView(){
-  const res=document.getElementById('res'); res.innerHTML='';
+  const res=document.getElementById('res'); _clearRenderQ(); res.innerHTML='';
   res.appendChild(info(groupSrc?('📚 По '+(tab==='quran'?'сурам':'источникам')+' · найдено: '+_results.length):('Найдено: '+_results.length+(_results.length>400?' (первые 400)':''))));
   res.appendChild(grpToggleEl()); ensureShareBtn();
   if(!groupSrc){ _results.slice(0,400).forEach(d=>res.appendChild(makeCard(d))); return; }
