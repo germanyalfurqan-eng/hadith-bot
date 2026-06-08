@@ -2804,6 +2804,45 @@ async def _api_serve(application=None):
         except Exception as e:
             return _cors(web.json_response({'ru': '', 'error': str(e)}))
 
+    async def explain(r):
+        # M208: нейро-объяснение «простыми словами» (шарх/тафсир) хадиса/аята. Накопление в expl_<code>. Гейт = нейро.
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('neuro', user):
+            return _deny('neuro')
+        if not rate_ok('explain:' + _uid(user, r), 8, 60):
+            return _ratelimited()
+        try:
+            text = (d.get('text') or '')[:6000]
+            source = re.sub(r'[^a-z0-9_]+', '', (d.get('source') or '').lower())[:40] or 'x'
+            num = d.get('num'); kind = (d.get('kind') or 'hadith')
+            force = bool(d.get('force'))
+            store_src = 'expl_' + source
+            if len(text) < 4:
+                return _cors(web.json_response({'explanation': ''}))
+            if not force and num not in (None, ''):
+                stored = await loop.run_in_executor(None, lambda: (_coll_load(store_src) or {}).get(str(num)))
+                if stored and stored.get('ru'):
+                    await loop.run_in_executor(None, usage_log, user, "объяснение", False, len(text), source, str(num or ""))
+                    await _notify_usage(user, "объяснение", False, source, num, None)
+                    return _cors(web.json_response({'explanation': stored['ru'], 'cached': True}))
+            sysm = ("Ты — знающий и осторожный исламский учитель. Объясни ПРОСТЫМ русским языком смысл этого "
+                    + ("аята Корана" if kind == 'quran' else "хадиса") + ": о чём он, главный смысл и польза/урок. "
+                    "2-5 коротких абзацев, понятно обычному человеку, без воды и длинных предисловий. "
+                    "НЕ выдумывай факты/хадисы; если что-то спорно — отметь кратко. Только объяснение.")
+            ex = await loop.run_in_executor(None, ask_deepseek, text, sysm)
+            ex = re.sub(r'\s*⚡.*$', '', (ex or ''), flags=re.S).strip()
+            if not ex:
+                return _cors(web.json_response({'explanation': '', 'error': 'no-ai'}))
+            saved = None
+            if num not in (None, ''):
+                saved = await loop.run_in_executor(None, coll_add_translation, store_src, num, text, ex)
+            await loop.run_in_executor(None, usage_log, user, "объяснение", True, len(text), source, str(num or ""))
+            await _notify_usage(user, "объяснение", True, source, num, saved)
+            return _cors(web.json_response({'explanation': ex, 'cached': False}))
+        except Exception as e:
+            return _cors(web.json_response({'explanation': '', 'error': str(e)}))
+
     async def translate(r):
         d = await _body(r)
         user = verify_init_data(d.get('initData'))
@@ -3058,7 +3097,7 @@ async def _api_serve(application=None):
                   web.get('/api/takhrij', takhrij_read), web.post('/api/takhrij', takhrij_save),
                   web.get('/api/narrator', narrator), web.post('/api/narrator_ai', narrator_ai), web.post('/api/hit', hit),
                   web.get('/api/popular', popular), web.get('/api/arabus', arabus),
-                  web.post('/api/wordai', wordai),
+                  web.post('/api/wordai', wordai), web.post('/api/explain', explain),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))

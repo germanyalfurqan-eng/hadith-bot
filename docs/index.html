@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v135</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v136</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -457,7 +457,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v135';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v136';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1901,6 +1901,26 @@ function arabusBtn(card){
     openArabus(s); };
   return b;
 }
+// M208: нейро-объяснение «простыми словами» (шарх/тафсир) — ИИ, накопительно, пометка ИИ
+async function doExplain(text, ayah, ref, host, btn){
+  if(!host) return; if(!BACKEND_URL){ host.textContent='объяснение работает на сервере'; return; }
+  if(btn&&btn.dataset.shown==='1'){ host.style.display='none'; btn.dataset.shown=''; return; }
+  const src = ayah?'quran':((ref&&ref.source)||'x'); const num = ayah?(ayah.s+':'+ayah.a):(((ref&&ref.num)!=null)?ref.num:'');
+  const kind = ayah?'quran':'hadith';
+  host.style.display=''; host.innerHTML='<span class="hint">🧠 Объясняю простыми словами…</span>'; if(btn) btn.dataset.shown='1';
+  try{
+    const r=await fetch(BACKEND_URL+'/explain',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text:text, source:src, num:num, kind:kind, initData:INITDATA})});
+    const j=await r.json().catch(()=>({}));
+    if(r.status===403){ host.innerHTML='<span class="hint">'+((j&&j.message)||'функция пока не открыта')+'</span>'; return; }
+    if(r.status===429){ host.innerHTML='<span class="hint">⏳ слишком часто — подожди немного</span>'; return; }
+    if(j&&j.explanation){ const paras=j.explanation.split(/\n+/).filter(p=>p.trim());
+      host.innerHTML='<div style="border:1px solid #6c5ce7;border-radius:10px;padding:10px;background:rgba(108,92,231,.08);font-size:14px;line-height:1.7">'
+        +'<div style="color:#b9a9ff;font-size:11px;margin-bottom:6px">'+(j.cached?'♻️ Объяснение (из базы, бесплатно)':'🧠 Объяснение (ИИ — простыми словами; возможны ошибки, не замена учёным)')+'</div>'
+        +paras.map(p=>'<p style="margin:0 0 8px">'+esc(p)+'</p>').join('')+'</div>';
+    } else host.innerHTML='<span class="hint">не удалось объяснить — попробуй ещё раз</span>';
+  }catch(e){ host.innerHTML='<span class="hint">🔧 сервис недоступен</span>'; }
+}
 function addTr(meta,card,text,ayah,fav){
   if(fav) addStar(meta,fav);
   const cp=document.createElement('button');cp.className='tr-btn';cp.textContent='⧉';
@@ -1926,7 +1946,14 @@ function addTr(meta,card,text,ayah,fav){
     if(out.style.display!=='none' && (out.textContent||'').trim()){ tr.dataset.shown='1'; if(tr.dataset.t0===undefined) tr.dataset.t0=tr.title||''; tr.style.boxShadow='0 0 8px rgba(74,222,128,.6)'; tr.title='Нажми ещё раз, чтобы скрыть перевод'; }
   };
   meta.appendChild(tr);
-  if(!ayah){   // 📕 Arabus — СКВОЗНОЙ тумблер: включил на любом посту → работает на всех (и нижних)
+  // M208: кнопка «Объяснить просто» (нейро-шарх/тафсир) — для хадисов и аятов
+  const exb=document.createElement('button'); exb.className='tr-btn'; exb.textContent='🧠 Объяснить просто';
+  exb.title='ИИ объяснит смысл простыми словами (вспомогательно, возможны ошибки — не замена учёным)';
+  exb.style.cssText='background:transparent;border:1px solid #6c5ce7;color:#c9b8ff;padding:6px 11px';
+  const exout=document.createElement('div'); exout.className='tr-out';
+  exb.onclick=()=>doExplain(text, ayah, refOf(fav), exout, exb);
+  meta.appendChild(exb);
+  if(!ayah){   //📕 Arabus — СКВОЗНОЙ тумблер: включил на любом посту → работает на всех (и нижних)
     const ab=document.createElement('button'); ab.className='tr-btn arabusToggle';
     ab.style.cssText='border:1px solid #1e7d5a;color:#7fe3bf;padding:6px 9px;display:inline-flex;align-items:center;gap:5px;background:'+(_arabusOn?'#173d30':'transparent');
     if(_arabusOn) ab.style.boxShadow='0 0 8px rgba(127,227,191,.7)';
@@ -1974,6 +2001,7 @@ function addTr(meta,card,text,ayah,fav){
   fbb.onclick=()=>openFeedback((fav&&fav.label)||'');
   meta.appendChild(fbb);
   card.appendChild(out);
+  card.appendChild(exout);   // M208: блок нейро-объяснения
 }
 /* ===== ТАХРИДЖ «Где ещё передаётся» — авторитетно (sunnah.one) + широко (ВСЕ наши сборники, мульти-фразой) + прогресс % + клик по № → читалка. Особое внимание правильной взаимосвязи хадисов. ===== */
 const TAKH_MAIN=['bukhari','muslim','abudawud','tirmidhi','ibnmajah','nasai','malik','ahmad','muqbil','muhaymin'];
