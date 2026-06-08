@@ -3043,6 +3043,58 @@ async def _api_serve(application=None):
         except Exception as e:
             return _cors(web.json_response({'error': str(e)}))
 
+    async def narrator_rijal(r):
+        # Разбор ПЕРЕДАТЧИКА (ильм риджаль): что говорят учёные — джарх/тадиль. Кэш data/narrators.json.
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('neuro', user):
+            return _deny('neuro')
+        if not rate_ok('narr_rijal:' + _uid(user, r), 12, 60):
+            return _ratelimited()
+        try:
+            name = (d.get('name') or '').strip()[:160]
+            if len(name) < 2:
+                return _cors(web.json_response({}))
+            cache = _data_get("narrators.json", {}) or {}
+            key = name.lower()
+            force = bool(d.get('force'))
+            if not force and key in cache:
+                out = dict(cache[key]); out['cached'] = True
+                return _cors(web.json_response(out))
+            sysm = ("Ты — специалист по ильм ар-риджаль (оценка передатчиков хадисов, джарх ва тадиль). "
+                    "Дан передатчик (рус. транскрипция или арабский). Ответь СТРОГО строками (метки точно так):\n"
+                    "ИМЯ_АР: <полное арабское имя передатчика, как в книгах риджаль>\n"
+                    "ЭПОХА: <век/годы, поколение (сахаби/табии/…), если знаешь; иначе ->\n"
+                    "ОЦЕНКА: <итоговая степень: сикъа/садукъ/слабый/матрук/… кратко>\n"
+                    "УЧЁНЫЕ: <что сказали имамы джарха-тадиля: напр. «Ибн Маин: сикъа; Ахмад: …; Абу Хатим: …» — кратко, по делу>\n"
+                    "ГДЕ_ИСКАТЬ: <в каких трудах риджаль смотреть (Тахзиб, аль-Джарх ва-т-Тадиль, аль-Камиль и т.п.)>\n"
+                    "ЗАМЕТКА: <1 фраза по-русски>\n"
+                    "Если это НЕ передатчик хадисов (а тема/слово) — выведи только: НЕ_ПЕРЕДАТЧИК\n"
+                    "Будь точен, не выдумывай. Выведи только метки.")
+            txt = await loop.run_in_executor(None, ask_deepseek, "Передатчик: " + name, sysm) or ""
+            if 'НЕ_ПЕРЕДАТЧИК' in txt or 'НЕ ПЕРЕДАТЧИК' in txt:
+                return _cors(web.json_response({'is_narrator': False}))
+            def _grab(lbl):
+                m = re.search(lbl + r'\s*[:：]\s*(.+)', txt); return m.group(1).strip() if m else ''
+            def _cl(s):
+                return '' if (s or '').strip() in ('', '-', '—', '–') else s.strip()
+            result = {'is_narrator': True, 'ar': _cl(_grab('ИМЯ_АР'))[:160], 'era': _cl(_grab('ЭПОХА'))[:120],
+                      'grade': _cl(_grab('ОЦЕНКА'))[:160], 'scholars': _cl(_grab('УЧЁНЫЕ'))[:600],
+                      'where': _cl(_grab('ГДЕ_ИСКАТЬ'))[:300], 'note': _cl(_grab('ЗАМЕТКА'))[:200]}
+            saved = None
+            if result.get('grade') or result.get('scholars'):
+                try:
+                    cache[key] = {k: v for k, v in result.items() if k != 'is_narrator'}
+                    await loop.run_in_executor(None, _data_put, "narrators.json", cache, f"narrator: {name[:40]}")
+                    saved = {"new": True, "total": len(cache)}
+                except Exception: pass
+            await loop.run_in_executor(None, usage_log, user, "разбор передатчика", True, len(name), "", "")
+            await _notify_usage(user, "разбор передатчика", True, "", "", saved)
+            out = dict(result); out['cached'] = False
+            return _cors(web.json_response(out))
+        except Exception as e:
+            return _cors(web.json_response({'error': str(e)}))
+
     async def errlog(r):
         # Журнал ошибок приложения: клиент шлёт ошибку → data/errors.json (с дедупом) + уведомление владельцу.
         try:
@@ -3582,7 +3634,7 @@ async def _api_serve(application=None):
                   web.post('/api/booksearch', booksearch),
                   web.post('/api/booktrans', booktrans), web.post('/api/bookinfo', bookinfo),
                   web.post('/api/authorinfo', authorinfo), web.get('/api/qaudio', qaudio),
-                  web.post('/api/errlog', errlog),
+                  web.post('/api/errlog', errlog), web.post('/api/narrator_rijal', narrator_rijal),
                   web.get('/api/book_page', book_page), web.post('/api/isnad_ai', isnad_ai_h),
                   web.post('/api/devfeedback', devfeedback),
                   web.options('/api/{t:.*}', opt)])

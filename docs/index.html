@@ -153,7 +153,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v195</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v196</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -487,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v195';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v196';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1605,6 +1605,7 @@ async function runSearch(explicit){
   }
   setStatus('');
   logSearch(shown, tab, count);
+  try{ maybeNarratorChip(shown); }catch(e){}   // #21: мягкая подсказка «это передатчик?» (не форсим)
   // в ИИ-режиме при малом числе результатов тоже добираем по всей библиотеке (по арабской фразе ИИ)
   if(modes.ai && aiPhrases && aiPhrases.length){ const ap=aiPhrases.find(p=>isArabic(p)); if(ap) wideQ=ap; }
   const wideWill = (tab==='hadith' && explicit && !numMode && (isArabic(shown) || (modes.ai && count<5)));
@@ -2270,6 +2271,48 @@ async function openAuthor(authorName){
     drawList(); };
   m.style.display='flex';
 }
+// === 👤 Разбор ПЕРЕДАТЧИКА (ильм риджаль): что говорят учёные (джарх/тадиль) ===
+async function openNarratorRijal(name){
+  if(!name) return;
+  let m=document.getElementById('narrModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='narrModal';
+    m.innerHTML='<div class="panel" style="max-width:640px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 12px;padding:14px 16px 11px;border-bottom:1px solid var(--border)"><b id="narrTitle" style="font-size:15px">👤 Разбор передатчика</b><button class="mini" id="narrClose" style="flex:none">закрыть ✕</button></div><div id="narrBody" style="max-height:74vh;overflow:auto"></div></div>';
+    document.body.appendChild(m); m.querySelector('#narrClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+  }
+  m.style.zIndex='10003'; m.style.display='flex';
+  m.querySelector('#narrTitle').textContent='👤 '+name;
+  const body=m.querySelector('#narrBody'); body.innerHTML='<div class="hint">📜 ИИ собирает, что говорят учёные…</div>';
+  if(!BACKEND_URL){ body.innerHTML='<div class="hint">Работает на сервере.</div>'; return; }
+  let j={}; try{ const r=await fetch(BACKEND_URL+'/narrator_rijal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,initData:INITDATA})}); j=await r.json().catch(()=>({})); if(r.status===403){ body.innerHTML='<div class="hint">'+((j&&j.message)||'функция пока не открыта')+'</div>'; return; } }catch(e){ body.innerHTML='<div class="hint">🔧 сервис недоступен</div>'; return; }
+  if(j.is_narrator===false){ body.innerHTML='<div class="hint">Похоже, это не имя передатчика. Это обычный поиск — ищи как искал. 🙂</div>'; return; }
+  body.innerHTML='';
+  const row=(lbl,val)=>val?('<div style="margin-top:5px"><span style="color:var(--hint)">'+lbl+':</span> '+esc(val)+'</div>'):'';
+  const card=document.createElement('div'); card.style.cssText='border:1px solid #6c5ce7;border-radius:12px;padding:11px;background:rgba(108,92,231,.08)';
+  card.innerHTML=(j.ar?('<div style="font-size:18px;'+_AF+';color:var(--mark);direction:rtl;text-align:right">'+esc(j.ar)+'</div>'):'')
+    +row('Эпоха',j.era)+row('Оценка',j.grade)+row('Учёные',j.scholars)+row('Где искать',j.where)
+    +'<div style="margin-top:6px;font-size:11px;color:var(--hint)">🧠 свод ИИ '+(j.cached?'(из базы)':'')+' — вспомогательно; проверяй по первоисточникам риджаль ниже.</div>';
+  body.appendChild(card);
+  const note=document.createElement('div'); note.style.cssText='margin-top:10px;font-size:13px;line-height:1.5';
+  note.innerHTML='📜 По нашему правилу надёжность передатчика должна быть письменно засвидетельствована одним из <b>48 мутабарун</b>. <span class="goHad" style="color:var(--link);cursor:pointer;text-decoration:underline">список + труды риджаль</span>';
+  note.querySelector('.goHad').onclick=()=>{ m.style.display='none'; openHadithScience(); }; body.appendChild(note);
+  try{ if(!_rijal) await fetch('./hadith/rijal_books.json').then(r=>r.json()).then(d=>_rijal=d).catch(()=>{}); }catch(e){}
+  if(_rijal && _rijal.critics){ const rj=document.createElement('div'); rj.style.cssText='margin-top:10px';
+    rj.innerHTML='<div style="font-weight:700;margin:6px 0">📚 Где читать (труды риджаль):</div>';
+    _rijal.critics.slice(0,8).forEach(cr=>{ (cr.books||[]).slice(0,3).forEach(bk=>{ const a=document.createElement('div'); a.style.cssText='font-size:13px;color:var(--link);cursor:pointer;direction:rtl;text-align:right;padding:2px 0'; a.textContent='• '+bk.title+' — '+cr.name;
+      a.onclick=()=>{ const t=String(bk.turath||''); if(/^\d+$/.test(t)){ m.style.display='none'; openBook(t); } else if(t.indexOf('author/')===0){ openLink('https://app.turath.io/'+t); } }; rj.appendChild(a); }); });
+    body.appendChild(rj); }
+}
+function maybeNarratorChip(q){ try{
+  if(tab!=='hadith') return; const res=document.getElementById('res'); if(!res) return;
+  const v=(q||'').trim(); const wc=v.split(/\s+/).length;
+  const looksName = v.length>=3 && wc<=4 && !/^\d/.test(v) && !/["|]/.test(v) && (isArabic(v) || /^[a-zа-яё'`\- ]+$/i.test(v));
+  if(!looksName) return; if(document.getElementById('narrChip')) return;
+  const c=document.createElement('div'); c.id='narrChip'; c.style.cssText='margin:8px 0;padding:9px 12px;border:1px dashed var(--border);border-radius:12px;font-size:13px;color:var(--text);cursor:pointer';
+  c.innerHTML='👤 Ищете <b>передатчика</b> «'+esc(v.slice(0,40))+'»? Открыть, что говорят о нём учёные (ильм риджаль)';
+  c.onclick=()=>openNarratorRijal(v);
+  res.insertBefore(c, res.firstChild);
+}catch(e){} }
 // === 📜 Наука хадиса (мусталях): правила достоверности + 48 мутабарун + труды риджаль ===
 let _hadRule=null, _rijal=null;
 async function openHadithScience(){
