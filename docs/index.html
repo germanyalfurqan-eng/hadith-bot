@@ -86,7 +86,7 @@
   .card{background:rgba(20,30,44,.62);backdrop-filter:blur(9px) saturate(1.1);-webkit-backdrop-filter:blur(9px) saturate(1.1);
         border:1px solid rgba(120,150,200,.16);border-radius:14px;padding:12px;margin-bottom:10px;box-shadow:0 4px 18px #0006}
   .ar{font-size:19px;line-height:2;direction:rtl;text-align:right;font-family:"Traditional Arabic","Amiri",serif}
-  .qw{cursor:pointer;border-radius:4px;padding:0 1px}
+  .qw{cursor:pointer;border-radius:4px;padding:0 1px;transition:background .18s,color .18s,box-shadow .18s}
   .qw:hover,.qw:active{background:rgba(74,158,255,.28)}
   .qw.hit{background:var(--mark);color:#241c00}
   .qw.qwnow{background:#2e9b5b;color:#fff;box-shadow:0 0 8px rgba(74,222,128,.7)}
@@ -153,7 +153,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v203</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v204</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -487,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v203';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v204';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2602,12 +2602,20 @@ function _qrPlay(s, a){ _qrWordStop();
   const body=document.getElementById('qrBody'); if(!body) return;
   body.querySelectorAll('.qrPlay').forEach(b=>b.textContent='▶');
   body.querySelectorAll('[data-qrhl]').forEach(b=>{ b.style.outline=''; b.style.background=''; b.removeAttribute('data-qrhl'); });
+  body.querySelectorAll('.qwnow').forEach(x=>x.classList.remove('qwnow'));
   const blk=document.getElementById('qr-'+a);
   if(blk){ blk.style.background='rgba(74,222,128,.18)'; blk.style.outline='2px solid #2e9b5b'; blk.style.borderRadius='8px'; blk.setAttribute('data-qrhl','1'); try{ blk.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
   _qrBtnSet(a,'⏳');
   const u='https://everyayah.com/data/'+(cfg.reciter||'Hudhaify_128kbps')+'/'+String(s).padStart(3,'0')+String(a).padStart(3,'0')+'.mp3';
   const au=new Audio(u); try{au.setAttribute('playsinline','');}catch(e){} window._qrAudio=au; window._qrCur={s:s,a:a}; window._qrNow={s:s,a:a,mode:'ayah'}; window._qrStopped=false; try{_miniSync();}catch(e){}
-  au.onplaying=()=>{ if(window._qrAudio===au){ _qrBtnSet(a,'⏸'); try{_miniSync();}catch(e){} } };
+  // ПЛАВНАЯ пословная подсветка по длительности аята (Худайфи и любой everyayah — без внешних таймкодов)
+  let _qw=[], _ends=[], _cw=-1;
+  const _buildWT=()=>{ try{ if(!blk||cfg.wordTap===false) return; _qw=[...blk.querySelectorAll('.qw')]; const dur=au.duration||0; if(!dur||!_qw.length){_qw=[];return;}
+    const wl=_qw.map(x=>Math.max(2,(x.textContent||'').replace(/[^ء-ي]/g,'').length)); const tot=wl.reduce((p,c)=>p+c,0)||1; let acc=0; _ends=wl.map(x=>{ acc+=x; return (acc/tot)*dur; }); }catch(e){} };
+  au.addEventListener('loadedmetadata',_buildWT);
+  au.ontimeupdate=()=>{ if(window._qrAudio!==au||!_qw.length) return; const t=au.currentTime; let i=_ends.findIndex(e=>t<e); if(i<0) i=_qw.length-1;
+    if(i!==_cw){ if(_cw>=0&&_qw[_cw]) _qw[_cw].classList.remove('qwnow'); if(_qw[i]) _qw[i].classList.add('qwnow'); _cw=i; } };
+  au.onplaying=()=>{ if(window._qrAudio===au){ _qrBtnSet(a,'⏸'); if(!_qw.length) _buildWT(); try{_miniSync();}catch(e){} } };
   au.onpause=()=>{ if(window._qrAudio===au && !au.ended){ _qrBtnSet(a,'▶'); try{_miniSync();}catch(e){} } };
   au.onended=()=>{ if(window._qrAudio!==au) return; _qrBtnSet(a,'▶');
     const tot=(SURA_AYAHS[s-1]||0); const open=(()=>{const mm=document.getElementById('qrModal');return mm&&mm.style.display!=='none';})();
