@@ -2889,7 +2889,15 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'ok': False}))
         try:
             fb = _data_get('devfeedback.json', []) or []
-            fb.append({'text': text, 'ctx': ctx, 'd': datetime.now().strftime('%d.%m.%Y %H:%M'), 'img': bool(img), 'done': False})
+            n = len(fb) + 1
+            imgkey = ''
+            if img and isinstance(img, str) and img.startswith('data:image'):
+                imgkey = 'devfb_img/%d.json' % n   # сохраняем САМ скрин (base64) → Claude может открыть
+                try:
+                    await loop.run_in_executor(None, _data_put, imgkey, {'b64': img, 'd': datetime.now().strftime('%d.%m.%Y %H:%M')}, 'devfb img %d' % n)
+                except Exception:
+                    imgkey = ''
+            fb.append({'text': text, 'ctx': ctx, 'd': datetime.now().strftime('%d.%m.%Y %H:%M'), 'img': bool(img), 'imgkey': imgkey, 'done': False})
             await loop.run_in_executor(None, _data_put, 'devfeedback.json', fb[-500:], 'devfeedback +1')
         except Exception:
             pass
