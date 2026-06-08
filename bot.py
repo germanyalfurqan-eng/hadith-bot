@@ -2977,6 +2977,49 @@ async def _api_serve(application=None):
         except Exception as e:
             return _cors(web.json_response({'error': str(e)}))
 
+    async def authorinfo(r):
+        # Биография автора (ИИ) + Википедия. Накопление data/bookinfo.json под ключом «author|<имя>».
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('neuro', user):
+            return _deny('neuro')
+        if not rate_ok('authorinfo:' + _uid(user, r), 15, 60):
+            return _ratelimited()
+        try:
+            author = (d.get('author') or '').strip()[:160]
+            if not author:
+                return _cors(web.json_response({}))
+            key = 'author|' + author
+            force = bool(d.get('force'))
+            cached = None if force else await loop.run_in_executor(None, binfo_get, key)
+            if cached:
+                out = dict(cached); out['cached'] = True
+                return _cors(web.json_response(out))
+            sysm = ("Дай краткую справку об исламском учёном/авторе. Ответь СТРОГО 4 строками (метки именно так):\n"
+                    "ИМЯ_РУ: <имя по-русски, как принято>\n"
+                    "БИО: <3-5 предложений: кто это, эпоха (годы/век по хиджре), мазхаб/специализация, чем известен, главные труды>\n"
+                    "ГОДЫ: <годы жизни / век по хиджре, если знаешь; иначе ->\n"
+                    "ВИКИ: <URL статьи Википедии об авторе (ru или ar), если уверен; иначе ->\n"
+                    "Не выдумывай ссылку. Выведи только эти 4 строки.")
+            txt = await loop.run_in_executor(None, ask_deepseek, "Автор: " + author, sysm) or ""
+            def _grab(lbl):
+                m = re.search(lbl + r'\s*[:：]\s*(.+)', txt); return m.group(1).strip() if m else ''
+            ru = _grab('ИМЯ_РУ'); bio = _grab('БИО'); years = _grab('ГОДЫ'); wiki = _grab('ВИКИ')
+            def _url(s):
+                m = re.search(r'https?://[^\s\)]+', s or ''); return m.group(0) if m else ''
+            years = '' if years in ('', '-', '—', '–') else years[:60]
+            result = {'ru': ru[:160], 'bio': bio[:800], 'years': years, 'wiki': _url(wiki)}
+            saved = None
+            if bio:
+                try: saved = {"new": True, "total": await loop.run_in_executor(None, binfo_put, key, result)}
+                except Exception: saved = None
+            await loop.run_in_executor(None, usage_log, user, "биография автора", True, len(author), "", "")
+            await _notify_usage(user, "биография автора", True, "", "", saved)
+            out = dict(result); out['cached'] = False
+            return _cors(web.json_response(out))
+        except Exception as e:
+            return _cors(web.json_response({'error': str(e)}))
+
     async def wordai(r):
         # ИИ-перевод/проверка ОДНОГО слова: точный перевод + настоящий корень (надёжнее Arabus).
         # Накопление в data/wordai.json + уведомление владельцу (ИИ vs Arabus — проверь). Гейт = нейро.
@@ -3399,6 +3442,7 @@ async def _api_serve(application=None):
                   web.post('/api/wordai', wordai), web.post('/api/explain', explain),
                   web.post('/api/booksearch', booksearch),
                   web.post('/api/booktrans', booktrans), web.post('/api/bookinfo', bookinfo),
+                  web.post('/api/authorinfo', authorinfo),
                   web.get('/api/book_page', book_page), web.post('/api/isnad_ai', isnad_ai_h),
                   web.post('/api/devfeedback', devfeedback),
                   web.options('/api/{t:.*}', opt)])

@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v185</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v186</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="homeBtn" style="display:block" title="🏠 На главную — сброс поиска">🏠</div>
@@ -487,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v185';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v186';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1744,6 +1744,7 @@ let _booksMap=null,_booksMapP=null;
 function loadBooksMap(){ if(_booksMap) return Promise.resolve(_booksMap); if(_booksMapP) return _booksMapP;
   _booksMapP=fetch('./books_map.json').then(r=>r.ok?r.json():null).then(j=>{_booksMap=j||{};return _booksMap;}).catch(()=>{_booksMap={};return _booksMap;}); return _booksMapP; }
 function bookName(id){ id=String(id||''); return (_booksMap&&_booksMap[id])||''; }
+function bookAuthorOf(id){ id=String(id||''); try{ if(_catalog){ const b=_catalog.find(x=>String(x.i)===id); return b?(b.a||''):''; } }catch(e){} return ''; }
 // M216: читалка любой книги Мактабы (через turath /api/book_page) — листание + Arabus
 let _bookView={id:null,pg:1};
 function openBook(bookId, startPg){
@@ -1767,7 +1768,11 @@ async function _bookLoad(){
   try{
     const r=await fetch(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+_bookView.pg+'&initData='+encodeURIComponent(INITDATA));
     const j=await r.json().catch(()=>({})); const meta=j.meta||{};
-    ttl.textContent='📖 '+((meta.book_name||bookName(_bookView.id)||('книга №'+_bookView.id)));
+    const bnm=(meta.book_name||bookName(_bookView.id)||('книга №'+_bookView.id));
+    const aut=(meta.author||bookAuthorOf(_bookView.id)||'');
+    ttl.innerHTML='<div style="direction:rtl;text-align:right">📖 '+esc(bnm)+'</div>'+(aut?('<div style="direction:rtl;text-align:right;font-size:12px;font-weight:400;margin-top:2px"><span id="bookAuthLink" style="color:var(--link);cursor:pointer">✍️ '+esc(aut)+'</span></div>'):'');
+    try{ const al=ttl.querySelector('#bookAuthLink'); if(al) al.onclick=()=>{ try{ openAuthor(aut); }catch(e){} }; }catch(e){}
+    if(!_catalog){ try{ loadCatalog().then(()=>{ if(!aut){ const a2=bookAuthorOf(_bookView.id); if(a2){ const cur=m.querySelector('#bookTitle'); if(cur && cur.querySelector('div')) cur.innerHTML='<div style="direction:rtl;text-align:right">📖 '+esc(bnm)+'</div><div style="direction:rtl;text-align:right;font-size:12px;font-weight:400;margin-top:2px"><span id="bookAuthLink2" style="color:var(--link);cursor:pointer">✍️ '+esc(a2)+'</span></div>'; const al2=cur.querySelector('#bookAuthLink2'); if(al2) al2.onclick=()=>openAuthor(a2); } } }); }catch(e){} }
     if(!j.text){ tEl.innerHTML='<span class="hint">Страница пуста. Полистай ← / → или введи другой номер.</span>'; }
     else { const clean=(j.text||'').replace(/<[^>]*>/g,'').replace(/ /g,' ');   // убрать turath-теги <span…> (мусор)
       tEl.dataset.txt=clean; tEl.innerHTML=esc(clean).replace(/\n+/g,'<br>'); try{ enableArabusTap(tEl); if(_arabusOn) tEl.style.cursor='pointer'; }catch(e){} }
@@ -2186,6 +2191,52 @@ async function _bookInfo(b,out,btn){
     html+='<div style="margin-top:5px;font-size:11px;color:var(--hint)">🧠 справку дал ИИ '+(j.cached?'(из базы)':'')+' — возможны неточности</div>';
     out.innerHTML=html;
   }catch(e){ out.innerHTML='<span class="hint">🔧 сервис недоступен</span>'; }
+}
+// книги автора + биография (страница автора, как в Мактаба)
+async function openAuthor(authorName){
+  if(!authorName) return; const cat=await loadCatalog(); if(!cat||!cat.length){ toast('Каталог не загрузился'); return; }
+  const _astop=['الله','الدين','بن','ابو','ابن','عبد','ابي','محمد','احمد','امام','حافظ','شيخ','الامام','الحافظ','الشيخ'];
+  const _anorm=s=>canon(s||'').replace(/[^ء-ي\s]/g,' ').replace(/\bال/g,'').replace(/\s+/g,' ').trim();
+  const aN=canon(authorName); let books=cat.filter(b=>b.a && canon(b.a)===aN);   // сначала точное совпадение
+  if(books.length<3){ // иначе — по ключевому (первому значимому) токену имени («ابن قيم الجوزية» → قيم → «ابن القيم»)
+    const qtok=[...new Set(_anorm(authorName).split(' ').filter(w=>w.length>=3 && _astop.indexOf(w)===-1))];
+    const key=qtok[0];   // первый значимый токен обычно самый специфичный (имя), не нисба
+    if(key){ const ext=cat.filter(b=>{ if(!b.a) return false; const at=_anorm(b.a).split(' ').filter(Boolean);
+      return at.some(x=>x===key || x.indexOf(key)!==-1 || key.indexOf(x)!==-1); });
+      if(ext.length>books.length) books=ext; } }
+  let m=document.getElementById('authorModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='authorModal';
+    m.innerHTML='<div class="panel" style="max-width:640px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 12px;padding:14px 16px 11px;border-bottom:1px solid var(--border)"><b id="authTitle" style="font-size:14px;direction:rtl;text-align:right"></b><button class="mini" id="authClose" style="flex:none">закрыть ✕</button></div>'
+     +'<div style="display:flex;gap:6px;margin-bottom:8px"><button class="mini" id="authBio" style="flex:1;background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:8px 11px;font-size:13px">📜 Биография (ИИ)</button><button class="mini" id="authTr" style="flex:1;border:1px solid var(--border);color:var(--text);padding:8px 11px;font-size:13px">🌐 Перевести названия</button></div>'
+     +'<div id="authBioOut" style="display:none;margin-bottom:8px;font-size:13px;line-height:1.55;border:1px solid var(--border);border-radius:8px;padding:9px;background:var(--bg)"></div>'
+     +'<div id="authList" style="max-height:54vh;overflow:auto"></div></div>';
+    document.body.appendChild(m); m.querySelector('#authClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+  }
+  m.style.zIndex='10002'; m.dataset.author=authorName; m._books=books;
+  m.querySelector('#authTitle').innerHTML='✍️ '+esc(authorName)+' <span style="font-size:11px;color:var(--hint);font-weight:400">· книг: '+books.length+'</span>';
+  const out=m.querySelector('#authBioOut'); out.style.display='none'; out.innerHTML='';
+  const authTr={on:false};
+  const drawList=()=>{ const list=m.querySelector('#authList'); list.innerHTML='';
+    books.slice(0,200).forEach(b=>{ const it=document.createElement('div'); it.style.cssText='border-bottom:1px solid var(--border);padding:9px 4px;cursor:pointer;direction:rtl;text-align:right';
+      const tr=authTr.on?_catTr.map[b.n]:null;
+      it.innerHTML='<div style="font-weight:600;color:var(--link);font-size:15px">'+esc((tr&&tr.voc)?tr.voc:b.n)+'</div>'+((tr&&tr.ru)?('<div style="direction:ltr;text-align:left;font-size:13px;color:#bcd0ff">'+esc(tr.ru)+'</div>'):'')+(b.c?('<div style="font-size:11px;color:var(--hint)">'+esc(catLabel(b.c).split(' — ')[1]||b.c)+'</div>'):'');
+      it.onclick=()=>{ m.style.display='none'; openBook(b.i); }; list.appendChild(it); }); };
+  drawList();
+  m.querySelector('#authBio').onclick=async()=>{ const b=m.querySelector('#authBio'); if(out.dataset.shown==='1'){ out.style.display='none'; out.dataset.shown=''; return; }
+    out.style.display='block'; out.innerHTML='<span class="hint">📜 ИИ готовит биографию…</span>'; out.dataset.shown='1';
+    try{ const r=await fetch(BACKEND_URL+'/authorinfo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({author:authorName,initData:INITDATA})});
+      const j=await r.json().catch(()=>({})); if(r.status===403){ out.innerHTML='<span class="hint">'+((j&&j.message)||'функция пока не открыта')+'</span>'; return; }
+      if(!j.bio){ out.innerHTML='<span class="hint">Биография недоступна.</span>'; return; }
+      let html=(j.ru?('<b>'+esc(j.ru)+'</b>'):'')+(j.years?(' <span style="color:var(--hint)">('+esc(j.years)+')</span>'):'')+'<br>'+esc(j.bio);
+      if(j.wiki) html+='<div style="margin-top:6px"><a href="'+esc(j.wiki)+'" target="_blank" style="color:var(--link)">📖 Википедия</a></div>';
+      html+='<div style="margin-top:5px;font-size:11px;color:var(--hint)">🧠 ИИ '+(j.cached?'(из базы)':'')+' — возможны неточности</div>'; out.innerHTML=html;
+    }catch(e){ out.innerHTML='<span class="hint">🔧 сервис недоступен</span>'; } };
+  m.querySelector('#authTr').onclick=async()=>{ authTr.on=!authTr.on; const b=m.querySelector('#authTr');
+    b.style.background=authTr.on?'#173d30':''; b.style.color=authTr.on?'#bff5d4':'var(--text)'; b.textContent=authTr.on?'🌐 Перевод ВКЛ ✓':'🌐 Перевести названия';
+    if(authTr.on && BACKEND_URL){ const need=books.slice(0,40).map(x=>x.n).filter(n=>n&&!_catTr.map[n]); if(need.length){ try{ const r=await fetch(BACKEND_URL+'/booktrans',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({titles:need,initData:INITDATA})}); const j=await r.json().catch(()=>({})); if(j.map) Object.assign(_catTr.map,j.map); }catch(e){} } }
+    drawList(); };
+  m.style.display='flex';
 }
 async function openCatalog(){
   const cat=await loadCatalog();
