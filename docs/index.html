@@ -153,7 +153,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v205</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v206</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -487,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v205';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v206';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2596,6 +2596,25 @@ async function _qrWordPlay(s, a){
   au.onended=()=>{ if(window._qrWordAudio===au) _qrWordStop(); };
   au.play().then(()=>toast('✨ Чтение по словам'+note)).catch(()=>{ toast('Аудио недоступно'); });
 }
+// Анализ реального аудио аята: слова распределяются по ФАКТИЧЕСКОЙ речи (паузы держат слово) → ровнее «в слог»
+let _wtCache={};
+async function _analyzeWordEnds(url, wordLens){
+  try{
+    if(!_wtCache[url]){
+      const Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return null;
+      const buf=await (await fetch(url)).arrayBuffer(); const ctx=new Ctx();
+      const ab=await ctx.decodeAudioData(buf); try{ctx.close();}catch(e){}
+      const ch=ab.getChannelData(0), sr=ab.sampleRate, win=Math.max(1,Math.floor(sr*0.02)), n=Math.floor(ch.length/win);
+      const rms=new Float32Array(n); let mx=0;
+      for(let i=0;i<n;i++){ let sm=0; const off=i*win; for(let j=0;j<win;j++){ const v=ch[off+j]; sm+=v*v; } const r=Math.sqrt(sm/win); rms[i]=r; if(r>mx)mx=r; }
+      const thr=mx*0.06, winT=win/sr; const cum=new Float32Array(n+1); let acc=0;
+      for(let i=0;i<n;i++){ if(rms[i]>thr) acc+=winT; cum[i+1]=acc; }
+      _wtCache[url]={cum:cum, winT:winT, total:acc||(n*winT), n:n};
+    }
+    const A=_wtCache[url]; const tot=wordLens.reduce((p,c)=>p+c,0)||1; let w=0;
+    return wordLens.map(x=>{ w+=x; const target=(w/tot)*A.total; let lo=0,hi=A.n; while(lo<hi){ const mid=(lo+hi)>>1; if(A.cum[mid]<target) lo=mid+1; else hi=mid; } return lo*A.winT; });
+  }catch(e){ return null; }
+}
 // M114+: аудио с подсветкой текущего аята + авто-переход к следующему (поаятная «дорожка чтения»)
 function _qrPlay(s, a){ _qrWordStop();
   try{ if(window._qrAudio){ window._qrAudio.onended=null; window._qrAudio.pause(); } }catch(e){}
@@ -2611,7 +2630,10 @@ function _qrPlay(s, a){ _qrWordStop();
   // ПЛАВНАЯ пословная подсветка по длительности аята (Худайфи и любой everyayah — без внешних таймкодов)
   let _qw=[], _ends=[], _cw=-1;
   const _buildWT=()=>{ try{ if(!blk||cfg.wordTap===false) return; _qw=[...blk.querySelectorAll('.qw')]; const dur=au.duration||0; if(!dur||!_qw.length){_qw=[];return;}
-    const wl=_qw.map(x=>Math.max(2,(x.textContent||'').replace(/[^ء-ي]/g,'').length)); const tot=wl.reduce((p,c)=>p+c,0)||1; let acc=0; _ends=wl.map(x=>{ acc+=x; return (acc/tot)*dur; }); }catch(e){} };
+    const wl=_qw.map(x=>Math.max(2,(x.textContent||'').replace(/[^ء-ي]/g,'').length)); const tot=wl.reduce((p,c)=>p+c,0)||1; let acc=0; _ends=wl.map(x=>{ acc+=x; return (acc/tot)*dur; }); // равномерно — сразу
+    // ...и подстройка под РЕАЛЬНЫЙ голос (паузы Худайфи): заменяем тайминги, когда проанализируем
+    _analyzeWordEnds(u, wl).then(e=>{ if(e && e.length===_qw.length && window._qrAudio===au) _ends=e; }).catch(()=>{});
+  }catch(e){} };
   au.addEventListener('loadedmetadata',_buildWT);
   au.ontimeupdate=()=>{ if(window._qrAudio!==au||!_qw.length) return; const t=au.currentTime; let i=_ends.findIndex(e=>t<e); if(i<0) i=_qw.length-1;
     if(i!==_cw){ if(_cw>=0&&_qw[_cw]) _qw[_cw].classList.remove('qwnow'); if(_qw[i]) _qw[i].classList.add('qwnow'); _cw=i; } };
