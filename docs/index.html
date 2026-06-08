@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v179</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v180</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="homeBtn" style="display:block" title="🏠 На главную — сброс поиска">🏠</div>
@@ -199,6 +199,7 @@
   </div>
   <div id="qHelper" class="hint" style="display:none;margin:-2px 0 6px;color:var(--link)"></div>
   <div id="tlSugg" style="display:none;margin:-2px 0 8px"></div>
+  <div id="bookSugg" style="display:none;margin:-2px 0 8px;flex-wrap:wrap;gap:6px;align-items:center"></div>
   <div id="qSugg" style="display:none;gap:10px;margin:0 0 8px">
     <div id="qSuggL" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto"></div>
     <div id="qSuggR" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto"></div>
@@ -486,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v179';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v180';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1007,6 +1008,27 @@ function updateTranslitSugg(){
   }, 220);
 }
 document.getElementById('q').addEventListener('input', updateTranslitSugg);
+// #19: подсказка КНИГ Мактабы прямо при вводе (ввёл طب / الطبراني → предлагает открыть книгу/сборник)
+let _bsT;
+function updateBookSugg(){
+  const box=document.getElementById('bookSugg'); if(!box) return;
+  const v=(document.getElementById('q').value||'').trim();
+  if(tab!=='hadith' || v.length<2 || v.length>22 || !isArabic(v)){ box.style.display='none'; box.innerHTML=''; return; }
+  clearTimeout(_bsT);
+  _bsT=setTimeout(async()=>{
+    if(((document.getElementById('q').value||'').trim())!==v) return;
+    let cat; try{ cat=await loadCatalog(); }catch(e){ return; }
+    if(!cat || ((document.getElementById('q').value||'').trim())!==v) return;
+    const cq=canon(v); if(!cq) { box.style.display='none'; return; }
+    const hits=cat.filter(b=>{ const nm=canon(b.n||''),au=canon(b.a||''); return nm.indexOf(cq)!==-1||au.indexOf(cq)!==-1; });
+    if(!hits.length){ box.style.display='none'; box.innerHTML=''; return; }
+    box.style.display='flex'; box.innerHTML='';
+    const cap=document.createElement('span'); cap.textContent='📚 Открыть книгу:'; cap.style.cssText='font-size:12px;color:var(--hint);margin-inline-end:2px'; box.appendChild(cap);
+    hits.slice(0,4).forEach(b=>{ const c=document.createElement('span'); c.className='chip'; c.style.cssText='cursor:pointer;direction:rtl;font-size:13px'; c.textContent=b.n; c.title=(b.a||'')+(b.c?(' · '+b.c):''); c.onclick=()=>{ box.style.display='none'; openBook(b.i); }; box.appendChild(c); });
+    if(hits.length>4){ const more=document.createElement('span'); more.className='chip'; more.style.cssText='cursor:pointer;font-size:12px;color:var(--link)'; more.textContent='+'+(hits.length-4)+' в Мактабе'; more.onclick=()=>{ box.style.display='none'; openCatalog(); setTimeout(()=>{ const s=document.querySelector('#catModal #catSearch'); if(s){ s.value=v; const mm=document.getElementById('catModal'); if(mm&&mm._render) mm._render(); } },180); }; box.appendChild(more); }
+  }, 240);
+}
+document.getElementById('q').addEventListener('input', updateBookSugg);
 /* 🕐 Недавние поиски (при тапе на пустое поле; выключается в Настройках) */
 let _recClosed=false, _popClosed=false;   // закрыто крестиком (×) на эту сессию
 function _recentKey(){ return 'muslimoon_recent_'+tab; }   // РАЗДЕЛЬНО для Аятов и Хадисов
@@ -3431,7 +3453,7 @@ function goHome(){ document.getElementById('q').value=''; selCols.clear(); selEx
   var _nb=document.getElementById('neuroBox'); if(_nb) _nb.style.display='none';
   var _mm2=document.getElementById('modesMore'); if(_mm2) _mm2.style.display='none'; var _mmb=document.getElementById('moreModes'); if(_mmb){ _mmb.textContent='⚙️ ещё ▾'; _mmb.classList.remove('on'); }
   document.getElementById('q').placeholder='Слова, фраза или № хадиса…';
-  document.getElementById('res').innerHTML=''; setStatus(''); try{localStorage.removeItem('muslimoon_state');}catch(e){} document.querySelector('.tab[data-tab="hadith"]').click(); renderCols(); updateExtraSel(); var _qh=document.getElementById('qHelper'); if(_qh)_qh.style.display='none'; var _qs=document.getElementById('qSugg'); if(_qs)_qs.style.display='none'; var _tl=document.getElementById('tlSugg'); if(_tl){_tl.style.display='none';_tl.innerHTML='';} try{window.scrollTo(0,0);}catch(e){} }
+  document.getElementById('res').innerHTML=''; setStatus(''); try{localStorage.removeItem('muslimoon_state');}catch(e){} document.querySelector('.tab[data-tab="hadith"]').click(); renderCols(); updateExtraSel(); var _qh=document.getElementById('qHelper'); if(_qh)_qh.style.display='none'; var _qs=document.getElementById('qSugg'); if(_qs)_qs.style.display='none'; var _tl=document.getElementById('tlSugg'); if(_tl){_tl.style.display='none';_tl.innerHTML='';} var _bsg=document.getElementById('bookSugg'); if(_bsg){_bsg.style.display='none';_bsg.innerHTML='';} try{window.scrollTo(0,0);}catch(e){} }
 document.getElementById('brand').onclick=goHome;
 var _hb=document.getElementById('homeBtn'); if(_hb) _hb.onclick=goHome;
 var _vb=document.getElementById('verBadge'); if(_vb){ _vb.style.cursor='pointer'; _vb.title='🆕 Что нового — нажми'; _vb.onclick=(e)=>{ e.stopPropagation(); try{ window.showUpdateNotes(APPVER); }catch(err){} }; }   // #30: бейдж версии → что нового + комменты по пунктам
