@@ -2855,11 +2855,13 @@ async def _api_serve(application=None):
                     await loop.run_in_executor(None, usage_log, user, "объяснение", False, len(text), source, str(num or ""))
                     await _notify_usage(user, "объяснение", False, source, num, None)
                     return _cors(web.json_response({'explanation': stored['ru'], 'cached': True}))
-            sysm = ("Ты — знающий и осторожный исламский учитель. Объясни ПРОСТЫМ русским языком смысл этого "
-                    + ("аята Корана" if kind == 'quran' else "хадиса") + ": о чём он, главный смысл и польза/урок. "
-                    "2-5 коротких абзацев, понятно обычному человеку, без воды и длинных предисловий. "
-                    "НЕ выдумывай факты/хадисы; если что-то спорно — отметь кратко. Только объяснение.")
-            ex = await loop.run_in_executor(None, ask_deepseek, text, sysm)
+            ref = ("Коран " + str(num)) if kind == 'quran' else ((source.capitalize() if source != 'x' else "хадис") + (" №" + str(num) if num not in (None, '') else ""))
+            sysm = ("Ты — знающий и осторожный исламский учитель. Объясни СУПЕР-ЛАКОНИЧНО и ясно смысл этого "
+                    + ("аята Корана" if kind == 'quran' else "хадиса") + " простым русским языком: 3-6 предложений — "
+                    "главный смысл + польза/урок + краткий довод. ОБЯЗАТЕЛЬНО начни с источника (" + ref + "). "
+                    "Не пересказывай весь текст, без длинных предисловий и воды. НЕ выдумывай факты/хадисы; "
+                    "если спорно — отметь одним словом. Только объяснение, коротко.")
+            ex = await loop.run_in_executor(None, ask_deepseek, "Источник: " + ref + "\n" + text, sysm)
             ex = re.sub(r'\s*⚡.*$', '', (ex or ''), flags=re.S).strip()
             if not ex:
                 return _cors(web.json_response({'explanation': '', 'error': 'no-ai'}))
