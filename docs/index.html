@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v158</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v159</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -468,7 +468,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v158';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v159';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -932,6 +932,19 @@ function updateQuranHelper(){
 document.getElementById('q').addEventListener('input', updateQuranHelper);
 /* 🔤 Живые подсказки транскрипции под полем: рус/лат → арабское слово (локально, без ключа) */
 let _tlT;
+// M200/M142: распознать словосочетание через ИИ (когда локальная транскрипция не угадала фразу)
+async function aiResolvePhrase(v, box){
+  if(!BACKEND_URL){ toast('Нужен сервер'); return; }
+  box.innerHTML='<span class="hint">🧠 Распознаю фразу…</span>';
+  try{
+    const sr=await smartSearch(v, true);   // {phrases,quran,hadiths,note,fixed}
+    const q=document.getElementById('q');
+    const ph=(sr.phrases||[]).filter(p=>isArabic(p)).sort((a,b)=>b.length-a.length)[0];
+    if(ph){ q.value=ph; box.style.display='none'; box.innerHTML=''; try{hideRecent();}catch(e){} updateQuranHelper(); runSearch(true); return; }
+    if(sr.quran && sr.quran.length){ const p=sr.quran[0].split(':'); box.style.display='none'; box.innerHTML=''; openQuranReader(+p[0],+p[1]); return; }
+    box.innerHTML='<span class="hint">🤷 ИИ не распознал фразу — попробуй «🧠 По смыслу».</span>';
+  }catch(e){ box.innerHTML='<span class="hint">🔧 ИИ недоступен сейчас.</span>'; }
+}
 function updateTranslitSugg(){
   const box=document.getElementById('tlSugg'); if(!box) return;
   const v=(document.getElementById('q').value||'').trim();
@@ -961,6 +974,11 @@ function updateTranslitSugg(){
         ch.style.cssText="font-family:'Traditional Arabic','Amiri',serif;font-size:18px;cursor:pointer;margin:0 4px 4px 0";
         ch.textContent=w; ch.onclick=()=>pick(w); box.appendChild(ch); });
     }
+    // словосочетание (2+ слова) → кнопка распознать целиком через ИИ (когда локально не угадало)
+    if(v.indexOf(' ')!==-1){ box.appendChild(document.createElement('br'));
+      const aib=document.createElement('span'); aib.className='chip';
+      aib.style.cssText='cursor:pointer;font-size:13px;margin:4px 0 0;background:#3a2d5e;border-color:#6c5ce7;color:#e0d7ff;display:inline-block';
+      aib.textContent='🧠 Не то? Распознать фразу (ИИ)'; aib.onclick=()=>aiResolvePhrase(v, box); box.appendChild(aib); }
     box.style.display='block';
   }, 220);
 }
