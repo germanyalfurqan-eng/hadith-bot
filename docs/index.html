@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v153</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v154</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -468,7 +468,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v153';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v154';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1886,7 +1886,7 @@ function enableArabusTap(arDiv){
     const r=_wordAtPoint(ev.clientX, ev.clientY); if(!r) return;
     ev.stopPropagation();
     const fakeEl={getBoundingClientRect:()=>{ try{ const rng=document.createRange(); rng.setStart(r.node,r.s); rng.setEnd(r.node,r.e); return rng.getBoundingClientRect(); }catch(e){ return arDiv.getBoundingClientRect(); } }};
-    onWordTap(r.w, fakeEl);
+    onWordTap(r.w, fakeEl, (arDiv.textContent||'').replace(/\s+/g,' ').trim().slice(0,200));
   });
 }
 // перевод ОДНОГО слова (накопительно: source=quranword, ключ=нормформа) — повтор бесплатно
@@ -1925,13 +1925,13 @@ function gramRu(code){
   if(has('MOOD:SUBJ')) out.push('сослагат.'); if(has('MOOD:JUS')) out.push('усечён.');
   return [...new Set(out)].join(', ');
 }
-async function onWordTap(word, el){
+async function onWordTap(word, el, ctx){
   const R=await loadRoots(); let e=R.f[rootKey(word)];
   if(!e || !e[0]){ const bare=word.replace(/^(وال|فال|بال|كال|لل|ال|و|ف|ب|ك|ل)/,''); if(bare && bare!==word){ const e2=R.f[rootKey(bare)]; if(e2 && e2[0]) e=e2; } }
   e=e||['','',''];
-  showWordPopup(el, word, e[0], e[1], e[2]);
+  showWordPopup(el, word, e[0], e[1], e[2], ctx);
 }
-function showWordPopup(el, word, root, lemma, gram){
+function showWordPopup(el, word, root, lemma, gram, ctx){
   closeWordPopup();
   const n = root ? ((_roots.r[root]||[]).length) : 0;
   const g = gramRu(gram);
@@ -1951,16 +1951,16 @@ function showWordPopup(el, word, root, lemma, gram){
   pop.style.left=left+'px'; pop.style.top=(window.scrollY+r.bottom+6)+'px';
   const x=pop.querySelector('#wpX'); if(x) x.onclick=closeWordPopup;
   const all=pop.querySelector('#wpAll'); if(all) all.onclick=()=>{ closeWordPopup(); showRootPlaces(root); };
-  const aib=pop.querySelector('#wpAiBtn'); if(aib) aib.onclick=()=>wordAi(word, root, pop.querySelector('#wpAiOut'), aib);
+  const aib=pop.querySelector('#wpAiBtn'); if(aib) aib.onclick=()=>wordAi(word, root, pop.querySelector('#wpAiOut'), aib, ctx);
   showArabusInline(word, pop.querySelector('#wpArabusOut'), root);   // авто-загрузка значений+форм Arabus (с подсказкой-корнем)
 }
 // ИИ-перевод/проверка ОДНОГО слова (точный перевод+корень, приоритет над Arabus; копится; владельцу уведомление)
-async function wordAi(word, root, host, btn){
+async function wordAi(word, root, host, btn, ctx){
   if(!host) return; if(!BACKEND_URL){ host.textContent='ИИ-перевод работает на сервере'; return; }
   host.innerHTML='<span class="hint">🧠 Спрашиваю ИИ…</span>'; if(btn){ btn.disabled=true; btn.style.opacity=.6; }
   try{
     const r=await fetch(BACKEND_URL+'/wordai',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({word:word, root:root||'', initData:INITDATA})});
+      body:JSON.stringify({word:word, root:root||'', ctx:(ctx||'').slice(0,200), initData:INITDATA})});
     const j=await r.json().catch(()=>({}));
     if(r.status===403){ host.textContent=(j&&j.message)||'функция пока не открыта'; return; }
     if(r.status===429){ host.textContent='⏳ слишком часто — подожди немного'; if(btn){btn.disabled=false;btn.style.opacity='';} return; }
@@ -2014,7 +2014,7 @@ function cardAyah(d,groups){
   const {v}=d; const card=document.createElement('div');card.className='card';
   const ar=document.createElement('div');ar.className='ar';
   if(cfg.wordTap!==false){ loadRoots(); ar.innerHTML=qWordsHTML(v.text,groups,d._root);
-    ar.addEventListener('click',e=>{ const sp=e.target.closest&&e.target.closest('.qw'); if(sp){ e.stopPropagation(); onWordTap(sp.textContent, sp); } });
+    ar.addEventListener('click',e=>{ const sp=e.target.closest&&e.target.closest('.qw'); if(sp){ e.stopPropagation(); onWordTap(sp.textContent, sp, (ar.textContent||'').replace(/\s+/g,' ').trim().slice(0,200)); } });
   } else { ar.innerHTML=highlight(cfg.noDiac?stripDiac(v.text):v.text,groups,modes); }
   card.appendChild(ar);
   if(d.ru){ const ru=document.createElement('div'); ru.style.cssText='margin-top:6px;font-size:14px;color:var(--text)';
