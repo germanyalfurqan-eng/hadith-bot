@@ -153,7 +153,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v212</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v213</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -487,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v212';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v213';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1830,30 +1830,57 @@ async function _bookLoad(){
     if(!j.text){ tEl.innerHTML='<span class="hint">Страница пуста. Полистай ← / → или введи другой номер.</span>'; }
     else { const clean=(j.text||'').replace(/<[^>]*>/g,'').replace(/ /g,' ');   // убрать turath-теги <span…> (мусор)
       tEl.dataset.txt=clean; tEl.innerHTML=esc(clean).replace(/\n+/g,'<br>'); try{ enableArabusTap(tEl); if(_arabusOn) tEl.style.cursor='pointer'; }catch(e){} }
-    navEl.innerHTML='';
+    navEl.innerHTML=''; navEl.style.flexDirection='column'; navEl.style.gap='7px';
     const mk=(t,fn,dis)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=t; if(dis) b.disabled=true; b.onclick=fn; return b; };
-    navEl.appendChild(mk('← пред', ()=>{ if(_bookView.pg>1){ _bookView.pg--; _bookLoad(); } }, _bookView.pg<=1));
+    // ── РЯД 1: навигация по страницам (крупно, по центру) — как у Мактабы, но удобнее
+    const r1=document.createElement('div'); r1.style.cssText='display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap';
+    r1.appendChild(mk('⏮', ()=>{ if(_bookView.pg!==1){ _bookView.pg=1; _bookLoad(); } }, _bookView.pg<=1));   // первая страница
+    r1.appendChild(mk('← пред', ()=>{ if(_bookView.pg>1){ _bookView.pg--; _bookLoad(); } }, _bookView.pg<=1));
     const inp=document.createElement('input'); inp.type='tel'; inp.value=_bookView.pg;
-    inp.style.cssText='width:62px;text-align:center;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:5px;font-size:14px';
+    inp.style.cssText='width:64px;text-align:center;background:var(--bg);color:var(--text);border:1px solid var(--btn);border-radius:8px;padding:6px;font-size:15px;font-weight:700';
     inp.onchange=()=>{ const p=parseInt(inp.value)||1; _bookView.pg=Math.max(1,p); _bookLoad(); };
-    navEl.appendChild(inp);
-    navEl.appendChild(mk('след →', ()=>{ _bookView.pg++; _bookLoad(); }));
-    const loc=document.createElement('span'); loc.className='hint'; loc.style.cssText='font-size:12px;margin-right:4px';
-    loc.textContent=(meta.vol?('том '+meta.vol+' · '):'')+(meta.page?('стр. '+meta.page):('стр-id '+_bookView.pg)); navEl.appendChild(loc);
-    // инструменты страницы: Arabus + перевод (ИИ)
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ const p=parseInt(inp.value)||1; _bookView.pg=Math.max(1,p); _bookLoad(); } });
+    r1.appendChild(inp);
+    r1.appendChild(mk('след →', ()=>{ _bookView.pg++; _bookLoad(); }));
+    const loc=document.createElement('span'); loc.className='hint'; loc.style.cssText='font-size:12.5px;margin:0 2px;white-space:nowrap';
+    loc.textContent='· '+(meta.vol?('том '+meta.vol+' · '):'')+(meta.page?('стр. '+meta.page):('стр-id '+_bookView.pg)); r1.appendChild(loc);
+    navEl.appendChild(r1);
+    // ── РЯД 2: инструменты страницы (поиск/копия/шрифт + ИИ-группа свёрнута)
+    const r2=document.createElement('div'); r2.style.cssText='display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap';
+    // 🔎 поиск по странице (подсветка совпадений в загруженном тексте)
+    const fnd=document.createElement('input'); fnd.type='search'; fnd.placeholder='🔎 найти на странице'; fnd.style.cssText='width:150px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:13px;direction:rtl;text-align:right';
+    const doFind=(q)=>{ const clean=tEl.dataset.txt||''; const qf=(q||'').trim();
+      let html=qf ? esc(clean).split(esc(qf)).join('<mark>'+esc(qf)+'</mark>') : esc(clean);
+      tEl.innerHTML=html.replace(/\n+/g,'<br>'); try{ enableArabusTap(tEl); if(_arabusOn) tEl.style.cursor='pointer'; }catch(e){} const f=tEl.querySelector('mark'); if(f) try{ f.scrollIntoView({block:'center'}); }catch(e){} };
+    fnd.addEventListener('keydown',e=>{ if(e.key==='Enter') doFind(fnd.value); });
+    fnd.addEventListener('search',()=>doFind(fnd.value));
+    r2.appendChild(fnd);
+    // ⧉ копировать страницу
+    r2.appendChild(mk('⧉ копия', ()=>{ const t=tEl.dataset.txt||tEl.textContent||''; try{ navigator.clipboard.writeText(t); toast('📋 Страница скопирована'); }catch(e){ toast('Не вышло'); } }));
+    // A− / A+ шрифт прямо тут
+    r2.appendChild(mk('A−', ()=>{ cfg.fontScale=Math.max(0.7,(cfg.fontScale||1)-0.1); saveCfg(cfg); applyFontScale(); }));
+    r2.appendChild(mk('A+', ()=>{ cfg.fontScale=Math.min(2.2,(cfg.fontScale||1)+0.1); saveCfg(cfg); applyFontScale(); }));
+    navEl.appendChild(r2);
+    // ── РЯД 3: ИИ-инструменты — свёрнуты в одну кнопку (чисто, не мешают чтению)
+    const aiWrap=document.createElement('div'); aiWrap.style.cssText='display:flex;flex-direction:column;gap:6px;align-items:center';
+    const aiToggle=document.createElement('button'); aiToggle.className='mini'; aiToggle.textContent='🧠 ИИ-инструменты ▾'; aiToggle.style.cssText='border:1px solid #6c5ce7;color:#d9ccff;background:#2e1d4a;padding:6px 14px;border-radius:9px;font-size:13px;font-weight:600';
+    const aiPanel=document.createElement('div'); aiPanel.style.cssText='display:none;gap:6px;flex-wrap:wrap;justify-content:center';
+    aiToggle.onclick=()=>{ const open=aiPanel.style.display!=='none'; aiPanel.style.display=open?'none':'flex'; aiToggle.textContent='🧠 ИИ-инструменты '+(open?'▾':'▴'); };
+    aiWrap.appendChild(aiToggle); aiWrap.appendChild(aiPanel); navEl.appendChild(aiWrap);
+    // Arabus (тап слова)
     const ab=document.createElement('button'); ab.className='mini'; ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus'; ab.title='Тап по слову → корень/значения';
     ab.onclick=()=>{ _arabusOn=!_arabusOn; try{ loadRoots(); if(_arabusOn) loadArabusLocal(); }catch(e){} ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus'; tEl.style.cursor=_arabusOn?'pointer':'default'; toast(_arabusOn?'📕 Arabus ВКЛ — тапай слово':'Arabus выкл'); };
-    navEl.appendChild(ab);
+    aiPanel.appendChild(ab);
     let trOut=m.querySelector('#bookTrOut'); if(!trOut){ trOut=document.createElement('div'); trOut.id='bookTrOut'; trOut.className='tr-out'; tEl.parentNode.insertBefore(trOut, tEl.nextSibling); } trOut.style.display='none'; trOut.innerHTML='';
     const trb=document.createElement('button'); trb.className='mini'; trb.textContent='🧠 Перевод (ИИ)'; trb.title='Перевести страницу (ИИ, накопит.)';
     trb.onclick=()=>{ const txt=tEl.dataset.txt||tEl.textContent||''; try{ translateTafsir(txt.slice(0,9000), 'book'+_bookView.id, _bookView.id, _bookView.pg, trOut, trb); }catch(e){} };
-    navEl.appendChild(trb);
+    aiPanel.appendChild(trb);
     // #3/#4: полный пакет — объяснение (ИИ) + огласовки страницы книги
     const _bref={source:'book'+_bookView.id, num:_bookView.pg};
     let exOut=m.querySelector('#bookExOut'); if(!exOut){ exOut=document.createElement('div'); exOut.id='bookExOut'; exOut.className='tr-out'; (m.querySelector('#bookTrOut')||tEl).parentNode.insertBefore(exOut,(m.querySelector('#bookTrOut')||tEl).nextSibling); } exOut.style.display='none'; exOut.innerHTML='';
     const exb=document.createElement('button'); exb.className='mini'; exb.textContent='🧠 Объяснить (ИИ)'; exb.title='ИИ объяснит страницу простыми словами (возможны ошибки)';
     exb.onclick=()=>{ const txt=tEl.dataset.txt||tEl.textContent||''; try{ doExplain(txt.slice(0,3500), null, _bref, exOut, exb); }catch(e){} };
-    navEl.appendChild(exb);
+    aiPanel.appendChild(exb);
     // ◌ Огласовки (ИИ): расставляем В ТОМ ЖЕ тексте (не отдельным мелким блоком), тем же шрифтом; повторно — вернуть
     const tkb=document.createElement('button'); tkb.className='mini'; tkb.textContent='◌ Огласовки (ИИ)'; tkb.title='ИИ расставит огласовки تشكيل прямо в тексте страницы';
     tkb.onclick=async()=>{
@@ -1870,7 +1897,7 @@ async function _bookLoad(){
       catch(e){ toast('🔧 Сервис недоступен'); }
       tkb.disabled=false; if(tkb.textContent==='…') tkb.textContent=p;
     };
-    navEl.appendChild(tkb);
+    aiPanel.appendChild(tkb);
     try{ tEl.scrollTop=0; m.querySelector('.panel').scrollTop=0; }catch(e){}
     try{ applyFontScale(); }catch(e){}
   }catch(e){ tEl.innerHTML='<span class="hint">🔧 Не удалось загрузить книгу — попробуй позже.</span>'; }
