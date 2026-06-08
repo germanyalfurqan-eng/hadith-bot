@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v183</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v184</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="homeBtn" style="display:block" title="🏠 На главную — сброс поиска">🏠</div>
@@ -487,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v183';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v184';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2169,6 +2169,24 @@ const CATS_INFO=[
 ];
 const _CAT_IDX={}; CATS_INFO.forEach((r,i)=>_CAT_IDX[r[0]]={ar:r[1],ru:r[2],ord:i});
 function catLabel(c){ const e=_CAT_IDX[c]; return e?(e.ar+' — '+e.ru):c; }
+let _catTr={on:false,map:{}};   // перевод названий книг (ИИ) с накоплением на клиенте
+// описание книги (ИИ) + ссылки на Википедию (накопление на сервере)
+async function _bookInfo(b,out,btn){
+  if(!BACKEND_URL){ toast('Нужен сервер'); return; }
+  if(btn.dataset.shown==='1'){ out.style.display='none'; btn.dataset.shown=''; return; }
+  out.style.display='block'; out.innerHTML='<span class="hint">ℹ️ Загружаю описание…</span>'; btn.dataset.shown='1';
+  try{ const r=await fetch(BACKEND_URL+'/bookinfo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:b.n,author:b.a||'',initData:INITDATA})});
+    const j=await r.json().catch(()=>({}));
+    if(r.status===403){ out.innerHTML='<span class="hint">'+((j&&j.message)||'функция пока не открыта')+'</span>'; return; }
+    if(!j.desc){ out.innerHTML='<span class="hint">Не удалось получить описание.</span>'; return; }
+    let html=(j.ru?('<b>'+esc(j.ru)+'</b><br>'):'')+esc(j.desc);
+    const links=[]; if(j.wiki_author) links.push('<a href="'+esc(j.wiki_author)+'" target="_blank" style="color:var(--link)">📖 Википедия: автор</a>');
+    if(j.wiki_book) links.push('<a href="'+esc(j.wiki_book)+'" target="_blank" style="color:var(--link)">📘 Википедия: книга</a>');
+    if(links.length) html+='<div style="margin-top:6px">'+links.join(' · ')+'</div>';
+    html+='<div style="margin-top:5px;font-size:11px;color:var(--hint)">🧠 справку дал ИИ '+(j.cached?'(из базы)':'')+' — возможны неточности</div>';
+    out.innerHTML=html;
+  }catch(e){ out.innerHTML='<span class="hint">🔧 сервис недоступен</span>'; }
+}
 async function openCatalog(){
   const cat=await loadCatalog();
   let m=document.getElementById('catModal');
@@ -2177,41 +2195,81 @@ async function openCatalog(){
     m.innerHTML='<div class="panel" style="max-width:640px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 12px;padding:14px 16px 11px;border-bottom:1px solid var(--border)"><b id="catTitle" style="font-size:14px;line-height:1.3">📚 Мактаба аш-Шамиля<br><span style="font-size:11px;color:var(--hint);font-weight:400">المكتبة الشاملة · '+cat.length+' книг</span></b><button class="mini" id="catClose" style="flex:none">закрыть ✕</button></div>'
      +'<input id="catSearch" placeholder="🔎 Введите название книги или автора…" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:2px solid var(--btn);border-radius:10px;padding:10px 12px;font-size:15px;margin-bottom:7px">'
      +'<select id="catCat" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 9px;font-size:15px;margin-bottom:8px"><option value="">— все разделы —</option>'+cats.map(c=>'<option value="'+esc(c)+'">'+esc(catLabel(c))+'</option>').join('')+'</select>'
-     +'<div style="display:flex;gap:6px;margin-bottom:8px"><button class="mini" id="catAi" style="flex:1;background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:9px 11px;font-size:14px">🧠 Умный поиск книги (ИИ)</button></div>'
-     +'<div class="hint" id="catAiHint" style="font-size:11px;color:var(--hint);margin:-4px 0 8px">Опиши своими словами: «недуги сердца ибн каим», «альбани сильсиля» — ИИ найдёт.</div>'
-     +'<div id="catList" style="max-height:52vh;overflow:auto"></div></div>';
+     +'<div style="display:flex;gap:6px;margin-bottom:6px"><button class="mini" id="catAi" style="flex:1;background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:9px 11px;font-size:14px">🧠 Умный поиск книги (ИИ)</button></div>'
+     +'<div style="display:flex;gap:6px;margin-bottom:6px"><button class="mini" id="catTr" style="flex:1;border:1px solid var(--border);color:var(--text);padding:8px 11px;font-size:13px">🌐 Перевести названия (ИИ)</button></div>'
+     +'<div class="hint" id="catAiHint" style="font-size:11px;color:var(--hint);margin:-2px 0 8px">Опиши своими словами: «ибн каим», «недуги сердца ибн каим», «альбани сильсиля» — ИИ найдёт.</div>'
+     +'<div id="catList" style="max-height:50vh;overflow:auto"></div></div>';
     document.body.appendChild(m);
     m.querySelector('#catClose').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
-    const render=()=>{ const q=canon((m.querySelector('#catSearch').value||'').toLowerCase()); const qc=m.querySelector('#catCat').value;
-      const list=m.querySelector('#catList'); let arr=cat;
+    let _lastArr=[];   // текущий показанный список книг (для перевода названий)
+    // строка одной книги: арабское название (огласованное если перевод вкл) + RU перевод рядом + автор + ℹ️ описание
+    const _bookRow=(b)=>{ const it=document.createElement('div'); it.style.cssText='border-bottom:1px solid var(--border);padding:9px 4px';
+      const tr=_catTr.on?(_catTr.map[b.n]||null):null;
+      const arName=(tr&&tr.voc)?tr.voc:b.n;
+      const main=document.createElement('div'); main.style.cssText='cursor:pointer;direction:rtl;text-align:right';
+      main.innerHTML='<div style="font-weight:600;color:var(--link);font-size:15px">'+esc(arName)+'</div>'
+        +((tr&&tr.ru)?('<div style="direction:ltr;text-align:left;font-size:13px;color:#bcd0ff;margin-top:2px">'+esc(tr.ru)+'</div>'):'')
+        +(b.a?('<div style="font-size:12px;color:var(--hint);margin-top:2px">'+esc(b.a)+(b.c?(' · '+esc(catLabel(b.c).split(' — ')[1]||b.c)):'')+'</div>'):'');
+      main.onclick=()=>{ m.style.display='none'; openBook(b.i); };
+      const tools=document.createElement('div'); tools.style.cssText='display:flex;gap:8px;margin-top:5px;direction:ltr';
+      const info=document.createElement('button'); info.className='mini'; info.textContent='ℹ️ о книге'; info.style.cssText='font-size:12px;padding:4px 9px';
+      const iout=document.createElement('div'); iout.style.cssText='display:none;margin-top:5px;font-size:13px;line-height:1.5;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg)';
+      info.onclick=(e)=>{ e.stopPropagation(); _bookInfo(b,iout,info); };
+      tools.appendChild(info); it.appendChild(main); it.appendChild(tools); it.appendChild(iout); return it; };
+    const showList=(arr,headHtml)=>{ const list=m.querySelector('#catList'); _lastArr=arr.slice(0,200); list.innerHTML='';
+      const h=document.createElement('div'); h.className='hint'; h.style.cssText='font-size:12px;margin-bottom:4px'; h.innerHTML=headHtml; list.appendChild(h);
+      _lastArr.forEach(b=>list.appendChild(_bookRow(b)));
+      if(_catTr.on) _catTranslateVisible();   // если перевод вкл — подтянуть переводы видимых
+    };
+    // перевести названия видимых книг (ИИ, накопление); потом перерисовать с RU + огласовками
+    async function _catTranslateVisible(){
+      if(!BACKEND_URL || !_lastArr.length) return;
+      const need=_lastArr.map(b=>b.n).filter(n=>n && !_catTr.map[n]).slice(0,40);
+      const h=m.querySelector('#catList .hint'); if(need.length && h) h.innerHTML+=' · 🌐 перевожу…';
+      if(!need.length){ _redrawTitles(); return; }
+      try{ const r=await fetch(BACKEND_URL+'/booktrans',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({titles:need,initData:INITDATA})});
+        const j=await r.json().catch(()=>({})); if(j.map) Object.assign(_catTr.map,j.map);
+      }catch(e){}
+      _redrawTitles();
+    }
+    function _redrawTitles(){ if(!_catTr.on) return; const list=m.querySelector('#catList');
+      const h=list.querySelector('.hint'); const head=h?h.outerHTML:''; list.innerHTML=head;
+      _lastArr.forEach(b=>list.appendChild(_bookRow(b))); }
+    const render=()=>{ const qc=m.querySelector('#catCat').value; let arr=cat;
       if(qc) arr=arr.filter(b=>b.c===qc);
-      if(q){ const ql=(m.querySelector('#catSearch').value||'').toLowerCase().trim(); arr=arr.filter(b=>((b.n||'').toLowerCase().indexOf(ql)!==-1)||((b.a||'').toLowerCase().indexOf(ql)!==-1)); }
-      list.innerHTML='<div class="hint" style="font-size:12px;margin-bottom:4px">найдено: '+arr.length+(arr.length>200?' (первые 200)':'')+'</div>';
-      arr.slice(0,200).forEach(b=>{ const it=document.createElement('div'); it.style.cssText='border-bottom:1px solid var(--border);padding:8px 4px;cursor:pointer;direction:rtl;text-align:right';
-        it.innerHTML='<div style="font-weight:600;color:var(--link);font-size:15px">'+esc(b.n)+'</div>'+(b.a?('<div style="font-size:12px;color:var(--hint)">'+esc(b.a)+(b.c?(' · '+esc(b.c)):'')+'</div>'):'');
-        it.onclick=()=>{ m.style.display='none'; openBook(b.i); }; list.appendChild(it); });
-      if(!arr.length && q){ const tip=document.createElement('div'); tip.className='hint'; tip.style.cssText='font-size:13px;margin:8px 0'; tip.textContent='Ничего по названию/автору. Попробуй «🧠 Подобрать книгу (ИИ)» — опиши своими словами.'; list.appendChild(tip); _catNotFound(list,(m.querySelector('#catSearch').value||'')); }
+      const ql=(m.querySelector('#catSearch').value||'').toLowerCase().trim();
+      if(ql){ const cq=canon(ql); arr=arr.filter(b=>((b.n||'').toLowerCase().indexOf(ql)!==-1)||((b.a||'').toLowerCase().indexOf(ql)!==-1)||canon(b.n||'').indexOf(cq)!==-1||canon(b.a||'').indexOf(cq)!==-1); }
+      showList(arr,'найдено: '+arr.length+(arr.length>200?' (первые 200)':''));
+      if(!arr.length && ql){ const list=m.querySelector('#catList'); const tip=document.createElement('div'); tip.className='hint'; tip.style.cssText='font-size:13px;margin:8px 0'; tip.textContent='Ничего по названию/автору. Попробуй «🧠 Умный поиск книги (ИИ)».'; list.appendChild(tip); _catNotFound(list,(m.querySelector('#catSearch').value||'')); }
     };
     let _ct; m.querySelector('#catSearch').addEventListener('input',()=>{ clearTimeout(_ct); _ct=setTimeout(render,200); });
     m.querySelector('#catCat').addEventListener('change',render);
-    // M-flood #21/#22: умный ИИ-поиск книги своими словами на русском → арабское название
+    // перевод названий (ИИ) с накоплением: тумблер
+    m.querySelector('#catTr').onclick=()=>{ _catTr.on=!_catTr.on; const b=m.querySelector('#catTr');
+      b.style.background=_catTr.on?'#173d30':''; b.style.borderColor=_catTr.on?'#2e9b5b':'var(--border)'; b.style.color=_catTr.on?'#bff5d4':'var(--text)';
+      b.textContent=_catTr.on?'🌐 Перевод названий ВКЛ ✓':'🌐 Перевести названия (ИИ)';
+      const list=m.querySelector('#catList'); list.innerHTML=''; const h=document.createElement('div'); h.className='hint'; h.style.cssText='font-size:12px;margin-bottom:4px'; h.textContent=_catTr.on?('перевод: '+_lastArr.length+' назв.'):('найдено: '+_lastArr.length); list.appendChild(h);
+      _lastArr.forEach(bb=>list.appendChild(_bookRow(bb)));
+      if(_catTr.on) _catTranslateVisible(); };
+    // умный ИИ-поиск книги/автора своими словами
     m.querySelector('#catAi').onclick=async()=>{ const inp=m.querySelector('#catSearch'); const q=(inp.value||'').trim();
-      if(q.length<2){ inp.focus(); toast('Напиши своими словами, что за книга (напр.: недуги сердца ибн каим)'); return; }
+      if(q.length<2){ inp.focus(); toast('Напиши своими словами: «ибн каим», «альбани сильсиля»…'); return; }
       if(!BACKEND_URL){ toast('Нужен сервер'); return; }
-      const list=m.querySelector('#catList'); list.innerHTML='<div class="hint">🧠 ИИ подбирает книгу…</div>';
+      const list=m.querySelector('#catList'); list.innerHTML='<div class="hint">🧠 ИИ подбирает…</div>';
       try{ const rr=await fetch(BACKEND_URL+'/booksearch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:q,initData:INITDATA})});
-        const j=await rr.json().catch(()=>({})); const terms=[].concat(j.ar||[],j.author||[]).filter(Boolean);
-        if(!terms.length){ list.innerHTML='<div class="hint">🤷 ИИ не распознал книгу.</div>'; _catNotFound(list,q); return; }
-        const fterms=terms.map(t=>canon(t));
-        let arr=cat.filter(b=>{ const nm=canon(b.n||''), au=canon(b.a||''); return fterms.some(t=>t&&(nm.indexOf(t)!==-1||au.indexOf(t)!==-1)); });
-        // если по полному термину пусто — пробуем по словам термина (частичное совпадение)
-        if(!arr.length){ const words=fterms.join(' ').split(' ').filter(w=>w.length>=3); arr=cat.filter(b=>{ const nm=canon(b.n||''); return words.some(w=>nm.indexOf(w)!==-1); }); }
-        list.innerHTML='<div class="hint" style="font-size:12px;margin-bottom:5px">🧠 ИИ: '+esc(j.note||terms[0])+' · по «'+esc(terms.slice(0,3).join(' / '))+'» найдено: '+arr.length+'</div>';
-        arr.slice(0,60).forEach(b=>{ const it=document.createElement('div'); it.style.cssText='border-bottom:1px solid var(--border);padding:8px 4px;cursor:pointer;direction:rtl;text-align:right';
-          it.innerHTML='<div style="font-weight:600;color:var(--link);font-size:15px">'+esc(b.n)+'</div>'+(b.a?('<div style="font-size:12px;color:var(--hint)">'+esc(b.a)+(b.c?(' · '+esc(b.c)):'')+'</div>'):'');
-          it.onclick=()=>{ m.style.display='none'; openBook(b.i); }; list.appendChild(it); });
-        if(!arr.length) _catNotFound(list,q);
+        const j=await rr.json().catch(()=>({})); const titles=(j.ar||[]).filter(Boolean), authors=(j.author||[]).filter(Boolean);
+        if(!titles.length && !authors.length){ list.innerHTML='<div class="hint">🤷 ИИ не распознал.</div>'; _catNotFound(list,q); return; }
+        // токены автора (для режима author — все книги автора)
+        const aTok=authors.flatMap(a=>canon(a).split(/\s+/)).filter(w=>w.length>=3 && !['الله','الدين','بن','ابو','ابن','عبد'].includes(w));
+        const tTerms=titles.map(t=>canon(t));
+        let arr;
+        if(j.mode==='author' && aTok.length){ arr=cat.filter(b=>{ const au=canon(b.a||''); return aTok.some(w=>au.indexOf(w)!==-1); }); }
+        else { arr=cat.filter(b=>{ const nm=canon(b.n||''), au=canon(b.a||''); return tTerms.some(t=>t&&nm.indexOf(t)!==-1) || aTok.some(w=>au.indexOf(w)!==-1 && tTerms.some(t=>nm.indexOf(t)!==-1)); });
+          if(!arr.length){ const words=tTerms.join(' ').split(' ').filter(w=>w.length>=3); arr=cat.filter(b=>{ const nm=canon(b.n||''); return words.some(w=>nm.indexOf(w)!==-1); }); }
+          if(!arr.length && aTok.length){ arr=cat.filter(b=>{ const au=canon(b.a||''); return aTok.some(w=>au.indexOf(w)!==-1); }); } }
+        showList(arr,'🧠 ИИ: '+esc(j.note||(authors[0]||titles[0]||''))+' · найдено: '+arr.length);
+        if(!arr.length) _catNotFound(m.querySelector('#catList'),q);
       }catch(e){ list.innerHTML='<div class="hint">🔧 ИИ недоступен сейчас.</div>'; }
     };
     m._render=render;

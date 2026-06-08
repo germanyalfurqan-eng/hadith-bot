@@ -2329,6 +2329,29 @@ def bsearch_get(key):
 def bsearch_put(key, val):
     c = _bsearch_load(); c[key] = val
     _data_put("booksearch.json", c, f"booksearch: +{key[:40]} (всего {len(c)})")
+# ---- Перевод названий книг (накопление): data/booknames.json = {"<ар.название>": {"ru":..,"voc":..}} ----
+_bnames_cache = None
+def _bnames_load():
+    global _bnames_cache
+    if _bnames_cache is None:
+        _bnames_cache = _data_get("booknames.json", {}) or {}
+    return _bnames_cache
+def bnames_put(newmap):
+    c = _bnames_load(); c.update(newmap)
+    _data_put("booknames.json", c, f"booknames: +{len(newmap)} (всего {len(c)})")
+    return len(c)
+# ---- Описание книги + Википедия (накопление): data/bookinfo.json = {"<ар.назв>|<автор>": {...}} ----
+_binfo_cache = None
+def _binfo_load():
+    global _binfo_cache
+    if _binfo_cache is None:
+        _binfo_cache = _data_get("bookinfo.json", {}) or {}
+    return _binfo_cache
+def binfo_get(key):
+    return _binfo_load().get(key)
+def binfo_put(key, val):
+    c = _binfo_load(); c[key] = val
+    _data_put("bookinfo.json", c, f"bookinfo: +{key[:40]} (всего {len(c)})")
     return len(c)
 # ---- Накопление ИИ-справок о равиях: data/rijal_ai.json = {имя: текст} (повтор НЕ тратит ключ) ----
 _rijal_cache = None
@@ -2828,28 +2851,31 @@ async def _api_serve(application=None):
                 out = dict(cached); out['cached'] = True
                 return _cors(web.json_response(out))
             sysm = ("Ты — каталог исламской библиотеки «المكتبة الشاملة» (тысячи книг). Запрос на русском "
-                    "(своими словами, ВОЗМОЖНЫ ОПЕЧАТКИ) описывает КНИГУ и/или АВТОРА. Определи, какую книгу хотят, "
-                    "и ответь СТРОГО 4 строками (метки именно так):\n"
-                    "НАЗВАНИЕ: <точные арабские названия книги, 1-3 варианта через ; как пишутся в библиотеке>\n"
-                    "АВТОР: <арабское имя автора, если ясно; иначе ->\n"
-                    "КЛЮЧИ: <2-5 арабских ключевых слов из названия для поиска; через ;>\n"
-                    "ЗАМЕТКА: <очень кратко по-русски, что это за книга>\n"
+                    "(своими словами, ВОЗМОЖНЫ ОПЕЧАТКИ) описывает КНИГУ и/или АВТОРА (часто транскрипция арабских имён). "
+                    "Определи, что хотят, и ответь СТРОГО 5 строками (метки именно так):\n"
+                    "АВТОР: <арабское имя автора как в каталоге, если запрос про автора/учёного; иначе ->\n"
+                    "НАЗВАНИЕ: <точные арабские названия книг, до 4 вариантов через ; как пишутся в библиотеке; если назван только автор — перечисли его САМЫЕ ИЗВЕСТНЫЕ книги>\n"
+                    "КЛЮЧИ: <2-6 арабских ключевых слов из названий/имени для поиска; через ;>\n"
+                    "РЕЖИМ: <author — если ищут все книги автора; book — если конкретную книгу>\n"
+                    "ЗАМЕТКА: <очень кратко по-русски, что это>\n"
                     "Примеры:\n"
-                    "«недуги сердца ибн каим» → НАЗВАНИЕ: أمراض القلوب وشفاؤها / АВТОР: ابن قيم الجوزية / КЛЮЧИ: أمراض القلوب ; شفاؤها / ЗАМЕТКА: трактат Ибн аль-Каййима о болезнях сердца\n"
-                    "«сахих бухари» → НАЗВАНИЕ: صحيح البخاري ; الجامع الصحيح / АВТОР: محمد بن إسماعيل البخاري / КЛЮЧИ: صحيح البخاري ; الجامع الصحيح / ЗАМЕТКА: сборник достоверных хадисов\n"
-                    "«рийад салихин» → НАЗВАНИЕ: رياض الصالحين / АВТОР: النووي / КЛЮЧИ: رياض الصالحين / ЗАМЕТКА: сборник Навави\n"
-                    "Бери РЕАЛЬНЫЕ арабские названия как в каталоге. Выведи ТОЛЬКО эти 4 строки.")
+                    "«ибн каим» → АВТОР: ابن قيم الجوزية / НАЗВАНИЕ: زاد المعاد ; مدارج السالكين ; إعلام الموقعين / КЛЮЧИ: ابن القيم ; ابن قيم الجوزية / РЕЖИМ: author / ЗАМЕТКА: имам Ибн аль-Каййим — показать все его книги\n"
+                    "«недуги сердца ибн каим» → АВТОР: ابن قيم الجوزية / НАЗВАНИЕ: أمراض القلوب وشفاؤها / КЛЮЧИ: أمراض القلوب ; شفاؤها / РЕЖИМ: book / ЗАМЕТКА: трактат о болезнях сердца\n"
+                    "«альбани сильсиля» → АВТОР: الألباني / НАЗВАНИЕ: السلسلة الصحيحة ; السلسلة الضعيفة / КЛЮЧИ: السلسلة ; الصحيحة ; الضعيفة ; الألباني / РЕЖИМ: book / ЗАМЕТКА: шейх аль-Альбани — Сильсиля ас-Сахиха и ад-Даифа\n"
+                    "«сахих бухари» → АВТОР: البخاري / НАЗВАНИЕ: صحيح البخاري ; الجامع الصحيح / КЛЮЧИ: صحيح البخاري ; الجامع الصحيح / РЕЖИМ: book / ЗАМЕТКА: сборник достоверных хадисов\n"
+                    "Бери РЕАЛЬНЫЕ арабские названия/имена как в каталоге. Выведи ТОЛЬКО эти 5 строк.")
             txt = await loop.run_in_executor(None, ask_deepseek, "Запрос: " + q, sysm) or ""
             def _grab(lbl):
                 m = re.search(lbl + r'\s*[:：]\s*(.+)', txt); return m.group(1).strip() if m else ''
-            naml, autl, keyl, notel = _grab('НАЗВАНИЕ'), _grab('АВТОР'), _grab('КЛЮЧИ'), _grab('ЗАМЕТКА')
+            naml, autl, keyl, model, notel = _grab('НАЗВАНИЕ'), _grab('АВТОР'), _grab('КЛЮЧИ'), _grab('РЕЖИМ'), _grab('ЗАМЕТКА')
             def _arlist(s):
                 return [re.sub(r'^[\d\.\-\)\s]+', '', x).strip() for x in re.split(r'[;\n،]', s or '') if re.search(r'[؀-ۿ]', x)][:6]
             ar = _arlist(naml) + _arlist(keyl)
             seen = set(); ar = [x for x in ar if not (x in seen or seen.add(x))][:8]
             author = _arlist(autl)
+            mode = 'author' if 'author' in (model or '').lower() else 'book'
             note = '' if notel in ('', '-', '—', '–') else notel[:200]
-            result = {'ar': ar, 'author': author, 'note': note}
+            result = {'ar': ar, 'author': author, 'mode': mode, 'note': note}
             saved = None
             if ar or author:
                 try: saved = {"new": True, "total": await loop.run_in_executor(None, bsearch_put, key, result)}
@@ -2860,6 +2886,96 @@ async def _api_serve(application=None):
             return _cors(web.json_response(out))
         except Exception as e:
             return _cors(web.json_response({'ar': [], 'author': [], 'error': str(e)}))
+
+    async def booktrans(r):
+        # Перевод названий книг (пачкой) на русский + огласованный арабский. Накопление data/booknames.json.
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('neuro', user):
+            return _deny('neuro')
+        if not rate_ok('booktrans:' + _uid(user, r), 20, 60):
+            return _ratelimited()
+        try:
+            titles = d.get('titles') or []
+            titles = [str(t).strip()[:200] for t in titles if str(t).strip()][:40]
+            if not titles:
+                return _cors(web.json_response({'map': {}}))
+            cache = _bnames_load()
+            out_map = {}; need = []
+            for t in titles:
+                if t in cache: out_map[t] = cache[t]
+                else: need.append(t)
+            new_map = {}
+            if need:
+                numbered = "\n".join(f"{i+1}. {t}" for i, t in enumerate(need))
+                sysm = ("Переведи названия исламских книг с арабского на русский. Для КАЖДОГО номера выведи ОДНУ строку строго в формате:\n"
+                        "<номер>| <русский перевод> || <тот же арабский, но С ОГЛАСОВКАМИ (تشكيل)>\n"
+                        "Русский — кратко и понятно (можно транслитерацию известных названий: «Сахих аль-Бухари»). "
+                        "Огласуй арабский правильно. Ничего лишнего, только строки по числу названий.")
+                txt = await loop.run_in_executor(None, ask_deepseek, numbered, sysm) or ""
+                for line in txt.splitlines():
+                    mm = re.match(r'\s*(\d{1,3})\s*[\|\.\)]\s*(.+)', line)
+                    if not mm: continue
+                    idx = int(mm.group(1)) - 1; rest = mm.group(2).strip()
+                    if idx < 0 or idx >= len(need): continue
+                    if '||' in rest:
+                        ru, voc = rest.split('||', 1); ru = ru.strip(); voc = voc.strip()
+                    else:
+                        ru = rest.strip(); voc = ''
+                    if ru:
+                        new_map[need[idx]] = {'ru': ru[:200], 'voc': voc[:200]}
+                if new_map:
+                    try: await loop.run_in_executor(None, bnames_put, new_map)
+                    except Exception: pass
+                out_map.update(new_map)
+            await loop.run_in_executor(None, usage_log, user, "перевод названий", bool(need), len(titles), "", "")
+            return _cors(web.json_response({'map': out_map, 'translated': len(new_map)}))
+        except Exception as e:
+            return _cors(web.json_response({'map': {}, 'error': str(e)}))
+
+    async def bookinfo(r):
+        # Описание книги (ИИ) + ссылки на Википедию автора/книги. Накопление data/bookinfo.json.
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('neuro', user):
+            return _deny('neuro')
+        if not rate_ok('bookinfo:' + _uid(user, r), 15, 60):
+            return _ratelimited()
+        try:
+            title = (d.get('title') or '').strip()[:200]
+            author = (d.get('author') or '').strip()[:120]
+            if not title:
+                return _cors(web.json_response({}))
+            key = title + '|' + author
+            force = bool(d.get('force'))
+            cached = None if force else await loop.run_in_executor(None, binfo_get, key)
+            if cached:
+                out = dict(cached); out['cached'] = True
+                return _cors(web.json_response(out))
+            sysm = ("Дай справку об исламской книге. Ответь СТРОГО 4 строками (метки именно так):\n"
+                    "НАЗВАНИЕ_РУ: <русский перевод названия>\n"
+                    "ОПИСАНИЕ: <2-4 предложения: о чём книга, тематика, значение, автор и его эпоха>\n"
+                    "ВИКИ_АВТОР: <URL статьи Википедии об авторе (ru.wikipedia.org или ar.wikipedia.org), если уверен; иначе ->\n"
+                    "ВИКИ_КНИГА: <URL статьи Википедии о книге, если уверена существует; иначе ->\n"
+                    "Не выдумывай ссылки — если не уверен, ставь -. Выведи только эти 4 строки.")
+            txt = await loop.run_in_executor(None, ask_deepseek, f"Книга: {title}\nАвтор: {author}", sysm) or ""
+            def _grab(lbl):
+                m = re.search(lbl + r'\s*[:：]\s*(.+)', txt); return m.group(1).strip() if m else ''
+            ru = _grab('НАЗВАНИЕ_РУ'); desc = _grab('ОПИСАНИЕ')
+            wa = _grab('ВИКИ_АВТОР'); wb = _grab('ВИКИ_КНИГА')
+            def _url(s):
+                m = re.search(r'https?://[^\s\)]+', s or ''); return m.group(0) if m else ''
+            result = {'ru': ru[:200], 'desc': desc[:700], 'wiki_author': _url(wa), 'wiki_book': _url(wb)}
+            saved = None
+            if desc:
+                try: saved = {"new": True, "total": await loop.run_in_executor(None, binfo_put, key, result)}
+                except Exception: saved = None
+            await loop.run_in_executor(None, usage_log, user, "описание книги", True, len(title), "", "")
+            await _notify_usage(user, "описание книги", True, "", "", saved)
+            out = dict(result); out['cached'] = False
+            return _cors(web.json_response(out))
+        except Exception as e:
+            return _cors(web.json_response({'error': str(e)}))
 
     async def wordai(r):
         # ИИ-перевод/проверка ОДНОГО слова: точный перевод + настоящий корень (надёжнее Arabus).
@@ -3282,6 +3398,7 @@ async def _api_serve(application=None):
                   web.get('/api/popular', popular), web.get('/api/arabus', arabus),
                   web.post('/api/wordai', wordai), web.post('/api/explain', explain),
                   web.post('/api/booksearch', booksearch),
+                  web.post('/api/booktrans', booktrans), web.post('/api/bookinfo', bookinfo),
                   web.get('/api/book_page', book_page), web.post('/api/isnad_ai', isnad_ai_h),
                   web.post('/api/devfeedback', devfeedback),
                   web.options('/api/{t:.*}', opt)])
