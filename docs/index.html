@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v159</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v160</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -287,6 +287,7 @@
     <div class="row"><span>📚 Другие сборники (Дарими, Ибн Хиббан…)</span><button class="go" id="extraBtn2" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>📖 Читать сборник</span><button class="go" id="readBtn2" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>🌿 Корни Корана (выбрать корень → аяты)</span><button class="go" id="rootBrowBtn" style="padding:5px 12px">Открыть</button></div>
+    <div class="row"><span>📚 Вся Мактаба (8589 книг — читать любую)</span><button class="go" id="catBrowBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row" style="opacity:.55"><span>📌 Фетвы и ответы (нумерованные)</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>📚 Полезные ресурсы</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>🔊 Озвучка аятов</span><span>скоро</span></div>
@@ -468,7 +469,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v159';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v160';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2045,6 +2046,37 @@ async function showRootPlaces(root, opts){
   if(n>CAP){ const m=document.createElement('div'); m.className='hint'; m.style.marginTop='8px'; m.textContent='(показаны первые '+CAP+' из '+n+')'; res.appendChild(m); }
   try{ window.scrollTo(0,0); }catch(e){}
 }
+// M216/M127: браузер ВСЕЙ Мактабы (8589 книг каталога Шамилы=turath) → открыть любую в читалке
+let _catalog=null,_catalogP=null;
+function loadCatalog(){ if(_catalog) return Promise.resolve(_catalog); if(_catalogP) return _catalogP;
+  _catalogP=fetch('./catalog.json').then(r=>r.ok?r.json():null).then(j=>{_catalog=j||[];return _catalog;}).catch(()=>{_catalog=[];return _catalog;}); return _catalogP; }
+async function openCatalog(){
+  const cat=await loadCatalog();
+  let m=document.getElementById('catModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='catModal';
+    const cats=[...new Set(cat.map(b=>b.c).filter(Boolean))].sort();
+    m.innerHTML='<div class="panel" style="max-width:640px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:6;background:var(--card);margin:-16px -16px 8px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b id="catTitle" style="font-size:14px">📚 Вся Мактаба ('+cat.length+' книг)</b><button class="mini" id="catClose" style="flex:none">закрыть ✕</button></div>'
+     +'<input id="catSearch" placeholder="🔎 название или автор…" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:14px;margin-bottom:6px">'
+     +'<select id="catCat" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:13px;margin-bottom:8px"><option value="">— все разделы —</option>'+cats.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('')+'</select>'
+     +'<div id="catList" style="max-height:54vh;overflow:auto"></div></div>';
+    document.body.appendChild(m);
+    m.querySelector('#catClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+    const render=()=>{ const q=canon((m.querySelector('#catSearch').value||'').toLowerCase()); const qc=m.querySelector('#catCat').value;
+      const list=m.querySelector('#catList'); let arr=cat;
+      if(qc) arr=arr.filter(b=>b.c===qc);
+      if(q){ const ql=(m.querySelector('#catSearch').value||'').toLowerCase().trim(); arr=arr.filter(b=>((b.n||'').toLowerCase().indexOf(ql)!==-1)||((b.a||'').toLowerCase().indexOf(ql)!==-1)); }
+      list.innerHTML='<div class="hint" style="font-size:12px;margin-bottom:4px">найдено: '+arr.length+(arr.length>200?' (первые 200)':'')+'</div>';
+      arr.slice(0,200).forEach(b=>{ const it=document.createElement('div'); it.style.cssText='border-bottom:1px solid var(--border);padding:8px 4px;cursor:pointer;direction:rtl;text-align:right';
+        it.innerHTML='<div style="font-weight:600;color:var(--link);font-size:15px">'+esc(b.n)+'</div>'+(b.a?('<div style="font-size:12px;color:var(--hint)">'+esc(b.a)+(b.c?(' · '+esc(b.c)):'')+'</div>'):'');
+        it.onclick=()=>{ m.style.display='none'; openBook(b.i); }; list.appendChild(it); });
+    };
+    let _ct; m.querySelector('#catSearch').addEventListener('input',()=>{ clearTimeout(_ct); _ct=setTimeout(render,200); });
+    m.querySelector('#catCat').addEventListener('change',render);
+    m._render=render;
+  }
+  m.style.display='flex'; if(m._render) m._render();
+}
 // M166: читалка Корана — клик «Коран · X:Y» → вся сура для чтения (листать суры, перевод, Arabus)
 let _qrView={s:1,a:0};
 async function openQuranReader(s,a){
@@ -3222,6 +3254,7 @@ var _setC=document.getElementById('settingsClose'); if(_setC) _setC.onclick=()=>
 var _tfC=document.getElementById('tafsirClose'); if(_tfC) _tfC.onclick=()=>{ document.getElementById('tafsirModal').style.display='none'; };
 var _rb2=document.getElementById('readBtn2'); if(_rb2) _rb2.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openReader(); };
 var _rbr=document.getElementById('rootBrowBtn'); if(_rbr) _rbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openRootBrowser(); };
+var _cbr=document.getElementById('catBrowBtn'); if(_cbr) _cbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openCatalog(); };
 document.getElementById('favBtn').onclick=()=>{ renderFav('date'); document.getElementById('favModal').style.display='flex'; };
 var _fh=document.getElementById('favHdr'); if(_fh) _fh.onclick=()=>{ renderFav('date'); document.getElementById('favModal').style.display='flex'; };
 document.getElementById('favClose').onclick=()=>{ document.getElementById('favModal').style.display='none'; };
