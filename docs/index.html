@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v163</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v164</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -284,10 +284,13 @@
     </div>
     <div class="hint" style="margin:0 0 8px">Дополнительные функции и сервисы.</div>
     <div class="row"><span>⭐ Закладки / избранное</span><button class="go" id="favBtn" style="padding:5px 12px">Открыть</button></div>
-    <div class="row"><span>📚 Другие сборники (Дарими, Ибн Хиббан…)</span><button class="go" id="extraBtn2" style="padding:5px 12px">Открыть</button></div>
-    <div class="row"><span>📖 Читать сборник</span><button class="go" id="readBtn2" style="padding:5px 12px">Открыть</button></div>
+    <div class="hint" style="margin:8px 0 2px;font-size:12px">📖 Чтение книг</div>
+    <div class="row"><span>📖 Читать Коран (сура целиком · аудио · перевод)</span><button class="go" id="qrOpenBtn" style="padding:5px 12px">Открыть</button></div>
+    <div class="row"><span>📚 Вся Мактаба — читать любую из 8589 книг</span><button class="go" id="catBrowBtn" style="padding:5px 12px">Открыть</button></div>
+    <div class="row"><span>📗 Читать наши сборники (Бухари, Муслим…)</span><button class="go" id="readBtn2" style="padding:5px 12px">Открыть</button></div>
+    <div class="hint" style="margin:8px 0 2px;font-size:12px">🔎 Поиск</div>
+    <div class="row"><span>➕ Добавить сборники в ПОИСК (выбор)</span><button class="go" id="extraBtn2" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>🌿 Корни Корана (выбрать корень → аяты)</span><button class="go" id="rootBrowBtn" style="padding:5px 12px">Открыть</button></div>
-    <div class="row"><span>📚 Вся Мактаба (8589 книг — читать любую)</span><button class="go" id="catBrowBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row" style="opacity:.55"><span>📌 Фетвы и ответы (нумерованные)</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>📚 Полезные ресурсы</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>🔊 Озвучка аятов</span><span>скоро</span></div>
@@ -469,7 +472,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v163';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v164';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2083,12 +2086,26 @@ async function openQuranReader(s,a){
   s=+s||1; if(s<1)s=1; if(s>114)s=114; _qrView={s:s,a:+a||0};
   let m=document.getElementById('qrModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='qrModal';
-    m.innerHTML='<div class="panel" style="max-width:680px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:6;background:var(--card);margin:-16px -16px 8px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b id="qrTitle" style="font-size:14px">📖 Коран</b><button class="mini" id="qrClose" style="flex:none">закрыть ✕</button></div><div id="qrNav" style="display:flex;gap:6px;align-items:center;justify-content:center;margin-bottom:8px;flex-wrap:wrap"></div><div id="qrBody" style="max-height:62vh;overflow:auto"></div></div>';
+    m.innerHTML='<div class="panel" style="max-width:680px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:6;background:var(--card);margin:-16px -16px 10px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b id="qrTitle" style="font-size:14px">📖 Коран</b><button class="mini" id="qrClose" style="flex:none">закрыть ✕</button></div>'
+     +'<input id="qrSearch" placeholder="🔎 сура:аят (2:255) · № суры · название суры…" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:14px;margin-bottom:8px">'
+     +'<div id="qrNav" style="display:flex;gap:6px;align-items:center;justify-content:center;margin:2px 0 10px;flex-wrap:wrap"></div><div id="qrBody" style="max-height:58vh;overflow:auto"></div></div>';
     document.body.appendChild(m);
     m.querySelector('#qrClose').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+    const qs=m.querySelector('#qrSearch'); qs.addEventListener('keydown',e=>{ if(e.key==='Enter') _qrSearchGo(qs.value); });
   }
   m.style.display='flex'; await _qrLoad();
+}
+function _qrSearchGo(val){ val=(val||'').trim(); if(!val) return;
+  let mm=val.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+  let m1=mm.match(/^(\d{1,3})\s*[:\.\s]\s*(\d{1,3})$/);   // сура:аят
+  if(m1){ openQuranReader(+m1[1], +m1[2]); return; }
+  if(/^\d{1,3}$/.test(mm)){ const n=+mm; if(n>=1&&n<=114){ openQuranReader(n,0); return; } }
+  // по названию суры
+  const q=(val||'').toLowerCase().replace('сура','').replace('сура','').trim();
+  let idx=-1; for(let i=0;i<SURA_NAMES.length;i++){ const nm=(SURA_NAMES[i]||'').toLowerCase(); if(nm.indexOf(q)!==-1 || q.indexOf(nm)!==-1){ idx=i; break; } }
+  if(idx<0 && typeof SURA_RU!=='undefined'){ for(let i=0;i<114;i++){ const r=(SURA_RU[i+1]||'').toLowerCase(); if(r && (r.indexOf(q)!==-1||q.indexOf(r)!==-1)){ idx=i; break; } } }
+  if(idx>=0) openQuranReader(idx+1,0); else toast('Не понял: введи 2:255, номер суры или название');
 }
 async function _qrLoad(){
   const m=document.getElementById('qrModal'); if(!m) return;
@@ -3159,7 +3176,7 @@ var _l4=document.getElementById('lnkAccess'); if(_l4) _l4.onclick=()=>openLink(G
 
 /* ===================== ОБРАТНАЯ СВЯЗЬ ===================== */
 let _fbCtx='';
-function openFeedback(ctx){ _fbCtx=ctx||''; var c=document.getElementById('fbCtx'); if(c) c.textContent=ctx?('Контекст: '+ctx):'Общее замечание'; var t=document.getElementById('fbText'); if(t) t.value=''; document.getElementById('fbModal').style.display='flex'; }
+function openFeedback(ctx){ _fbCtx=ctx||''; var c=document.getElementById('fbCtx'); if(c) c.textContent=ctx?('Контекст: '+ctx):'Общее замечание'; var t=document.getElementById('fbText'); if(t) t.value=''; var m=document.getElementById('fbModal'); m.style.zIndex='10000'; m.style.display='flex'; }
 async function sendFeedback(){
   const t=document.getElementById('fbText').value.trim(); if(!t){ toast('Напиши замечание'); return; }
   if(!BACKEND_URL){ toast('Нет связи с сервером'); return; }
@@ -3270,6 +3287,7 @@ var _tfC=document.getElementById('tafsirClose'); if(_tfC) _tfC.onclick=()=>{ doc
 var _rb2=document.getElementById('readBtn2'); if(_rb2) _rb2.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openReader(); };
 var _rbr=document.getElementById('rootBrowBtn'); if(_rbr) _rbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openRootBrowser(); };
 var _cbr=document.getElementById('catBrowBtn'); if(_cbr) _cbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openCatalog(); };
+var _qro=document.getElementById('qrOpenBtn'); if(_qro) _qro.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openQuranReader(_qrView.s||1, 0); };
 document.getElementById('favBtn').onclick=()=>{ renderFav('date'); document.getElementById('favModal').style.display='flex'; };
 var _fh=document.getElementById('favHdr'); if(_fh) _fh.onclick=()=>{ renderFav('date'); document.getElementById('favModal').style.display='flex'; };
 document.getElementById('favClose').onclick=()=>{ document.getElementById('favModal').style.display='none'; };
