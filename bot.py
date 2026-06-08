@@ -2606,6 +2606,25 @@ def wide_search(q, page=1):
         return {"count": 0, "data": [], "error": str(e), "page": page}
     return {"count": 0, "data": [], "page": page}
 
+def turath_page(book_id, pg):
+    """M216: страница книги Мактабы/turath по book_id+pg → {text, meta, pg}. Прокси (CORS у turath закрыт)."""
+    try:
+        bid = re.sub(r'[^0-9]', '', str(book_id or ''))[:8]
+        p = re.sub(r'[^0-9]', '', str(pg or '1'))[:6] or '1'
+        if not bid:
+            return {}
+        r = requests.get('https://api.turath.io/page', params={'book_id': bid, 'pg': p},
+                         headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://app.turath.io/'}, timeout=15)
+        if r.status_code == 200:
+            j = r.json(); meta = j.get('meta')
+            if isinstance(meta, str):
+                try: meta = json.loads(meta)
+                except Exception: meta = {}
+            return {'text': j.get('text', ''), 'meta': meta or {}, 'pg': int(p)}
+    except Exception as e:
+        return {'err': str(e)}
+    return {}
+
 async def _api_serve(application=None):
     from aiohttp import web
     loop = asyncio.get_event_loop()
@@ -2803,6 +2822,16 @@ async def _api_serve(application=None):
             return _cors(web.json_response(out))
         except Exception as e:
             return _cors(web.json_response({'ru': '', 'error': str(e)}))
+
+    async def book_page(r):
+        # M216: читалка любой книги Мактабы через turath (book_id+pg). Гейт = вход в приложение.
+        user = verify_init_data(r.headers.get('X-Init-Data') or r.query.get('initData'))
+        if not feature_allowed('app', user):
+            return _deny('app')
+        if not rate_ok('bookpage:' + _uid(user, r), 60, 60):
+            return _ratelimited()
+        res = await loop.run_in_executor(None, turath_page, r.query.get('id'), r.query.get('pg') or '1')
+        return _cors(web.json_response(res))
 
     async def explain(r):
         # M208: нейро-объяснение «простыми словами» (шарх/тафсир) хадиса/аята. Накопление в expl_<code>. Гейт = нейро.
@@ -3098,6 +3127,7 @@ async def _api_serve(application=None):
                   web.get('/api/narrator', narrator), web.post('/api/narrator_ai', narrator_ai), web.post('/api/hit', hit),
                   web.get('/api/popular', popular), web.get('/api/arabus', arabus),
                   web.post('/api/wordai', wordai), web.post('/api/explain', explain),
+                  web.get('/api/book_page', book_page),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))

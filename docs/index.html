@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v139</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v140</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -457,7 +457,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v139';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v140';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1540,10 +1540,51 @@ let _booksMap=null,_booksMapP=null;
 function loadBooksMap(){ if(_booksMap) return Promise.resolve(_booksMap); if(_booksMapP) return _booksMapP;
   _booksMapP=fetch('./books_map.json').then(r=>r.ok?r.json():null).then(j=>{_booksMap=j||{};return _booksMap;}).catch(()=>{_booksMap={};return _booksMap;}); return _booksMapP; }
 function bookName(id){ id=String(id||''); return (_booksMap&&_booksMap[id])||''; }
+// M216: читалка любой книги Мактабы (через turath /api/book_page) — листание + Arabus
+let _bookView={id:null,pg:1};
+function openBook(bookId, startPg){
+  if(!BACKEND_URL){ toast('Читалка книги работает на сервере'); return; }
+  const id=String(bookId||'').replace(/[^0-9]/g,''); if(!id) return;
+  let sp=parseInt(String(startPg||'').replace(/[^0-9]/g,''))||1; if(sp<1) sp=1;
+  _bookView={id:id, pg:sp};
+  let m=document.getElementById('bookModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='bookModal';
+    m.innerHTML='<div class="panel" style="max-width:680px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:6;background:var(--card);margin:-16px -16px 8px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b id="bookTitle" style="font-size:14px">📖 Книга</b><button class="mini" id="bookClose" style="flex:none">закрыть ✕</button></div><div id="bookNav" style="display:flex;gap:6px;align-items:center;justify-content:center;margin-bottom:8px;flex-wrap:wrap"></div><div id="bookText" style="direction:rtl;text-align:right;font-size:18px;line-height:2.05;border:1px solid var(--border);border-radius:10px;padding:12px;max-height:60vh;overflow:auto"></div></div>';
+    document.body.appendChild(m);
+    m.querySelector('#bookClose').onclick=()=>{ m.style.display='none'; };
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+  }
+  m.style.display='flex'; _bookLoad();
+}
+async function _bookLoad(){
+  const m=document.getElementById('bookModal'); if(!m) return;
+  const tEl=m.querySelector('#bookText'), navEl=m.querySelector('#bookNav'), ttl=m.querySelector('#bookTitle');
+  tEl.innerHTML='<span class="hint">📖 Загружаю страницу…</span>';
+  try{
+    const r=await fetch(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+_bookView.pg+'&initData='+encodeURIComponent(INITDATA));
+    const j=await r.json().catch(()=>({})); const meta=j.meta||{};
+    ttl.textContent='📖 '+((meta.book_name||bookName(_bookView.id)||('книга №'+_bookView.id)));
+    if(!j.text){ tEl.innerHTML='<span class="hint">Страница пуста. Полистай ← / → или введи другой номер.</span>'; }
+    else { tEl.innerHTML=esc(j.text).replace(/\n+/g,'<br>'); try{ enableArabusTap(tEl); if(_arabusOn) tEl.style.cursor='pointer'; }catch(e){} }
+    navEl.innerHTML='';
+    const mk=(t,fn,dis)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=t; if(dis) b.disabled=true; b.onclick=fn; return b; };
+    navEl.appendChild(mk('← пред', ()=>{ if(_bookView.pg>1){ _bookView.pg--; _bookLoad(); } }, _bookView.pg<=1));
+    const inp=document.createElement('input'); inp.type='tel'; inp.value=_bookView.pg;
+    inp.style.cssText='width:62px;text-align:center;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:5px;font-size:14px';
+    inp.onchange=()=>{ const p=parseInt(inp.value)||1; _bookView.pg=Math.max(1,p); _bookLoad(); };
+    navEl.appendChild(inp);
+    navEl.appendChild(mk('след →', ()=>{ _bookView.pg++; _bookLoad(); }));
+    const loc=document.createElement('span'); loc.className='hint'; loc.style.cssText='font-size:12px;margin-right:4px';
+    loc.textContent=(meta.vol?('том '+meta.vol+' · '):'')+(meta.page?('стр. '+meta.page):('стр-id '+_bookView.pg)); navEl.appendChild(loc);
+    try{ tEl.scrollTop=0; m.querySelector('.panel').scrollTop=0; }catch(e){}
+  }catch(e){ tEl.innerHTML='<span class="hint">🔧 Не удалось загрузить книгу — попробуй позже.</span>'; }
+}
 function wideCard(x){ const card=document.createElement('div');card.className='card';
   const nm=bookName(x.source); const loc=x.loc||x.source_location||'';
   if(nm||x.source){ const sh=document.createElement('div'); sh.style.cssText='font-size:13px;color:var(--link);margin-bottom:5px;direction:rtl;text-align:right;font-weight:600';
-    sh.innerHTML='📖 '+esc(nm||('источник №'+x.source))+(loc?(' · <span style="color:var(--hint);font-weight:400">'+esc(String(loc))+'</span>'):''); card.appendChild(sh); }
+    sh.innerHTML=(nm?'📖 ':'')+esc(nm||('источник №'+x.source))+(loc?(' · <span style="color:var(--hint);font-weight:400">'+esc(String(loc))+'</span>'):'');
+    if(nm){ sh.style.cursor='pointer'; sh.title='Открыть книгу в читалке'; const sp=(/^\d+$/.test(String(loc))?String(loc):1); sh.onclick=()=>openBook(x.source, sp); }   // M216: книга из каталога → открыть через turath
+    card.appendChild(sh); }
   const ar=document.createElement('div');ar.className='ar';
   ar.innerHTML=esc(x.text||'').replace(/&lt;mark&gt;/g,'<mark>').replace(/&lt;\/mark&gt;/g,'</mark>'); card.appendChild(ar);
   try{ enableArabusTap(ar); if(_arabusOn) ar.style.cursor='pointer'; }catch(e){}   // M211: Arabus и в большой библиотеке
