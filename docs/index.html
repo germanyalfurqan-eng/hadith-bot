@@ -153,7 +153,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v206</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v207</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -487,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v206';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v207';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2607,9 +2607,9 @@ async function _analyzeWordEnds(url, wordLens){
       const ch=ab.getChannelData(0), sr=ab.sampleRate, win=Math.max(1,Math.floor(sr*0.02)), n=Math.floor(ch.length/win);
       const rms=new Float32Array(n); let mx=0;
       for(let i=0;i<n;i++){ let sm=0; const off=i*win; for(let j=0;j<win;j++){ const v=ch[off+j]; sm+=v*v; } const r=Math.sqrt(sm/win); rms[i]=r; if(r>mx)mx=r; }
-      const thr=mx*0.06, winT=win/sr; const cum=new Float32Array(n+1); let acc=0;
-      for(let i=0;i<n;i++){ if(rms[i]>thr) acc+=winT; cum[i+1]=acc; }
-      _wtCache[url]={cum:cum, winT:winT, total:acc||(n*winT), n:n};
+      const thr=mx*0.06, winT=win/sr; const cum=new Float32Array(n+1); let acc=0, onIdx=-1, offIdx=-1;
+      for(let i=0;i<n;i++){ if(rms[i]>thr){ acc+=winT; if(onIdx<0) onIdx=i; offIdx=i; } cum[i+1]=acc; }
+      _wtCache[url]={cum:cum, winT:winT, total:acc||(n*winT), n:n, onset:(onIdx>0?onIdx*winT:0), offset:(offIdx>=0?(offIdx+1)*winT:0), dur:ab.duration};
     }
     const A=_wtCache[url]; const tot=wordLens.reduce((p,c)=>p+c,0)||1; let w=0;
     return wordLens.map(x=>{ w+=x; const target=(w/tot)*A.total; let lo=0,hi=A.n; while(lo<hi){ const mid=(lo+hi)>>1; if(A.cum[mid]<target) lo=mid+1; else hi=mid; } return lo*A.winT; });
@@ -2631,20 +2631,32 @@ function _qrPlay(s, a){ _qrWordStop();
   let _qw=[], _ends=[], _cw=-1;
   const _buildWT=()=>{ try{ if(!blk||cfg.wordTap===false) return; _qw=[...blk.querySelectorAll('.qw')]; const dur=au.duration||0; if(!dur||!_qw.length){_qw=[];return;}
     const wl=_qw.map(x=>Math.max(2,(x.textContent||'').replace(/[^ء-ي]/g,'').length)); const tot=wl.reduce((p,c)=>p+c,0)||1; let acc=0; _ends=wl.map(x=>{ acc+=x; return (acc/tot)*dur; }); // равномерно — сразу
-    // ...и подстройка под РЕАЛЬНЫЙ голос (паузы Худайфи): заменяем тайминги, когда проанализируем
-    _analyzeWordEnds(u, wl).then(e=>{ if(e && e.length===_qw.length && window._qrAudio===au) _ends=e; }).catch(()=>{});
+    // ...подстройка под РЕАЛЬНЫЙ голос + бесшовность: обрезаем тишину в начале/конце аята
+    _analyzeWordEnds(u, wl).then(e=>{ if(window._qrAudio!==au) return; if(e && e.length===_qw.length) _ends=e;
+      const A=_wtCache[u]; if(A){ if(cfg.qrTrim!==false){
+        if(A.onset>0.25 && (au.currentTime||0)<A.onset-0.05 && (au.currentTime||0)<0.6){ try{ au.currentTime=A.onset; }catch(e){} }   // пропустить тишину в начале
+        au.__off = (A.offset && A.dur && A.offset < A.dur-0.45) ? A.offset+0.10 : 0;   // конец речи (обрезать хвост-паузу)
+      } }
+    }).catch(()=>{});
   }catch(e){} };
   au.addEventListener('loadedmetadata',_buildWT);
-  au.ontimeupdate=()=>{ if(window._qrAudio!==au||!_qw.length) return; const t=au.currentTime; let i=_ends.findIndex(e=>t<e); if(i<0) i=_qw.length-1;
-    if(i!==_cw){ if(_cw>=0&&_qw[_cw]) _qw[_cw].classList.remove('qwnow'); if(_qw[i]) _qw[i].classList.add('qwnow'); _cw=i; } };
-  au.onplaying=()=>{ if(window._qrAudio===au){ _qrBtnSet(a,'⏸'); if(!_qw.length) _buildWT(); try{_miniSync();}catch(e){} } };
-  au.onpause=()=>{ if(window._qrAudio===au && !au.ended){ _qrBtnSet(a,'▶'); try{_miniSync();}catch(e){} } };
-  au.onended=()=>{ if(window._qrAudio!==au) return; _qrBtnSet(a,'▶');
+  const _advance=()=>{ if(window._qrAudio!==au) return; _qrBtnSet(a,'▶');
     const tot=(SURA_AYAHS[s-1]||0); const open=(()=>{const mm=document.getElementById('qrModal');return mm&&mm.style.display!=='none';})();
     if(a < tot){ _qrView={s:s,a:a+1}; _qrPlay(s, a+1); }
     else if(cfg.qrAutoNext!==false && s<114){ _qrView={s:s+1,a:0}; if(open){ _qrLoad().then(()=>_qrPlay(s+1,1)); } else { _qrPlay(s+1,1); } }
     else { window._qrStopped=true; try{_miniSync();}catch(e){} if(blk){ blk.style.outline=''; blk.style.background=''; blk.removeAttribute('data-qrhl'); } } };
+  au.ontimeupdate=()=>{ if(window._qrAudio!==au) return; const t=au.currentTime;
+    if(au.__off && t>=au.__off && !au.__adv){ au.__adv=1; au.onended=null; try{au.pause();}catch(e){} _advance(); return; }   // обрезать хвост-тишину → сразу следующий аят
+    if(!_qw.length) return; let i=_ends.findIndex(e=>t<e); if(i<0) i=_qw.length-1;
+    if(i!==_cw){ if(_cw>=0&&_qw[_cw]) _qw[_cw].classList.remove('qwnow'); if(_qw[i]) _qw[i].classList.add('qwnow'); _cw=i; } };
+  au.onplaying=()=>{ if(window._qrAudio===au){ _qrBtnSet(a,'⏸'); if(!_qw.length) _buildWT(); try{_miniSync();}catch(e){} } };
+  au.onpause=()=>{ if(window._qrAudio===au && !au.ended){ _qrBtnSet(a,'▶'); try{_miniSync();}catch(e){} } };
+  au.onended=_advance;
   au.play().catch(()=>{ _qrBtnSet(a,'▶'); toast('Аудио сейчас недоступно'); });
+  // предзагрузка СЛЕДУЮЩЕГО аята (чтобы не было паузы на загрузку между аятами)
+  try{ const tot=(SURA_AYAHS[s-1]||0); let na=null; if(a<tot) na={s:s,a:a+1}; else if(s<114) na={s:s+1,a:1};
+    if(na){ const pu='https://everyayah.com/data/'+(cfg.reciter||'Hudhaify_128kbps')+'/'+String(na.s).padStart(3,'0')+String(na.a).padStart(3,'0')+'.mp3';
+      const pre=new Audio(); pre.preload='auto'; pre.src=pu; window._qrPre=pre; } }catch(e){}
 }
 function _qrBtnSet(a, txt){ const b=document.querySelector('#qr-'+a+' .qrPlay'); if(b) b.textContent=txt; }
 function _qrToggle(s,a){
@@ -2789,6 +2801,7 @@ async function _qrLoad(){
   const tg2=(label,on,fn)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=(on?'✓ ':'')+label; b.style.cssText='border:1px solid '+(on?'#2e9b5b':'var(--border)')+';color:'+(on?'#bff5d4':'var(--text)')+';background:'+(on?'#173d30':'transparent')+';padding:8px 11px;font-size:13px;margin:0 6px 0 0'; b.onclick=()=>fn(b); return b; };
   const trow=document.createElement('div'); trow.style.cssText='display:flex;flex-wrap:wrap;gap:6px;align-items:center';
   trow.appendChild(tg2('◌ Без огласовок', !!cfg.qrNoDiac, (b)=>{ cfg.qrNoDiac=!cfg.qrNoDiac; saveCfg(cfg); _qrLoad(); }));
+  trow.appendChild(tg2('⏩ Без пауз между аятами', cfg.qrTrim!==false, (b)=>{ cfg.qrTrim=(cfg.qrTrim===false); saveCfg(cfg); const on=cfg.qrTrim!==false; b.textContent=(on?'✓ ':'')+'⏩ Без пауз между аятами'; b.style.background=on?'#173d30':'transparent'; b.style.color=on?'#bff5d4':'var(--text)'; b.style.borderColor=on?'#2e9b5b':'var(--border)'; toast(on?'⏩ Паузы между аятами убраны':'Паузы оставлены'); }));
   trow.appendChild(tg2('📕 Arabus (тап слова)', _arabusOn, (b)=>{ _arabusOn=!_arabusOn; try{ loadRoots(); if(_arabusOn) loadArabusLocal(); }catch(e){} body.querySelectorAll('.ar').forEach(a=>a.style.cursor=_arabusOn?'pointer':'default'); b.textContent=(_arabusOn?'✓ ':'')+'📕 Arabus (тап слова)'; b.style.background=_arabusOn?'#173d30':'transparent'; b.style.color=_arabusOn?'#bff5d4':'var(--text)'; b.style.borderColor=_arabusOn?'#2e9b5b':'var(--border)'; toast(_arabusOn?'📕 Arabus ВКЛ — тапай слово':'Arabus выкл'); }));
   const tj=document.createElement('span'); tj.style.cssText='font-size:13px;color:var(--hint);opacity:.7;padding:8px 6px'; tj.textContent='🎨 Таджвид (цветной) — скоро'; trow.appendChild(tj);
   sp.appendChild(trow);
