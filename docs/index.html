@@ -122,7 +122,7 @@
   .gate h2{font-size:20px;margin:14px 0 6px}
   .gate p{color:var(--hint);max-width:360px}
   /* modal управление */
-  .modal{position:fixed;inset:0;background:#000a;display:none;align-items:flex-start;justify-content:center;z-index:80;padding:14px;padding-top:calc(16px + env(safe-area-inset-top,0px));overflow:auto}
+  .modal{position:fixed;inset:0;background:#000a;display:none;align-items:flex-start;justify-content:center;z-index:80;padding:14px;padding-top:calc(40px + env(safe-area-inset-top,0px));overflow:auto}
   .modal .panel{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;max-width:460px;width:100%;max-height:90vh;overflow:auto}
   .row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:8px}
   .sw{width:46px;height:26px;border-radius:14px;background:#3a4658;position:relative;cursor:pointer;flex:none}
@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v138</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v139</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -457,7 +457,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v138';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v139';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1277,7 +1277,10 @@ async function runSearch(explicit){
     if(merged.length){ aiPhrases=merged; smartNote='🧠 '+(fixNote?fixNote+' · ':'')+'по смыслу «'+shown+'»'+quranHint+' (фразы ниже — нажми нужную)';
       // для ПОИСКА берём СПЕЦИФИЧНЫЕ (многословные) фразы — чтобы не взрывать выдачу общими словами (النبي/رسول الله)
       const multi=merged.filter(p=>p.trim().indexOf(' ')!==-1);
-      const useForQ=multi.length?multi:merged;
+      // выкидываем СЛИШКОМ ОБЩИЕ фразы (رسول الله/النبي/قال…) — иначе выдача взрывается (десятки тысяч)
+      const GEN=['رسول الله','النبي','رسول','الله','نبي','قال','عن','حدثنا','صلى الله عليه وسلم','عليه السلام','رضي الله عنه','عن النبي','عن رسول الله'].map(x=>canon(x));
+      const specific=multi.filter(p=>{ const c=canon(p); return GEN.indexOf(c)===-1 && c.replace(/\s/g,'').length>=6; });
+      const useForQ=specific.length?specific:(multi.length?multi:merged);
       q=useForQ.map(p=> p.indexOf(' ')!==-1?('"'+p+'"'):p).join(' | '); }
     else if(quranHint){ smartNote='🧠 '+(fixNote?fixNote+' · ':'')+'по смыслу «'+shown+'»'+quranHint; }
   }
@@ -1929,7 +1932,7 @@ async function doExplain(text, ayah, ref, host, btn){
   if(btn&&btn.dataset.shown==='1'){ host.style.display='none'; btn.dataset.shown=''; return; }
   const src = ayah?'quran':((ref&&ref.source)||'x'); const num = ayah?(ayah.s+':'+ayah.a):(((ref&&ref.num)!=null)?ref.num:'');
   const kind = ayah?'quran':'hadith';
-  host.style.display=''; host.innerHTML='<span class="hint">🧠 Объясняю простыми словами…</span>'; if(btn) btn.dataset.shown='1';
+  host.style.display='block'; host.innerHTML='<span class="hint">🧠 Объясняю простыми словами…</span>'; if(btn) btn.dataset.shown='1';
   try{
     const r=await fetch(BACKEND_URL+'/explain',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({text:text, source:src, num:num, kind:kind, initData:INITDATA})});
@@ -1969,9 +1972,9 @@ function addTr(meta,card,text,ayah,fav){
   };
   meta.appendChild(tr);
   // M208: кнопка «Объяснить просто» (нейро-шарх/тафсир) — для хадисов и аятов
-  const exb=document.createElement('button'); exb.className='tr-btn'; exb.textContent='🧠 Объяснить просто';
-  exb.title='ИИ объяснит смысл простыми словами (вспомогательно, возможны ошибки — не замена учёным)';
-  exb.style.cssText='background:transparent;border:1px solid #6c5ce7;color:#c9b8ff;padding:6px 11px';
+  const exb=document.createElement('button'); exb.className='tr-btn'; exb.innerHTML='🧠 Объяснить (ИИ)';
+  exb.title='Нейросеть (ИИ) объяснит смысл простыми словами — вспомогательно, возможны ошибки, не замена учёным';
+  exb.style.cssText='background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:6px 11px';
   const exout=document.createElement('div'); exout.className='tr-out';
   exb.onclick=()=>doExplain(text, ayah, refOf(fav), exout, exb);
   meta.appendChild(exb);
