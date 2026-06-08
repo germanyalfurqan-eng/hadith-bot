@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v170</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v171</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -187,7 +187,10 @@
     <button id="qClear" title="Очистить поиск" style="display:none;position:absolute;right:94px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--hint);font-size:20px;cursor:pointer;padding:4px 8px;z-index:3">✕</button>
     <button class="go" id="goBtn" title="Искать по запросу">Найти</button>
   </div>
-  <div id="quranReadRow" style="display:none;margin:4px 0 8px"><button id="quranReadBtn" style="background:#10331f;border:1px solid #2e9b5b;color:#bff5d4;padding:8px 16px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;width:100%">📖 Читать Коран (сура целиком · аудио · перевод)</button></div>
+  <div id="quranReadRow" style="display:none;margin:4px 0 8px;gap:8px">
+    <button id="quranReadBtn" style="background:#10331f;border:1px solid #2e9b5b;color:#bff5d4;padding:8px 14px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;flex:1">📖 Читать Коран</button>
+    <button id="quranRandBtn" title="Случайный аят → дальше подряд" style="background:#1d2b4a;border:1px solid #3a5b9b;color:#bcd2ff;padding:8px 14px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;flex:none">🔀 Случайно</button>
+  </div>
   <div id="hadithReadRow" style="display:none;margin:4px 0 8px"><button id="hadithReadBtn" style="background:#11261f;border:1px solid #2e7d5a;color:#bff5d4;padding:8px 16px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;width:100%">📚 Читать книги Мактабы (8589 — поиск по автору/названию)</button></div>
   <div id="qHelper" class="hint" style="display:none;margin:-2px 0 6px;color:var(--link)"></div>
   <div id="tlSugg" style="display:none;margin:-2px 0 8px"></div>
@@ -476,7 +479,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v170';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v171';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -852,7 +855,7 @@ const selExtra=new Set(); // M44: выбранные «другие сборни
 function renderCols(){
   const box=document.getElementById('cols');
   document.getElementById('colsWrap').style.display = tab==='hadith'?'block':'none';
-  var _qrr=document.getElementById('quranReadRow'); if(_qrr) _qrr.style.display = tab==='quran'?'block':'none';   // M262: «Читать Коран» в Аятах
+  var _qrr=document.getElementById('quranReadRow'); if(_qrr) _qrr.style.display = tab==='quran'?'flex':'none';   // M262: «Читать Коран» + 🔀 в Аятах
   var _hrr=document.getElementById('hadithReadRow'); if(_hrr) _hrr.style.display = tab==='hadith'?'block':'none';   // M249: «Читать книги» в Хадисах
   box.innerHTML='';
   COLLECTIONS.forEach(c=>{ const d=document.createElement('div');
@@ -2092,16 +2095,31 @@ async function openCatalog(){
 let _qrView={s:1,a:0};
 // M114+: аудио с подсветкой текущего аята + авто-переход к следующему (поаятная «дорожка чтения»)
 function _qrPlay(s, a){
-  try{ if(window._qrAudio){ window._qrAudio.pause(); } }catch(e){}
+  try{ if(window._qrAudio){ window._qrAudio.onended=null; window._qrAudio.pause(); } }catch(e){}
   const body=document.getElementById('qrBody'); if(!body) return;
+  body.querySelectorAll('.qrPlay').forEach(b=>b.textContent='▶');
   body.querySelectorAll('[data-qrhl]').forEach(b=>{ b.style.outline=''; b.style.background=''; b.removeAttribute('data-qrhl'); });
   const blk=document.getElementById('qr-'+a);
   if(blk){ blk.style.background='rgba(74,222,128,.18)'; blk.style.outline='2px solid #2e9b5b'; blk.style.borderRadius='8px'; blk.setAttribute('data-qrhl','1'); try{ blk.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
+  _qrBtnSet(a,'⏳');
   const u='https://everyayah.com/data/'+(cfg.reciter||'Hudhaify_128kbps')+'/'+String(s).padStart(3,'0')+String(a).padStart(3,'0')+'.mp3';
-  const au=new Audio(u); window._qrAudio=au;
-  au.onended=()=>{ if(window._qrAudio!==au) return; const nx=document.getElementById('qr-'+(a+1)); if(nx) _qrPlay(s, a+1); else if(blk){ blk.style.outline=''; blk.style.background=''; blk.removeAttribute('data-qrhl'); } };
-  au.play().catch(()=>toast('Аудио сейчас недоступно'));
+  const au=new Audio(u); window._qrAudio=au; window._qrCur={s:s,a:a};
+  au.onplaying=()=>{ if(window._qrAudio===au) _qrBtnSet(a,'⏸'); };
+  au.onpause=()=>{ if(window._qrAudio===au && !au.ended) _qrBtnSet(a,'▶'); };
+  au.onended=()=>{ if(window._qrAudio!==au) return; _qrBtnSet(a,'▶');
+    const nx=document.getElementById('qr-'+(a+1));
+    if(nx){ _qrPlay(s, a+1); }
+    else if(cfg.qrAutoNext!==false && s<114){ _qrView={s:s+1,a:0}; _qrLoad().then(()=>{ _qrPlay(s+1, 1); }); }
+    else if(blk){ blk.style.outline=''; blk.style.background=''; blk.removeAttribute('data-qrhl'); } };
+  au.play().catch(()=>{ _qrBtnSet(a,'▶'); toast('Аудио сейчас недоступно'); });
 }
+function _qrBtnSet(a, txt){ const b=document.querySelector('#qr-'+a+' .qrPlay'); if(b) b.textContent=txt; }
+function _qrToggle(s,a){
+  if(window._qrAudio && window._qrCur && window._qrCur.s===s && window._qrCur.a===a){ if(window._qrAudio.paused){ window._qrAudio.play().catch(()=>{}); } else { window._qrAudio.pause(); } return; }
+  _qrPlay(s,a);
+}
+function _qrRandom(){ const s=1+Math.floor(Math.random()*114); const tot=(SURA_AYAHS[s-1]||1); const a=1+Math.floor(Math.random()*tot);
+  Promise.resolve(openQuranReader(s,a)).then(()=>{ setTimeout(()=>_qrPlay(s,a),300); }); toast('🔀 '+(SURA_NAMES[s-1]||'')+' '+s+':'+a); }
 async function openQuranReader(s,a){
   s=+s||1; if(s<1)s=1; if(s>114)s=114; _qrView={s:s,a:+a||0};
   let m=document.getElementById('qrModal');
@@ -2145,8 +2163,9 @@ async function _qrLoad(){
     const t=ru[s+':'+v.a]; if(t){ const rd=document.createElement('div'); rd.style.cssText='font-size:13px;color:var(--hint);margin-top:4px;line-height:1.5'; rd.textContent=v.a+'. '+t; blk.appendChild(rd); }
     // M166+: ▶️ аудио (Alafasy) + 🛠 все инструменты на этот аят (перевод/объяснить/тафсир/Arabus/где ещё)
     const ctl=document.createElement('div'); ctl.style.cssText='margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
-    const au=document.createElement('button'); au.className='mini'; au.textContent='▶️ Слушать'; au.title='Аудио аята (чтец Али аль-Худайфи) — дальше читает подряд с подсветкой';
-    au.onclick=(e)=>{ e.stopPropagation(); _qrPlay(s, v.a); };
+    const au=document.createElement('button'); au.className='qrPlay'; au.textContent='▶'; au.title='Слушать (дальше читает подряд) · ещё раз — пауза';
+    au.style.cssText='background:var(--btn);color:#fff;border:none;border-radius:50%;width:38px;height:38px;font-size:16px;cursor:pointer;flex:none';
+    au.onclick=(e)=>{ e.stopPropagation(); _qrToggle(s, v.a); };
     const tb=document.createElement('button'); tb.className='mini'; tb.textContent='🛠 Инструменты'; tb.title='Перевод, объяснение, тафсир, Arabus, где ещё — для этого аята';
     const tools=document.createElement('div'); tools.style.display='none'; tools.style.marginTop='6px';
     tb.onclick=(e)=>{ e.stopPropagation(); if(tb.dataset.on){ tools.style.display='none'; tb.dataset.on=''; tb.textContent='🛠 Инструменты'; return; }
@@ -3320,6 +3339,7 @@ var _rbr=document.getElementById('rootBrowBtn'); if(_rbr) _rbr.onclick=()=>{ doc
 var _cbr=document.getElementById('catBrowBtn'); if(_cbr) _cbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openCatalog(); };
 var _qro=document.getElementById('qrOpenBtn'); if(_qro) _qro.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openQuranReader(_qrView.s||1, 0); };
 var _qrb=document.getElementById('quranReadBtn'); if(_qrb) _qrb.onclick=()=>openQuranReader(_qrView.s||1, 0);
+var _qrn=document.getElementById('quranRandBtn'); if(_qrn) _qrn.onclick=_qrRandom;
 var _hrb=document.getElementById('hadithReadBtn'); if(_hrb) _hrb.onclick=()=>openCatalog();
 var _rcb=document.getElementById('recentBtn'); if(_rcb) _rcb.onclick=()=>{ var b=document.getElementById('recentBox'); if(b&&b.style.display==='block'){ hideRecent(); } else { showRecent(true); } };   // M256: 🕐 переключает недавние
 document.getElementById('favBtn').onclick=()=>{ renderFav('date'); document.getElementById('favModal').style.display='flex'; };
