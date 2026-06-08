@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v165</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v166</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -185,6 +185,7 @@
     <input type="text" id="q" placeholder="Слова, фраза или № хадиса…" autocomplete="off" enterkeyhint="search">
     <button class="go" id="goBtn" title="Искать по запросу">Найти</button>
   </div>
+  <div id="quranReadRow" style="display:none;margin:4px 0 8px"><button id="quranReadBtn" style="background:#10331f;border:1px solid #2e9b5b;color:#bff5d4;padding:8px 16px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;width:100%">📖 Читать Коран (сура целиком · аудио · перевод)</button></div>
   <div id="qHelper" class="hint" style="display:none;margin:-2px 0 6px;color:var(--link)"></div>
   <div id="tlSugg" style="display:none;margin:-2px 0 8px"></div>
   <div id="qSugg" style="display:none;gap:10px;margin:0 0 8px">
@@ -472,7 +473,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v165';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v166';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -847,6 +848,7 @@ const selExtra=new Set(); // M44: выбранные «другие сборни
 function renderCols(){
   const box=document.getElementById('cols');
   document.getElementById('colsWrap').style.display = tab==='hadith'?'block':'none';
+  var _qrr=document.getElementById('quranReadRow'); if(_qrr) _qrr.style.display = tab==='quran'?'block':'none';   // M262: «Читать Коран» в Аятах
   box.innerHTML='';
   COLLECTIONS.forEach(c=>{ const d=document.createElement('div');
     d.className='col'+(c.special?' muh':'')+(selCols.has(c.code)?' on':'');
@@ -2082,6 +2084,18 @@ async function openCatalog(){
 }
 // M166: читалка Корана — клик «Коран · X:Y» → вся сура для чтения (листать суры, перевод, Arabus)
 let _qrView={s:1,a:0};
+// M114+: аудио с подсветкой текущего аята + авто-переход к следующему (поаятная «дорожка чтения»)
+function _qrPlay(s, a){
+  try{ if(window._qrAudio){ window._qrAudio.pause(); } }catch(e){}
+  const body=document.getElementById('qrBody'); if(!body) return;
+  body.querySelectorAll('[data-qrhl]').forEach(b=>{ b.style.outline=''; b.style.background=''; b.removeAttribute('data-qrhl'); });
+  const blk=document.getElementById('qr-'+a);
+  if(blk){ blk.style.background='rgba(74,222,128,.18)'; blk.style.outline='2px solid #2e9b5b'; blk.style.borderRadius='8px'; blk.setAttribute('data-qrhl','1'); try{ blk.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
+  const u='https://everyayah.com/data/'+(cfg.reciter||'Hudhaify_128kbps')+'/'+String(s).padStart(3,'0')+String(a).padStart(3,'0')+'.mp3';
+  const au=new Audio(u); window._qrAudio=au;
+  au.onended=()=>{ if(window._qrAudio!==au) return; const nx=document.getElementById('qr-'+(a+1)); if(nx) _qrPlay(s, a+1); else if(blk){ blk.style.outline=''; blk.style.background=''; blk.removeAttribute('data-qrhl'); } };
+  au.play().catch(()=>toast('Аудио сейчас недоступно'));
+}
 async function openQuranReader(s,a){
   s=+s||1; if(s<1)s=1; if(s>114)s=114; _qrView={s:s,a:+a||0};
   let m=document.getElementById('qrModal');
@@ -2090,8 +2104,9 @@ async function openQuranReader(s,a){
      +'<input id="qrSearch" placeholder="🔎 сура:аят (2:255) · № суры · название суры…" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:14px;margin-bottom:8px">'
      +'<div id="qrNav" style="display:flex;gap:6px;align-items:center;justify-content:center;margin:2px 0 10px;flex-wrap:wrap"></div><div id="qrBody" style="max-height:58vh;overflow:auto"></div></div>';
     document.body.appendChild(m);
-    m.querySelector('#qrClose').onclick=()=>m.style.display='none';
-    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+    const stopA=()=>{ try{ if(window._qrAudio){ window._qrAudio.pause(); window._qrAudio=null; } }catch(e){} };
+    m.querySelector('#qrClose').onclick=()=>{ stopA(); m.style.display='none'; };
+    m.addEventListener('click',e=>{ if(e.target===m){ stopA(); m.style.display='none'; } });
     const qs=m.querySelector('#qrSearch'); qs.addEventListener('keydown',e=>{ if(e.key==='Enter') _qrSearchGo(qs.value); });
   }
   m.style.display='flex'; await _qrLoad();
@@ -2124,9 +2139,8 @@ async function _qrLoad(){
     const t=ru[s+':'+v.a]; if(t){ const rd=document.createElement('div'); rd.style.cssText='font-size:13px;color:var(--hint);margin-top:4px;line-height:1.5'; rd.textContent=v.a+'. '+t; blk.appendChild(rd); }
     // M166+: ▶️ аудио (Alafasy) + 🛠 все инструменты на этот аят (перевод/объяснить/тафсир/Arabus/где ещё)
     const ctl=document.createElement('div'); ctl.style.cssText='margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
-    const au=document.createElement('button'); au.className='mini'; au.textContent='▶️ Слушать'; au.title='Аудио аята (чтец Али аль-Худайфи)';
-    au.onclick=(e)=>{ e.stopPropagation(); try{ const u='https://everyayah.com/data/'+(cfg.reciter||'Hudhaify_128kbps')+'/'+String(s).padStart(3,'0')+String(v.a).padStart(3,'0')+'.mp3';
-      if(window._qrAudio){ try{window._qrAudio.pause();}catch(_){} } window._qrAudio=new Audio(u); window._qrAudio.play().catch(()=>toast('Аудио сейчас недоступно')); au.textContent='🔊 Играет'; setTimeout(()=>au.textContent='▶️ Слушать',1500); }catch(err){} };
+    const au=document.createElement('button'); au.className='mini'; au.textContent='▶️ Слушать'; au.title='Аудио аята (чтец Али аль-Худайфи) — дальше читает подряд с подсветкой';
+    au.onclick=(e)=>{ e.stopPropagation(); _qrPlay(s, v.a); };
     const tb=document.createElement('button'); tb.className='mini'; tb.textContent='🛠 Инструменты'; tb.title='Перевод, объяснение, тафсир, Arabus, где ещё — для этого аята';
     const tools=document.createElement('div'); tools.style.display='none'; tools.style.marginTop='6px';
     tb.onclick=(e)=>{ e.stopPropagation(); if(tb.dataset.on){ tools.style.display='none'; tb.dataset.on=''; tb.textContent='🛠 Инструменты'; return; }
@@ -2143,6 +2157,11 @@ async function _qrLoad(){
     b.style.cssText='background:var(--btn);color:#fff;border:1px solid var(--btn);border-radius:10px;padding:9px 18px;font-size:15px;font-weight:600;cursor:pointer;margin:0 4px'+(dis?';opacity:.35':''); return b; };
   nav.appendChild(mk('← пред. сура', ()=>{ _qrView={s:s-1,a:0}; _qrLoad(); }, s<=1));
   nav.appendChild(mk('след. сура →', ()=>{ _qrView={s:s+1,a:0}; _qrLoad(); }, s>=114));
+  // 📕 Arabus тумблер для всей суры (тап по слову → корень/значения)
+  const ab=document.createElement('button'); ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus';
+  ab.style.cssText='border:1px solid #1e7d5a;border-radius:10px;padding:9px 14px;font-size:14px;cursor:pointer;margin:0 4px;color:#7fe3bf;background:'+(_arabusOn?'#173d30':'transparent');
+  ab.onclick=()=>{ _arabusOn=!_arabusOn; try{ loadRoots(); if(_arabusOn) loadArabusLocal(); }catch(e){} ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus'; ab.style.background=_arabusOn?'#173d30':'transparent'; body.querySelectorAll('.ar').forEach(a=>a.style.cursor=_arabusOn?'pointer':'default'); toast(_arabusOn?'📕 Arabus ВКЛ — тапай слово в аяте':'Arabus выкл'); };
+  nav.appendChild(ab);
   if(_qrView.a){ const tgt=body.querySelector('#qr-'+_qrView.a); if(tgt) setTimeout(()=>{ try{ tgt.scrollIntoView({block:'center'}); }catch(e){} },60); } else { body.scrollTop=0; }
 }
 function cardAyah(d,groups){
@@ -3288,6 +3307,7 @@ var _rb2=document.getElementById('readBtn2'); if(_rb2) _rb2.onclick=()=>{ docume
 var _rbr=document.getElementById('rootBrowBtn'); if(_rbr) _rbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openRootBrowser(); };
 var _cbr=document.getElementById('catBrowBtn'); if(_cbr) _cbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openCatalog(); };
 var _qro=document.getElementById('qrOpenBtn'); if(_qro) _qro.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openQuranReader(_qrView.s||1, 0); };
+var _qrb=document.getElementById('quranReadBtn'); if(_qrb) _qrb.onclick=()=>openQuranReader(_qrView.s||1, 0);
 document.getElementById('favBtn').onclick=()=>{ renderFav('date'); document.getElementById('favModal').style.display='flex'; };
 var _fh=document.getElementById('favHdr'); if(_fh) _fh.onclick=()=>{ renderFav('date'); document.getElementById('favModal').style.display='flex'; };
 document.getElementById('favClose').onclick=()=>{ document.getElementById('favModal').style.display='none'; };
