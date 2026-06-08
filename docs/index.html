@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v171</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v172</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -479,7 +479,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v171';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v172';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1559,7 +1559,7 @@ async function runSearch(explicit){
   if(!count && seq===_seq){
     if(tab==='quran' && !strict && await tryRootFallback(shown, seq)){ /* M212/M225: показал по корню (в строгом режиме — не подменяем) */ }
     else if(wideWill){ res.innerHTML='<div class="status">🔎 В наших книгах точного совпадения нет — ищу по всей библиотеке…</div>'; }
-    else if(!res.querySelector('.corrGo')){ res.innerHTML='<div class="status">Ничего не найдено 🤷</div>'; }   // M173: не затирать баннер «возможно, вы искали…»
+    else if(!res.querySelector('.corrGo')){ res.innerHTML='<div class="status">Ничего не найдено 🤷</div>'; addNotFoundBtn(res, shown); }   // M173: не затирать баннер; +«сообщите нам»
   }
   // Поиск по ВСЕЙ библиотеке: наши книги выше (если нашлись), ниже — остальной корпус (sunnah.one). Только при явном «Найти»/Enter.
   if(wideWill) await appendWide(seq, wideQ);
@@ -2024,6 +2024,8 @@ async function wordAi(word, root, host, btn, ctx){
   }catch(e){ host.textContent='🔧 сервис недоступен'; if(btn){btn.disabled=false;btn.style.opacity='';} }
 }
 document.addEventListener('click',e=>{ if(!(e.target.closest&&(e.target.closest('#wordPop')||e.target.closest('.qw')))) closeWordPopup(); }, true);
+// M256: недавние (🕐) скрываются при тапе мимо поиска
+document.addEventListener('click',e=>{ const t=e.target; if(t&&t.closest&&(t.closest('#recentBox')||t.closest('#recentBtn')||t.closest('.searchbar'))) return; var b=document.getElementById('recentBox'); if(b&&b.style.display==='block') b.style.display='none'; }, true);
 let _rootView={root:'',sort:'order',form:''};
 async function showRootPlaces(root, opts){
   if(!root) return; const R=await loadRoots(); const arr=await loadQuran();
@@ -2187,6 +2189,12 @@ async function _qrLoad(){
   ab.style.cssText='border:1px solid #1e7d5a;border-radius:10px;padding:9px 14px;font-size:14px;cursor:pointer;margin:0 4px;color:#7fe3bf;background:'+(_arabusOn?'#173d30':'transparent');
   ab.onclick=()=>{ _arabusOn=!_arabusOn; try{ loadRoots(); if(_arabusOn) loadArabusLocal(); }catch(e){} ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus'; ab.style.background=_arabusOn?'#173d30':'transparent'; body.querySelectorAll('.ar').forEach(a=>a.style.cursor=_arabusOn?'pointer':'default'); toast(_arabusOn?'📕 Arabus ВКЛ — тапай слово в аяте':'Arabus выкл'); };
   nav.appendChild(ab);
+  // выбор чтеца (everyayah)
+  const RECITERS=[['Hudhaify_128kbps','Али аль-Худайфи'],['Alafasy_128kbps','Мишари аль-Афаси'],['Husary_128kbps','Махмуд аль-Хусари'],['Abdul_Basit_Murattal_192kbps','Абдуль-Басит'],['Minshawi_Murattal_128kbps','аль-Миншави'],['Saood_ash-Shuraym_128kbps','Сауд аш-Шурайм'],['Ghamadi_40kbps','аль-Гамиди']];
+  const rs=document.createElement('select'); rs.style.cssText='background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px;font-size:13px;margin:0 4px';
+  RECITERS.forEach(rc=>{ const o=document.createElement('option'); o.value=rc[0]; o.textContent='🔊 '+rc[1]; if((cfg.reciter||'Hudhaify_128kbps')===rc[0]) o.selected=true; rs.appendChild(o); });
+  rs.onchange=()=>{ cfg.reciter=rs.value; saveCfg(cfg); toast('Чтец: '+rs.options[rs.selectedIndex].textContent.replace('🔊 ','')); };
+  nav.appendChild(rs);
   if(_qrView.a){ const tgt=body.querySelector('#qr-'+_qrView.a); if(tgt) setTimeout(()=>{ try{ tgt.scrollIntoView({block:'center'}); }catch(e){} },60); } else { body.scrollTop=0; }
 }
 function cardAyah(d,groups){
@@ -3220,6 +3228,11 @@ var _l4=document.getElementById('lnkAccess'); if(_l4) _l4.onclick=()=>openLink(G
 
 /* ===================== ОБРАТНАЯ СВЯЗЬ ===================== */
 let _fbCtx='';
+function addNotFoundBtn(res, q){ try{ if(!res) return; const w=document.createElement('div'); w.style.cssText='text-align:center;margin:12px 0';
+  const b=document.createElement('button'); b.style.cssText='background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:9px 16px;border-radius:12px;font-size:14px;cursor:pointer';
+  b.textContent='🙏 Не нашли? Сообщите нам — улучшим поиск';
+  b.onclick=()=>{ try{ openFeedback('поиск не дал результата: «'+(q||'').slice(0,120)+'»'); }catch(e){} };
+  w.appendChild(b); res.appendChild(w); }catch(e){} }
 function openFeedback(ctx){ _fbCtx=ctx||''; var c=document.getElementById('fbCtx'); if(c) c.textContent=ctx?('Контекст: '+ctx):'Общее замечание'; var t=document.getElementById('fbText'); if(t) t.value=''; var m=document.getElementById('fbModal'); m.style.zIndex='10000'; m.style.display='flex'; }
 async function sendFeedback(){
   const t=document.getElementById('fbText').value.trim(); if(!t){ toast('Напиши замечание'); return; }
