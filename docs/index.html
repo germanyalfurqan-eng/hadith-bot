@@ -152,7 +152,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="На главную">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v140</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v141</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -457,7 +457,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v140';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v141';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1404,7 +1404,7 @@ async function runSearch(explicit){
     if(!count && !modes.ai && !numMode && !strict){ relaxA=await relaxArabicHadith(codes, groups, modes, seq, add); if(seq!==_seq) return; }
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
     if(relaxA && relaxA.dropped.length && count) relaxBanner(relaxA.dropped, relaxA.used);
-    if(count) ensureGrpToggle();
+    if(count){ ensureGrpToggle(); ensureShareBtn(); }
     if(!numMode) addLibMore();   // кнопка «искать ещё в большой библиотеке» (16 изданий + Мукбиль)
   } else {
     let relaxQ=null, corrQ=null;
@@ -1430,7 +1430,7 @@ async function runSearch(explicit){
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
     if(corrQ && corrQ.changed.length) autoCorrectBanner(shown, corrQ.corrected.join(' '));   // M173: «показаны результаты для X · искать как ввёл»
     if(relaxQ && relaxQ.dropped.length && count) relaxBanner(relaxQ.dropped, relaxQ.used);   // M172: честно показать что убрали
-    if(count) ensureGrpToggle();
+    if(count){ ensureGrpToggle(); ensureShareBtn(); }
   }
   setStatus('');
   logSearch(shown, tab, count);
@@ -1507,10 +1507,30 @@ function grpToggleEl(){
 function ensureGrpToggle(){ const res=document.getElementById('res'); if(!res.firstChild || document.getElementById('grpToggle')) return;
   const grp=new Set(_results.map(srcKeyOf)); if(grp.size<2) return;   // группировка только когда есть 2+ источника/суры (иначе не мозолит глаза)
   res.insertBefore(grpToggleEl(), res.children[1]||null); }
+// M227: поделиться результатами поиска (с ЛИМИТОМ — не зависнуть — + промо бота)
+function shareResults(){
+  if(!_results||!_results.length){ toast('Сначала найди что-нибудь'); return; }
+  const LIM=10; const parts=[];
+  _results.slice(0,LIM).forEach(d=>{
+    if(d.type==='q'){ const v=d.v; parts.push('📖 Коран '+v.s+':'+v.a+'\n'+(v.text||'').replace(/\s+/g,' ').slice(0,360)); }
+    else { const h=d.h, code=d.code||(d.type==='m'?'muhaymin':''), num=(h&&(h.num||h.n))||''; parts.push('📗 '+arOf(code)+(num?(' №'+num):'')+'\n'+((h&&h.text)||'').replace(/\s+/g,' ').slice(0,360)); }
+  });
+  let txt=parts.join('\n\n———\n\n');
+  if(_results.length>LIM) txt+='\n\n…и ещё '+(_results.length-LIM)+' (смотри в приложении)';
+  txt+='\n\n📗 Muslimoon — Коран и хадисы\n'+APP_LINK;
+  if(txt.length>3800) txt=txt.slice(0,3800)+'…';
+  try{ if(navigator.share){ navigator.share({title:'Muslimoon — результаты поиска', text:txt}).catch(()=>{}); return; } }catch(e){}
+  copyText(txt);
+}
+function ensureShareBtn(){ const res=document.getElementById('res'); if(!res.firstChild || document.getElementById('shareBtn') || !_results.length) return;
+  const b=document.createElement('span'); b.id='shareBtn';
+  b.style.cssText='display:inline-block;margin:2px 0 8px 8px;font-size:13px;color:var(--link);cursor:pointer;user-select:none;border:1px solid var(--border);border-radius:12px;padding:3px 10px';
+  b.textContent='📤 Поделиться'; b.onclick=shareResults;
+  const gt=document.getElementById('grpToggle'); if(gt&&gt.parentNode) gt.parentNode.insertBefore(b, gt.nextSibling); else res.insertBefore(b, res.children[1]||null); }
 function renderResultsView(){
   const res=document.getElementById('res'); res.innerHTML='';
   res.appendChild(info(groupSrc?('📚 По '+(tab==='quran'?'сурам':'источникам')+' · найдено: '+_results.length):('Найдено: '+_results.length+(_results.length>400?' (первые 400)':''))));
-  res.appendChild(grpToggleEl());
+  res.appendChild(grpToggleEl()); ensureShareBtn();
   if(!groupSrc){ _results.slice(0,400).forEach(d=>res.appendChild(makeCard(d))); return; }
   // группируем по ВСЕМ результатам → видны ВСЕ сборники/суры (не только первые 400)
   const groups={}; const order=[];
