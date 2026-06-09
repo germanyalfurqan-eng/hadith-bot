@@ -2704,6 +2704,110 @@ def wide_search(q, page=1):
         return {"count": 0, "data": [], "error": str(e), "page": page}
     return {"count": 0, "data": [], "page": page}
 
+
+# ===== ОБЩИЙ ПОИСК ПО ВСЕЙ МАКТАБЕ (turath) — основной поиск =====
+# Движок: api.turath.io/search (по всем ~8589 книгам Шамили). book_id = id нашего каталога.
+# Порядок по умолчанию: ① 40 первоисточников → ② избранное → ③ كتب السنة → ④ тафсир → ⑤ остальное.
+MAKTABA_FIRST_RANK = {  # канонические издания первоисточников (по авторитетности)
+    1681: 1,   # صحيح البخاري - ط السلطانية
+    1727: 2,   # صحيح مسلم - ت عبد الباقي
+    1726: 3,   # سنن أبي داود
+    7895: 4,   # سنن الترمذي - ت بشار
+    829:  5,   # سنن النسائي - ط المصرية
+    1198: 6,   # سنن ابن ماجه - ت عبد الباقي
+    1699: 7,   # موطأ مالك - ت عبد الباقي
+    25794: 8,  # مسند أحمد - ط الرسالة
+    1446: 9,   # صحيح ابن خزيمة
+    1729: 10,  # صحيح ابن حبان (الإحسان)
+    1424: 11,  # المستدرك للحاكم - ط الرسالة
+}
+MAKTABA_FAV_IDS = {148097, 47}  # Мукбиль «الجامع الصحيح مما ليس في الصحيحين», Аʿзами «الجامع الكامل» (Мухэймин — наш, не turath)
+MAKTABA_TAFSIR_CATS = {"التفسير", "علوم القرآن وأصول التفسير"}
+_maktaba_catmap = None
+def _maktaba_catmap_load():
+    """{book_id: категория} из живого каталога (GitHub Pages). Кэш в памяти."""
+    global _maktaba_catmap
+    if _maktaba_catmap is not None:
+        return _maktaba_catmap
+    m = {}
+    for u in ("https://germanyalfurqan-eng.github.io/hadith-bot/catalog.json",
+              "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/docs/catalog.json"):
+        try:
+            r = requests.get(u, timeout=20)
+            if r.status_code == 200:
+                for it in r.json():
+                    m[it.get("i")] = it.get("c", "")
+                if m:
+                    break
+        except Exception:
+            continue
+    _maktaba_catmap = m
+    return m
+
+MAKTABA_FIRST_CSV = ",".join(str(b) for b in list(MAKTABA_FIRST_RANK.keys()) + list(MAKTABA_FAV_IDS))
+
+def _turath_search(q, page=1, book_id=None):
+    params = {"q": q, "page": str(page)}
+    if book_id:
+        params["book_id"] = book_id   # turath поддерживает список id через запятую → фильтр по конкретным книгам
+    try:
+        r = requests.get("https://api.turath.io/search", params=params,
+                         headers={"User-Agent": "Mozilla/5.0", "Referer": "https://app.turath.io/"}, timeout=20)
+        if r.status_code == 200:
+            return r.json()
+    except Exception:
+        pass
+    return {"count": 0, "data": []}
+
+def _maktaba_item(x, cm):
+    bid = x.get("book_id"); meta = x.get("meta")
+    if isinstance(meta, str):
+        try: meta = json.loads(meta)
+        except Exception: meta = {}
+    meta = meta or {}
+    return {
+        "book_id": bid, "cat_id": x.get("cat_id"), "cat": cm.get(bid, ""),
+        "book_name": meta.get("book_name", ""), "author": meta.get("author_name", ""),
+        "page": meta.get("page"), "vol": meta.get("vol"), "page_id": meta.get("page_id"),
+        "headings": meta.get("headings") or [],
+        "snip": (x.get("snip") or x.get("text") or "")[:600],
+    }
+
+def maktaba_search(q, page=1):
+    """ОСНОВНОЙ поиск. Стр.1: сначала адресный запрос по 40 первоисточникам+избранному (наверх),
+    затем общий по всей Мактабе. Стр.>1: только общий (первоисточники уже показаны)."""
+    try:
+        page = max(1, int(page))
+    except Exception:
+        page = 1
+    try:
+        cm = _maktaba_catmap_load()
+        general = _turath_search(q, page)
+        items = [_maktaba_item(x, cm) for x in (general.get("data") or [])]
+        def gtier(it):
+            if it["cat"] == "كتب السنة": return (2, 0)
+            if it["cat"] in MAKTABA_TAFSIR_CATS: return (3, 0)
+            return (4, 0)
+        items = [z[2] for z in sorted([(gtier(it), i, it) for i, it in enumerate(items)],
+                                      key=lambda z: (z[0][0], z[0][1], z[1]))]
+        first_n = 0
+        if page == 1:
+            fs = _turath_search(q, 1, MAKTABA_FIRST_CSV)
+            fitems = [_maktaba_item(x, cm) for x in (fs.get("data") or [])]
+            def frank(it):
+                b = it["book_id"]
+                if b in MAKTABA_FIRST_RANK: return (0, MAKTABA_FIRST_RANK[b])
+                if b in MAKTABA_FAV_IDS: return (1, 0)
+                return (2, 0)
+            fitems.sort(key=frank)
+            seen = set((it["book_id"], it.get("page_id")) for it in fitems)
+            items = [it for it in items if (it["book_id"], it.get("page_id")) not in seen]
+            items = fitems + items
+            first_n = len(fitems)
+        return {"count": general.get("count", 0), "data": items, "page": page, "first_n": first_n}
+    except Exception as e:
+        return {"count": 0, "data": [], "error": str(e), "page": page}
+
 def turath_page(book_id, pg):
     """M216: страница книги Мактабы/turath по book_id+pg → {text, meta, pg}. Прокси (CORS у turath закрыт)."""
     try:
@@ -3514,6 +3618,21 @@ async def _api_serve(application=None):
         res = await loop.run_in_executor(None, wide_search, q, page) if q else {'count': 0, 'data': [], 'page': 1}
         return _cors(web.json_response(res))
 
+    async def maktaba(r):
+        # ОСНОВНОЙ поиск по всей Мактабе (turath): 40 первоисточников → избранное → كتب السنة → тафсир → остальное
+        user = verify_init_data(r.headers.get('X-Init-Data') or r.query.get('initData'))
+        if not feature_allowed('app', user):
+            return _deny('app')
+        if not rate_ok('maktaba:' + _uid(user, r)):
+            return _ratelimited()
+        q = (r.query.get('q') or '')[:200]
+        try:
+            page = max(1, min(200, int(r.query.get('page') or 1)))
+        except Exception:
+            page = 1
+        res = await loop.run_in_executor(None, maktaba_search, q, page) if q else {'count': 0, 'data': [], 'page': 1}
+        return _cors(web.json_response(res))
+
     async def balance(r):
         # только владелец: остаток DeepSeek + краткая статистика журналов для рабочего стола
         d = await _body(r)
@@ -3703,6 +3822,7 @@ async def _api_serve(application=None):
     a = web.Application()
     a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
+                  web.get('/api/maktaba', maktaba),
                   web.post('/api/access', access), web.post('/api/balance', balance),
                   web.post('/api/feedback', feedback), web.post('/api/searchlog', searchlog),
                   web.post('/api/tashkeel', tashkeel),

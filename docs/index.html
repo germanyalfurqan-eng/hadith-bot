@@ -153,7 +153,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v213</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v214</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -487,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v213';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v214';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -1522,8 +1522,8 @@ async function runSearch(explicit){
         await new Promise(r=>setTimeout(r,0));
       }
       if(seq!==_seq) return; b.remove(); groupSrc=true; renderResultsView();
-      toast('Наши издания: '+count+'. Шаг 2/2 — вся библиотека (~9000 книг, sunnah.one)…');
-      try{ await appendWide(seq, shown, false); }catch(e){}   // + вся открытая библиотека (sunnah.one, ~9000 книг)
+      toast('Наши издания: '+count+'. Шаг 2/2 — вся Мактаба (~8589 книг)…');
+      try{ await appendMaktaba(seq, shown, false); }catch(e){}   // + вся Мактаба (turath, первоисточники сверху)
     };
     res.appendChild(b);
   }
@@ -1651,7 +1651,7 @@ async function runSearch(explicit){
     else if(!res.querySelector('.corrGo')){ res.innerHTML='<div class="status">Ничего не найдено 🤷</div>'; addNotFoundBtn(res, shown); }   // M173: не затирать баннер; +«сообщите нам»
   }
   // Поиск по ВСЕЙ библиотеке: наши книги выше (если нашлись), ниже — остальной корпус (sunnah.one). Только при явном «Найти»/Enter.
-  if(wideWill) await appendWide(seq, wideQ);
+  if(wideWill) await appendMaktaba(seq, wideQ);
 }
 function makeCard(d){ const c=d.type==='q'?cardAyah(d,_groups):(d.type==='m'?cardMuh(d,_groups):(d.type==='hr'?cardHadithRu(d):cardHadith(d,_groups)));
   try{ c.querySelectorAll('.ar').forEach(a=>{ enableArabusTap(a); if(_arabusOn) a.style.cursor='pointer'; }); }catch(e){}   // сквозной Arabus
@@ -2001,6 +2001,72 @@ async function appendWideMulti(seq, cands){
     }catch(e){}
   }
   sec.textContent='🤷 Точное совпадение не нашёл. Попробуй вставить характерную фразу из матна (без иснада/имён).';
+}
+
+/* ===== ОСНОВНОЙ ПОИСК ПО ВСЕЙ МАКТАБЕ (turath) ===== */
+/* Карточка результата Мактабы: книга кликабельна → открыть на точной странице (page_id) */
+function maktabaCard(x){
+  const card=document.createElement('div'); card.className='card';
+  const bid=x.book_id, pid=x.page_id||x.page||1, nm=x.book_name||('книга №'+bid), au=x.author||'';
+  const loc=(x.vol?('т.'+x.vol+' · '):'')+(x.page!=null?('стр. '+x.page):'');
+  const head=document.createElement('div'); head.style.cssText='font-size:13.5px;color:var(--link);margin-bottom:6px;direction:rtl;text-align:right;font-weight:700;cursor:pointer';
+  head.innerHTML='📖 '+esc(nm)+(au?(' <span style="color:var(--hint);font-weight:400;font-size:12px">· '+esc(au)+'</span>'):'')+(loc?(' <span style="color:var(--hint);font-weight:400;font-size:12px">· '+esc(loc)+'</span>'):'');
+  head.title='Открыть книгу на этой странице'; head.onclick=()=>{ try{ openBook(bid, pid); }catch(e){} };
+  card.appendChild(head);
+  const ar=document.createElement('div'); ar.className='ar'; ar.style.fontSize='17px';
+  const snip=(x.snip||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim();
+  ar.innerHTML=esc(snip); card.appendChild(ar);
+  try{ enableArabusTap(ar); if(_arabusOn) ar.style.cursor='pointer'; }catch(e){}
+  const open=document.createElement('button'); open.className='mini'; open.textContent='📖 Открыть в книге →'; open.style.cssText='margin-top:8px;border:1px solid var(--btn);color:var(--btn);background:transparent;padding:6px 12px;border-radius:9px;font-size:13px;font-weight:600';
+  open.onclick=()=>{ try{ openBook(bid, pid); }catch(e){} };
+  card.appendChild(open);
+  return card;
+}
+function maktabaMoreBtn(seq,q,st){
+  const wrap=document.createElement('div'); wrap.style.cssText='text-align:center;margin:10px 0';
+  const b=document.createElement('button'); b.className='mini'; b.textContent='⬇️ Ещё из Мактабы'; b.style.cssText='border:1px solid var(--border);padding:8px 16px;border-radius:10px';
+  b.onclick=async()=>{ b.disabled=true; b.textContent='…';
+    try{ const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(q)+'&page='+((st.page||1)+1)+'&initData='+encodeURIComponent(INITDATA));
+      if(seq!==_seq) return; const j=await r.json().catch(()=>({})); const data=j.data||[];
+      if(!data.length){ b.textContent='Больше нет'; b.disabled=true; return; }
+      data.forEach(x=>wrap.parentNode.insertBefore(maktabaCard(x),wrap));
+      st.page=j.page||((st.page||1)+1); b.disabled=false; b.textContent='⬇️ Ещё из Мактабы';
+    }catch(e){ b.disabled=false; b.textContent='⬇️ Ещё'; } };
+  wrap.appendChild(b);
+  try{ const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){io.disconnect();b.click();}});},{rootMargin:'160px'}); io.observe(b);}catch(e){}
+  return wrap;
+}
+function maktabaSunnahBtn(res,seq,q){   // sunnah.one — ОТДЕЛЬНЫЙ помощник (хукм/тахридж), не основной
+  const wrap=document.createElement('div'); wrap.style.cssText='text-align:center;margin:14px 0 4px';
+  const b=document.createElement('button'); b.className='mini'; b.textContent='🔆 Ещё поискать на Sunnah.one (хукм/тахридж)'; b.title='Дополнительно: на sunnah.one бывают степени достоверности и тахридж';
+  b.style.cssText='border:1px dashed #5a7a3a;color:#bfe39a;background:transparent;padding:8px 14px;border-radius:10px;font-size:13px';
+  b.onclick=()=>{ b.remove(); appendWide(seq, q, false); };
+  wrap.appendChild(b); res.appendChild(wrap);
+}
+async function appendMaktaba(seq, q, primary){
+  if(!BACKEND_URL || !q) return;
+  const res=document.getElementById('res'); if(primary) res.innerHTML='';
+  const sec=document.createElement('div'); sec.className='hint';
+  sec.style.cssText=primary?'color:#4ade80;font-size:13px;margin:0 0 8px':'color:#4ade80;font-size:13px;margin:14px 0 6px;border-top:1px solid var(--border);padding-top:10px';
+  sec.textContent='🔎 Ищу по всей Мактабе…'; res.appendChild(sec);
+  try{
+    const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(q)+'&initData='+encodeURIComponent(INITDATA));
+    if(seq!==_seq) return;
+    const j=await r.json().catch(()=>({}));
+    if(r.status===403){ sec.textContent='🌐 Мактаба: доступ пока не открыт.'; return; }
+    if(r.status===429){ sec.textContent='🌐 Слишком часто, подожди немного.'; return; }
+    const data=j.data||[]; const fn=j.first_n||0;
+    if(!data.length){ sec.textContent='🤷 По Мактабе точного совпадения нет. Попробуй характерную фразу из матна.'; try{ maktabaSunnahBtn(res,seq,q); addNotFoundBtn(res,q); }catch(e){} return; }
+    await loadBooksMap();
+    sec.textContent='📚 Поиск по всей Мактабе · показано '+data.length+(j.count>data.length?(' из ~'+(j.count||0).toLocaleString('ru')):'')+(fn?' · ⭐ первоисточники сверху':'');
+    data.forEach((x,i)=>{
+      if(fn && i===0){ const h=document.createElement('div'); h.className='hint'; h.style.cssText='color:#d6b25a;font-size:12.5px;font-weight:700;margin:4px 0 7px'; h.textContent='📜 40 первоисточников · избранное'; res.appendChild(h); }
+      if(fn && i===fn){ const h=document.createElement('div'); h.className='hint'; h.style.cssText='color:#7fb3ff;font-size:12.5px;font-weight:700;margin:14px 0 7px;border-top:1px solid var(--border);padding-top:9px'; h.textContent='📚 Вся остальная Мактаба'; res.appendChild(h); }
+      res.appendChild(maktabaCard(x));
+    });
+    res.appendChild(maktabaMoreBtn(seq,q,{page:(j.page||1)}));
+    try{ maktabaSunnahBtn(res,seq,q); }catch(e){}
+  }catch(e){ sec.textContent='🌐 Мактаба сейчас недоступна — попробуй позже.'; }
 }
 
 function cardHadith(d,groups){
