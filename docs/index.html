@@ -157,7 +157,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v243</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v244</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -492,7 +492,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v243';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v244';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1882,8 +1882,13 @@ function bookAuthorOf(id){ id=String(id||''); try{ if(_catalog){ const b=_catalo
 // M216: читалка любой книги Мактабы (через turath /api/book_page) — листание + Arabus
 let _bookView={id:null,pg:1};
 function openBook(bookId, startPg){
-  if(!BACKEND_URL){ toast('Читалка книги работает на сервере'); return; }
   const id=String(bookId||'').replace(/[^0-9]/g,''); if(!id) return;
+  // «Муслим в Мактабе = в Избранном»: издания Сахих Муслим (тур. печать 711 / ت عبد الباقي 1727) открываем
+  // НАШИМ ридером (muslim_baqi, нумерация Абд аль-Баки) — тот же текст и номера, что в избранном/поиске/у учёных.
+  // Наш ридер локальный (muslim_baqi.json), поэтому работает даже без бэкенда — ставим ДО проверки BACKEND_URL.
+  const OUR_COLL_BOOK={'711':'muslim','1727':'muslim'};
+  if(OUR_COLL_BOOK[id] && isReadable(OUR_COLL_BOOK[id])){ try{ openReader(OUR_COLL_BOOK[id]); toast('Сахих Муслим — издание Абд аль-Баки (как в избранном)'); }catch(e){} return; }
+  if(!BACKEND_URL){ toast('Читалка книги работает на сервере'); return; }
   let sp=parseInt(String(startPg||'').replace(/[^0-9]/g,''))||1; if(sp<1) sp=1;
   _bookView={id:id, pg:sp};
   let m=document.getElementById('bookModal');
