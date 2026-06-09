@@ -699,7 +699,62 @@ def parse_registry_command(text):
     return None
 
 # ============ ХАДИСЫ ============
+# ---- Муслим: нумерация Абд аль-Баки (как в приложении и у учёных), а НЕ fawazahmed0 (M197) ----
+_MUSLIM_BAQI = None
+def _load_muslim_baqi():
+    """Карта Муслима Абд аль-Баки {num: {ar, fw}} (docs/muslim_baqi.json), грузим один раз."""
+    global _MUSLIM_BAQI
+    if _MUSLIM_BAQI is not None:
+        return _MUSLIM_BAQI
+    _MUSLIM_BAQI = {}
+    for u in (f"https://cdn.jsdelivr.net/gh/{GITHUB_REPO}@main/docs/muslim_baqi.json",
+              f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/docs/muslim_baqi.json"):
+        try:
+            r = requests.get(u, timeout=20)
+            if r.status_code == 200:
+                _MUSLIM_BAQI = {int(x["num"]): x for x in r.json() if "num" in x}
+                break
+        except: pass
+    return _MUSLIM_BAQI
+
+def _norm_ar(s):
+    return re.sub(r"[^ء-ي]", "", s or "")
+
+def get_muslim_baqi_hadith(number):
+    """Муслим по Абд аль-Баки: арабский — из нашей карты (верный текст+номер); готовый русский —
+    из fawazahmed0 rus-muslim/{fw}, НО только если арабский fawaz[fw] СОВПАЛ с нашим (поле fw местами
+    битое — без сверки вернули бы чужой перевод = баг M197). None → номера нет в Абд аль-Баки (общий путь)."""
+    try:
+        e = _load_muslim_baqi().get(int(number))
+        if not e:
+            return None
+        arabic = (e.get("ar") or "").replace("\n", " ").strip()
+        russian = grade = ""
+        fw = e.get("fw")
+        if fw and arabic:
+            try:
+                ra = requests.get(f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-muslim/{fw}.min.json", timeout=10)
+                ok = False
+                if ra.status_code == 200:
+                    ha = ra.json().get("hadiths", [])
+                    if ha:
+                        ok = _norm_ar(ha[0].get("text", ""))[:40] == _norm_ar(arabic)[:40]
+                if ok:
+                    rr = requests.get(f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-muslim/{fw}.min.json", timeout=10)
+                    if rr.status_code == 200:
+                        hr = rr.json().get("hadiths", [])
+                        if hr:
+                            russian = re.sub(r"\[\d+\]", "", hr[0].get("text", "").replace("\\n", " "))
+            except: pass
+        return arabic, russian, ("рус" if russian else "араб"), grade
+    except:
+        return None
+
 def get_hadith(collection, number):
+    if collection == "muslim":
+        res = get_muslim_baqi_hadith(number)
+        if res is not None:
+            return res
     try:
         ua = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-{collection}/{number}.min.json"
         ur = f"https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-{collection}/{number}.min.json"
@@ -855,6 +910,7 @@ _AI_CALLS = []
 _AI_KILL = False           # авто-выключение (спам)
 _AI_KILL_MANUAL = False    # ручное выключение владельцем
 _AI_KILL_PENDING = None    # текст уведомления владельцу (отправится при следующем апдейте)
+_MAINTENANCE = False       # B4: режим обслуживания (бот стоп/старт) — для остальных бот молчит-заглушка, владелец работает
 AI_RATE_LIMIT = 35         # >35 вызовов ИИ за окно → авария
 AI_RATE_WINDOW = 120       # секунд
 def ai_kill_active():
@@ -1157,6 +1213,19 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⏸ ИИ выключен вручную. Включить: «ии вкл»."); return
     if is_owner(update) and text.lower() in ("ии статус", "статус ии", "ai status"):
         await update.message.reply_text(f"ИИ: {'⏸ ВЫКЛ' if ai_kill_active() else '✅ вкл'}\nВызовов за {AI_RATE_WINDOW}с: {len(_AI_CALLS)}/{AI_RATE_LIMIT}\nавто-выкл={_AI_KILL} · ручной={_AI_KILL_MANUAL}"); return
+
+    # B4: режим обслуживания — «бот стоп» / «бот старт» (только владелец); для остальных бот отвечает заглушкой
+    global _MAINTENANCE
+    if is_owner(update) and text.lower() in ("бот стоп", "бот выкл", "стоп бот", "обслуживание", "обслуживание вкл"):
+        _MAINTENANCE = True
+        await update.message.reply_text("🔧 Режим обслуживания ВКЛ. Для остальных бот отвечает заглушкой (поиск/ИИ не работают). Вернуть в эфир: «бот старт»."); return
+    if is_owner(update) and text.lower() in ("бот старт", "бот вкл", "старт бот", "обслуживание выкл"):
+        _MAINTENANCE = False
+        await update.message.reply_text("✅ Бот снова в эфире (обслуживание выключено)."); return
+    if _MAINTENANCE and not is_owner(update):
+        try: await update.message.reply_text("🔧 Бот на техническом обслуживании — скоро вернёмся, ин ша Аллах.")
+        except Exception: pass
+        return
 
     if text in ("📖 Инструкция", "инструкция", "путеводитель", "гайд", "/guide"):
         await send_long(update, get_guide())
@@ -2086,6 +2155,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 msg += f"🔤 {ar}\n\n"
             if tr:
                 msg += f"🌍 ({lang}): {tr}\n"
+            elif collection == "muslim" and ar:
+                msg += "ℹ️ Арабский — по нумерации Абд аль-Баки (как в приложении и у учёных). Готовый русский перевод для этого номера ещё сверяется.\n"
             if gr:
                 msg += f"\n📊 {gr}"
             msg += f"\n\n📚 {NAMES.get(collection, collection)}, №{number}"
@@ -2112,6 +2183,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*Достоверность (الدرر السنية):*\nсунна من غشنا (по тексту)\nхадис о терпении (по смыслу, через ИИ)\n(матн + хукм صحيح/ضعيف + перевод + تخريج со ссылками)\n\n"
             "*Корень слова:*\nкорень علм | корень хукм\n\n"
             "*Для владельца:*\n"
+            "⚙️ бот стоп / бот старт (обслуживание) · ии вкл / ии выкл / ии статус\n"
             "🤖 ботяра вопрос | ботяра очисти свою память\n"
             "🔄 переведи текст\n"
             "📖 тафсир 2:255\n"
