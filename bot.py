@@ -2808,6 +2808,66 @@ def maktaba_search(q, page=1):
     except Exception as e:
         return {"count": 0, "data": [], "error": str(e), "page": page}
 
+
+# ===== НЕЙРОМУХАДДИС: поиск передатчика по 150 трудам ильм-риджаля (джарх-ва-тадиль) =====
+_rijal_ids = None
+_rijal_critic = None
+def _rijal_load():
+    """Список book_id корпуса риджаля + {book_id: критик} из живого rijal_corpus.json. Кэш."""
+    global _rijal_ids, _rijal_critic
+    if _rijal_ids is not None:
+        return _rijal_ids, _rijal_critic
+    ids = []; crit = {}
+    for u in ("https://germanyalfurqan-eng.github.io/hadith-bot/hadith/rijal_corpus.json",
+              "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/docs/hadith/rijal_corpus.json"):
+        try:
+            r = requests.get(u, timeout=20)
+            if r.status_code == 200:
+                j = r.json()
+                for c in (j.get("critics") or []):
+                    for b in (c.get("books") or []):
+                        bid = b.get("id")
+                        if bid:
+                            ids.append(bid); crit[bid] = c.get("critic", "")
+                if ids:
+                    break
+        except Exception:
+            continue
+    _rijal_ids = ids; _rijal_critic = crit
+    return ids, crit
+
+def rijal_search(name, page=1):
+    """Ищет имя передатчика по всем трудам риджаля (turath &book_id=csv) → места джарх/тадиль."""
+    try:
+        page = max(1, int(page))
+    except Exception:
+        page = 1
+    ids, crit = _rijal_load()
+    if not ids:
+        return {"count": 0, "data": [], "page": page, "books": 0}
+    csv = ",".join(str(i) for i in ids)
+    try:
+        r = requests.get("https://api.turath.io/search", params={"q": name, "book_id": csv, "page": str(page)},
+                         headers={"User-Agent": "Mozilla/5.0", "Referer": "https://app.turath.io/"}, timeout=30)
+        if r.status_code != 200:
+            return {"count": 0, "data": [], "page": page, "books": len(ids)}
+        j = r.json(); out = []
+        for x in (j.get("data") or []):
+            bid = x.get("book_id"); meta = x.get("meta")
+            if isinstance(meta, str):
+                try: meta = json.loads(meta)
+                except Exception: meta = {}
+            meta = meta or {}
+            out.append({
+                "book_id": bid, "critic": crit.get(bid, ""),
+                "book_name": meta.get("book_name", ""), "author": meta.get("author_name", ""),
+                "page": meta.get("page"), "vol": meta.get("vol"), "page_id": meta.get("page_id"),
+                "snip": (x.get("snip") or x.get("text") or "")[:700],
+            })
+        return {"count": j.get("count", 0), "data": out, "page": page, "books": len(ids)}
+    except Exception as e:
+        return {"count": 0, "data": [], "error": str(e), "page": page, "books": len(ids)}
+
 def turath_page(book_id, pg):
     """M216: страница книги Мактабы/turath по book_id+pg → {text, meta, pg}. Прокси (CORS у turath закрыт)."""
     try:
@@ -3633,6 +3693,21 @@ async def _api_serve(application=None):
         res = await loop.run_in_executor(None, maktaba_search, q, page) if q else {'count': 0, 'data': [], 'page': 1}
         return _cors(web.json_response(res))
 
+    async def rijal(r):
+        # НейроМухаддис: поиск передатчика по 150 трудам ильм-риджаля (джарх/тадиль)
+        user = verify_init_data(r.headers.get('X-Init-Data') or r.query.get('initData'))
+        if not feature_allowed('app', user):
+            return _deny('app')
+        if not rate_ok('rijal:' + _uid(user, r)):
+            return _ratelimited()
+        name = (r.query.get('name') or r.query.get('q') or '')[:80]
+        try:
+            page = max(1, min(50, int(r.query.get('page') or 1)))
+        except Exception:
+            page = 1
+        res = await loop.run_in_executor(None, rijal_search, name, page) if name else {'count': 0, 'data': [], 'page': 1}
+        return _cors(web.json_response(res))
+
     async def balance(r):
         # только владелец: остаток DeepSeek + краткая статистика журналов для рабочего стола
         d = await _body(r)
@@ -3822,7 +3897,7 @@ async def _api_serve(application=None):
     a = web.Application()
     a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
-                  web.get('/api/maktaba', maktaba),
+                  web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
                   web.post('/api/feedback', feedback), web.post('/api/searchlog', searchlog),
                   web.post('/api/tashkeel', tashkeel),

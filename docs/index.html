@@ -155,7 +155,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v217</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v218</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -489,7 +489,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v217';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v218';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -2544,6 +2544,28 @@ async function openNarratorRijal(name){
     +row('Эпоха',j.era)+row('Оценка',j.grade)+row('Учёные',j.scholars)+row('Где искать',j.where)
     +'<div style="margin-top:6px;font-size:11px;color:var(--hint)">🧠 свод ИИ '+(j.cached?'(из базы)':'')+' — вспомогательно; проверяй по первоисточникам риджаль ниже.</div>';
   body.appendChild(card);
+  // 📚 НЕЙРОМУХАДДИС: что сказали критики по 150 трудам риджаля (turath, точные места джарх/тадиль)
+  const rjBtn=document.createElement('button'); rjBtn.className='mini'; rjBtn.textContent='📚 Что сказали критики (по 150 трудам риджаля)';
+  rjBtn.style.cssText='margin-top:11px;width:100%;border:1px solid #2e9b5b;color:#bff5d4;background:#173d30;padding:10px;border-radius:10px;font-size:13.5px;font-weight:700;cursor:pointer';
+  const rjOut=document.createElement('div'); rjOut.style.cssText='margin-top:8px';
+  rjBtn.onclick=async()=>{ if(!BACKEND_URL){ toast('Нужен сервер'); return; } rjBtn.disabled=true; rjOut.innerHTML='<div class="hint">📚 Ищу «'+esc(name)+'» по 150 трудам джарх-ва-тадиль…</div>';
+    try{ const r=await fetch(BACKEND_URL+'/rijal?name='+encodeURIComponent(name)+'&initData='+encodeURIComponent(INITDATA));
+      const jj=await r.json().catch(()=>({}));
+      if(r.status===429){ rjOut.innerHTML='<div class="hint">Слишком часто — подожди немного.</div>'; rjBtn.disabled=false; return; }
+      if(r.status===403){ rjOut.innerHTML='<div class="hint">Функция пока не открыта.</div>'; rjBtn.disabled=false; return; }
+      const data=jj.data||[];
+      if(!data.length){ rjOut.innerHTML='<div class="hint">Прямых упоминаний не нашёл (имя бывает в другой форме — попробуй полнее, напр. с куньей/нисбой).</div>'; rjBtn.disabled=false; rjBtn.textContent='📚 Искать снова'; return; }
+      rjOut.innerHTML='<div class="hint" style="margin-bottom:7px">📚 Найдено мест: <b>'+(jj.count||data.length).toLocaleString('ru')+'</b> в трудах риджаля (по '+(jj.books||150)+' книгам критиков · показаны первые '+data.length+'):</div>';
+      data.forEach(x=>{ const c=document.createElement('div'); c.className='card'; c.style.cssText='margin-bottom:7px';
+        const loc=(x.vol?('т.'+x.vol+' '):'')+(x.page!=null?('стр. '+x.page):'');
+        c.innerHTML='<div class="rjH" style="font-size:12.5px;color:var(--link);direction:rtl;text-align:right;font-weight:600;cursor:pointer">📖 '+esc(x.book_name||'')+(x.critic?(' <span style="color:#bff5d4">· '+esc(x.critic)+'</span>'):'')+(loc?(' <span style="color:var(--hint);font-weight:400">· '+esc(loc)+'</span>'):'')+'</div>'
+          +'<div class="ar" style="font-size:16px;margin-top:5px;line-height:1.9">'+esc((x.snip||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim())+'</div>';
+        c.querySelector('.rjH').onclick=()=>{ try{ openBook(x.book_id, x.page_id||x.page||1); }catch(e){} };
+        try{ enableArabusTap(c.querySelector('.ar')); if(_arabusOn) c.querySelector('.ar').style.cursor='pointer'; }catch(e){}
+        rjOut.appendChild(c); });
+      rjBtn.disabled=false; rjBtn.textContent='📚 Обновить поиск по трудам риджаля';
+    }catch(e){ rjOut.innerHTML='<div class="hint">🔧 сервис недоступен — попробуй позже.</div>'; rjBtn.disabled=false; } };
+  body.appendChild(rjBtn); body.appendChild(rjOut);
   const note=document.createElement('div'); note.style.cssText='margin-top:10px;font-size:13px;line-height:1.5';
   note.innerHTML='📜 По нашему правилу надёжность передатчика должна быть письменно засвидетельствована одним из <b>48 мутабарун</b>. <span class="goHad" style="color:var(--link);cursor:pointer;text-decoration:underline">список + труды риджаль</span>';
   note.querySelector('.goHad').onclick=()=>{ m.style.display='none'; openHadithScience(); }; body.appendChild(note);
