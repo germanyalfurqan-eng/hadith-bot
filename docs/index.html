@@ -155,7 +155,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v240</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v241</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -489,7 +489,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v240';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v241';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3780,16 +3780,16 @@ async function doNarratorAI(name, out, btn){
 // Оценка достоверности равия по рангам учёных (ибн Хаджар/Захаби) → цвет звена в древе
 function _narrGrade(rankH, rankZ){
   const t=((rankH||'')+' '+(rankZ||''));
-  if(/كذاب|وضاع|يضع|متروك|متهم/.test(t)) return {g:'كذّاب / متروك', c:'#e74c3c', bg:'rgba(231,76,60,.16)'};
-  if(/ضعيف جدا|واه/.test(t)) return {g:'ضعيف جدًا', c:'#e67e22', bg:'rgba(230,126,34,.16)'};
-  if(/مجهول/.test(t)) return {g:'مجهول', c:'#95a5a6', bg:'rgba(149,165,166,.14)'};
-  if(/ضعيف|لين|سيء الحفظ|ليس بالقوي/.test(t)) return {g:'ضعيف', c:'#e67e22', bg:'rgba(230,126,34,.13)'};
-  if(/صحابي/.test(t)) return {g:'صحابي', c:'#3498db', bg:'rgba(52,152,219,.15)'};
-  if(/ثقة ثبت|ثقة حافظ|ثقة متقن|إمام|حجة/.test(t)) return {g:'ثقة ثبت', c:'#2ecc71', bg:'rgba(46,204,113,.2)'};
-  if(/ثقة|حافظ/.test(t)) return {g:'ثقة', c:'#2ecc71', bg:'rgba(46,204,113,.15)'};
-  if(/صدوق يهم|صدوق له أوهام|صدوق سيء|صدوق يخطئ|مقبول/.test(t)) return {g:'صدوق (يهم)', c:'#f1c40f', bg:'rgba(241,196,15,.15)'};
-  if(/صدوق|لا بأس به|محله الصدق/.test(t)) return {g:'صدوق', c:'#a3d977', bg:'rgba(163,217,119,.15)'};
-  return {g:'нет оценки', c:'#95a5a6', bg:'rgba(149,165,166,.1)'};
+  if(/كذاب|وضاع|يضع|متروك|متهم/.test(t)) return {g:'كذّاب / متروك', c:'#e74c3c', bg:'rgba(231,76,60,.16)', r:-1};
+  if(/ضعيف جدا|واه/.test(t)) return {g:'ضعيف جدًا', c:'#e67e22', bg:'rgba(230,126,34,.16)', r:0};
+  if(/مجهول/.test(t)) return {g:'مجهول', c:'#95a5a6', bg:'rgba(149,165,166,.14)', r:null};
+  if(/ضعيف|لين|سيء الحفظ|ليس بالقوي/.test(t)) return {g:'ضعيف', c:'#e67e22', bg:'rgba(230,126,34,.13)', r:1};
+  if(/صحابي/.test(t)) return {g:'صحابي', c:'#3498db', bg:'rgba(52,152,219,.15)', r:6};
+  if(/ثقة ثبت|ثقة حافظ|ثقة متقن|إمام|حجة/.test(t)) return {g:'ثقة ثبت', c:'#2ecc71', bg:'rgba(46,204,113,.2)', r:5};
+  if(/ثقة|حافظ/.test(t)) return {g:'ثقة', c:'#2ecc71', bg:'rgba(46,204,113,.15)', r:4};
+  if(/صدوق يهم|صدوق له أوهام|صدوق سيء|صدوق يخطئ|مقبول/.test(t)) return {g:'صدوق (يهم)', c:'#f1c40f', bg:'rgba(241,196,15,.15)', r:2};
+  if(/صدوق|لا بأس به|محله الصدق/.test(t)) return {g:'صدوق', c:'#a3d977', bg:'rgba(163,217,119,.15)', r:3};
+  return {g:'нет оценки', c:'#95a5a6', bg:'rgba(149,165,166,.1)', r:null};
 }
 // B: ДРЕВО ИСНАДА — цепочка передатчиков, цвет звена = достоверность по учёным; тап → полная карточка
 async function openIsnadTree(text, out){
@@ -3801,8 +3801,13 @@ async function openIsnadTree(text, out){
   const nodes=[];
   for(const nm of names){ let id=null; try{ id=await _narrLookup(nm); }catch(e){} let cc=null; if(id!=null){ try{ cc=await _narrCard(id); }catch(e){} }
     nodes.push({nm, rankH:cc?cc[5]:'', gr:_narrGrade(cc?cc[5]:'', cc?cc[6]:'')}); }
+  // общая оценка цепочки = по слабейшему звену (хадис крепок настолько, насколько крепок самый слабый равий)
+  const known=nodes.filter(n=>n.gr.r!=null); const unknown=nodes.length-known.length;
+  let verd='';
+  if(known.length){ const weak=known.reduce((a,b)=>b.gr.r<a.gr.r?b:a);
+    verd='<div style="margin:0 0 9px;padding:8px 11px;border-radius:9px;background:'+weak.gr.bg+';border:1px solid '+weak.gr.c+'"><b style="color:'+weak.gr.c+'">🔗 Цепочка по слабейшему звену: '+esc(weak.gr.g)+'</b>'+(unknown?(' <span style="color:#95a5a6;font-size:12px">· '+unknown+' звен(а) без оценки — картина неполная</span>'):'')+'</div>'; }
   let html='<div style="border:1px solid #6c5ce7;border-radius:12px;padding:11px;margin:6px 0;background:rgba(108,92,231,.06)">'
-    +'<div style="font-weight:700;color:#d9ccff;font-size:13.5px;margin-bottom:8px">🌳 Древо иснада (цвет = достоверность по учёным):</div>';
+    +'<div style="font-weight:700;color:#d9ccff;font-size:13.5px;margin-bottom:8px">🌳 Древо иснада (цвет = достоверность по учёным):</div>'+verd;
   nodes.forEach((n,i)=>{ const ind=Math.min(i,6)*16;
     html+='<div class="isNode" data-i="'+i+'" style="cursor:pointer;margin:0 0 0 '+ind+'px;padding:7px 11px;border-radius:9px;border-right:5px solid '+n.gr.c+';background:'+n.gr.bg+';direction:rtl;text-align:right">'
       +'<span style="font-weight:700;font-size:14px;color:var(--text)">'+esc(n.nm)+'</span> '
