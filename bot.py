@@ -2404,6 +2404,7 @@ def neuro_get(key):
 def neuro_put(key, phrases):
     c = _neuro_load(); c[key] = phrases
     _data_put("neuro.json", c, f"neuro: +{key[:40]} (всего {len(c)})")
+    return len(c)
 # ---- Накопление умного ИИ-поиска КНИГ Мактабы: data/booksearch.json = {"<рус.запрос>": {ar,author,note}} ----
 _bsearch_cache = None
 def _bsearch_load():
@@ -2416,6 +2417,7 @@ def bsearch_get(key):
 def bsearch_put(key, val):
     c = _bsearch_load(); c[key] = val
     _data_put("booksearch.json", c, f"booksearch: +{key[:40]} (всего {len(c)})")
+    return len(c)
 # ---- Перевод названий книг (накопление): data/booknames.json = {"<ар.название>": {"ru":..,"voc":..}} ----
 _bnames_cache = None
 def _bnames_load():
@@ -2951,7 +2953,11 @@ async def _api_serve(application=None):
             who = "аноним"
         tag = "🆕 свежий (DeepSeek, ключ потрачен)" if fresh else "♻️ из базы (ключ НЕ потрачен)"
         loc = f" {src} №{num}" if (src and num not in (None, '')) else ""
-        extra = f" · накоплено (всего {saved['total']})" if (saved and saved.get("new")) else ""
+        if saved and saved.get("new"):
+            _what = (": " + saved["what"]) if saved.get("what") else ""
+            extra = f" · 📦 накоплено{_what} (в базе всего {saved.get('total', '?')})"
+        else:
+            extra = ""
         ftag = {"перевод": "#перевод", "нейро": "#нейро", "огласовки": "#огласовки"}.get(feat, "#" + re.sub(r"\s+", "", feat))
         try:
             await application.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} 🤖 {feat}: {who}{loc} — {tag}{extra}", parse_mode="Markdown")
@@ -3155,7 +3161,10 @@ async def _api_serve(application=None):
             result = {'ar': ar, 'author': author, 'mode': mode, 'note': note}
             saved = None
             if ar or author:
-                try: saved = {"new": True, "total": await loop.run_in_executor(None, bsearch_put, key, result)}
+                try:
+                    _tot = await loop.run_in_executor(None, bsearch_put, key, result)
+                    _ttl = (ar[0] if ar else (author[0] if author else ''))
+                    saved = {"new": True, "total": _tot, "what": f"книга «{q[:30]}» → {_ttl}"}
                 except Exception: saved = None
             await loop.run_in_executor(None, usage_log, user, "поиск книги", True, len(q), "", "")
             await _notify_usage(user, "поиск книги", True, "", "", saved)
