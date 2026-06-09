@@ -155,7 +155,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v238</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v239</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -489,7 +489,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v238';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v239';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3678,8 +3678,18 @@ async function showNarratorBio(name, out){
   // Идентификация (имя/كنية/نسب/وفاة/طبقة/رتبة + бейдж) — без джарха
   let c=null; try{ c=await showNarratorCardLocal(name, out); }catch(e){}
   const foundLocal=!!c;
-  // РАЗДЕЛ 1 (СНАЧАЛА): наши книги мутабарунов — ВСЕ места + ссылки на страницу
-  if(BACKEND_URL){ const rijalBox=document.createElement('div'); rijalBox.style.marginTop='8px'; out.appendChild(rijalBox); try{ doRijalCorpus(name, rijalBox, null); }catch(e){} }
+  // РАЗДЕЛ 1: УПОМИНАНИЯ в наших трудах — сырой поиск, обработка НЕ завершена, СВОРАЧИВАЕМЫЙ
+  if(BACKEND_URL){
+    const sec=document.createElement('div'); sec.style.cssText='margin-top:8px;border:1px solid #b8860b;border-radius:10px;overflow:hidden';
+    const hdr=document.createElement('div'); hdr.style.cssText='cursor:pointer;padding:8px 11px;background:rgba(184,134,11,.13);font-size:12.5px;color:#ffd479;font-weight:700;display:flex;justify-content:space-between;gap:8px;align-items:center';
+    hdr.innerHTML='<span>🔍 Упоминания в наших трудах · ⚠️ обработка не завершена</span><span class="rjTg">▾</span>';
+    const body=document.createElement('div'); body.style.cssText='padding:8px 11px';
+    body.innerHTML='<div style="font-size:11.5px;color:var(--hint);margin-bottom:7px">⚠️ Это просто НАЙДЕННЫЕ МЕСТА, где встречается имя — <b>не вердикт</b>. Нужно разобрать, что и почему сказал мутабарун. Готовые выводы учёных — ниже, «База Мактаба».</div>';
+    const rijalBox=document.createElement('div'); body.appendChild(rijalBox);
+    hdr.onclick=()=>{ const op=body.style.display!=='none'; body.style.display=op?'none':'block'; hdr.querySelector('.rjTg').textContent=op?'▸':'▾'; };
+    sec.appendChild(hdr); sec.appendChild(body); out.appendChild(sec);
+    try{ doRijalCorpus(name, rijalBox, null); }catch(e){}
+  }
   // РАЗДЕЛ 2 (ПОТОМ): полная база Мактаба (موسوعة) — джарх целиком + ИИ-инструменты
   if(c && c[8]){ try{ renderMosuaJarh(c, out); }catch(e){} }
   const extra=document.createElement('div'); out.appendChild(extra);
@@ -3720,7 +3730,7 @@ async function doRijalCorpus(name, out, btn){
   const render=()=>{
     out.innerHTML='';
     const head=document.createElement('div'); head.style.cssText='margin:6px 0';
-    head.innerHTML='<div class="hint">📚 Слова наших критиков (мутабаруны) — всего мест: <b>'+(st.count||st.all.length).toLocaleString('ru')+'</b> в '+st.books+' трудах · загружено '+st.all.length+'</div>';
+    head.innerHTML='<div class="hint">🔍 Найдено мест: <b>'+(st.count||st.all.length).toLocaleString('ru')+'</b> в '+st.books+' трудах мутабарунов · загружено '+st.all.length+' (упоминания — нужно разбирать)</div>';
     const sb=document.createElement('div'); sb.style.cssText='display:flex;gap:6px;margin:6px 0;flex-wrap:wrap';
     const mkS=(t,k)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=t; b.style.cssText='font-size:12px;padding:4px 10px'+(st.sort===k?';background:var(--btn);color:#fff;border-color:var(--btn)':''); b.onclick=()=>{ st.sort=k; render(); }; return b; };
     sb.appendChild(mkS('📕 По сборникам','book')); sb.appendChild(mkS('✍️ По авторам','author'));
