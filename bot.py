@@ -1218,6 +1218,30 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ===== Владельцу: ЧЁРНЫЙ СПИСОК (бан чата/пользователя по id) =====
     if is_owner(update):
         _tl = text.strip().lower()
+        # ===== АНОНС в канал приложения вручную ===== «анонс» = текущий update_note.txt; «анонс <текст>» = свой
+        if _tl == "анонс" or _tl.startswith("анонс ") or _tl.startswith("анонс\n"):
+            custom = text.strip()[5:].strip()
+            note = custom
+            if not note:
+                try:
+                    rr = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_note.txt",
+                                      headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
+                    if rr.status_code == 200:
+                        note = base64.b64decode(rr.json().get("content", "")).decode("utf-8").strip()
+                except Exception:
+                    note = ""
+            if not note:
+                await update.message.reply_text("Пусто. Напиши: анонс <текст обновления>")
+                return
+            body = note + "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot/app\n🤖 Бот: https://t.me/muslimoontt_bot"
+            try:
+                await context.bot.send_message(APP_CHANNEL_ID, body, disable_web_page_preview=True)
+                j = _journal_load(); j["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+                _journal_save("анонс → канал приложения (вручную)")
+                await update.message.reply_text("✅ Опубликовал в канал @muslimoonapp.")
+            except Exception as e:
+                await update.message.reply_text("❌ Не вышло: " + str(e)[:200])
+            return
         if _tl in ("ошибки", "журнал ошибок", "errors"):
             errs = _data_get("errors.json", []) or []
             open_errs = [e for e in errs if not e.get('fixed')]
