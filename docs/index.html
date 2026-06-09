@@ -153,7 +153,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v214</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v215</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -487,7 +487,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v214';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v215';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -774,8 +774,33 @@ function gradeOf(h){ const g=h.grades&&h.grades[0]; return g?(g.grade||'').toStr
 // Степень достоверности из источника (учёные/sunnah) — ПОМЕЧАЕМ, что это НЕ наша проверка.
 const GRADE_NOTE='Оценка указана по источнику (учёные / sunnah.com), не нашей редакцией. Наша проверка будет добавлена позже.';
 function gradeBadge(g){ if(!g) return '';
-  // единый понятный бейдж: оценка + ЯВНАЯ привязка, что это оценка источника (не нашей редакции)
-  return '<span class="grade" title="'+GRADE_NOTE+'">⚖️ '+esc(g)+' <span style="opacity:.72;font-weight:400;font-size:11px">· оценка источника, не наша</span></span>'; }
+  // единый понятный бейдж: оценка + ЯВНАЯ привязка, что это оценка источника (не нашей редакции). КЛИКАБЕЛЕН → объяснение степени
+  return '<span class="grade gradeClick" data-g="'+esc(g)+'" onclick="explainHukm(this)" style="cursor:pointer" title="Нажми — что значит эта степень достоверности">⚖️ '+esc(g)+' <span style="opacity:.72;font-weight:400;font-size:11px">· оценка источника · ⓘ что значит</span></span>'; }
+// Кликабельный хукм: статичное объяснение степени достоверности (без траты лимита ИИ)
+const HUKM_MEANINGS=[
+  [/صحيح\s*لغيره/, 'صحيح لغيره (Сахих ли-гайрихи) — «достоверный благодаря другому»: сам по себе хасан, но усилен другими путями до уровня достоверного.'],
+  [/حسن\s*لغيره/, 'حسن لغيره (Хасан ли-гайрихи) — «хороший благодаря другому»: слабый из-за лёгкого изъяна, но усилен совокупностью путей до уровня хорошего.'],
+  [/صحيح/, 'صحيح (Сахих) — высшая степень: непрерывный иснад надёжных и точных передатчиков, без отклонения (шазз) и скрытого изъяна (‘илля). Довод.'],
+  [/حسن/, 'حسن (Хасан) — хороший: как сахих, но точность одного из передатчиков чуть ниже. Принимается как довод.'],
+  [/ضعيف\s*جدا|ضعيف\s*جدًا/, 'ضعيف جدًا (Да‘иф джиддан) — очень слабый: серьёзный изъян в иснаде.'],
+  [/ضعيف/, 'ضعيف (Да‘иф) — слабый: разрыв в иснаде или слабый передатчик. Сам по себе не довод.'],
+  [/موضوع/, 'موضوع (Мауду‘) — выдуманный/подложный: приписан Пророку ﷺ ложно. Запрещено передавать как хадис.'],
+  [/منكر/, 'منكر (Мункар) — отвергаемый: слабый передатчик противоречит более надёжным.'],
+  [/شاذ/, 'شاذ (Шазз) — отклонённый: надёжный передатчик противоречит более надёжным.'],
+  [/موقوف/, 'موقوف (Маукуф) — слова/действие сподвижника, не возведённые к Пророку ﷺ.'],
+  [/مرسل/, 'مرسل (Мурсаль) — таби‘ин передаёт напрямую от Пророка ﷺ, пропустив сподвижника.'],
+  [/متفق/, 'متفق عليه (Муттафакун ‘алейхи) — согласованный: передали и аль-Бухари, и Муслим. Высшая достоверность.'],
+];
+function explainHukm(el){ try{ if(window.event&&window.event.stopPropagation) window.event.stopPropagation(); }catch(e){}
+  const g=(el&&el.getAttribute&&el.getAttribute('data-g'))||''; let txt='Степень достоверности хадиса по оценке источника.';
+  for(const pair of HUKM_MEANINGS){ if(pair[0].test(g)){ txt=pair[1]; break; } }
+  let bx=document.getElementById('hukmInfo');
+  if(!bx){ bx=document.createElement('div'); bx.id='hukmInfo'; bx.className='modal';
+    bx.innerHTML='<div class="panel" style="max-width:470px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px"><b id="hukmT" style="font-size:17px"></b><button class="mini" id="hukmX" style="flex:none">закрыть ✕</button></div><div id="hukmB" style="font-size:15px;line-height:1.65"></div></div>';
+    document.body.appendChild(bx); bx.querySelector('#hukmX').onclick=()=>bx.style.display='none'; bx.addEventListener('click',e=>{ if(e.target===bx) bx.style.display='none'; }); }
+  bx.querySelector('#hukmT').textContent='⚖️ '+g;
+  bx.querySelector('#hukmB').innerHTML=esc(txt)+'<div style="margin-top:11px;color:var(--hint);font-size:12.5px;border-top:1px solid var(--border);padding-top:9px">⚠️ Это оценка <b>источника</b> (sunnah.one), не нашей редакции. Наша выверенная оценка достоверности добавляется отдельно (🅼).</div>';
+  try{ hap('light'); }catch(e){} bx.style.display='flex'; }
 const SAHIHAYN=['bukhari','muslim'];
 const NOGRADE_NOTE='Оценка достоверности будет добавлена после нашей проверки.';
 /* 🅼 НАША оценка достоверности на ОТДЕЛЬНЫХ хадисах (приоритет над всем). Ключ: code|номер. */
@@ -1327,10 +1352,11 @@ async function openRootBrowser(){
   let m=document.getElementById('rootModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='rootModal';
     m.innerHTML='<div class="panel" style="max-width:560px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;background:var(--card);margin:-16px -16px 8px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b>🌿 Корни Корана ('+roots.length+')</b><button class="mini" id="rootClose" style="flex:none">закрыть ✕</button></div>'
-     +'<div style="border:1px solid var(--border);border-radius:10px;padding:8px;margin-bottom:8px;background:var(--bg)"><div style="font-size:12px;color:var(--hint);margin-bottom:5px">Вставь слово — определю его корень (по корпусу Корана + проверка ИИ):</div>'
-       +'<div style="display:flex;gap:6px"><input id="rootWord" placeholder="напр.: ينصرون / نَصَرَ" style="flex:1;direction:rtl;text-align:right;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:16px;'+_AF+'"><button class="mini" id="rootDet" style="flex:none;border:1px solid var(--btn);color:var(--btn)">🔎 Корень</button></div>'
-       +'<div id="rootDetOut" style="display:none;margin-top:6px;font-size:14px"></div></div>'
-     +'<div style="font-size:13px;color:var(--hint);margin-bottom:6px">…или выбери корень: первая буква → крутилка вариантов. Нажми корень → все аяты с ним.</div>'
+     +'<div style="border:2px solid var(--btn);border-radius:12px;padding:11px;margin-bottom:10px;background:var(--bg)"><div style="font-size:14px;color:var(--text);font-weight:700;margin-bottom:7px">📝 Введите слово — узнаю его корень</div>'
+       +'<div style="display:flex;gap:6px"><input id="rootWord" placeholder="напр.: ينصرون / نَصَرَ" style="flex:1;direction:rtl;text-align:right;background:var(--card);color:var(--text);border:1px solid var(--btn);border-radius:9px;padding:11px;font-size:19px;'+_AF+'"><button class="mini" id="rootPaste" title="Вставить из буфера" style="flex:none;border:1px solid var(--border);padding:0 11px;font-size:16px">📋</button><button class="go" id="rootDet" style="flex:none;padding:0 15px;font-size:15px;font-weight:700">🔎 Корень</button></div>'
+       +'<div style="font-size:12px;color:var(--hint);margin-top:6px">Определяю по корпусу Корана. Если слова там нет — кнопка «🧠 Уточнить у ИИ» (вызывается только по нажатию).</div>'
+       +'<div id="rootDetOut" style="display:none;margin-top:8px;font-size:15px"></div></div>'
+     +'<div style="font-size:14px;color:var(--text);font-weight:600;margin-bottom:7px;text-align:center">👇 Или выбери корень: нажми <b style="color:var(--mark)">первую букву</b> → появится список корней</div>'
      +'<div id="rootCur" style="text-align:center;font-size:26px;'+_AF+';min-height:34px;color:var(--mark);direction:rtl"></div>'
      +'<div id="rootLetters" style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;direction:rtl;margin:6px 0"></div>'
      +'<div style="display:flex;gap:8px;justify-content:center;align-items:center;margin-bottom:8px;flex-wrap:wrap"><button class="mini" id="rootBack">⌫ стереть</button><button class="mini" id="rootClear">очистить</button><button class="mini" id="rootDemo" style="border:1px solid #2e9b5b;color:#bff5d4">▶ пример (نصر)</button><select id="rootSel" style="display:none;background:var(--bg);color:var(--text);border:1px solid var(--btn);border-radius:8px;padding:7px;font-size:17px;'+_AF+'"></select></div>'
@@ -1346,7 +1372,7 @@ async function openRootBrowser(){
   const openRoot=(r)=>{ m.style.display='none'; if(tab!=='quran'){ try{ document.querySelector('.tab[data-tab="quran"]').click(); }catch(e){} } showRootPlaces(r); };
   function refresh(){
     curEl.textContent=cur||'—';
-    if(!cur){ listEl.innerHTML='<span class="hint" style="font-size:12px">Выбери первую букву корня…</span>'; selEl.style.display='none'; return; }
+    if(!cur){ listEl.innerHTML='<span class="hint" style="font-size:14px">👆 Нажми первую букву корня выше — и здесь появятся корни</span>'; selEl.style.display='none'; return; }
     const matches=roots.filter(r=>r.indexOf(cur)===0).sort();
     // КРУТИЛКА: варианты корней на выбранные буквы
     if(matches.length){ selEl.style.display='inline-block'; selEl.innerHTML='<option value="">⌄ выбрать корень ('+matches.length+')</option>'+matches.slice(0,400).map(r=>'<option value="'+esc(r)+'">'+esc(r)+' · '+(R.r[r]||[]).length+'</option>').join(''); }
@@ -1366,29 +1392,48 @@ async function openRootBrowser(){
   curEl.style.transition='transform .25s';
   // ОПРЕДЕЛИТЬ КОРЕНЬ по слову: корпус Корана + проверка ИИ
   const wInp=m.querySelector('#rootWord'), dOut=m.querySelector('#rootDetOut');
-  m.querySelector('#rootDet').onclick=async()=>{ const raw=(wInp.value||'').trim(); if(!raw){ wInp.focus(); return; }
+  // ⚠️ ИИ НЕ вызывается автоматически (бережём лимит) — только по кнопке «🧠 Уточнить у ИИ»
+  const _askRootAI=async(word, host, btn)=>{ if(!BACKEND_URL){ toast('Нужен сервер'); return; } if(btn){ btn.disabled=true; btn.textContent='🧠 …'; }
+    try{ const r=await fetch(BACKEND_URL+'/wordai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({word:word,initData:INITDATA})}); const j=await r.json().catch(()=>({}));
+      if(r.status===429){ toast((j&&j.message)||'Лимит ИИ — подожди'); if(btn){btn.disabled=false;btn.textContent='🧠 Уточнить у ИИ';} return; }
+      if(j&&j.root){ const ai=document.createElement('div'); ai.style.cssText='margin-top:7px;padding:7px;border:1px solid #6c5ce7;border-radius:8px';
+        ai.innerHTML='<span style="color:#b9a7ff">🧠 ИИ:</span> корень <b style="'+_AF+';font-size:18px;color:#d9ccff">'+esc(j.root)+'</b>'+(j.translation?(' · '+esc(j.translation)):'')+' · <span class="goR2" style="color:var(--link);cursor:pointer;text-decoration:underline">показать аяты</span>';
+        host.appendChild(ai); const g2=ai.querySelector('.goR2'); if(g2) g2.onclick=()=>openRoot(j.root); if(btn) btn.remove(); }
+      else { toast('ИИ не определил корень'); if(btn){btn.disabled=false;btn.textContent='🧠 Уточнить у ИИ';} }
+    }catch(e){ toast('🔧 Сервис ИИ недоступен'); if(btn){btn.disabled=false;btn.textContent='🧠 Уточнить у ИИ';} } };
+  m.querySelector('#rootDet').onclick=()=>{ const raw=(wInp.value||'').trim(); if(!raw){ wInp.focus(); return; }
     const word=raw.replace(/[ؗ-ًؚ-ْٰـ]/g,'').trim(); dOut.style.display='block';
     let e=(R.f&&R.f[rootKey(word)])||null; if(!e||!e[0]){ const bare=word.replace(/^(وال|فال|بال|كال|لل|ال|و|ف|ب|ك|ل)/,''); if(bare&&bare!==word) e=(R.f&&R.f[rootKey(bare)])||null; }
     const corpus=e&&e[0]?e[0]:'';
-    dOut.innerHTML = corpus ? ('Корень по корпусу Корана: <b style="'+_AF+';font-size:18px;color:var(--mark)">'+esc(corpus)+'</b> · <span class="goR" style="color:var(--link);cursor:pointer;text-decoration:underline">показать аяты</span>') : '<span class="hint">В корпусе Корана не нашёл (слово не из Корана?). Спрашиваю ИИ…</span>';
+    dOut.innerHTML = corpus ? ('Корень по корпусу Корана: <b style="'+_AF+';font-size:20px;color:var(--mark)">'+esc(corpus)+'</b> · <span class="goR" style="color:var(--link);cursor:pointer;text-decoration:underline">показать аяты</span>') : '<span class="hint" style="font-size:14px">В корпусе Корана не нашёл (слово не из Корана?).</span>';
     const gr=dOut.querySelector('.goR'); if(gr) gr.onclick=()=>openRoot(corpus);
-    if(BACKEND_URL){ try{ const r=await fetch(BACKEND_URL+'/wordai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({word:word,initData:INITDATA})}); const j=await r.json().catch(()=>({}));
-      if(j&&j.root){ const diff=corpus&&canon(j.root).replace(/[^ء-ي]/g,'')!==canon(corpus).replace(/[^ء-ي]/g,''); dOut.innerHTML+='<div style="margin-top:5px">🧠 ИИ: корень <b style="'+_AF+';font-size:17px">'+esc(j.root)+'</b>'+(j.translation?(' · '+esc(j.translation)):'')+(diff?' <span style="color:#ffb74d">(расходится с корпусом — проверь)</span>':(corpus?' <span style="color:#7fe3bf">(совпадает ✓)</span>':''))+'</div>';
-        if(!corpus){ const gr2=document.createElement('span'); }
-      } }catch(e){} }
+    // ручная кнопка ИИ (фиолетовая, ИИ-цвет) — НЕ авто
+    const aib=document.createElement('button'); aib.className='mini'; aib.textContent='🧠 Уточнить у ИИ'; aib.style.cssText='display:block;margin-top:7px;border:1px solid #6c5ce7;color:#d9ccff;background:#2e1d4a;padding:7px 12px;border-radius:8px;font-size:13px';
+    aib.onclick=()=>_askRootAI(word, dOut, aib); dOut.appendChild(aib);
   };
+  const pasteBtn=m.querySelector('#rootPaste'); if(pasteBtn) pasteBtn.onclick=async()=>{ try{ const t=await navigator.clipboard.readText(); if(t){ wInp.value=t.trim(); wInp.focus(); m.querySelector('#rootDet').onclick(); } else toast('Буфер пуст'); }catch(e){ toast('Разреши доступ к буферу или вставь вручную'); } };
   wInp.addEventListener('keydown',e=>{ if(e.key==='Enter') m.querySelector('#rootDet').onclick(); });
-  // МЕДЛЕННАЯ анимация-пример: показываем по букве не спеша + подсветка буквы + подпись
-  async function demo(){ cur=''; refresh(); const seq=['ن','ص','ر']; const cap=m.querySelector('#rootDetOut');
-    try{ toast('Пример: набираю корень نصر по букве…'); }catch(e){}
-    await new Promise(r=>setTimeout(r,700));
-    for(const L of seq){ cur+=L; refresh();
-      curEl.style.transform='scale(1.35)'; curEl.style.color='#7fe3bf';
-      const lb=[...lettersEl.children].find(x=>x.dataset.l===L); if(lb){ lb.style.boxShadow='0 0 12px #4ade80'; lb.style.background='#173d30'; setTimeout(()=>{ lb.style.boxShadow=''; lb.style.background=''; },800); }
-      await new Promise(r=>setTimeout(r,900)); curEl.style.transform=''; curEl.style.color='var(--mark)';
-      await new Promise(r=>setTimeout(r,250));
+  // МЕДЛЕННАЯ наглядная анимация-пример с пальцем-указателем 👆, который «нажимает» буквы
+  async function demo(){ cur=''; refresh(); const seq=['ن','ص','ر'];
+    let fp=m.querySelector('#rootFinger'); if(!fp){ fp=document.createElement('div'); fp.id='rootFinger'; fp.textContent='👆'; fp.style.cssText='position:fixed;z-index:99;font-size:32px;pointer-events:none;transition:left .8s ease,top .8s ease,transform .2s;filter:drop-shadow(0 2px 5px rgba(0,0,0,.6))'; document.body.appendChild(fp); }
+    fp.style.opacity='1';
+    try{ toast('Пример: набираю корень نصر — следи за пальцем 👆'); }catch(e){}
+    await new Promise(r=>setTimeout(r,900));
+    for(const L of seq){
+      const lb=[...lettersEl.children].find(x=>x.dataset.l===L);
+      if(lb){ const rc=lb.getBoundingClientRect(); fp.style.left=(rc.left+rc.width/2-8)+'px'; fp.style.top=(rc.bottom-8)+'px'; }
+      await new Promise(r=>setTimeout(r,900));   // палец «долетает» до буквы
+      if(lb){ lb.style.transition='all .2s'; lb.style.boxShadow='0 0 16px #4ade80'; lb.style.background='#173d30'; lb.style.transform='scale(1.2)'; }
+      fp.style.transform='translateY(5px) scale(.88)';   // нажатие
+      await new Promise(r=>setTimeout(r,260)); fp.style.transform='';
+      cur+=L; refresh(); curEl.style.transform='scale(1.4)'; curEl.style.color='#7fe3bf';
+      await new Promise(r=>setTimeout(r,1100));
+      if(lb){ lb.style.boxShadow=''; lb.style.background=''; lb.style.transform=''; }
+      curEl.style.transform=''; curEl.style.color='var(--mark)';
+      await new Promise(r=>setTimeout(r,350));
     }
-    try{ toast('💡 Готово: выбери корень в крутилке/списке → все аяты. Или вставь слово сверху.'); }catch(e){}
+    fp.style.opacity='0';
+    try{ toast('💡 Готово: теперь выбери корень в списке → все аяты. Или впиши слово сверху.'); }catch(e){}
   }
   m.querySelector('#rootDemo').onclick=demo;
   refresh();
