@@ -155,7 +155,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v236</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v237</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -489,7 +489,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v236';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v237';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3392,7 +3392,8 @@ function addTr(meta,card,text,ayah,fav){
   if(!ayah){ const nb=document.createElement('button');nb.className='tr-btn';nb.textContent='👤 Передатчики';nb.title='Разобрать цепочку (иснад): кто передатчики + слова учёных о них';
     nb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
     const nbout=document.createElement('div');nbout.className='tr-out';
-    nb.onclick=()=>doNarrators(text, nbout, nb); meta.appendChild(nb); card.appendChild(nbout); }
+    nb.onclick=()=>doNarrators(text, nbout, nb); meta.appendChild(nb); card.appendChild(nbout);
+    try{ autoHighlightNarr(text, card, nbout); }catch(e){} }   // A: подсветить передатчиков СРАЗУ (кликабельны без нажатия кнопки)
   const fbb=document.createElement('button');fbb.className='tr-btn';fbb.textContent='✍️ Сообщить нам';fbb.title='Написать нам об ошибке/замечании';
   fbb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--link);padding:6px 10px';
   fbb.onclick=()=>openFeedback((fav&&fav.label)||'');
@@ -3648,8 +3649,6 @@ async function showNarratorCardLocal(name, host){
     +'<div style="font-size:11px;color:var(--hint);margin:2px 0 7px">📖 موسوعة رواة الحديث (база Мактабы) · #'+c[0]+'</div>'
     +row('الكنية',c[2])+row('النسب',c[3])+row('سنة الوفاة',c[4]?('~'+c[4]+'هـ'):'')+row('الطبقة',c[7])
     +rank('الرتبة عند ابن حجر',c[5])+rank('الرتبة عند الذهبي',c[6]);
-  try{ const bks=await _narrBooks(c[0]); if(bks&&bks.length){ const mp=await loadRijalBooksMap(); const crit=[...new Set(bks.map(b=>mp[b]).filter(Boolean))];
-    h+='<div style="margin:6px 0;padding:6px 9px;background:rgba(46,155,91,.16);border-radius:8px;font-size:13px;direction:ltr;text-align:left"><b style="color:#bff5d4">✅ Подтверждён нашей базой:</b> упоминается в <b>'+bks.length+'</b> наших трудах мутабарунов'+(crit.length?(' — '+crit.slice(0,6).map(esc).join(', ')+(crit.length>6?'…':'')):'')+'</div>'; } }catch(e){}
   h+='</div>';
   host.insertAdjacentHTML('afterbegin', h); return c;   // джарх موсуа рендерится ОТДЕЛЬНЫМ разделом ПОСЛЕ наших книг
 }
@@ -3710,24 +3709,49 @@ async function showNarratorBio(name, out){
 // 📚 НейроМухаддис: слова критиков о передатчике по 150 трудам ильм-риджаля (/api/rijal)
 async function doRijalCorpus(name, out, btn){
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }
-  const prev=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='📚 ищу…'; }
-  out.innerHTML='<div class="hint">📚 Что сказали наши критики (мутабаруны) о «'+esc(name)+'» — ищу по 150 трудам…</div>';
-  try{ const r=await fetch(BACKEND_URL+'/rijal?name='+encodeURIComponent(name)+'&initData='+encodeURIComponent(INITDATA));
-    const jj=await r.json().catch(()=>({})); if(btn){ btn.disabled=false; btn.textContent=prev; }
-    if(r.status===429){ out.innerHTML='<div class="hint">Слишком часто — подожди.</div>'; return; }
-    if(r.status===403){ out.innerHTML='<div class="hint">Функция пока не открыта.</div>'; return; }
-    if((jj&&jj.error)||r.status>=500){ out.innerHTML='<div class="hint">🔧 Сервер риджаля недоступен (бэкенд лежит?). Подними Railway → заработает.</div>'; return; }
-    const data=jj.data||[];
-    if(!data.length){ out.innerHTML='<div class="hint">Прямых упоминаний не нашёл — имя бывает в другой форме (попробуй с куньей/нисбой).</div>'; return; }
-    out.innerHTML='<div class="hint" style="margin:6px 0">📚 Найдено мест: <b>'+(jj.count||data.length).toLocaleString('ru')+'</b> в '+(jj.books||150)+' трудах критиков (показаны первые '+data.length+'):</div>';
-    data.forEach(x=>{ const c=document.createElement('div'); c.className='card'; c.style.cssText='margin-bottom:7px';
-      const loc=(x.vol?('т.'+x.vol+' '):'')+(x.page!=null?('стр. '+x.page):'');
-      c.innerHTML='<div class="rjH" style="font-size:12.5px;color:var(--link);direction:rtl;text-align:right;font-weight:600;cursor:pointer">📖 '+esc(x.book_name||'')+(x.critic?(' <span style="color:#bff5d4">· '+esc(x.critic)+'</span>'):'')+(loc?(' <span style="color:var(--hint);font-weight:400">· '+esc(loc)+'</span>'):'')+'</div>'
-        +'<div class="ar" style="font-size:16px;margin-top:5px;line-height:1.9">'+esc((x.snip||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim())+'</div>';
-      c.querySelector('.rjH').onclick=()=>{ try{ openBook(x.book_id, x.page_id||x.page||1); }catch(e){} };
-      try{ enableArabusTap(c.querySelector('.ar')); if(_arabusOn) c.querySelector('.ar').style.cursor='pointer'; }catch(e){}
-      out.appendChild(c); });
-  }catch(e){ if(btn){ btn.disabled=false; btn.textContent=prev; } out.innerHTML='<div class="hint">🔧 сервис недоступен (бэкенд?).</div>'; }
+  const st=(out._rj=out._rj||{all:[],page:0,count:0,books:150,sort:'book',loading:false,done:false});
+  const renderCard=(x)=>{ const c=document.createElement('div'); c.className='card'; c.style.cssText='margin-bottom:7px';
+    const loc=(x.vol?('т.'+x.vol+' '):'')+(x.page!=null?('стр. '+x.page):'');
+    c.innerHTML='<div class="rjH" style="font-size:12.5px;color:var(--link);direction:rtl;text-align:right;font-weight:600;cursor:pointer" title="Открыть книгу на этой странице">📖 '+esc(x.book_name||'')+(x.critic?(' <span style="color:#bff5d4">· '+esc(x.critic)+'</span>'):'')+(loc?(' <span style="color:var(--hint);font-weight:400">· '+esc(loc)+'</span>'):'')+'</div>'
+      +'<div class="ar" style="font-size:16px;margin-top:5px;line-height:1.9">'+esc((x.snip||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim())+'</div>';
+    c.querySelector('.rjH').onclick=()=>{ try{ openBook(x.book_id, x.page_id||x.page||1); }catch(e){} };
+    try{ enableArabusTap(c.querySelector('.ar')); if(_arabusOn) c.querySelector('.ar').style.cursor='pointer'; }catch(e){}
+    return c; };
+  const render=()=>{
+    out.innerHTML='';
+    const head=document.createElement('div'); head.style.cssText='margin:6px 0';
+    head.innerHTML='<div class="hint">📚 Слова наших критиков (мутабаруны) — всего мест: <b>'+(st.count||st.all.length).toLocaleString('ru')+'</b> в '+st.books+' трудах · загружено '+st.all.length+'</div>';
+    const sb=document.createElement('div'); sb.style.cssText='display:flex;gap:6px;margin:6px 0;flex-wrap:wrap';
+    const mkS=(t,k)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=t; b.style.cssText='font-size:12px;padding:4px 10px'+(st.sort===k?';background:var(--btn);color:#fff;border-color:var(--btn)':''); b.onclick=()=>{ st.sort=k; render(); }; return b; };
+    sb.appendChild(mkS('📕 По сборникам','book')); sb.appendChild(mkS('✍️ По авторам','author'));
+    head.appendChild(sb); out.appendChild(head);
+    let arr=st.all.slice();
+    if(st.sort==='author') arr.sort((a,b)=>(''+(a.critic||'')).localeCompare(''+(b.critic||''),'ru')||(''+(a.book_name||'')).localeCompare(''+(b.book_name||'')));
+    else arr.sort((a,b)=>(''+(a.book_name||'')).localeCompare(''+(b.book_name||'')));
+    let lastG='\x00';
+    arr.forEach(x=>{ const g=st.sort==='author'?(x.critic||'—'):(x.book_name||'—');
+      if(g!==lastG){ lastG=g; const gh=document.createElement('div'); gh.style.cssText='font-weight:700;color:#d9ccff;font-size:13px;margin:9px 0 4px;direction:rtl;text-align:right'; gh.textContent=(st.sort==='author'?'✍️ ':'📕 ')+g; out.appendChild(gh); }
+      out.appendChild(renderCard(x)); });
+    if(!st.done && st.all.length<st.count){ const mb=document.createElement('button'); mb.className='mini'; mb.style.cssText='display:block;width:100%;margin:9px 0;padding:9px;border:1px dashed var(--border);border-radius:10px;cursor:pointer';
+      mb.textContent='⬇️ Показать ещё (осталось '+(st.count-st.all.length).toLocaleString('ru')+')'; mb.onclick=()=>loadMore(mb); out.appendChild(mb); }
+  };
+  async function loadMore(mb){
+    if(st.loading) return; st.loading=true; if(mb){ mb.textContent='⏳ загружаю…'; mb.disabled=true; }
+    try{ const r=await fetch(BACKEND_URL+'/rijal?name='+encodeURIComponent(name)+'&page='+(st.page+1)+'&initData='+encodeURIComponent(INITDATA));
+      const jj=await r.json().catch(()=>({}));
+      if(r.status===429){ if(mb){mb.textContent='Слишком часто — подожди';mb.disabled=false;} st.loading=false; return; }
+      if(r.status===403){ st.done=true; st.loading=false; if(!st.all.length) out.innerHTML='<div class="hint">Функция пока не открыта.</div>'; else render(); return; }
+      if((jj&&jj.error)||r.status>=500){ st.done=true; st.loading=false; if(!st.all.length) out.innerHTML='<div class="hint">🔧 Сервер риджаля недоступен — подними Railway.</div>'; else render(); return; }
+      const data=jj.data||[]; st.page++; st.count=jj.count||st.count; st.books=jj.books||st.books;
+      data.forEach(x=>st.all.push(x)); if(!data.length) st.done=true;
+      st.loading=false; render();
+    }catch(e){ st.loading=false; if(mb){mb.textContent='🔧 ошибка, ещё раз';mb.disabled=false;} if(!st.all.length) out.innerHTML='<div class="hint">🔧 сервис недоступен.</div>'; }
+  }
+  if(btn){ btn.disabled=true; btn.textContent='📚 ищу…'; }
+  out.innerHTML='<div class="hint">📚 Ищу «'+esc(name)+'» по 150 трудам мутабарунов…</div>';
+  await loadMore(null);
+  if(btn){ btn.disabled=false; btn.textContent='📚 Слова критиков (150 трудов риджаля)'; }
+  if(!st.all.length && st.done){ out.innerHTML='<div class="hint">Прямых упоминаний не нашёл — имя бывает в другой форме (кунья/нисба).</div>'; }
 }
 async function doNarratorAI(name, out, btn){
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }
@@ -3742,6 +3766,13 @@ async function doNarratorAI(name, out, btn){
       else out.innerHTML='<span class="hint">ИИ не дал ответа — попробуй полную карточку.</span>'; }
   }catch(e){ out.innerHTML='<span class="hint">🔧 Сервис недоступен.</span>'; }
   btn.disabled=false; btn.textContent=prev;
+}
+// A: авто-подсветка передатчиков в карточке СРАЗУ при показе (лёгкое выделение, клик → карточка равия)
+function autoHighlightNarr(text, card, out){
+  let names; try{ names=isnadNarrators(text).filter(nm=>{ const t=(nm||'').trim(); return / بن | ابن /.test(' '+t+' ')||/^(?:أبو|أبي|أم|عبد|ابن)\s/.test(t+' '); }); }catch(e){ return; }
+  if(!names||!names.length) return;
+  setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
+    highlightNarratorsInDiv(ad, names, nm=>{ out.style.display='block'; showNarratorBio(nm,out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }); } }); }catch(e){} }, 0);
 }
 async function doNarrators(text, out, btn){
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }
