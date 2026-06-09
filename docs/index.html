@@ -155,7 +155,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v231</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v232</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -489,7 +489,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v231';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v232';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3645,7 +3645,7 @@ async function showNarratorCardLocal(name, host){
     +'<div style="font-size:11px;color:var(--hint);margin:2px 0 7px">📖 موسوعة رواة الحديث (база Мактабы) · #'+c[0]+'</div>'
     +row('الكنية',c[2])+row('النسب',c[3])+row('سنة الوفاة',c[4]?('~'+c[4]+'هـ'):'')+row('الطبقة',c[7])
     +rank('الرتبة عند ابن حجر',c[5])+rank('الرتبة عند الذهبي',c[6]);
-  if(c[8]) h+='<details style="margin-top:7px"><summary style="cursor:pointer;color:var(--link);font-size:13px">📜 الجرح والتعديل (слова учёных)</summary><div style="font-size:13.5px;line-height:1.85;margin-top:5px;white-space:pre-wrap">'+esc(c[8])+'</div></details>';
+  if(c[8]) h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:7px"><div style="font-weight:700;color:#ffd479;font-size:13.5px;margin-bottom:4px">📜 Что сказали о нём учёные (наша база):</div><div style="font-size:13.5px;line-height:1.9;white-space:pre-wrap">'+esc(c[8])+'</div></div>';
   h+='</div>';
   host.insertAdjacentHTML('afterbegin', h); return true;
 }
@@ -3653,6 +3653,8 @@ async function showNarratorBio(name, out){
   out.style.display='block'; out.innerHTML='';
   // 1) НАША база (расшифрованная Мактаба) — карточка как в Шамиле, мгновенно/офлайн
   let foundLocal=false; try{ foundLocal=await showNarratorCardLocal(name, out); }catch(e){}
+  // 2) ПРИОРИТЕТ: что сказали НАШИ критики (мутабаруны) из НАШИХ 150 трудов риджаля — СРАЗУ, с ссылкой на место в книге
+  if(BACKEND_URL){ const rijalBox=document.createElement('div'); rijalBox.style.marginTop='8px'; out.appendChild(rijalBox); try{ doRijalCorpus(name, rijalBox, null); }catch(e){} }
   const extra=document.createElement('div'); out.appendChild(extra);
   if(!BACKEND_URL){ if(!foundLocal) extra.innerHTML='<span class="hint">«'+esc(name)+'» — для доп. источников нужен сервер.</span>'; return; }
   if(!foundLocal) extra.innerHTML='<span class="hint">Ищу «'+esc(name)+'» в энциклопедии равиев…</span>';
@@ -3679,10 +3681,10 @@ async function showNarratorBio(name, out){
 // 📚 НейроМухаддис: слова критиков о передатчике по 150 трудам ильм-риджаля (/api/rijal)
 async function doRijalCorpus(name, out, btn){
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }
-  btn.disabled=true; const prev=btn.textContent; btn.textContent='📚 ищу…';
-  out.innerHTML='<div class="hint">📚 Ищу «'+esc(name)+'» по 150 трудам джарх-ва-тадиль…</div>';
+  const prev=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='📚 ищу…'; }
+  out.innerHTML='<div class="hint">📚 Что сказали наши критики (мутабаруны) о «'+esc(name)+'» — ищу по 150 трудам…</div>';
   try{ const r=await fetch(BACKEND_URL+'/rijal?name='+encodeURIComponent(name)+'&initData='+encodeURIComponent(INITDATA));
-    const jj=await r.json().catch(()=>({})); btn.disabled=false; btn.textContent=prev;
+    const jj=await r.json().catch(()=>({})); if(btn){ btn.disabled=false; btn.textContent=prev; }
     if(r.status===429){ out.innerHTML='<div class="hint">Слишком часто — подожди.</div>'; return; }
     if(r.status===403){ out.innerHTML='<div class="hint">Функция пока не открыта.</div>'; return; }
     if((jj&&jj.error)||r.status>=500){ out.innerHTML='<div class="hint">🔧 Сервер риджаля недоступен (бэкенд лежит?). Подними Railway → заработает.</div>'; return; }
@@ -3696,7 +3698,7 @@ async function doRijalCorpus(name, out, btn){
       c.querySelector('.rjH').onclick=()=>{ try{ openBook(x.book_id, x.page_id||x.page||1); }catch(e){} };
       try{ enableArabusTap(c.querySelector('.ar')); if(_arabusOn) c.querySelector('.ar').style.cursor='pointer'; }catch(e){}
       out.appendChild(c); });
-  }catch(e){ btn.disabled=false; btn.textContent=prev; out.innerHTML='<div class="hint">🔧 сервис недоступен (бэкенд?).</div>'; }
+  }catch(e){ if(btn){ btn.disabled=false; btn.textContent=prev; } out.innerHTML='<div class="hint">🔧 сервис недоступен (бэкенд?).</div>'; }
 }
 async function doNarratorAI(name, out, btn){
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }
