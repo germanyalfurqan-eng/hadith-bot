@@ -155,7 +155,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v229</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v230</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -489,7 +489,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v229';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v230';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3624,29 +3624,56 @@ function highlightNarratorsInDiv(ad, names, onClick){
     node.parentNode.replaceChild(frag, node);
   });
 }
+/* ===== БАЗА ПЕРЕДАТЧИКОВ (расшифрованная Мактаба, 18989 равиев) — карточка как в Шамиле ===== */
+let _narrNames=null, _narrNamesP=null, _narrShard={};
+function loadNarrNames(){ if(_narrNames) return Promise.resolve(_narrNames); if(_narrNamesP) return _narrNamesP;
+  _narrNamesP=fetch('./narrators_names.json').then(r=>r.ok?r.json():null).then(j=>{_narrNames=j||[];return _narrNames;}).catch(()=>{_narrNames=[];return _narrNames;}); return _narrNamesP; }
+function _narrCanon(s){ s=(s||'').replace(/[ً-ْـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه'); return s.replace(/\s+/g,' ').trim(); }
+async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.length) return null; const cn=_narrCanon(name); if(cn.length<4) return null;
+  let exact=null, pref=null, prefLen=1e9;   // иснад даёт КОРОТКУЮ форму → DB-имя начинается с искомого; берём самое короткое (базовый равий)
+  for(const it of idx){ const nm=it[0]; if(nm===cn){ exact=it[1]; break; } if(nm.indexOf(cn+' ')===0 && nm.length<prefLen){ pref=it[1]; prefLen=nm.length; } }
+  return exact!=null?exact:pref; }
+async function _narrCard(id){ const b=Math.floor(id/100); if(!_narrShard[b]){ try{ _narrShard[b]=await (await fetch('./narr/'+b+'.json')).json(); }catch(e){ _narrShard[b]={}; } } return (_narrShard[b]||{})[String(id)]||null; }
+async function showNarratorCardLocal(name, host){
+  let id=null; try{ id=await _narrLookup(name); }catch(e){} if(id==null) return false;
+  const c=await _narrCard(id); if(!c) return false;   // [id,name,kunya,nisba,death,rankHajar,rankDhahabi,tabaqa,jarh]
+  const row=(lbl,v)=>v?('<div style="margin:2px 0"><span style="color:var(--hint)">'+lbl+':</span> <b>'+esc(v)+'</b></div>'):'';
+  const rank=(lbl,v)=>v?('<div style="margin:4px 0;padding:5px 9px;background:rgba(46,155,91,.13);border-radius:8px"><span style="color:var(--hint)">'+lbl+':</span> <b style="color:#bff5d4">'+esc(v)+'</b></div>'):'';
+  let h='<div style="border:1px solid #6c5ce7;border-radius:12px;padding:11px;margin:6px 0;background:rgba(108,92,231,.07);direction:rtl;text-align:right">'
+    +'<div style="font-weight:700;font-size:16px;color:#d9ccff">👤 '+esc(c[1])+'</div>'
+    +'<div style="font-size:11px;color:var(--hint);margin:2px 0 7px">📖 موسوعة رواة الحديث (база Мактабы) · #'+c[0]+'</div>'
+    +row('الكنية',c[2])+row('النسب',c[3])+row('سنة الوفاة',c[4]?('~'+c[4]+'هـ'):'')+row('الطبقة',c[7])
+    +rank('الرتبة عند ابن حجر',c[5])+rank('الرتبة عند الذهبي',c[6]);
+  if(c[8]) h+='<details style="margin-top:7px"><summary style="cursor:pointer;color:var(--link);font-size:13px">📜 الجرح والتعديل (слова учёных)</summary><div style="font-size:13.5px;line-height:1.85;margin-top:5px;white-space:pre-wrap">'+esc(c[8])+'</div></details>';
+  h+='</div>';
+  host.insertAdjacentHTML('afterbegin', h); return true;
+}
 async function showNarratorBio(name, out){
-  if(!BACKEND_URL){ toast('Нужен сервер'); return; }
-  out.style.display='block'; out.innerHTML='<span class="hint">Ищу «'+esc(name)+'» в موسوعة رواة الحديث…</span>';
+  out.style.display='block'; out.innerHTML='';
+  // 1) НАША база (расшифрованная Мактаба) — карточка как в Шамиле, мгновенно/офлайн
+  let foundLocal=false; try{ foundLocal=await showNarratorCardLocal(name, out); }catch(e){}
+  const extra=document.createElement('div'); out.appendChild(extra);
+  if(!BACKEND_URL){ if(!foundLocal) extra.innerHTML='<span class="hint">«'+esc(name)+'» — для доп. источников нужен сервер.</span>'; return; }
+  if(!foundLocal) extra.innerHTML='<span class="hint">Ищу «'+esc(name)+'» в энциклопедии равиев…</span>';
   try{ const r=await fetch(BACKEND_URL+'/narrator?q='+encodeURIComponent(name)+'&initData='+encodeURIComponent(INITDATA));
     const j=await r.json().catch(()=>({})); let rs=j.results||[];
-    if(!rs.length){ out.innerHTML='<div class="hint">«'+esc(name)+'» не нашёл в энциклопедии равиев (имя в иснаде бывает сокращено).</div>'; return; }
+    if(!rs.length){ extra.innerHTML = foundLocal?'' : '<div class="hint">«'+esc(name)+'» не нашёл (имя в иснаде бывает сокращено).</div>'; return; }
     const cn=canon(name); rs=rs.slice().sort((a,b)=>{ const A=canon(a.title||'').indexOf(cn), B=canon(b.title||'').indexOf(cn); return (A<0?99:A)-(B<0?99:B); });
     const main=rs[0];
     let html='<div style="border:1px solid var(--border);border-radius:12px;padding:10px;margin:6px 0;background:rgba(108,92,231,.06)">'
-      +'<div style="font-weight:700;direction:rtl;font-size:16px">'+esc(main.title)+'</div>'
-      +'<div style="color:var(--hint);font-size:12px;margin:4px 0 8px">📖 Источник: <b>موسوعة رواة الحديث</b> — биография · الطبقة · الوفاة · أقوال العلماء</div>'
-      +'<button class="nlink" data-u="'+esc(main.url)+'" style="background:var(--btn);color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:12.5px;cursor:pointer">📖 Открыть карточку (моусу‘а)</button> '
+      +'<div style="color:var(--hint);font-size:12px;margin:0 0 6px">🌐 Ещё источники о «'+esc(name)+'»:</div>'
+      +'<button class="nlink" data-u="'+esc(main.url)+'" style="background:var(--btn);color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:12.5px;cursor:pointer">📖 موسوعة رواة الحديث</button> '
       +'<button class="naiBtn" style="background:#3a2d5e;color:#e0d7ff;border:1px solid #6c5ce7;border-radius:8px;padding:5px 10px;font-size:12.5px;cursor:pointer">🧠 ИИ: кто это + оценка</button> '
       +'<button class="rjBtn" style="background:#173d30;color:#bff5d4;border:1px solid #2e9b5b;border-radius:8px;padding:6px 11px;font-size:12.5px;cursor:pointer;font-weight:700;margin-top:5px">📚 Слова критиков (150 трудов риджаля)</button>';
     if(rs.length>1) html+='<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--hint);font-size:12px">Другие совпадения ('+(rs.length-1)+')</summary>'+rs.slice(1,6).map(x=>'<div style="direction:rtl;margin:4px 0;font-size:14px"><span class="nlink" data-u="'+esc(x.url)+'" style="color:var(--link);cursor:pointer">• '+esc(x.title)+'</span></div>').join('')+'</details>';
     html+='<div class="naiOut" style="margin-top:8px"></div><div class="rjOut2" style="margin-top:8px"></div></div>';
-    out.innerHTML=html;
-    out.querySelectorAll('.nlink').forEach(b=>b.onclick=()=>openLink(b.dataset.u));
-    const nai=out.querySelector('.naiBtn'), naiOut=out.querySelector('.naiOut');
+    extra.innerHTML=html;
+    extra.querySelectorAll('.nlink').forEach(b=>b.onclick=()=>openLink(b.dataset.u));
+    const nai=extra.querySelector('.naiBtn'), naiOut=extra.querySelector('.naiOut');
     if(nai) nai.onclick=()=>doNarratorAI(name, naiOut, nai);
-    const rjb=out.querySelector('.rjBtn'), rjo=out.querySelector('.rjOut2');
+    const rjb=extra.querySelector('.rjBtn'), rjo=extra.querySelector('.rjOut2');
     if(rjb) rjb.onclick=()=>doRijalCorpus(name, rjo, rjb);
-  }catch(e){ out.innerHTML='<div class="hint">🔧 Сервис недоступен — попробуй позже.</div>'; }
+  }catch(e){ extra.innerHTML = foundLocal?'' : '<div class="hint">🔧 доп. источники недоступны.</div>'; }
 }
 // 📚 НейроМухаддис: слова критиков о передатчике по 150 трудам ильм-риджаля (/api/rijal)
 async function doRijalCorpus(name, out, btn){
