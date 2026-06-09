@@ -3709,7 +3709,7 @@ async def _api_serve(application=None):
             stored = None
             if not force and source and num not in (None, ''):
                 stored = await loop.run_in_executor(None, lambda: (_coll_load(source) or {}).get(str(num)))
-            if stored and stored.get('ru'):
+            if stored and stored.get('ru') and not _is_mostly_arabic(stored['ru']):   # битый арабский кэш игнорируем → переведём заново через DeepSeek
                 await loop.run_in_executor(None, usage_log, user, "перевод", False, len(text), source, str(num or ""))
                 await _notify_usage(user, "перевод", False, source, num, None)   # ♻️ из базы, ключ НЕ потрачен
                 return _cors(web.json_response({'translation': stored['ru'], 'cached': True}))
