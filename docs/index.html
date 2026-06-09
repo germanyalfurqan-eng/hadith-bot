@@ -36,6 +36,8 @@
   body.light .matn{ color:#0b1320 }
   .col,.chip,.tab,input[type=text]{box-shadow:0 2px 8px #0006}
   .wrap{max-width:820px;margin:0 auto;padding:12px;padding-top:calc(28px + env(safe-area-inset-top,0px))}
+  @media(min-width:1024px){ .wrap{max-width:1040px;padding-left:22px;padding-right:22px} }   /* M125: на ПК/планшете контент шире */
+  @media(min-width:1500px){ .wrap{max-width:1180px} }
   /* шапка/бренд */
   .brand{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 0}
   .bleft{display:flex;align-items:center;gap:8px;min-width:0}
@@ -155,7 +157,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v242</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v243</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -186,6 +188,7 @@
   <div class="searchbar" style="position:relative">
     <button id="recentBtn" title="🕐 Недавние запросы" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--hint);font-size:18px;cursor:pointer;padding:4px 6px;z-index:3">🕐</button>
     <input type="text" id="q" placeholder="Введите слово, фразу или № хадиса…" autocomplete="off" enterkeyhint="search" style="padding-left:36px;border:2px solid var(--btn);box-shadow:0 0 0 3px rgba(47,123,230,.10)">
+    <button id="qBack" title="↩ Вернуть прошлый запрос" style="display:none;position:absolute;right:128px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--hint);font-size:19px;cursor:pointer;padding:4px 7px;z-index:3">↩</button>
     <button id="qClear" title="Очистить поиск" style="display:none;position:absolute;right:94px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--hint);font-size:20px;cursor:pointer;padding:4px 8px;z-index:3">✕</button>
     <button class="go" id="goBtn" title="Искать по запросу">Найти</button>
   </div>
@@ -229,8 +232,8 @@
     <div style="font-size:13px;margin-bottom:6px">🔬 Расширенный: подберу арабские фразы — можешь поправить перед поиском:</div>
     <textarea id="neuroIn" placeholder="напр.: намерения · терпение · права соседа"></textarea>
     <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
-      <button class="go" id="neuroRun" style="padding:8px 14px">Подобрать</button>
-      <span class="hint" style="margin:0">базовый режим (умные слова); полный ИИ — после сервера</span>
+      <button class="go" id="neuroRun" style="padding:8px 14px">Подобрать (ИИ)</button>
+      <span class="hint" style="margin:0;color:#e0b34a">⚠️ «Подобрать» = новый запрос к ИИ (тратит ключ). Можно поправить фразы и искать без ИИ.</span>
     </div>
   </div>
 
@@ -489,7 +492,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v242';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v243';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1500,6 +1503,20 @@ async function tryRootFallback(q, seq){
   }catch(e){}
   return false;
 }
+/* M254: история запросов для кнопки «↩ Назад» (вернуть прошлый поиск). Посимвольный набор схлопывается в одну запись. */
+var _qHist=[];
+function _qHistPush(s,t){ if(!s) return; var top=_qHist[_qHist.length-1];
+  if(top){ if(top.q===s){ top.tab=t; return; }
+    if(top.q.length>=2 && s.length>=2 && (top.q.indexOf(s)===0 || s.indexOf(top.q)===0)){ top.q=s; top.tab=t; _qHistUpd(); return; } }   // один из другого префикс → это тот же набор
+  _qHist.push({q:s,tab:t}); if(_qHist.length>40) _qHist.shift(); _qHistUpd(); }
+function _qHistUpd(){ var b=document.getElementById('qBack'); if(b) b.style.display=(_qHist.length>=2)?'block':'none'; }
+function qBack(){ if(_qHist.length<2){ toast('Больше некуда возвращаться'); return; }
+  _qHist.pop();                              // убрать текущий запрос
+  var prev=_qHist[_qHist.length-1];          // предыдущий распознанный запрос
+  try{ if(prev.tab && prev.tab!==tab){ var tb=document.querySelector('.tab[data-tab="'+prev.tab+'"]'); if(tb) tb.click(); } }catch(e){}
+  var qi=document.getElementById('q'); qi.value=prev.q;
+  try{ var qc=document.getElementById('qClear'); if(qc) qc.style.display=qi.value?'block':'none'; }catch(e){}
+  _qHistUpd(); runSearch(true); }
 async function runSearch(explicit){
   const strict=_strictSearch; _strictSearch=false;   // M173: захватываем флаг строгого режима на этот запуск
   const seq=++_seq; groupSrc=false; uniqMode=false; relMode=false; _lastQueryTerms=[];   // новый поиск — сброс режимов вывода
@@ -1507,6 +1524,7 @@ async function runSearch(explicit){
   let q=document.getElementById('q').value.trim(); const shown=q;
   if(!q){ toast('Введите запрос'); return; }
   saveRecent(shown); hideRecent();   // 🕐 запомнить запрос для «недавних»
+  try{ _qHistPush(shown, tab); }catch(e){}   // M254: история для кнопки «↩ Назад»
   const res=document.getElementById('res'); _clearRenderQ(); res.innerHTML=''; _results=[]; _pick={items:[],sel:new Set(),excl:new Set(),kind:'',meaning:''};
   const head=info('⏳ Ищу…'); res.appendChild(head);
   document.getElementById('qSugg').style.display='none';   // спрятать подсказки на время поиска
@@ -4005,7 +4023,11 @@ async function doTafsir(s,a,out,btn,key,lang){
     out.querySelectorAll('.tfk').forEach(b=>b.onclick=()=>doTafsir(s,a,out,btn,b.dataset.k,lang));
     out.querySelectorAll('.tflang').forEach(b=>b.onclick=()=>doTafsir(s,a,out,btn,key,b.dataset.l));
     { const tb=out.querySelector('.tftr'); if(tb && txt) tb.onclick=()=>translateTafsir(txt, key, s, a, out.querySelector('.tftrOut'), tb); }
-    { const cpb=out.querySelector('.tfcopy'); if(cpb) cpb.onclick=()=>{ let t=((out.querySelector('.tafsirText')||{}).innerText||txt||'').trim(); const tr=((out.querySelector('.tftrOut')||{}).innerText||'').trim(); copyWithSig((t+(tr?('\n\n'+tr):'')).trim()); }; }
+    { const cpb=out.querySelector('.tfcopy'); if(cpb) cpb.onclick=()=>{ let t=((out.querySelector('.tafsirText')||{}).innerText||txt||'').trim(); const tr=((out.querySelector('.tftrOut')||{}).innerText||'').trim(); copyWithSig((t+(tr?('\n\n'+tr):'')).trim());
+        // M220: ясно сообщить, ЧТО скопировано, и подсказать как добавить второй язык
+        let _m; if(isAr){ _m = tr ? '⧉ Скопировано: оригинал (ар) + перевод' : ('⧉ Скопировано: оригинал (ар) · нажми '+(tf.ru?'📘 Перевод':'🧠 Перевести')+', чтобы добавить русский'); }
+        else { _m = '⧉ Скопировано: перевод (рус) · нажми 📖 Оригинал, чтобы добавить арабский'; }
+        try{ toast(_m); }catch(e){} }; }
     const x=out.querySelector('.tfx'); if(x) x.onclick=()=>{ var mm=document.getElementById('tafsirModal'); if(mm) mm.style.display='none'; };
     const tDiv=out.querySelector('.tafsirText'), fInp=out.querySelector('.tfFind'), fInfo=out.querySelector('.tfFindInfo'), rawT=txt;   // поиск ВНУТРИ тафсира
     if(fInp&&tDiv) fInp.oninput=()=>{ const term=fInp.value.trim();
@@ -4576,6 +4598,8 @@ let toastT; function toast(t){const el=document.getElementById('toast');el.textC
 
 /* ===================== СТАРТ ===================== */
 document.getElementById('goBtn').onclick=()=>{ hap('medium'); Promise.resolve(runSearch(true)).then(()=>{ try{ hap((_results&&_results.length)?'ok':'err'); }catch(e){} }); };
+// M254: кнопка «↩ Назад» — вернуть предыдущий распознанный запрос
+(function(){ var qb=document.getElementById('qBack'); if(qb) qb.onclick=()=>{ try{ hap('light'); }catch(e){} qBack(); }; })();
 // M254: кнопка очистки поиска ✕
 (function(){ var qc=document.getElementById('qClear'), qi=document.getElementById('q'); if(!qc||!qi) return;
   var upd=()=>{ qc.style.display=qi.value?'block':'none'; }; qi.addEventListener('input',upd); upd();
@@ -4595,7 +4619,7 @@ document.getElementById('neuroRun').onclick=neuroRun;
 var _tt=document.getElementById('toTop'); if(_tt){ _tt.onclick=()=>{ try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){window.scrollTo(0,0);} };
   window.addEventListener('scroll',()=>{ _tt.style.display=(window.scrollY>500)?'block':'none'; },{passive:true}); }
 function openLink(u){ try{ if(tg&&tg.openLink) tg.openLink(u); else window.open(u,'_blank'); }catch(e){ try{window.open(u,'_blank');}catch(_){} } }
-function goHome(){ document.getElementById('q').value=''; selCols.clear(); selExtra.clear();
+function goHome(){ document.getElementById('q').value=''; selCols.clear(); selExtra.clear(); _qHist=[]; try{_qHistUpd();}catch(e){}
   modes.ai=modes.root=modes.diac=modes.matnonly=modes.neuro=false; groupSrc=false;   // сброс режимов (ИИ и пр.)
   document.querySelectorAll('.modes .chip').forEach(c=>c.classList.remove('on'));
   var _nb=document.getElementById('neuroBox'); if(_nb) _nb.style.display='none';
