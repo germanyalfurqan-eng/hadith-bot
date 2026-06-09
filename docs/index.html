@@ -155,7 +155,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v241</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v242</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -489,7 +489,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v241';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v242';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3817,6 +3817,37 @@ async function openIsnadTree(text, out){
   html+='<div class="hint" style="font-size:11px;margin-top:8px">🟢 ثقة · 🟡 صдوق · 🟠 ضعيف · 🔴 متروك · ⚪ нет оценки. Тап по звену → полная карточка (كنية/رتبة/джарх + наши труды).</div></div>';
   out.innerHTML=html;
   out.querySelectorAll('.isNode').forEach(el=>{ el.onclick=()=>{ const i=+el.dataset.i; const bx=document.createElement('div'); bx.style.marginTop='6px'; out.appendChild(bx); showNarratorBio(nodes[i].nm, bx); try{ bx.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }; });
+  // режим версий (طرق): собрать версии хадиса и показать, где цепочки расходятся
+  const vb=document.createElement('button'); vb.className='mini'; vb.style.cssText='display:block;width:100%;margin:9px 0 2px;padding:9px;border:1px solid #6c5ce7;border-radius:10px;background:#2e1d4a;color:#d9ccff;font-weight:700;cursor:pointer'; vb.textContent='🔀 Версии (طرق) — где расходятся';
+  const vout=document.createElement('div'); vout.style.marginTop='6px';
+  vb.onclick=()=>{ vb.disabled=true; vb.textContent='🔀 собираю версии…'; Promise.resolve(openIsnadVersions(text, vout)).finally(()=>{ vb.disabled=false; vb.textContent='🔀 Версии (طرق) — где расходятся'; }); };
+  out.appendChild(vb); out.appendChild(vout);
+}
+// Режим версий (طرق): найти версии хадиса по матну в наших сборниках, показать цепочки и точки расхождения
+async function openIsnadVersions(text, out){
+  out.style.display='block'; out.innerHTML='<div class="hint">🔀 Ищу версии (طرق) по матну в наших сборниках…</div>';
+  // матн = текст после иснада (после «‹›» / «يقول» / «قال رسول»)
+  const flat=stripDiac(text).replace(/ـ/g,'');
+  const matn=(flat.split(/«|»|\sيقول\s|قال رسول|قال النبي|سمعت رسول|سمع النبي/).slice(1).join(' ')||flat);
+  const mw=canon(matn).split(' ').filter(w=>w.length>=2);
+  if(mw.length<5){ out.innerHTML='<span class="hint">Текст матна коротковат для надёжного сбора версий.</span>'; return; }
+  const wins=[]; for(let i=0;i+4<mw.length;i++) wins.push(mw.slice(i,i+5).join(' '));
+  const isVer=(ct)=>wins.some(w=>ct.indexOf(w)!==-1);
+  const COLS=['bukhari','muslim','abudawud','tirmidhi','nasai','ibnmaja','malik','ahmad','darimi'];
+  const versions=[{coll:'этот хадис', num:'', chain:isnadNarrators(text)}];
+  for(const code of COLS){ if(versions.length>=9) break;
+    try{ const arr=await loadByCode(code); for(const h of arr){ if(isVer(canon(h.text))){ const ch=isnadNarrators(h.text); if(ch.length){ versions.push({coll:arOf(code)||code, num:h.num, chain:ch}); } break; } } }catch(e){} }
+  if(versions.length<=1){ out.innerHTML='<span class="hint">Других версий по матну в основных сборниках не нашёл (бывает иная формулировка).</span>'; return; }
+  const freq={}; versions.forEach(v=>{ new Set(v.chain.map(canon)).forEach(cn=>freq[cn]=(freq[cn]||0)+1); });
+  let html='<div style="border:1px solid #6c5ce7;border-radius:12px;padding:11px;margin:6px 0;background:rgba(108,92,231,.06)">'
+    +'<div style="font-weight:700;color:#d9ccff;font-size:13.5px;margin-bottom:4px">🔀 Версии (طرق) хадиса · найдено '+versions.length+'</div>'
+    +'<div class="hint" style="font-size:11px;margin-bottom:8px">🟢 общие звенья — где версии СХОДЯТСЯ (مدار) · обычные — где РАСХОДЯТСЯ. Тап по имени → карточка равия.</div>';
+  versions.forEach(v=>{ html+='<div style="margin:8px 0;padding:7px 8px;border-right:3px solid var(--border);direction:rtl;text-align:right">'
+    +'<div style="font-size:12px;color:#bff5d4;font-weight:700;margin-bottom:4px">📖 '+esc(v.coll)+(v.num?(' №'+esc(String(v.num))):'')+'</div>'
+    +v.chain.map(nm=>{ const common=freq[canon(nm)]>1; return '<span class="vN" data-n="'+esc(nm)+'" style="cursor:pointer;display:inline-block;margin:2px;padding:3px 8px;border-radius:7px;font-size:13px;'+(common?'background:rgba(46,204,113,.18);color:#bff5d4;border:1px solid #2ecc71':'background:var(--bg);border:1px solid var(--border)')+'">'+esc(nm)+'</span>'; }).join('<span style="color:var(--hint)"> ← </span>')
+    +'</div>'; });
+  html+='</div>'; out.innerHTML=html;
+  out.querySelectorAll('.vN').forEach(el=>{ el.onclick=()=>{ const bx=document.createElement('div'); bx.style.marginTop='6px'; out.appendChild(bx); showNarratorBio(el.dataset.n, bx); try{ bx.scrollIntoView({block:'nearest'}); }catch(e){} }; });
 }
 // A: авто-подсветка передатчиков в карточке СРАЗУ при показе (лёгкое выделение, клик → карточка равия)
 function autoHighlightNarr(text, card, out){
