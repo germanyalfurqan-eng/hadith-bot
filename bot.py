@@ -2465,14 +2465,15 @@ def searchlog_add(q, tab, cnt):
     _search_dirty += 1
     if _search_dirty >= 8:
         _journal_save("searches"); _search_dirty = 0
-def feedback_add(user, ctx, txt):
+def feedback_add(user, ctx, txt, has_img=False):
     """Отзыв/ошибка → нумерованный журнал (каждому свой № для поиска в журналах/Telegram)."""
     j = _journal_load()
     j["fb_seq"] = j.get("fb_seq", 0) + 1
     fid = j["fb_seq"]
     name = ("@" + user["username"]) if (user and user.get("username")) else str((user or {}).get("id") or "аноним")
     j["feedback"].insert(0, {"id": fid, "d": datetime.now().strftime("%d.%m.%Y %H:%M"), "u": name,
-                             "uid": str((user or {}).get("id") or ""), "ctx": (ctx or "")[:200], "t": (txt or "")[:1000]})
+                             "uid": str((user or {}).get("id") or ""), "ctx": (ctx or "")[:200], "t": (txt or "")[:1000],
+                             "img": bool(has_img), "done": False})
     j["feedback"] = j["feedback"][:500]
     _journal_save(f"отзыв #{fid} от {name}")
     return fid
@@ -3887,11 +3888,30 @@ async def _api_serve(application=None):
             return _ratelimited()
         txt = (d.get('text') or '').strip()[:1000]
         ctx = (d.get('context') or '')[:200]
-        if not txt:
+        img = d.get('img') or ''
+        has_img = bool(img and isinstance(img, str) and img.startswith('data:image'))
+        if not txt and not has_img:
             return _cors(web.json_response({'ok': False}))
-        fid = await loop.run_in_executor(None, feedback_add, user, ctx, txt)
+        fid = await loop.run_in_executor(None, feedback_add, user, ctx, txt, has_img)
+        if has_img:   # сохраняем САМ скрин (base64) → Claude может открыть data/fb_img/<id>.json
+            try:
+                await loop.run_in_executor(None, _data_put, 'fb_img/%s.json' % fid,
+                                           {'b64': img, 'd': datetime.now().strftime('%d.%m.%Y %H:%M')}, 'fb img %s' % fid)
+            except Exception:
+                pass
         name = ("@" + user["username"]) if (user and user.get("username")) else str((user or {}).get("id") or "аноним")
-        await _notify(f"#отзыв 💬 №{fid} от {name}{(' · ' + ctx) if ctx else ''}:\n{txt}")
+        cap = f"#отзыв 💬 №{fid} от {name}{(' · ' + ctx) if ctx else ''}:\n{txt}"
+        if has_img and application:
+            try:
+                import base64
+                from io import BytesIO
+                raw = base64.b64decode(img.split(',', 1)[1])
+                bio = BytesIO(raw); bio.name = 'feedback.jpg'
+                await application.bot.send_photo(LOG_CHAT_ID, photo=bio, caption=cap[:1000])
+            except Exception:
+                await _notify(cap)
+        else:
+            await _notify(cap)
         return _cors(web.json_response({'ok': True, 'id': fid}))
 
     async def tashkeel(r):
