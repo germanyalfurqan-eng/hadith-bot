@@ -155,7 +155,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v219</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v220</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -489,7 +489,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v219';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v220';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 (async function(){ try{
   if(sessionStorage.getItem('verReloaded')==='1') return;
@@ -591,7 +591,7 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 /* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:false,wordTap:true,popular:false,arabus:false}, loadCfg());
+let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:false,wordTap:true,popular:false,arabus:false,qrHl:true}, loadCfg());
 if(!cfg._rpoff){ cfg.recent=false; cfg.popular=false; cfg._rpoff=1; saveCfg(cfg); }   // разовое: выключить Недавнее/Популярное по умолчанию (можно вернуть в Настройках)
 function applyTheme(){ document.body.classList.toggle('light', cfg.theme==='light'); }
 try{ applyTheme(); }catch(e){}
@@ -1974,6 +1974,10 @@ function wideCard(x){ const card=document.createElement('div');card.className='c
   nw.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
   const nwout=document.createElement('div');nwout.className='tr-out';
   nw.onclick=()=>doNarrators(cleanTxt,nwout,nw); meta.appendChild(nw);
+  // ⛓ НейроТахкик — анализ цепи (скоро): схема-древо иснада с цветными звеньями + словами учёных
+  const nt=document.createElement('button');nt.className='tr-btn';nt.textContent='⛓ НейроТахкик · скоро';nt.title='Скоро: схема-древо иснада — цветные звенья (надёжный/слабый/лжец/тадлис), клик по звену → слова учёных, клик по связи → доказательство сама‘';
+  nt.style.cssText='background:#2e1d4a;border:1px solid #6c5ce7;color:#d9ccff;padding:6px 11px';
+  nt.onclick=()=>{ try{ openNeuroTahkik(); }catch(e){ toast('🔬 Нейро-Тахкик — схема скоро'); } }; meta.appendChild(nt);
   const ab=document.createElement('button'); ab.className='tr-btn arabusToggle'; ab.title='Разбор слов: включи и тапай любое слово в тексте → корень и значения';
   ab.style.cssText='border:1px solid #1e7d5a;color:#7fe3bf;padding:6px 9px;background:'+(_arabusOn?'#173d30':'transparent');
   ab.textContent='📕 Arabus';
@@ -2523,6 +2527,70 @@ async function openAuthor(authorName){
   m.style.display='flex';
 }
 // === 👤 Разбор ПЕРЕДАТЧИКА (ильм риджаль): что говорят учёные (джарх/тадиль) ===
+// 🔬 НЕЙРО-ТАХКИК (бета) — наглядная схема-древо иснада: цветные звенья + слова учёных + связи
+function openNeuroTahkik(){
+  let m=document.getElementById('ntModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='ntModal';
+    m.innerHTML='<div class="panel" style="max-width:780px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 10px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:15px">🔬 Нейро-Тахкик <span style="font-size:11px;background:#6c5ce7;color:#fff;border-radius:6px;padding:2px 7px;vertical-align:middle">БЕТА</span></b><button class="mini" id="ntClose" style="flex:none">закрыть ✕</button></div><div id="ntBody" style="max-height:80vh;overflow:auto"></div></div>';
+    document.body.appendChild(m); m.querySelector('#ntClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+  }
+  m.style.zIndex='10005'; m.style.display='flex';
+  const body=m.querySelector('#ntBody'); body.innerHTML='';
+  body.innerHTML='<div style="background:#2e1d4a;border:1px solid #6c5ce7;border-radius:10px;padding:10px;font-size:13px;color:#e0d7ff;margin-bottom:11px">🔬 <b>Нейро-Тахкик</b> — будущая система проверки достоверности: берём хадис → строим <b>древо всех цепей (طرق)</b> → каждое звено-передатчик красим по надёжности → собираем слова критиков из 150 трудов риджаля → выносим итог.<br><span style="color:#b9a7ff">⏳ Сейчас — наглядный ДЕМО-пример (данные иллюстративные). Скоро — на реальных хадисах + ИИ.</span></div>';
+  const T={ thiqa:['#2e9b5b','🟢','ثقة','надёжный — передача принимается'], saduq:['#caa53a','🟡','صدوق','приемлемый (хасан)'], mudallis:['#e08a2e','🟠','مدلس','тадлис — при عنعنة нужен ثبوت السماع'], daif:['#c0392b','🔴','ضعيف','слабый'], kadhab:['#1c1c1c','⚫','كذّاب/متروك','лжец/оставленный — отвергается'], majhul:['#8a93a0','⚪','مجهول','неизвестный — нет тауси́ка'] };
+  // легенда
+  const lg=document.createElement('div'); lg.style.cssText='display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px';
+  Object.keys(T).forEach(k=>{ const s=document.createElement('span'); s.style.cssText='font-size:11.5px;color:var(--text);display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border);border-radius:20px;padding:3px 9px';
+    s.innerHTML='<span style="width:11px;height:11px;border-radius:50%;background:'+T[k][0]+';display:inline-block;border:1px solid #fff3"></span> '+T[k][1]+' · '+esc(T[k][3]); lg.appendChild(s); }); body.appendChild(lg);
+  // инфо-панель (обновляется по клику)
+  const info=document.createElement('div'); info.id='ntInfo'; info.style.cssText='border:1px solid var(--border);border-radius:10px;padding:11px;margin-bottom:12px;background:var(--bg);font-size:14px;min-height:46px';
+  info.innerHTML='<span class="hint">👆 Нажми на <b>звено</b> (передатчика) — слова учёных. Нажми на <b>🔗 связь</b> — доказательство سماع/встречи.</span>';
+  const paths=[
+   {title:'الطريق ١ — صحيح', verdict:'✅ صحيح — все ثقات والسماع ثابت', nodes:[
+     {ar:'الإمام أحمد', t:'thiqa', say:'جامع ثقة حافظ — صاحب المسند'},
+     {ar:'يحيى بن سعيد القطان', t:'thiqa', say:'إمام ثقة متقن، من أئمة الجرح والتعديل', edge:'سمع من شعبة — ملازمة ثابتة ✅'},
+     {ar:'شعبة بن الحجاج', t:'thiqa', say:'«أمير المؤمنين في الحديث» — أثبت الناس', edge:'لازم قتادة وعرف سماعه ✅'},
+     {ar:'قتادة بن دعامة', t:'mudallis', say:'ثقة ثبت حافظ، لكنه يدلّس — وهنا صرّح بالسماع فيُقبل', edge:'قال: «حدثنا أنس» → السماع ثابت ✅'},
+     {ar:'أنس بن مالك ﭬ', t:'thiqa', say:'صحابي جليل، خادم النبي ﷺ — الصحابة عدول'},
+   ]},
+   {title:'الطريق ٢ — تدليس', verdict:'⚠️ السماع غير ثابت — لا يُحتجّ به منفردًا', nodes:[
+     {ar:'جامع آخر', t:'saduq', say:'صدوق'},
+     {ar:'بقية بن الوليد', t:'mudallis', say:'صدوق كثير التدليس (تدليس التسوية) — لا يُقبل حتى يصرّح بالسماع في كل الطبقات', edge:'عنعنة — يُحتمل إسقاط راوٍ ضعيف ⚠️'},
+     {ar:'شيخٌ لبقية', t:'majhul', say:'لم يُسمَّ ولم يوثَّق — مجهول العين'},
+     {ar:'أنس بن مالك ﭬ', t:'thiqa', say:'صحابي'},
+   ]},
+   {title:'الطريق ٣ — موضوع', verdict:'⛔ ساقط — فيه متروك كذّبوه', nodes:[
+     {ar:'جامع', t:'saduq', say:'صدوق'},
+     {ar:'أبان بن أبي عياش', t:'kadhab', say:'متروك؛ قال شعبة: «لأن أزني أحبّ إليّ من أن أحدّث عن أبان» — وكذّبه غير واحد', edge:'الراوي متروك ⇒ الطريق ساقط ⛔'},
+     {ar:'أنس بن مالك ﭬ', t:'thiqa', say:'صحابي'},
+   ]},
+  ];
+  const showInfo=(html,color)=>{ info.innerHTML=html; info.style.borderColor=color||'var(--border)'; try{ info.scrollIntoView({block:'nearest'}); }catch(e){} };
+  const cols=document.createElement('div'); cols.style.cssText='display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;direction:rtl';
+  paths.forEach(p=>{ const col=document.createElement('div'); col.style.cssText='flex:1;min-width:200px;border:1px solid var(--border);border-radius:12px;padding:9px;background:var(--card)';
+    const h=document.createElement('div'); h.style.cssText='text-align:center;font-size:13px;font-weight:700;'+_AF+';color:var(--text);margin-bottom:4px'; h.textContent=p.title; col.appendChild(h);
+    const v=document.createElement('div'); v.style.cssText='text-align:center;font-size:11.5px;color:var(--hint);margin-bottom:9px'; v.textContent=p.verdict; col.appendChild(v);
+    // النبي ﷺ сверху
+    const top=document.createElement('div'); top.style.cssText='text-align:center;margin-bottom:6px';
+    top.innerHTML='<span style="display:inline-block;background:#0d4f2c;border:2px solid #2e9b5b;color:#bff5d4;border-radius:10px;padding:6px 12px;font-size:15px;'+_AF+'">ﷺ النبي</span>';
+    col.appendChild(top);
+    p.nodes.forEach((n,idx)=>{ const conn=document.createElement('div'); conn.style.cssText='text-align:center;line-height:1';
+      conn.innerHTML='<span style="color:var(--border)">│</span>'+(n.edge?(' <span class="ntEdge" style="cursor:pointer;font-size:11px;color:#7fb3ff;border:1px dashed #3a5a8a;border-radius:10px;padding:1px 6px">🔗 связь</span>'):'');
+      const ce=conn.querySelector('.ntEdge'); if(ce) ce.onclick=()=>showInfo('<div style="direction:rtl;text-align:right;'+_AF+';font-size:15px"><b>🔗 الاتصال:</b> '+esc(n.edge)+'</div><div style="font-size:11.5px;color:var(--hint);margin-top:5px">Связь между передатчиками: доказан ли سماع/لقاء (встреча/слушание).</div>','#3a5a8a');
+      col.appendChild(conn);
+      const tc=T[n.t]; const nd=document.createElement('div'); nd.style.cssText='text-align:center;margin:3px 0';
+      nd.innerHTML='<span class="ntNode" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;background:'+tc[0]+'22;border:2px solid '+tc[0]+';border-radius:11px;padding:6px 11px;font-size:14.5px;'+_AF+';color:var(--text)"><span style="width:10px;height:10px;border-radius:50%;background:'+tc[0]+';flex:none"></span>'+esc(n.ar)+'</span>';
+      nd.querySelector('.ntNode').onclick=()=>showInfo('<div style="direction:rtl;text-align:right;'+_AF+';font-size:17px;margin-bottom:4px"><b>'+esc(n.ar)+'</b> <span style="font-size:13px;color:'+tc[0]+'">· '+tc[1]+' '+esc(tc[2])+'</span></div><div style="direction:rtl;text-align:right;'+_AF+';font-size:15px;line-height:1.8">'+esc(n.say)+'</div><div style="font-size:11px;color:var(--hint);margin-top:6px">Скоро: слова критиков подтянутся из 150 трудов риджаля автоматически.</div>',tc[0]);
+      col.appendChild(nd);
+    });
+    cols.appendChild(col);
+  });
+  body.appendChild(cols); body.appendChild(info);
+  const plan=document.createElement('div'); plan.style.cssText='margin-top:12px;font-size:12.5px;color:var(--hint);line-height:1.6;border-top:1px solid var(--border);padding-top:10px';
+  plan.innerHTML='📋 <b>Что будет дальше (план):</b><br>• Реальное древо строится из всех طرق хадиса (по 150 трудам + сборникам).<br>• Каждое звено красится по جرح/تعديل из трудов мутабарун.<br>• Клик по связи → доказан ли سماع (по كتب المراسيل/التواريخ).<br>• ИИ собирает противоречия критиков и выносит итог по твоим правилам.';
+  body.appendChild(plan);
+}
 async function openNarratorRijal(name){
   if(!name) return;
   let m=document.getElementById('narrModal');
@@ -3519,14 +3587,39 @@ async function showNarratorBio(name, out){
       +'<div style="font-weight:700;direction:rtl;font-size:16px">'+esc(main.title)+'</div>'
       +'<div style="color:var(--hint);font-size:12px;margin:4px 0 8px">📖 Источник: <b>موسوعة رواة الحديث</b> — биография · الطبقة · الوفاة · أقوال العلماء</div>'
       +'<button class="nlink" data-u="'+esc(main.url)+'" style="background:var(--btn);color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:12.5px;cursor:pointer">📖 Открыть карточку (моусу‘а)</button> '
-      +'<button class="naiBtn" style="background:#3a2d5e;color:#e0d7ff;border:1px solid #6c5ce7;border-radius:8px;padding:5px 10px;font-size:12.5px;cursor:pointer">🧠 ИИ: кто это + оценка</button>';
+      +'<button class="naiBtn" style="background:#3a2d5e;color:#e0d7ff;border:1px solid #6c5ce7;border-radius:8px;padding:5px 10px;font-size:12.5px;cursor:pointer">🧠 ИИ: кто это + оценка</button> '
+      +'<button class="rjBtn" style="background:#173d30;color:#bff5d4;border:1px solid #2e9b5b;border-radius:8px;padding:6px 11px;font-size:12.5px;cursor:pointer;font-weight:700;margin-top:5px">📚 Слова критиков (150 трудов риджаля)</button>';
     if(rs.length>1) html+='<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--hint);font-size:12px">Другие совпадения ('+(rs.length-1)+')</summary>'+rs.slice(1,6).map(x=>'<div style="direction:rtl;margin:4px 0;font-size:14px"><span class="nlink" data-u="'+esc(x.url)+'" style="color:var(--link);cursor:pointer">• '+esc(x.title)+'</span></div>').join('')+'</details>';
-    html+='<div class="naiOut" style="margin-top:8px"></div></div>';
+    html+='<div class="naiOut" style="margin-top:8px"></div><div class="rjOut2" style="margin-top:8px"></div></div>';
     out.innerHTML=html;
     out.querySelectorAll('.nlink').forEach(b=>b.onclick=()=>openLink(b.dataset.u));
     const nai=out.querySelector('.naiBtn'), naiOut=out.querySelector('.naiOut');
     if(nai) nai.onclick=()=>doNarratorAI(name, naiOut, nai);
+    const rjb=out.querySelector('.rjBtn'), rjo=out.querySelector('.rjOut2');
+    if(rjb) rjb.onclick=()=>doRijalCorpus(name, rjo, rjb);
   }catch(e){ out.innerHTML='<div class="hint">🔧 Сервис недоступен — попробуй позже.</div>'; }
+}
+// 📚 НейроМухаддис: слова критиков о передатчике по 150 трудам ильм-риджаля (/api/rijal)
+async function doRijalCorpus(name, out, btn){
+  if(!BACKEND_URL){ toast('Нужен сервер'); return; }
+  btn.disabled=true; const prev=btn.textContent; btn.textContent='📚 ищу…';
+  out.innerHTML='<div class="hint">📚 Ищу «'+esc(name)+'» по 150 трудам джарх-ва-тадиль…</div>';
+  try{ const r=await fetch(BACKEND_URL+'/rijal?name='+encodeURIComponent(name)+'&initData='+encodeURIComponent(INITDATA));
+    const jj=await r.json().catch(()=>({})); btn.disabled=false; btn.textContent=prev;
+    if(r.status===429){ out.innerHTML='<div class="hint">Слишком часто — подожди.</div>'; return; }
+    if(r.status===403){ out.innerHTML='<div class="hint">Функция пока не открыта.</div>'; return; }
+    if((jj&&jj.error)||r.status>=500){ out.innerHTML='<div class="hint">🔧 Сервер риджаля недоступен (бэкенд лежит?). Подними Railway → заработает.</div>'; return; }
+    const data=jj.data||[];
+    if(!data.length){ out.innerHTML='<div class="hint">Прямых упоминаний не нашёл — имя бывает в другой форме (попробуй с куньей/нисбой).</div>'; return; }
+    out.innerHTML='<div class="hint" style="margin:6px 0">📚 Найдено мест: <b>'+(jj.count||data.length).toLocaleString('ru')+'</b> в '+(jj.books||150)+' трудах критиков (показаны первые '+data.length+'):</div>';
+    data.forEach(x=>{ const c=document.createElement('div'); c.className='card'; c.style.cssText='margin-bottom:7px';
+      const loc=(x.vol?('т.'+x.vol+' '):'')+(x.page!=null?('стр. '+x.page):'');
+      c.innerHTML='<div class="rjH" style="font-size:12.5px;color:var(--link);direction:rtl;text-align:right;font-weight:600;cursor:pointer">📖 '+esc(x.book_name||'')+(x.critic?(' <span style="color:#bff5d4">· '+esc(x.critic)+'</span>'):'')+(loc?(' <span style="color:var(--hint);font-weight:400">· '+esc(loc)+'</span>'):'')+'</div>'
+        +'<div class="ar" style="font-size:16px;margin-top:5px;line-height:1.9">'+esc((x.snip||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim())+'</div>';
+      c.querySelector('.rjH').onclick=()=>{ try{ openBook(x.book_id, x.page_id||x.page||1); }catch(e){} };
+      try{ enableArabusTap(c.querySelector('.ar')); if(_arabusOn) c.querySelector('.ar').style.cursor='pointer'; }catch(e){}
+      out.appendChild(c); });
+  }catch(e){ btn.disabled=false; btn.textContent=prev; out.innerHTML='<div class="hint">🔧 сервис недоступен (бэкенд?).</div>'; }
 }
 async function doNarratorAI(name, out, btn){
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }
