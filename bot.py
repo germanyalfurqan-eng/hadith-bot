@@ -1013,9 +1013,36 @@ def flush_trans():
 def _trans_key(arabic):
     t = re.sub(r"[ً-ٰٟـ]", "", arabic or "")
     return "".join(c for c in t if "ء" <= c <= "ي")[:300]
+def _is_mostly_arabic(s):
+    """True, если арабского в строке не меньше, чем русского → перевод НЕ сделан (модель вернула оригинал)."""
+    if not s:
+        return False
+    ar = len(re.findall(r'[؀-ۿ]', s)); ru = len(re.findall(r'[А-Яа-яЁё]', s))
+    return ar >= 8 and ar >= ru
+
+def _chunk_by_paras(text, maxlen=1200):
+    """Режем длинный текст на куски по абзацам (≤maxlen): free-модели переводят короткое надёжнее длинного."""
+    chunks = []; cur = ''
+    for p in re.split(r'\n+', text):
+        p = p.strip()
+        if not p:
+            continue
+        if cur and len(cur) + len(p) + 1 > maxlen:
+            chunks.append(cur); cur = ''
+        cur = (cur + '\n' + p) if cur else p
+        while len(cur) > maxlen:
+            cut = cur.rfind(' ', 0, maxlen)
+            if cut < maxlen // 2:
+                cut = maxlen
+            chunks.append(cur[:cut].strip()); cur = cur[cut:].strip()
+    if cur:
+        chunks.append(cur)
+    return chunks
+
 def translate_matn(arabic, src="", owner=False, force=False):
     """Перевод матна на русский с накопительным кэшем (оригинал+перевод+источник).
-    force=True — переперевести заново (минуя кэш), напр. чтобы починить оборванный перевод."""
+    force=True — переперевести заново (минуя кэш). Длинные тексты переводим ПО АБЗАЦАМ, иначе free-модель
+    часто возвращает арабский оригинал вместо перевода. Битый арабский кэш игнорируем и переводим заново."""
     global _trans_dirty
     if not arabic or len(arabic) < 5:
         return ""
@@ -1023,20 +1050,36 @@ def translate_matn(arabic, src="", owner=False, force=False):
     key = _trans_key(arabic)
     if key in cache and not force:
         v = cache[key]
-        return v.get("ru", "") if isinstance(v, dict) else v
-    sysmsg = ("Ты профессиональный переводчик хадисов с арабского на русский. "
-              "Выдай ТОЛЬКО точный перевод текста на русский язык, ПОЛНОСТЬЮ, до конца (не обрывай). "
-              "Без вступлений, без пояснений, без арабского текста, без кавычек, без указания модели — только перевод.")
-    # max_tokens большой: длинные хадисы (напр. речь Умара) не должны обрываться на полуслове
-    ru = ask_ai("Переведи на русский:\n" + arabic, sysmsg, owner=owner, max_tokens=8000)
-    if ru and not ru.startswith("❌") and not ru.startswith("⏸"):
-        ru = re.sub(r"\n*⚡ \*Модель:.*$", "", ru, flags=re.S).strip()
+        cru = v.get("ru", "") if isinstance(v, dict) else v
+        if cru and not _is_mostly_arabic(cru):
+            return cru                 # нормальный русский кэш
+        # иначе — старый битый (арабский) кэш: игнорируем и переводим заново ниже
+    sysmsg = ("Ты профессиональный переводчик с арабского на русский. "
+              "Переведи текст на русский язык ПОЛНОСТЬЮ, до конца (не обрывай). "
+              "Ответ ДОЛЖЕН быть на РУССКОМ — НЕ копируй арабский, НЕ оставляй арабские предложения. "
+              "Имена и термины передавай по-русски. "
+              "Без вступлений, без пояснений, без кавычек, без указания модели — только перевод.")
+    def _one(t):
+        r = ask_ai("Переведи на русский:\n" + t, sysmsg, owner=owner, max_tokens=4000)
+        if not r or r.startswith("❌") or r.startswith("⏸"):
+            return None
+        return re.sub(r"\n*⚡ \*Модель:.*$", "", r, flags=re.S).strip()
+    if len(arabic) > 1400:
+        parts = []
+        for ch in _chunk_by_paras(arabic, 1200):
+            tr = _one(ch)
+            if tr and not _is_mostly_arabic(tr):   # арабский-эхо отбрасываем
+                parts.append(tr)
+        ru = "\n".join(parts).strip()
+    else:
+        ru = (_one(arabic) or "").strip()
+    if ru and not _is_mostly_arabic(ru):
         cache[key] = {"ar": arabic[:600], "ru": ru, "src": (src or "")[:120]}
         _trans_dirty += 1
         if _trans_dirty >= 3:          # батч: коммитим в репо каждые 3 новых
             _save_trans(); _trans_dirty = 0
         return ru
-    return ""
+    return ""                          # перевод не удался (арабский/пусто) — мусор не кэшируем
 
 async def send_long(update, text, parse_mode=None):
     limit = 3900
