@@ -155,7 +155,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v227</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v228</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -489,7 +489,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v227';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v228';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3702,20 +3702,32 @@ async function doNarrators(text, out, btn){
 }
 // M201: ИИ перепроверяет/дополняет цепочку передатчиков (эвристика иногда пропускает)
 async function verifyIsnadAI(text, names, arDivs, out, btn){
+  // ПОВТОРНОЕ нажатие на «✅ Проверено» → ВЫКЛЮЧИТЬ (вернуть эвристику)
+  if(btn.dataset.verified==='1'){
+    btn.dataset.verified='';
+    arDivs.forEach(ad=>{ if(ad.dataset.narrOrig!==undefined) ad.innerHTML=ad.dataset.narrOrig; try{ highlightNarratorsInDiv(ad, names, nm=>showNarratorBio(nm,out)); }catch(e){} });
+    const old=out.querySelector('.aiChainList'); if(old) old.remove();
+    btn.textContent='🧠 Проверить полноту цепочки (ИИ)'; btn.style.background='#3a2d5e'; btn.style.borderColor='#6c5ce7';
+    return;
+  }
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }
   btn.disabled=true; const p=btn.textContent; btn.textContent='🧠 Проверяю цепочку…';
   try{
     const r=await fetch(BACKEND_URL+'/isnad_ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text, initData:INITDATA})});
     const j=await r.json().catch(()=>({}));
-    if(r.status===403){ toast(j.message||'функция пока не открыта'); btn.disabled=false; btn.textContent=p; return; }
-    if(r.status===429){ toast('⏳ слишком часто — подожди'); btn.disabled=false; btn.textContent=p; return; }
+    btn.disabled=false;   // FIX: всегда разблокируем (раньше оставалась disabled → не нажималась повторно)
+    if(r.status===403){ toast(j.message||'функция пока не открыта'); btn.textContent=p; return; }
+    if(r.status===429){ toast('⏳ слишком часто — подожди'); btn.textContent=p; return; }
     const aiNames=(j.names||[]).filter(Boolean);
-    if(!aiNames.length){ toast('ИИ не нашёл дополнительных имён'); btn.disabled=false; btn.textContent=p; return; }
+    if(!aiNames.length){ toast('ИИ не нашёл дополнительных имён'); btn.textContent=p; return; }
     const merged=[...new Set([...(names||[]), ...aiNames])];
     arDivs.forEach(ad=>{ if(ad.dataset.narrOrig!==undefined) ad.innerHTML=ad.dataset.narrOrig; highlightNarratorsInDiv(ad, merged, nm=>showNarratorBio(nm,out)); });
     const added=aiNames.filter(n=>!(names||[]).includes(n)).length;
-    btn.textContent='✅ Проверено ИИ'+(j.cached?' ♻️':'')+(added?(' · +'+added):'');
-    const lst=document.createElement('div'); lst.style.cssText='margin-top:7px;font-size:12px;color:var(--hint);direction:rtl;text-align:right';
+    btn.dataset.verified='1';   // теперь это переключатель: нажми ещё раз — выключить
+    btn.textContent='✅ Проверено ИИ'+(j.cached?' ♻️':'')+(added?(' · +'+added):'')+' · ✕ выкл';
+    btn.style.background='#173d30'; btn.style.borderColor='#2e9b5b';
+    const old=out.querySelector('.aiChainList'); if(old) old.remove();
+    const lst=document.createElement('div'); lst.className='aiChainList'; lst.style.cssText='margin-top:7px;font-size:12px;color:var(--hint);direction:rtl;text-align:right';
     lst.innerHTML='<span style="direction:ltr;color:#c9b8ff">🧠 Цепочка по ИИ:</span> '+aiNames.map(esc).join(' ← ')+' <span style="opacity:.7;direction:ltr;display:inline-block">(разметка ИИ, возможны ошибки)</span>';
     out.appendChild(lst);
   }catch(e){ toast('🔧 сервис недоступен'); btn.disabled=false; btn.textContent=p; }
