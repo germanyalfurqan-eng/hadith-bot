@@ -155,7 +155,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v222</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v223</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -489,7 +489,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v222';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v223';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1877,6 +1877,13 @@ async function _bookLoad(){
   try{
     const r=await fetch(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+_bookView.pg+'&initData='+encodeURIComponent(INITDATA));
     const j=await r.json().catch(()=>({})); const meta=j.meta||{};
+    // «как в Шамиле»: пользователь прыгает по ПЕЧАТНОЙ странице, а turath листает только по «листу» (pg).
+    // Подгоняем лист так, чтобы попасть РОВНО в нужную печатную страницу (до 2 шагов авто-коррекции).
+    if(_bookView.want!=null && typeof meta.page==='number' && meta.page!==_bookView.want && (_bookView.snaps||0)<2){
+      const delta=_bookView.want-meta.page;
+      if(delta!==0 && Math.abs(delta)<20000){ _bookView.snaps=(_bookView.snaps||0)+1; _bookView.pg=Math.max(1,_bookView.pg+delta); _bookLoad(); return; }
+    }
+    _bookView.want=null; _bookView.snaps=0;
     const bnm=(meta.book_name||bookName(_bookView.id)||('книга №'+_bookView.id));
     const aut=(meta.author||bookAuthorOf(_bookView.id)||'');
     ttl.innerHTML='<div style="direction:rtl;text-align:right">📖 '+esc(bnm)+'</div>'+(aut?('<div style="direction:rtl;text-align:right;font-size:12px;font-weight:400;margin-top:2px"><span id="bookAuthLink" style="color:var(--link);cursor:pointer">✍️ '+esc(aut)+'</span></div>'):'');
@@ -1894,19 +1901,24 @@ async function _bookLoad(){
     const r1=document.createElement('div'); r1.style.cssText='display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;direction:rtl';
     r1.appendChild(mk('⏮ первая', ()=>{ if(_bookView.pg!==1){ _bookView.pg=1; _bookLoad(); } }, _bookView.pg<=1));   // первая страница (справа)
     r1.appendChild(mk('пред →', ()=>{ if(_bookView.pg>1){ _bookView.pg--; _bookLoad(); } }, _bookView.pg<=1));
-    const inp=document.createElement('input'); inp.type='tel'; inp.value=_bookView.pg;
+    const hasP=(typeof meta.page==='number');
+    _bookView.off = hasP ? (_bookView.pg-meta.page) : (_bookView.off||0);   // смещение «лист − печатная» для прыжка по печатному номеру
+    const inp=document.createElement('input'); inp.type='tel'; inp.value=hasP?meta.page:_bookView.pg;
+    inp.title=hasP?'Печатная страница (как напечатано в книге) — введи номер и Enter':('Лист №'+_bookView.pg+' — печатный номер не указан (титул/предисловие)');
     inp.style.cssText='width:64px;text-align:center;background:var(--bg);color:var(--text);border:1px solid var(--btn);border-radius:8px;padding:6px;font-size:15px;font-weight:700';
-    inp.onchange=()=>{ const p=parseInt(inp.value)||1; _bookView.pg=Math.max(1,p); _bookLoad(); };
-    inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ const p=parseInt(inp.value)||1; _bookView.pg=Math.max(1,p); _bookLoad(); } });
-    r1.appendChild(inp);
+    const jump=()=>{ const t=Math.max(1,parseInt(inp.value)||1); if(hasP){ _bookView.want=t; _bookView.snaps=0; _bookView.pg=Math.max(1,t+(_bookView.off||0)); } else { _bookView.pg=t; } _bookLoad(); };
+    inp.onchange=jump; inp.addEventListener('keydown',e=>{ if(e.key==='Enter') jump(); });
+    const cap=document.createElement('span'); cap.className='hint'; cap.textContent='стр.'; cap.style.cssText='font-size:13px;margin:0 1px';   // как «ص:» в Мактабе
+    r1.appendChild(cap); r1.appendChild(inp);
+    r1.appendChild(mk('↪ Перейти', jump));   // как кнопка «اذهب» в Мактабе
     r1.appendChild(mk('← след', ()=>{ _bookView.pg++; _bookLoad(); }));
     const loc=document.createElement('span'); loc.className='hint'; loc.style.cssText='font-size:12.5px;margin:0 2px;white-space:nowrap';
-    loc.textContent='· '+(meta.vol?('том '+meta.vol+' · '):'')+(meta.page?('стр. '+meta.page):('стр-id '+_bookView.pg)); r1.appendChild(loc);
+    loc.textContent='· '+(meta.vol?('том '+meta.vol+' · '):'')+(hasP?('стр. '+meta.page):('лист '+_bookView.pg+' · титул/предисл.')); r1.appendChild(loc);
     navEl.appendChild(r1);
     // ── РЯД 2: инструменты страницы (поиск/копия/шрифт + ИИ-группа свёрнута)
     const r2=document.createElement('div'); r2.style.cssText='display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap';
     // 🔎 поиск по странице (подсветка совпадений в загруженном тексте)
-    const fnd=document.createElement('input'); fnd.type='search'; fnd.placeholder='🔎 найти на странице'; fnd.style.cssText='width:150px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:13px;direction:rtl;text-align:right';
+    const fnd=document.createElement('input'); fnd.type='search'; fnd.placeholder='🔎 найти на странице'; fnd.style.cssText='width:168px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:13px;direction:ltr;text-align:right';
     const doFind=(q)=>{ const clean=tEl.dataset.txt||''; const qf=(q||'').trim();
       let html=qf ? esc(clean).split(esc(qf)).join('<mark>'+esc(qf)+'</mark>') : esc(clean);
       tEl.innerHTML=html.replace(/\n+/g,'<br>'); try{ enableArabusTap(tEl); if(_arabusOn) tEl.style.cursor='pointer'; }catch(e){} const f=tEl.querySelector('mark'); if(f) try{ f.scrollIntoView({block:'center'}); }catch(e){} };
