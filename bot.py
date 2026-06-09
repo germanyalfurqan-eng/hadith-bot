@@ -3985,6 +3985,40 @@ async def _setup(application):
                 _journal_save("app_post → канал приложения")
     except Exception as e:
         print("app channel post failed:", e)
+    # Авто-вотчер канала @muslimoonapp: фронт-деплои (GitHub Pages) НЕ рестартят Railway,
+    # поэтому стартовый пост выше срабатывает ТОЛЬКО при редеплое бэкенда. Эта фоновая
+    # задача каждые 5 мин сама читает КОРНЕВОЙ update_note.txt из репозитория и постит в
+    # канал, если нота новее последней опубликованной (дедуп — через journal app_post,
+    # тот же, что у стартового блока → двойных постов нет). Канал больше НЕ отстаёт.
+    try:
+        asyncio.create_task(_app_channel_watcher(application))
+    except Exception as e:
+        print("app channel watcher start failed:", e)
+
+async def _app_channel_watcher(application):
+    """Фон: раз в 5 мин публикует новую update_note.txt в @muslimoonapp (см. _setup)."""
+    while True:
+        try:
+            await asyncio.sleep(300)
+            note = ""
+            try:
+                rr = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_note.txt",
+                                  headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
+                if rr.status_code == 200:
+                    note = base64.b64decode(rr.json().get("content", "")).decode("utf-8").strip()
+            except Exception:
+                note = ""
+            if not note:
+                continue
+            j = _journal_load()
+            last = (j.get("app_post") or {}).get("note", "")
+            if note != last:
+                body = (note + "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot/app\n🤖 Бот: https://t.me/muslimoontt_bot")
+                await application.bot.send_message(APP_CHANNEL_ID, body, disable_web_page_preview=True)
+                j["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+                _journal_save("app_post → канал приложения (авто-вотчер, 5 мин)")
+        except Exception as e:
+            print("app channel watcher error:", e)
 
 async def start_cmd(update, context):
     """/start — приветствие + кнопка открыть мини-апп (работает у всех)."""
