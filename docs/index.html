@@ -155,7 +155,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v228</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v229</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -489,7 +489,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v228';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v229';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2875,7 +2875,14 @@ async function openCatalog(){
         // буст: книги, чей ТИП совпадает с тем, что просил пользователь (тафсир→تفسير, шарх→شرح…) — поднимаем выше всего
         const QTYPE=[['тафсир','تفسير'],['тафасир','تفسير'],['шарх','شرح'],['сунан','سنن'],['муснад','مسند'],['сахих','صحيح'],['сира','سيرة'],['джами','جامع'],['мустадрак','مستدرك'],['тарих','تاريخ'],['акыда','عقيدة'],['акида','عقيدة'],['фикх','فقه'],['муджам','معجم']];
         const _ql=(q||'').toLowerCase(); const qtypes=QTYPE.filter(p=>_ql.indexOf(p[0])!==-1).map(p=>canon(p[1]));
-        const sc=b=>{ const nm=canon(b.n||''); let s=0; tTerms.forEach(t=>{ if(t&&nm.indexOf(t)!==-1) s+=8; }); tw.forEach(w=>{ if(nm.indexOf(w)!==-1) s+=3; }); qtypes.forEach(t=>{ if(nm.indexOf(t)!==-1) s+=20; }); return s; };
+        const _au0=(authors&&authors[0])?canon(authors[0]):'';   // имя автора от ИИ (напр. البغوي)
+        const DERIV=['مختصر','روايات','دراسة','تخريج','حاشية','تعليق','منتخب','مستخرج','زوائد','فهرس','تهذيب'];   // производные / «о книге» — ниже оригинала
+        const sc=b=>{ const nm=canon(b.n||''), au=canon(b.a||''); let s=0;
+          tTerms.forEach(t=>{ if(t&&nm.indexOf(t)!==-1) s+=8; }); tw.forEach(w=>{ if(nm.indexOf(w)!==-1) s+=3; });
+          qtypes.forEach(t=>{ if(nm.indexOf(t)!==-1) s+=20; });
+          if(_au0 && au.indexOf(_au0)!==-1) s+=15;                     // оригинал САМОГО автора (البغوي), а не чужая работа о нём
+          DERIV.forEach(d=>{ if(nm.indexOf(canon(d))!==-1) s-=14; });  // مختصر/روايات/دراسة — производные, опускаем
+          return s; };
         arr=arr.map(b=>({b,s:sc(b)})).sort((x,y)=>y.s-x.s).map(o=>o.b);
         showList(arr,'🧠 ИИ: '+esc(j.note||(authors[0]||titles[0]||''))+' · найдено: '+arr.length, true);
         // КАРТОЧКА АВТОРА сверху (как корень с количеством) — биография + все книги
