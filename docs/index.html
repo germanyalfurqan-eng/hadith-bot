@@ -155,7 +155,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v220</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v221</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -489,34 +489,38 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v220';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v221';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
-(async function(){ try{
-  if(sessionStorage.getItem('verReloaded')==='1') return;
-  // отмечаем, что человек уже начал работать (фокус/ввод/скролл/тап) — тогда НЕ дёргаем перезагрузкой
-  ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
+['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
+let _updShownFor='';
+async function _checkUpdate(){ try{
   const r=await fetch('ver.txt?cb='+Date.now(),{cache:'no-store'}); if(!r.ok) return;
-  const latest=(await r.text()).trim();
-  if(latest && latest!==APPVER){ sessionStorage.setItem('verReloaded','1');
-    const doReload=()=>location.replace(location.pathname+'?v='+encodeURIComponent(latest)+location.hash);
-    if(!window.__interacted){ doReload(); return; }   // только открыл, ничего не делал → безопасно обновить сразу
-    // уже ищет/читает → НЕ сбиваем в начало: мягкий баннер «обновить, когда удобно»
-    try{ const b=document.createElement('div'); b.id='updBanner';
-      b.style.cssText='position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:9999;background:#11306b;color:#fff;border:1px solid #2f7be6;border-radius:12px;padding:10px 14px;font-size:13px;box-shadow:0 6px 20px #000b;max-width:92%;display:flex;gap:10px;align-items:center';
-      const txt=document.createElement('span'); txt.textContent='🔄 Обновление ('+latest+')';
-      const go=document.createElement('button'); go.textContent='Обновить';
-      go.style.cssText='background:#2f7be6;color:#fff;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:14px;font-weight:700';
-      go.addEventListener('click',e=>{ e.preventDefault(); e.stopPropagation(); doReload(); });
-      const wn=document.createElement('button'); wn.textContent='💬 Что нового'; wn.title='Посмотреть пункты обновления и оставить замечание по каждому';
-      wn.style.cssText='background:transparent;color:#cfe0ff;border:1px solid #2f7be6;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:13px';
-      wn.addEventListener('click',e=>{ e.stopPropagation(); try{ window.showUpdateNotes(latest); }catch(err){} });
-      const x=document.createElement('button'); x.textContent='✕';
-      x.style.cssText='background:transparent;color:#fff;border:none;cursor:pointer;opacity:.7;font-size:16px;padding:4px 6px';
-      x.addEventListener('click',e=>{ e.stopPropagation(); b.remove(); });
-      b.appendChild(txt); b.appendChild(go); b.appendChild(wn); b.appendChild(x);
-      (document.body||document.documentElement).appendChild(b);
-    }catch(e){} }
-}catch(e){} })();
+  const latest=(await r.text()).trim(); if(!latest || latest===APPVER) return;
+  const ln=parseInt((latest.match(/\d+/)||[])[0]||'0'), cn=parseInt((APPVER.match(/\d+/)||[])[0]||'0');
+  if(ln && cn && ln<=cn) return;   // только СТРОГО новее
+  const doReload=()=>location.replace(location.pathname+'?v='+encodeURIComponent(latest)+location.hash);
+  // только открыл, ничего не делал, ещё не перезагружались → тихо обновить
+  if(!window.__interacted && sessionStorage.getItem('verReloaded')!=='1'){ sessionStorage.setItem('verReloaded','1'); doReload(); return; }
+  if(_updShownFor===latest || document.getElementById('updBanner')) return;   // баннер для этой версии уже показан
+  _updShownFor=latest;
+  const b=document.createElement('div'); b.id='updBanner';
+  b.style.cssText='position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:9999;background:#11306b;color:#fff;border:1px solid #2f7be6;border-radius:12px;padding:10px 14px;font-size:13px;box-shadow:0 6px 20px #000b;max-width:92%;display:flex;gap:10px;align-items:center';
+  const txt=document.createElement('span'); txt.innerHTML='🔄 Вышло обновление <b>'+latest+'</b>';
+  const go=document.createElement('button'); go.textContent='Обновить';
+  go.style.cssText='background:#2f7be6;color:#fff;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:14px;font-weight:700';
+  go.addEventListener('click',e=>{ e.preventDefault(); e.stopPropagation(); doReload(); });
+  const wn=document.createElement('button'); wn.textContent='💬 Что нового'; wn.title='Посмотреть пункты обновления';
+  wn.style.cssText='background:transparent;color:#cfe0ff;border:1px solid #2f7be6;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:13px';
+  wn.addEventListener('click',e=>{ e.stopPropagation(); try{ window.showUpdateNotes(latest); }catch(err){} });
+  const x=document.createElement('button'); x.textContent='✕';
+  x.style.cssText='background:transparent;color:#fff;border:none;cursor:pointer;opacity:.7;font-size:16px;padding:4px 6px';
+  x.addEventListener('click',e=>{ e.stopPropagation(); b.remove(); });
+  b.appendChild(txt); b.appendChild(go); b.appendChild(wn); b.appendChild(x);
+  (document.body||document.documentElement).appendChild(b);
+}catch(e){} }
+setTimeout(_checkUpdate, 1500);
+setInterval(_checkUpdate, 90000);   // СТРОГОЕ ПРАВИЛО: проверяем обновление каждые 90с (пока человек в приложении)
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) _checkUpdate(); });   // вернулся в приложение → сразу проверить
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
 const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
