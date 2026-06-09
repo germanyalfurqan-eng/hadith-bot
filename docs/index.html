@@ -155,7 +155,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v230</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v231</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -489,7 +489,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v230';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v231';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3587,7 +3587,8 @@ function isnadNarrators(text){
   // нет цепочки передачи (حدثنا/أخبرنا/سمعت/ثنا/عن) во всём тексте → это матн, передатчиков нет (не выдёргивать из матна!)
   if(!/(?:^|\s)(?:حدثنا|حدثني|حدثناه|أخبرنا|أخبرني|أنبأنا|أنبأني|سمعت|ثنا)\s/.test(flat) && !/\sعن\s/.test(flat)) return [];
   let isn=stripDiac(splitIsnad(text)[0]||'').replace(/ـ/g,'');
-  if(!isn) isn=flat.split(/قال رسول|قال النبي|«/)[0]||flat;                     // чистый иснад без матна → до матна (или весь)
+  if(!isn) isn=flat;
+  isn=isn.split(/«|»|\sيقول\s|سمعت رسول|سمع النبي|عن النبي|عن رسول الله|قال رسول|قال النبي/)[0]||isn;   // ОТРЕЗАТЬ матн (после «‹›» / «سمع النبي … يقول») — иначе слова матна (الحرير/الخمر/المعازف) попадают в имена
   const VERB=/\s*(?:حدثناه|حدثنا|حدثني|أخبرنا|أخبرني|أنبأنا|أنبأني|سمعت|عن|قالا|قالوا|قال|ثنا|كلهم|جميعا)\s+/u;
   const parts=[];
   isn.split(VERB).forEach(seg=>{ seg=seg.replace(/[،,.:؛«»()]/g,' ').replace(/\s+/g,' ').trim(); if(!seg) return;
@@ -3713,7 +3714,13 @@ async function doNarratorAI(name, out, btn){
 }
 async function doNarrators(text, out, btn){
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }
-  const names=isnadNarrators(text);
+  let names=isnadNarrators(text);
+  // ТОЧНОСТЬ: оставляем только похожее на имя (بن/ابن/أبو/أم/عبد) ИЛИ то, что реально есть в базе 18989 равиев — убирает слова матна (الحرير/الخمر/العلم)
+  try{ await loadNarrNames(); const keep=[];
+    for(const nm of names){ const t=(nm||'').trim();
+      if(/ بن | ابن /.test(' '+t+' ') || /^(?:أبو|أبي|أم|عبد|ابن)\s/.test(t+' ') || (await _narrLookup(nm))!=null) keep.push(nm); }
+    names=keep;
+  }catch(e){}
   if(!names.length){ out.style.display='block'; out.innerHTML='<span class="hint">Не удалось выделить цепочку передатчиков из этого текста.</span>'; return; }
   const card=btn.closest('.card'); const arDivs=card?[...card.querySelectorAll('.ar')]:[];
   if(!btn.dataset.on){
