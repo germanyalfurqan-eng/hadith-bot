@@ -155,7 +155,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v237</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v238</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -489,7 +489,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v237';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v238';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3389,10 +3389,10 @@ function addTr(meta,card,text,ayah,fav){
     tx.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
     const txout=document.createElement('div');txout.className='tr-out';
     tx.onclick=()=>doTakhrij(text, refOf(fav), txout, tx); meta.appendChild(tx); card.appendChild(txout); }
-  if(!ayah){ const nb=document.createElement('button');nb.className='tr-btn';nb.textContent='👤 Передатчики';nb.title='Разобрать цепочку (иснад): кто передатчики + слова учёных о них';
+  if(!ayah){ const nb=document.createElement('button');nb.className='tr-btn';nb.textContent='🌳 Передатчики';nb.title='Древо иснада: цепочка передатчиков, цвет = достоверность по учёным';
     nb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
     const nbout=document.createElement('div');nbout.className='tr-out';
-    nb.onclick=()=>doNarrators(text, nbout, nb); meta.appendChild(nb); card.appendChild(nbout);
+    nb.onclick=()=>openIsnadTree(text, nbout); meta.appendChild(nb); card.appendChild(nbout);
     try{ autoHighlightNarr(text, card, nbout); }catch(e){} }   // A: подсветить передатчиков СРАЗУ (кликабельны без нажатия кнопки)
   const fbb=document.createElement('button');fbb.className='tr-btn';fbb.textContent='✍️ Сообщить нам';fbb.title='Написать нам об ошибке/замечании';
   fbb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--link);padding:6px 10px';
@@ -3766,6 +3766,42 @@ async function doNarratorAI(name, out, btn){
       else out.innerHTML='<span class="hint">ИИ не дал ответа — попробуй полную карточку.</span>'; }
   }catch(e){ out.innerHTML='<span class="hint">🔧 Сервис недоступен.</span>'; }
   btn.disabled=false; btn.textContent=prev;
+}
+// Оценка достоверности равия по рангам учёных (ибн Хаджар/Захаби) → цвет звена в древе
+function _narrGrade(rankH, rankZ){
+  const t=((rankH||'')+' '+(rankZ||''));
+  if(/كذاب|وضاع|يضع|متروك|متهم/.test(t)) return {g:'كذّاب / متروك', c:'#e74c3c', bg:'rgba(231,76,60,.16)'};
+  if(/ضعيف جدا|واه/.test(t)) return {g:'ضعيف جدًا', c:'#e67e22', bg:'rgba(230,126,34,.16)'};
+  if(/مجهول/.test(t)) return {g:'مجهول', c:'#95a5a6', bg:'rgba(149,165,166,.14)'};
+  if(/ضعيف|لين|سيء الحفظ|ليس بالقوي/.test(t)) return {g:'ضعيف', c:'#e67e22', bg:'rgba(230,126,34,.13)'};
+  if(/صحابي/.test(t)) return {g:'صحابي', c:'#3498db', bg:'rgba(52,152,219,.15)'};
+  if(/ثقة ثبت|ثقة حافظ|ثقة متقن|إمام|حجة/.test(t)) return {g:'ثقة ثبت', c:'#2ecc71', bg:'rgba(46,204,113,.2)'};
+  if(/ثقة|حافظ/.test(t)) return {g:'ثقة', c:'#2ecc71', bg:'rgba(46,204,113,.15)'};
+  if(/صدوق يهم|صدوق له أوهام|صدوق سيء|صدوق يخطئ|مقبول/.test(t)) return {g:'صدوق (يهم)', c:'#f1c40f', bg:'rgba(241,196,15,.15)'};
+  if(/صدوق|لا بأس به|محله الصدق/.test(t)) return {g:'صدوق', c:'#a3d977', bg:'rgba(163,217,119,.15)'};
+  return {g:'нет оценки', c:'#95a5a6', bg:'rgba(149,165,166,.1)'};
+}
+// B: ДРЕВО ИСНАДА — цепочка передатчиков, цвет звена = достоверность по учёным; тап → полная карточка
+async function openIsnadTree(text, out){
+  let names; try{ names=isnadNarrators(text).filter(nm=>{ const t=(nm||'').trim(); return / بن | ابن /.test(' '+t+' ')||/^(?:أبو|أبي|أم|عبد|ابن)\s/.test(t+' '); }); }catch(e){ names=[]; }
+  out.style.display='block';
+  if(!names.length){ out.innerHTML='<span class="hint">Не удалось выделить цепочку передатчиков из этого текста.</span>'; return; }
+  out.innerHTML='<div class="hint">🌳 Строю древо иснада с оценкой достоверности…</div>';
+  try{ await loadNarrNames(); }catch(e){}
+  const nodes=[];
+  for(const nm of names){ let id=null; try{ id=await _narrLookup(nm); }catch(e){} let cc=null; if(id!=null){ try{ cc=await _narrCard(id); }catch(e){} }
+    nodes.push({nm, rankH:cc?cc[5]:'', gr:_narrGrade(cc?cc[5]:'', cc?cc[6]:'')}); }
+  let html='<div style="border:1px solid #6c5ce7;border-radius:12px;padding:11px;margin:6px 0;background:rgba(108,92,231,.06)">'
+    +'<div style="font-weight:700;color:#d9ccff;font-size:13.5px;margin-bottom:8px">🌳 Древо иснада (цвет = достоверность по учёным):</div>';
+  nodes.forEach((n,i)=>{ const ind=Math.min(i,6)*16;
+    html+='<div class="isNode" data-i="'+i+'" style="cursor:pointer;margin:0 0 0 '+ind+'px;padding:7px 11px;border-radius:9px;border-right:5px solid '+n.gr.c+';background:'+n.gr.bg+';direction:rtl;text-align:right">'
+      +'<span style="font-weight:700;font-size:14px;color:var(--text)">'+esc(n.nm)+'</span> '
+      +'<span style="font-size:12px;color:'+n.gr.c+';font-weight:700">· '+esc(n.gr.g)+'</span>'
+      +(n.rankH?('<div style="font-size:11px;color:var(--hint);margin-top:2px">'+esc((n.rankH||'').slice(0,55))+'</div>'):'')+'</div>';
+    if(i<nodes.length-1) html+='<div style="margin:1px '+(ind+20)+'px;color:var(--hint);font-size:13px;line-height:1">↓</div>'; });
+  html+='<div class="hint" style="font-size:11px;margin-top:8px">🟢 ثقة · 🟡 صдوق · 🟠 ضعيف · 🔴 متروك · ⚪ нет оценки. Тап по звену → полная карточка (كنية/رتبة/джарх + наши труды).</div></div>';
+  out.innerHTML=html;
+  out.querySelectorAll('.isNode').forEach(el=>{ el.onclick=()=>{ const i=+el.dataset.i; const bx=document.createElement('div'); bx.style.marginTop='6px'; out.appendChild(bx); showNarratorBio(nodes[i].nm, bx); try{ bx.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }; });
 }
 // A: авто-подсветка передатчиков в карточке СРАЗУ при показе (лёгкое выделение, клик → карточка равия)
 function autoHighlightNarr(text, card, out){
