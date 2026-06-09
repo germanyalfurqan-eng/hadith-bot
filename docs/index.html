@@ -155,7 +155,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v232</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v233</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -489,7 +489,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v232';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v233';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3635,6 +3635,9 @@ async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.lengt
   for(const it of idx){ const nm=it[0]; if(nm===cn){ exact=it[1]; break; } if(nm.indexOf(cn+' ')===0 && nm.length<prefLen){ pref=it[1]; prefLen=nm.length; } }
   return exact!=null?exact:pref; }
 async function _narrCard(id){ const b=Math.floor(id/100); if(!_narrShard[b]){ try{ _narrShard[b]=await (await fetch('./narr/'+b+'.json')).json(); }catch(e){ _narrShard[b]={}; } } return (_narrShard[b]||{})[String(id)]||null; }
+let _rijalBkMap=null, _rijalBkMapP=null, _narrBkShard={};   // предрасчёт: в каких НАШИХ трудах мутабарунов есть равий (личная проверка 18989)
+function loadRijalBooksMap(){ if(_rijalBkMap) return Promise.resolve(_rijalBkMap); if(_rijalBkMapP) return _rijalBkMapP; _rijalBkMapP=fetch('./rijal_books_map.json').then(r=>r.ok?r.json():null).then(j=>{_rijalBkMap=j||{};return _rijalBkMap;}).catch(()=>{_rijalBkMap={};return _rijalBkMap;}); return _rijalBkMapP; }
+async function _narrBooks(id){ const b=Math.floor(id/100); if(!_narrBkShard[b]){ try{ _narrBkShard[b]=await (await fetch('./narrbk/'+b+'.json')).json(); }catch(e){ _narrBkShard[b]={}; } } return (_narrBkShard[b]||{})[String(id)]||[]; }
 async function showNarratorCardLocal(name, host){
   let id=null; try{ id=await _narrLookup(name); }catch(e){} if(id==null) return false;
   const c=await _narrCard(id); if(!c) return false;   // [id,name,kunya,nisba,death,rankHajar,rankDhahabi,tabaqa,jarh]
@@ -3645,6 +3648,8 @@ async function showNarratorCardLocal(name, host){
     +'<div style="font-size:11px;color:var(--hint);margin:2px 0 7px">📖 موسوعة رواة الحديث (база Мактабы) · #'+c[0]+'</div>'
     +row('الكنية',c[2])+row('النسب',c[3])+row('سنة الوفاة',c[4]?('~'+c[4]+'هـ'):'')+row('الطبقة',c[7])
     +rank('الرتبة عند ابن حجر',c[5])+rank('الرتبة عند الذهبي',c[6]);
+  try{ const bks=await _narrBooks(c[0]); if(bks&&bks.length){ const mp=await loadRijalBooksMap(); const crit=[...new Set(bks.map(b=>mp[b]).filter(Boolean))];
+    h+='<div style="margin:6px 0;padding:6px 9px;background:rgba(46,155,91,.16);border-radius:8px;font-size:13px;direction:ltr;text-align:left"><b style="color:#bff5d4">✅ Подтверждён нашей базой:</b> упоминается в <b>'+bks.length+'</b> наших трудах мутабарунов'+(crit.length?(' — '+crit.slice(0,6).map(esc).join(', ')+(crit.length>6?'…':'')):'')+'</div>'; } }catch(e){}
   if(c[8]) h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:7px"><div style="font-weight:700;color:#ffd479;font-size:13.5px;margin-bottom:4px">📜 Что сказали о нём учёные (наша база):</div><div style="font-size:13.5px;line-height:1.9;white-space:pre-wrap">'+esc(c[8])+'</div></div>';
   h+='</div>';
   host.insertAdjacentHTML('afterbegin', h); return true;
