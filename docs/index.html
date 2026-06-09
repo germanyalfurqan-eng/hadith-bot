@@ -155,7 +155,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v225</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v226</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -489,7 +489,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v225';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v226';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1903,24 +1903,26 @@ async function _bookLoad(){
       tEl.dataset.txt=clean; tEl.innerHTML=esc(clean).replace(/\n+/g,'<br>'); try{ enableArabusTap(tEl); if(_arabusOn) tEl.style.cursor='pointer'; }catch(e){} }
     navEl.innerHTML=''; navEl.style.flexDirection='column'; navEl.style.gap='7px';
     const mk=(t,fn,dis)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=t; if(dis) b.disabled=true; b.onclick=fn; return b; };
-    // ── РЯД 1: навигация по страницам (крупно, по центру) — как у Мактабы, но удобнее
-    // арабская книга → навигация СПРАВА НАЛЕВО: «пред» справа (→), «след» слева (←)
-    const r1=document.createElement('div'); r1.style.cssText='display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;direction:rtl';
-    r1.appendChild(mk('⏮ первая', ()=>{ if(_bookView.pg!==1){ _bookView.pg=1; _bookLoad(); } }, _bookView.pg<=1));   // первая страница (справа)
-    r1.appendChild(mk('пред →', ()=>{ if(_bookView.pg>1){ _bookView.pg--; _bookLoad(); } }, _bookView.pg<=1));
+    // ── РЯД 1: понятная навигация (LTR, привычные стрелки: ◀ назад, вперёд ▶) + отдельная строка «где я»
     const hasP=(typeof meta.page==='number');
     _bookView.off = hasP ? (_bookView.pg-meta.page) : (_bookView.off||0);   // смещение «лист − печатная» для прыжка по печатному номеру
+    // строка-индикатор: где сейчас находимся
+    const loc=document.createElement('div'); loc.className='hint'; loc.style.cssText='font-size:13px;text-align:center;margin-bottom:3px;color:var(--mark)';
+    loc.textContent='📖 '+(meta.vol?('том '+meta.vol+' · '):'')+(hasP?('страница '+meta.page):('лист '+_bookView.pg+' (титул/предисловие)'));
+    navEl.appendChild(loc);
+    // ряд кнопок — слева направо, как привычно
+    const r1=document.createElement('div'); r1.style.cssText='display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap';
+    r1.appendChild(mk('⏮', ()=>{ if(_bookView.pg!==1){ _bookView.pg=1; _bookLoad(); } }, _bookView.pg<=1));   // в самое начало
+    r1.appendChild(mk('◀ Пред.', ()=>{ if(_bookView.pg>1){ _bookView.pg--; _bookLoad(); } }, _bookView.pg<=1));
+    const cap=document.createElement('span'); cap.className='hint'; cap.textContent='стр.'; cap.style.cssText='font-size:13px';
     const inp=document.createElement('input'); inp.type='tel'; inp.value=hasP?meta.page:_bookView.pg;
-    inp.title=hasP?'Печатная страница (как напечатано в книге) — введи номер и Enter':('Лист №'+_bookView.pg+' — печатный номер не указан (титул/предисловие)');
-    inp.style.cssText='width:64px;text-align:center;background:var(--bg);color:var(--text);border:1px solid var(--btn);border-radius:8px;padding:6px;font-size:15px;font-weight:700';
+    inp.title=hasP?'Печатная страница (как напечатано в книге) — введи номер и Enter':('Лист №'+_bookView.pg+' — печатный номер не указан');
+    inp.style.cssText='width:56px;text-align:center;background:var(--bg);color:var(--text);border:1px solid var(--btn);border-radius:8px;padding:6px;font-size:15px;font-weight:700';
     const jump=()=>{ const t=Math.max(1,parseInt(inp.value)||1); if(hasP){ _bookView.want=t; _bookView.snaps=0; _bookView.pg=Math.max(1,t+(_bookView.off||0)); } else { _bookView.pg=t; } _bookLoad(); };
     inp.onchange=jump; inp.addEventListener('keydown',e=>{ if(e.key==='Enter') jump(); });
-    const cap=document.createElement('span'); cap.className='hint'; cap.textContent='стр.'; cap.style.cssText='font-size:13px;margin:0 1px';   // как «ص:» в Мактабе
     r1.appendChild(cap); r1.appendChild(inp);
-    r1.appendChild(mk('↪ Перейти', jump));   // как кнопка «اذهب» в Мактабе
-    r1.appendChild(mk('← след', ()=>{ _bookView.pg++; _bookLoad(); }));
-    const loc=document.createElement('span'); loc.className='hint'; loc.style.cssText='font-size:12.5px;margin:0 2px;white-space:nowrap';
-    loc.textContent='· '+(meta.vol?('том '+meta.vol+' · '):'')+(hasP?('стр. '+meta.page):('лист '+_bookView.pg+' · титул/предисл.')); r1.appendChild(loc);
+    r1.appendChild(mk('Перейти', jump));
+    r1.appendChild(mk('След. ▶', ()=>{ _bookView.pg++; _bookLoad(); }));
     navEl.appendChild(r1);
     // ── РЯД 2: инструменты страницы (поиск/копия/шрифт + ИИ-группа свёрнута)
     const r2=document.createElement('div'); r2.style.cssText='display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap';
@@ -2870,7 +2872,10 @@ async function openCatalog(){
           if(!arr.length && aTok.length){ arr=cat.filter(b=>{ const au=canon(b.a||''); return aTok.some(w=>au.indexOf(w)!==-1); }); } }
         // релевантность: книги, чьё НАЗВАНИЕ точно совпадает с тем, что назвал ИИ — выше (التاريخ при «бухари тарих»)
         const tw=tTerms.join(' ').split(' ').filter(w=>w.length>=3);
-        const sc=b=>{ const nm=canon(b.n||''); let s=0; tTerms.forEach(t=>{ if(t&&nm.indexOf(t)!==-1) s+=8; }); tw.forEach(w=>{ if(nm.indexOf(w)!==-1) s+=3; }); return s; };
+        // буст: книги, чей ТИП совпадает с тем, что просил пользователь (тафсир→تفسير, шарх→شرح…) — поднимаем выше всего
+        const QTYPE=[['тафсир','تفسير'],['тафасир','تفسير'],['шарх','شرح'],['сунан','سنن'],['муснад','مسند'],['сахих','صحيح'],['сира','سيرة'],['джами','جامع'],['мустадрак','مستدرك'],['тарих','تاريخ'],['акыда','عقيدة'],['акида','عقيدة'],['фикх','فقه'],['муджам','معجم']];
+        const _ql=(q||'').toLowerCase(); const qtypes=QTYPE.filter(p=>_ql.indexOf(p[0])!==-1).map(p=>canon(p[1]));
+        const sc=b=>{ const nm=canon(b.n||''); let s=0; tTerms.forEach(t=>{ if(t&&nm.indexOf(t)!==-1) s+=8; }); tw.forEach(w=>{ if(nm.indexOf(w)!==-1) s+=3; }); qtypes.forEach(t=>{ if(nm.indexOf(t)!==-1) s+=20; }); return s; };
         arr=arr.map(b=>({b,s:sc(b)})).sort((x,y)=>y.s-x.s).map(o=>o.b);
         showList(arr,'🧠 ИИ: '+esc(j.note||(authors[0]||titles[0]||''))+' · найдено: '+arr.length, true);
         // КАРТОЧКА АВТОРА сверху (как корень с количеством) — биография + все книги
