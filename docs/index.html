@@ -54,6 +54,10 @@
        border:1px solid rgba(120,150,200,.15);font-weight:600;cursor:pointer}
   .tab.active{background:linear-gradient(180deg,#2f7be6,#1e6fd6);color:#fff;border-color:#3a8bff;box-shadow:0 0 16px #2d7be680}
   .lbl{font-size:12px;color:var(--hint);margin:2px 2px 5px}
+  /* строка «Искать в…» + кнопка Мактабы: на ПК рядом, на телефоне кнопка аккуратно во всю ширину по центру */
+  .maktabaRow{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:2px}
+  #maktabaTopBtn{text-align:center;white-space:normal;line-height:1.3}
+  @media(max-width:680px){ .maktabaRow{gap:8px} #maktabaTopBtn{flex:1 1 100%;justify-content:center;margin-top:2px} }
   .cols{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
   .col{padding:6px 10px;border-radius:18px;background:var(--card);border:1px solid var(--border);
        font-size:13px;cursor:pointer}
@@ -157,7 +161,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v256</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v257</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -174,7 +178,7 @@
   </div>
 
   <div id="colsWrap">
-    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <div class="maktabaRow">
       <div class="lbl" id="colsToggle" style="cursor:pointer;user-select:none;color:var(--link);display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:rgba(108,92,231,.10);border-radius:20px;padding:6px 12px;font-size:13px;font-weight:600">🔎 <span id="colCount"></span> <span id="colsArrow" style="opacity:.8">▾</span></div>
       <button id="maktabaTopBtn" title="Читать всю библиотеку Мактаба аш-Шамиля (8589 книг) + первоисточники и избранное" style="display:inline-flex;align-items:center;gap:7px;background:#11261f;border:1px solid #2e7d5a;color:#bff5d4;border-radius:20px;padding:8px 18px;font-size:13.5px;font-weight:700;cursor:pointer;box-shadow:0 1px 10px rgba(46,125,90,.28)">📚 Читать библиотеку Мактаба аш-Шамиля <span style="opacity:.8;font-weight:600">(المكتبة الشاملة · 8589 книг)</span></button>
     </div>
@@ -507,7 +511,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v256';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v257';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2273,8 +2277,10 @@ function _maktFilterBar(res, data){
     bar.appendChild(chip); });
   return wrap;
 }
-// дедуп: чтобы поиск «по всей Мактабе» не дублировал хадисы, уже показанные в локальных результатах выше (Бухари и т.п.)
-function _matnSig(t){ try{ return canon(String(t||'').replace(/<\/?mark>/g,'')).replace(/\s+/g,'').slice(0,70); }catch(e){ return ''; } }
+// дедуп: убираем ТОЛЬКО точь-в-точь повторы (тот же ПОЛНЫЙ хадис = иснад+матн), уже показанные выше.
+// ⚠️ ВАЖНО: считаем по ВСЕМУ тексту (иснад+матн), а НЕ по матну — одинаковый матн с РАЗНЫМ иснадом
+// (или иным выражением равия: «ابن مسعود» у Бухари vs «عبد الله» у Ахмада) — это РАЗНЫЕ хадисы, ОБА показываем.
+function _matnSig(t){ try{ return canon(String(t||'').replace(/<\/?mark>/g,'')).replace(/\s+/g,'').slice(0,4000); }catch(e){ return ''; } }
 function _shownLocalMatn(){ const s=new Set(); try{ (typeof _results!=='undefined'?_results:[]).forEach(d=>{ const t=(d&&d.h&&(d.h.text||(d.h.rv&&d.h.rv.map(r=>r.t||'').join(' '))))||''; const g=_matnSig(t); if(g) s.add(g); }); }catch(e){} return s; }
 async function appendMaktaba(seq, q, primary){
   if(!BACKEND_URL || !q) return;
