@@ -161,7 +161,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v257</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v258</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -511,7 +511,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v257';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v258';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2897,8 +2897,12 @@ async function _critBio(c, host, btn){
     html+='<div style="margin-top:4px;font-size:11px;color:var(--hint)">🧠 ИИ '+(j.cached?'(из базы)':'')+' — возможны неточности</div>'; host.innerHTML=html;
   }catch(e){ host.innerHTML='<span class="hint">🔧 сервис недоступен</span>'; }
 }
+let _wikiT=null, _wikiTP=null;
+function loadWikiTitles(){ if(_wikiT) return Promise.resolve(_wikiT); if(_wikiTP) return _wikiTP;
+  _wikiTP=fetch('./wiki_titles_verified.json').then(r=>r.ok?r.json():{}).then(j=>{ _wikiT=j||{}; window._wikiT=_wikiT; return _wikiT; }).catch(()=>{ _wikiT={}; window._wikiT={}; return _wikiT; }); return _wikiTP; }
 async function openCatalog(){
   const cat=await loadCatalog();
+  try{ await loadWikiTitles(); }catch(e){}   // канон. рус. названия книг из Википедии (выверенные, 68 книг)
   let m=document.getElementById('catModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='catModal';
     const cats=[...new Set(cat.map(b=>b.c).filter(Boolean))].sort((a,b)=>{ const ia=(_CAT_IDX[a]?_CAT_IDX[a].ord:999), ib=(_CAT_IDX[b]?_CAT_IDX[b].ord:999); if(ia===ib) return a.localeCompare(b); return ia-ib; });
@@ -2916,10 +2920,13 @@ async function openCatalog(){
     const _bookRow=(b)=>{ const it=document.createElement('div'); it.style.cssText='border-bottom:1px solid var(--border);padding:9px 4px';
       const tr=_catTr.on?(_catTr.map[b.n]||null):null;
       const arName=(tr&&tr.voc)?tr.voc:b.n;
+      const wk=(window._wikiT && window._wikiT[String(b.i)])||null;   // канон. рус. имя из Википедии + ссылка (выверено)
       const main=document.createElement('div'); main.style.cssText='cursor:pointer;direction:rtl;text-align:right';
       main.innerHTML='<div style="font-weight:600;color:var(--link);font-size:15px">'+esc(arName)+'</div>'
-        +((tr&&tr.ru)?('<div style="direction:ltr;text-align:left;font-size:13px;color:#bcd0ff;margin-top:2px">'+esc(tr.ru)+'</div>'):'')
+        +(wk?('<div style="direction:ltr;text-align:left;font-size:13px;color:#bcd0ff;margin-top:2px">📘 '+esc(wk.ru)+' <span class="wkLink" data-u="'+esc(wk.url)+'" style="color:#7fb3ff;cursor:pointer;font-size:11px;white-space:nowrap">· 🔗 Википедия</span></div>')
+            :((tr&&tr.ru)?('<div style="direction:ltr;text-align:left;font-size:13px;color:#bcd0ff;margin-top:2px">'+esc(tr.ru)+'</div>'):''))
         +(b.a?('<div style="font-size:12px;color:var(--hint);margin-top:2px">'+esc(b.a)+(b.c?(' · '+esc(catLabel(b.c).split(' — ')[1]||b.c)):'')+'</div>'):'');
+      const _wl=main.querySelector('.wkLink'); if(_wl) _wl.onclick=(e)=>{ e.stopPropagation(); try{ openLink(_wl.dataset.u); }catch(_e){} };
       main.onclick=()=>{ m.style.display='none'; openBook(b.i); };
       const tools=document.createElement('div'); tools.style.cssText='display:flex;gap:8px;margin-top:5px;direction:ltr';
       const info=document.createElement('button'); info.className='mini'; info.textContent='ℹ️ о книге'; info.style.cssText='font-size:12px;padding:4px 9px';
