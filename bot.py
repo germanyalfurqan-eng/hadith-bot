@@ -3421,16 +3421,10 @@ async def _api_serve(application=None):
     from aiohttp import web
     loop = asyncio.get_event_loop()
     async def _notify_usage(user, feat, fresh, src, num, saved, q=""):
-        # зеркалим расход ИИ в рабочий канал-журнал (LOG_CHAT_ID)
-        # M301: баланс спам↔информативность — КЭШ-вызовы (ключ НЕ потрачен) В ЛОГ НЕ ШЛЁМ (это не расход).
-        # Считаем их в тихий счётчик (виден по команде «расход»). Логируем ТОЛЬКО реальные траты ключа.
+        # зеркалим ВСЮ активность ИИ в рабочий канал-журнал (LOG_CHAT_ID) — и траты, и из базы.
+        # M301 (по требованию владельца): кэш-вызовы НЕ глушим — показываем с тем же ПОДРОБНЫМ описанием
+        # (что/где/запрос), чтобы видеть активность функции; разница только в метке 🆕 потрачено / ♻️ из базы.
         if not application:
-            return
-        if not fresh:
-            try:
-                j = _journal_load(); u = j.setdefault("ai_cached", {"count": 0})
-                u["count"] = u.get("count", 0) + 1; _journal_save("ai cached +1")
-            except Exception: pass
             return
         uid = (user or {}).get("id")
         if user and user.get("username"):
@@ -3548,7 +3542,7 @@ async def _api_serve(application=None):
                 if isinstance(cached, list):   # старый формат (только фразы)
                     cached = {'phrases': cached, 'quran': [], 'note': '', 'fixed': ''}
                 await loop.run_in_executor(None, usage_log, user, "нейро", False, len(meaning), "", "")
-                await _notify_usage(user, "нейро", False, "", "", None)
+                await _notify_usage(user, "нейро", False, "", "", None, q=meaning)
                 out = dict(cached); out['cached'] = True
                 return _cors(web.json_response(out))
             # 2) УМНЫЙ ИИ-поиск: понять смысл (исправить опечатки), дать НОМЕР аята и/или характерную арабскую фразу
