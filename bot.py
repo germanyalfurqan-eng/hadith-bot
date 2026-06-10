@@ -1459,6 +1459,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "• `заявка done <№>` — пометить выполненной\n\n"
                 "🤖 *ИИ (внутренняя кухня, только тебе):*\n"
                 "• `гпт <вопрос>` — спросить GPT/Gemini\n\n"
+                "💬 *Связь с пользователем:*\n"
+                "• `написать <ID> <текст>` — отправить юзеру сообщение от твоего имени (ID берёшь из журнала #ии)\n\n"
                 "📣 *Канал и закреп:*\n"
                 "• `анонс` — запостить текущее обновление в @muslimoonapp\n"
                 "• `анонс <текст>` — свой текст в канал\n"
@@ -1490,6 +1492,19 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_message(LOG_CHAT_ID, f"💸 GPT-расход ({s.get('t')}): {s.get('model')} · in {s.get('in')}/out {s.get('out')} ток. ≈ ${s.get('cost', 0):.4f} · всего GPT ≈ ${s.get('total', 0):.4f} ({s.get('calls', '?')} вызовов). Баланс — platform.openai.com/usage")
                 except Exception:
                     pass
+            return
+        # === НАПИСАТЬ ПОЛЬЗОВАТЕЛЮ по ID (релей через бота — для юзеров без @username, по их ID из журнала): «написать <ID> <текст>» ===
+        if _tl.startswith("написать ") or _tl.startswith("ответить ") or _tl.startswith("напиши "):
+            parts = text.strip().split(None, 2)   # [команда, ID, текст]
+            if len(parts) >= 3 and parts[1].lstrip('-').isdigit():
+                target_uid = int(parts[1]); body = parts[2]
+                try:
+                    await context.bot.send_message(target_uid, f"💬 Сообщение от разработчика Muslimoon:\n\n{body}")
+                    await update.message.reply_text(f"✅ Отправлено пользователю {target_uid}.")
+                except Exception as e:
+                    await update.message.reply_text(f"⚠️ Не смог отправить {target_uid}: {e}\n(Юзер мог не запускать бота или заблокировал.)")
+            else:
+                await update.message.reply_text("Формат: написать <ID> <текст>\nНапр.: написать 6692711031 Ассаламу алейкум!\n(ID берётся из журнала #ии; бот отправит юзеру от твоего имени.)")
             return
         # ===== ЗАКРЕП: сообщение с кнопкой открытия приложения + автозакреп. «закреп <свой текст>» = свой текст =====
         if _tl == "закреп" or _tl == "закрепить" or _tl.startswith("закреп "):
