@@ -163,7 +163,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v268</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v269</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -512,7 +512,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v268';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v269';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1559,6 +1559,7 @@ async function runSearch(explicit){
   _arabusOn=false;   // M-fix: новый поиск → Arabus сброшен в ВЫКЛ (по умолчанию выключен)
   let q=document.getElementById('q').value.trim(); const shown=q;
   if(!q){ toast('Введите запрос'); return; }
+  q=q.replace(/[،؛؟,;!]+/g,' ').replace(/\s+/g,' ').trim();   // M283: убрать пунктуацию (запятая прилипала к слову и ломала строгий матч)
   saveRecent(shown); hideRecent();   // 🕐 запомнить запрос для «недавних»
   try{ _qHistPush(shown, tab); }catch(e){}   // M254: история для кнопки «↩ Назад»
   const res=document.getElementById('res'); _clearRenderQ(); res.innerHTML=''; _results=[]; _pick={items:[],sel:new Set(),excl:new Set(),kind:'',meaning:''};
@@ -1642,14 +1643,8 @@ async function runSearch(explicit){
         await new Promise(r=>setTimeout(r,0));
       }
       if(seq!==_seq) return; b.remove(); groupSrc=true; renderResultsView();
-      // вторая ступень — вся Мактаба (turath, ~8589 книг) — отдельной кнопкой (тяжело грузить авто)
-      if(!document.getElementById('maktabaMore')){
-        const m2=document.createElement('div'); m2.id='maktabaMore';
-        m2.style.cssText='display:block;margin:10px 0 6px;cursor:pointer;color:var(--link);border:1px dashed var(--border);border-radius:12px;padding:9px 12px;text-align:center;font-size:13px';
-        m2.textContent='🌐 Искать ещё во ВСЕЙ Мактабе (~8589 книг)';
-        m2.onclick=async()=>{ if(seq!==_seq) return; m2.textContent='🌐 Ищу во всей Мактабе…'; m2.style.pointerEvents='none'; try{ await appendMaktaba(seq, shown, false); }catch(e){} m2.remove(); };
-        res.appendChild(m2);
-      }
+      // M284: вторую ступень (вся Мактаба turath) НЕ показываем отдельной кнопкой — она ищется АВТОМАТОМ
+      // (appendMaktaba в конце runSearch) с фоновой ленивой догрузкой по скроллу (IntersectionObserver в maktabaMoreBtn).
     };
     b.onclick=runMore;
     res.appendChild(b);
@@ -1862,7 +1857,7 @@ function ensureUniqToggle(){ const res=document.getElementById('res'); if(!res.f
 function grpToggleEl(){
   const t=document.createElement('div'); t.id='grpToggle';
   t.style.cssText='display:inline-block;margin:2px 0 8px;font-size:13px;color:var(--link);cursor:pointer;user-select:none;border:1px solid var(--border);border-radius:12px;padding:3px 10px';
-  t.textContent = groupSrc?'📋 Обычным списком':('📚 Сгруппировать по '+(tab==='quran'?'сурам':'источникам'));
+  t.textContent = groupSrc?'📋 Обычным списком':('📚 Сгруппировать по '+(tab==='quran'?'сурам':'сборникам'));
   t.onclick=()=>{ groupSrc=!groupSrc; renderResultsView(); };
   return t;
 }
@@ -1911,7 +1906,7 @@ function renderResultsView(){
   if(relMode && _lastQueryTerms.length){ list=_results.map((d,i)=>[d,_relScore(d),i]).sort((a,b)=>(b[1]-a[1])||(a[2]-b[2])).map(x=>x[0]); }
   if(uniqMode){ const dd=dedupResults(list, uniqMode); list=dd.list; hid=dd.hidden; }
   const cnt='найдено: '+_results.length+(relMode?' · по релевантности':'')+(uniqMode?(' · '+(uniqMode==='version'?'уникальных версий':'уникальных хадисов')+' '+list.length+(hid?(' · свёрнуто '+hid):'')+(uniqMode==='hadith'?' · основная версия/متابعات — пометка скоро':'')):'');
-  res.appendChild(info((groupSrc?('📚 По '+(tab==='quran'?'сурам':'источникам')+' · '):'')+cnt+((!groupSrc&&list.length>400)?' (первые 400)':'')));
+  res.appendChild(info((groupSrc?('📚 Сгруппировано по '+(tab==='quran'?'сурам':'сборникам')+' · '):'')+cnt+((!groupSrc&&list.length>400)?' (первые 400)':'')));
   res.appendChild(grpToggleEl()); res.appendChild(uniqToggleEl()); res.appendChild(relToggleEl()); ensureShareBtn();
   if(!groupSrc){ list.slice(0,400).forEach(d=>res.appendChild(makeCard(d))); return; }
   // группируем по ВСЕМ результатам → видны ВСЕ сборники/суры (не только первые 400)
@@ -2244,18 +2239,19 @@ function maktabaCard(x){
   card.appendChild(open);
   return card;
 }
-function maktabaMoreBtn(seq,q,st){
+function maktabaMoreBtn(seq,q,st,strictWords){
   const wrap=document.createElement('div'); wrap.style.cssText='text-align:center;margin:10px 0';
-  const b=document.createElement('button'); b.className='mini'; b.textContent='⬇️ Ещё из Мактабы'; b.style.cssText='border:1px solid var(--border);padding:8px 16px;border-radius:10px';
-  b.onclick=async()=>{ b.disabled=true; b.textContent='…';
+  const b=document.createElement('button'); b.className='mini'; b.textContent='⬇️ Ещё из Мактабы'+(strictWords?' (строго: все слова)':''); b.style.cssText='border:1px solid var(--border);padding:8px 16px;border-radius:10px';
+  let io; const observe=()=>{ try{ io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){io.disconnect();load();}});},{rootMargin:'220px'}); io.observe(b);}catch(e){} };
+  const load=async()=>{ if(b.disabled) return; b.disabled=true; b.textContent='…';
     try{ const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(q)+'&page='+((st.page||1)+1)+'&initData='+encodeURIComponent(INITDATA));
       if(seq!==_seq) return; const j=await r.json().catch(()=>({})); const data=j.data||[];
       if(!data.length){ b.textContent='Больше нет'; b.disabled=true; return; }
-      data.forEach(x=>wrap.parentNode.insertBefore(maktabaCard(x),wrap));
-      st.page=j.page||((st.page||1)+1); b.disabled=false; b.textContent='⬇️ Ещё из Мактабы';
-    }catch(e){ b.disabled=false; b.textContent='⬇️ Ещё'; } };
-  wrap.appendChild(b);
-  try{ const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){io.disconnect();b.click();}});},{rootMargin:'160px'}); io.observe(b);}catch(e){}
+      const view = strictWords ? data.filter(x=>_snipHasAll(x.snip,strictWords)) : data;
+      view.forEach(x=>wrap.parentNode.insertBefore(maktabaCard(x),wrap));
+      st.page=j.page||((st.page||1)+1); b.disabled=false; b.textContent='⬇️ Ещё из Мактабы'+(strictWords?' (строго)':''); observe();   // M284: непрерывная фоновая догрузка по скроллу
+    }catch(e){ b.disabled=false; b.textContent='⬇️ Ещё'; observe(); } };
+  b.onclick=load; wrap.appendChild(b); observe();
   return wrap;
 }
 function maktabaSunnahBtn(res,seq,q){   // sunnah.one — ОТДЕЛЬНЫЙ помощник (хукм/тахридж), не основной
@@ -2288,6 +2284,9 @@ function _maktFilterBar(res, data){
 // (или иным выражением равия: «ابن مسعود» у Бухари vs «عبد الله» у Ахмада) — это РАЗНЫЕ хадисы, ОБА показываем.
 function _matnSig(t){ try{ return canon(String(t||'').replace(/<\/?mark>/g,'')).replace(/\s+/g,'').slice(0,4000); }catch(e){ return ''; } }
 function _shownLocalMatn(){ const s=new Set(); try{ (typeof _results!=='undefined'?_results:[]).forEach(d=>{ const t=(d&&d.h&&(d.h.text||(d.h.rv&&d.h.rv.map(r=>r.t||'').join(' '))))||''; const g=_matnSig(t); if(g) s.add(g); }); }catch(e){} return s; }
+// M283: значимые слова запроса (без приставок و/ف/ب/ك/ل/ال, длиной ≥3) — для строгого «все слова присутствуют»
+function _strictQWords(q){ return canon((q||'').replace(/[،؛؟,;!.:"'»«()\[\]]/g,' ')).split(' ').map(w=>w.replace(/^(و|ف|ب|ك|ل)/,'').replace(/^ال/,'')).filter(w=>w.length>=3); }
+function _snipHasAll(snip, words){ if(!words||!words.length) return true; const c=canon(String(snip||'').replace(/<[^>]*>/g,'')); return words.every(w=>c.indexOf(w)!==-1); }
 async function appendMaktaba(seq, q, primary){
   if(!BACKEND_URL || !q) return;
   const res=document.getElementById('res'); if(primary) res.innerHTML='';
@@ -2301,18 +2300,21 @@ async function appendMaktaba(seq, q, primary){
     if(r.status===403){ sec.textContent='🌐 Мактаба: доступ пока не открыт.'; return; }
     if(r.status===429){ sec.textContent='🌐 Слишком часто, подожди немного.'; return; }
     const data=j.data||[]; const fn=j.first_n||0;
-    // БЕЗ авто-дедупа: один и тот же хадис, приведённый в РАЗНЫХ книгах (Бухари/Ахмад/Мукбиль/Табари) —
-    // показываем ВЕЗДЕ (смысл — видеть, где он приводится дословно). Уникальность хадисов/версий — это ФИЛЬТР-кнопки.
+    // M283: СТРОГО — только результаты, где есть ВСЕ значимые слова запроса (терпим к приставкам). Не в ИИ-режиме.
+    let strictWords=null; if(!modes.ai){ const ww=_strictQWords(q); if(ww.length>=2) strictWords=ww; }
+    // БЕЗ авто-дедупа (R16): один хадис в разных книгах показываем везде; уникальность — фильтр-кнопки.
     if(!data.length){ sec.textContent='🤷 По Мактабе точного совпадения нет. Попробуй характерную фразу из матна.'; try{ maktabaSunnahBtn(res,seq,q); addNotFoundBtn(res,q); }catch(e){} return; }
     await loadBooksMap();
-    sec.textContent='📚 Поиск по всей Мактабе · показано '+data.length+(j.count>data.length?(' из ~'+(j.count||0).toLocaleString('ru')):'')+(fn?' · ⭐ первоисточники сверху':'');
-    try{ const _fb=_maktFilterBar(res,data); if(_fb) res.appendChild(_fb); }catch(e){}
-    data.forEach((x,i)=>{
-      if(fn && i===0){ const h=document.createElement('div'); h.className='hint'; h.style.cssText='color:#d6b25a;font-size:12.5px;font-weight:700;margin:4px 0 7px'; h.textContent='📜 40 первоисточников · избранное'; res.appendChild(h); }
-      if(fn && i===fn){ const h=document.createElement('div'); h.className='hint'; h.style.cssText='color:#7fb3ff;font-size:12.5px;font-weight:700;margin:14px 0 7px;border-top:1px solid var(--border);padding-top:9px'; h.textContent='📚 Вся остальная Мактаба'; res.appendChild(h); }
-      res.appendChild(maktabaCard(x));
-    });
-    res.appendChild(maktabaMoreBtn(seq,q,{page:(j.page||1)}));
+    let fsrc=data.slice(0,fn), rest=data.slice(fn);
+    if(strictWords){ fsrc=fsrc.filter(x=>_snipHasAll(x.snip,strictWords)); rest=rest.filter(x=>_snipHasAll(x.snip,strictWords)); }
+    const view=fsrc.concat(rest); const hid=data.length-view.length;
+    const strictNote = strictWords ? (' · 🎯 строго: все слова'+(hid>0?(' (частичных скрыто '+hid+')'):'')) : '';
+    sec.textContent='📚 Поиск по всей Мактабе · показано '+view.length+(j.count>view.length?(' из ~'+(j.count||0).toLocaleString('ru')):'')+(fsrc.length?' · ⭐ первоисточники сверху':'')+strictNote;
+    try{ const _fb=_maktFilterBar(res,view); if(_fb) res.appendChild(_fb); }catch(e){}
+    if(fsrc.length){ const h=document.createElement('div'); h.className='hint'; h.style.cssText='color:#d6b25a;font-size:12.5px;font-weight:700;margin:4px 0 7px'; h.textContent='📜 Первоисточники'; res.appendChild(h); fsrc.forEach(x=>res.appendChild(maktabaCard(x))); }
+    if(rest.length){ const h=document.createElement('div'); h.className='hint'; h.style.cssText='color:#7fb3ff;font-size:12.5px;font-weight:700;margin:14px 0 7px;border-top:1px solid var(--border);padding-top:9px'; h.textContent='📚 Остальная Мактаба'; res.appendChild(h); rest.forEach(x=>res.appendChild(maktabaCard(x))); }
+    if(strictWords && !view.length){ const note=document.createElement('div'); note.className='hint'; note.style.cssText='font-size:12.5px;margin:6px 0'; note.textContent='🎯 На этой странице нет совпадений со ВСЕМИ словами. Листай вниз — подгружаю дальше.'; res.appendChild(note); }
+    res.appendChild(maktabaMoreBtn(seq,q,{page:(j.page||1)}, strictWords));
     try{ maktabaSunnahBtn(res,seq,q); }catch(e){}
   }catch(e){ sec.textContent='🌐 Мактаба сейчас недоступна — попробуй позже.'; }
 }
