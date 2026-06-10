@@ -496,28 +496,47 @@ def parse_audio_meta(text):
     comment = grab(['описани\\w*', 'коммент\\w*', 'desc\\w*', 'comment'])
     return title, artist, comment
 
+_ENH_PRE = ("highpass=f=80,"            # убрать гул/рокот ниже голоса
+            "afftdn=nf=-25:nr=20,"     # сильное FFT-шумоподавление
+            "adeclick,"                # убрать щелчки
+            "acompressor=threshold=-20dB:ratio=4:attack=5:release=150:makeup=3")  # плотная динамика
+def _loudnorm_measure(input_path):
+    """1-й проход loudnorm: измеряем параметры (для ТОЧНОЙ нормализации во 2-м проходе = студийное качество)."""
+    try:
+        cmd = [_ffmpeg_bin(), "-hide_banner", "-i", input_path, "-af",
+               _ENH_PRE + ",loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json", "-f", "null", "-"]
+        r = subprocess.run(cmd, capture_output=True, timeout=240)
+        err = (r.stderr or b"").decode("utf-8", "ignore")
+        m = re.search(r'\{[^{}]*"input_i"[^{}]*\}', err, re.S)
+        return json.loads(m.group(0)) if m else None
+    except Exception:
+        return None
+
 def enhance_audio(input_path, output_path, artist="", title="", comment="", enhance=True):
     """Конвертация (+опц. студийное улучшение «как Auphonic») в mp3 через ffmpeg.
-    Цепочка улучшения: highpass (убрать гул) → afftdn (шумоподавление) →
-    acompressor (сжать динамику) → loudnorm I=-16 LUFS (выровнять громкость,
-    стандарт вещания EBU R128) → alimiter (мягкий предел). Теги пишем метаданными."""
+    Улучшение = ДВА прохода: ① highpass→afftdn(сильный шумодав)→adeclick→компрессор,
+    измеряем громкость; ② loudnorm с ИЗМЕРЕННЫМИ параметрами (linear=true — прозрачно,
+    как студия) → alimiter. 256 kbps / 48 kHz. Теги пишем метаданными."""
     try:
         cmd = [_ffmpeg_bin(), "-y", "-i", input_path]
         if enhance:
-            af = ("highpass=f=70,"
-                  "afftdn=nf=-25,"
-                  "acompressor=threshold=-18dB:ratio=3:attack=20:release=250,"
-                  "loudnorm=I=-16:TP=-1.5:LRA=11,"
-                  "alimiter=limit=0.97")
-            cmd += ["-af", af, "-b:a", "192k"]
+            meas = _loudnorm_measure(input_path)
+            if meas and meas.get('input_i'):
+                ln = ("loudnorm=I=-16:TP=-1.5:LRA=11:linear=true"
+                      ":measured_I=%s:measured_TP=%s:measured_LRA=%s:measured_thresh=%s:offset=%s"
+                      % (meas.get('input_i'), meas.get('input_tp'), meas.get('input_lra'),
+                         meas.get('input_thresh'), meas.get('target_offset', '0')))
+            else:
+                ln = "loudnorm=I=-16:TP=-1.5:LRA=11"   # фолбэк (1 проход), если измерение не вышло
+            af = _ENH_PRE + "," + ln + ",alimiter=level_in=1:level_out=1:limit=0.97"
+            cmd += ["-af", af, "-ar", "48000", "-ac", "2", "-b:a", "256k"]
         else:
-            cmd += ["-b:a", "160k"]
-        cmd += ["-ar", "44100", "-ac", "2"]
+            cmd += ["-ar", "44100", "-ac", "2", "-b:a", "160k"]
         if title:   cmd += ["-metadata", "title=" + title]
         if artist:  cmd += ["-metadata", "artist=" + artist]
         if comment: cmd += ["-metadata", "comment=" + comment]
         cmd += [output_path]
-        r = subprocess.run(cmd, capture_output=True, timeout=240)
+        r = subprocess.run(cmd, capture_output=True, timeout=300)
         if r.returncode != 0:
             print("ffmpeg error:", (r.stderr or b"").decode("utf-8", "ignore")[-600:])
             return False
@@ -1655,18 +1674,19 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("✅ Журнал ошибок пуст.")
             else:
                 lines = ["🐞 Журнал ошибок — открытых: " + str(len(open_errs)) + " / всего: " + str(len(errs))]
-                for e in sorted(errs, key=lambda x: -x.get('count', 1))[:20]:
-                    mark = "✅" if e.get('fixed') else "•"
-                    lines.append(f"{mark} [{e.get('ver','')}] {e.get('where','')}: {e.get('msg','')[:120]} (×{e.get('count',1)})")
-                lines.append("\nКоманда: «ошибка решена <часть текста>» — пометить исправленной.")
+                for e in sorted(errs, key=lambda x: (x.get('fixed', False), -x.get('seq', x.get('count', 1))))[:25]:
+                    mark = "✅" if e.get('fixed') else "🔴"
+                    lines.append(f"{mark} {e.get('eid','A-?')} [{e.get('ver','')}] {e.get('where','')}: {e.get('msg','')[:110]} (×{e.get('count',1)})")
+                lines.append("\nРешить: «ошибка решена A-001» (по номеру) или «ошибка решена <часть текста>».")
                 await update.message.reply_text("\n".join(lines)[:3900])
             return
         _mfix = re.match(r"^ошибка\s+(решена|исправлена)\s+(.+)$", _tl)
         if _mfix:
             frag = _mfix.group(2).strip()
             errs = _data_get("errors.json", []) or []; n = 0
+            _fl = frag.lower()
             for e in errs:
-                if frag in (e.get('msg', '') + ' ' + e.get('where', '')).lower():
+                if _fl == str(e.get('eid', '')).lower() or frag in (e.get('msg', '') + ' ' + e.get('where', '')).lower():
                     e['fixed'] = True; n += 1
             _data_put("errors.json", errs, "errlog: помечено решённым")
             await update.message.reply_text(f"✅ Помечено решёнными: {n}.")
@@ -1924,7 +1944,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _rest = re.sub(r'^\s*(бахни\s*)?(mp3|мп3|улучши\w*|почисти\w*|конверт\w*|студий\w*|auphonic)\b[\s:.\-—]*', '', text, flags=re.IGNORECASE).strip()
                 if _rest and not re.search(r'["«»“‘\']|исполнител|описани|artist|performer|comment', _rest, re.IGNORECASE):
                     _t_meta = _rest[:150]
-            _title  = _t_meta or (getattr(_rep.audio, 'title', None) if _rep.audio else None) or datetime.now().strftime("%d.%m.%Y %H:%M")
+            _title  = _t_meta or (getattr(_rep.audio, 'title', None) if _rep.audio else None) or (datetime.utcnow()+timedelta(hours=3)).strftime("%d.%m.%Y %H:%M")
             _artist = _a_meta or (getattr(_rep.audio, 'performer', None) if _rep.audio else None) \
                       or (_rep.sender_chat.title if _rep.sender_chat else (_rep.from_user.full_name if _rep.from_user else "Muslimoon"))
             _comment = _c_meta or ""
@@ -3400,9 +3420,17 @@ def isnad_ai(text):
 async def _api_serve(application=None):
     from aiohttp import web
     loop = asyncio.get_event_loop()
-    async def _notify_usage(user, feat, fresh, src, num, saved):
+    async def _notify_usage(user, feat, fresh, src, num, saved, q=""):
         # зеркалим расход ИИ в рабочий канал-журнал (LOG_CHAT_ID)
+        # M301: баланс спам↔информативность — КЭШ-вызовы (ключ НЕ потрачен) В ЛОГ НЕ ШЛЁМ (это не расход).
+        # Считаем их в тихий счётчик (виден по команде «расход»). Логируем ТОЛЬКО реальные траты ключа.
         if not application:
+            return
+        if not fresh:
+            try:
+                j = _journal_load(); u = j.setdefault("ai_cached", {"count": 0})
+                u["count"] = u.get("count", 0) + 1; _journal_save("ai cached +1")
+            except Exception: pass
             return
         uid = (user or {}).get("id")
         if user and user.get("username"):
@@ -3419,8 +3447,9 @@ async def _api_serve(application=None):
         else:
             extra = ""
         ftag = {"перевод": "#перевод", "нейро": "#нейро", "огласовки": "#огласовки"}.get(feat, "#" + re.sub(r"\s+", "", feat))
+        _qs = (" · 🔎 «" + str(q)[:70] + "»") if q else ""   # M301: ЗА ЧТО потрачено (текст запроса)
         try:
-            await application.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} 🤖 {feat}: {who}{loc} — {tag}{extra}", parse_mode="Markdown")
+            await application.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} 🤖 {feat}: {who}{loc} — {tag}{extra}{_qs}", parse_mode="Markdown")
         except Exception:
             pass
     async def _notify(text):
@@ -3566,7 +3595,7 @@ async def _api_serve(application=None):
                 try: saved = {"new": True, "total": await loop.run_in_executor(None, neuro_put, nkey, result)}
                 except Exception: saved = None
             await loop.run_in_executor(None, usage_log, user, "нейро", True, len(meaning), "", "")
-            await _notify_usage(user, "нейро", True, "", "", saved)
+            await _notify_usage(user, "нейро", True, "", "", saved, q=meaning)
             out = dict(result); out['cached'] = False
             return _cors(web.json_response(out))
         except Exception as e:
@@ -3844,11 +3873,14 @@ async def _api_serve(application=None):
                 existing['count'] = (existing.get('count', 1)) + 1
                 existing['last_ver'] = ver
             else:
+                # M304: сквозной номер ошибки приложения — A-001, A-002… (A = App). Не повторяется.
+                _seq = max([e.get('seq', 0) for e in cur] or [0]) + 1
+                _eid = 'A-%03d' % _seq
                 cur.append({'key': key, 'msg': msg, 'where': where, 'ver': ver, 'stack': stack,
-                            'uid': str(uid)[:24], 'count': 1, 'fixed': False})
+                            'uid': str(uid)[:24], 'count': 1, 'fixed': False, 'seq': _seq, 'eid': _eid})
                 cur = cur[-400:]
                 try:
-                    await _notify(f"🐞 НОВАЯ ОШИБКА (app {ver})\n{where}: {msg}\n(в журнале ошибок, всего: {len(cur)})")
+                    await _notify(f"🐞 НОВАЯ ОШИБКА {_eid} (app {ver})\n{where}: {msg}\n(открыта; всего в журнале: {len(cur)} · решить: «ошибка решена {_eid}»)")
                 except Exception: pass
             await loop.run_in_executor(None, _data_put, "errors.json", cur, f"errlog: {msg[:40]}")
             return _cors(web.json_response({'ok': True}))
