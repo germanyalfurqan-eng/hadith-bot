@@ -314,6 +314,9 @@ TOKEN = os.environ.get("TOKEN")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+# GPT (OpenAI) для особых задач. Читаем под несколькими именами — чтобы сработало как ни назвал переменную на Railway.
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY") or os.environ.get("GPT_API_KEY") or os.environ.get("OPENAI_KEY") or os.environ.get("CHATGPT_API_KEY") or ""
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 OWNER_ID = 131827895
 OWNER_CHANNEL_ID = -1001660979432
@@ -963,6 +966,23 @@ def deepseek_balance():
         pass
     return None
 
+def ask_gpt(prompt, system=None, max_tokens=900):
+    """GPT (OpenAI) для особых задач. Ключ — переменная OPENAI_API_KEY на Railway. Возвращает текст или None/ошибку."""
+    if not OPENAI_API_KEY:
+        return None
+    try:
+        msgs = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": prompt}]
+        r = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
+            json={"model": OPENAI_MODEL, "messages": msgs, "max_tokens": max_tokens},
+            timeout=90)
+        if r.status_code == 200:
+            return r.json()["choices"][0]["message"]["content"].strip()
+        return f"⚠️ GPT вернул код {r.status_code}: {r.text[:200]}"
+    except Exception as e:
+        return f"⚠️ GPT недоступен: {e}"
+
 def ask_ai(prompt, system=None, owner=False, max_tokens=None):
     if ai_kill_active():   # 🚨 авто-рубильник: ИИ выключен (спам/вручную) — не дёргаем ни DeepSeek, ни бесплатные
         return "⏸ ИИ временно на паузе (защита от спама). Включит владелец."
@@ -1330,6 +1350,20 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ===== Владельцу: ЧЁРНЫЙ СПИСОК (бан чата/пользователя по id) =====
     if is_owner(update):
         _tl = text.strip().lower()
+        # ===== GPT (OpenAI) для особых задач: «гпт <вопрос>» / «gpt <вопрос>» =====
+        if _tl == "гпт" or _tl == "gpt" or _tl.startswith("гпт ") or _tl.startswith("gpt ") or _tl.startswith("гпт\n") or _tl.startswith("gpt\n"):
+            q = text.strip()[3:].strip()
+            if not q:
+                await update.message.reply_text("Напиши: гпт <вопрос>")
+                return
+            if not OPENAI_API_KEY:
+                await update.message.reply_text("⚠️ GPT-ключ не найден в окружении. Railway → Variables: добавь OPENAI_API_KEY и сделай Redeploy.")
+                return
+            try: await update.message.reply_text(f"🤖 GPT ({OPENAI_MODEL}) думает…")
+            except Exception: pass
+            ans = ask_gpt(q)
+            await update.message.reply_text((ans or "Не удалось получить ответ от GPT.")[:4000])
+            return
         # ===== АНОНС в канал приложения вручную ===== «анонс» = текущий update_note.txt; «анонс <текст>» = свой
         if _tl == "анонс" or _tl.startswith("анонс ") or _tl.startswith("анонс\n"):
             custom = text.strip()[5:].strip()
@@ -4094,7 +4128,7 @@ async def _api_serve(application=None):
 async def _setup(application):
     try:
         from telegram import MenuButtonWebApp, WebAppInfo
-        btn = MenuButtonWebApp(text="🔎 Поиск", web_app=WebAppInfo(url=WEBAPP_URL))
+        btn = MenuButtonWebApp(text="Ⓜ️ Muslimoon", web_app=WebAppInfo(url=WEBAPP_URL))   # было «🔎 Поиск» — апп теперь больше чем поиск
         # кнопка «🔎 Поиск» по умолчанию для ВСЕХ (доступ внутри решает сервер G9)
         await application.bot.set_chat_menu_button(menu_button=btn)
         await application.bot.set_chat_menu_button(chat_id=OWNER_ID, menu_button=btn)
@@ -4171,9 +4205,9 @@ async def start_cmd(update, context):
     try:
         is_private = update.effective_chat and update.effective_chat.type == "private"
         if is_private:
-            btn = InlineKeyboardButton("🔎 Открыть поиск", web_app=WebAppInfo(url=WEBAPP_URL))
+            btn = InlineKeyboardButton("📗 Открыть Muslimoon", web_app=WebAppInfo(url=WEBAPP_URL))
         else:
-            btn = InlineKeyboardButton("🔎 Открыть поиск", url=WEBAPP_URL)  # web_app-инлайн нельзя в группах
+            btn = InlineKeyboardButton("📗 Открыть Muslimoon", url=WEBAPP_URL)  # web_app-инлайн нельзя в группах
         await update.message.reply_text(
             "Добро пожаловать в *Muslimoon Bot*! 🌙\n\n"
             "🔎 Поиск по хадисам, аятам и базе аль-Мухаймин — жми кнопку ниже.\n"
