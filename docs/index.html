@@ -157,7 +157,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v246</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v247</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -503,7 +503,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v246';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v247';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1622,19 +1622,29 @@ async function runSearch(explicit){
     const b=document.createElement('div'); b.id='libMore';
     b.style.cssText='display:block;margin:14px 0 6px;cursor:pointer;color:var(--link);border:1px dashed var(--border);border-radius:12px;padding:9px 12px;text-align:center;font-size:13px';
     b.textContent='🌐 Искать по ВСЕЙ библиотеке (~9000 книг) + наши доп. издания';
-    b.onclick=async()=>{ if(seq!==_seq) return; b.style.pointerEvents='none'; let done=0;
+    // #2a: первоисточники (наши доп. издания) структурируем СРАЗУ после Ахмада — потоково, с прогрессом.
+    const runMore=async()=>{ if(seq!==_seq) return; b.style.pointerEvents='none'; let done=0;
       for(const code of codes){ if(seq!==_seq) return; done++;
-        b.textContent='📚 Шаг 1/2 — наши доп. издания: '+arOf(code)+'… '+done+'/'+codes.length+' ('+Math.round(done/codes.length*100)+'%)';
-        try{ const arr=await loadByCode(code); if(seq!==_seq) return;
+        b.textContent='📚 Первоисточники: '+arOf(code)+'… '+done+'/'+codes.length+' ('+Math.round(done/codes.length*100)+'%)';
+        try{ const arr=await loadByCode(code); if(seq!==_seq) return; const n0=count;
           for(const h of arr){ if(docMatch(h,groups,modes)){ _results.push(code==='muhaymin'?{type:'m',h}:{type:'h',code,h}); count++; } }
+          if(count>n0){ groupSrc=true; renderResultsView(); res.appendChild(b); }   // структура продолжается после Ахмада; баннер прогресса возвращаем вниз (renderResultsView чистит res)
         }catch(e){}
         await new Promise(r=>setTimeout(r,0));
       }
       if(seq!==_seq) return; b.remove(); groupSrc=true; renderResultsView();
-      toast('Наши издания: '+count+'. Шаг 2/2 — вся Мактаба (~8589 книг)…');
-      try{ await appendMaktaba(seq, shown, false); }catch(e){}   // + вся Мактаба (turath, первоисточники сверху)
+      // вторая ступень — вся Мактаба (turath, ~8589 книг) — отдельной кнопкой (тяжело грузить авто)
+      if(!document.getElementById('maktabaMore')){
+        const m2=document.createElement('div'); m2.id='maktabaMore';
+        m2.style.cssText='display:block;margin:10px 0 6px;cursor:pointer;color:var(--link);border:1px dashed var(--border);border-radius:12px;padding:9px 12px;text-align:center;font-size:13px';
+        m2.textContent='🌐 Искать ещё во ВСЕЙ Мактабе (~8589 книг)';
+        m2.onclick=async()=>{ if(seq!==_seq) return; m2.textContent='🌐 Ищу во всей Мактабе…'; m2.style.pointerEvents='none'; try{ await appendMaktaba(seq, shown, false); }catch(e){} m2.remove(); };
+        res.appendChild(m2);
+      }
     };
+    b.onclick=runMore;
     res.appendChild(b);
+    if(explicit){ b.textContent='📚 Догружаю первоисточники…'; runMore(); }   // явный поиск (Найти/Enter) → авто, без клика
   }
   if(tab==='hadith'){
     // Длинный вставленный ХАДИС (целиком) → сразу широкий поиск (sunnah.one). Пробуем НЕСКОЛЬКО фраз-кандидатов
@@ -1868,6 +1878,19 @@ function ensureShareBtn(){ const res=document.getElementById('res'); if(!res.fir
   b.style.cssText='display:inline-block;margin:2px 0 8px 8px;font-size:13px;color:var(--link);cursor:pointer;user-select:none;border:1px solid var(--border);border-radius:12px;padding:3px 10px';
   b.textContent='📤 Поделиться найденным'; b.title='Отправить подборку найденного (что искал + совпадения помечены ‹…›) со ссылкой на приложение'; b.onclick=shareResults;
   const gt=document.getElementById('grpToggle'); if(gt&&gt.parentNode) gt.parentNode.insertBefore(b, gt.nextSibling); else res.insertBefore(b, res.children[1]||null); }
+// #2b: кнопка «Читать библиотеку Мактаба» не должна торчать МЕЖДУ поиском и результатами.
+// Когда есть результаты — уводим её ВНИЗ (под результаты); когда пусто — возвращаем наверх (под поиск).
+function _placeMaktabaRow(){ try{
+  const row=document.getElementById('hadithReadRow'), res=document.getElementById('res'),
+        status=document.getElementById('status'), neuro=document.getElementById('neuroBox');
+  if(!row||!res||typeof tab==='undefined'||tab!=='hadith') return;
+  const hasResults = res.children.length>0;
+  if(hasResults){ if(status && status.nextElementSibling!==row) status.after(row); }
+  else { if(neuro && neuro.previousElementSibling!==row) neuro.before(row); }
+}catch(e){} }
+(function(){ try{ const res=document.getElementById('res'); if(!res||!window.MutationObserver) return;
+  new MutationObserver(()=>{ _placeMaktabaRow(); }).observe(res,{childList:true}); _placeMaktabaRow();
+}catch(e){} })();
 function renderResultsView(){
   const res=document.getElementById('res'); _clearRenderQ(); res.innerHTML='';
   let list=_results, hid=0;
