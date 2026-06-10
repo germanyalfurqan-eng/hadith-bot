@@ -542,7 +542,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v306';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v307';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2780,6 +2780,9 @@ async function loadBookTr(){ if(_bookTrLoaded) return; _bookTrLoaded=true;
     for(const k in j){ if(!_catTr.map[k]) _catTr.map[k]={ru:j[k]}; }
     if(!_catTr._userSet) _catTr.on=true;   // по умолчанию ВКЛ — раз названия уже переведены
   }catch(e){}
+  // ◌ огласовки названий (выверено вручную, 149 риджаль; _bookRow показывает voc вместо голого имени)
+  try{ const r2=await fetch('./book_titles_voc.json'); if(r2.ok){ const v=await r2.json();
+    for(const k in v){ if(!_catTr.map[k]) _catTr.map[k]={}; _catTr.map[k].voc=v[k]; } } }catch(e){}
 }
 // Избранное каталога (id книг, localStorage). Поиск — право человека: это лишь удобная подборка.
 function _catFavs(){ try{ return JSON.parse(localStorage.getItem('cat_favs')||'[]'); }catch(e){ return []; } }
@@ -4111,7 +4114,7 @@ const _NARR_FAMOUS={
  'ахмад ибн ханбал':'احمد بن محمد بن حنبل','шафии':'محمد بن ادريس بن العباس','ибн мубарак':'عبد الله بن المبارك بن واضح',
  'абу ханифа':'النعمان بن ثابت بن زوطي','суфян саури':'سفيان بن سعيد بن مسروق','суфян ибн уяйна':'سفيان بن عيينه',
  'малик':'مالك بن انس بن مالك بن ابي عامر','малик ибн анас':'مالك بن انس بن مالك بن ابي عامر','анас ибн малик':'انس بن مالك بن النضر',
- 'яхя ибн маин':'يحيي بن معين بن عون','муслим':'مسلم بن الحجاج'};   // ⚠️ ключи — в форме _narrFamKey (без ь/ъ, без аль-/ас-)
+ 'яхя ибн маин':'يحيي بن معين بن عون','муслим':'مسلم بن الحجاج','лейс':'الليث بن سعد بن عبد الرحمن','лейс ибн саад':'الليث بن سعد بن عبد الرحمن'};   // ⚠️ ключи — в форме _narrFamKey (без ь/ъ, без аль-/ас-)
 function _narrFamKey(q){ return q.toLowerCase().replace(/ё/g,'е').replace(/[ъь']/g,'').replace(/(^|\s)(аль|эль|ал|ас|аш|ад|аз|ар|ан|ат)-/g,'$1').replace(/-/g,' ').replace(/\s+/g,' ').trim(); }
 function _narrRuMatch(qsk, nws){   // qsk/nws: массивы [strict,loose]; подпоследовательность по loose
   let i=0, strictHits=0, firstHit=-1, lastHit=-1;
@@ -4250,6 +4253,26 @@ async function renderNarrVerdicts(id, host){
     (b.q||[]).forEach(q=>{ h+='<div style="direction:rtl;text-align:right;font-size:14px;line-height:1.75;margin-top:4px">'+esc(q.q)+'…</div>'; });
     if(b.q[0]&&b.q[0].p!=null) h+='<div style="margin-top:3px"><span class="vOpen" data-bid="'+b.i+'" data-pg="'+b.q[0].p+'" style="cursor:pointer;color:var(--link);font-size:11.5px">📖 открыть в книге (стр. '+b.q[0].p+')</span></div>';
     card.innerHTML=h; body.appendChild(card);
+    // 🧠 инструменты на цитате (заявка: перевод+огласовки+пересказ — цитаты были сырым арабским)
+    const qtxt=(b.q||[]).map(q=>q.q).join('\n'); if(!qtxt) return;
+    const tl=document.createElement('div'); tl.style.cssText='display:flex;gap:5px;flex-wrap:wrap;margin-top:5px';
+    const trH=document.createElement('div'); trH.style.cssText='display:none';   // перевод
+    const exH=document.createElement('div'); exH.style.cssText='display:none';   // объяснение
+    const tkH=document.createElement('div'); tkH.style.cssText='display:none';   // огласованный текст
+    const mk=(t,fn)=>{ const x=document.createElement('button'); x.className='mini'; x.textContent=t; x.style.cssText='font-size:11.5px;padding:3px 8px'; x.onclick=fn; return x; };
+    const trB=mk('🧠 Перевод', ()=>{ try{ translateTafsir(qtxt.slice(0,9000), 'narrv'+id+'_'+b.i, id, b.i, trH, trB); }catch(e){} });
+    tl.appendChild(trB);
+    const exB=mk('💬 Объяснить', ()=>{ try{ doExplain('Оценка передатчика в труде риджаля «'+b.b+'»: '+qtxt.slice(0,5000), null, {source:'rijal'+b.i, num:id}, exH, exB); }catch(e){} });
+    tl.appendChild(exB);
+    const tkB=mk('◌ Огласовки', null);
+    tkB.onclick=async()=>{ if(tkB.dataset.shown==='1'){ tkH.style.display='none'; tkB.dataset.shown=''; return; }
+      if(tkH.dataset.done==='1'){ tkH.style.display='block'; tkB.dataset.shown='1'; return; }
+      if(!BACKEND_URL){ toast('Нужен сервер'); return; } tkB.disabled=true; const p=tkB.textContent; tkB.textContent='…';
+      try{ const r=await fetch(BACKEND_URL+'/tashkeel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:qtxt.slice(0,3500),source:'narrv'+id+'_'+b.i,num:0,initData:INITDATA})}); const j=await r.json().catch(()=>({}));
+        if(j&&j.text){ tkH.innerHTML='<div class="ar" style="direction:rtl;text-align:right;font-size:15px;line-height:2.05;border:1px solid var(--border);border-radius:9px;padding:8px;margin-top:5px;white-space:pre-wrap"></div>'; tkH.firstChild.textContent=j.text; tkH.style.display='block'; tkH.dataset.done='1'; tkB.dataset.shown='1'; try{ enableArabusTap(tkH.firstChild); }catch(e){} } else toast('Не удалось');
+      }catch(e){ toast('🔧 сервис'); } tkB.disabled=false; tkB.textContent=p; };
+    tl.appendChild(tkB);
+    card.appendChild(tl); card.appendChild(tkH); card.appendChild(trH); card.appendChild(exH);
   });
   hdr.onclick=()=>{ const op=body.style.display!=='none'; body.style.display=op?'none':'block'; hdr.querySelector('.vTg').textContent=op?'▸':'▾'; };
   sec.appendChild(hdr); sec.appendChild(body); host.appendChild(sec);
