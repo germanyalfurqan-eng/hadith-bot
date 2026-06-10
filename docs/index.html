@@ -157,7 +157,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v248</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v249</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -504,7 +504,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v248';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v249';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1951,6 +1951,43 @@ function openBook(bookId, startPg){
   }
   m.style.display='flex'; _bookLoad();
 }
+// дозагрузка соседней страницы В ТО ЖЕ окно (как в Шамиле: «тахмиль ас-сафха ат-талия/ас-сабика») — читать подряд, не перелистывая
+async function _bookFetchClean(pg){
+  try{ const r=await fetch(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+pg+'&initData='+encodeURIComponent(INITDATA));
+    const j=await r.json().catch(()=>({})); const meta=j.meta||{};
+    const clean=(j.text||'').replace(/<[^>]*>/g,'').replace(/ /g,' ');
+    return {clean, page:(typeof meta.page==='number'?meta.page:null), headings:(meta.headings||[]).filter(Boolean)};
+  }catch(e){ return null; }
+}
+function _bookPageBlock(clean, printedPage, headings){
+  const d=document.createElement('div'); d.className='bookPageExtra'; d.style.cssText='border-top:2px dashed var(--border);margin-top:12px;padding-top:9px';
+  const lbl=document.createElement('div'); lbl.style.cssText='text-align:center;font-size:12px;color:var(--mark);margin-bottom:6px;font-weight:600';
+  lbl.textContent='— '+(printedPage?('страница '+printedPage):'лист')+' —'; d.appendChild(lbl);
+  if(headings&&headings.length){ const hb=document.createElement('div'); hb.style.cssText='direction:rtl;text-align:right;font-size:12px;color:var(--mark);margin-bottom:6px;line-height:1.5'; hb.textContent='📑 '+headings.join(' ‹ '); d.appendChild(hb); }   // главы/разделы этой страницы
+  const tx=document.createElement('div'); tx.style.cssText='direction:rtl;text-align:right'; tx.innerHTML=esc(clean).replace(/\n+/g,'<br>'); d.appendChild(tx);
+  try{ enableArabusTap(tx); if(_arabusOn) tx.style.cursor='pointer'; }catch(e){}
+  return d;
+}
+async function _bookAddNext(){
+  const btn=document.getElementById('bookNextAdd'); const np=(_bookView.lastLeaf||_bookView.pg)+1;
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Загружаю следующую…'; }
+  const res=await _bookFetchClean(np);
+  if(!res||!res.clean){ if(btn){ btn.textContent='— дальше страниц нет —'; } return; }
+  const wrap=document.getElementById('bookExtrasBottom'); if(wrap) wrap.appendChild(_bookPageBlock(res.clean,res.page,res.headings));
+  _bookView.lastLeaf=np; if(btn){ btn.disabled=false; btn.textContent='⬇️ Добавить следующую страницу ниже'; }
+}
+async function _bookAddPrev(){
+  const btn=document.getElementById('bookPrevAdd'); const pp=(_bookView.firstLeaf||_bookView.pg)-1;
+  if(pp<1){ if(btn){ btn.textContent='— это начало книги —'; btn.disabled=true; } return; }
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Загружаю предыдущую…'; }
+  const res=await _bookFetchClean(pp);
+  if(!res||!res.clean){ if(btn){ btn.textContent='— это начало книги —'; btn.disabled=true; } return; }
+  const tEl=document.getElementById('bookText'), wrap=document.getElementById('bookExtrasTop');
+  const h0=tEl?tEl.scrollHeight:0, t0=tEl?tEl.scrollTop:0;
+  if(wrap) wrap.insertBefore(_bookPageBlock(res.clean,res.page,res.headings), wrap.firstChild);   // пред. страница — над текущей
+  if(tEl){ const added=tEl.scrollHeight-h0; tEl.scrollTop=t0+added; }   // не дёргать позицию чтения
+  _bookView.firstLeaf=pp; if(btn){ btn.disabled=(pp<=1); btn.textContent=(pp<=1)?'— это начало книги —':'⬆️ Добавить предыдущую страницу выше'; }
+}
 async function _bookLoad(){
   const m=document.getElementById('bookModal'); if(!m) return;
   const tEl=m.querySelector('#bookText'), navEl=m.querySelector('#bookNav'), ttl=m.querySelector('#bookTitle');
@@ -1974,7 +2011,17 @@ async function _bookLoad(){
     const _hd=(meta.headings||[]).filter(Boolean); crumb.innerHTML=_hd.length?('📑 '+_hd.map(h=>esc(h)).join(' ‹ ')):''; crumb.style.display=_hd.length?'block':'none';
     if(!j.text){ tEl.innerHTML='<span class="hint">Страница пуста. Полистай ← / → или введи другой номер.</span>'; }
     else { const clean=(j.text||'').replace(/<[^>]*>/g,'').replace(/ /g,' ');   // убрать turath-теги <span…> (мусор)
-      tEl.dataset.txt=clean; tEl.innerHTML=esc(clean).replace(/\n+/g,'<br>'); try{ enableArabusTap(tEl); if(_arabusOn) tEl.style.cursor='pointer'; }catch(e){} }
+      _bookView.firstLeaf=_bookView.pg; _bookView.lastLeaf=_bookView.pg;   // диапазон загруженных листов (для «добавить страницу»)
+      tEl.dataset.txt=clean;
+      // как в Шамиле: [⬆️ добавить пред.] [пред.] [ТЕКУЩАЯ] [след.] [⬇️ добавить след.] — читать подряд, не перелистывая
+      const _addBtnCss='display:block;width:100%;box-sizing:border-box;padding:9px;border:1px dashed var(--btn);background:transparent;color:var(--link);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer';
+      tEl.innerHTML='<button id="bookPrevAdd" style="'+_addBtnCss+';margin:0 0 8px">⬆️ Добавить предыдущую страницу выше</button>'
+        +'<div id="bookExtrasTop"></div><div id="bookMain" style="direction:rtl;text-align:right"></div><div id="bookExtrasBottom"></div>'
+        +'<button id="bookNextAdd" style="'+_addBtnCss+';margin:8px 0 0">⬇️ Добавить следующую страницу ниже</button>';
+      const mainEl=tEl.querySelector('#bookMain'); mainEl.innerHTML=esc(clean).replace(/\n+/g,'<br>');
+      try{ enableArabusTap(mainEl); if(_arabusOn) mainEl.style.cursor='pointer'; }catch(e){}
+      const _pAdd=tEl.querySelector('#bookPrevAdd'); if(_pAdd){ if(_bookView.pg<=1) _pAdd.style.display='none'; _pAdd.onclick=_bookAddPrev; }
+      const _nAdd=tEl.querySelector('#bookNextAdd'); if(_nAdd) _nAdd.onclick=_bookAddNext; }
     navEl.innerHTML=''; navEl.style.flexDirection='column'; navEl.style.gap='7px';
     const mk=(t,fn,dis)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=t; if(dis) b.disabled=true; b.onclick=fn; return b; };
     // ── РЯД 1: понятная навигация (LTR, привычные стрелки: ◀ назад, вперёд ▶) + отдельная строка «где я»
@@ -2002,9 +2049,9 @@ async function _bookLoad(){
     const r2=document.createElement('div'); r2.style.cssText='display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap';
     // 🔎 поиск по странице (подсветка совпадений в загруженном тексте)
     const fnd=document.createElement('input'); fnd.type='search'; fnd.placeholder='🔎 найти на странице'; fnd.style.cssText='width:168px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:13px;direction:ltr;text-align:right';
-    const doFind=(q)=>{ const clean=tEl.dataset.txt||''; const qf=(q||'').trim();
+    const doFind=(q)=>{ const me=tEl.querySelector('#bookMain')||tEl; const clean=tEl.dataset.txt||''; const qf=(q||'').trim();
       let html=qf ? esc(clean).split(esc(qf)).join('<mark>'+esc(qf)+'</mark>') : esc(clean);
-      tEl.innerHTML=html.replace(/\n+/g,'<br>'); try{ enableArabusTap(tEl); if(_arabusOn) tEl.style.cursor='pointer'; }catch(e){} const f=tEl.querySelector('mark'); if(f) try{ f.scrollIntoView({block:'center'}); }catch(e){} };
+      me.innerHTML=html.replace(/\n+/g,'<br>'); try{ enableArabusTap(me); if(_arabusOn) me.style.cursor='pointer'; }catch(e){} const f=me.querySelector('mark'); if(f) try{ f.scrollIntoView({block:'center'}); }catch(e){} };
     fnd.addEventListener('keydown',e=>{ if(e.key==='Enter') doFind(fnd.value); });
     fnd.addEventListener('search',()=>doFind(fnd.value));
     r2.appendChild(fnd);
@@ -2037,15 +2084,16 @@ async function _bookLoad(){
     // ◌ Огласовки (ИИ): расставляем В ТОМ ЖЕ тексте (не отдельным мелким блоком), тем же шрифтом; повторно — вернуть
     const tkb=document.createElement('button'); tkb.className='mini'; tkb.textContent='◌ Огласовки (ИИ)'; tkb.title='ИИ расставит огласовки تشكيل прямо в тексте страницы';
     tkb.onclick=async()=>{
-      if(tEl.dataset.voc==='1'){ tEl.innerHTML=esc(tEl.dataset.txt||'').replace(/\n+/g,'<br>'); tEl.dataset.voc=''; tkb.textContent='◌ Огласовки (ИИ)'; try{ enableArabusTap(tEl); }catch(e){} return; }
+      const me=tEl.querySelector('#bookMain')||tEl;
+      if(tEl.dataset.voc==='1'){ me.innerHTML=esc(tEl.dataset.txt||'').replace(/\n+/g,'<br>'); tEl.dataset.voc=''; tkb.textContent='◌ Огласовки (ИИ)'; try{ enableArabusTap(me); }catch(e){} return; }
       if(!BACKEND_URL){ toast('Нужен сервер'); return; }
-      const txt=tEl.dataset.txt||tEl.textContent||''; tkb.disabled=true; const p=tkb.textContent; tkb.textContent='…';
+      const txt=tEl.dataset.txt||me.textContent||''; tkb.disabled=true; const p=tkb.textContent; tkb.textContent='…';
       try{ const r=await fetch(BACKEND_URL+'/tashkeel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:txt.slice(0,3500),source:_bref.source,num:_bref.num,initData:INITDATA})});
         const j=await r.json().catch(()=>({}));
         if(r.status===429){ toast((j&&j.message)||'Лимит ИИ — подожди'); }
         else if(r.status===403){ toast((j&&j.message)||'Огласовки пока не для всех'); }
         else if(j&&j.text){ const warn='<div style="color:#ffb74d;font-size:12px;margin-bottom:6px;direction:rtl">⚠️ Огласовки расставил ИИ — возможны ошибки (не от автора).</div>';
-          tEl.innerHTML=warn+esc(j.text).replace(/\n+/g,'<br>'); tEl.dataset.voc='1'; tkb.textContent='◌ Без огласовок'; try{ enableArabusTap(tEl); }catch(e){} }
+          me.innerHTML=warn+esc(j.text).replace(/\n+/g,'<br>'); tEl.dataset.voc='1'; tkb.textContent='◌ Без огласовок'; try{ enableArabusTap(me); }catch(e){} }
         else toast('Не удалось расставить'); }
       catch(e){ toast('🔧 Сервис недоступен'); }
       tkb.disabled=false; if(tkb.textContent==='…') tkb.textContent=p;
