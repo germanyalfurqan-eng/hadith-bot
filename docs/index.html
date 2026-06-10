@@ -163,7 +163,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v272</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v273</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -513,7 +513,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v272';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v273';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1108,23 +1108,38 @@ function updateTranslitSugg(){
 }
 document.getElementById('q').addEventListener('input', updateTranslitSugg);
 // #19: подсказка КНИГ Мактабы прямо при вводе (ввёл طب / الطبراني → предлагает открыть книгу/сборник)
-let _bsT;
+let _bsT, _bsCollapsed=false, _bsClosedQ='', _bsLastHits=[], _bsLastV='';
+// подсказки КНИГ по названию (#bookSugg): сворачиваемо + понятная подпись (это КНИГИ с таким названием, не хадисы); авто-сворачивание при поиске
+function _renderBookSugg(hits, v){
+  const box=document.getElementById('bookSugg'); if(!box) return;
+  _bsLastHits=hits; _bsLastV=v;
+  box.style.display='flex'; box.innerHTML='';
+  const n=hits.length;
+  const hdr=document.createElement('span'); hdr.className='chip'; hdr.style.cssText='cursor:pointer;font-size:12px;color:#bcd0ff;border:1px solid var(--btn);background:rgba(108,92,231,.12);font-weight:600';
+  hdr.innerHTML='📚 Книги с таким названием ('+n+') '+(_bsCollapsed?'▸ показать':'▾ свернуть');
+  hdr.title='Это КНИГИ, у которых такое название (не сами хадисы). Нажми — свернуть/развернуть.';
+  hdr.onclick=()=>{ _bsCollapsed=!_bsCollapsed; _renderBookSugg(hits, v); };
+  box.appendChild(hdr);
+  if(_bsCollapsed) return;   // свёрнуто — показываем только заголовок-пилюлю (ясно, что это и что свёрнуто)
+  hits.slice(0,4).forEach(b=>{ const c=document.createElement('span'); c.className='chip'; c.style.cssText='cursor:pointer;direction:rtl;font-size:13px'; c.textContent=b.n; c.title=(b.a||'')+(b.c?(' · '+b.c):''); c.onclick=()=>{ box.style.display='none'; openBook(b.i); }; box.appendChild(c); });
+  if(n>4){ const more=document.createElement('span'); more.className='chip'; more.style.cssText='cursor:pointer;font-size:12px;color:var(--link)'; more.textContent='+'+(n-4)+' в Мактабе'; more.title='Ещё '+(n-4)+' книг с таким названием — откроется каталог Мактабы с этим запросом'; more.onclick=()=>{ box.style.display='none'; openCatalog(); setTimeout(()=>{ const s=document.querySelector('#catModal #catSearch'); if(s){ s.value=v; const mm=document.getElementById('catModal'); if(mm&&mm._render) mm._render(); } },180); }; box.appendChild(more); }
+  const x=document.createElement('span'); x.className='chip'; x.style.cssText='cursor:pointer;font-size:12px;color:var(--hint)'; x.textContent='✕'; x.title='Скрыть эти подсказки книг'; x.onclick=()=>{ _bsClosedQ=v; box.style.display='none'; box.innerHTML=''; }; box.appendChild(x);
+}
+function collapseBookSugg(){ _bsCollapsed=true; const box=document.getElementById('bookSugg'); if(box && box.style.display!=='none' && _bsLastHits.length){ _renderBookSugg(_bsLastHits, _bsLastV); } }   // ставим флаг безусловно — отложенный рендер тоже свернётся
 function updateBookSugg(){
   const box=document.getElementById('bookSugg'); if(!box) return;
   const v=(document.getElementById('q').value||'').trim();
   if(tab!=='hadith' || v.length<2 || v.length>22 || !isArabic(v)){ box.style.display='none'; box.innerHTML=''; return; }
+  _bsCollapsed=false;   // при наборе — развёрнуто (свернётся при нажатии «Найти»)
   clearTimeout(_bsT);
   _bsT=setTimeout(async()=>{
     if(((document.getElementById('q').value||'').trim())!==v) return;
     let cat; try{ cat=await loadCatalog(); }catch(e){ return; }
     if(!cat || ((document.getElementById('q').value||'').trim())!==v) return;
-    const cq=canon(v); if(!cq) { box.style.display='none'; return; }
+    const cq=canon(v); if(!cq){ box.style.display='none'; return; }
     const hits=cat.filter(b=>{ const nm=canon(b.n||''),au=canon(b.a||''); return nm.indexOf(cq)!==-1||au.indexOf(cq)!==-1; });
-    if(!hits.length){ box.style.display='none'; box.innerHTML=''; return; }
-    box.style.display='flex'; box.innerHTML='';
-    const cap=document.createElement('span'); cap.textContent='📚 Открыть книгу:'; cap.style.cssText='font-size:12px;color:var(--hint);margin-inline-end:2px'; box.appendChild(cap);
-    hits.slice(0,4).forEach(b=>{ const c=document.createElement('span'); c.className='chip'; c.style.cssText='cursor:pointer;direction:rtl;font-size:13px'; c.textContent=b.n; c.title=(b.a||'')+(b.c?(' · '+b.c):''); c.onclick=()=>{ box.style.display='none'; openBook(b.i); }; box.appendChild(c); });
-    if(hits.length>4){ const more=document.createElement('span'); more.className='chip'; more.style.cssText='cursor:pointer;font-size:12px;color:var(--link)'; more.textContent='+'+(hits.length-4)+' в Мактабе'; more.onclick=()=>{ box.style.display='none'; openCatalog(); setTimeout(()=>{ const s=document.querySelector('#catModal #catSearch'); if(s){ s.value=v; const mm=document.getElementById('catModal'); if(mm&&mm._render) mm._render(); } },180); }; box.appendChild(more); }
+    if(!hits.length || _bsClosedQ===v){ box.style.display='none'; box.innerHTML=''; return; }
+    _renderBookSugg(hits, v);
   }, 240);
 }
 document.getElementById('q').addEventListener('input', updateBookSugg);
@@ -4822,7 +4837,7 @@ let toastT; function toast(t){const el=document.getElementById('toast');el.textC
   clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2800);}
 
 /* ===================== СТАРТ ===================== */
-document.getElementById('goBtn').onclick=()=>{ hap('medium'); Promise.resolve(runSearch(true)).then(()=>{ try{ hap((_results&&_results.length)?'ok':'err'); }catch(e){} }); };
+document.getElementById('goBtn').onclick=()=>{ hap('medium'); try{collapseBookSugg();}catch(e){} Promise.resolve(runSearch(true)).then(()=>{ try{ hap((_results&&_results.length)?'ok':'err'); }catch(e){} }); };   // «Найти» → авто-свернуть подсказки книг
 // M254: кнопка «↩ Назад» — вернуть предыдущий распознанный запрос
 (function(){ var qb=document.getElementById('qBack'); if(qb) qb.onclick=()=>{ try{ hap('light'); }catch(e){} qBack(); }; })();
 // M254: кнопка очистки поиска ✕
@@ -4831,7 +4846,7 @@ document.getElementById('goBtn').onclick=()=>{ hap('medium'); Promise.resolve(ru
   qc.onclick=()=>{ qi.value=''; upd(); var r=document.getElementById('res'); if(r) r.innerHTML=''; try{setStatus('');}catch(e){}
     var tl=document.getElementById('tlSugg'); if(tl){tl.style.display='none';tl.innerHTML='';} var qh=document.getElementById('qHelper'); if(qh) qh.style.display='none'; qi.focus(); }; })();
 (function(){ let t; const el=document.getElementById('q');
-  el.addEventListener('keydown',e=>{ if(e.key==='Enter'){ clearTimeout(t); runSearch(true); } });
+  el.addEventListener('keydown',e=>{ if(e.key==='Enter'){ clearTimeout(t); try{collapseBookSugg();}catch(e){} runSearch(true); } });   // Enter → авто-свернуть подсказки книг
   el.addEventListener('input',()=>{ clearTimeout(t); const v=el.value.trim();
     if(v.length<2){ if(!v){document.getElementById('res').innerHTML='';setStatus('');} return; }
     if(modes.ai) return;   // режим «По смыслу (ИИ)»: НЕ дёргать ИИ на каждую букву (тратит ключ) — только по «Найти»/Enter
