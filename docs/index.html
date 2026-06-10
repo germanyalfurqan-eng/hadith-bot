@@ -163,7 +163,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v265</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v266</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -512,7 +512,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v265';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v266';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2636,6 +2636,23 @@ function _matchSource(cat, src){ const ak=_dial(src.author_key), tk=_dial(src.ti
     let sc=0; if(tk && nm.indexOf(tk)!==-1) sc+=4; tkw.forEach(w=>{ if(nm.indexOf(w)!==-1) sc++; });
     if(sc>bestScore){ bestScore=sc; best=b; } }
   return bestScore>=1?best:null; }
+// ⭐ Приоритет-сортировка ОБЗОРА раздела (поток №7): major-сборники сверху, обскурные — ниже в исходном порядке.
+let _firstSrcRank=null;   // bookId → ранг в каноническом ряду 39 первоисточников (0=Бухари, 1=Муслим…); строится 1 раз
+async function _ensureFirstSrcRank(cat){ if(_firstSrcRank) return _firstSrcRank;
+  const m={}; try{ const src=await loadFirstSrc(); src.forEach((s,i)=>{ const b=_matchSource(cat,s); if(b && m[String(b.i)]==null) m[String(b.i)]=i; }); }catch(e){}
+  _firstSrcRank=m; return m; }
+const _PRIO_FAM=['الطبراني','الحاكم','البيهقي','الدارقطني','عبد الرزاق','الطحاوي','ابو نعيم','ابن ابي الدنيا'];  // знаменитые вторичные сборники (по автору; короткие/общие нисбы НЕ брать — ложные совпадения)
+const _PRIO_TYPE=['صحيح','سنن','مسند','مصنف','معجم','مستدرك','موطا','جامع'];   // канонический тип-труд в начале названия
+const _PRIO_DERIV=['مختصر','مختاره','زوائد','اطراف','فهرس','تخريج','زهر','رباعيات','ثمانيات','جزء','اربعون','الاربعين','منتقي'];  // производные/выборки — вниз
+function _wAl(x){ return (x||'').replace(/^ال/,''); }   // снять артикль ال у слова
+function _browsePrio(b){ const id=String(b.i);
+  if(_firstSrcRank && _firstSrcRank[id]!=null) return 2000 - _firstSrcRank[id];   // 39 первоисточников — наверх в каноническом порядке
+  const nm=canon(b.n||''), au=canon(b.a||''); const first=_wAl((nm.split(' ')[0]||''));
+  let s=0; const typeHit=_PRIO_TYPE.indexOf(first)!==-1; const famHit=_PRIO_FAM.some(f=>au.indexOf(canon(f))!==-1);
+  if(famHit&&typeHit) s=900; else if(famHit) s=700; else if(typeHit) s=500;
+  if(_PRIO_DERIV.some(d=>first===_wAl(canon(d)))) s-=300;   // مختصر/زوائد/جزء… — производные ниже
+  return s; }
+function _sortBrowse(arr){ return arr.map((b,i)=>[b,i]).sort((x,y)=>(_browsePrio(y[0])-_browsePrio(x[0]))||(x[1]-y[1])).map(o=>o[0]); }
 // описание книги (ИИ) + ссылки на Википедию (накопление на сервере)
 async function _bookInfo(b,out,btn){
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }
@@ -2977,11 +2994,12 @@ async function openCatalog(){
     }
     const render=async()=>{ const qc=m.querySelector('#catCat').value; let arr=cat; let headPrefix='';
       const ql=(m.querySelector('#catSearch').value||'').toLowerCase().trim();
+      try{ await _ensureFirstSrcRank(cat); }catch(e){}   // ранги 39 первоисточников (1 раз, кэш) — для приоритет-сортировки обзора/поиска
       if(qc==='__fav__'){ const fv=_catFavs(); arr=cat.filter(b=>fv.indexOf(String(b.i))!==-1); headPrefix='⭐ Избранное · '; }
       else if(qc==='__first40__'){ const src=await loadFirstSrc(); const seen={}; const list40=[];
         src.forEach(s=>{ const b=_matchSource(cat,s); if(b && !seen[b.i]){ seen[b.i]=1; b.__srcRu=s.ru; list40.push(b); } });
         arr=list40; headPrefix='📜 Первоисточники · '; }
-      else if(qc){ arr=arr.filter(b=>b.c===qc); }
+      else if(qc){ arr=arr.filter(b=>b.c===qc); if(!ql){ arr=_sortBrowse(arr); headPrefix='⭐ Важные сборники сверху · '; } }   // поток №7: при обзоре раздела major-сборники наверх
       else if(!ql){   // ДЕФОЛТ (пустой поиск + «все разделы») → 40 первоисточников хадисов
         const src=await loadFirstSrc(); const seen={}; const list40=[];
         src.forEach(s=>{ const b=_matchSource(cat,s); if(b && !seen[b.i]){ seen[b.i]=1; b.__srcRu=s.ru; list40.push(b); } });
@@ -2993,7 +3011,9 @@ async function openCatalog(){
         const score=b=>{ const nm=canon(b.n||''), au=canon(b.a||''); let s=0;
           if(nm.indexOf(cq)!==-1) s+=10; if(nm.indexOf(cq)===0) s+=5;
           words.forEach(w=>{ if(nm.indexOf(w)!==-1) s+=3; if(au.indexOf(w)!==-1) s+=1; });
-          if(au.indexOf(cq)!==-1) s+=2; return s; };
+          if(au.indexOf(cq)!==-1) s+=2;
+          const pr=_browsePrio(b); if(pr>=1900) s+=6; else if(pr>0) s+=2;   // тай-брейк: major-сборники чуть выше при равной текстовой релевантности
+          return s; };
         arr=arr.map(b=>({b,s:score(b)})).sort((x,y)=>y.s-x.s).map(o=>o.b);
       }
       showList(arr, headPrefix+'найдено: '+arr.length+(arr.length>200?' (первые 200)':''), !!(ql||qc));
