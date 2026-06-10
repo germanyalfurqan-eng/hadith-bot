@@ -165,7 +165,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=1" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v281</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v282</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -528,7 +528,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v281';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v282';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3267,7 +3267,9 @@ function _qrPlay(s, a){ _qrWordStop();
   // переиспользуем ПРЕДЗАГРУЖЕННЫЙ аят (если он уже подгружен) → без спиннера-загрузки на переходе
   let au; try{ if(window._qrPre && window._qrPre.src===u){ au=window._qrPre; window._qrPre=null; } }catch(e){}
   if(!au) au=new Audio(u);
-  try{au.setAttribute('playsinline','');}catch(e){} window._qrAudio=au; window._qrCur={s:s,a:a}; window._qrNow={s:s,a:a,mode:'ayah'}; window._qrStopped=false; try{_miniSync();}catch(e){}
+  try{au.setAttribute('playsinline','');}catch(e){}
+  try{ au.preservesPitch=true; au.mozPreservesPitch=true; au.webkitPreservesPitch=true; au.playbackRate=cfg.qrRate||1; }catch(e){}   // скорость чтеца без искажения голоса
+  window._qrAudio=au; window._qrCur={s:s,a:a}; window._qrNow={s:s,a:a,mode:'ayah'}; window._qrStopped=false; try{_miniSync();}catch(e){}
   // ПЛАВНАЯ пословная подсветка по длительности аята (Худайфи и любой everyayah — без внешних таймкодов)
   let _qw=[], _ends=[], _cw=-1;
   const _buildWT=()=>{ try{ if(!blk||cfg.wordTap===false||cfg.qrHl===false) return; _qw=[...blk.querySelectorAll('.qw')]; const dur=au.duration||0; if(!dur||!_qw.length){_qw=[];return;}
@@ -3440,6 +3442,16 @@ async function _qrLoad(){
       else if(now && window._qrAudio && !window._qrAudio.paused){ const ws=now.s, wa=now.a; try{window._qrAudio.onended=null;window._qrAudio.pause();}catch(e){} _qrPlay(ws, wa); }
     }catch(e){} };
   rrow.appendChild(rs); sp.appendChild(rrow);
+  // ⏩ скорость чтеца (preservesPitch — голос не «пищит»). Замечание: ±1.5x (или 1.25x если 1.5 искажает).
+  const sprow=document.createElement('div'); sprow.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:9px;flex-wrap:wrap'; sprow.innerHTML='<span style="font-size:13px;color:var(--hint)">⏩ Скорость:</span>';
+  [['0.75','0.75×'],['1','1× обычно'],['1.25','1.25×'],['1.5','1.5×']].forEach(r=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=r[1];
+    const on=(String(cfg.qrRate||1)===r[0]); b.style.cssText='border:1px solid '+(on?'#2e9b5b':'var(--border)')+';color:'+(on?'#bff5d4':'var(--text)')+';background:'+(on?'#173d30':'transparent')+';padding:7px 11px;border-radius:9px;font-size:13px;cursor:pointer';
+    b.onclick=()=>{ cfg.qrRate=parseFloat(r[0]); saveCfg(cfg);
+      try{ if(window._qrAudio){ window._qrAudio.preservesPitch=true; window._qrAudio.mozPreservesPitch=true; window._qrAudio.webkitPreservesPitch=true; window._qrAudio.playbackRate=cfg.qrRate; } }catch(e){}
+      sprow.querySelectorAll('button').forEach(x=>{ x.style.borderColor='var(--border)'; x.style.color='var(--text)'; x.style.background='transparent'; });
+      b.style.borderColor='#2e9b5b'; b.style.color='#bff5d4'; b.style.background='#173d30'; toast('Скорость чтения: '+r[1]); };
+    sprow.appendChild(b); });
+  sp.appendChild(sprow);
   // 📖 ЧТЕНИЕ ПО СЛОВАМ — отдельные записи каждого слова (quran.com). ДВА режима:
   //   • тап по слову = озвучить ТОЛЬКО это слово;  • ▶ подряд = читает все слова по очереди сам.
   const wbWrap=document.createElement('div'); wbWrap.style.cssText='border:1px solid #6c5ce7;background:#2e1d4a;border-radius:10px;padding:9px;margin-bottom:9px';
