@@ -4356,8 +4356,8 @@ async def _setup(application):
         asyncio.create_task(_api_serve(application))
     except Exception as e:
         print("api start failed:", e)
+    note = ""
     try:
-        note = ""
         try:
             rr = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_note.txt",
                               headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
@@ -4365,23 +4365,35 @@ async def _setup(application):
                 note = base64.b64decode(rr.json().get("content", "")).decode("utf-8").strip()
         except Exception:
             pass
-        msg = "#деплой ✅ *Обновление готово!*\n" + (note if note else "Бот снова в эфире.")
-        await application.bot.send_message(LOG_CHAT_ID, msg, parse_mode="Markdown")
-    except Exception:
-        pass
-    # Публичный канал приложения (@muslimoonapp): постим обновление, НО только если note НОВЫЙ
-    # (защита от спама при частых рестартах Railway — сравниваем с последним опубликованным).
-    try:
+        j = _journal_load()
+        # LOG #деплой — ДЕДУП: при ПОВТОРНЫХ рестартах (частые пуши/пересборки) не дублируем один и тот же деплой.
+        if note and note == (j.get("log_deploy") or {}).get("note", ""):
+            pass   # этот деплой уже отмечен в LOG — молчим
+        else:
+            try:
+                msg = "#деплой ✅ *Обновление готово!*\n" + (note if note else "Бот снова в эфире.")
+                await application.bot.send_message(LOG_CHAT_ID, msg, parse_mode="Markdown")
+            except Exception:
+                pass
+            if note:
+                j["log_deploy"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+                _journal_save("log_deploy дедуп")
+        # Публичный канал @muslimoonapp: постим, только если note НОВЫЙ. Ошибку — В LOG (чтобы видеть, ПОЧЕМУ молчит).
         if note:
-            j = _journal_load()
             last = (j.get("app_post") or {}).get("note", "")
             if note != last:
-                body = (note + "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot/app\n🤖 Бот: https://t.me/muslimoontt_bot")
-                await application.bot.send_message(APP_CHANNEL_ID, body, disable_web_page_preview=True)
-                j["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
-                _journal_save("app_post → канал приложения")
+                try:
+                    body = (note + "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot/app\n🤖 Бот: https://t.me/muslimoontt_bot")
+                    await application.bot.send_message(APP_CHANNEL_ID, body, disable_web_page_preview=True)
+                    j["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+                    _journal_save("app_post → канал приложения")
+                except Exception as e:
+                    try:
+                        await application.bot.send_message(LOG_CHAT_ID, f"⚠️ Не смог запостить обновление в @muslimoonapp (APP_CHANNEL_ID={APP_CHANNEL_ID}): {e}\nПроверь: бот добавлен АДМИНОМ канала с правом «Публикация сообщений»?")
+                    except Exception:
+                        pass
     except Exception as e:
-        print("app channel post failed:", e)
+        print("deploy notify block failed:", e)
     # Авто-вотчер канала @muslimoonapp: фронт-деплои (GitHub Pages) НЕ рестартят Railway,
     # поэтому стартовый пост выше срабатывает ТОЛЬКО при редеплое бэкенда. Эта фоновая
     # задача каждые 5 мин сама читает КОРНЕВОЙ update_note.txt из репозитория и постит в
