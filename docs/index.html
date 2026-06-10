@@ -163,7 +163,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v266</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v267</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -512,7 +512,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v266';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v267';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2615,7 +2615,7 @@ function _catFavDefaults(m, cat){
   ].filter(d=>hid.indexOf(d.k)===-1);
   if(!defs.length) return;
   const box=document.createElement('div'); box.style.cssText='border:1px solid #a8862e;border-radius:10px;padding:9px;margin:6px 0 10px;background:rgba(168,134,46,.08)';
-  box.innerHTML='<div style="font-weight:700;color:#ffd75e;font-size:13px;margin-bottom:5px">⭐ Подборка по умолчанию (можно убрать):</div>';
+  box.innerHTML='';   // без подписи (владелец: «толковый и так поймёт, что это заводская подборка»)
   defs.forEach(d=>{ const it=document.createElement('div'); it.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid var(--border)';
     const a=document.createElement('div'); a.style.cssText='flex:1;font-size:14px;'+(d.open?'color:var(--link);cursor:pointer':'color:var(--text)');
     a.innerHTML=esc(d.ru)+(d.soon?' <span style="color:var(--hint);font-size:11px">(скоро)</span>':'')+(d.miss?' <span style="color:var(--hint);font-size:11px">(не найдена в каталоге)</span>':'');
@@ -2934,7 +2934,7 @@ async function openCatalog(){
      +'<select id="catCat" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 9px;font-size:15px;margin-bottom:8px"><option value="" selected>— все разделы —</option><option value="__first40__">📜 Первоисточники хадисов</option><option value="__fav__">⭐ Моё избранное</option>'+cats.map(c=>'<option value="'+esc(c)+'">'+esc(catLabel(c))+'</option>').join('')+'</select>'
      +'<div style="display:flex;gap:6px;margin-bottom:6px"><button class="mini" id="catAi" style="flex:1.6;background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:9px 11px;font-size:14px">🧠 Умный поиск книги (ИИ)</button><button class="mini" id="catFavBtn" style="flex:1;border:1px solid #a8862e;color:#ffd75e;background:transparent;padding:9px 11px;font-size:14px">⭐ Избранное</button></div>'
      +'<div class="hint" id="catAiHint" style="font-size:11px;color:var(--hint);margin:-2px 0 8px">Опиши своими словами: «ибн каим», «альбани», «недуги сердца ибн каим» — ИИ найдёт. По умолчанию ниже — первоисточники хадисов.</div>'
-     +'<div id="catList" style="max-height:50vh;overflow:auto"></div></div>';
+     +'<div id="catList" style="max-height:52vh;overflow:auto;border:1px solid var(--border);border-radius:12px;padding:6px 10px;background:rgba(255,255,255,.02);-webkit-overflow-scrolling:touch"></div></div>';
     document.body.appendChild(m);
     m.querySelector('#catClose').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
@@ -2945,11 +2945,14 @@ async function openCatalog(){
       const arName=(tr&&tr.voc)?tr.voc:b.n;
       const wk=(window._wikiT && window._wikiT[String(b.i)])||null;   // канон. имя из Википедии + ссылка (выверено; ru→en→ar)
       const _wkName=wk?(wk.name||wk.ru||''):''; const _wkLang=wk?(wk.lang||'ru'):'';
-      const _wkWord=_wkLang==='ar'?'ويكيبيديا':(_wkLang==='en'?'Wikipedia':'Википедия');
-      const _wkMark=_wkLang==='en'?' <span title="Статья в английской Википедии" style="font-size:9px;font-weight:700;color:#9ec3ff;border:1px solid #4a6da0;border-radius:3px;padding:0 3px">EN</span>':(_wkLang==='ar'?' <span title="Статья в арабской Википедии" style="font-size:9px;font-weight:700;color:#7fe3bf;border:1px solid #2e7d5a;border-radius:3px;padding:0 3px">AR</span>':'');
+      // Википедия: слово ВСЕГДА по-русски + лёгкая отметка языка (ar/en) в конце ссылки (как принято в ссылках; ru — без отметки). AR-название НЕ дублируем (оно = арабскому имени книги). RU/EN-имя показываем строкой над чипом.
+      const _wkSuf=(_wkLang==='ru'||!wk)?'':('<span style="font-size:9px;color:var(--hint);font-weight:600;margin-left:3px;letter-spacing:.4px">'+esc(_wkLang)+'</span>');
+      const _wkChip=wk?('<span class="wkLink" data-u="'+esc(wk.url)+'" title="Открыть статью в Википедии" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:2px 8px;background:rgba(255,255,255,.05);white-space:nowrap"><b style="font-family:Georgia,\'Times New Roman\',serif;font-size:13px;line-height:1">W</b> Википедия'+_wkSuf+' ↗</span>'):'';
+      const _wkNameLine=(wk && (_wkLang==='ru'||_wkLang==='en') && _wkName)?('<div style="direction:ltr;text-align:left;font-size:13px;color:#bcd0ff;margin-top:3px">📘 '+esc(_wkName)+'</div>'):'';
       const main=document.createElement('div'); main.style.cssText='cursor:pointer;direction:rtl;text-align:right';
       main.innerHTML='<div style="font-weight:600;color:var(--link);font-size:15px">'+esc(arName)+'</div>'
-        +(wk?('<div style="direction:ltr;text-align:left;font-size:13px;color:#bcd0ff;margin-top:3px;display:flex;align-items:center;gap:7px;flex-wrap:wrap">📘 '+esc(_wkName)+_wkMark+' <span class="wkLink" data-u="'+esc(wk.url)+'" title="Открыть статью в Википедии" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:3px;padding:1px 6px 1px 4px;background:rgba(255,255,255,.05);white-space:nowrap"><b style="font-family:Georgia,\'Times New Roman\',serif;font-size:13px;line-height:1">W</b> '+esc(_wkWord)+' ↗</span></div>')
+        +_wkNameLine
+        +(wk?('<div style="direction:ltr;text-align:left;margin-top:4px">'+_wkChip+'</div>')
             :((tr&&tr.ru)?('<div style="direction:ltr;text-align:left;font-size:13px;color:#bcd0ff;margin-top:2px">'+esc(tr.ru)+'</div>'):''))
         +(b.a?('<div style="font-size:12px;color:var(--hint);margin-top:2px">'+esc(b.a)+(b.c?(' · '+esc(catLabel(b.c).split(' — ')[1]||b.c)):'')+'</div>'):'');
       const _wl=main.querySelector('.wkLink'); if(_wl) _wl.onclick=(e)=>{ e.stopPropagation(); try{ openLink(_wl.dataset.u); }catch(_e){} };
@@ -2967,17 +2970,28 @@ async function openCatalog(){
           else if(!on && ix>=0){ a.splice(ix,1); } saveFav(a); }catch(_e){}
         fav.textContent=on?'⭐ в избранном':'☆ в избранное'; fav.style.color=on?'#ffd75e':''; fav.style.borderColor=on?'#a8862e':''; hap('light'); toast(on?'★ Добавлено — ищи в ⭐ вверху':'Убрано из избранного'); };
       tools.appendChild(info); tools.appendChild(fav); it.appendChild(main); it.appendChild(tools); it.appendChild(iout); return it; };
-    let _lastHead='', _lastSearch=false;
+    let _lastHead='', _lastSearch=false, _catShown=0; const _CAT_PAGE=80;
+    // #3 дорисовать следующую порцию строк (бесконечная подгрузка по всей базе — порциями, оптимально по скорости)
+    const _catAppendRows=()=>{ const list=m.querySelector('#catList'); if(!list) return;
+      const old=list.querySelector('#catMore'); if(old) old.remove();
+      const to=Math.min(_lastArr.length,_catShown+_CAT_PAGE); const frag=document.createDocumentFragment();
+      for(let i=_catShown;i<to;i++) frag.appendChild(_bookRow(_lastArr[i]));
+      list.appendChild(frag); _catShown=to;
+      if(_catShown<_lastArr.length){ const more=document.createElement('div'); more.id='catMore'; more.style.cssText='text-align:center;padding:9px 0';
+        const mb=document.createElement('button'); mb.className='mini'; mb.style.cssText='font-size:13px;padding:8px 16px;border:1px solid var(--btn);color:var(--btn)';
+        mb.textContent='▼ Показать ещё (осталось '+(_lastArr.length-_catShown)+')'; mb.onclick=()=>_catAppendRows();
+        more.appendChild(mb); list.appendChild(more); } };
     const _rebuildRows=()=>{ const list=m.querySelector('#catList'); list.innerHTML='';
       const h=document.createElement('div'); h.className='hint'; h.style.cssText='font-size:12px;margin-bottom:4px'; h.innerHTML=_lastHead; list.appendChild(h);
-      if(_lastSearch){ const tw=document.createElement('div'); tw.style.cssText='margin:2px 0 8px';
+      const _curQc=((m.querySelector('#catCat')||{}).value)||'';
+      if(_lastSearch && _curQc!=='__fav__'){ const tw=document.createElement('div'); tw.style.cssText='margin:2px 0 8px';   // в Избранном перевод не нужен — имена кладутся уже переведёнными
         const tb=document.createElement('button'); tb.className='mini'; tb.id='catTrBtn';
         tb.style.cssText='border:1px solid '+(_catTr.on?'#2e9b5b':'var(--border)')+';color:'+(_catTr.on?'#bff5d4':'var(--text)')+';background:'+(_catTr.on?'#173d30':'transparent')+';padding:6px 11px;font-size:13px';
         tb.textContent=_catTr.on?'🌐 Перевод названий ВКЛ ✓':'🌐 Перевести названия (ИИ) — рус. рядом с книгой';
         tb.onclick=()=>{ _catTr.on=!_catTr.on; if(_catTr.on){ _catTranslateVisible(); } else { _rebuildRows(); } };
         tw.appendChild(tb); list.appendChild(tw); }
-      _lastArr.forEach(b=>list.appendChild(_bookRow(b))); };
-    const showList=(arr,headHtml,isSearch)=>{ _lastArr=arr.slice(0,200); _lastHead=headHtml; _lastSearch=!!isSearch;
+      _catShown=0; _catAppendRows(); };
+    const showList=(arr,headHtml,isSearch)=>{ _lastArr=arr; _lastHead=headHtml; _lastSearch=!!isSearch;
       _rebuildRows();
       if(isSearch && _catTr.on) _catTranslateVisible();
     };
@@ -3003,7 +3017,8 @@ async function openCatalog(){
       else if(!ql){   // ДЕФОЛТ (пустой поиск + «все разделы») → 40 первоисточников хадисов
         const src=await loadFirstSrc(); const seen={}; const list40=[];
         src.forEach(s=>{ const b=_matchSource(cat,s); if(b && !seen[b.i]){ seen[b.i]=1; b.__srcRu=s.ru; list40.push(b); } });
-        arr=list40; headPrefix='📜 Первоисточники хадисов (по умолчанию) · '; }
+        const rest=cat.filter(b=>!seen[b.i]);   // #3: после первоисточников — ВСЯ остальная библиотека (листать вниз, подгрузка порциями)
+        arr=list40.concat(rest); headPrefix='📚 Вся библиотека · сверху первоисточники хадисов · '; }
       if(ql){ const cq=canon(ql);
         arr=arr.filter(b=>((b.n||'').toLowerCase().indexOf(ql)!==-1)||((b.a||'').toLowerCase().indexOf(ql)!==-1)||canon(b.n||'').indexOf(cq)!==-1||canon(b.a||'').indexOf(cq)!==-1);
         // РЕЛЕВАНТНОСТЬ: совпадение в названии важнее автора; все слова в названии — выше
@@ -3016,7 +3031,7 @@ async function openCatalog(){
           return s; };
         arr=arr.map(b=>({b,s:score(b)})).sort((x,y)=>y.s-x.s).map(o=>o.b);
       }
-      showList(arr, headPrefix+'найдено: '+arr.length+(arr.length>200?' (первые 200)':''), !!(ql||qc));
+      showList(arr, headPrefix+'найдено: '+arr.length+(arr.length>_CAT_PAGE?' · листайте вниз':''), !!(ql||qc));
       if(qc==='__fav__'){ try{ _catFavDefaults(m, cat); }catch(e){} }   // подборка по умолчанию сверху
       if(!arr.length){ const list=m.querySelector('#catList');
         if(qc==='__fav__'){ /* пусто — дефолтная подборка уже показана выше */ }
@@ -3029,6 +3044,8 @@ async function openCatalog(){
       else render(); }
     let _ct; m.querySelector('#catSearch').addEventListener('input',()=>{ clearTimeout(_ct); _ct=setTimeout(_onCatInput,250); });
     m.querySelector('#catCat').addEventListener('change',render);
+    // #3 бесконечная подгрузка: у дна списка дорисовываем следующую порцию (оптимально — только когда близко к концу)
+    m.querySelector('#catList').addEventListener('scroll',()=>{ const el=m.querySelector('#catList'); if(_lastArr && _catShown<_lastArr.length && el.scrollTop+el.clientHeight>=el.scrollHeight-140){ _catAppendRows(); } });
     const _cfb=m.querySelector('#catFavBtn'); if(_cfb) _cfb.onclick=()=>{ m.querySelector('#catSearch').value=''; m.querySelector('#catCat').value='__fav__'; render(); };
     // умный ИИ-поиск книги/автора своими словами
     m.querySelector('#catAi').onclick=async()=>{ const inp=m.querySelector('#catSearch'); const q=(inp.value||'').trim();
