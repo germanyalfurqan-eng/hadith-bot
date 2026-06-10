@@ -496,40 +496,23 @@ def parse_audio_meta(text):
     comment = grab(['описани\\w*', 'коммент\\w*', 'desc\\w*', 'comment'])
     return title, artist, comment
 
-# ⚙️ Формула выверена ffmpeg-замерами против Auphonic (10.06.2026): БЕЗ компрессора —
-# он давил LRA (динамику) до 0.9 → звук «каша». Теперь только гул-фильтр + мягкий шумодав,
-# а громкость/пики делает двухпроходный loudnorm (linear). Итог совпал с Auphonic: LRA≈5.5, TP≈-2.4, I=-16.
-_ENH_PRE = ("highpass=f=70,"           # убрать гул/рокот ниже голоса
-            "afftdn=nf=-25:nr=12")     # мягкое FFT-шумоподавление без «подводных» артефактов
-def _loudnorm_measure(input_path):
-    """1-й проход loudnorm: измеряем параметры (для ТОЧНОЙ нормализации во 2-м проходе = студийное качество)."""
-    try:
-        cmd = [_ffmpeg_bin(), "-hide_banner", "-i", input_path, "-af",
-               _ENH_PRE + ",loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json", "-f", "null", "-"]
-        r = subprocess.run(cmd, capture_output=True, timeout=240)
-        err = (r.stderr or b"").decode("utf-8", "ignore")
-        m = re.search(r'\{[^{}]*"input_i"[^{}]*\}', err, re.S)
-        return json.loads(m.group(0)) if m else None
-    except Exception:
-        return None
+# ⚙️ Формула ВЫВЕРЕНА ffmpeg-замерами против эталона «нейро/Auphonic» (10.06.2026, черновик↔нейро):
+#   Цель эталона: I≈-16 LUFS, TP≈-1.5, LRA≈3 (выровненная громкость для долгого прослушивания).
+#   highpass(гул) → afftdn(мягкий шумодав) → acompressor r2.5 (МЯГКИЙ выравниватель: LRA→~3, НЕ давит в кашу
+#   как прежний r4=LRA 0.9) → loudnorm dynamic I=-16:LRA=4 (адаптивно выравнивает) → alimiter.
+#   Итог на лекции: I=-15.8, TP=-1.6, LRA=3.2 (= нейро). На коротком войсе не крушит (LRA 4.1). 192k/44.1k.
+_ENH_PRE = ("highpass=f=70,"
+            "afftdn=nf=-25:nr=10,"
+            "acompressor=threshold=-18dB:ratio=2.5:attack=20:release=250")
 
 def enhance_audio(input_path, output_path, artist="", title="", comment="", enhance=True):
-    """Конвертация (+опц. студийное улучшение «как Auphonic») в mp3 через ffmpeg.
-    Улучшение = ДВА прохода: ① highpass→afftdn(сильный шумодав)→adeclick→компрессор,
-    измеряем громкость; ② loudnorm с ИЗМЕРЕННЫМИ параметрами (linear=true — прозрачно,
-    как студия) → alimiter. 256 kbps / 48 kHz. Теги пишем метаданными."""
+    """Конвертация (+опц. студийное улучшение «как нейро/Auphonic») в mp3 через ffmpeg.
+    Цепочка выверена замерами (см. _ENH_PRE): шумодав + мягкое выравнивание громкости (LRA≈3) +
+    нормализация к -16 LUFS, пик -1.5. Теги пишем метаданными."""
     try:
         cmd = [_ffmpeg_bin(), "-y", "-i", input_path]
         if enhance:
-            meas = _loudnorm_measure(input_path)
-            if meas and meas.get('input_i'):
-                ln = ("loudnorm=I=-16:TP=-1.5:LRA=11:linear=true"
-                      ":measured_I=%s:measured_TP=%s:measured_LRA=%s:measured_thresh=%s:offset=%s"
-                      % (meas.get('input_i'), meas.get('input_tp'), meas.get('input_lra'),
-                         meas.get('input_thresh'), meas.get('target_offset', '0')))
-            else:
-                ln = "loudnorm=I=-16:TP=-1.5:LRA=11"   # фолбэк (1 проход), если измерение не вышло
-            af = _ENH_PRE + "," + ln + ",alimiter=level_in=1:level_out=1:limit=0.98"
+            af = _ENH_PRE + ",loudnorm=I=-16:TP=-1.5:LRA=4,alimiter=level_in=1:level_out=1:limit=0.98"
             cmd += ["-af", af, "-ar", "44100", "-ac", "2", "-b:a", "192k"]
         else:
             cmd += ["-ar", "44100", "-ac", "2", "-b:a", "160k"]
