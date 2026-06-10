@@ -157,7 +157,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v254</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v255</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -507,7 +507,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v254';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v255';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -942,7 +942,7 @@ function cardHadithRu(d){ const card=document.createElement('div');card.classNam
 function hlRu(text,q){ let html=esc(text); const ws=q.toLowerCase().split(/\s+/).filter(w=>w.length>1).sort((a,b)=>b.length-a.length);
   for(const w of ws){ try{ html=html.replace(new RegExp('('+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'%%H%%$1%%E%%'); }catch(e){} }
   return html.split('%%H%%').join('<mark>').split('%%E%%').join('</mark>'); }
-async function loadMuhaymin(){ if(muh)return muh; setStatus('Загружаю аль-Мухаймин…');
+async function loadMuhaymin(silent){ if(muh)return muh; if(!silent) setStatus('Загружаю аль-Мухаймин…');
   const j=await (await fetch(MUHAYMIN_URL)).json();
   muh=j.map(x=>{ const rv=(x.rv||[]).map(r=> typeof r==='string'?{t:r,s:''}:r); const joined=rv.map(r=>r.t).join(' ');
     return {n:x.n,b:x.b,c:x.c,rv:rv,rc:rv.length,text:joined,norm:''}; }); return muh; }
@@ -1977,7 +1977,7 @@ async function _bookAddNext(){
   const res=await _bookFetchClean(np);
   if(!res||!res.clean){ if(btn){ btn.textContent='— дальше страниц нет —'; } return; }
   const wrap=document.getElementById('bookExtrasBottom'); if(wrap) wrap.appendChild(_bookPageBlock(res.clean,res.page,res.headings));
-  _bookView.lastLeaf=np; if(btn){ btn.disabled=false; btn.textContent='⬇️ Добавить следующую страницу ниже'; }
+  _bookView.lastLeaf=np; if(btn){ btn.disabled=false; btn.textContent='⬇️ Показать следующую страницу ниже'; }
 }
 async function _bookAddPrev(){
   const btn=document.getElementById('bookPrevAdd'); const pp=(_bookView.firstLeaf||_bookView.pg)-1;
@@ -1989,7 +1989,7 @@ async function _bookAddPrev(){
   const h0=tEl?tEl.scrollHeight:0, t0=tEl?tEl.scrollTop:0;
   if(wrap) wrap.insertBefore(_bookPageBlock(res.clean,res.page,res.headings), wrap.firstChild);   // пред. страница — над текущей
   if(tEl){ const added=tEl.scrollHeight-h0; tEl.scrollTop=t0+added; }   // не дёргать позицию чтения
-  _bookView.firstLeaf=pp; if(btn){ btn.disabled=(pp<=1); btn.textContent=(pp<=1)?'— это начало книги —':'⬆️ Добавить предыдущую страницу выше'; }
+  _bookView.firstLeaf=pp; if(btn){ btn.disabled=(pp<=1); btn.textContent=(pp<=1)?'— это начало книги —':'⬆️ Показать предыдущую страницу выше'; }
 }
 async function _bookLoad(){
   const m=document.getElementById('bookModal'); if(!m) return;
@@ -2018,9 +2018,9 @@ async function _bookLoad(){
       tEl.dataset.txt=clean;
       // как в Шамиле: [⬆️ добавить пред.] [пред.] [ТЕКУЩАЯ] [след.] [⬇️ добавить след.] — читать подряд, не перелистывая
       const _addBtnCss='display:block;width:100%;box-sizing:border-box;padding:9px;border:1px dashed var(--btn);background:transparent;color:var(--link);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer';
-      tEl.innerHTML='<button id="bookPrevAdd" style="'+_addBtnCss+';margin:0 0 8px">⬆️ Добавить предыдущую страницу выше</button>'
+      tEl.innerHTML='<button id="bookPrevAdd" style="'+_addBtnCss+';margin:0 0 8px">⬆️ Показать предыдущую страницу выше</button>'
         +'<div id="bookExtrasTop"></div><div id="bookMain" style="direction:rtl;text-align:right"></div><div id="bookExtrasBottom"></div>'
-        +'<button id="bookNextAdd" style="'+_addBtnCss+';margin:8px 0 0">⬇️ Добавить следующую страницу ниже</button>';
+        +'<button id="bookNextAdd" style="'+_addBtnCss+';margin:8px 0 0">⬇️ Показать следующую страницу ниже</button>';
       const mainEl=tEl.querySelector('#bookMain'); mainEl.innerHTML=esc(clean).replace(/\n+/g,'<br>');
       try{ enableArabusTap(mainEl); if(_arabusOn) mainEl.style.cursor='pointer'; }catch(e){}
       const _pAdd=tEl.querySelector('#bookPrevAdd'); if(_pAdd){ if(_bookView.pg<=1) _pAdd.style.display='none'; _pAdd.onclick=_bookAddPrev; }
@@ -4696,6 +4696,9 @@ function runDeepLink(){ const g=_deepLinkToken(); if(!g) return; const p=g.split
   }catch(e){} }, 650); }
 try{ runDeepLink(); }catch(e){}
 var _mh=document.getElementById('maktabaTopBtn'); if(_mh) _mh.onclick=()=>{ try{ openCatalog(); }catch(e){} };
+/* Прогрев аль-Мухаймина (8.4МБ) + reverse_index в ФОНЕ на простое — чтобы первый поиск не ждал загрузку (тихо, без статуса). */
+(function(){ const warm=()=>{ try{ loadMuhaymin(true); }catch(e){} try{ if(typeof loadReverse==='function') loadReverse(); }catch(e){} };
+  if('requestIdleCallback' in window){ requestIdleCallback(()=>setTimeout(warm,1000),{timeout:7000}); } else { setTimeout(warm, 3000); } })();
 var _is=document.getElementById('isnadSw'); if(_is){ _is.classList.toggle('on',!!cfg.isnad); _is.onclick=()=>{ cfg.isnad=!cfg.isnad; saveCfg(cfg); _is.classList.toggle('on',!!cfg.isnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _hi=document.getElementById('hideIsnadSw'); if(_hi){ _hi.classList.toggle('on',!!cfg.hideIsnad); _hi.onclick=()=>{ cfg.hideIsnad=!cfg.hideIsnad; saveCfg(cfg); _hi.classList.toggle('on',!!cfg.hideIsnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _ac=document.getElementById('acSw'); if(_ac){ _ac.classList.toggle('on',!!cfg.ac); _ac.onclick=()=>{ cfg.ac=!cfg.ac; saveCfg(cfg); _ac.classList.toggle('on',!!cfg.ac); updateQuranHelper(); }; }
