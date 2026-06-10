@@ -319,7 +319,7 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY") or os.environ.get("GPT_API_KEY
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 # Google Gemini (бесплатный лимит) — запасной/основной мотор для особых задач, если у OpenAI нет денег
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")   # актуальная бесплатная модель (1.5-flash устаревает)
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 OWNER_ID = 131827895
 OWNER_CHANNEL_ID = -1001660979432
