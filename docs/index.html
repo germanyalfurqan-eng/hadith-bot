@@ -165,7 +165,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=1" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v289</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v290</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -312,12 +312,13 @@
 </div>
 <style>
   /* M311: обновление при «домой» — лого мягко разгорается + свет из угла «очищает» экран (не вспышка) */
-  @keyframes logoGlow{ 0%{filter:drop-shadow(0 0 10px rgba(80,160,255,.45)) brightness(1)} 35%{filter:drop-shadow(0 0 24px rgba(150,215,255,.95)) brightness(1.4)} 100%{filter:drop-shadow(0 0 10px rgba(80,160,255,.45)) brightness(1)} }
+  /* --gk = интенсивность свечения (1→0 за 10 нажатий, потом авто-выкл) */
+  @keyframes logoGlow{ 0%{filter:drop-shadow(0 0 10px rgba(80,160,255,.45)) brightness(1)} 35%{filter:drop-shadow(0 0 calc(22px*var(--gk,1)) rgba(150,215,255,.9)) brightness(calc(1 + .4*var(--gk,1)))} 100%{filter:drop-shadow(0 0 10px rgba(80,160,255,.45)) brightness(1)} }
   #brandLogo.refreshing{ animation:logoGlow 1.1s ease-out }
   /* свет из верхнего-левого угла (от лого) проходит по приложению — обновление «светом» */
   #appShine{ position:fixed; inset:0; pointer-events:none; z-index:9998; opacity:0;
     background:radial-gradient(120% 90% at 11% 5%, rgba(160,215,255,.34), rgba(120,190,255,.14) 34%, rgba(120,190,255,0) 62%); }
-  @keyframes appShine{ 0%{opacity:0;transform:scale(.92)} 22%{opacity:.6} 100%{opacity:0;transform:scale(1.04)} }
+  @keyframes appShine{ 0%{opacity:0;transform:scale(.92)} 22%{opacity:calc(.6*var(--gk,1))} 100%{opacity:0;transform:scale(1.04)} }
   #appShine.on{ animation:appShine 1.05s cubic-bezier(.25,.6,.2,1); transform-origin:11% 5%; }
   /* «Ещё» — строки-карточки: вся строка кликабельна, кнопки «Открыть» скрыты, ▸ справа */
   #menuModal .row{ background:var(--card); border:1px solid var(--border); border-radius:12px; padding:13px 14px; margin-bottom:9px; box-shadow:0 1px 5px rgba(0,0,0,.22); transition:transform .12s, background .12s, border-color .12s; gap:8px }
@@ -537,7 +538,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v289';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v290';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4991,12 +4992,19 @@ function _logoHint(){ try{
   clearTimeout(window._logoHintT); window._logoHintT=setTimeout(()=>{ try{b.style.display='none';}catch(e){} }, 6000);
 }catch(e){} }
 function goHome(){
-  try{ if(!cfg.noLogoGlow){   // M311: обновление «светом» (выключаемо в Настройках)
-    var _bl=document.getElementById('brandLogo'); if(_bl){ _bl.classList.remove('refreshing'); void _bl.offsetWidth; _bl.classList.add('refreshing'); setTimeout(()=>{try{_bl.classList.remove('refreshing');}catch(e){}},1150); }
-    var _sh=document.getElementById('appShine'); if(!_sh){ _sh=document.createElement('div'); _sh.id='appShine'; document.body.appendChild(_sh); }
-    _sh.classList.remove('on'); void _sh.offsetWidth; _sh.classList.add('on'); setTimeout(()=>{try{_sh.classList.remove('on');}catch(e){}},1100);
-    hap('light');
-    try{ var _hn=parseInt(localStorage.getItem('mn_logohint')||'0',10); if(_hn<3){ localStorage.setItem('mn_logohint',String(_hn+1)); _logoHint(); } }catch(e){}
+  try{ if(!cfg.noLogoGlow){   // M311: обновление «светом» — плавно гаснет за 10 нажатий, потом авто-выкл (выключаемо в Настройках)
+    var _n=parseInt(localStorage.getItem('mn_glow_n')||'0',10);
+    var _k=Math.max(0,(10-_n)/10);   // интенсивность 1.0 → 0 за 10 нажатий
+    if(_k>0.001){
+      document.body.style.setProperty('--gk', _k.toFixed(2));
+      var _bl=document.getElementById('brandLogo'); if(_bl){ _bl.classList.remove('refreshing'); void _bl.offsetWidth; _bl.classList.add('refreshing'); setTimeout(()=>{try{_bl.classList.remove('refreshing');}catch(e){}},1150); }
+      var _sh=document.getElementById('appShine'); if(!_sh){ _sh=document.createElement('div'); _sh.id='appShine'; document.body.appendChild(_sh); }
+      _sh.classList.remove('on'); void _sh.offsetWidth; _sh.classList.add('on'); setTimeout(()=>{try{_sh.classList.remove('on');}catch(e){}},1100);
+      hap('light');
+      if(_n<3) _logoHint();   // первые 3 раза — подсказка про обновление + кнопка отключить
+    }
+    localStorage.setItem('mn_glow_n', String(_n+1));
+    if(_n+1>=10){ cfg.noLogoGlow=true; saveCfg(cfg); var _sw=document.getElementById('glowSw'); if(_sw) _sw.classList.remove('on'); }   // привыкли — выключаем сами; вернуть в Настройках
   } }catch(e){}
   document.getElementById('q').value=''; selCols.clear(); selExtra.clear(); _qHist=[]; try{_qHistUpd();}catch(e){}
   modes.ai=modes.root=modes.diac=modes.matnonly=modes.neuro=false; groupSrc=false;   // сброс режимов (ИИ и пр.)
