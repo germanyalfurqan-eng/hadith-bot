@@ -165,7 +165,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=1" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v295</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v296</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -538,7 +538,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v295';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v296';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1694,18 +1694,17 @@ async function runSearch(explicit){
     b.style.cssText='display:block;margin:14px 0 6px;cursor:pointer;color:var(--link);border:1px dashed var(--border);border-radius:12px;padding:9px 12px;text-align:center;font-size:13px';
     b.textContent='🌐 Искать по ВСЕЙ библиотеке (~9000 книг) + наши доп. издания';
     // #2a: первоисточники (наши доп. издания) структурируем СРАЗУ после Ахмада — потоково, с прогрессом.
-    const runMore=async()=>{ if(seq!==_seq) return; b.style.pointerEvents='none'; let done=0, _skip=0;
-      for(const code of codes){ if(seq!==_seq) return; done++;
-        b.textContent='📚 Первоисточники: '+arOf(code)+'… '+done+'/'+codes.length+' ('+Math.round(done/codes.length*100)+'%)';
-        try{ const arr=await loadByCode(code); if(seq!==_seq) return; const n0=count;
-          for(const h of arr){ if(docMatch(h,groups,modes)){ _results.push(code==='muhaymin'?{type:'m',h}:{type:'h',code,h}); count++; } }
-          if(count>n0){ groupSrc=true; renderResultsView(); res.appendChild(b); }   // структура продолжается после Ахмада; баннер прогресса возвращаем вниз (renderResultsView чистит res)
-        }catch(e){ _skip++;   // 🛡 книга зависла/не отдалась → пропускаем, не вешаем поиск (ошибка уже в журнале)
-          try{ b.textContent='⚠️ '+arOf(code)+' пропущен ('+((e&&e._timeout)?'долго грузился':'ошибка')+') — иду дальше…'; }catch(_){ } }
-        await new Promise(r=>setTimeout(r,0));
-      }
-      if(seq!==_seq) return; b.remove(); groupSrc=true; renderResultsView();
-      if(_skip>0){ try{ toast('⚠️ Пропущено книг: '+_skip+' (не загрузились — записал в журнал ошибок)'); }catch(_){ } }
+    const runMore=async()=>{ if(seq!==_seq) return; b.style.pointerEvents='none';
+      b.textContent='📚 Загружаю первоисточники ('+codes.length+')…';
+      // ⚡ ПАРАЛЛЕЛЬНО (а не по очереди) — одна медленная книга (Ибн аль-Мубарак) больше НЕ держит остальные.
+      const loaded=await Promise.all(codes.map(code=>loadByCode(code).then(arr=>({code,arr})).catch(e=>({code,arr:null}))));
+      if(seq!==_seq) return;
+      let _skip=0; const n0=count;
+      for(const it of loaded){ if(!it.arr){ _skip++; continue; }
+        for(const h of it.arr){ if(docMatch(h,groups,modes)){ _results.push(it.code==='muhaymin'?{type:'m',h}:{type:'h',code:it.code,h}); count++; } } }
+      if(seq!==_seq) return;
+      b.remove(); if(count>n0){ groupSrc=true; renderResultsView(); }
+      if(_skip>0){ try{ toast('⚠️ '+_skip+' книг(и) не загрузились (медленные) — записал в журнал'); }catch(_){ } }
       // M284: вторую ступень (вся Мактаба turath) НЕ показываем отдельной кнопкой — она ищется АВТОМАТОМ
       // (appendMaktaba в конце runSearch) с фоновой ленивой догрузкой по скроллу (IntersectionObserver в maktabaMoreBtn).
     };
