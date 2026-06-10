@@ -1258,6 +1258,26 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
     text = text.strip()
 
+    # 📥 СКРИН-ЗАЯВКА владельца: фото с подписью «заявка ...»/«замечание ...» → запись с номером + архив в рабочий журнал (LOG)
+    try:
+        if is_owner(update) and update.message.photo and (update.message.caption or "").strip().lower().startswith(("заявка", "замечание")):
+            cap = (update.message.caption or "").strip()
+            body = cap[6:].strip() if cap.lower().startswith("заявка") else cap[9:].strip()
+            dup = req_dup(body) if len(body) >= 6 else None
+            if dup:
+                await update.message.reply_text(f"⚠️ Похоже, ты это уже присылал — заявка №{dup}. Не дублирую.")
+                return
+            rid = req_add(body or "(скрин)", img_flag=True, imgkey=str(update.message.photo[-1].file_id))
+            try:
+                await context.bot.copy_message(LOG_CHAT_ID, update.effective_chat.id, update.message.message_id)
+                await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца №{rid}: {(body or '(скрин)')[:300]}")
+            except Exception:
+                pass
+            await update.message.reply_text(f"📥 Заявка №{rid} со скрином записана ✅. Список — «заявки».")
+            return
+    except Exception:
+        pass
+
     # 🚨 авто-рубильник ИИ (защита баланса DeepSeek): уведомить владельца о срабатывании + команды управления
     global _AI_KILL, _AI_KILL_MANUAL, _AI_KILL_PENDING
     if _AI_KILL_PENDING:
@@ -1405,22 +1425,69 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ans, model = ask_special(q)
             await update.message.reply_text(((ans or "Не удалось получить ответ.") + (f"\n\n— {model}" if model else ""))[:4000])
             return
-        # ===== ЗАКРЕП: сообщение с кнопкой открытия приложения + автозакреп =====
-        if _tl == "закреп" or _tl == "закрепить":
+        # ===== ЗАКРЕП: сообщение с кнопкой открытия приложения + автозакреп. «закреп <свой текст>» = свой текст =====
+        if _tl == "закреп" or _tl == "закрепить" or _tl.startswith("закреп "):
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+            custom = text.strip()[7:].strip() if _tl.startswith("закреп ") else ""
+            body = custom or ("📗 *Muslimoon* — Коран и хадисы 🌙\n🔎 Поиск по хадисам и аятам · 📚 чтение Мактабы (8589 книг) · 👤 передатчики · 📖 тафсир.\n\nЖми кнопку ниже 👇")
             is_private = update.effective_chat and update.effective_chat.type == "private"
             if is_private:
-                kb = InlineKeyboardButton("📗 Открыть 𝗠𝗨𝗦𝗟𝗜𝗠𝗢𝗢𝗡-𝗔𝗣𝗣", web_app=WebAppInfo(url=WEBAPP_URL))
+                kb = InlineKeyboardButton("📗 𝗠𝗨𝗦𝗟𝗜𝗠𝗢𝗢𝗡-𝗔𝗣𝗣", web_app=WebAppInfo(url=WEBAPP_URL))
             else:
-                kb = InlineKeyboardButton("📗 Открыть 𝗠𝗨𝗦𝗟𝗜𝗠𝗢𝗢𝗡-𝗔𝗣𝗣", url="https://t.me/muslimoontt_bot?startapp")
-            msg = await update.message.reply_text(
-                "📗 *Muslimoon* — Коран и хадисы 🌙\n🔎 Поиск по хадисам и аятам · 📚 чтение Мактабы (8589 книг) · 👤 передатчики · 📖 тафсир.\n\nЖми кнопку ниже 👇",
-                reply_markup=InlineKeyboardMarkup([[kb]]), parse_mode="Markdown")
+                kb = InlineKeyboardButton("📗 𝗠𝗨𝗦𝗟𝗜𝗠𝗢𝗢𝗡-𝗔𝗣𝗣", url="https://t.me/muslimoontt_bot?startapp")
+            msg = await update.message.reply_text(body, reply_markup=InlineKeyboardMarkup([[kb]]), parse_mode="Markdown")
             try:
                 await context.bot.pin_chat_message(chat_id=update.effective_chat.id, message_id=msg.message_id, disable_notification=True)
-                await update.message.reply_text("📌 Закреплено. Это сообщение можно переслать в свой канал/группу и закрепить там же.")
-            except Exception as e:
-                await update.message.reply_text(f"Сообщение с кнопкой отправлено ✅. Авто-закрепить не вышло ({e}) — закрепи вручную (правый клик / зажми сообщение → «Закрепить»).")
+                await update.message.reply_text("📌 Закреплено. Перешли это сообщение в свой канал/группу и закрепи там. ✍️ Свой текст: «закреп <твой текст>».")
+            except Exception:
+                await update.message.reply_text("Сообщение с кнопкой отправлено ✅. Авто-закрепить не вышло — закрепи вручную (зажми сообщение → «Закрепить»). ✍️ Свой текст: «закреп <твой текст>».")
+            return
+        # ===== ЗАЯВКИ владельца: список (невыполненные первыми + от пользователей) =====
+        if _tl == "заявки" or _tl == "список заявок" or _tl == "мои заявки":
+            j = _journal_load(); reqs = j.get("requests", []); fb = j.get("feedback", [])
+            open_r = [r for r in reqs if not r.get("done")]; done_r = [r for r in reqs if r.get("done")]
+            lines = [f"📋 *Заявки владельца* — открытых {len(open_r)} · выполнено {len(done_r)}\n"]
+            if open_r:
+                lines.append("🔴 *Не сделано:*")
+                for r in open_r[:30]:
+                    lines.append(f"№{r['id']} ({r['d']}){' 📷' if r.get('img') else ''}: {(r.get('t') or '')[:200]}")
+            else:
+                lines.append("✅ Открытых заявок нет.")
+            if fb:
+                lines.append(f"\n📨 *От пользователей* (последние, всего {len(fb)}):")
+                for x in fb[:8]:
+                    lines.append(f"№{x.get('id','?')} {x.get('u','')}: {(x.get('t') or '')[:140]}")
+            lines.append("\nℹ️ Добавить: «заявка <текст>». Закрыть: «заявка done <№>».")
+            await update.message.reply_text("\n".join(lines)[:4000], parse_mode="Markdown")
+            return
+        # ===== Закрыть заявку: «заявка done <№>» / «заявка готово <№>» =====
+        if _tl.startswith("заявка done ") or _tl.startswith("заявка готово "):
+            try:
+                rid = int("".join(ch for ch in _tl if ch.isdigit()))
+            except Exception:
+                rid = 0
+            j = _journal_load(); hit = False
+            for r in j.get("requests", []):
+                if r.get("id") == rid:
+                    r["done"] = True; hit = True; break
+            if hit:
+                _journal_save(f"заявка #{rid} done")
+                await update.message.reply_text(f"✅ Заявка №{rid} помечена выполненной.")
+            else:
+                await update.message.reply_text(f"Не нашёл заявку №{rid}.")
+            return
+        # ===== Добавить заявку: «заявка <текст>» / «замечание <текст>» (+ подсказка о дубле) =====
+        if _tl.startswith("заявка ") or _tl.startswith("замечание ") or _tl == "заявка" or _tl == "замечание":
+            body = text.strip()[6:].strip() if _tl.startswith("заявк") or _tl == "заявка" else text.strip()[9:].strip()
+            if not body:
+                await update.message.reply_text("✍️ Напиши: *заявка <текст>* — запишу с номером. Скрин: пришли фото с подписью «заявка ...».", parse_mode="Markdown")
+                return
+            dup = req_dup(body)
+            if dup:
+                await update.message.reply_text(f"⚠️ Похоже, ты это уже присылал — *заявка №{dup}*. Не дублирую.\n(Если всё же другое — допиши подробнее и пришли ещё раз.)", parse_mode="Markdown")
+                return
+            rid = req_add(body)
+            await update.message.reply_text(f"📥 *Заявка №{rid}* записана ✅\nСписок — команда «заявки».", parse_mode="Markdown")
             return
         # ===== АНОНС в канал приложения вручную ===== «анонс» = текущий update_note.txt; «анонс <текст>» = свой
         if _tl == "анонс" or _tl.startswith("анонс ") or _tl.startswith("анонс\n"):
@@ -2569,6 +2636,28 @@ def feedback_add(user, ctx, txt, has_img=False):
     j["feedback"] = j["feedback"][:500]
     _journal_save(f"отзыв #{fid} от {name}")
     return fid
+def req_add(txt, img_flag=False, imgkey=""):
+    """Заявка/замечание ВЛАДЕЛЬЦА → нумерованный журнал requests[] (отдельно от пользовательских feedback[])."""
+    j = _journal_load()
+    j["req_seq"] = j.get("req_seq", 0) + 1
+    rid = j["req_seq"]
+    j.setdefault("requests", []).insert(0, {"id": rid, "d": datetime.now().strftime("%d.%m.%Y %H:%M"),
+                                            "t": (txt or "")[:1500], "img": bool(img_flag), "imgkey": imgkey, "done": False})
+    j["requests"] = j["requests"][:1000]
+    _journal_save(f"заявка #{rid}")
+    return rid
+def req_dup(txt):
+    """Если заявка ТОЧНО дублирует уже записанную — вернуть её номер (иначе None). Только при высокой схожести."""
+    import difflib
+    n = (txt or "").strip().lower()
+    if len(n) < 6:
+        return None
+    j = _journal_load()
+    for r in j.get("requests", []):
+        o = (r.get("t") or "").strip().lower()
+        if o and (o == n or difflib.SequenceMatcher(None, o, n).ratio() > 0.9):
+            return r.get("id")
+    return None
 def _journal_save(msg):
     if _journal_cache is not None:
         _data_put("journal.json", _journal_cache, msg)
