@@ -317,6 +317,9 @@ DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 # GPT (OpenAI) для особых задач. Читаем под несколькими именами — чтобы сработало как ни назвал переменную на Railway.
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY") or os.environ.get("GPT_API_KEY") or os.environ.get("OPENAI_KEY") or os.environ.get("CHATGPT_API_KEY") or ""
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+# Google Gemini (бесплатный лимит) — запасной/основной мотор для особых задач, если у OpenAI нет денег
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 OWNER_ID = 131827895
 OWNER_CHANNEL_ID = -1001660979432
@@ -983,6 +986,44 @@ def ask_gpt(prompt, system=None, max_tokens=900):
     except Exception as e:
         return f"⚠️ GPT недоступен: {e}"
 
+def ask_gemini(prompt, system=None):
+    """Google Gemini (бесплатный лимит). Ключ — GEMINI_API_KEY на Railway."""
+    if not GEMINI_API_KEY:
+        return None
+    try:
+        parts = []
+        if system:
+            parts.append({"text": system + "\n\n"})
+        parts.append({"text": prompt})
+        r = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}",
+            headers={"Content-Type": "application/json"},
+            json={"contents": [{"parts": parts}]},
+            timeout=90)
+        if r.status_code == 200:
+            j = r.json()
+            return j["candidates"][0]["content"]["parts"][0]["text"].strip()
+        return f"⚠️ Gemini код {r.status_code}: {r.text[:200]}"
+    except Exception as e:
+        return f"⚠️ Gemini недоступен: {e}"
+
+def ask_special(prompt, system=None):
+    """Особые задачи: пробуем OpenAI (если есть ключ+деньги), иначе Gemini (бесплатный лимит). Возвращает (ответ, имя_модели)."""
+    if OPENAI_API_KEY:
+        a = ask_gpt(prompt, system)
+        if a and not str(a).startswith("⚠️"):
+            return a, f"GPT · {OPENAI_MODEL}"
+    if GEMINI_API_KEY:
+        a = ask_gemini(prompt, system)
+        if a and not str(a).startswith("⚠️"):
+            return a, f"Gemini · {GEMINI_MODEL}"
+    # вернём хоть какую-то диагностику
+    if OPENAI_API_KEY:
+        return ask_gpt(prompt, system), "GPT"
+    if GEMINI_API_KEY:
+        return ask_gemini(prompt, system), "Gemini"
+    return None, None
+
 def ask_ai(prompt, system=None, owner=False, max_tokens=None):
     if ai_kill_active():   # 🚨 авто-рубильник: ИИ выключен (спам/вручную) — не дёргаем ни DeepSeek, ни бесплатные
         return "⏸ ИИ временно на паузе (защита от спама). Включит владелец."
@@ -1356,13 +1397,13 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not q:
                 await update.message.reply_text("Напиши: гпт <вопрос>")
                 return
-            if not OPENAI_API_KEY:
-                await update.message.reply_text("⚠️ GPT-ключ не найден в окружении. Railway → Variables: добавь OPENAI_API_KEY и сделай Redeploy.")
+            if not OPENAI_API_KEY and not GEMINI_API_KEY:
+                await update.message.reply_text("⚠️ Нет ни OPENAI_API_KEY, ни GEMINI_API_KEY (валидного). Railway → Variables: имя без пробелов, и Redeploy.")
                 return
-            try: await update.message.reply_text(f"🤖 GPT ({OPENAI_MODEL}) думает…")
+            try: await update.message.reply_text("🤖 Думаю…")
             except Exception: pass
-            ans = ask_gpt(q)
-            await update.message.reply_text((ans or "Не удалось получить ответ от GPT.")[:4000])
+            ans, model = ask_special(q)
+            await update.message.reply_text(((ans or "Не удалось получить ответ.") + (f"\n\n— {model}" if model else ""))[:4000])
             return
         # ===== АНОНС в канал приложения вручную ===== «анонс» = текущий update_note.txt; «анонс <текст>» = свой
         if _tl == "анонс" or _tl.startswith("анонс ") or _tl.startswith("анонс\n"):
