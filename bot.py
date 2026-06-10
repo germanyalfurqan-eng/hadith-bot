@@ -1405,6 +1405,23 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ans, model = ask_special(q)
             await update.message.reply_text(((ans or "Не удалось получить ответ.") + (f"\n\n— {model}" if model else ""))[:4000])
             return
+        # ===== ЗАКРЕП: сообщение с кнопкой открытия приложения + автозакреп =====
+        if _tl == "закреп" or _tl == "закрепить":
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+            is_private = update.effective_chat and update.effective_chat.type == "private"
+            if is_private:
+                kb = InlineKeyboardButton("📗 Открыть 𝗠𝗨𝗦𝗟𝗜𝗠𝗢𝗢𝗡-𝗔𝗣𝗣", web_app=WebAppInfo(url=WEBAPP_URL))
+            else:
+                kb = InlineKeyboardButton("📗 Открыть 𝗠𝗨𝗦𝗟𝗜𝗠𝗢𝗢𝗡-𝗔𝗣𝗣", url="https://t.me/muslimoontt_bot?startapp")
+            msg = await update.message.reply_text(
+                "📗 *Muslimoon* — Коран и хадисы 🌙\n🔎 Поиск по хадисам и аятам · 📚 чтение Мактабы (8589 книг) · 👤 передатчики · 📖 тафсир.\n\nЖми кнопку ниже 👇",
+                reply_markup=InlineKeyboardMarkup([[kb]]), parse_mode="Markdown")
+            try:
+                await context.bot.pin_chat_message(chat_id=update.effective_chat.id, message_id=msg.message_id, disable_notification=True)
+                await update.message.reply_text("📌 Закреплено. Это сообщение можно переслать в свой канал/группу и закрепить там же.")
+            except Exception as e:
+                await update.message.reply_text(f"Сообщение с кнопкой отправлено ✅. Авто-закрепить не вышло ({e}) — закрепи вручную (правый клик / зажми сообщение → «Закрепить»).")
+            return
         # ===== АНОНС в канал приложения вручную ===== «анонс» = текущий update_note.txt; «анонс <текст>» = свой
         if _tl == "анонс" or _tl.startswith("анонс ") or _tl.startswith("анонс\n"):
             custom = text.strip()[5:].strip()
