@@ -542,7 +542,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v309';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v310';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4194,7 +4194,7 @@ async function _narrSkelIndex(){ if(_narrSkelIdx) return _narrSkelIdx;
     let prof=null;   // «короткий профиль» = первое имя + нисба (без куний): паттерн шухры «Суфьян ас-Саури» матчится СМЕЖНО
     if(e&&e[0]){ let ew=e[0].split(' '); while(ew.length>1&&(ew[0]==='ابو'||ew[0]==='ام'||ew[0]==='ابن')) ew=ew.slice(2);
       if(ew.length) prof=[it[0].split(' ')[0]].concat(ew).map(_skelAr); }
-    return [it[0], it[1], full.split(' ').map(_skelAr), e?(e[2]||0):0, pen, prof]; });   // [имя, id, скелеты слов, известность, штраф, профиль]
+    return [it[0], it[1], full.split(' ').map(_skelAr), e?(e[2]||0):0, pen, prof, e?(e[1]||0):0]; });   // [имя, id, скелеты, известность, штраф, профиль, год смерти]
   return _narrSkelIdx; }
 const _NARR_RU_STOP=new Set(['имам','имама','хафиз','шейх','передатчик','равий','рави']);   // титулы — не часть имени
 // 🌟 ГАРАНТ-СЛОЙ знаменитостей (принцип Ф-09: не нашёл известного — добавь сюда): рус-шухра → точное начало канон-имени в базе
@@ -4231,7 +4231,7 @@ async function narrCandidates(qRaw){
       else if(words.length>1 && words.every(w=>(' '+full).indexOf(' '+w)>=0)) sc=60;
       else if(nm.indexOf(cn)>0) sc=35;
       else if(full!==nm && full.indexOf(cn)>0) sc=25;
-      if(sc) out.push({nm:nm,id:it[1],sc:sc-nm.length*0.05+Math.min(e?e[2]:0,150)*0.02}); }
+      if(sc) out.push({nm:nm,id:it[1],sc:sc-nm.length*0.05+Math.min(e?e[2]:0,150)*0.02, y:e?(e[1]||0):0}); }
   } else if(/[а-яё]/i.test(qRaw)){
     const idx=await _narrSkelIndex();
     const q2=qRaw.toLowerCase().replace(/(^|[\s-])абдул?/g,'$1абд ');   // рус склейка «Абдуллах/Абдурахман» → араб раздельно عبد الله (⚠️ \b не работает с кириллицей!)
@@ -4244,7 +4244,7 @@ async function narrCandidates(qRaw){
     for(const it of idx){
       const s=Math.max(score(_narrRuMatch(qsk, it[2])), score(it[5]?_narrRuMatch(qsk, it[5]):null));   // полные слова ИЛИ «короткий профиль» (имя+нисба)
       if(s<-1e8) continue;
-      out.push({nm:it[0], id:it[1], sc: s - it[0].length*0.01 + Math.min(it[3],150)*0.09 - it[4]}); }
+      out.push({nm:it[0], id:it[1], sc: s - it[0].length*0.01 + Math.min(it[3],150)*0.09 - it[4], y:it[6]||0}); }
     // 🌟 гарант: знаменитая шухра из словаря — всегда первой
     const fam=_NARR_FAMOUS[_narrFamKey(qRaw)];
     if(fam){ const hit=idx.find(it=>it[0].indexOf(fam)===0);
@@ -4252,16 +4252,20 @@ async function narrCandidates(qRaw){
   }
   out.sort((a,b)=>b.sc-a.sc); return out.slice(0,14);
 }
-function _narrRow(c){   // строка-кандидат: имя (RTL) + мета (وفاة/ранг) дотягивается из шарда
+function _narrRow(c){   // строка-кандидат: имя (RTL) + рус-транслит + мета (وفاة/ранг)
   const r=document.createElement('div');
   r.style.cssText='padding:8px 11px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center';
-  r.innerHTML='<span class="nsMeta" style="font-size:11px;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%"></span><b style="direction:rtl;text-align:right;font-size:14.5px;flex:1">'+esc(c.nm)+'</b>';
+  let ruN=''; try{ ruN=arNameRu(c.nm, 6); }catch(e){}
+  r.innerHTML='<span class="nsMeta" style="font-size:11px;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42%">'+(c.y?('وفاة ~'+c.y+'هـ'):'')+'</span>'
+    +'<span style="flex:1;min-width:0"><b style="display:block;direction:rtl;text-align:right;font-size:14.5px">'+esc(c.nm)+'</b>'
+    +(ruN?('<span style="display:block;text-align:right;font-size:11px;color:#bcd0ff">≈ '+esc(ruN)+'</span>'):'')+'</span>';
   r.onclick=()=>{ try{hap('light');}catch(e){} narrOpen(c.nm); };
   _narrCard(c.id).then(cc=>{ if(!cc) return; const m=[]; if(cc[4]) m.push('وفاة ~'+cc[4]+'هـ'); const rk=cc[5]||cc[6]; if(rk) m.push((''+rk).slice(0,42)); const el=r.querySelector('.nsMeta'); if(el) el.textContent=m.join(' · '); }).catch(()=>{});
   return r;
 }
 /* — обратная транслитерация ар→рус для читаемости подсказок/биографий: словарь частых компонент имён + фонетический фолбэк — */
 const _AR2RU={'عبد الله':'Абдуллах','عبد الرحمن':'Абдуррахман','عبد العزيز':'Абдулазиз','عبد الملك':'Абдулмалик','عبد الوهاب':'Абдулваххаб','عبيد الله':'Убайдуллах',
+ 'عبد المطلب':'Абдулмутталиб','عبد':'Абд','المطلب':'аль-Мутталиб','عبيد':'Убайд','عتبه':'Утба','شهاب':'Шихаб','مسلمه':'Маслама','ربيعه':'Раби’а','اميه':'Умайя','هند':'Хинд',
  'ابو':'Абу','ابن':'Ибн','بن':'ибн','بنت':'бинт','ام':'Умм','محمد':'Мухаммад','احمد':'Ахмад','ابراهيم':'Ибрахим','اسماعيل':'Исмаил','اسحاق':'Исхак','يعقوب':'Якуб',
  'يحيي':'Яхья','سفيان':'Суфьян','مالك':'Малик','عمر':'Умар','عمرو':'Амр','عثمان':'Усман','علي':'Али','حسن':'Хасан','الحسن':'аль-Хасан','حسين':'Хусейн','الحسين':'аль-Хусейн',
  'سعيد':'Саид','سعد':'Саад','هشام':'Хишам','هاشم':'Хашим','قتاده':'Катада','انس':'Анас','زيد':'Зейд','يزيد':'Язид','جابر':'Джабир','عائشه':'Аиша','خالد':'Халид',
@@ -4299,14 +4303,26 @@ function arNameRu(name, maxWords){   // «هشام بن عمار بن نصير»
   return out.join(' ');
 }
 function hideNarrSugg(){ const b=document.getElementById('narrSugg'); if(b) b.style.display='none'; }
-let _narrSugSeq=0;
+let _narrSugSeq=0, _narrSort='fame', _narrLastCands=null;
+function _narrRenderSugg(){
+  const box=document.getElementById('narrSugg'); if(!box||!_narrLastCands||!_narrLastCands.length) return;
+  let view=_narrLastCands.slice();
+  if(_narrSort==='year') view.sort((a,b)=>((a.y||9999)-(b.y||9999)));
+  else if(_narrSort==='alpha') view.sort((a,b)=>(''+a.nm).localeCompare(''+b.nm,'ar'));
+  // 'fame' = как пришло (скоринг известность+точность)
+  const hd=document.createElement('div'); hd.style.cssText='padding:5px 11px;border-bottom:1px solid var(--border);font-size:11px;color:var(--hint);display:flex;justify-content:space-between;align-items:center;gap:8px';
+  const mkS=(t,k,title)=>'<span class="nsSort" data-k="'+k+'" title="'+title+'" style="cursor:pointer;padding:1px 7px;border-radius:6px;'+(_narrSort===k?'background:var(--btn);color:#fff':'border:1px solid var(--border)')+'">'+t+'</span>';
+  hd.innerHTML='<span>👤 Похожие передатчики — выбери:</span><span style="display:flex;gap:4px">'+mkS('⭐','fame','По известности (по умолчанию)')+mkS('📅','year','По году смерти')+mkS('🔤','alpha','По алфавиту')+'</span>';
+  box.innerHTML=''; box.appendChild(hd);
+  view.forEach(c=>box.appendChild(_narrRow(c)));
+  hd.querySelectorAll('.nsSort').forEach(s=>s.onclick=(e)=>{ e.stopPropagation(); _narrSort=s.dataset.k; _narrRenderSugg(); });
+  box.style.display='block';
+}
 async function narrSuggest(q){
   const box=document.getElementById('narrSugg'); if(!box) return; const my=++_narrSugSeq;
   const cands=await narrCandidates(q); if(my!==_narrSugSeq) return;
   if(!cands.length){ box.style.display='none'; return; }
-  box.innerHTML='<div style="padding:5px 11px;border-bottom:1px solid var(--border);font-size:11px;color:var(--hint)">👤 Похожие передатчики — выбери:</div>';
-  cands.forEach(c=>box.appendChild(_narrRow(c)));
-  box.style.display='block';
+  _narrLastCands=cands; _narrRenderSugg();
 }
 async function narrOpen(nm){
   hideNarrSugg(); const qi=document.getElementById('q'); if(qi){ qi.value=nm; try{ const qc=document.getElementById('qClear'); if(qc) qc.style.display='block'; }catch(e){} }
@@ -4369,43 +4385,66 @@ async function _narrBooks(id){ const b=Math.floor(id/100); if(!_narrBkShard[b]){
 let _narrVerdShard={};
 async function _narrVerd(id){ const b=Math.floor(id/100); if(!_narrVerdShard[b]){ try{ _narrVerdShard[b]=await (await fetch('./narrverd/'+b+'.json')).json(); }catch(e){ _narrVerdShard[b]={}; } } return (_narrVerdShard[b]||{})[String(id)]||null; }
 const _TADIL_KW=['ثقة','ثبت','حجة','امام','حافظ','صدوق','لا باس','صالح','مامون','عدل','ليس به باس','محله الصدق'];
+// M315: КАТЕГОРИИ квалификации (заявка владельца: «сначала вытащить, распределить, квалифицировать — кто что сказал»)
+const _NARR_CATS=[
+ {k:'adl',   t:'Похвала (تعديل)',                     ic:'🟢', col:'#2e9b5b', bg:'rgba(46,155,91,.10)',  tx:'#bff5d4', open:true},
+ {k:'jarh',  t:'Порицание (تجريح)',                   ic:'🔴', col:'#b3502e', bg:'rgba(179,80,46,.10)',  tx:'#ff9b7a', open:true},
+ {k:'jahl',  t:'Неизвестность (تجهيل)',               ic:'⚪', col:'#8a8f98', bg:'rgba(138,143,152,.10)',tx:'#d6d9de', open:true},
+ {k:'nosama',t:'Отрицание слышания (إرسال/انقطاع)',   ic:'🟠', col:'#b8860b', bg:'rgba(184,134,11,.10)', tx:'#ffd479', open:true},
+ {k:'sama',  t:'Свидетельства слышания/передачи',     ic:'🔵', col:'#3a5b9b', bg:'rgba(58,91,155,.10)',  tx:'#bcd2ff', open:false}];
+function _qCat(q){ const cs=q.c||[]; for(const c of ['adl','jarh','jahl','nosama','sama']) if(cs.indexOf(c)>=0) return c;
+  return (q.v||[]).some(w=>_TADIL_KW.some(t=>(''+w).indexOf(t)===0))?'adl':'jarh'; }   // фолбэк для старых шардов без c
+function _qToolsRow(qtxt, key, bookName){   // мини-кнопки Перевод/Объяснить/Огласовки на цитате
+  const wrap=document.createElement('div');
+  const tl=document.createElement('div'); tl.style.cssText='display:flex;gap:5px;flex-wrap:wrap;margin-top:4px';
+  const trH=document.createElement('div'); trH.style.cssText='display:none';
+  const exH=document.createElement('div'); exH.style.cssText='display:none';
+  const tkH=document.createElement('div'); tkH.style.cssText='display:none';
+  const mk=(t,fn)=>{ const x=document.createElement('button'); x.className='mini'; x.textContent=t; x.style.cssText='font-size:11px;padding:2px 7px'; x.onclick=fn; return x; };
+  const trB=mk('🧠 Перевод', ()=>{ try{ translateTafsir(qtxt.slice(0,9000), key, 0, 0, trH, trB); }catch(e){} });
+  const exB=mk('💬 Объяснить', ()=>{ try{ doExplain('Запись о передатчике в труде риджаля «'+bookName+'»: '+qtxt.slice(0,5000), null, {source:key, num:''}, exH, exB); }catch(e){} });
+  const tkB=mk('◌ Огласовки', null);
+  tkB.onclick=async()=>{ if(tkB.dataset.shown==='1'){ tkH.style.display='none'; tkB.dataset.shown=''; return; }
+    if(tkH.dataset.done==='1'){ tkH.style.display='block'; tkB.dataset.shown='1'; return; }
+    if(!BACKEND_URL){ toast('Нужен сервер'); return; } tkB.disabled=true; const p=tkB.textContent; tkB.textContent='…';
+    try{ const r=await fetch(BACKEND_URL+'/tashkeel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:qtxt.slice(0,3500),source:key,num:0,initData:INITDATA})}); const j=await r.json().catch(()=>({}));
+      if(j&&j.text){ tkH.innerHTML='<div class="ar" style="direction:rtl;text-align:right;font-size:15px;line-height:2.05;border:1px solid var(--border);border-radius:9px;padding:8px;margin-top:5px;white-space:pre-wrap"></div>'; tkH.firstChild.textContent=j.text; tkH.style.display='block'; tkH.dataset.done='1'; tkB.dataset.shown='1'; try{ enableArabusTap(tkH.firstChild); }catch(e){} } else toast('Не удалось');
+    }catch(e){ toast('🔧 сервис'); } tkB.disabled=false; tkB.textContent=p; };
+  tl.appendChild(trB); tl.appendChild(exB); tl.appendChild(tkB);
+  wrap.appendChild(tl); wrap.appendChild(tkH); wrap.appendChild(trH); wrap.appendChild(exH);
+  return wrap;
+}
 async function renderNarrVerdicts(id, host){
   let v=null; try{ v=await _narrVerd(id); }catch(e){}
   if(!v || !v.bk || !v.bk.length) return;
-  const isTadil=(vd)=>(vd||[]).some(w=>_TADIL_KW.some(t=>w.indexOf(t)===0));
-  const sec=document.createElement('div'); sec.style.cssText='margin-top:8px;border:1px solid #2e9b5b;border-radius:11px;overflow:hidden';
-  const hdr=document.createElement('div'); hdr.style.cssText='cursor:pointer;padding:9px 11px;background:rgba(46,155,91,.13);font-size:13px;color:#bff5d4;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px';
-  hdr.innerHTML='<span>📚 Оценки из трудов риджаля — '+v.bk.length+' книг (глубокий анализ)</span><span class="vTg">▾</span>';
-  const body=document.createElement('div'); body.style.cssText='padding:8px 11px;max-height:48vh;overflow:auto';
-  v.bk.forEach(b=>{
-    const card=document.createElement('div'); card.style.cssText='border-bottom:1px solid var(--border);padding:8px 0';
-    const verds=(b.q[0]&&b.q[0].v)||[];
-    const tag=verds.length?('<span style="font-size:11px;border-radius:6px;padding:1px 7px;margin-inline-start:6px;white-space:nowrap;'+(isTadil(verds)?'background:#173d30;color:#bff5d4;border:1px solid #2e9b5b':'background:#3d1717;color:#ff9b7a;border:1px solid #b3502e')+'">'+esc(verds.join(' · '))+'</span>'):'';
-    let h='<div style="font-size:12.5px;color:#9fb6d6;font-weight:600">📕 '+esc(b.b)+(b.a?(' — '+esc(b.a)):'')+tag+'</div>';
-    (b.q||[]).forEach(q=>{ h+='<div style="direction:rtl;text-align:right;font-size:14px;line-height:1.75;margin-top:4px">'+esc(q.q)+'…</div>'; });
-    if(b.q[0]&&b.q[0].p!=null) h+='<div style="margin-top:3px"><span class="vOpen" data-bid="'+b.i+'" data-pg="'+b.q[0].p+'" style="cursor:pointer;color:var(--link);font-size:11.5px">📖 открыть в книге (стр. '+b.q[0].p+')</span></div>';
-    card.innerHTML=h; body.appendChild(card);
-    // 🧠 инструменты на цитате (заявка: перевод+огласовки+пересказ — цитаты были сырым арабским)
-    const qtxt=(b.q||[]).map(q=>q.q).join('\n'); if(!qtxt) return;
-    const tl=document.createElement('div'); tl.style.cssText='display:flex;gap:5px;flex-wrap:wrap;margin-top:5px';
-    const trH=document.createElement('div'); trH.style.cssText='display:none';   // перевод
-    const exH=document.createElement('div'); exH.style.cssText='display:none';   // объяснение
-    const tkH=document.createElement('div'); tkH.style.cssText='display:none';   // огласованный текст
-    const mk=(t,fn)=>{ const x=document.createElement('button'); x.className='mini'; x.textContent=t; x.style.cssText='font-size:11.5px;padding:3px 8px'; x.onclick=fn; return x; };
-    const trB=mk('🧠 Перевод', ()=>{ try{ translateTafsir(qtxt.slice(0,9000), 'narrv'+id+'_'+b.i, id, b.i, trH, trB); }catch(e){} });
-    tl.appendChild(trB);
-    const exB=mk('💬 Объяснить', ()=>{ try{ doExplain('Оценка передатчика в труде риджаля «'+b.b+'»: '+qtxt.slice(0,5000), null, {source:'rijal'+b.i, num:id}, exH, exB); }catch(e){} });
-    tl.appendChild(exB);
-    const tkB=mk('◌ Огласовки', null);
-    tkB.onclick=async()=>{ if(tkB.dataset.shown==='1'){ tkH.style.display='none'; tkB.dataset.shown=''; return; }
-      if(tkH.dataset.done==='1'){ tkH.style.display='block'; tkB.dataset.shown='1'; return; }
-      if(!BACKEND_URL){ toast('Нужен сервер'); return; } tkB.disabled=true; const p=tkB.textContent; tkB.textContent='…';
-      try{ const r=await fetch(BACKEND_URL+'/tashkeel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:qtxt.slice(0,3500),source:'narrv'+id+'_'+b.i,num:0,initData:INITDATA})}); const j=await r.json().catch(()=>({}));
-        if(j&&j.text){ tkH.innerHTML='<div class="ar" style="direction:rtl;text-align:right;font-size:15px;line-height:2.05;border:1px solid var(--border);border-radius:9px;padding:8px;margin-top:5px;white-space:pre-wrap"></div>'; tkH.firstChild.textContent=j.text; tkH.style.display='block'; tkH.dataset.done='1'; tkB.dataset.shown='1'; try{ enableArabusTap(tkH.firstChild); }catch(e){} } else toast('Не удалось');
-      }catch(e){ toast('🔧 сервис'); } tkB.disabled=false; tkB.textContent=p; };
-    tl.appendChild(tkB);
-    card.appendChild(tl); card.appendChild(tkH); card.appendChild(trH); card.appendChild(exH);
+  // раскладка цитат по категориям: {cat:[{q-объект, книга}]}
+  const byCat={}; let total=0;
+  v.bk.forEach(b=>(b.q||[]).forEach(q=>{ const c=_qCat(q); (byCat[c]=byCat[c]||[]).push({q:q, b:b}); total++; }));
+  const sec=document.createElement('div'); sec.style.cssText='margin-top:8px;border:1px solid #6c5ce7;border-radius:11px;overflow:hidden';
+  const hdr=document.createElement('div'); hdr.style.cssText='cursor:pointer;padding:9px 11px;background:rgba(108,92,231,.13);font-size:13px;color:#d9ccff;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px';
+  hdr.innerHTML='<span>📚 Из 149 трудов риджаля: '+total+' записей · '+v.bk.length+' книг — КВАЛИФИЦИРОВАНО по категориям</span><span class="vTg">▾</span>';
+  const body=document.createElement('div'); body.style.cssText='padding:8px 11px;max-height:56vh;overflow:auto';
+  _NARR_CATS.forEach(cat=>{
+    const items=byCat[cat.k]; if(!items||!items.length) return;
+    const cs=document.createElement('div'); cs.style.cssText='border:1px solid '+cat.col+';border-radius:10px;overflow:hidden;margin:6px 0';
+    const ch=document.createElement('div'); ch.style.cssText='cursor:pointer;padding:7px 10px;background:'+cat.bg+';font-size:12.5px;color:'+cat.tx+';font-weight:700;display:flex;justify-content:space-between;gap:8px;align-items:center';
+    ch.innerHTML='<span>'+cat.ic+' '+cat.t+' — '+items.length+'</span><span class="cTg">'+(cat.open?'▾':'▸')+'</span>';
+    const cb=document.createElement('div'); cb.style.cssText='padding:6px 10px;'+(cat.open?'':'display:none;');
+    items.forEach((it,j)=>{
+      const card=document.createElement('div'); card.style.cssText='border-bottom:1px solid var(--border);padding:7px 0';
+      const verds=(it.q.v||[]);
+      let h='<div style="font-size:11.5px;color:#9fb6d6">📕 '+esc(it.b.b)+(it.b.a?(' — '+esc(it.b.a)):'')
+        +(verds.length?(' <span style="font-size:10.5px;border-radius:6px;padding:1px 6px;white-space:nowrap;background:'+cat.bg+';color:'+cat.tx+';border:1px solid '+cat.col+'">'+esc(verds.join(' · '))+'</span>'):'')+'</div>';
+      h+='<div style="direction:rtl;text-align:right;font-size:14px;line-height:1.78;margin-top:3px">…'+esc(it.q.q)+'…</div>';
+      if(it.q.p!=null) h+='<div style="margin-top:2px"><span class="vOpen" data-bid="'+it.b.i+'" data-pg="'+it.q.p+'" style="cursor:pointer;color:var(--link);font-size:11px">📖 открыть в книге (стр. '+it.q.p+')</span></div>';
+      card.innerHTML=h;
+      card.appendChild(_qToolsRow(it.q.q, 'narrv'+id+'_'+it.b.i+'_'+j, it.b.b));
+      cb.appendChild(card);
+    });
+    ch.onclick=()=>{ const op=cb.style.display!=='none'; cb.style.display=op?'none':'block'; ch.querySelector('.cTg').textContent=op?'▸':'▾'; };
+    cs.appendChild(ch); cs.appendChild(cb); body.appendChild(cs);
   });
+  body.insertAdjacentHTML('beforeend','<div style="font-size:10.5px;color:var(--hint);margin-top:5px">Автоматическая квалификация по ключевым словам учёных — открывай источник и проверяй контекст. Свидетельства слышания важны для непрерывности иснада (اتصال).</div>');
   hdr.onclick=()=>{ const op=body.style.display!=='none'; body.style.display=op?'none':'block'; hdr.querySelector('.vTg').textContent=op?'▸':'▾'; };
   sec.appendChild(hdr); sec.appendChild(body); host.appendChild(sec);
   body.querySelectorAll('.vOpen').forEach(o=>o.onclick=()=>{ try{ var mm=document.getElementById('catModal'); if(mm) mm.style.display='none'; openBook(+o.dataset.bid, +o.dataset.pg||1); }catch(e){} });
@@ -4418,24 +4457,25 @@ async function renderMutabarunSummary(id, box, out){
     const found=[...new Set((books||[]).map(b=>map[String(b)]).filter(Boolean))].sort((a,b)=>(''+a).localeCompare(''+b,'ru'));
     const all=[...new Set(Object.values(map).filter(Boolean))];
     const notFound=all.filter(c=>found.indexOf(c)===-1).sort((a,b)=>(''+a).localeCompare(''+b,'ru'));
-    box.style.cssText='border:1px solid #2e9b5b;border-radius:12px;padding:11px;margin:8px 0;background:rgba(46,155,91,.07)';
-    box.innerHTML='<div style="font-weight:700;color:#bff5d4;font-size:13.5px;margin-bottom:7px">📊 По мутабарунам ('+all.length+' критиков) — где засвидетельствован передатчик:</div>';
+    // НЕЙТРАЛЬНО (замечание владельца: ✅-галки выглядели как «похвалил» ДО квалификации!)
+    box.style.cssText='border:1px solid #3a5b9b;border-radius:12px;padding:11px;margin:8px 0;background:rgba(58,91,155,.08)';
+    box.innerHTML='<div style="font-weight:700;color:#bcd2ff;font-size:13.5px;margin-bottom:7px">📊 По мутабарунам: у кого ЕСТЬ записи об этом передатчике <span style="font-weight:400;color:var(--hint)">('+all.length+' критиков по нашим 149 книгам; полный список мутабарунов — 48)</span></div>';
     const fw=document.createElement('div'); fw.style.cssText='margin-bottom:8px';
-    fw.innerHTML='<div style="font-size:12px;color:var(--hint);margin-bottom:5px">✅ Засвидетельствован у <b style="color:#bff5d4">'+found.length+'</b>'+(found.length?' (нажми → его слова ниже):':':')+'</div>';
+    fw.innerHTML='<div style="font-size:12px;color:var(--hint);margin-bottom:5px">📝 Упомянут в трудах <b style="color:#bcd2ff">'+found.length+'</b> критиков'+(found.length?' (нажми → его места ниже):':':')+'</div>';
     const fb=document.createElement('div'); fb.style.cssText='display:flex;gap:5px;flex-wrap:wrap';
-    if(found.length){ found.forEach(cr=>{ const ch=document.createElement('span'); ch.className='chip'; ch.style.cssText='font-size:12px;border:1px solid #2e9b5b;color:#bff5d4;background:rgba(46,155,91,.12);cursor:pointer;direction:rtl'; ch.textContent='✅ '+cr; ch.title='Раскрыть упоминания этого критика ниже';
+    if(found.length){ found.forEach(cr=>{ const ch=document.createElement('span'); ch.className='chip'; ch.style.cssText='font-size:12px;border:1px solid #3a5b9b;color:#bcd2ff;background:rgba(58,91,155,.12);cursor:pointer;direction:rtl'; ch.textContent='📝 '+cr; ch.title='Раскрыть найденные места этого критика ниже (упоминание ≠ оценка!)';
         ch.onclick=()=>{ try{ const mb=out.querySelector('.narrMentions'); if(mb){ mb.style.display='block'; const tg=mb.parentNode&&mb.parentNode.querySelector('.rjTg'); if(tg) tg.textContent='▾'; mb.scrollIntoView({behavior:'smooth',block:'start'}); } }catch(e){} try{hap('light');}catch(e){} };
         fb.appendChild(ch); }); }
     else fb.innerHTML='<span style="color:var(--hint);font-size:12px">— в наших трудах мутабарунов не нашёл (имя бывает в иной форме: كنية/نسب)</span>';
     fw.appendChild(fb); box.appendChild(fw);
     if(notFound.length){
-      const nh=document.createElement('div'); nh.style.cssText='cursor:pointer;font-size:12px;color:var(--hint)'; nh.innerHTML='⬜ Не найдено у <b>'+notFound.length+'</b> — показать ▸';
+      const nh=document.createElement('div'); nh.style.cssText='cursor:pointer;font-size:12px;color:var(--hint)'; nh.innerHTML='⬜ Не встретилось у <b>'+notFound.length+'</b> — показать ▸';
       const nb=document.createElement('div'); nb.style.cssText='display:none;gap:5px;flex-wrap:wrap;margin-top:5px';
       notFound.forEach(cr=>{ const ch=document.createElement('span'); ch.className='chip'; ch.style.cssText='font-size:11.5px;border:1px solid var(--border);color:var(--hint);direction:rtl'; ch.textContent='⬜ '+cr; nb.appendChild(ch); });
-      let op=false; nh.onclick=()=>{ op=!op; nb.style.display=op?'flex':'none'; nh.innerHTML='⬜ Не найдено у <b>'+notFound.length+'</b> — '+(op?'скрыть ▾':'показать ▸'); };
+      let op=false; nh.onclick=()=>{ op=!op; nb.style.display=op?'flex':'none'; nh.innerHTML='⬜ Не встретилось у <b>'+notFound.length+'</b> — '+(op?'скрыть ▾':'показать ▸'); };
       box.appendChild(nh); box.appendChild(nb);
     }
-    box.insertAdjacentHTML('beforeend','<div style="font-size:10.5px;color:var(--hint);margin-top:7px">⚠️ «Найден» = имя встречается в труде мутабаруна (личная сверка базы) — место для разбора, не готовый вердикт. Слова критиков — ниже / в «Базе Мактаба».</div>');
+    box.insertAdjacentHTML('beforeend','<div style="font-size:10.5px;color:var(--hint);margin-top:7px">⚠️ Упоминание — это НЕ вердикт: кто ПОХВАЛИЛ (تعديل), кто ПОРИЦАЛ (تجريح), кто счёл неизвестным (تجهيل) и свидетельства слышания — смотри ниже в «Оценках из трудов риджаля» (квалификация по категориям).</div>');
   }catch(e){ try{ box.remove(); }catch(_e){} }
 }
 async function showNarratorCardLocal(name, host){
@@ -4444,25 +4484,70 @@ async function showNarratorCardLocal(name, host){
   const row=(lbl,v)=>v?('<div style="margin:2px 0"><span style="color:var(--hint)">'+lbl+':</span> <b>'+esc(v)+'</b></div>'):'';
   const rank=(lbl,v)=>v?('<div style="margin:4px 0;padding:5px 9px;background:rgba(46,155,91,.13);border-radius:8px"><span style="color:var(--hint)">'+lbl+':</span> <b style="color:#bff5d4">'+esc(v)+'</b></div>'):'';
   let h='<div style="border:1px solid #6c5ce7;border-radius:12px;padding:11px;margin:6px 0;background:rgba(108,92,231,.07);direction:rtl;text-align:right">'
-    +'<div style="font-weight:700;font-size:16px;color:#d9ccff">👤 '+esc(c[1])+'</div>'
-    +'<div style="font-size:11px;color:var(--hint);margin:2px 0 7px">📖 موسوعة رواة الحديث (база Мактабы) · #'+c[0]+'</div>'
+    +'<div style="font-weight:700;font-size:16px;color:#d9ccff">👤 '+esc(c[1])+'</div>';
+  let _ruNm=''; try{ _ruNm=arNameRu(c[1],7); }catch(e){}
+  if(_ruNm) h+='<div style="direction:ltr;text-align:left;font-size:12.5px;color:#bcd0ff;margin-top:1px">≈ '+esc(_ruNm)+'</div>';
+  h+='<div style="font-size:11px;color:var(--hint);margin:2px 0 7px">📖 موسوعة رواة الحديث (база Мактабы) · #'+c[0]+'</div>'
     +row('الكنية',c[2])+row('النسب',c[3])+row('سنة الوفاة',c[4]?('~'+c[4]+'هـ'):'')+row('الطبقة',c[7])
     +rank('الرتبة عند ابن حجر',c[5])+rank('الرتبة عند الذهبي',c[6]);
+  // 📜 биография-сводка по-русски (заявка: «первым делом общая признанная биография на арабском и русском»)
+  try{
+    const bio=[];
+    bio.push((_ruNm||'Этот равий')+' — передатчик хадисов'+(c[2]?(', кунья '+c[2]):'')+(c[3]?(', нисба '+c[3]):'')+(c[4]?('. Умер ~'+c[4]+' г.х.'):'.'));
+    if(c[7]) bio.push('Табака (поколение): '+c[7]+'.');
+    if(c[5]) bio.push('Оценка Ибн Хаджара: «'+c[5]+'».');
+    if(c[6]) bio.push('Оценка аз-Захаби: «'+c[6]+'».');
+    h+='<div style="direction:ltr;text-align:left;font-size:13px;color:var(--text);margin-top:7px;line-height:1.6;border-top:1px dashed var(--border);padding-top:6px">📜 '+esc(bio.join(' '))+'</div>';
+  }catch(e){}
   h+='</div>';
   host.insertAdjacentHTML('afterbegin', h); return c;   // джарх موсуа рендерится ОТДЕЛЬНЫМ разделом ПОСЛЕ наших книг
 }
 // РАЗДЕЛ 2: полный джарх-тадиль из موسوعة (база Мактаба) + ИИ-инструменты (перевод/огласовки/Arabus)
+// M316: стена текста → разбивка по КНИГАМ-ИСТОЧНИКАМ (названия работают разделителями в конце фрагмента)
+const _MOSUA_BOOKS=['إكمال تهذيب الكمال','اكمال تهذيب الكمال','تهذيب التهذيب','تقريب التهذيب','تهذيب الكمال','الكاشف في معرفة من له رواية في الكتب الستة',
+ 'تحفة التحصيل في المراسيل','تحفة التحصيل','ميزان الاعتدال','لسان الميزان','التاريخ الكبير','الثقات لابن حبان','المجروحين','طبقات ابن سعد',
+ 'الجرح والتعديل لابن أبي حاتم','الجرح والتعديل','إثبات سماع الراوي','اثبات سماع الراوي','المراسيل','الكامل في الضعفاء'];
+const _MOSUA_CRITICS=['ابن حجر','الذهبي','المزي','ابن حبان','العجلي','النسائي','ابن سعد','أبو حاتم','ابو حاتم','ابن معين','أحمد بن حنبل','احمد بن حنبل','يعقوب بن شيبة','الترمذي','أبو زرعة','ابو زرعة','الدارقطني','البخاري','أبو داود','ابو داود','اللالكائي','مسلم'];
+function _mosuaStruct(txt){
+  const pat=_MOSUA_BOOKS.map(b=>b.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
+  const parts=String(txt||'').split(new RegExp('('+pat+')'));
+  const out=[];   // [{t:текст, src:книга}]
+  for(let i=0;i<parts.length;i+=2){ const t=(parts[i]||'').trim(); const src=(parts[i+1]||'').trim();
+    if(t||src) out.push({t:t, src:src}); }
+  return out;
+}
+function _mosuaHtml(frag){   // esc + выделить имена критиков
+  let h=esc(frag);
+  for(const cr of _MOSUA_CRITICS){ h=h.split(esc(cr)).join('<b style="color:#ffd479">'+esc(cr)+'</b>'); }
+  return h;
+}
 function renderMosuaJarh(c, out){
   if(!c||!c[8]) return;
   const box=document.createElement('div'); box.style.cssText='border:1px solid var(--border);border-radius:12px;padding:11px;margin:8px 0;background:var(--card)';
-  box.innerHTML='<div style="font-weight:700;color:#d9ccff;font-size:13.5px;margin-bottom:5px">📖 База Мактаба (موسوعة رواة الحديث) — слова учёных полностью:</div>';
+  box.innerHTML='<div style="font-weight:700;color:#d9ccff;font-size:13.5px;margin-bottom:5px">📖 База Мактаба (موسوعة رواة الحديث) — слова учёных по книгам-источникам:</div>';
   const tools=document.createElement('div'); tools.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:7px';
-  const jt=document.createElement('div'); jt.className='ar'; jt.style.cssText='font-size:13.5px;line-height:1.95;white-space:pre-wrap;direction:rtl;text-align:right'; jt.textContent=c[8]; jt.dataset.txt=c[8];
+  const jt=document.createElement('div'); jt.dataset.txt=c[8];
+  const _mosuaRenderInto=(host, txt)=>{   // структурный вид: карточка на фрагмент с бейджем книги-источника (источник стоит ПОСЛЕ цитаты в موسوعة)
+    host.innerHTML='';
+    const frs=_mosuaStruct(txt);
+    if(frs.length>1){
+      host.className=''; host.style.cssText='direction:rtl;text-align:right';
+      frs.forEach(fr=>{ if(!fr.t&&!fr.src) return;
+        const card=document.createElement('div'); card.style.cssText='border:1px solid var(--border);border-radius:9px;padding:7px 9px;margin:5px 0;background:var(--bg)';
+        let h='';
+        if(fr.src) h+='<div style="font-size:11px;color:#9fb6d6;font-weight:700;margin-bottom:3px">📕 '+esc(fr.src)+'</div>';
+        if(fr.t) h+='<div class="ar" style="font-size:13.5px;line-height:1.95">'+_mosuaHtml(fr.t)+'</div>';
+        card.innerHTML=h; host.appendChild(card); });
+    } else {
+      host.className='ar'; host.style.cssText='font-size:13.5px;line-height:1.95;white-space:pre-wrap;direction:rtl;text-align:right'; host.textContent=txt;
+    }
+  };
+  _mosuaRenderInto(jt, c[8]);
   const tro=document.createElement('div'); tro.className='tr-out'; tro.style.cssText='display:none;margin-top:7px';
   const mk=(t,fn)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=t; b.style.cssText='font-size:12px;padding:4px 9px'; b.onclick=fn; return b; };
   tools.appendChild(mk('🧠 Перевод (ИИ)', ()=>{ try{ translateTafsir((jt.dataset.txt||c[8]).slice(0,9000),'narrator'+c[0],c[0],0,tro,null); }catch(e){} }));
   const tkb=mk('◌ Огласовки (ИИ)', null);
-  tkb.onclick=async()=>{ if(jt.dataset.voc==='1'){ jt.textContent=jt.dataset.txt||''; jt.dataset.voc=''; tkb.textContent='◌ Огласовки (ИИ)'; try{ enableArabusTap(jt); }catch(e){} return; }
+  tkb.onclick=async()=>{ if(jt.dataset.voc==='1'){ _mosuaRenderInto(jt, jt.dataset.txt||''); jt.dataset.voc=''; tkb.textContent='◌ Огласовки (ИИ)'; try{ enableArabusTap(jt); }catch(e){} return; }
     if(!BACKEND_URL){ toast('Нужен сервер'); return; } tkb.disabled=true; const p=tkb.textContent; tkb.textContent='…';
     try{ const r=await fetch(BACKEND_URL+'/tashkeel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:(jt.dataset.txt||'').slice(0,3500),source:'narrator'+c[0],num:0,initData:INITDATA})}); const j=await r.json().catch(()=>({}));
       if(j&&j.text){ jt.textContent=j.text; jt.dataset.voc='1'; tkb.textContent='◌ Без огласовок'; try{ enableArabusTap(jt); }catch(e){} } else toast('Не удалось'); }catch(e){ toast('🔧 сервис'); } tkb.disabled=false; if(tkb.textContent==='…') tkb.textContent=p; };
@@ -4541,10 +4626,26 @@ async function doRijalCorpus(name, out, btn){
     let arr=st.all.slice();
     if(st.sort==='author') arr.sort((a,b)=>(''+(a.critic||'')).localeCompare(''+(b.critic||''),'ru')||(''+(a.book_name||'')).localeCompare(''+(b.book_name||'')));
     else arr.sort((a,b)=>(''+(a.book_name||'')).localeCompare(''+(b.book_name||'')));
-    let lastG='\x00';
+    let lastG='\x00', gwrap=null;
     arr.forEach(x=>{ const g=st.sort==='author'?(x.critic||'—'):(x.book_name||'—');
-      if(g!==lastG){ lastG=g; const gh=document.createElement('div'); gh.style.cssText='font-weight:700;color:#d9ccff;font-size:13px;margin:9px 0 4px;direction:rtl;text-align:right'; gh.textContent=(st.sort==='author'?'✍️ ':'📕 ')+g; out.appendChild(gh); }
-      out.appendChild(renderCard(x)); });
+      if(g!==lastG){ lastG=g;
+        // M317: заголовок книги — огласовки + рус-перевод + Википедия + СВОРАЧИВАНИЕ (клик)
+        const tr=(st.sort!=='author' && typeof _catTr!=='undefined' && _catTr.map)?(_catTr.map[g]||null):null;
+        const wk=(st.sort!=='author' && window._wikiT)?(window._wikiT[String(x.book_id)]||null):null;
+        const gh=document.createElement('div'); gh.style.cssText='font-weight:700;color:#d9ccff;font-size:13px;margin:9px 0 2px;direction:rtl;text-align:right;cursor:pointer;user-select:none';
+        gh.innerHTML='<span class="gTg" style="color:var(--hint);font-weight:400;font-size:11px;float:left">▾ свернуть</span>'+(st.sort==='author'?'✍️ ':'📕 ')+esc((tr&&tr.voc)?tr.voc:g);
+        out.appendChild(gh);
+        if((tr&&tr.ru)||wk){
+          const sub=document.createElement('div'); sub.style.cssText='direction:ltr;text-align:left;font-size:12px;color:#bcd0ff;margin:0 0 4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+          let sh=''; if(tr&&tr.ru) sh+='<span>'+esc(tr.ru)+'</span>';
+          if(wk) sh+='<span class="wkL" style="cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px"><b style="font-family:Georgia,serif">W</b> Википедия ↗</span>';
+          sub.innerHTML=sh; out.appendChild(sub);
+          const wl=sub.querySelector('.wkL'); if(wl&&wk) wl.onclick=()=>{ try{ openLink(wk.url); }catch(e){} };
+        }
+        const gw=document.createElement('div'); gwrap=gw; out.appendChild(gw);
+        gh.onclick=()=>{ const open=gw.style.display!=='none'; gw.style.display=open?'none':'block'; const t=gh.querySelector('.gTg'); if(t) t.textContent=open?'▸ развернуть':'▾ свернуть'; };
+      }
+      (gwrap||out).appendChild(renderCard(x)); });
     if(!st.done && st.all.length<st.count){ const mb=document.createElement('button'); mb.className='mini'; mb.style.cssText='display:block;width:100%;margin:9px 0;padding:9px;border:1px dashed var(--border);border-radius:10px;cursor:pointer';
       mb.textContent='⬇️ Показать ещё (осталось '+(st.count-st.all.length).toLocaleString('ru')+')'; mb.onclick=()=>loadMore(mb); out.appendChild(mb); }
   };
@@ -4561,6 +4662,7 @@ async function doRijalCorpus(name, out, btn){
     }catch(e){ st.loading=false; if(mb){mb.textContent='🔧 ошибка, ещё раз';mb.disabled=false;} if(!st.all.length) out.innerHTML='<div class="hint">🔧 сервис недоступен.</div>'; }
   }
   if(btn){ btn.disabled=true; btn.textContent='📚 ищу…'; }
+  try{ loadBookTr(); }catch(e){}   // M317: рус-названия/огласовки книг к моменту рендера
   out.innerHTML='<div class="hint">📚 Ищу «'+esc(name)+'» по 150 трудам мутабарунов…</div>';
   await loadMore(null);
   if(btn){ btn.disabled=false; btn.textContent='📚 Слова критиков (150 трудов риджаля)'; }
