@@ -161,7 +161,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v258</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v259</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -172,16 +172,15 @@
   </div>
   <div class="sub" id="sub">поиск по хадисам и аятам</div>
 
+  <button id="maktabaTopBtn" title="Читать всю библиотеку Мактаба аш-Шамиля (8589 книг) + первоисточники и избранное" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;box-sizing:border-box;margin:4px 0 10px;background:#11261f;border:1px solid #2e7d5a;color:#bff5d4;border-radius:14px;padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 1px 10px rgba(46,125,90,.28)">📚 Читать библиотеку Мактаба аш-Шамиля (8589 книг)</button>
+
   <div class="tabs">
     <div class="tab active" data-tab="hadith" title="Поиск по хадисам (сборники)">📚 Хадисы</div>
     <div class="tab" data-tab="quran" title="Поиск по аятам Корана (текст, номер 2:255, русский перевод)">📖 Аяты</div>
   </div>
 
   <div id="colsWrap">
-    <div class="maktabaRow">
-      <div class="lbl" id="colsToggle" style="cursor:pointer;user-select:none;color:var(--link);display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:rgba(108,92,231,.10);border-radius:20px;padding:6px 12px;font-size:13px;font-weight:600">🔎 <span id="colCount"></span> <span id="colsArrow" style="opacity:.8">▾</span></div>
-      <button id="maktabaTopBtn" title="Читать всю библиотеку Мактаба аш-Шамиля (8589 книг) + первоисточники и избранное" style="display:inline-flex;align-items:center;gap:7px;background:#11261f;border:1px solid #2e7d5a;color:#bff5d4;border-radius:20px;padding:8px 18px;font-size:13.5px;font-weight:700;cursor:pointer;box-shadow:0 1px 10px rgba(46,125,90,.28)">📚 Читать библиотеку Мактаба аш-Шамиля <span style="opacity:.8;font-weight:600">(المكتبة الشاملة · 8589 книг)</span></button>
-    </div>
+    <div class="lbl" id="colsToggle" style="cursor:pointer;user-select:none;color:var(--link);display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:rgba(108,92,231,.10);border-radius:20px;padding:6px 12px;font-size:13px;font-weight:600">🔎 <span id="colCount"></span> <span id="colsArrow" style="opacity:.8">▾</span></div>
     <div id="colsBody" style="display:none">
       <div class="cols" id="cols"></div>
       <div class="colbar">
@@ -511,7 +510,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v258';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v259';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2294,12 +2293,12 @@ async function appendMaktaba(seq, q, primary){
     const j=await r.json().catch(()=>({}));
     if(r.status===403){ sec.textContent='🌐 Мактаба: доступ пока не открыт.'; return; }
     if(r.status===429){ sec.textContent='🌐 Слишком часто, подожди немного.'; return; }
-    let data=j.data||[]; let fn=j.first_n||0; let hiddenDup=0; const _rawEmpty=!data.length;
-    if(!primary && data.length){ const shown=_shownLocalMatn();   // убираем дубли тех хадисов, что уже показаны выше
-      if(shown.size){ let nf=0; const kept=[]; data.forEach((x,idx)=>{ const g=_matnSig(x.text||x.snip); if(g && shown.has(g)){ hiddenDup++; return; } if(idx<fn) nf++; kept.push(x); }); data=kept; fn=nf; } }
-    if(!data.length){ sec.textContent = _rawEmpty ? '🤷 По Мактабе точного совпадения нет. Попробуй характерную фразу из матна.' : ('✓ Всё, что нашлось в Мактабе, уже показано выше (скрыто дублей: '+hiddenDup+').'); try{ maktabaSunnahBtn(res,seq,q); if(_rawEmpty) addNotFoundBtn(res,q); }catch(e){} return; }
+    const data=j.data||[]; const fn=j.first_n||0;
+    // БЕЗ авто-дедупа: один и тот же хадис, приведённый в РАЗНЫХ книгах (Бухари/Ахмад/Мукбиль/Табари) —
+    // показываем ВЕЗДЕ (смысл — видеть, где он приводится дословно). Уникальность хадисов/версий — это ФИЛЬТР-кнопки.
+    if(!data.length){ sec.textContent='🤷 По Мактабе точного совпадения нет. Попробуй характерную фразу из матна.'; try{ maktabaSunnahBtn(res,seq,q); addNotFoundBtn(res,q); }catch(e){} return; }
     await loadBooksMap();
-    sec.textContent='📚 Поиск по всей Мактабе · показано '+data.length+(j.count>data.length?(' из ~'+(j.count||0).toLocaleString('ru')):'')+(fn?' · ⭐ первоисточники сверху':'')+(hiddenDup?(' · скрыто дублей '+hiddenDup):'');
+    sec.textContent='📚 Поиск по всей Мактабе · показано '+data.length+(j.count>data.length?(' из ~'+(j.count||0).toLocaleString('ru')):'')+(fn?' · ⭐ первоисточники сверху':'');
     try{ const _fb=_maktFilterBar(res,data); if(_fb) res.appendChild(_fb); }catch(e){}
     data.forEach((x,i)=>{
       if(fn && i===0){ const h=document.createElement('div'); h.className='hint'; h.style.cssText='color:#d6b25a;font-size:12.5px;font-weight:700;margin:4px 0 7px'; h.textContent='📜 40 первоисточников · избранное'; res.appendChild(h); }
