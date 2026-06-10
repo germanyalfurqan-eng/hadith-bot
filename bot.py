@@ -9,7 +9,7 @@ import hashlib
 import time
 import collections
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from html import unescape
 from urllib.parse import parse_qsl
 from telegram import Update, ReplyKeyboardMarkup
@@ -1270,7 +1270,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             rid = req_add(body or "(скрин)", img_flag=True, imgkey=str(update.message.photo[-1].file_id))
             try:
                 await context.bot.copy_message(LOG_CHAT_ID, update.effective_chat.id, update.message.message_id)
-                await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца №{rid}: {(body or '(скрин)')[:300]}")
+                await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца №{rid} ({_now_msk()}): {(body or '(скрин)')[:300]}")
             except Exception:
                 pass
             await update.message.reply_text(f"📥 Заявка №{rid} со скрином записана ✅. Список — «заявки».")
@@ -1411,6 +1411,28 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ===== Владельцу: ЧЁРНЫЙ СПИСОК (бан чата/пользователя по id) =====
     if is_owner(update):
         _tl = text.strip().lower()
+        # ===== ПОЛНАЯ ИНСТРУКЦИЯ команд владельца (чтобы не запоминать): «команды» / «помощь» =====
+        if _tl in ("команды", "помощь", "хелп", "/команды", "инструкция", "что умеешь"):
+            await update.message.reply_text(
+                "🛠 *Команды владельца* (пиши боту в личку):\n\n"
+                "📥 *Заявки/замечания мне (Claude):*\n"
+                "• `заявка <текст>` — записать заявку с номером (предупрежу, если точный дубль)\n"
+                "• *фото с подписью* `заявка <текст>` — скрин-заявка (скрин уходит в рабочий журнал, с МСК-временем)\n"
+                "• `заявки` — список (невыполненные первыми + от пользователей)\n"
+                "• `заявка done <№>` — пометить выполненной\n\n"
+                "🤖 *ИИ (внутренняя кухня, только тебе):*\n"
+                "• `гпт <вопрос>` — спросить GPT/Gemini\n\n"
+                "📣 *Канал и закреп:*\n"
+                "• `анонс` — запостить текущее обновление в @muslimoonapp\n"
+                "• `анонс <текст>` — свой текст в канал\n"
+                "• `закреп` — сообщение с кнопкой приложения (закрепляется автоматически)\n"
+                "• `закреп <текст>` — свой текст под кнопкой\n\n"
+                "⚙️ *Управление:*\n"
+                "• `ии вкл` / `ии выкл` — ИИ для пользователей вкл/выкл\n"
+                "• `бот стоп` / `бот старт` — режим обслуживания\n\n"
+                "ℹ️ Эту шпаргалку всегда можно открыть командой *команды*.",
+                parse_mode="Markdown")
+            return
         # ===== GPT (OpenAI) для особых задач: «гпт <вопрос>» / «gpt <вопрос>» =====
         if _tl == "гпт" or _tl == "gpt" or _tl.startswith("гпт ") or _tl.startswith("gpt ") or _tl.startswith("гпт\n") or _tl.startswith("gpt\n"):
             q = text.strip()[3:].strip()
@@ -1487,7 +1509,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(f"⚠️ Похоже, ты это уже присылал — *заявка №{dup}*. Не дублирую.\n(Если всё же другое — допиши подробнее и пришли ещё раз.)", parse_mode="Markdown")
                 return
             rid = req_add(body)
-            await update.message.reply_text(f"📥 *Заявка №{rid}* записана ✅\nСписок — команда «заявки».", parse_mode="Markdown")
+            try: await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца №{rid} ({_now_msk()}):\n{body[:1500]}")
+            except Exception: pass
+            await update.message.reply_text(f"📥 *Заявка №{rid}* записана ✅ ({_now_msk()})\nСписок — команда «заявки».", parse_mode="Markdown")
             return
         # ===== АНОНС в канал приложения вручную ===== «анонс» = текущий update_note.txt; «анонс <текст>» = свой
         if _tl == "анонс" or _tl.startswith("анонс ") or _tl.startswith("анонс\n"):
@@ -2636,12 +2660,15 @@ def feedback_add(user, ctx, txt, has_img=False):
     j["feedback"] = j["feedback"][:500]
     _journal_save(f"отзыв #{fid} от {name}")
     return fid
+def _now_msk():
+    """Точное московское время (сервер Railway в UTC; МСК = UTC+3). Для всех заявок — по требованию владельца."""
+    return (datetime.utcnow() + timedelta(hours=3)).strftime("%d.%m.%Y %H:%M МСК")
 def req_add(txt, img_flag=False, imgkey=""):
     """Заявка/замечание ВЛАДЕЛЬЦА → нумерованный журнал requests[] (отдельно от пользовательских feedback[])."""
     j = _journal_load()
     j["req_seq"] = j.get("req_seq", 0) + 1
     rid = j["req_seq"]
-    j.setdefault("requests", []).insert(0, {"id": rid, "d": datetime.now().strftime("%d.%m.%Y %H:%M"),
+    j.setdefault("requests", []).insert(0, {"id": rid, "d": _now_msk(),
                                             "t": (txt or "")[:1500], "img": bool(img_flag), "imgkey": imgkey, "done": False})
     j["requests"] = j["requests"][:1000]
     _journal_save(f"заявка #{rid}")
