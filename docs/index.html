@@ -165,7 +165,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=1" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v296</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v297</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -358,8 +358,10 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <b>➕ Другие сборники</b><button class="mini" id="extraClose">закрыть ✕</button>
     </div>
-    <div class="hint" style="margin:0 0 8px">Эти книги можно добавить к поиску. А чтобы ЧИТАТЬ любую из ~8589 книг — открой всю библиотеку:</div>
-    <button id="extraAllMaktaba" style="background:#11261f;border:1px solid #2e7d5a;color:#bff5d4;padding:9px 14px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;width:100%;margin-bottom:10px">📚 Открыть всю Мактаба аш-Шамиля (المكتبة الشاملة · 8589)</button>
+    <div class="hint" style="margin:0 0 8px">Выбери ГДЕ искать: целый раздел (чипы ниже), отдельные книги (список) — или открой всю Мактабу для глубокого выбора. Ничего не выбрал — ищет везде.</div>
+    <div class="hint" style="margin:2px 0 5px;font-size:12px">🎯 Искать сразу в РАЗДЕЛЕ (нажми — поставит рамку поиска):</div>
+    <div id="extraSections" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+    <button id="extraAllMaktaba" style="background:#11261f;border:1px solid #2e7d5a;color:#bff5d4;padding:9px 14px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;width:100%;margin-bottom:10px">📚 Вся Мактаба: мультивыбор книг И разделов (8589) →</button>
     <div class="hint" style="margin:0 0 6px;font-size:12px">Или добавь к поиску (<b id="extraTotal"></b> готовых книг):</div>
     <input type="text" id="extraSearch" placeholder="Автор или книга: дарими · ибн хиббан · мусаннаф…" autocomplete="off"
            style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-size:14px">
@@ -538,7 +540,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v296';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v297';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5220,7 +5222,17 @@ function renderExtraList(){
   if(rest.length){ const s=document.createElement('div'); s.className='exsep'; s.textContent='Остальные сборники'; box.appendChild(s); rest.forEach(mkRow); }
   updateExtraSel();
 }
-function openExtra(){ const t=document.getElementById('extraTotal'); if(t) t.textContent=EXTRA.length; renderExtraList(); document.getElementById('extraModal').style.display='flex'; const s=document.getElementById('extraSearch'); if(s){ s.value=''; } }
+function _extraSectChip(label, name, getter){ const c=document.createElement('span'); c.className='chip'; c.textContent=label;
+  c.style.cssText='cursor:pointer;font-size:13px;border:1px solid #2e9b5b;color:#bff5d4;background:#173d30;padding:6px 11px;border-radius:9px;font-weight:600';
+  c.onclick=async()=>{ try{ c.textContent='⏳ '+label; const ids=await getter(); document.getElementById('extraModal').style.display='none'; if(ids&&ids.size){ setSearchScope(ids, name); } else { toast('Раздел пуст'); } }catch(e){ toast('Не удалось'); } finally{ c.textContent=label; } }; return c; }
+function _fillExtraSections(){ const sw=document.getElementById('extraSections'); if(!sw) return; sw.innerHTML='';
+  sw.appendChild(_extraSectChip('📚 Риджаль (149)','Наша подборка риджаль (149)', async()=>{ const m=await loadRijalBooksMap(); return new Set(Object.keys(m||{}).map(String)); }));
+  sw.appendChild(_extraSectChip('📜 Первоисточники','Первоисточники хадисов', async()=>{ const cat=await loadCatalog(); const src=await loadFirstSrc(); const ids=new Set(); src.forEach(s=>{ const b=_matchSource(cat,s); if(b) ids.add(String(b.i)); }); return ids; }));
+  // тематические разделы — топ-несколько
+  const _cats=[['كتب السنة','📖 Сборники Сунны'],['التفسير','📗 Тафсиры'],['العقيدة','🕌 ‘Акыда'],['التراجم والطبقات','👤 Биографии (риджаль)'],['شروح الحديث','📝 Шархи хадисов']];
+  _cats.forEach(([c,lab])=> sw.appendChild(_extraSectChip(lab, lab, async()=>{ const cat=await loadCatalog(); return new Set(cat.filter(b=>b.c===c).map(b=>String(b.i))); })));
+}
+function openExtra(){ const t=document.getElementById('extraTotal'); if(t) t.textContent=EXTRA.length; try{ _fillExtraSections(); }catch(e){} renderExtraList(); document.getElementById('extraModal').style.display='flex'; const s=document.getElementById('extraSearch'); if(s){ s.value=''; } }
 var _eb=document.getElementById('extraBtn'); if(_eb) _eb.onclick=openExtra;
 var _eb2=document.getElementById('extraBtn2'); if(_eb2) _eb2.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openExtra(); };
 var _ec=document.getElementById('extraClose'); if(_ec) _ec.onclick=()=>{ document.getElementById('extraModal').style.display='none'; };
