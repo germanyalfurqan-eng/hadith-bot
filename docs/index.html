@@ -161,7 +161,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v259</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v260</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -510,7 +510,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v259';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v260';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1841,13 +1841,18 @@ function ensureRelToggle(){ const res=document.getElementById('res'); if(!res.fi
   const anchor=document.getElementById('uniqToggle')||document.getElementById('shareBtn')||document.getElementById('grpToggle');
   if(anchor&&anchor.parentNode) anchor.parentNode.insertBefore(relToggleEl(), anchor.nextSibling); else res.insertBefore(relToggleEl(), res.children[1]||null); }
 function _matnText(d){ return d.type==='hr'?(d.ru||''):((d.h&&d.h.text)||(d.v&&d.v.text)||''); }
-function _matnKey(d){ const t=canon(_matnText(d)).replace(/\s+/g,' ').trim(); return t.split(' ').slice(0,12).join(' '); }   // первые 12 слов канона матна
-function dedupResults(arr){ const seen=new Set(), out=[]; let hid=0; arr.forEach(d=>{ const k=_matnKey(d); if(k && seen.has(k)){ hid++; return; } if(k) seen.add(k); out.push(d); }); return {list:out, hidden:hid}; }
-function uniqToggleEl(){ const t=document.createElement('div'); t.id='uniqToggle';
-  t.style.cssText='display:inline-block;margin:2px 0 8px 8px;font-size:13px;color:var(--link);cursor:pointer;user-select:none;border:1px solid '+(uniqMode?'#2e9b5b':'var(--border)')+';border-radius:12px;padding:3px 10px';
-  t.textContent = uniqMode?'✨ Уникальные (вкл)':'✨ Только уникальные';
-  t.title='Скрыть повторы одного и того же хадиса из разных книг — показать только уникальные';
-  t.onclick=()=>{ uniqMode=!uniqMode; renderResultsView(); }; return t; }
+// ХАДИС = матн (хвост текста, после иснада): разные иснады одного матна свернуть в ОДИН хадис
+function _hadKey(d){ const w=canon(_matnText(d)).replace(/\s+/g,' ').trim().split(' ').filter(Boolean); return (w.length>14?w.slice(-14):w).join(' '); }
+// ВЕРСИЯ = начало (иснад+старт матна): одна и та же цепь из разных книг (Абу Дауд+Ахмад) = одна версия
+function _verKey(d){ const w=canon(_matnText(d)).replace(/\s+/g,' ').trim().split(' ').filter(Boolean); return w.slice(0,16).join(' '); }
+function dedupResults(arr, mode){ const seen=new Set(), out=[]; let hid=0; const kf=(mode==='version'?_verKey:_hadKey); arr.forEach(d=>{ const k=kf(d); if(k && seen.has(k)){ hid++; return; } if(k) seen.add(k); out.push(d); }); return {list:out, hidden:hid}; }
+function uniqToggleEl(){ const wrap=document.createElement('span'); wrap.id='uniqToggle';
+  const mk=(mode,label,col,tip)=>{ const on=uniqMode===mode; const t=document.createElement('span');
+    t.style.cssText='display:inline-block;margin:2px 0 8px 8px;font-size:13px;color:var(--link);cursor:pointer;user-select:none;border:1px solid '+(on?col:'var(--border)')+';border-radius:12px;padding:3px 10px'+(on?(';background:'+col+'22;color:var(--text)'):'');
+    t.textContent=(on?'✓ ':'')+label; t.title=tip; t.onclick=()=>{ uniqMode=(uniqMode===mode?'':mode); renderResultsView(); }; return t; };
+  wrap.appendChild(mk('hadith','✨ Уникальные хадисы','#2e9b5b','Один хадис — один раз (разные иснады одного матна сворачиваются). Основная версия / متابعات — пометка скоро.'));
+  wrap.appendChild(mk('version','🔀 Уникальные версии','#6c5ce7','Все версии, но без дублей версий: одна и та же цепь из разных книг (Абу Дауд+Ахмад) — один раз.'));
+  return wrap; }
 function ensureUniqToggle(){ const res=document.getElementById('res'); if(!res.firstChild||document.getElementById('uniqToggle')||!_results.length) return;
   const anchor=document.getElementById('shareBtn')||document.getElementById('grpToggle');
   if(anchor&&anchor.parentNode) anchor.parentNode.insertBefore(uniqToggleEl(), anchor.nextSibling); else res.insertBefore(uniqToggleEl(), res.children[1]||null); }
@@ -1902,8 +1907,8 @@ function renderResultsView(){
   const res=document.getElementById('res'); _clearRenderQ(); res.innerHTML='';
   let list=_results, hid=0;
   if(relMode && _lastQueryTerms.length){ list=_results.map((d,i)=>[d,_relScore(d),i]).sort((a,b)=>(b[1]-a[1])||(a[2]-b[2])).map(x=>x[0]); }
-  if(uniqMode){ const dd=dedupResults(list); list=dd.list; hid=dd.hidden; }
-  const cnt='найдено: '+_results.length+(relMode?' · по релевантности':'')+(uniqMode?(' · уникальных '+list.length+(hid?(' · скрыто дублей '+hid):'')):'');
+  if(uniqMode){ const dd=dedupResults(list, uniqMode); list=dd.list; hid=dd.hidden; }
+  const cnt='найдено: '+_results.length+(relMode?' · по релевантности':'')+(uniqMode?(' · '+(uniqMode==='version'?'уникальных версий':'уникальных хадисов')+' '+list.length+(hid?(' · свёрнуто '+hid):'')+(uniqMode==='hadith'?' · основная версия/متابعات — пометка скоро':'')):'');
   res.appendChild(info((groupSrc?('📚 По '+(tab==='quran'?'сурам':'источникам')+' · '):'')+cnt+((!groupSrc&&list.length>400)?' (первые 400)':'')));
   res.appendChild(grpToggleEl()); res.appendChild(uniqToggleEl()); res.appendChild(relToggleEl()); ensureShareBtn();
   if(!groupSrc){ list.slice(0,400).forEach(d=>res.appendChild(makeCard(d))); return; }
