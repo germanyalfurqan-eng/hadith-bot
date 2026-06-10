@@ -163,7 +163,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v273</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v274</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -513,7 +513,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v273';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v274';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1122,7 +1122,7 @@ function _renderBookSugg(hits, v){
   box.appendChild(hdr);
   if(_bsCollapsed) return;   // свёрнуто — показываем только заголовок-пилюлю (ясно, что это и что свёрнуто)
   hits.slice(0,4).forEach(b=>{ const c=document.createElement('span'); c.className='chip'; c.style.cssText='cursor:pointer;direction:rtl;font-size:13px'; c.textContent=b.n; c.title=(b.a||'')+(b.c?(' · '+b.c):''); c.onclick=()=>{ box.style.display='none'; openBook(b.i); }; box.appendChild(c); });
-  if(n>4){ const more=document.createElement('span'); more.className='chip'; more.style.cssText='cursor:pointer;font-size:12px;color:var(--link)'; more.textContent='+'+(n-4)+' в Мактабе'; more.title='Ещё '+(n-4)+' книг с таким названием — откроется каталог Мактабы с этим запросом'; more.onclick=()=>{ box.style.display='none'; openCatalog(); setTimeout(()=>{ const s=document.querySelector('#catModal #catSearch'); if(s){ s.value=v; const mm=document.getElementById('catModal'); if(mm&&mm._render) mm._render(); } },180); }; box.appendChild(more); }
+  if(n>4){ const more=document.createElement('span'); more.className='chip'; more.style.cssText='cursor:pointer;font-size:12px;color:var(--link);border:1px solid var(--link)'; more.textContent='📚 Показать все '+n+' книг →'; more.title='Открыть каталог со ВСЕМИ '+n+' книгами, в названии которых есть «'+v+'»'; more.onclick=()=>{ box.style.display='none'; openCatalog(v); }; box.appendChild(more); }
   const x=document.createElement('span'); x.className='chip'; x.style.cssText='cursor:pointer;font-size:12px;color:var(--hint)'; x.textContent='✕'; x.title='Скрыть эти подсказки книг'; x.onclick=()=>{ _bsClosedQ=v; box.style.display='none'; box.innerHTML=''; }; box.appendChild(x);
 }
 function collapseBookSugg(){ _bsCollapsed=true; const box=document.getElementById('bookSugg'); if(box && box.style.display!=='none' && _bsLastHits.length){ _renderBookSugg(_bsLastHits, _bsLastV); } }   // ставим флаг безусловно — отложенный рендер тоже свернётся
@@ -2941,7 +2941,7 @@ async function _critBio(c, host, btn){
 let _wikiT=null, _wikiTP=null;
 function loadWikiTitles(){ if(_wikiT) return Promise.resolve(_wikiT); if(_wikiTP) return _wikiTP;
   _wikiTP=fetch('./wiki_titles_verified.json').then(r=>r.ok?r.json():{}).then(j=>{ _wikiT=j||{}; window._wikiT=_wikiT; return _wikiT; }).catch(()=>{ _wikiT={}; window._wikiT={}; return _wikiT; }); return _wikiTP; }
-async function openCatalog(){
+async function openCatalog(q0){   // q0 (опц.) — начальный запрос: открыть каталог сразу с фильтром по нему (без гонки таймингов)
   const cat=await loadCatalog();
   try{ await loadWikiTitles(); }catch(e){}   // канон. рус. названия книг из Википедии (выверенные, 68 книг)
   let m=document.getElementById('catModal');
@@ -3111,6 +3111,7 @@ async function openCatalog(){
     const _co=m.querySelector('#catOur'); if(_co) _co.onclick=()=>{ try{ openReader(); const rm=document.getElementById('readModal'); if(rm) rm.style.zIndex='10005'; }catch(e){} };
     m._render=render;
   }
+  if(q0!=null && q0!==''){ const _s=m.querySelector('#catSearch'); if(_s) _s.value=q0; const _c=m.querySelector('#catCat'); if(_c) _c.value=''; }   // открыть сразу с фильтром по q0
   m.style.display='flex'; if(m._render) m._render();
 }
 // M166: читалка Корана — клик «Коран · X:Y» → вся сура для чтения (листать суры, перевод, Arabus)
