@@ -210,6 +210,7 @@
     <div id="qSuggL" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto"></div>
     <div id="qSuggR" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto"></div>
   </div>
+  <div id="narrSugg" style="display:none;margin:-2px 0 8px;border:1px solid #6c5ce7;border-radius:12px;background:var(--card);overflow:hidden;max-height:300px;overflow-y:auto;box-shadow:0 6px 18px #0006"></div>
   <div id="recentBox" style="display:none;margin:-4px 0 8px;border:1px solid var(--border);border-radius:10px;background:var(--card);overflow:hidden;box-shadow:0 6px 18px #0006">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 11px;border-bottom:1px solid var(--border)"><span class="hint" style="font-size:11px">🕐 Недавние</span><span><span id="recentClr" style="cursor:pointer;color:var(--link);font-size:11px">очистить</span> <span id="recentClose" style="cursor:pointer;color:var(--hint);font-size:14px;margin-inline-start:8px">✕</span></span></div>
     <div id="recentList"></div>
@@ -223,6 +224,7 @@
     <div class="chip" data-mode="root" title="Однокоренные: ищет все формы слова по корню (намного шире). Покажет панель форм.">جذ Однокоренные</div>
     <div class="chip" data-mode="diac" title="Огласовки точно: совпадение с учётом تشكيل (как набрано в запросе).">َ Огласовки точно</div>
     <div class="chip" data-mode="ai" title="По смыслу (ИИ): опиши смысл на русском/англ. — ИИ подберёт арабские фразы и найдёт хадисы/аяты. Текст всегда из реальной базы.">🧠 По смыслу (ИИ)</div>
+    <div class="chip" data-mode="narr" title="Поиск передатчика (равия): набирай имя по-арабски или по-русски (Суфьян ас-Саури) — живые подсказки из 18989 равиев → карточка с оценками риджаля.">👤 Передатчик</div>
     <div class="chip" id="moreModes" style="border-style:dashed" title="Дополнительные режимы поиска">⚙️ ещё ▾</div>
   </div>
   <div class="modes" id="modesMore" style="display:none">
@@ -540,7 +542,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v305';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v306';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1247,7 +1249,14 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.datas
   if(m==='ai'){ const inp=document.getElementById('q');
     inp.placeholder = modes.ai ? 'Опиши смысл точнее, напр.: хадис о запрете нововведений'
                                : (tab==='hadith'?'Слова, фраза или № хадиса…':'Слова, фраза или № (2:255)…');
-    if(modes.ai && !inp.value.trim()) toast('Пиши осмысленно, напр.: «хадис о запрете нововведений»'); }
+    if(modes.ai && !inp.value.trim()) toast('Пиши осмысленно, напр.: «хадис о запрете нововведений»');
+    if(modes.ai && modes.narr){ modes.narr=false; const nc=document.querySelector('.chip[data-mode="narr"]'); if(nc) nc.classList.remove('on'); hideNarrSugg(); } }
+  if(m==='narr'){ const inp=document.getElementById('q');   // 👤 режим поиска передатчика (Сессия 13)
+    if(modes.narr){ if(modes.ai){ modes.ai=false; const ac=document.querySelector('.chip[data-mode="ai"]'); if(ac) ac.classList.remove('on'); }
+      inp.placeholder='Имя равия: араб. или рус. (Суфьян ас-Саури)…';
+      if(!inp.value.trim()) toast('👤 Набирай имя передатчика — покажу подсказки');
+      else narrSuggest(inp.value.trim());
+    } else { inp.placeholder=(tab==='hadith'?'Слова, фраза или № хадиса…':'Слова, фраза или № (2:255)…'); hideNarrSugg(); } }
   if(document.getElementById('q').value.trim()) runSearch();   // сразу пересчитать с новым режимом
 });
 var _ct=document.getElementById('colsToggle'); if(_ct) _ct.onclick=()=>{ const b=document.getElementById('colsBody'); const open=b.style.display==='none'; b.style.display=open?'block':'none'; var a=document.getElementById('colsArrow'); if(a) a.textContent=open?'▴':'▾'; };
@@ -1625,6 +1634,8 @@ async function runSearch(explicit){
   // Скрытием управляет сам обработчик ввода (по содержимому) и клик по чипу.
   await new Promise(r=>setTimeout(r,16));   // дать браузеру отрисовать «Ищу…»/нажатую кнопку ДО тяжёлого цикла (чтобы не выглядело зависшим)
   if(seq!==_seq) return;
+  // 👤 РЕЖИМ ПЕРЕДАТЧИКА (Сессия 13): ищем равия по имени (араб/рус), не хадисы
+  if(modes.narr){ await narrRun(q, seq); logSearch(shown,'narr',0); return; }
   // 🎯 SCOPE: ищем ТОЛЬКО в выбранных книгах (риджаль-149 и т.п.) — напрямую по Мактабе с фильтром по book_id; локальный поиск минуем.
   if(_scopeIds && _scopeIds.size && tab==='hadith' && explicit){
     res.innerHTML=''; let sq=q;
@@ -4062,6 +4073,160 @@ async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.lengt
   for(const it of idx){ const nm=it[0]; if(nm===cn){ exact=it[1]; break; } if(nm.indexOf(cn+' ')===0 && nm.length<prefLen){ pref=it[1]; prefLen=nm.length; } }
   return exact!=null?exact:pref; }
 async function _narrCard(id){ const b=Math.floor(id/100); if(!_narrShard[b]){ try{ _narrShard[b]=await (await fetch('./narr/'+b+'.json')).json(); }catch(e){ _narrShard[b]={}; } } return (_narrShard[b]||{})[String(id)]||null; }
+/* ===== 👤 РЕЖИМ ПОИСКА ПЕРЕДАТЧИКА (Сессия 13, Ф-10): автоподсказки из 18989 равиев; рус↔араб «скелет согласных» ===== */
+// Идея Ф-10: имя по-русски и по-арабски сводим к скелету согласных в общем алфавите (ث/س/ص→s, ح/خ/ه→h, ق/ك→k…),
+// слабые و/ي (и рус у/ю/и/й/в) — только в strict-скелете; артикли (ال / «аль-/ас-…») срезаем; хвостовую ه/«ха» (ة) срезаем.
+// Матч: слова запроса = подпоследовательность слов имени по loose-скелету; strict-совпадение и короткое имя поднимают ранг.
+const _AR_SK={'ب':'b','ت':'t','ث':'s','ج':'j','ح':'h','خ':'h','د':'d','ذ':'z','ر':'r','ز':'z','س':'s','ش':'x','ص':'s','ض':'d','ط':'t','ظ':'z','غ':'g','ف':'f','ق':'k','ك':'k','ل':'l','م':'m','ن':'n','ه':'h'};
+function _skelFin(s){ s=s.replace(/(.)\1+/g,'$1');   // двойные схлопнуть (шадда/рус «бб») ДО удаления слабых — иначе h-y-r-y-r слипся бы в hr
+  return [s, s.replace(/[wy]/g,'').replace(/(.+)h$/,'$1')]; }   // loose = без слабых و/ي; хвостовую ه (часто ة) срезаем, НО не единственную согласную (يحيي→h)
+function _skelAr(w){ w=w.replace(/^ال/,''); let s='';
+  for(const ch of w){ const c=_AR_SK[ch]; if(c) s+=c; else if(ch==='و'||ch==='ؤ') s+='w'; else if(ch==='ي'||ch==='ئ') s+='y'; }
+  return _skelFin(s); }
+const _RU_SK={'б':'b','п':'b','г':'g','д':'d','ж':'j','з':'z','к':'k','л':'l','м':'m','н':'n','р':'r','с':'s','т':'t','ф':'f','х':'h','ц':'s','ч':'j','ш':'x','щ':'x'};
+function _skelRu(w){ w=w.toLowerCase().replace(/ё/g,'е').replace(/дж/g,'ж').replace(/^(аль|эль|ал|ас|аш|ад|аз|ар|ан|ат)[-ъ']/,''); let s='';
+  for(const ch of w){ const c=_RU_SK[ch]; if(c) s+=c; else if(ch==='в'||ch==='у'||ch==='ю') s+='w'; else if(ch==='й'||ch==='и'||ch==='ы') s+='y'; }
+  return _skelFin(s); }
+let _narrExt=null, _narrExtP=null;   // расширение: id → [кунья+нисба (канон), год смерти, известность(трудов-критиков)] — матчинг «ас-Саури» + ранжирование знаменитостей
+function loadNarrExt(){ if(_narrExt) return Promise.resolve(_narrExt); if(_narrExtP) return _narrExtP;
+  _narrExtP=fetch('./narrators_ext.json').then(r=>r.ok?r.json():null).then(a=>{ _narrExt=new Map(); (a||[]).forEach(x=>_narrExt.set(x[0],[x[1]||'',x[2]||0,x[3]||0])); return _narrExt; }).catch(()=>{ _narrExt=new Map(); return _narrExt; }); return _narrExtP; }
+let _narrSkelIdx=null;
+async function _narrSkelIndex(){ if(_narrSkelIdx) return _narrSkelIdx;
+  const [idx, ext]=await Promise.all([loadNarrNames(), loadNarrExt()]);
+  _narrSkelIdx=idx.map(it=>{ const e=ext.get(it[1]); const full=it[0]+(e&&e[0]?(' '+e[0]):'');
+    const pen=/ (عن|قال) /.test(' '+it[0]+' ')?8:0;   // «X عن Y» / «قال…» — составная запись, не имя; известность у них раздута текстовым матчингом
+    let prof=null;   // «короткий профиль» = первое имя + нисба (без куний): паттерн шухры «Суфьян ас-Саури» матчится СМЕЖНО
+    if(e&&e[0]){ let ew=e[0].split(' '); while(ew.length>1&&(ew[0]==='ابو'||ew[0]==='ام'||ew[0]==='ابن')) ew=ew.slice(2);
+      if(ew.length) prof=[it[0].split(' ')[0]].concat(ew).map(_skelAr); }
+    return [it[0], it[1], full.split(' ').map(_skelAr), e?(e[2]||0):0, pen, prof]; });   // [имя, id, скелеты слов, известность, штраф, профиль]
+  return _narrSkelIdx; }
+const _NARR_RU_STOP=new Set(['имам','имама','хафиз','шейх','передатчик','равий','рави']);   // титулы — не часть имени
+// 🌟 ГАРАНТ-СЛОЙ знаменитостей (принцип Ф-09: не нашёл известного — добавь сюда): рус-шухра → точное начало канон-имени в базе
+const _NARR_FAMOUS={
+ 'абу хурайра':'عبد الرحمن بن صخر بن جويريه','ибн аббас':'عبد الله بن عباس بن عبد المطلب','ибн умар':'عبد الله بن عمر بن الخطاب',
+ 'ибн масуд':'عبد الله بن مسعود بن غافل','аиша':'عائشه بنت ابي بكر الصديق','зухри':'محمد بن مسلم بن عبيد الله بن عبد الله بن شهاب',
+ 'аамаш':'سليمان بن مهران','амаш':'سليمان بن مهران','ваки':'وكيع بن الجراح بن مليح','хасан басри':'الحسن بن ابي الحسن يسار',
+ 'абу бакр':'عبد الله بن ابي قحافه عثمان','умар':'عمر بن الخطاب','усман':'عثمان بن عفان','али':'علي بن ابي طالب عبد مناف',
+ 'джабир':'جابر بن عبد الله بن عمرو بن حرام','абу дауд':'سليمان بن الاشعث','шуба':'شعبه بن الحجاج','ибн ханбал':'احمد بن محمد بن حنبل',
+ 'ахмад ибн ханбал':'احمد بن محمد بن حنبل','шафии':'محمد بن ادريس بن العباس','ибн мубарак':'عبد الله بن المبارك بن واضح',
+ 'абу ханифа':'النعمان بن ثابت بن زوطي','суфян саури':'سفيان بن سعيد بن مسروق','суфян ибн уяйна':'سفيان بن عيينه',
+ 'малик':'مالك بن انس بن مالك بن ابي عامر','малик ибн анас':'مالك بن انس بن مالك بن ابي عامر','анас ибн малик':'انس بن مالك بن النضر',
+ 'яхя ибн маин':'يحيي بن معين بن عون','муслим':'مسلم بن الحجاج'};   // ⚠️ ключи — в форме _narrFamKey (без ь/ъ, без аль-/ас-)
+function _narrFamKey(q){ return q.toLowerCase().replace(/ё/g,'е').replace(/[ъь']/g,'').replace(/(^|\s)(аль|эль|ал|ас|аш|ад|аз|ар|ан|ат)-/g,'$1').replace(/-/g,' ').replace(/\s+/g,' ').trim(); }
+function _narrRuMatch(qsk, nws){   // qsk/nws: массивы [strict,loose]; подпоследовательность по loose
+  let i=0, strictHits=0, firstHit=-1, lastHit=-1;
+  for(let j=0;j<nws.length && i<qsk.length;j++){
+    if(qsk[i][1]===nws[j][1]){ if(firstHit<0) firstHit=j; lastHit=j; if(qsk[i][0]===nws[j][0]) strictHits++; i++; } }
+  return i>=qsk.length ? {strictHits:strictHits, firstHit:firstHit, lastHit:lastHit} : null; }
+async function narrCandidates(qRaw){
+  const out=[];
+  if(isArabic(qRaw)){
+    const [idx, ext]=await Promise.all([loadNarrNames(), loadNarrExt()]);
+    const cn=_narrCanon(qRaw); if(cn.length<2) return out;
+    const words=cn.split(' ');
+    for(const it of idx){ const nm=it[0]; let sc=0;
+      const e=ext.get(it[1]); const full=e&&e[0]?(nm+' '+e[0]):nm;   // имя + كنية + نسبة («سفيان الثوري» находит нисбу)
+      if(nm===cn) sc=200; else if(nm.indexOf(cn)===0) sc=100;
+      else if((' '+nm+' ').indexOf(' '+cn+' ')>=0) sc=85;
+      else if((' '+nm).indexOf(' '+cn)>=0) sc=75;
+      else if(words.length>1 && words[0]===nm.split(' ')[0] && words.every(w=>(' '+full).indexOf(' '+w)>=0)) sc=78;   // запрос начинается с ПЕРВОГО имени равия (سفيان الثوري — сам Суфьян выше отца)
+      else if(full!==nm && (' '+full+' ').indexOf(' '+cn+' ')>=0) sc=70;
+      else if(words.length>1 && words.every(w=>(' '+full).indexOf(' '+w)>=0)) sc=60;
+      else if(nm.indexOf(cn)>0) sc=35;
+      else if(full!==nm && full.indexOf(cn)>0) sc=25;
+      if(sc) out.push({nm:nm,id:it[1],sc:sc-nm.length*0.05+Math.min(e?e[2]:0,150)*0.02}); }
+  } else if(/[а-яё]/i.test(qRaw)){
+    const idx=await _narrSkelIndex();
+    const q2=qRaw.toLowerCase().replace(/(^|[\s-])абдул?/g,'$1абд ');   // рус склейка «Абдуллах/Абдурахман» → араб раздельно عبد الله (⚠️ \b не работает с кириллицей!)
+    const qsk=q2.split(/[\s,.;·]+/).filter(w=>!_NARR_RU_STOP.has(w)).map(_skelRu).filter(p=>p[1]);
+    if(!qsk.length) return out;
+    const score=(m)=>{ if(!m) return -1e9;
+      // плотное (смежное) покрытие + известность; штраф за РАСТЯЖКУ матча, не за позицию (нисба честно живёт в конце)
+      const adj=(qsk.length>1 && m.lastHit-m.firstHit===qsk.length-1)?5:0;   // слова подряд (بن عباس) — сильный сигнал
+      return qsk.length*10 + m.strictHits*3 + (m.firstHit===0?4:0) + adj - (m.lastHit-m.firstHit)*0.7 - m.firstHit*0.3; };
+    for(const it of idx){
+      const s=Math.max(score(_narrRuMatch(qsk, it[2])), score(it[5]?_narrRuMatch(qsk, it[5]):null));   // полные слова ИЛИ «короткий профиль» (имя+нисба)
+      if(s<-1e8) continue;
+      out.push({nm:it[0], id:it[1], sc: s - it[0].length*0.01 + Math.min(it[3],150)*0.09 - it[4]}); }
+    // 🌟 гарант: знаменитая шухра из словаря — всегда первой
+    const fam=_NARR_FAMOUS[_narrFamKey(qRaw)];
+    if(fam){ const hit=idx.find(it=>it[0].indexOf(fam)===0);
+      if(hit){ const j=out.findIndex(c=>c.id===hit[1]); if(j>=0) out.splice(j,1); out.unshift({nm:hit[0], id:hit[1], sc:999}); } }
+  }
+  out.sort((a,b)=>b.sc-a.sc); return out.slice(0,14);
+}
+function _narrRow(c){   // строка-кандидат: имя (RTL) + мета (وفاة/ранг) дотягивается из шарда
+  const r=document.createElement('div');
+  r.style.cssText='padding:8px 11px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center';
+  r.innerHTML='<span class="nsMeta" style="font-size:11px;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%"></span><b style="direction:rtl;text-align:right;font-size:14.5px;flex:1">'+esc(c.nm)+'</b>';
+  r.onclick=()=>{ try{hap('light');}catch(e){} narrOpen(c.nm); };
+  _narrCard(c.id).then(cc=>{ if(!cc) return; const m=[]; if(cc[4]) m.push('وفاة ~'+cc[4]+'هـ'); const rk=cc[5]||cc[6]; if(rk) m.push((''+rk).slice(0,42)); const el=r.querySelector('.nsMeta'); if(el) el.textContent=m.join(' · '); }).catch(()=>{});
+  return r;
+}
+function hideNarrSugg(){ const b=document.getElementById('narrSugg'); if(b) b.style.display='none'; }
+let _narrSugSeq=0;
+async function narrSuggest(q){
+  const box=document.getElementById('narrSugg'); if(!box) return; const my=++_narrSugSeq;
+  const cands=await narrCandidates(q); if(my!==_narrSugSeq) return;
+  if(!cands.length){ box.style.display='none'; return; }
+  box.innerHTML='<div style="padding:5px 11px;border-bottom:1px solid var(--border);font-size:11px;color:var(--hint)">👤 Похожие передатчики — выбери:</div>';
+  cands.forEach(c=>box.appendChild(_narrRow(c)));
+  box.style.display='block';
+}
+async function narrOpen(nm){
+  hideNarrSugg(); const qi=document.getElementById('q'); if(qi){ qi.value=nm; try{ const qc=document.getElementById('qClear'); if(qc) qc.style.display='block'; }catch(e){} }
+  try{ saveRecent(nm); }catch(e){}
+  const res=document.getElementById('res'); try{ _clearRenderQ(); }catch(e){} res.innerHTML='';
+  const box=document.createElement('div'); box.className='card'; box.style.cssText='padding:11px'; res.appendChild(box);
+  const out=document.createElement('div'); box.appendChild(out);
+  await showNarratorBio(nm, out);
+  try{ window.scrollTo({top:res.offsetTop-8,behavior:'smooth'}); }catch(e){}
+}
+async function narrRun(q, seq){
+  hideNarrSugg();   // дропдаун-подсказки гасим — список кандидатов рисуем в результатах
+  const res=document.getElementById('res'); res.innerHTML='';
+  const head=info('👤 Ищу передатчика…'); res.appendChild(head);
+  const cands=await narrCandidates(q); if(seq!==undefined && seq!==_seq) return;
+  if(cands.length===1){ res.innerHTML=''; await narrOpen(cands[0].nm); return; }
+  if(cands.length){
+    head.textContent='👤 Похожие передатчики ('+cands.length+') — выбери:';
+    const lb=document.createElement('div'); lb.className='card'; lb.style.cssText='padding:4px 0';
+    cands.forEach(c=>lb.appendChild(_narrRow(c)));
+    res.appendChild(lb);
+    if(!isArabic(q) && BACKEND_URL) res.appendChild(_narrAiBtn(q, 'Нет нужного? 🧠 ИИ: распознать русское написание'));
+    return;
+  }
+  head.textContent='👤 По такому написанию не нашёл.';
+  if(!isArabic(q) && BACKEND_URL) res.appendChild(_narrAiBtn(q, '🧠 ИИ: распознать русское написание имени'));
+  else head.textContent+=' Попробуй часть имени (напр. только нисбу: الثوري).';
+}
+function _narrAiBtn(q, label){
+  const w=document.createElement('div'); w.style.cssText='margin:8px 0';
+  const b=document.createElement('button'); b.className='go'; b.style.cssText='padding:9px 14px;font-size:14px';
+  b.textContent=label; b.onclick=()=>{ b.disabled=true; narrAiResolve(q, w); };
+  w.appendChild(b); return w;
+}
+async function narrAiResolve(q, host){
+  host.innerHTML='<div class="hint">🧠 Спрашиваю ИИ, как пишется по-арабски…</div>';
+  let names=[];
+  try{
+    const key='narr|'+q.toLowerCase(); let j=_aiCache[key];
+    if(!j && BACKEND_URL){
+      const meaning='Транслитерация имени. Передатчик хадисов (равий) написан русскими буквами: «'+q+'». В поле ФРАЗЫ дай 2-4 варианта АРАБСКОГО написания именно этого ИМЕНИ (полная форма с отцом/нисбой и краткая) — только имя, БЕЗ слов из хадисов.';
+      const r=await fetch(BACKEND_URL+'/neuro',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({meaning:meaning,kind:'hadith',initData:INITDATA})});
+      if(r.ok){ j=await r.json(); _aiCache[key]=j; }
+    }
+    names=((j&&j.phrases)||[]).filter(isArabic);
+  }catch(e){}
+  if(!names.length){ host.innerHTML='<div class="hint">ИИ не дал арабского написания — попробуй иначе (добавь «ибн …» или нисбу).</div>'; return; }
+  host.innerHTML='<div class="hint" style="direction:rtl;text-align:right">🧠 ИИ предлагает: '+names.map(esc).join(' · ')+'</div>';
+  const seen=new Set(); const all=[];
+  for(const nm of names){ const cs=await narrCandidates(nm); for(const c of cs){ if(!seen.has(c.id)){ seen.add(c.id); all.push(c); } } }
+  if(!all.length){ host.insertAdjacentHTML('beforeend','<div class="hint">В базе 18989 равиев совпадения не нашёл.</div>'); return; }
+  const lb=document.createElement('div'); lb.className='card'; lb.style.cssText='padding:4px 0';
+  all.slice(0,14).forEach(c=>lb.appendChild(_narrRow(c)));
+  host.appendChild(lb);
+}
 let _rijalBkMap=null, _rijalBkMapP=null, _narrBkShard={};   // предрасчёт: в каких НАШИХ трудах мутабарунов есть равий (личная проверка 18989)
 function loadRijalBooksMap(){ if(_rijalBkMap) return Promise.resolve(_rijalBkMap); if(_rijalBkMapP) return _rijalBkMapP; _rijalBkMapP=fetch('./rijal_books_map.json').then(r=>r.ok?r.json():null).then(j=>{_rijalBkMap=j||{};return _rijalBkMap;}).catch(()=>{_rijalBkMap={};return _rijalBkMap;}); return _rijalBkMapP; }
 async function _narrBooks(id){ const b=Math.floor(id/100); if(!_narrBkShard[b]){ try{ _narrBkShard[b]=await (await fetch('./narrbk/'+b+'.json')).json(); }catch(e){ _narrBkShard[b]={}; } } return (_narrBkShard[b]||{})[String(id)]||[]; }
@@ -5129,6 +5294,7 @@ document.getElementById('goBtn').onclick=()=>{ hap('medium'); try{collapseBookSu
   el.addEventListener('input',()=>{ clearTimeout(t); const v=el.value.trim();
     if(v.length<2){ if(!v){document.getElementById('res').innerHTML='';setStatus('');} return; }
     if(modes.ai) return;   // режим «По смыслу (ИИ)»: НЕ дёргать ИИ на каждую букву (тратит ключ) — только по «Найти»/Enter
+    if(modes.narr){ t=setTimeout(()=>narrSuggest(v),230); return; }   // 👤 передатчик: живые подсказки, полный показ — по Enter/Найти
     // НЕ авто-искать НЕОДНОЗНАЧНЫЙ номер аята (235 → 2:35 / 23:5): пусть помощник покажет варианты, юзер выберет
     if(tab==='quran'){ const mn=v.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)); if(/^\d{2,6}$/.test(mn) && (mn.length>=4 || +mn>114) && ayahCandidates(mn).length>1){ return; } }
     t=setTimeout(()=>runSearch(true),350); });   // explicit=true → поиск идёт и по всей библиотеке (как по умолчанию)
