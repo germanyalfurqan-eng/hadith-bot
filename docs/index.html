@@ -165,7 +165,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=1" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v302</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v303</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -540,7 +540,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v302';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v303';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4051,6 +4051,31 @@ async function _narrCard(id){ const b=Math.floor(id/100); if(!_narrShard[b]){ tr
 let _rijalBkMap=null, _rijalBkMapP=null, _narrBkShard={};   // предрасчёт: в каких НАШИХ трудах мутабарунов есть равий (личная проверка 18989)
 function loadRijalBooksMap(){ if(_rijalBkMap) return Promise.resolve(_rijalBkMap); if(_rijalBkMapP) return _rijalBkMapP; _rijalBkMapP=fetch('./rijal_books_map.json').then(r=>r.ok?r.json():null).then(j=>{_rijalBkMap=j||{};return _rijalBkMap;}).catch(()=>{_rijalBkMap={};return _rijalBkMap;}); return _rijalBkMapP; }
 async function _narrBooks(id){ const b=Math.floor(id/100); if(!_narrBkShard[b]){ try{ _narrBkShard[b]=await (await fetch('./narrbk/'+b+'.json')).json(); }catch(e){ _narrBkShard[b]={}; } } return (_narrBkShard[b]||{})[String(id)]||[]; }
+// 📚 ГЛУБОКИЙ АНАЛИЗ: оценки равия (цитаты+квалификация) из 149 трудов риджаля (наш разбор → narrverd шарды)
+let _narrVerdShard={};
+async function _narrVerd(id){ const b=Math.floor(id/100); if(!_narrVerdShard[b]){ try{ _narrVerdShard[b]=await (await fetch('./narrverd/'+b+'.json')).json(); }catch(e){ _narrVerdShard[b]={}; } } return (_narrVerdShard[b]||{})[String(id)]||null; }
+const _TADIL_KW=['ثقة','ثبت','حجة','امام','حافظ','صدوق','لا باس','صالح','مامون','عدل','ليس به باس','محله الصدق'];
+async function renderNarrVerdicts(id, host){
+  let v=null; try{ v=await _narrVerd(id); }catch(e){}
+  if(!v || !v.bk || !v.bk.length) return;
+  const isTadil=(vd)=>(vd||[]).some(w=>_TADIL_KW.some(t=>w.indexOf(t)===0));
+  const sec=document.createElement('div'); sec.style.cssText='margin-top:8px;border:1px solid #2e9b5b;border-radius:11px;overflow:hidden';
+  const hdr=document.createElement('div'); hdr.style.cssText='cursor:pointer;padding:9px 11px;background:rgba(46,155,91,.13);font-size:13px;color:#bff5d4;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px';
+  hdr.innerHTML='<span>📚 Оценки из трудов риджаля — '+v.bk.length+' книг (глубокий анализ)</span><span class="vTg">▾</span>';
+  const body=document.createElement('div'); body.style.cssText='padding:8px 11px;max-height:48vh;overflow:auto';
+  v.bk.forEach(b=>{
+    const card=document.createElement('div'); card.style.cssText='border-bottom:1px solid var(--border);padding:8px 0';
+    const verds=(b.q[0]&&b.q[0].v)||[];
+    const tag=verds.length?('<span style="font-size:11px;border-radius:6px;padding:1px 7px;margin-inline-start:6px;white-space:nowrap;'+(isTadil(verds)?'background:#173d30;color:#bff5d4;border:1px solid #2e9b5b':'background:#3d1717;color:#ff9b7a;border:1px solid #b3502e')+'">'+esc(verds.join(' · '))+'</span>'):'';
+    let h='<div style="font-size:12.5px;color:#9fb6d6;font-weight:600">📕 '+esc(b.b)+(b.a?(' — '+esc(b.a)):'')+tag+'</div>';
+    (b.q||[]).forEach(q=>{ h+='<div style="direction:rtl;text-align:right;font-size:14px;line-height:1.75;margin-top:4px">'+esc(q.q)+'…</div>'; });
+    if(b.q[0]&&b.q[0].p!=null) h+='<div style="margin-top:3px"><span class="vOpen" data-bid="'+b.i+'" data-pg="'+b.q[0].p+'" style="cursor:pointer;color:var(--link);font-size:11.5px">📖 открыть в книге (стр. '+b.q[0].p+')</span></div>';
+    card.innerHTML=h; body.appendChild(card);
+  });
+  hdr.onclick=()=>{ const op=body.style.display!=='none'; body.style.display=op?'none':'block'; hdr.querySelector('.vTg').textContent=op?'▸':'▾'; };
+  sec.appendChild(hdr); sec.appendChild(body); host.appendChild(sec);
+  body.querySelectorAll('.vOpen').forEach(o=>o.onclick=()=>{ try{ var mm=document.getElementById('catModal'); if(mm) mm.style.display='none'; openBook(+o.dataset.bid, +o.dataset.pg||1); }catch(e){} });
+}
 // #5 шаг2: СВОДКА ПО МУТАБАРУНАМ — у каких критиков равий засвидетельствован (✅) / у каких не найден (⬜). Чистый фронт (narrbk + rijal_books_map, личная сверка 18989).
 async function renderMutabarunSummary(id, box, out){
   try{
@@ -4120,6 +4145,7 @@ async function showNarratorBio(name, out){
   const foundLocal=!!c;
   // #5 (вердикты вверх): готовый джарх-тадиль учёных из موسوعة — СРАЗУ под карточкой (как в ТГ-образце: цитаты+источник+ثقة)
   if(c && c[8]){ try{ renderMosuaJarh(c, out); }catch(e){} }
+  if(c){ try{ renderNarrVerdicts(c[0], out); }catch(e){} }   // 📚 оценки из 149 трудов (наш глубокий анализ — цитаты+квалификация)
   // #5 шаг2: сводка ПО МУТАБАРУНАМ (плейсхолдер выше «упоминаний»; заполняется async ниже)
   let _mtbBox=null; if(c){ _mtbBox=document.createElement('div'); out.appendChild(_mtbBox); }
   // НИЖЕ — сырые УПОМИНАНИЯ в наших трудах (обработка НЕ завершена, свёрнуто)
