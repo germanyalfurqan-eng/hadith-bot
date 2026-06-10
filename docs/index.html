@@ -165,7 +165,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=1" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v304</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v305</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -540,7 +540,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v304';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v305';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2361,8 +2361,21 @@ function renderScopeChip(){ var bar=document.getElementById('scopeBar');
   if(!bar){ bar=document.createElement('div'); bar.id='scopeBar'; bar.style.cssText='margin:6px 0'; var a=document.querySelector('.modes'); if(a&&a.parentNode) a.parentNode.insertBefore(bar,a); }
   if(!_scopeIds){ bar.style.display='none'; bar.innerHTML=''; return; }
   bar.style.display='block';
-  bar.innerHTML='<span style="display:inline-flex;align-items:center;gap:7px;background:#173d30;border:1px solid #2e9b5b;color:#bff5d4;border-radius:10px;padding:6px 11px;font-size:13px;max-width:100%">🎯 Поиск только в: <b style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(_scopeName)+'</b> <span id="scopeX" title="убрать рамку поиска" style="cursor:pointer;font-weight:700;flex:none">✕</span></span>';
+  bar.innerHTML='<div style="display:flex;align-items:center;gap:7px;background:#173d30;border:1px solid #2e9b5b;color:#bff5d4;border-radius:10px;padding:6px 11px;font-size:13px;flex-wrap:wrap">🎯 Ищу в: <b style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%">'+esc(_scopeName)+'</b> · '+_scopeIds.size+' кн. <span id="scopeList" style="cursor:pointer;text-decoration:underline">📋 список</span> <span id="scopeX" title="убрать рамку поиска" style="cursor:pointer;font-weight:700;flex:none;margin-inline-start:auto">✕</span></div><div id="scopeListBox" style="display:none;margin-top:6px"></div>';
   var x=document.getElementById('scopeX'); if(x) x.onclick=clearSearchScope;
+  var sl=document.getElementById('scopeList'); if(sl) sl.onclick=()=>{ var b=document.getElementById('scopeListBox'); var op=b.style.display==='none'; b.style.display=op?'block':'none'; sl.textContent=op?'📋 скрыть':'📋 список'; if(op) _renderScopeList(); };
+}
+async function _renderScopeList(){ var box=document.getElementById('scopeListBox'); if(!box||!_scopeIds) return;
+  box.innerHTML='<div class="hint" style="font-size:11px;padding:6px">загружаю…</div>';
+  const cat=await loadCatalog(); const mp={}; cat.forEach(b=>mp[String(b.i)]=b);
+  const books=[..._scopeIds].map(id=>mp[id]).filter(Boolean);
+  let html='<div class="hint" style="font-size:11px;margin-bottom:4px">Выбрано '+_scopeIds.size+' книг — лишнюю убери «−»:</div><div style="border:1px solid var(--border);border-radius:8px;max-height:40vh;overflow:auto;background:var(--card)">';
+  books.forEach(b=>{ const ru=(_catTr.map[b.n]&&_catTr.map[b.n].ru)||'';
+    html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 9px;border-bottom:1px solid var(--border)"><span style="flex:1;min-width:0">'+(ru?('<div style="font-size:13px">📖 '+esc(ru)+'</div>'):'')+'<div style="font-size:12.5px;color:#9fb6d6;direction:rtl;text-align:right">'+esc(b.n)+'</div></span><button class="scDel" data-id="'+String(b.i)+'" style="border:1px solid #b3502e;color:#ff9b7a;background:transparent;padding:2px 11px;font-size:15px;border-radius:7px;cursor:pointer;flex:none">−</button></div>'; });
+  html+='</div>';
+  box.innerHTML=html;
+  box.querySelectorAll('.scDel').forEach(d=>d.onclick=()=>{ _scopeIds.delete(d.dataset.id); try{_pickIds.delete(d.dataset.id);}catch(e){}
+    if(!_scopeIds.size){ clearSearchScope(); } else { _scopeName='Выбранные книги ('+_scopeIds.size+')'; renderScopeChip(); var bb=document.getElementById('scopeListBox'); if(bb){ bb.style.display='block'; var sl=document.getElementById('scopeList'); if(sl) sl.textContent='📋 скрыть'; _renderScopeList(); } } });
 }
 async function appendMaktaba(seq, q, primary){
   if(!BACKEND_URL || !q) return;
