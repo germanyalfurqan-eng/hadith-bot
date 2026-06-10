@@ -165,7 +165,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=1" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v288</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v289</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -537,7 +537,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v288';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v289';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4977,12 +4977,26 @@ document.getElementById('neuroRun').onclick=neuroRun;
 var _tt=document.getElementById('toTop'); if(_tt){ _tt.onclick=()=>{ try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){window.scrollTo(0,0);} };
   window.addEventListener('scroll',()=>{ _tt.style.display=(window.scrollY>500)?'block':'none'; },{passive:true}); }
 function openLink(u){ try{ if(tg&&tg.openLink) tg.openLink(u); else window.open(u,'_blank'); }catch(e){ try{window.open(u,'_blank');}catch(_){} } }
+// M311: первые 3 раза — подсказка «тап по лого = обновление» + кнопка отключить свечение (экономия заряда)
+function _logoHint(){ try{
+  var b=document.getElementById('logoHint');
+  if(!b){ b=document.createElement('div'); b.id='logoHint';
+    b.style.cssText='position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:9999;max-width:92%;background:var(--card);border:1px solid var(--btn);border-radius:12px;padding:10px 13px;box-shadow:0 6px 22px rgba(0,0,0,.45);font-size:13px;color:var(--text);display:flex;align-items:center;gap:10px;flex-wrap:wrap;line-height:1.35';
+    document.body.appendChild(b); }
+  b.innerHTML='<span>✨ Тап по лого — это <b>обновление страницы</b> (на главную, сброс поиска).</span>';
+  var btn=document.createElement('button'); btn.textContent='🔋 Отключить свечение'; btn.className='mini';
+  btn.style.cssText='border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;color:var(--link);white-space:nowrap;background:transparent';
+  btn.onclick=()=>{ cfg.noLogoGlow=true; saveCfg(cfg); var sw=document.getElementById('glowSw'); if(sw) sw.classList.remove('on'); try{localStorage.setItem('mn_logohint','3');}catch(e){} b.style.display='none'; try{toast('Свечение выключено (экономия заряда). Вернуть — в ⚙️ Настройках');}catch(e){} };
+  b.appendChild(btn); b.style.display='flex';
+  clearTimeout(window._logoHintT); window._logoHintT=setTimeout(()=>{ try{b.style.display='none';}catch(e){} }, 6000);
+}catch(e){} }
 function goHome(){
   try{ if(!cfg.noLogoGlow){   // M311: обновление «светом» (выключаемо в Настройках)
     var _bl=document.getElementById('brandLogo'); if(_bl){ _bl.classList.remove('refreshing'); void _bl.offsetWidth; _bl.classList.add('refreshing'); setTimeout(()=>{try{_bl.classList.remove('refreshing');}catch(e){}},1150); }
     var _sh=document.getElementById('appShine'); if(!_sh){ _sh=document.createElement('div'); _sh.id='appShine'; document.body.appendChild(_sh); }
     _sh.classList.remove('on'); void _sh.offsetWidth; _sh.classList.add('on'); setTimeout(()=>{try{_sh.classList.remove('on');}catch(e){}},1100);
     hap('light');
+    try{ var _hn=parseInt(localStorage.getItem('mn_logohint')||'0',10); if(_hn<3){ localStorage.setItem('mn_logohint',String(_hn+1)); _logoHint(); } }catch(e){}
   } }catch(e){}
   document.getElementById('q').value=''; selCols.clear(); selExtra.clear(); _qHist=[]; try{_qHistUpd();}catch(e){}
   modes.ai=modes.root=modes.diac=modes.matnonly=modes.neuro=false; groupSrc=false;   // сброс режимов (ИИ и пр.)
