@@ -969,6 +969,37 @@ def deepseek_balance():
         pass
     return None
 
+# === Строгий учёт расхода GPT (внутренняя кухня R30): токены+стоимость → data/gpt_spend.json + уведомление в LOG ===
+OPENAI_PRICES = {  # USD за 1M токенов (вход, выход) — приблизительно
+    "gpt-4o-mini": (0.15, 0.60), "gpt-4o": (2.50, 10.0),
+    "gpt-4.1-mini": (0.40, 1.60), "gpt-4.1": (2.0, 8.0), "gpt-5": (1.25, 10.0),
+}
+GPT_SPEND_FILE = "data/gpt_spend.json"
+_LAST_GPT_SPEND = {}
+def _gpt_price(model):
+    for k, v in OPENAI_PRICES.items():
+        if model and k in str(model):
+            return v
+    return OPENAI_PRICES["gpt-4o-mini"]   # дефолт-оценка
+def _record_gpt_spend(model, pin, pout):
+    """Записать расход одного GPT-вызова: стоимость + накопительный итог. _now_msk определён ниже (вызов в рантайме — ок)."""
+    global _LAST_GPT_SPEND
+    pi, po = _gpt_price(model)
+    cost = (int(pin or 0) / 1e6) * pi + (int(pout or 0) / 1e6) * po
+    rec = {"t": _now_msk(), "model": model, "in": int(pin or 0), "out": int(pout or 0), "cost": round(cost, 6)}
+    try:
+        os.makedirs("data", exist_ok=True)
+        hist = json.load(open(GPT_SPEND_FILE, encoding="utf-8")) if os.path.exists(GPT_SPEND_FILE) else {"total": 0.0, "calls": 0, "log": []}
+        hist["total"] = round(float(hist.get("total", 0.0)) + cost, 6)
+        hist["calls"] = int(hist.get("calls", 0)) + 1
+        hist["log"] = (hist.get("log", []) + [rec])[-500:]
+        json.dump(hist, open(GPT_SPEND_FILE, "w", encoding="utf-8"), ensure_ascii=False)
+        rec["total"], rec["calls"] = hist["total"], hist["calls"]
+    except Exception:
+        pass
+    _LAST_GPT_SPEND = rec
+    return rec
+
 def ask_gpt(prompt, system=None, max_tokens=900):
     """GPT (OpenAI) для особых задач. Ключ — переменная OPENAI_API_KEY на Railway. Возвращает текст или None/ошибку."""
     if not OPENAI_API_KEY:
@@ -981,7 +1012,13 @@ def ask_gpt(prompt, system=None, max_tokens=900):
             json={"model": OPENAI_MODEL, "messages": msgs, "max_tokens": max_tokens},
             timeout=90)
         if r.status_code == 200:
-            return r.json()["choices"][0]["message"]["content"].strip()
+            j = r.json()
+            try:
+                u = j.get("usage") or {}
+                _record_gpt_spend(j.get("model", OPENAI_MODEL), u.get("prompt_tokens", 0), u.get("completion_tokens", 0))
+            except Exception:
+                pass
+            return j["choices"][0]["message"]["content"].strip()
         return f"⚠️ GPT вернул код {r.status_code}: {r.text[:200]}"
     except Exception as e:
         return f"⚠️ GPT недоступен: {e}"
@@ -1446,6 +1483,13 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception: pass
             ans, model = ask_special(q)
             await update.message.reply_text(((ans or "Не удалось получить ответ.") + (f"\n\n— {model}" if model else ""))[:4000])
+            # СТРОГИЙ лог расхода GPT в внутренний журнал (Gemini бесплатный — не логируем как расход)
+            if model and str(model).startswith("GPT") and _LAST_GPT_SPEND:
+                s = _LAST_GPT_SPEND
+                try:
+                    await context.bot.send_message(LOG_CHAT_ID, f"💸 GPT-расход ({s.get('t')}): {s.get('model')} · in {s.get('in')}/out {s.get('out')} ток. ≈ ${s.get('cost', 0):.4f} · всего GPT ≈ ${s.get('total', 0):.4f} ({s.get('calls', '?')} вызовов). Баланс — platform.openai.com/usage")
+                except Exception:
+                    pass
             return
         # ===== ЗАКРЕП: сообщение с кнопкой открытия приложения + автозакреп. «закреп <свой текст>» = свой текст =====
         if _tl == "закреп" or _tl == "закрепить" or _tl.startswith("закреп "):
