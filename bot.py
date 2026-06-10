@@ -4169,7 +4169,7 @@ async def _api_serve(application=None):
 async def _setup(application):
     try:
         from telegram import MenuButtonWebApp, WebAppInfo
-        btn = MenuButtonWebApp(text="Ⓜ️ Muslimoon", web_app=WebAppInfo(url=WEBAPP_URL))   # было «🔎 Поиск» — апп теперь больше чем поиск
+        btn = MenuButtonWebApp(text="𝗠𝗨𝗦𝗟𝗜𝗠𝗢𝗢𝗡-𝗔𝗣𝗣", web_app=WebAppInfo(url=WEBAPP_URL))   # имя кнопки приложения — вариант владельца
         # кнопка «🔎 Поиск» по умолчанию для ВСЕХ (доступ внутри решает сервер G9)
         await application.bot.set_chat_menu_button(menu_button=btn)
         await application.bot.set_chat_menu_button(chat_id=OWNER_ID, menu_button=btn)
