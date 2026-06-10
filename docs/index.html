@@ -165,7 +165,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=1" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v280</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v281</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -299,6 +299,7 @@
     <div class="row"><span>📳 Тактильная отдача (вибро) на действия</span><div class="sw" id="hapticSw"></div></div>
     <div class="row"><span>🔥 Популярное (что чаще ищут, при пустом поле)</span><div class="sw" id="popSw"></div></div>
     <div class="row"><span>🔆 Доп. поиск на Sunnah.one (хукм/тахридж) <span style="color:var(--hint);font-size:11px">(по умолч. выкл — Мактаба ищет норм)</span></span><div class="sw" id="sunnahSw"></div></div>
+    <div class="row"><span>🖥 На весь экран <span style="color:var(--hint);font-size:11px">(растянуть приложение, скрыть шапку Telegram)</span></span><div class="sw" id="fsSw"></div></div>
     <div class="row"><span>🎨 Тема оформления</span>
       <select id="themeSel" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 8px">
         <option value="dark">Тёмная</option>
@@ -465,7 +466,7 @@
       <div id="banList" class="hint" style="margin-top:8px"></div>
     </div>
     <div class="accf">
-      <div class="ah"><div><div class="at">💳 Баланс DeepSeek</div><div class="ad">Сколько осталось на твоём ключе.</div></div>
+      <div class="ah"><div><div class="at">💳 Баланс ИИ</div><div class="ad">DeepSeek (для юзеров) · GPT и Gemini (внутр. кухня).</div></div>
         <button class="go" id="balBtn" style="padding:6px 12px">Проверить</button></div>
       <div id="balOut" class="hint" style="margin-top:8px">нажми «Проверить»</div>
     </div>
@@ -527,7 +528,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v280';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v281';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4714,10 +4715,21 @@ async function checkBalance(){
   const out=document.getElementById('balOut'); out.textContent='проверяю…';
   if(!DEV_DATA||DEV_DATA.balance===undefined) await loadDev();
   if(DEV_DATA&&DEV_DATA.forbidden){ out.textContent='⛔ только владелец (открой через Telegram)'; return; }
-  const b=DEV_DATA&&DEV_DATA.balance;
-  if(!b){ out.textContent='не удалось получить (проверь ключ/сеть)'; return; }
-  const infos=b.balance_infos||[];
-  out.innerHTML='Доступен: '+(b.is_available?'✅ да':'❌ нет')+infos.map(i=>'<br>• '+i.currency+': осталось <b>'+esc(String(i.total_balance))+'</b> (пополнено '+esc(String(i.topped_up_balance||'?'))+')').join('');
+  if(!DEV_DATA){ out.textContent='🔧 сервер недоступен'; return; }
+  let html='';
+  // 🔵 DeepSeek — для пользователей
+  const b=DEV_DATA.balance;
+  if(b){ const infos=b.balance_infos||[];
+    html+='<div style="margin-bottom:7px"><b>🔵 DeepSeek</b> <span class="hint" style="font-size:11px">(юзеры)</span>: '+(b.is_available?'✅ доступен':'❌ нет')+infos.map(i=>'<br>&nbsp;&nbsp;• '+esc(i.currency)+': осталось <b>'+esc(String(i.total_balance))+'</b>').join('')+'</div>';
+  } else { html+='<div style="margin-bottom:7px"><b>🔵 DeepSeek</b>: не удалось получить (ключ/сеть)</div>'; }
+  // 🟢 GPT — внутренняя кухня (учёт расхода R30)
+  const g=DEV_DATA.gpt;
+  if(g){ html+='<div style="margin-bottom:7px"><b>🟢 GPT</b> <span class="hint" style="font-size:11px">('+esc(g.model||'?')+', кухня)</span>: '+(g.enabled?'✅ вкл':'⚪ ключа нет')
+        +'<br>&nbsp;&nbsp;потрачено: <b>$'+esc(String(g.spent||0))+'</b> · вызовов '+esc(String(g.calls||0))+(g.last&&g.last.cost?(' · последний $'+esc(String(g.last.cost))):'')+'</div>'; }
+  // 🟣 Gemini — бесплатный лимит
+  const ge=DEV_DATA.gemini;
+  if(ge){ html+='<div><b>🟣 Gemini</b> <span class="hint" style="font-size:11px">('+esc(ge.model||'?')+', кухня)</span>: '+(ge.enabled?'✅ вкл · бесплатный лимит':'⚪ ключа нет')+'</div>'; }
+  out.innerHTML=html||'нет данных';
 }
 async function openDev(){ document.getElementById('devModal').style.display='flex'; document.getElementById('balOut').textContent='нажми «Проверить»'; document.getElementById('jOut').textContent='загружаю…'; try{ if(!ACC) await fetchAccess(); }catch(e){} renderBanList(); await loadDev(); document.getElementById('jOut').textContent=(DEV_DATA&&DEV_DATA.forbidden)?'⛔ только владелец (открой через Telegram)':'выбери журнал — покажу последние записи'; }
 var _dv=document.getElementById('devBtn'); if(_dv) _dv.onclick=openDev;
@@ -4856,6 +4868,18 @@ function applyZoom(){ var m=document.getElementById('vpMeta'); if(!m) return;
   m.setAttribute('content', cfg.noZoom ? 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' : 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes'); }
 var _zm=document.getElementById('zoomSw'); if(_zm){ _zm.classList.toggle('on',!cfg.noZoom); _zm.onclick=()=>{ cfg.noZoom=!cfg.noZoom; saveCfg(cfg); _zm.classList.toggle('on',!cfg.noZoom); applyZoom(); if(!cfg.noZoom) toast('Зум включён 🔍'); }; }
 applyZoom();
+// 🖥 Полноэкранный режим (Telegram WebApp 8.0+): растягивает мини-апп на весь экран, прячет шапку TG.
+function _fsSupported(){ try{ return !!(tg&&tg.requestFullscreen&&tg.isVersionAtLeast&&tg.isVersionAtLeast('8.0')); }catch(e){ return false; } }
+function applyFullscreen(){ try{ if(!(tg&&tg.requestFullscreen)) return; if(cfg.fullscreen){ tg.requestFullscreen(); } else if(tg.exitFullscreen){ tg.exitFullscreen(); } }catch(e){} }
+var _fs=document.getElementById('fsSw'); if(_fs){ _fs.classList.toggle('on',!!cfg.fullscreen); _fs.onclick=()=>{ try{hap('light');}catch(e){}
+  if(!_fsSupported()){ toast('⚠️ Нужна новая версия Telegram (8.0+)'); return; }
+  cfg.fullscreen=!cfg.fullscreen; saveCfg(cfg); _fs.classList.toggle('on',!!cfg.fullscreen); applyFullscreen();
+  toast(cfg.fullscreen?'🖥 На весь экран':'Полный экран выключен'); }; }
+try{ if(tg&&tg.onEvent){   // на десктопе/старом TG fullscreen может не сработать → откатываем тумблер, не врём
+  tg.onEvent('fullscreenFailed', ()=>{ try{ cfg.fullscreen=false; saveCfg(cfg); if(_fs) _fs.classList.remove('on'); toast('⚠️ Полный экран недоступен на этом устройстве'); }catch(e){} });
+  tg.onEvent('fullscreenChanged', ()=>{ try{ if(_fs) _fs.classList.toggle('on', !!tg.isFullscreen); }catch(e){} });
+} }catch(e){}
+if(cfg.fullscreen && _fsSupported()){ applyFullscreen(); }   // восстановить при следующем открытии
 var _th=document.getElementById('themeSel'); if(_th){ _th.value=cfg.theme||'dark'; _th.onchange=()=>{ cfg.theme=_th.value; saveCfg(cfg); applyTheme(); toast(cfg.theme==='light'?'Светлая тема ☀️':'Тёмная тема 🌙'); }; }
 var _rcw=document.getElementById('recentSw'); if(_rcw){ _rcw.classList.toggle('on',cfg.recent!==false); _rcw.onclick=()=>{ cfg.recent=(cfg.recent===false); saveCfg(cfg); _rcw.classList.toggle('on',cfg.recent!==false); if(cfg.recent===false) hideRecent(); }; }
 var _tjw=document.getElementById('tafJumpSw'); if(_tjw){ _tjw.classList.toggle('on',cfg.tafJump!==false); _tjw.onclick=()=>{ cfg.tafJump=(cfg.tafJump===false); saveCfg(cfg); _tjw.classList.toggle('on',cfg.tafJump!==false); }; }

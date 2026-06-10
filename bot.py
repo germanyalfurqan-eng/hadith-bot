@@ -4210,8 +4210,26 @@ async def _api_serve(application=None):
             return _deny('app')
         b = await loop.run_in_executor(None, deepseek_balance)
         j = await loop.run_in_executor(None, _journal_load)
+        # GPT (OpenAI) — накопленный расход из gpt_spend.json (внутренняя кухня R30)
+        gpt_data = {}
+        try:
+            if os.path.exists(GPT_SPEND_FILE):
+                gpt_data = json.load(open(GPT_SPEND_FILE, encoding="utf-8"))
+        except Exception:
+            gpt_data = {}
+        gpt_info = {
+            'enabled': bool(OPENAI_API_KEY),
+            'model': OPENAI_MODEL,
+            'spent': round(float(gpt_data.get('total', 0.0)), 4),
+            'calls': int(gpt_data.get('calls', 0)),
+            'last': (gpt_data.get('log') or [{}])[-1] if gpt_data.get('log') else {},
+        }
+        # Gemini — бесплатный лимит Google (биллинга нет); показываем статус/модель
+        gemini_info = {'enabled': bool(GEMINI_API_KEY), 'model': GEMINI_MODEL, 'free': True}
         return _cors(web.json_response({
             'balance': b,
+            'gpt': gpt_info,
+            'gemini': gemini_info,
             'usage': {'totals': j.get('usage', {}).get('totals', {}), 'recent': (j.get('usage', {}).get('recent') or [])[:25]},
             'translations': {'totals': j.get('translations', {}).get('totals', {}), 'recent': (j.get('translations', {}).get('recent') or [])[:25]},
             'feedback': (j.get('feedback') or [])[:25],
