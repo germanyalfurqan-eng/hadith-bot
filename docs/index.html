@@ -165,7 +165,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=1" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v299</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v300</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -540,7 +540,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v299';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v300';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2679,18 +2679,42 @@ const _CAT_IDX={}; CATS_INFO.forEach((r,i)=>_CAT_IDX[r[0]]={ar:r[1],ru:r[2],ord:
 function catLabel(c){ const e=_CAT_IDX[c]; return e?(e.ar+' — '+e.ru):c; }
 let _catTr={on:false,map:{}};   // перевод названий книг (ИИ) с накоплением на клиенте
 // 🎯 МУЛЬТИВЫБОР книг для поиска (накопление через каталог: книги + целые разделы)
-let _pickIds=new Set();
+let _pickIds=new Set(); let _pickListOpen=false; let _pickSort='sec';
 function _renderPickBar(){ var bar=document.getElementById('catPickBar'); if(!bar) return;
-  if(!_pickIds.size){ bar.style.display='none'; bar.innerHTML=''; return; }
-  bar.style.display='flex'; bar.style.flexWrap='wrap';
-  bar.innerHTML='<span style="flex:1;min-width:120px;color:#bff5d4;font-size:13px;font-weight:600">🎯 Выбрано книг: '+_pickIds.size+'</span>'
-    +'<button class="mini" id="pickGo" style="border:1px solid #2e9b5b;color:#bff5d4;background:#173d30;padding:6px 13px;font-size:13px;border-radius:8px;font-weight:600;cursor:pointer">🔍 Искать в выбранных</button>'
-    +'<button class="mini" id="pickClr" style="border:1px solid var(--border);color:var(--hint);padding:6px 10px;font-size:12px;border-radius:8px;cursor:pointer">сброс</button>';
-  var g=document.getElementById('pickGo'); if(g) g.onclick=()=>{ var ids=new Set(_pickIds); var mm=document.getElementById('catModal'); if(mm) mm.style.display='none'; setSearchScope(ids, 'Выбранные книги ('+ids.size+')'); };
-  var c=document.getElementById('pickClr'); if(c) c.onclick=()=>{ _pickIds.clear(); _pickSec.clear(); _renderPickBar(); _buildSecPick(); try{ var ev=document.getElementById('catCat'); if(ev) ev.dispatchEvent(new Event('change',{bubbles:true})); }catch(e){} };
+  if(!_pickIds.size){ bar.style.display='none'; bar.innerHTML=''; _pickListOpen=false; return; }
+  bar.style.display='block';
+  bar.innerHTML='<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">'
+    +'<span style="flex:1;min-width:100px;color:#bff5d4;font-size:13px;font-weight:600">🎯 Источников: '+_pickIds.size+' книг'+(_pickSec.size?(' · '+_pickSec.size+' разд.'):'')+'</span>'
+    +'<button class="mini" id="pickShow" style="border:1px solid var(--border);color:var(--link);padding:6px 10px;font-size:12px;border-radius:8px;cursor:pointer">'+(_pickListOpen?'скрыть ▴':'📋 список ▾')+'</button>'
+    +'<button class="mini" id="pickGo" style="border:1px solid #2e9b5b;color:#bff5d4;background:#173d30;padding:6px 13px;font-size:13px;border-radius:8px;font-weight:600;cursor:pointer">🔍 Искать</button>'
+    +'<button class="mini" id="pickClr" style="border:1px solid var(--border);color:var(--hint);padding:6px 10px;font-size:12px;border-radius:8px;cursor:pointer">сброс</button>'
+    +'</div><div id="pickListBox" style="'+(_pickListOpen?'':'display:none;')+'margin-top:8px"></div>';
+  document.getElementById('pickShow').onclick=()=>{ _pickListOpen=!_pickListOpen; _renderPickBar(); };
+  document.getElementById('pickGo').onclick=()=>{ var ids=new Set(_pickIds); var mm=document.getElementById('catModal'); if(mm) mm.style.display='none'; setSearchScope(ids, 'Выбранные книги ('+ids.size+')'); };
+  document.getElementById('pickClr').onclick=()=>{ _pickIds.clear(); _pickSec.clear(); _renderPickBar(); _buildSecPick(); try{ var ev=document.getElementById('catCat'); if(ev) ev.dispatchEvent(new Event('change',{bubbles:true})); }catch(e){} };
+  if(_pickListOpen) _renderPickList();
+}
+// 📋 список выбранных книг — пробежаться, удалить лишнее [−], сортировать по разделам/авторам
+async function _renderPickList(){ var box=document.getElementById('pickListBox'); if(!box) return;
+  const cat=await loadCatalog(); const mp={}; cat.forEach(b=>mp[String(b.i)]=b);
+  const books=[..._pickIds].map(id=>mp[id]).filter(Boolean);
+  const grp = _pickSort==='auth' ? (b=>(b.a||'— без автора')) : (b=>(catLabel(b.c||'').split(' — ').pop()||'— раздел'));
+  books.sort((a,b)=>grp(a).localeCompare(grp(b),'ru') || ((mp&&'')) );
+  let html='<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center"><span class="hint" style="font-size:11px;flex:1">Сортировать:</span>'
+    +'<span class="pkSort" data-s="sec" style="cursor:pointer;font-size:11px;border:1px solid '+(_pickSort==='sec'?'#2e9b5b':'var(--border)')+';color:'+(_pickSort==='sec'?'#bff5d4':'var(--text)')+';border-radius:7px;padding:3px 9px">по разделам</span>'
+    +'<span class="pkSort" data-s="auth" style="cursor:pointer;font-size:11px;border:1px solid '+(_pickSort==='auth'?'#2e9b5b':'var(--border)')+';color:'+(_pickSort==='auth'?'#bff5d4':'var(--text)')+';border-radius:7px;padding:3px 9px">по авторам</span></div>';
+  html+='<div style="max-height:34vh;overflow:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg)">';
+  let lastG=null;
+  books.forEach(b=>{ const g=grp(b); if(g!==lastG){ html+='<div style="background:rgba(255,255,255,.05);padding:4px 9px;font-size:11px;color:#9fb6d6;font-weight:700">'+esc(g)+'</div>'; lastG=g; }
+    const nm=(_catTr.map[b.n]&&_catTr.map[b.n].ru)||b.n;
+    html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 9px;border-bottom:1px solid var(--border)"><span style="flex:1;font-size:13px">📖 '+esc(nm)+'</span><button class="pkDel" data-id="'+String(b.i)+'" title="убрать из поиска" style="border:1px solid #b3502e;color:#ff9b7a;background:transparent;padding:2px 11px;font-size:15px;border-radius:7px;cursor:pointer;flex:none">−</button></div>'; });
+  html+='</div>';
+  box.innerHTML=html;
+  box.querySelectorAll('.pkSort').forEach(s=>s.onclick=()=>{ _pickSort=s.dataset.s; _renderPickList(); });
+  box.querySelectorAll('.pkDel').forEach(d=>d.onclick=()=>{ _pickIds.delete(d.dataset.id); _renderPickBar(); try{_buildSecPick();}catch(e){} });
 }
 // 📂 СПИСОК РАЗДЕЛОВ с «+» — отметить несколько разделов для поиска (просто и наглядно, по слову владельца)
-let _pickSec=new Set();
+let _pickSec=new Set(); let _secSets=null;
 async function _sectionIds(kind){ const cat=await loadCatalog();
   if(kind==='__rijal__'){ const mp=await loadRijalBooksMap(); return new Set(Object.keys(mp||{}).map(String)); }
   if(kind==='__first40__'){ const src=await loadFirstSrc(); const ids=new Set(); src.forEach(s=>{ const b=_matchSource(cat,s); if(b) ids.add(String(b.i)); }); return ids; }
@@ -2699,17 +2723,28 @@ async function _sectionIds(kind){ const cat=await loadCatalog();
 async function _buildSecPick(){ const host=document.getElementById('catSecPick'); if(!host) return;
   if(host.dataset.col==='1'){ host.innerHTML='<span class="mini" id="secExp" style="cursor:pointer;color:var(--link);font-size:13px">📂 Выбрать разделы для поиска ▾</span>'; var e1=document.getElementById('secExp'); if(e1) e1.onclick=()=>{ host.dataset.col=''; _buildSecPick(); }; return; }
   const cat=await loadCatalog(); const cnt={}; cat.forEach(b=>{ if(b.c) cnt[b.c]=(cnt[b.c]||0)+1; });
+  if(!_secSets){ _secSets={}; try{ _secSets['__rijal__']=await _sectionIds('__rijal__'); }catch(e){ _secSets['__rijal__']=new Set(); } try{ _secSets['__first40__']=await _sectionIds('__first40__'); }catch(e){ _secSets['__first40__']=new Set(); } }
   const cats=Object.keys(cnt).sort((a,b)=>{ const ia=(_CAT_IDX[a]?_CAT_IDX[a].ord:999),ib=(_CAT_IDX[b]?_CAT_IDX[b].ord:999); return ia-ib; });
-  const rows=[['__first40__','📜 Первоисточники хадисов',39],['__rijal__','📚 Наша подборка риджаль',149]].concat(cats.map(c=>[c,catLabel(c),cnt[c]]));
-  host.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><span class="hint" style="font-size:12px">📂 Отметь РАЗДЕЛЫ (➕) — можно несколько · клик по названию = листать книги</span><span class="mini" id="secCol" style="cursor:pointer;color:var(--hint);font-size:12px">свернуть ▴</span></div>';
+  const rows=[['__first40__','📜 Первоисточники хадисов',(_secSets['__first40__']||{size:39}).size],['__rijal__','📚 Наша подборка риджаль',149]].concat(cats.map(c=>[c,catLabel(c),cnt[c]]));
+  // выбрано по категориям (для индикатора ◐ частично)
+  const pickedCat={}; cat.forEach(b=>{ if(b.c && _pickIds.has(String(b.i))) pickedCat[b.c]=(pickedCat[b.c]||0)+1; });
+  host.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><span class="hint" style="font-size:12px">📂 Отметь РАЗДЕЛЫ (➕) — можно несколько · ◐ = выбраны отдельные книги · клик по названию = листать</span><span class="mini" id="secCol" style="cursor:pointer;color:var(--hint);font-size:12px">свернуть ▴</span></div>';
   var col=document.getElementById('secCol'); if(col) col.onclick=()=>{ host.dataset.col='1'; _buildSecPick(); };
   const wrap=document.createElement('div'); wrap.style.cssText='max-height:30vh;overflow:auto;border:1px solid var(--border);border-radius:10px';
   rows.forEach(([key,label,n])=>{ const r=document.createElement('div'); r.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border)';
-    const on=_pickSec.has(key);
-    const nm=document.createElement('span'); nm.style.cssText='flex:1;font-size:14px;cursor:pointer'; nm.innerHTML=esc(label)+(n?(' <span style="color:var(--hint);font-size:12px">· '+n+'</span>'):'');
+    let total, picked;
+    if(key==='__rijal__'||key==='__first40__'){ const s=_secSets[key]||new Set(); total=s.size||n; picked=0; s.forEach(i=>{ if(_pickIds.has(i)) picked++; }); }
+    else { total=cnt[key]||0; picked=pickedCat[key]||0; }
+    const state= picked===0?'none':((picked>=total&&total>0)?'full':'partial');
+    if(state==='full') _pickSec.add(key); else _pickSec.delete(key);
+    const nm=document.createElement('span'); nm.style.cssText='flex:1;font-size:14px;cursor:pointer'; nm.innerHTML=esc(label)+(n?(' <span style="color:var(--hint);font-size:12px">· '+n+(picked?(' · ✓'+picked):'')+'</span>'):'');
     nm.onclick=()=>{ var sel=document.getElementById('catCat'); if(sel){ sel.value=key; sel.dispatchEvent(new Event('change',{bubbles:true})); } };
-    const pb=document.createElement('button'); pb.className='mini'; pb.textContent=on?'✓':'➕'; pb.style.cssText='font-size:14px;padding:4px 12px;flex:none;'+(on?'color:#bff5d4;border-color:#2e9b5b;background:#173d30':'');
-    pb.onclick=async(e)=>{ e.stopPropagation(); pb.textContent='⏳'; const ids=await _sectionIds(key); if(_pickSec.has(key)){ _pickSec.delete(key); ids.forEach(i=>_pickIds.delete(i)); } else { _pickSec.add(key); ids.forEach(i=>_pickIds.add(i)); } _renderPickBar(); _buildSecPick(); };
+    const pb=document.createElement('button'); pb.className='mini'; pb.textContent= state==='full'?'✓':(state==='partial'?'◐':'➕');
+    pb.title= state==='partial'?('выбрано '+picked+' из '+total+' — нажми, чтобы добавить весь раздел'):(state==='full'?'весь раздел выбран — нажми, чтобы убрать':'добавить весь раздел');
+    pb.style.cssText='font-size:14px;padding:4px 12px;flex:none;'+(state!=='none'?'color:#bff5d4;border-color:#2e9b5b;background:#173d30':'');
+    pb.onclick=async(e)=>{ e.stopPropagation(); pb.textContent='⏳'; const ids=await _sectionIds(key);
+      if(state==='full'){ ids.forEach(i=>_pickIds.delete(i)); _pickSec.delete(key); } else { ids.forEach(i=>_pickIds.add(i)); _pickSec.add(key); }   // none/partial → выбрать весь раздел
+      _renderPickBar(); _buildSecPick(); };
     r.appendChild(nm); r.appendChild(pb); wrap.appendChild(r); });
   host.appendChild(wrap);
 }
