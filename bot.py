@@ -496,10 +496,11 @@ def parse_audio_meta(text):
     comment = grab(['описани\\w*', 'коммент\\w*', 'desc\\w*', 'comment'])
     return title, artist, comment
 
-_ENH_PRE = ("highpass=f=80,"            # убрать гул/рокот ниже голоса
-            "afftdn=nf=-25:nr=20,"     # сильное FFT-шумоподавление
-            "adeclick,"                # убрать щелчки
-            "acompressor=threshold=-20dB:ratio=4:attack=5:release=150:makeup=3")  # плотная динамика
+# ⚙️ Формула выверена ffmpeg-замерами против Auphonic (10.06.2026): БЕЗ компрессора —
+# он давил LRA (динамику) до 0.9 → звук «каша». Теперь только гул-фильтр + мягкий шумодав,
+# а громкость/пики делает двухпроходный loudnorm (linear). Итог совпал с Auphonic: LRA≈5.5, TP≈-2.4, I=-16.
+_ENH_PRE = ("highpass=f=70,"           # убрать гул/рокот ниже голоса
+            "afftdn=nf=-25:nr=12")     # мягкое FFT-шумоподавление без «подводных» артефактов
 def _loudnorm_measure(input_path):
     """1-й проход loudnorm: измеряем параметры (для ТОЧНОЙ нормализации во 2-м проходе = студийное качество)."""
     try:
@@ -528,8 +529,8 @@ def enhance_audio(input_path, output_path, artist="", title="", comment="", enha
                          meas.get('input_thresh'), meas.get('target_offset', '0')))
             else:
                 ln = "loudnorm=I=-16:TP=-1.5:LRA=11"   # фолбэк (1 проход), если измерение не вышло
-            af = _ENH_PRE + "," + ln + ",alimiter=level_in=1:level_out=1:limit=0.97"
-            cmd += ["-af", af, "-ar", "48000", "-ac", "2", "-b:a", "256k"]
+            af = _ENH_PRE + "," + ln + ",alimiter=level_in=1:level_out=1:limit=0.98"
+            cmd += ["-af", af, "-ar", "44100", "-ac", "2", "-b:a", "192k"]
         else:
             cmd += ["-ar", "44100", "-ac", "2", "-b:a", "160k"]
         if title:   cmd += ["-metadata", "title=" + title]
