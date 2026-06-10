@@ -545,7 +545,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v311';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v312';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2209,6 +2209,14 @@ async function _bookLoad(){
     const aiPanel=document.createElement('div'); aiPanel.style.cssText='display:none;gap:6px;flex-wrap:wrap;justify-content:center';
     aiToggle.onclick=()=>{ const open=aiPanel.style.display!=='none'; aiPanel.style.display=open?'none':'flex'; aiToggle.textContent='🧠 ИИ '+(open?'▾':'▴'); };
     tgl.appendChild(aiToggle); navEl.appendChild(aiPanel);
+    // 🔎 ПОИСК ПО ВСЕЙ КНИГЕ (батч 2:29): слова И № хадиса — через рамку scope, результаты списком на экране поиска
+    const sbk=document.createElement('button'); sbk.className='mini'; sbk.textContent='🔎 По книге'; sbk.title='Искать слова или № хадиса по ВСЕЙ этой книге — результаты списком';
+    sbk.style.cssText='padding:6px 12px;border-radius:9px;font-size:13px';
+    sbk.onclick=()=>{ try{ setSearchScope(new Set([String(_bookView.id)]), bnm||'эта книга'); }catch(e){}
+      m.style.display='none';
+      try{ const qi=document.getElementById('q'); qi.value=''; qi.focus(); }catch(e){}
+      toast('🔎 Введи слова или № хадиса — ищу ТОЛЬКО в этой книге'); };
+    tgl.appendChild(sbk);
     // Arabus (тап слова)
     const ab=document.createElement('button'); ab.className='mini'; ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus'; ab.title='Тап по слову → корень/значения';
     ab.onclick=()=>{ _arabusOn=!_arabusOn; try{ loadRoots(); if(_arabusOn) loadArabusLocal(); }catch(e){} ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus'; tEl.style.cursor=_arabusOn?'pointer':'default'; toast(_arabusOn?'📕 Arabus ВКЛ — тапай слово':'Arabus выкл'); };
@@ -2241,6 +2249,27 @@ async function _bookLoad(){
       tkb.disabled=false; if(tkb.textContent==='…') tkb.textContent=p;
     };
     aiPanel.appendChild(tkb);
+    // 👥 ПЕРЕДАТЧИКИ НА СТРАНИЦЕ (батч 2:29, шаг к M308): иснады каждого хадиса (по маркерам «N -») → подсветка, тап → карточка
+    let narrOut=m.querySelector('#bookNarrOut'); if(!narrOut){ narrOut=document.createElement('div'); narrOut.id='bookNarrOut'; narrOut.style.cssText='display:none;margin-top:8px'; tEl.parentNode.insertBefore(narrOut, tEl.nextSibling); } narrOut.style.display='none'; narrOut.innerHTML='';
+    const nbtn=document.createElement('button'); nbtn.className='mini'; nbtn.textContent='👥 Передатчики'; nbtn.title='Подсветить имена передатчиков на странице — тап по имени → карточка с оценками риджаля';
+    nbtn.onclick=async()=>{
+      nbtn.disabled=true; const pp=nbtn.textContent; nbtn.textContent='⏳…';
+      try{
+        const me=tEl.querySelector('#bookMain')||tEl;
+        const txt=tEl.dataset.txt||'';
+        const parts=txt.split(/(?=(?:^|[\n\s])[٠-٩]{1,5}\s*[-–—]\s)/);   // резка по хадисам: иснад у каждого свой
+        let names=[]; const seenN=new Set();
+        for(const part of parts.slice(0,40)){ let ns=[]; try{ ns=isnadNarrators(part)||[]; }catch(e){}
+          for(const nm of ns){ if(/^[٠-٩0-9\s\-–—.()]+$/.test(nm)) continue;   // номера хадисов/цифры — не имена
+            let k=nm; try{ k=canon(nm); }catch(e){} if(!seenN.has(k)){ seenN.add(k); names.push(nm); } } }
+        if(!names.length){ toast('Иснадов на странице не распознал'); nbtn.textContent=pp; nbtn.disabled=false; return; }
+        try{ delete me.dataset.narrOn; }catch(e){}
+        highlightNarratorsInDiv(me, names, nm=>{ narrOut.style.display='block'; narrOut.innerHTML=''; const bx=document.createElement('div'); narrOut.appendChild(bx); showNarratorBio(nm, bx); try{ narrOut.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} });
+        toast('👥 Подсвечено имён: '+names.length+' — тапай');
+      }catch(e){ toast('Не вышло'); }
+      nbtn.textContent=pp; nbtn.disabled=false;
+    };
+    aiPanel.appendChild(nbtn);
     try{ tEl.scrollTop=0; m.querySelector('.panel').scrollTop=0; }catch(e){}
     try{ applyFontScale(); }catch(e){}
   }catch(e){ tEl.innerHTML='<span class="hint">🔧 Не удалось загрузить книгу — попробуй позже.</span>'; }
@@ -2394,13 +2423,35 @@ async function maktabaByNum(seq, n){
     const tr=(typeof _catTr!=='undefined'&&_catTr.map&&_catTr.map[bn])||null;
     let h='<div class="nbOpen" style="direction:rtl;text-align:right;font-weight:700;color:var(--link);font-size:15px;cursor:pointer" title="Открыть книгу на хадисе №'+n+'">📖 '+esc((tr&&tr.voc)?tr.voc:bn)+'</div>';
     if(tr&&tr.ru) h+='<div style="font-size:12.5px;color:#bcd0ff;margin-top:2px">'+esc(tr.ru)+'</div>';
-    h+='<div style="font-size:12px;color:var(--hint);margin-top:2px;direction:rtl;text-align:right">'+esc(x.author||'')+'</div>';
+    if(x.author) h+='<div class="nbAuth" style="font-size:12px;color:var(--link);margin-top:2px;direction:rtl;text-align:right;cursor:pointer" title="Все книги этого автора">✍️ '+esc(x.author)+'</div>';
     const i=sn.search(mark); const frag=i>=0?sn.slice(i).replace(/^[^٠-٩]*/,''):sn;
     if(frag) h+='<div style="direction:rtl;text-align:right;font-size:14px;line-height:1.8;margin-top:5px;color:var(--text)">'+esc(frag.slice(0,180))+'…</div>';
-    h+='<div style="margin-top:6px"><button class="mini nbBtn" style="font-size:12.5px;padding:6px 12px">📖 Открыть №'+n+(x.vol?(' · т.'+esc(String(x.vol))+' стр.'+esc(String(x.page||'')) ):'')+'</button></div>';
+    h+='<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="mini nbBtn" style="font-size:12.5px;padding:6px 12px">📖 Открыть №'+n+(x.vol?(' · т.'+esc(String(x.vol))+' стр.'+esc(String(x.page||'')) ):'')+'</button>'
+      +'<button class="mini nbFull" style="font-size:12.5px;padding:6px 12px" title="Полный текст хадиса прямо здесь + Перевод/Передатчики/Где ещё передаётся">📜 Текст + инструменты</button></div>';
     card.innerHTML=h;
     const open=()=>{ try{ hap('light'); }catch(e){} openBook(bid, x.page_id); };
     card.querySelector('.nbOpen').onclick=open; card.querySelector('.nbBtn').onclick=open;
+    const au=card.querySelector('.nbAuth'); if(au) au.onclick=()=>{ try{ openAuthor(x.author); }catch(e){} };
+    // 📜 M-батч 2:29: развернуть ПОЛНЫЙ текст хадиса №N в карточке + стандартные инструменты (перевод/передатчики/где ещё)
+    const fb=card.querySelector('.nbFull'); if(fb) fb.onclick=async()=>{
+      fb.disabled=true; fb.textContent='⏳ беру текст…';
+      try{
+        const r=await fetch(BACKEND_URL+'/book_page?id='+bid+'&pg='+x.page_id+'&initData='+encodeURIComponent(INITDATA));
+        const j=await r.json().catch(()=>({}));
+        let t=(j.text||'').replace(/<[^>]*>/g,'').replace(/ /g,' ');
+        const mm=t.match(mark); let txt='';
+        if(mm){ const st=t.indexOf(mm[0])+ (mm[1]?mm[1].length:0); let rest=t.slice(st).replace(/^[^٠-٩]*[٠-٩]+\s*[-–—]\s*/,'');
+          const nx=rest.search(/(^|[\n\s»\)\].:،؛])\s*[٠-٩]{1,5}\s*[-–—]\s/); txt=(nx>40?rest.slice(0,nx):rest).trim(); }
+        if(!txt) txt=t.slice(0,1200);
+        fb.style.display='none';
+        const ar=document.createElement('div'); ar.className='ar'; ar.style.cssText='font-size:16px;line-height:2;margin-top:7px;border-top:1px dashed var(--border);padding-top:7px';
+        ar.textContent=txt.slice(0,2500); card.appendChild(ar);
+        const meta2=document.createElement('div'); meta2.className='meta';
+        addTr(meta2, card, txt.slice(0,2500), null, {k:'mk|'+bid+'|'+n, type:'h', coll:bn, label:bn+' №'+n, text:txt.slice(0,200)});
+        card.appendChild(meta2);
+        try{ enableArabusTap(ar); }catch(e){}
+      }catch(e){ fb.textContent='🔧 не вышло'; fb.disabled=false; }
+    };
     return card;
   };
   let io; const observe=()=>{ try{ if(io) io.disconnect(); io=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting){ io.disconnect(); load(); } }); },{rootMargin:'600px'}); io.observe(more); }catch(e){} };
@@ -4236,8 +4287,11 @@ const _NARR_FAMOUS={
  'абу ханифа':'النعمان بن ثابت بن زوطي','суфян саури':'سفيان بن سعيد بن مسروق','суфян ибн уяйна':'سفيان بن عيينه',
  'малик':'مالك بن انس بن مالك بن ابي عامر','малик ибн анас':'مالك بن انس بن مالك بن ابي عامر','анас ибн малик':'انس بن مالك بن النضر',
  'яхя ибн маин':'يحيي بن معين بن عون','муслим':'مسلم بن الحجاج','лейс':'الليث بن سعد بن عبد الرحمن','лейс ибн саад':'الليث بن سعد بن عبد الرحمن',
- 'хишам ибн аммар':'هشام بن عمار بن نصير','катада':'قتاده بن دعامه','катада ибн диама':'قتاده بن دعامه'};   // ⚠️ ключи — в форме _narrFamKey (без ь/ъ, без аль-/ас-)
-function _narrFamKey(q){ return q.toLowerCase().replace(/ё/g,'е').replace(/[ъь']/g,'').replace(/(^|\s)(аль|эль|ал|ас|аш|ад|аз|ар|ан|ат)-/g,'$1').replace(/-/g,' ').replace(/\s+/g,' ').trim(); }
+ 'хишам ибн аммар':'هشام بن عمار بن نصير','катада':'قتاده بن دعامه','катада ибн диама':'قتاده بن دعامه',
+ 'саури':'سفيان بن سعيد بن مسروق','шааби':'عامر بن شراحيل','аузаи':'عبد الرحمن بن عمرو ابو عمرو الاوزاعي','ибн уяйна':'سفيان بن عيينه'};   // ⚠️ ключи — в форме _narrFamKey (без ь/ъ, без аль-/ас-)
+function _narrFamKey(q){ return q.toLowerCase().replace(/ё/g,'е').replace(/[ъь']/g,'')
+  .replace(/(^|\s)(аль|эль|ал|ас|аш|ад|аз|ар|ан|ат)[-\s]+/g,'$1')   // артикль и с дефисом («ас-Саури»), и ОТДЕЛЬНЫМ словом («ас саури»)
+  .replace(/-/g,' ').replace(/\s+/g,' ').trim(); }
 function _narrRuMatch(qsk, nws){   // qsk/nws: массивы [strict,loose]; подпоследовательность по loose
   let i=0, strictHits=0, firstHit=-1, lastHit=-1;
   for(let j=0;j<nws.length && i<qsk.length;j++){
@@ -4262,7 +4316,8 @@ async function narrCandidates(qRaw){
       if(sc) out.push({nm:nm,id:it[1],sc:sc-nm.length*0.05+Math.min(e?e[2]:0,150)*0.02, y:e?(e[1]||0):0}); }
   } else if(/[а-яё]/i.test(qRaw)){
     const idx=await _narrSkelIndex();
-    const q2=qRaw.toLowerCase().replace(/(^|[\s-])абдул?/g,'$1абд ');   // рус склейка «Абдуллах/Абдурахман» → араб раздельно عبد الله (⚠️ \b не работает с кириллицей!)
+    const q2=qRaw.toLowerCase().replace(/(^|[\s-])абдул?/g,'$1абд ')   // рус склейка «Абдуллах/Абдурахман» → араб раздельно عبد الله (⚠️ \b не работает с кириллицей!)
+      .replace(/(^|\s)(аль|эль|ал|ас|аш|ад|аз|ар|ан|ат)\s+(?=[а-яё])/g,'$1');   // артикль ОТДЕЛЬНЫМ словом («ас саури») — приклеить к следующему = убрать
     const qsk=q2.split(/[\s,.;·]+/).filter(w=>!_NARR_RU_STOP.has(w)).map(_skelRu).filter(p=>p[1]);
     if(!qsk.length) return out;
     const score=(m)=>{ if(!m) return -1e9;
@@ -4487,7 +4542,7 @@ async function renderMutabarunSummary(id, box, out){
     const notFound=all.filter(c=>found.indexOf(c)===-1).sort((a,b)=>(''+a).localeCompare(''+b,'ru'));
     // НЕЙТРАЛЬНО (замечание владельца: ✅-галки выглядели как «похвалил» ДО квалификации!)
     box.style.cssText='border:1px solid #3a5b9b;border-radius:12px;padding:11px;margin:8px 0;background:rgba(58,91,155,.08)';
-    box.innerHTML='<div style="font-weight:700;color:#bcd2ff;font-size:13.5px;margin-bottom:7px">📊 По мутабарунам: у кого ЕСТЬ записи об этом передатчике <span style="font-weight:400;color:var(--hint)">('+all.length+' критиков по нашим 149 книгам; полный список мутабарунов — 48)</span></div>';
+    box.innerHTML='<div style="font-weight:700;color:#bcd2ff;font-size:13.5px;margin-bottom:7px">📊 По критикам наших 149 книг: у кого ЕСТЬ записи об этом передатчике <span style="font-weight:400;color:var(--hint)">('+all.length+' критиков-авторов; эталонный список 48 мутабарунов — ниже)</span></div>';
     const fw=document.createElement('div'); fw.style.cssText='margin-bottom:8px';
     fw.innerHTML='<div style="font-size:12px;color:var(--hint);margin-bottom:5px">📝 Упомянут в трудах <b style="color:#bcd2ff">'+found.length+'</b> критиков'+(found.length?' (нажми → его места ниже):':':')+'</div>';
     const fb=document.createElement('div'); fb.style.cssText='display:flex;gap:5px;flex-wrap:wrap';
@@ -4504,6 +4559,19 @@ async function renderMutabarunSummary(id, box, out){
       box.appendChild(nh); box.appendChild(nb);
     }
     box.insertAdjacentHTML('beforeend','<div style="font-size:10.5px;color:var(--hint);margin-top:7px">⚠️ Упоминание — это НЕ вердикт: кто ПОХВАЛИЛ (تعديل), кто ПОРИЦАЛ (تجريح), кто счёл неизвестным (تجهيل) и свидетельства слышания — смотри ниже в «Оценках из трудов риджаля» (квалификация по категориям).</div>');
+    // 📜 эталонный список 48 мутабарунов (дан владельцем): зелёные — есть СВОИ труды в нашей подборке (15); акваль остальных — цитатами внутри книг (этап 3b)
+    try{
+      const mh=document.createElement('div'); mh.style.cssText='cursor:pointer;font-size:12px;color:#bcd2ff;margin-top:7px;font-weight:600'; mh.innerHTML='📜 Эталонный список 48 мутабарунов — показать ▸';
+      const mb=document.createElement('div'); mb.style.cssText='display:none;margin-top:5px;max-height:40vh;overflow:auto;border:1px solid var(--border);border-radius:9px;padding:7px 9px';
+      let mOpen=false, mLoaded=false;
+      mh.onclick=async()=>{ mOpen=!mOpen; mb.style.display=mOpen?'block':'none'; mh.innerHTML='📜 Эталонный список 48 мутабарунов — '+(mOpen?'скрыть ▾':'показать ▸');
+        if(mOpen&&!mLoaded){ mLoaded=true;
+          try{ const j=await (await fetch('./mutabarun_48.json')).json();
+            mb.innerHTML=(j.list||[]).map(x=>'<div style="font-size:12px;padding:2px 0;'+(x.covered?'color:#bff5d4':'color:var(--hint)')+'">'+x.i+'. '+esc(x.ru)+' <span style="font-size:10.5px">('+esc(x.y)+')'+(x.covered?' · 📗 труды в подборке':'')+'</span></div>').join('')
+              +'<div style="font-size:10.5px;color:var(--hint);margin-top:5px">📗 зелёные (15) — их собственные книги в наших 149; слова остальных имамов достаём цитатами из этих книг (الجرح والتعديل، تاريخ ابن معين، العلل…).</div>';
+          }catch(e){ mb.innerHTML='<span class="hint">не загрузился</span>'; } } };
+      box.appendChild(mh); box.appendChild(mb);
+    }catch(e){}
   }catch(e){ try{ box.remove(); }catch(_e){} }
 }
 async function showNarratorCardLocal(name, host){
