@@ -161,9 +161,10 @@
 
 <div class="wrap" id="app" style="display:none">
   <div class="brand">
-    <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
-      <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v269</span></h1>
+    <div class="bleft" id="brand" style="cursor:pointer;display:flex;align-items:center;gap:8px" title="🏠 Нажми лого — вернуться на главную и сбросить поиск">
+      <!-- лого-баннер в углу слева; для EN-версии в будущем: src='./logo_en.png' (lang switch) -->
+      <img id="brandLogo" src="./logo_ru.png" alt="Muslimoon Bot" style="height:46px;width:auto;display:block;filter:drop-shadow(0 1px 7px rgba(47,123,230,.28))">
+      <span class="ver" id="verBadge" style="align-self:flex-start;margin-top:3px">v270</span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -512,7 +513,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v269';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v270';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3223,8 +3224,8 @@ function _qrPlay(s, a){ _qrWordStop();
     // ...подстройка под РЕАЛЬНЫЙ голос + бесшовность: обрезаем тишину в начале/конце аята
     _analyzeWordEnds(u, wl).then(e=>{ if(window._qrAudio!==au) return; if(e && e.length===_qw.length) _ends=e;
       const A=_wtCache[u]; if(A){ if(cfg.qrTrim!==false){
-        if(A.onset>0.25 && (au.currentTime||0)<A.onset-0.05 && (au.currentTime||0)<0.6){ try{ au.currentTime=A.onset; }catch(e){} }   // пропустить тишину в начале
-        au.__off = (A.offset && A.dur && A.offset < A.dur-0.45) ? A.offset+0.10 : 0;   // конец речи (обрезать хвост-паузу)
+        // НЕ срезаем начало аята: раньше au.currentTime=A.onset при ошибке детектора перепрыгивал в первое слово → «съедал начало». Играем с натурального старта (≈0).
+        au.__off = (A.offset && A.dur && A.offset < A.dur-0.55) ? A.offset+0.15 : 0;   // только хвост-пауза: ранний переход к след. аяту без среза начала/конца (+0.15с запас)
       } }
     }).catch(()=>{});
   }catch(e){} };
