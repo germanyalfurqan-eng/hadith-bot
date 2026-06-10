@@ -542,7 +542,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v307';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v308';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1003,7 +1003,20 @@ let tab='hadith'; var _seq=0, _results=[], _groups=[], _shown=0;
 const modes={diac:false,root:false,neuro:false,ai:false};
 const selCols=new Set(); // пусто = искать ВЕЗДЕ (как sunnah); выбор чипов = сузить
 const selExtra=new Set(); // M44: выбранные «другие сборники» — добавляются к поиску только явно
-
+// 🎯 связка чипов сборников ↔ рамка scope (Мактаба): book_id изданий каждого сборника; ПЕРВЫЙ id = каноническое издание (его добавляем кликом)
+const COLL_BIDS={bukhari:['1681','735','907','1284','1376'], muslim:['1727','711'], abudawud:['1726','654','117359'],
+ tirmidhi:['1435','1363','7895'], ibnmajah:['1198','1194','98138'], nasai:['829','1339'],
+ malik:['1699','8140','16050','28107'], ahmad:['25794','98139']};
+function _collScopeToggle(code){   // клик по чипу при активной рамке: добавить/убрать сборник ИЗ РАМКИ (логичная связка двух систем)
+  const ids=COLL_BIDS[code]||[]; if(!ids.length){ toast('Этот сборник пока не связан с Мактабой'); return; }
+  const s=new Set(_scopeIds||[]); const has=ids.some(b=>s.has(b));
+  if(has){ ids.forEach(b=>{ s.delete(b); try{_pickIds.delete(b);}catch(e){} }); }
+  else { s.add(ids[0]); try{_pickIds.add(ids[0]);}catch(e){} }
+  try{ hap('light'); }catch(e){}
+  if(!s.size){ clearSearchScope(); renderCols(); return; }
+  setSearchScope(s, 'Выбранные книги ('+s.size+')'); renderCols();
+  try{ var bb=document.getElementById('scopeListBox'); if(bb&&bb.style.display!=='none') _renderScopeList(); }catch(e){}
+}
 function renderCols(){
   const box=document.getElementById('cols');
   document.getElementById('colsWrap').style.display = tab==='hadith'?'block':'none';
@@ -1011,9 +1024,12 @@ function renderCols(){
   var _hrr=document.getElementById('hadithReadRow'); if(_hrr) _hrr.style.display='none';   // компактная кнопка Мактабы теперь в шапке (📚), большую зелёную убрали
   box.innerHTML='';
   COLLECTIONS.forEach(c=>{ const d=document.createElement('div');
-    d.className='col'+(c.special?' muh':'')+(selCols.has(c.code)?' on':'');
+    const inScope=!!(_scopeIds && (COLL_BIDS[c.code]||[]).some(b=>_scopeIds.has(b)));   // 🎯 сборник выбран в рамке Мактабы → чип «светится»
+    d.className='col'+(c.special?' muh':'')+((selCols.has(c.code)||inScope)?' on':'');
+    if(inScope){ d.style.boxShadow='0 0 8px rgba(46,155,91,.8)'; d.style.borderColor='#2e9b5b'; d.title='🎯 Выбран в рамке поиска (Мактаба) — нажми, чтобы убрать из рамки'; }
+    else if(_scopeIds){ d.title='🎯 Идёт поиск по выбранным книгам — нажми, чтобы добавить этот сборник в рамку'; }
     d.textContent=c.ru;
-    d.onclick=()=>{ selCols.has(c.code)?selCols.delete(c.code):selCols.add(c.code); renderCols(); };
+    d.onclick=()=>{ if(_scopeIds){ _collScopeToggle(c.code); return; } selCols.has(c.code)?selCols.delete(c.code):selCols.add(c.code); renderCols(); };
     box.appendChild(d); });
   // выбранные доп. сборники — отдельными чипами (нажал = убрать)
   [...selExtra].forEach(code=>{ const e=EXTRA_MAP[code]; if(!e) return;
@@ -2365,9 +2381,9 @@ function _strictQWords(q){ return canon((q||'').replace(/[،؛؟,;!.:"'»«()\[\
 function _snipHasAll(snip, words){ if(!words||!words.length) return true; const c=canon(String(snip||'').replace(/<[^>]*>/g,'')); return words.every(w=>c.indexOf(w)!==-1); }
 // 🎯 SCOPE ПОИСКА: искать ТОЛЬКО в выбранных книгах (напр. риджаль-149) — фильтр результатов Мактабы по book_id.
 let _scopeIds=null, _scopeName='';
-function setSearchScope(ids, name){ _scopeIds=(ids&&ids.size)?ids:null; _scopeName=name||''; renderScopeChip();
+function setSearchScope(ids, name){ _scopeIds=(ids&&ids.size)?ids:null; _scopeName=name||''; renderScopeChip(); try{ renderCols(); }catch(e){}   // 🎯 чипы сборников подсвечиваются
   if(_scopeIds){ try{ var qi=document.getElementById('q'); if(qi){ qi.focus(); if(qi.value.trim()) runSearch(true); else toast('🎯 Введи слово — ищу в: '+_scopeName); } }catch(e){} } }
-function clearSearchScope(){ _scopeIds=null; _scopeName=''; try{ _pickIds.clear(); _renderPickBar(); }catch(e){} renderScopeChip(); }
+function clearSearchScope(){ _scopeIds=null; _scopeName=''; try{ _pickIds.clear(); _renderPickBar(); }catch(e){} renderScopeChip(); try{ renderCols(); }catch(e){} }
 function renderScopeChip(){ var bar=document.getElementById('scopeBar');
   if(!bar){ bar=document.createElement('div'); bar.id='scopeBar'; bar.style.cssText='margin:6px 0'; var a=document.querySelector('.modes'); if(a&&a.parentNode) a.parentNode.insertBefore(bar,a); }
   if(!_scopeIds){ bar.style.display='none'; bar.innerHTML=''; return; }
