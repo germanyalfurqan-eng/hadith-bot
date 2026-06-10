@@ -163,7 +163,7 @@
   <div class="brand">
     <div class="bleft" id="brand" style="cursor:pointer" title="🏠 Нажми «Muslimoon» — вернуться на главную и сбросить поиск">
       <img class="logo" src="./logo.png" alt="M">
-      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v271</span></h1>
+      <h1><span class="b">M</span>uslimoon <span class="b">Bot</span> <span class="ver" id="verBadge">v272</span></h1>
     </div>
     <div style="display:flex;gap:6px;flex:none">
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
@@ -286,6 +286,7 @@
     <div class="row"><span>🔤 Коран без огласовок (تشكيل)</span><div class="sw" id="noDiacSw"></div></div>
     <div class="row"><span>🎨 Выделять иснад (цепочку) серым</span><div class="sw" id="isnadSw"></div></div>
     <div class="row"><span>🙈 Скрывать иснад (показывать только матн)</span><div class="sw" id="hideIsnadSw"></div></div>
+    <div class="row"><span>🎯 Строгий поиск: только где есть ВСЕ слова <span style="color:var(--hint);font-size:11px">(выкл → покажет и близкие)</span></span><div class="sw" id="strictSw"></div></div>
     <div class="row"><span>🔡 Автоподсказки в Коране (списком при вводе номера)</span><div class="sw" id="acSw"></div></div>
     <div class="row"><span>🌿 Тап по слову аята → корень + все места в Коране</span><div class="sw" id="wtSw"></div></div>
     <div class="row"><span>✒️ Подпись при копировании (ссылка на приложение)</span><div class="sw" id="sigSw"></div></div>
@@ -512,7 +513,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v271';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v272';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2301,7 +2302,7 @@ async function appendMaktaba(seq, q, primary){
     if(r.status===429){ sec.textContent='🌐 Слишком часто, подожди немного.'; return; }
     const data=j.data||[]; const fn=j.first_n||0;
     // M283: СТРОГО — только результаты, где есть ВСЕ значимые слова запроса (терпим к приставкам). Не в ИИ-режиме.
-    let strictWords=null; if(!modes.ai){ const ww=_strictQWords(q); if(ww.length>=2) strictWords=ww; }
+    let strictWords=null; if(!modes.ai && cfg.strictSearch!==false){ const ww=_strictQWords(q); if(ww.length>=2) strictWords=ww; }   // тумблер «Строгий поиск» (по умолч. ВКЛ)
     // БЕЗ авто-дедупа (R16): один хадис в разных книгах показываем везде; уникальность — фильтр-кнопки.
     if(!data.length){ sec.textContent='🤷 По Мактабе точного совпадения нет. Попробуй характерную фразу из матна.'; try{ maktabaSunnahBtn(res,seq,q); addNotFoundBtn(res,q); }catch(e){} return; }
     await loadBooksMap();
@@ -4777,6 +4778,7 @@ applyZoom();
 var _th=document.getElementById('themeSel'); if(_th){ _th.value=cfg.theme||'dark'; _th.onchange=()=>{ cfg.theme=_th.value; saveCfg(cfg); applyTheme(); toast(cfg.theme==='light'?'Светлая тема ☀️':'Тёмная тема 🌙'); }; }
 var _rcw=document.getElementById('recentSw'); if(_rcw){ _rcw.classList.toggle('on',cfg.recent!==false); _rcw.onclick=()=>{ cfg.recent=(cfg.recent===false); saveCfg(cfg); _rcw.classList.toggle('on',cfg.recent!==false); if(cfg.recent===false) hideRecent(); }; }
 var _tjw=document.getElementById('tafJumpSw'); if(_tjw){ _tjw.classList.toggle('on',cfg.tafJump!==false); _tjw.onclick=()=>{ cfg.tafJump=(cfg.tafJump===false); saveCfg(cfg); _tjw.classList.toggle('on',cfg.tafJump!==false); }; }
+var _str=document.getElementById('strictSw'); if(_str){ _str.classList.toggle('on',cfg.strictSearch!==false); _str.onclick=()=>{ cfg.strictSearch=(cfg.strictSearch===false); saveCfg(cfg); _str.classList.toggle('on',cfg.strictSearch!==false); toast(cfg.strictSearch!==false?'🎯 Строгий поиск ВКЛ — только все слова':'Строгий поиск ВЫКЛ — покажет и близкие'); }; }   // M283-тумблер
 var _hpw=document.getElementById('hapticSw'); if(_hpw){ _hpw.classList.toggle('on',cfg.haptic!==false); _hpw.onclick=()=>{ cfg.haptic=(cfg.haptic===false); saveCfg(cfg); _hpw.classList.toggle('on',cfg.haptic!==false); if(cfg.haptic!==false){ _hapErr=0; hap('light'); } }; }
 var _psw=document.getElementById('popSw'); if(_psw){ _psw.classList.toggle('on',cfg.popular!==false); _psw.onclick=()=>{ cfg.popular=(cfg.popular===false); saveCfg(cfg); _psw.classList.toggle('on',cfg.popular!==false); var pb=document.getElementById('popularBox'); if(cfg.popular===false&&pb){pb.style.display='none';} else { try{renderPopular();}catch(e){} } }; }
 applyTheme();
