@@ -8,6 +8,8 @@ import hmac
 import hashlib
 import time
 import collections
+import subprocess
+import shutil
 import requests
 from datetime import datetime, timedelta
 from html import unescape
@@ -478,13 +480,63 @@ def ai_describe_media(text_hint=""):
         pass
     return text_hint or "без описания"
 
-def convert_to_mp3(input_path, output_path, artist="", title=""):
+def _ffmpeg_bin():
+    return shutil.which("ffmpeg") or "ffmpeg"
+
+def parse_audio_meta(text):
+    """Достаём метаданные из команды: имя "X" исполнитель "Y" описание "Z".
+    Кавычки любые (" « » “ ” ' ), опечатки терпим (исполнительнь, описани...)."""
+    Q = r'["«»“”‘’«»\']'
+    NQ = r'["«»“”‘’«»\'\n]'
+    def grab(keys):
+        m = re.search(r'(?:' + '|'.join(keys) + r')\s*[:=]?\s*' + Q + r'([^' + NQ[1:-1] + r']{1,150})', text, re.IGNORECASE)
+        return m.group(1).strip() if m else ""
+    title   = grab(['имя', 'назван\\w*', 'тайтл', 'title'])
+    artist  = grab(['исполнител\\w*', 'артист', 'автор', 'performer', 'artist'])
+    comment = grab(['описани\\w*', 'коммент\\w*', 'desc\\w*', 'comment'])
+    return title, artist, comment
+
+def enhance_audio(input_path, output_path, artist="", title="", comment="", enhance=True):
+    """Конвертация (+опц. студийное улучшение «как Auphonic») в mp3 через ffmpeg.
+    Цепочка улучшения: highpass (убрать гул) → afftdn (шумоподавление) →
+    acompressor (сжать динамику) → loudnorm I=-16 LUFS (выровнять громкость,
+    стандарт вещания EBU R128) → alimiter (мягкий предел). Теги пишем метаданными."""
+    try:
+        cmd = [_ffmpeg_bin(), "-y", "-i", input_path]
+        if enhance:
+            af = ("highpass=f=70,"
+                  "afftdn=nf=-25,"
+                  "acompressor=threshold=-18dB:ratio=3:attack=20:release=250,"
+                  "loudnorm=I=-16:TP=-1.5:LRA=11,"
+                  "alimiter=limit=0.97")
+            cmd += ["-af", af, "-b:a", "192k"]
+        else:
+            cmd += ["-b:a", "160k"]
+        cmd += ["-ar", "44100", "-ac", "2"]
+        if title:   cmd += ["-metadata", "title=" + title]
+        if artist:  cmd += ["-metadata", "artist=" + artist]
+        if comment: cmd += ["-metadata", "comment=" + comment]
+        cmd += [output_path]
+        r = subprocess.run(cmd, capture_output=True, timeout=240)
+        if r.returncode != 0:
+            print("ffmpeg error:", (r.stderr or b"").decode("utf-8", "ignore")[-600:])
+            return False
+        return os.path.exists(output_path) and os.path.getsize(output_path) > 100
+    except Exception as e:
+        print(f"enhance_audio error: {e}")
+        return False
+
+def convert_to_mp3(input_path, output_path, artist="", title="", comment=""):
+    """Простая конвертация в mp3 (без улучшения). Сначала ffmpeg, при сбое — pydub."""
+    if enhance_audio(input_path, output_path, artist=artist, title=title, comment=comment, enhance=False):
+        return True
     try:
         from pydub import AudioSegment
         sound = AudioSegment.from_file(input_path)
-        sound.export(output_path, format="mp3", bitrate="128k", tags={
+        sound.export(output_path, format="mp3", bitrate="160k", tags={
             "artist": artist or "Unknown",
-            "title": title or "Без названия"
+            "title": title or "Без названия",
+            "comment": comment or ""
         })
         return True
     except Exception as e:
@@ -1849,28 +1901,52 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await update.message.reply_text("❌ Не найдено в реестре.")
                 return
 
-    # ============ ВЛАДЕЛЕЦ: КОНВЕРТАЦИЯ АУДИО ============
-    if is_owner(update) and text and text.lower().startswith("бахни mp3"):
-        if update.message.reply_to_message and (update.message.reply_to_message.audio or update.message.reply_to_message.voice):
-            await update.message.reply_text("🎧 Конвертирую...")
-            replied = update.message.reply_to_message
-            file_obj = replied.audio or replied.voice
-
-            artist = replied.sender_chat.title if replied.sender_chat else (replied.from_user.full_name if replied.from_user else "Unknown")
-            title = text[10:].strip() if len(text) > 10 else datetime.now().strftime("%d.%m.%Y %H:%M")
-
-            file = await file_obj.get_file()
-            input_path = f"/tmp/{file.file_id}.ogg"
-            output_path = f"/tmp/{file.file_id}.mp3"
-            await file.download_to_drive(input_path)
-
-            if convert_to_mp3(input_path, output_path, artist=artist, title=title):
-                await update.message.reply_audio(audio=open(output_path, "rb"), title=title, performer=artist)
-            else:
-                await update.message.reply_text("❌ Не удалось конвертировать.")
-        else:
-            await update.message.reply_text("❌ Ответь на аудио или войс командой 'бахни mp3'.")
-        return
+    # ============ ВЛАДЕЛЕЦ: АУДИО → MP3 (конвертация / студийное улучшение / метаданные) ============
+    # Ответь на аудио/войс в чате и напиши:
+    #   «mp3»                         → пришлю mp3
+    #   «mp3 имя "X" исполнитель "Y" описание "Z"» → mp3 с тегами
+    #   «улучшить»                    → шумодав + выравнивание громкости (как Auphonic) → чистый mp3
+    #   «улучшить имя "X" ...»         → улучшенный mp3 + теги
+    if is_owner(update) and text and update.message.reply_to_message:
+        _tl = text.lower().strip()
+        _rep = update.message.reply_to_message
+        _has_audio = bool(_rep.audio or _rep.voice or _rep.video or
+                          (_rep.document and (_rep.document.mime_type or '').startswith('audio')))
+        _want_mp3     = bool(re.match(r'^(бахни\s*)?(mp3|мп3|конверт\w*)\b', _tl))
+        _want_enhance = bool(re.match(r'^(улучши\w*|почисти\w*|студий\w*|auphonic)\b', _tl))
+        _has_meta     = bool(re.search(r'(имя|исполнител\w*|назван\w*|описани\w*|title|artist|performer)\s*[:=]?\s*["«»“‘\']', _tl))
+        if _has_audio and (_want_mp3 or _want_enhance or _has_meta):
+            await update.message.reply_text("✨ Улучшаю звук (шумодав + громкость)…" if _want_enhance else "🎧 Делаю mp3…")
+            _fobj = _rep.audio or _rep.voice or _rep.video or _rep.document
+            _t_meta, _a_meta, _c_meta = parse_audio_meta(text)
+            # свободный заголовок после команды без кавычек: «mp3 Лекция о посте»
+            if not _t_meta:
+                _rest = re.sub(r'^\s*(бахни\s*)?(mp3|мп3|улучши\w*|почисти\w*|конверт\w*|студий\w*|auphonic)\b[\s:.\-—]*', '', text, flags=re.IGNORECASE).strip()
+                if _rest and not re.search(r'["«»“‘\']|исполнител|описани|artist|performer|comment', _rest, re.IGNORECASE):
+                    _t_meta = _rest[:150]
+            _title  = _t_meta or (getattr(_rep.audio, 'title', None) if _rep.audio else None) or datetime.now().strftime("%d.%m.%Y %H:%M")
+            _artist = _a_meta or (getattr(_rep.audio, 'performer', None) if _rep.audio else None) \
+                      or (_rep.sender_chat.title if _rep.sender_chat else (_rep.from_user.full_name if _rep.from_user else "Muslimoon"))
+            _comment = _c_meta or ""
+            try:
+                _f = await _fobj.get_file()
+                _src = f"/tmp/{_f.file_id}.src"
+                _out = f"/tmp/{_f.file_id}.mp3"
+                await _f.download_to_drive(_src)
+                _ok = enhance_audio(_src, _out, artist=_artist, title=_title, comment=_comment, enhance=_want_enhance)
+                if _ok:
+                    _cap = "✨ Звук улучшен (шумоподавление + громкость −16 LUFS)" if _want_enhance else "🎵 MP3"
+                    if _t_meta or _a_meta or _c_meta:
+                        _cap += f"\n🏷 {_title} — {_artist}" + (f"\n📝 {_comment}" if _comment else "")
+                    await update.message.reply_audio(audio=open(_out, "rb"), title=_title, performer=_artist, caption=_cap)
+                else:
+                    await update.message.reply_text("❌ Не удалось обработать аудио. Нужен ffmpeg в деплое — после Redeploy (nixpacks.toml) заработает.")
+                for _p in (_src, _out):
+                    try: os.remove(_p)
+                    except Exception: pass
+            except Exception as e:
+                await update.message.reply_text("❌ Ошибка обработки аудио: " + str(e)[:200])
+            return
 
     # ============ ВЛАДЕЛЕЦ: ПАМЯТЬ ============
     if is_owner(update) and text:
@@ -2429,7 +2505,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🤖 ботяра вопрос | ботяра очисти свою память\n"
             "🔄 переведи текст\n"
             "📖 тафсир 2:255\n"
-            "🎧 бахни mp3 (reply)\n\n"
+            "🎧 Аудио (reply на аудио/войс): mp3 · улучшить\n"
+            "   теги: mp3 имя \"X\" исполнитель \"Y\" описание \"Z\"\n\n"
             "*Память (владелец):*\nзапомни: факт | память | удали память 2\nисправь память 2: текст | очистить память\n\n"
             "*Реестр (владелец):*\nв реестр (reply) | реестр | ожидает\nсделано 1 | удали 1 | результат 1 ссылка",
             parse_mode="Markdown",

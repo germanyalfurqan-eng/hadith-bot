@@ -165,7 +165,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=1" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v279</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v280</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -527,7 +527,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v279';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v280';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -641,12 +641,25 @@ try{ applyTheme(); }catch(e){}
 /* ===================== СЕРВЕРНЫЙ ДОСТУП (G9) ===================== */
 const INITDATA = (tg && tg.initData) || '';
 // #16 Журнал ошибок: ловим клиентские ошибки → /api/errlog (троттлинг + дедуп); владелец читает «ошибки» в боте
+let _appReport=function(){};
 (function(){ const _sent={}; let _cnt=0;
   function _report(msg, where, stack){ try{ if(!BACKEND_URL||!msg||_cnt>12) return; const k=(msg+'|'+where).slice(0,160); if(_sent[k]) return; _sent[k]=1; _cnt++;
     fetch(BACKEND_URL+'/errlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:String(msg).slice(0,300),where:String(where||'').slice(0,120),stack:String(stack||'').slice(0,600),ver:(typeof APPVER!=='undefined'?APPVER:''),initData:INITDATA})}).catch(()=>{}); }catch(e){} }
   window.addEventListener('error', e=>{ try{ _report(e.message||'error',(e.filename||'').split('/').pop()+':'+(e.lineno||''), e.error&&e.error.stack); }catch(_){} });
   window.addEventListener('unhandledrejection', e=>{ try{ const r=e.reason; _report((r&&r.message)||String(r)||'promise rejection','unhandledrejection', r&&r.stack); }catch(_){} });
+  _appReport=_report;   // экспонируем для логгера зависших загрузок
 })();
+// 🛡 Защита загрузок: fetch с таймаутом. Зависшая книга (напр. Ибн аль-Мубарак) больше не вешает прогу:
+// по таймауту бросаем ошибку → она ловится, пишется в журнал ошибок (/api/errlog) и книга ПРОПУСКАЕТСЯ.
+async function fetchJSON(url, ms){ ms=ms||20000;
+  const ctl=new AbortController(); const t=setTimeout(()=>{ try{ctl.abort();}catch(e){} }, ms);
+  try{ const r=await fetch(url,{signal:ctl.signal}); if(!r.ok) throw new Error('HTTP '+r.status); return await r.json(); }
+  catch(e){ const ab=(e&&e.name==='AbortError');
+    const reason=ab?('таймаут '+Math.round(ms/1000)+'с'):((e&&e.message)||'сбой сети');
+    try{ _appReport('Загрузка книги не удалась ('+reason+'): '+String(url).split('/').pop().slice(0,50), 'fetchJSON'); }catch(_){}
+    const err=new Error('fetchJSON: '+reason); err._url=url; err._timeout=ab; throw err; }
+  finally{ clearTimeout(t); }
+}
 let ALLOW=null;   // {app,translate,neuro,bot} с сервера
 let ACC=null;     // полный конфиг доступа (для owner-панели)
 let ME=null;      // {id,username,owner,verified}
@@ -880,27 +893,27 @@ async function loadCollection(code){
   if(cache[code]) return cache[code];
   if(code==='muslim'){   // Муслим — нумерация Абд аль-Баки (как sunnah.com): 2363=пальмы. fw = номер fawazahmed0 для готового перевода
     setStatus('Загружаю Сахих Муслим (Абд аль-Баки)…');
-    const j=await (await fetch('./muslim_baqi.json')).json();
+    const j=await fetchJSON('./muslim_baqi.json');
     cache[code]=j.map(x=>({num:String(x.num),text:(x.ar||'').replace(/\s+/g,' ').trim(),grade:'',fw:x.fw||null,norm:''}));
     return cache[code]; }
   setStatus('Загружаю: '+nameOf(code)+'…');
-  const j=await (await fetch(EDITION_URL(code))).json();
+  const j=await fetchJSON(EDITION_URL(code));
   cache[code]=(j.hadiths||[]).map(h=>{ const raw=(h.text||'').replace(/\s+/g,' ').trim();
     return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),norm:''}; });
   return cache[code];
 }
 let ahmadArr=null;
 async function loadAhmad(){ if(ahmadArr)return ahmadArr; setStatus('Загружаю Муснад Ахмада (большой)…');
-  const j=await (await fetch(AHMAD_URL)).json();
+  const j=await fetchJSON(AHMAD_URL, 45000);
   ahmadArr=j.map(x=>({num:String(x.n),text:x.t||'',grade:x.g||'',norm:''})); return ahmadArr; }
 const _local={};
 async function loadLocal(code,file){ if(_local[code])return _local[code]; setStatus('Загружаю '+nameOf(code)+'…');
-  const j=await (await fetch('./'+file)).json();
+  const j=await fetchJSON('./'+file);
   _local[code]=j.map(x=>{ const raw=(x.ar||x.t||'').replace(/\s+/g,' ').trim(); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }
 async function loadExtra(code){ if(_local[code])return _local[code]; const e=EXTRA_MAP[code]; setStatus('Загружаю '+(e?e.short:code)+'…');
   if(e&&e.cdn){ const j=await (await fetch(EDITION_URL(code))).json();
     _local[code]=(j.hadiths||[]).map(h=>({num:String(h.hadithnumber),text:(h.text||'').replace(/\s+/g,' ').trim(),grade:gradeOf(h),norm:''})); return _local[code]; }
-  const j=await (await fetch(EXTRA_BASE+code+'.json')).json();
+  const j=await fetchJSON(EXTRA_BASE+code+'.json');
   _local[code]=j.map(x=>{ const raw=(x.ar||x.t||'').replace(/\s+/g,' ').trim(); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }
 async function loadQuran(){ if(quran)return quran; setStatus('Загружаю Коран…');
   const j=await (await fetch(QURAN_URL)).json();
@@ -1663,16 +1676,18 @@ async function runSearch(explicit){
     b.style.cssText='display:block;margin:14px 0 6px;cursor:pointer;color:var(--link);border:1px dashed var(--border);border-radius:12px;padding:9px 12px;text-align:center;font-size:13px';
     b.textContent='🌐 Искать по ВСЕЙ библиотеке (~9000 книг) + наши доп. издания';
     // #2a: первоисточники (наши доп. издания) структурируем СРАЗУ после Ахмада — потоково, с прогрессом.
-    const runMore=async()=>{ if(seq!==_seq) return; b.style.pointerEvents='none'; let done=0;
+    const runMore=async()=>{ if(seq!==_seq) return; b.style.pointerEvents='none'; let done=0, _skip=0;
       for(const code of codes){ if(seq!==_seq) return; done++;
         b.textContent='📚 Первоисточники: '+arOf(code)+'… '+done+'/'+codes.length+' ('+Math.round(done/codes.length*100)+'%)';
         try{ const arr=await loadByCode(code); if(seq!==_seq) return; const n0=count;
           for(const h of arr){ if(docMatch(h,groups,modes)){ _results.push(code==='muhaymin'?{type:'m',h}:{type:'h',code,h}); count++; } }
           if(count>n0){ groupSrc=true; renderResultsView(); res.appendChild(b); }   // структура продолжается после Ахмада; баннер прогресса возвращаем вниз (renderResultsView чистит res)
-        }catch(e){}
+        }catch(e){ _skip++;   // 🛡 книга зависла/не отдалась → пропускаем, не вешаем поиск (ошибка уже в журнале)
+          try{ b.textContent='⚠️ '+arOf(code)+' пропущен ('+((e&&e._timeout)?'долго грузился':'ошибка')+') — иду дальше…'; }catch(_){ } }
         await new Promise(r=>setTimeout(r,0));
       }
       if(seq!==_seq) return; b.remove(); groupSrc=true; renderResultsView();
+      if(_skip>0){ try{ toast('⚠️ Пропущено книг: '+_skip+' (не загрузились — записал в журнал ошибок)'); }catch(_){ } }
       // M284: вторую ступень (вся Мактаба turath) НЕ показываем отдельной кнопкой — она ищется АВТОМАТОМ
       // (appendMaktaba в конце runSearch) с фоновой ленивой догрузкой по скроллу (IntersectionObserver в maktabaMoreBtn).
     };
