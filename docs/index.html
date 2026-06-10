@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" id="vpMeta" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
+<!-- M318: книжный насх для читалки (грузится тихо; при оффлайне падаем на Traditional Arabic) -->
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;500;700&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
 <title>Muslimoon — Коран и хадисы: поиск, перевод, тафсир, достоверность</title>
 <meta name="description" content="Muslimoon — поиск по хадисам и аятам Корана: Сахих аль-Бухари, Муслим, Абу Дауд, Тирмизи, Насаи, Ибн Маджа, Малик, Ахмад и десятки сборников. Перевод (Кулиев/Абу Адель), тафсир (Ибн Касир, Табари), достоверность и تخريج «где ещё передаётся», карточки передатчиков. Исламская библиотека в кармане.">
 <meta name="keywords" content="хадисы, поиск хадисов, Коран онлайн, аяты, тафсир, Ибн Касир, Табари, Сахих Бухари, Сахих Муслим, Абу Дауд, Тирмизи, достоверность хадиса, тахридж, передатчики хадиса, иснад, сунна, ислам, Muslimoon, муслимун">
@@ -542,7 +545,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v310';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v311';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2052,16 +2055,35 @@ function openBook(bookId, startPg){
   if(OUR_COLL_BOOK[id] && isReadable(OUR_COLL_BOOK[id])){ try{ openReader(OUR_COLL_BOOK[id]); toast('Сахих Муслим — издание Абд аль-Баки (как в избранном)'); }catch(e){} return; }
   if(!BACKEND_URL){ toast('Читалка книги работает на сервере'); return; }
   let sp=parseInt(String(startPg||'').replace(/[^0-9]/g,''))||1; if(sp<1) sp=1;
+  // M318: ПРОДОЛЖИТЬ ЧТЕНИЕ — если страница не указана, возвращаемся туда, где остановились
+  if(!startPg){ try{ const pos=JSON.parse(localStorage.getItem('bk_pos')||'{}'); if(pos[id]&&pos[id].pg>1){ sp=pos[id].pg; setTimeout(()=>toast('▶ Продолжаю со стр. '+sp+' (читал ранее)'),300); } }catch(e){} }
   _bookView={id:id, pg:sp};
   let m=document.getElementById('bookModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='bookModal';
-    m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 8px;padding:13px 16px 9px;border-bottom:1px solid var(--border)"><b id="bookTitle" style="font-size:14px;line-height:1.35;flex:1;min-width:0">📖 Книга</b><button class="mini" id="bookClose" style="flex:none">закрыть ✕</button></div><div id="bookNav" style="display:flex;gap:6px;align-items:center;justify-content:center;margin-bottom:8px;flex-wrap:wrap"></div><div id="bookText" style="direction:rtl;text-align:right;font-size:19px;line-height:2.25;border:1px solid var(--border);border-radius:10px;padding:13px 14px;max-height:62vh;overflow:auto"></div></div>';
+    // M318 (редизайн по совету GPT, R31): компакт-шапка · тогглы инструментов · текст с книжной типографикой · sticky-низ листания
+    m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0;padding-bottom:0;display:flex;flex-direction:column;max-height:92vh">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 6px;padding:11px 16px 8px;border-bottom:1px solid var(--border)"><b id="bookTitle" style="font-size:14px;line-height:1.35;flex:1;min-width:0">📖 Книга</b><button class="mini" id="bookClose" style="flex:none">✕</button></div>'
+      +'<div id="bookNav" style="display:flex;gap:6px;align-items:center;justify-content:center;margin-bottom:6px;flex-wrap:wrap"></div>'
+      +'<div id="bookText" style="direction:rtl;text-align:right;font-size:19px;line-height:2.1;text-align:justify;font-family:\'Noto Naskh Arabic\',\'Amiri\',\'Traditional Arabic\',\'Scheherazade New\',serif;border:1px solid var(--border);border-radius:10px;padding:14px 15px;flex:1;min-height:30vh;overflow:auto"></div>'
+      +'<div id="bookBotBar" style="position:sticky;bottom:0;z-index:20;background:var(--card);margin:6px -16px 0;padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap"></div>'
+      +'</div>';
     document.body.appendChild(m);
     m.querySelector('#bookClose').onclick=()=>{ m.style.display='none'; };
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
   }
   m.style.display='flex'; _bookLoad();
 }
+// M318: тема текста читалки (тёмная / сепия / чёрная-AMOLED) — на контейнере текста
+function _bkApplyTheme(tEl){
+  const th=cfg.bkTheme||'dark';
+  if(th==='sepia'){ tEl.style.background='#f4ecd8'; tEl.style.color='#3a2f1b'; tEl.style.borderColor='#cdbd9b'; }
+  else if(th==='black'){ tEl.style.background='#000'; tEl.style.color='#d6d6d6'; tEl.style.borderColor='#222'; }
+  else { tEl.style.background=''; tEl.style.color=''; tEl.style.borderColor=''; }
+}
+function _bkSavePos(){ try{ const pos=JSON.parse(localStorage.getItem('bk_pos')||'{}');
+  pos[_bookView.id]={pg:_bookView.pg, t:Date.now()};
+  const ks=Object.keys(pos); if(ks.length>60){ ks.sort((a,b)=>(pos[a].t||0)-(pos[b].t||0)); delete pos[ks[0]]; }
+  localStorage.setItem('bk_pos', JSON.stringify(pos)); }catch(e){} }
 // дозагрузка соседней страницы В ТО ЖЕ окно (как в Шамиле: «тахмиль ас-сафха ат-талия/ас-сабика») — читать подряд, не перелистывая
 async function _bookFetchClean(pg){
   try{ const r=await fetch(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+pg+'&initData='+encodeURIComponent(INITDATA));
@@ -2135,29 +2157,31 @@ async function _bookLoad(){
       const _nAdd=tEl.querySelector('#bookNextAdd'); if(_nAdd) _nAdd.onclick=_bookAddNext; }
     navEl.innerHTML=''; navEl.style.flexDirection='column'; navEl.style.gap='7px';
     const mk=(t,fn,dis)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=t; if(dis) b.disabled=true; b.onclick=fn; return b; };
-    // ── РЯД 1: понятная навигация (LTR, привычные стрелки: ◀ назад, вперёд ▶) + отдельная строка «где я»
     const hasP=(typeof meta.page==='number');
     _bookView.off = hasP ? (_bookView.pg-meta.page) : (_bookView.off||0);   // смещение «лист − печатная» для прыжка по печатному номеру
-    // строка-индикатор: где сейчас находимся
-    const loc=document.createElement('div'); loc.className='hint'; loc.style.cssText='font-size:13px;text-align:center;margin-bottom:3px;color:var(--mark)';
-    loc.textContent='📖 '+(meta.vol?('том '+meta.vol+' · '):'')+(hasP?('страница '+meta.page):('лист '+_bookView.pg+' (титул/предисловие)'));
-    navEl.appendChild(loc);
-    // ряд кнопок — слева направо, как привычно
-    const r1=document.createElement('div'); r1.style.cssText='display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap';
-    r1.appendChild(mk('⏮', ()=>{ if(_bookView.pg!==1){ _bookView.pg=1; _bookLoad(); } }, _bookView.pg<=1));   // в самое начало
-    r1.appendChild(mk('◀ Пред.', ()=>{ if(_bookView.pg>1){ _bookView.pg--; _bookLoad(); } }, _bookView.pg<=1));
-    const cap=document.createElement('span'); cap.className='hint'; cap.textContent='стр.'; cap.style.cssText='font-size:13px';
-    const inp=document.createElement('input'); inp.type='tel'; inp.value=hasP?meta.page:_bookView.pg;
-    inp.title=hasP?'Печатная страница (как напечатано в книге) — введи номер и Enter':('Лист №'+_bookView.pg+' — печатный номер не указан');
-    inp.style.cssText='width:56px;text-align:center;background:var(--bg);color:var(--text);border:1px solid var(--btn);border-radius:8px;padding:6px;font-size:15px;font-weight:700';
-    const jump=()=>{ const t=Math.max(1,parseInt(inp.value)||1); if(hasP){ _bookView.want=t; _bookView.snaps=0; _bookView.pg=Math.max(1,t+(_bookView.off||0)); } else { _bookView.pg=t; } _bookLoad(); };
-    inp.onchange=jump; inp.addEventListener('keydown',e=>{ if(e.key==='Enter') jump(); });
-    r1.appendChild(cap); r1.appendChild(inp);
-    r1.appendChild(mk('Перейти', jump));
-    r1.appendChild(mk('След. ▶', ()=>{ _bookView.pg++; _bookLoad(); }));
-    navEl.appendChild(r1);
-    // ── РЯД 2: инструменты страницы (поиск/копия/шрифт + ИИ-группа свёрнута)
-    const r2=document.createElement('div'); r2.style.cssText='display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap';
+    try{ _bkSavePos(); }catch(e){}   // M318: запоминаем где читаем (вернёмся сюда же)
+    try{ _bkApplyTheme(tEl); }catch(e){}
+    // ── M318: НИЗ-БАР ЛИСТАНИЯ (sticky bottom — большой палец достаёт; листание = главное действие чтения)
+    const bot=m.querySelector('#bookBotBar'); if(bot){ bot.innerHTML='';
+      bot.appendChild(mk('⏮', ()=>{ if(_bookView.pg!==1){ _bookView.pg=1; _bookLoad(); } }, _bookView.pg<=1));
+      bot.appendChild(mk('◀', ()=>{ if(_bookView.pg>1){ _bookView.pg--; _bookLoad(); } }, _bookView.pg<=1));
+      const inp=document.createElement('input'); inp.type='tel'; inp.value=hasP?meta.page:_bookView.pg;
+      inp.title=hasP?'Печатная страница — введи номер и Enter':('Лист №'+_bookView.pg);
+      inp.style.cssText='width:62px;text-align:center;background:var(--bg);color:var(--text);border:1px solid var(--btn);border-radius:8px;padding:7px 4px;font-size:15px;font-weight:700';
+      const jump=()=>{ const t=Math.max(1,parseInt(inp.value)||1); if(hasP){ _bookView.want=t; _bookView.snaps=0; _bookView.pg=Math.max(1,t+(_bookView.off||0)); } else { _bookView.pg=t; } _bookLoad(); };
+      inp.onchange=jump; inp.addEventListener('keydown',e=>{ if(e.key==='Enter') jump(); });
+      const lc=document.createElement('span'); lc.className='hint'; lc.style.cssText='font-size:12px;color:var(--mark);white-space:nowrap';
+      lc.textContent=(meta.vol?('т.'+meta.vol+' · '):'')+(hasP?'стр.':'лист');
+      bot.appendChild(lc); bot.appendChild(inp);
+      bot.appendChild(mk('▶', ()=>{ _bookView.pg++; _bookLoad(); }));
+      m._jump=jump; m._inp=inp;
+    }
+    // ── РЯД ТОГГЛОВ: ⚙️ Инструменты (поиск/копия/ссылка/шрифт/тема) + 🧠 ИИ — панели по требованию, чтение не загромождено
+    const tgl=document.createElement('div'); tgl.style.cssText='display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap';
+    const r2=document.createElement('div'); r2.style.cssText='display:none;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap';
+    const gearB=document.createElement('button'); gearB.className='mini'; gearB.textContent='⚙️ Инструменты ▾'; gearB.style.cssText='padding:6px 12px;border-radius:9px;font-size:13px';
+    gearB.onclick=()=>{ const open=r2.style.display!=='none'; r2.style.display=open?'none':'flex'; gearB.textContent='⚙️ Инструменты '+(open?'▾':'▴'); };
+    tgl.appendChild(gearB); navEl.appendChild(tgl);
     // 🔎 поиск по странице (подсветка совпадений в загруженном тексте)
     const fnd=document.createElement('input'); fnd.type='search'; fnd.placeholder='🔎 найти на странице'; fnd.style.cssText='width:168px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:13px;direction:ltr;text-align:right';
     const doFind=(q)=>{ const me=tEl.querySelector('#bookMain')||tEl; const clean=tEl.dataset.txt||''; const qf=(q||'').trim();
@@ -2169,18 +2193,22 @@ async function _bookLoad(){
     // ⧉ копировать страницу
     r2.appendChild(mk('⧉ копия', ()=>{ const t=tEl.dataset.txt||tEl.textContent||''; try{ navigator.clipboard.writeText(t); toast('📋 Страница скопирована'); }catch(e){ toast('Не вышло'); } }));
     // 🔗 ссылка на ЭТУ страницу книги (открой/перешли — откроется ровно здесь, в Telegram и в браузере)
-    r2.appendChild(mk('🔗 Ссылка', ()=>{ const pg=(inp&&inp.value)||_bookView.pg; const u=deepLinkUrls('b_'+_bookView.id+'_'+pg);
+    r2.appendChild(mk('🔗 Ссылка', ()=>{ const pg=(m._inp&&m._inp.value)||_bookView.pg; const u=deepLinkUrls('b_'+_bookView.id+'_'+pg);
       try{ navigator.clipboard.writeText('📖 '+bnm+' — стр. '+pg+'\n'+u.tg+'\n'+u.web); toast('🔗 Ссылка на эту страницу скопирована'); }catch(e){ toast('Ссылка: '+u.web); } }));
     // A− / A+ шрифт прямо тут
     r2.appendChild(mk('A−', ()=>{ cfg.fontScale=Math.max(0.7,(cfg.fontScale||1)-0.1); saveCfg(cfg); applyFontScale(); }));
     r2.appendChild(mk('A+', ()=>{ cfg.fontScale=Math.min(2.2,(cfg.fontScale||1)+0.1); saveCfg(cfg); applyFontScale(); }));
+    // 🎨 тема текста (тёмная → сепия → чёрная) — M318
+    const thB=mk('🎨 Тема', ()=>{ const seq=['dark','sepia','black']; const cur=seq.indexOf(cfg.bkTheme||'dark');
+      cfg.bkTheme=seq[(cur+1)%seq.length]; saveCfg(cfg); _bkApplyTheme(tEl);
+      toast('🎨 '+(cfg.bkTheme==='sepia'?'Сепия (как бумага)':cfg.bkTheme==='black'?'Чёрная (AMOLED)':'Тёмная')); });
+    r2.appendChild(thB);
     navEl.appendChild(r2);
-    // ── РЯД 3: ИИ-инструменты — свёрнуты в одну кнопку (чисто, не мешают чтению)
-    const aiWrap=document.createElement('div'); aiWrap.style.cssText='display:flex;flex-direction:column;gap:6px;align-items:center';
-    const aiToggle=document.createElement('button'); aiToggle.className='mini'; aiToggle.textContent='🧠 ИИ-инструменты ▾'; aiToggle.style.cssText='border:1px solid #6c5ce7;color:#d9ccff;background:#2e1d4a;padding:6px 14px;border-radius:9px;font-size:13px;font-weight:600';
+    // ── ИИ-инструменты — тоггл в одной строке с ⚙️ (чисто, не мешают чтению)
+    const aiToggle=document.createElement('button'); aiToggle.className='mini'; aiToggle.textContent='🧠 ИИ ▾'; aiToggle.style.cssText='border:1px solid #6c5ce7;color:#d9ccff;background:#2e1d4a;padding:6px 12px;border-radius:9px;font-size:13px;font-weight:600';
     const aiPanel=document.createElement('div'); aiPanel.style.cssText='display:none;gap:6px;flex-wrap:wrap;justify-content:center';
-    aiToggle.onclick=()=>{ const open=aiPanel.style.display!=='none'; aiPanel.style.display=open?'none':'flex'; aiToggle.textContent='🧠 ИИ-инструменты '+(open?'▾':'▴'); };
-    aiWrap.appendChild(aiToggle); aiWrap.appendChild(aiPanel); navEl.appendChild(aiWrap);
+    aiToggle.onclick=()=>{ const open=aiPanel.style.display!=='none'; aiPanel.style.display=open?'none':'flex'; aiToggle.textContent='🧠 ИИ '+(open?'▾':'▴'); };
+    tgl.appendChild(aiToggle); navEl.appendChild(aiPanel);
     // Arabus (тап слова)
     const ab=document.createElement('button'); ab.className='mini'; ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus'; ab.title='Тап по слову → корень/значения';
     ab.onclick=()=>{ _arabusOn=!_arabusOn; try{ loadRoots(); if(_arabusOn) loadArabusLocal(); }catch(e){} ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus'; tEl.style.cursor=_arabusOn?'pointer':'default'; toast(_arabusOn?'📕 Arabus ВКЛ — тапай слово':'Arabus выкл'); };
