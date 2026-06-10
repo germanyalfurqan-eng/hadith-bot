@@ -546,6 +546,27 @@ def convert_to_mp3(input_path, output_path, artist="", title="", comment=""):
         print(f"Convert error: {e}")
         return False
 
+def transcribe_audio(path):
+    """Расшифровка речи (OpenAI Whisper, ключ OPENAI_API_KEY на Railway). Возвращает текст или None.
+    Поддерживает ru/ar и др. Whisper принимает ogg/oga/mp3/m4a/wav до ~25 МБ."""
+    if not OPENAI_API_KEY:
+        return None
+    try:
+        with open(path, "rb") as fh:
+            r = requests.post(
+                "https://api.openai.com/v1/audio/transcriptions",
+                headers={"Authorization": "Bearer " + OPENAI_API_KEY},
+                files={"file": (os.path.basename(path) or "audio.ogg", fh, "application/octet-stream")},
+                data={"model": "whisper-1"},
+                timeout=300)
+        if r.status_code == 200:
+            return (r.json() or {}).get("text", "").strip()
+        print("whisper error:", r.status_code, r.text[:200])
+        return None
+    except Exception as e:
+        print(f"transcribe error: {e}")
+        return None
+
 def is_owner(update: Update) -> bool:
     user_id = update.effective_user.id if update.effective_user else 0
     sender_chat_id = 0
@@ -1918,7 +1939,31 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                           (_rep.document and (_rep.document.mime_type or '').startswith('audio')))
         _want_mp3     = bool(re.match(r'^(бахни\s*)?(mp3|мп3|конверт\w*)\b', _tl))
         _want_enhance = bool(re.match(r'^(улучши\w*|почисти\w*|студий\w*|auphonic)\b', _tl))
+        _want_transcribe = bool(re.match(r'^(расшифр\w*|транскри\w*|в\s*текст|текст\b|whisper)', _tl))
         _has_meta     = bool(re.search(r'(имя|исполнител\w*|назван\w*|описани\w*|title|artist|performer)\s*[:=]?\s*["«»“‘\']', _tl))
+        # 📝 РАСШИФРОВКА речи (Whisper): ответь на голосовое/аудио/видео + «расшифровать»
+        if _has_audio and _want_transcribe:
+            await update.message.reply_text("📝 Расшифровываю речь… (может занять минуту)")
+            _fobj = _rep.audio or _rep.voice or _rep.video or _rep.document
+            try:
+                _f = await _fobj.get_file()
+                _src = f"/tmp/{_f.file_id}.audio"
+                await _f.download_to_drive(_src)
+                _txt = await asyncio.get_event_loop().run_in_executor(None, transcribe_audio, _src)
+                if _txt:
+                    if len(_txt) > 3800:   # длинная речь → присылаем файлом-документом
+                        from io import BytesIO
+                        _bio = BytesIO(_txt.encode("utf-8")); _bio.name = "transcript.txt"
+                        await update.message.reply_document(document=_bio, caption="📝 Расшифровка (длинная — файлом)")
+                    else:
+                        await send_long(update, "📝 Расшифровка:\n\n" + _txt)
+                else:
+                    await update.message.reply_text("❌ Не удалось расшифровать. Нужен OPENAI_API_KEY на Railway (Whisper).")
+                try: os.remove(_src)
+                except Exception: pass
+            except Exception as e:
+                await update.message.reply_text("❌ Ошибка расшифровки: " + str(e)[:200])
+            return
         if _has_audio and (_want_mp3 or _want_enhance or _has_meta):
             await update.message.reply_text("✨ Улучшаю звук (шумодав + громкость)…" if _want_enhance else "🎧 Делаю mp3…")
             _fobj = _rep.audio or _rep.voice or _rep.video or _rep.document
@@ -2509,7 +2554,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🤖 ботяра вопрос | ботяра очисти свою память\n"
             "🔄 переведи текст\n"
             "📖 тафсир 2:255\n"
-            "🎧 Аудио (reply на аудио/войс): mp3 · улучшить\n"
+            "🎧 Аудио (reply на аудио/войс): mp3 · улучшить · расшифровать (речь→текст)\n"
             "   теги: mp3 имя \"X\" исполнитель \"Y\" описание \"Z\"\n\n"
             "*Память (владелец):*\nзапомни: факт | память | удали память 2\nисправь память 2: текст | очистить память\n\n"
             "*Реестр (владелец):*\nв реестр (reply) | реестр | ожидает\nсделано 1 | удали 1 | результат 1 ссылка",
