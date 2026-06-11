@@ -463,6 +463,12 @@
       <div class="ah"><div><div class="at">🔐 Доступы (кто что видит)</div><div class="ad">Кому открыт вход, перевод, нейро, бот. Главный рубильник «ВСЁ ВСЕМ».</div></div>
         <button class="go" id="accBtn" style="padding:6px 12px">Открыть</button></div>
     </div>
+    <!-- M428: ЕДИНЫЙ журнал заявок (бот TB + апп TA + чат M) из req_status.json — синхронизирован с деплоями -->
+    <div class="accf">
+      <div class="ah"><div><div class="at">📋 Журнал заявок (полный)</div><div class="ad">Все коды: M (чат) · TB (бот) · TA (апп). Статусы, причины, сроки — обновляется с каждым деплоем.</div></div>
+        <button class="go" id="reqBtn" style="padding:6px 12px">Открыть</button></div>
+      <div id="reqOut" style="display:none;margin-top:8px;max-height:55vh;overflow:auto"></div>
+    </div>
     <div class="accf">
       <div class="at">📝 Замечание / правка для Claude</div>
       <div class="ad">Опиши ошибку или пожелание — улетит ко мне (в журнал разработки), внесу в заявки и отчитаюсь. Можно приложить скрин.</div>
@@ -547,7 +553,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v356';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v357';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -6630,6 +6636,31 @@ async function openModal(){
 }
 var _g=document.getElementById('gear'); if(_g) _g.onclick=openModal;
 var _accB=document.getElementById('accBtn'); if(_accB) _accB.onclick=()=>{ document.getElementById('devModal').style.display='none'; openModal(); };
+// M428: единый журнал заявок (M+TB+TA) из req_status.json — счётчики, фильтр «открытые», причины и сроки
+var _reqB=document.getElementById('reqBtn');
+if(_reqB) _reqB.onclick=async()=>{
+  const out=document.getElementById('reqOut');
+  if(out.style.display==='block'){ out.style.display='none'; _reqB.textContent='Открыть'; return; }
+  out.style.display='block'; _reqB.textContent='⏳…'; out.innerHTML='<div class="hint">⏳ Гружу журнал…</div>';
+  try{
+    const j=await (await fetch('./req_status.json?'+Date.now())).json();
+    let onlyOpen=true;
+    const draw=()=>{
+      const items=(j.items||[]).filter(it=>!onlyOpen||it.status==='open');
+      let h='<div style="font-size:12.5px;margin-bottom:6px"><b>'+esc(j.updated||'')+'</b> · современных: '+j.modern_total+' = ✅'+j.modern_done+' + 🔴'+j.modern_open+'</div>'
+        +'<div class="hint" style="font-size:11px;margin-bottom:6px">'+esc(j.legacy_note||'')+'</div>'
+        +'<button class="mini" id="reqTgl" style="margin-bottom:7px;padding:5px 11px;border:1px solid var(--border);border-radius:8px">'+(onlyOpen?'☑ только ОТКРЫТЫЕ — показать все':'☐ все — показать только открытые')+'</button>';
+      items.slice(0,160).forEach(it=>{ h+='<div style="border-bottom:1px solid var(--border);padding:6px 2px;font-size:12.5px">'
+        +'<b style="color:'+(it.status==='done'?'#7ee2a8':(it.status==='archive'?'var(--hint)':'#ffd479'))+'">'+esc(it.code)+'</b> '
+        +(it.status==='done'?'✅':(it.status==='archive'?'📦':'🔴'))+' '+esc((it.title||'').slice(0,110))
+        +(it.note?('<div style="font-size:11px;color:var(--hint)">'+esc(it.note.slice(0,110))+'</div>'):'')
+        +(it.reason?('<div style="font-size:11px;color:#bcd0ff">↳ '+esc(it.reason)+' · срок: '+esc(it.eta||'—')+'</div>'):'')+'</div>'; });
+      out.innerHTML=h;
+      const tg=out.querySelector('#reqTgl'); if(tg) tg.onclick=()=>{ onlyOpen=!onlyOpen; draw(); };
+    };
+    draw(); _reqB.textContent='Скрыть';
+  }catch(e){ out.innerHTML='<div class="hint">🔧 не загрузился (нужен свежий деплой)</div>'; _reqB.textContent='Открыть'; }
+};
 function renderBanList(){ const el=document.getElementById('banList'); if(!el) return; const bl=((ACC&&ACC.blacklist)||[]).map(String);
   el.innerHTML = bl.length ? ('⛔ В бане ('+bl.length+'): '+bl.map(esc).join(', ')) : 'Чёрный список пуст.'; }
 async function devBan(add){

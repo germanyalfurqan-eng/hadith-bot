@@ -1600,6 +1600,25 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 await update.message.reply_text("Сообщение с кнопкой отправлено ✅. Авто-закрепить не вышло — закрепи вручную (зажми сообщение → «Закрепить»). ✍️ Свой текст: «закреп <твой текст>».")
             return
+        # M428: ПОЛНЫЙ единый журнал (M-чат + TB-бот + TA-апп) — сводка статусов/причин/сроков с Pages (req_status.json, обновляется каждым деплоем)
+        if _tl in ("статус заявок", "заявки полные", "полный журнал", "журнал заявок"):
+            try:
+                rs = requests.get("https://germanyalfurqan-eng.github.io/hadith-bot/req_status.json", timeout=15).json()
+                lines = [f"📋 *ЕДИНЫЙ журнал заявок* (обновлён {rs.get('updated','')})",
+                         f"Современных: {rs.get('modern_total')} = ✅{rs.get('modern_done')} + 🔴{rs.get('modern_open')}",
+                         f"_{rs.get('legacy_note','')}_", "", "🔴 *Открытые:*"]
+                for it in (rs.get("items") or []):
+                    if it.get("status") != "open":
+                        continue
+                    lines.append(f"• *{it.get('code')}*: {(it.get('title') or '')[:90]}")
+                    if it.get("reason"):
+                        lines.append(f"   ↳ {it['reason']} · срок: {it.get('eta','—')}")
+                    if len(lines) > 70:
+                        lines.append("… (полный список — в Кабинете приложения, «📋 Журнал заявок»)"); break
+                await send_long(update, "\n".join(lines), "Markdown")
+            except Exception as e:
+                await update.message.reply_text("🔧 Журнал не дотянулся: " + str(e)[:120])
+            return
         # ===== ЗАЯВКИ владельца: список (невыполненные первыми + от пользователей) =====
         if _tl == "заявки" or _tl == "список заявок" or _tl == "мои заявки":
             j = _journal_load(); reqs = j.get("requests", []); fb = j.get("feedback", [])
