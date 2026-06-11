@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v331';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v332';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4465,7 +4465,11 @@ function highlightNarratorsInDiv(ad, names, onClick){
 /* ===== БАЗА ПЕРЕДАТЧИКОВ (расшифрованная Мактаба, 18989 равиев) — карточка как в Шамиле ===== */
 let _narrNames=null, _narrNamesP=null, _narrShard={};
 function loadNarrNames(){ if(_narrNames) return Promise.resolve(_narrNames); if(_narrNamesP) return _narrNamesP;
-  _narrNamesP=fetch('./narrators_names.json').then(r=>r.ok?r.json():null).then(j=>{_narrNames=j||[];return _narrNames;}).catch(()=>{_narrNames=[];return _narrNames;}); return _narrNamesP; }
+  _narrNamesP=fetch('./narrators_names.json').then(r=>r.ok?r.json():null).then(async j=>{ _narrNames=j||[];
+    // M381: расширенный индекс форм (كنية/نسب: أبو مالك الأشعري، الحسن البصري…) — уникальные вливаются в общий
+    try{ const r2=await fetch('./narrators_names2.json'); if(r2.ok){ const n2=await r2.json();
+      (n2.u||[]).forEach(p=>_narrNames.push(p)); window._narrMulti=n2.m||[]; } }catch(e){}
+    return _narrNames; }).catch(()=>{_narrNames=[];return _narrNames;}); return _narrNamesP; }
 function _narrCanon(s){ s=(s||'').replace(/[ً-ْـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه'); return s.replace(/\s+/g,' ').trim(); }
 async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.length) return null; const cn=_narrCanon(name); if(cn.length<4) return null;
   // Ф-04б (M377): ДВУСТОРОННИЙ префикс — иснад бывает и КОРОЧЕ базы (سفيان → سفيان بن سعيد…), и ДЛИННЕЕ
@@ -4488,7 +4492,9 @@ function _skelAr(w){ w=w.replace(/^ال/,''); let s='';
   for(const ch of w){ const c=_AR_SK[ch]; if(c) s+=c; else if(ch==='و'||ch==='ؤ') s+='w'; else if(ch==='ي'||ch==='ئ') s+='y'; }
   return _skelFin(s); }
 const _RU_SK={'б':'b','п':'b','г':'g','д':'d','ж':'j','з':'z','к':'k','л':'l','м':'m','н':'n','р':'r','с':'s','т':'t','ф':'f','х':'h','ц':'s','ч':'j','ш':'x','щ':'x'};
-function _skelRu(w){ w=w.toLowerCase().replace(/ё/g,'е').replace(/дж/g,'ж').replace(/^(аль|эль|ал|ас|аш|ад|аз|ар|ан|ат)[-ъ']/,''); let s='';
+function _skelRu(w){ w=w.toLowerCase().replace(/ё/g,'е').replace(/дж/g,'ж').replace(/^(аль|эль|ал|ас|аш|ад|аз|ар|ан|ат)[-ъ']/,'');
+  w=w.replace(/^(аль|эль)(?=[а-я]{3,})/,'');   // Ф-10б (M383): СЛИТНЫЙ артикль («альбасри») тоже срезаем (остаток ≥3 букв; «али» не трогаем)
+  let s='';
   for(const ch of w){ const c=_RU_SK[ch]; if(c) s+=c; else if(ch==='в'||ch==='у'||ch==='ю') s+='w'; else if(ch==='й'||ch==='и'||ch==='ы') s+='y'; }
   return _skelFin(s); }
 let _narrExt=null, _narrExtP=null;   // расширение: id → [кунья+нисба (канон), год смерти, известность(трудов-критиков)] — матчинг «ас-Саури» + ранжирование знаменитостей
@@ -4577,6 +4583,16 @@ function _narrRow(c){   // строка-кандидат: имя (RTL) + рус-
     const rk=cc[5]||cc[6];
     el.innerHTML='<span dir="rtl" style="display:block">'+(cc[4]?('وفاة ~'+cc[4]+'هـ'):'<span style="opacity:.4">وفاة ؟</span>')+'</span>'
       +(rk?('<span dir="rtl" style="display:block;color:#9aa7b8">'+esc((''+rk).slice(0,38))+'</span>'):''); }).catch(()=>{});
+  // M382: ШУХРА видна в строке («суфьян саури» → видно «الثوري · ас-Саури»)
+  loadNarrExt().then(ext=>{ try{ const e=ext.get(c.id); if(!e||!e[0]) return;
+    const _shStop={'يقال':1,'وقيل':1,'ويقال':1,'الله':1,'الرحمن':1,'الدين':1,'ابن':1,'ابو':1};
+    const toks=e[0].split(' ').filter(w=>w.length>=4&&w.startsWith('ال')&&!_shStop[w]);
+    const tok=toks[toks.length-1]; if(!tok) return;   // нисба-шухра обычно ПОСЛЕДНЯЯ (الثوري، البصري)
+    const host=r.children[1]; if(!host||host.dataset.sh) return; host.dataset.sh='1';
+    let ruT=''; try{ ruT=_arWordRu(tok)||''; }catch(e2){}
+    const d=document.createElement('span'); d.style.cssText='display:block;text-align:right;font-size:11.5px;color:#ffd479';
+    d.innerHTML='<span dir="rtl">'+esc(tok)+'</span>'+(ruT?(' <span style="color:#cdb97a">· '+esc(ruT)+'</span>'):'');
+    host.appendChild(d); }catch(e){} }).catch(()=>{});
   return r;
 }
 /* — обратная транслитерация ар→рус для читаемости подсказок/биографий: словарь частых компонент имён + фонетический фолбэк — */
