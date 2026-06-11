@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v334';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v335';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2464,6 +2464,7 @@ function _cleanShamela(t){ t=String(t||'');
   t=t.replace(/\[\s*ر\s*:\s*[٠-٩0-9\s،]+\]/g,'');
   return t.trim(); }
 async function maktabaByNum(seq, n){
+  maktabaByNum.__ae=0;   // M388: лимит авторазворотов — на каждый поиск заново
   const res=document.getElementById('res');
   const arN=_toArDigits(n);
   const head=document.createElement('div'); head.className='hint'; head.style.cssText='color:#4ade80;font-size:13px;margin:0 0 8px';
@@ -2601,6 +2602,9 @@ async function maktabaByNum(seq, n){
         try{ enableArabusTap(ar); }catch(e){}
       }catch(e){ fb.textContent='🔧 не вышло'; fb.disabled=false; }
     };
+    // M388: непокрытые шардами ПЕЧАТИ ПЕРВОИСТОЧНИКОВ разворачиваются сами (лесенка ≤5) — единый «классный» вид
+    if(auto && fb){ const ai=(maktabaByNum.__ae=(maktabaByNum.__ae||0))<5 ? maktabaByNum.__ae++ : -1;
+      if(ai>=0) setTimeout(()=>{ try{ if(!fb.disabled && fb.style.display!=='none') fb.onclick(); }catch(e){} }, 380*ai+150); }
     return card;
   };
   let io; const observe=()=>{ try{ if(io) io.disconnect(); io=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting){ io.disconnect(); load(); } }); },{rootMargin:'600px'}); io.observe(more); }catch(e){} };
@@ -2632,7 +2636,7 @@ async function maktabaByNum(seq, n){
               sl.appendChild(btn); sl.__edBtn=btn; }
             btn.__n++; rEl.style.display=btn.__open?'':'none';
             sl.appendChild(rEl); _chkStd(rEl, cc, sn); _edBtnPaint(btn, sl); }   // M364: сверка нумерации
-          else if(f40.has(bid)) (topSlots.get(bid)||listTop).appendChild(row(x, sn));   // 📜 первоисточники — слоты в порядке списка 40
+          else if(f40.has(bid)) (topSlots.get(bid)||listTop).appendChild(row(x, sn, true));   // 📜 первоисточники — слоты + авторазворот (M388)
           else { restHdr.style.display='block'; list.appendChild(row(x, sn)); }   // M374: граница «дальше не первоисточники»
         }
         if(add===0) emptyRuns++; else emptyRuns=0;
@@ -5506,9 +5510,37 @@ async function openIsnadVersions(text, out, ref){
   if(versions.length<=1 && !BACKEND_URL){ liveDiv.innerHTML='<span class="hint">Других версий по матну в основных сборниках не нашёл (бывает иная формулировка).</span>'; return; }
   render();
 }
+// M389: ВТОРОЙ слой подсветки — скан ВСЕГО текста окнами 2-4 слова по словарю форм базы (имена в акваль-аппарате,
+// а не только стартовый иснад). Set канонов строится один раз.
+let _allFormsSet=null;
+async function _buildFormsSet(){ if(_allFormsSet) return _allFormsSet;
+  const idx=await loadNarrNames(); _allFormsSet=new Set();
+  for(const it of idx){ const n=it[0]; const wc=n.split(' ').length; if(wc>=2&&wc<=4&&n.length>=7) _allFormsSet.add(n); }
+  return _allFormsSet; }
+async function findKnownNames(text){
+  const S=await _buildFormsSet(); const out=new Set();
+  const flat=stripDiac(String(text||'')).replace(/ـ/g,'');
+  const ws=flat.split(/[\s،؛:.()«»\[\]"]+/).filter(w=>w.length>1);
+  const cw=ws.map(w=>_narrCanon(w));
+  for(let i=0;i<cw.length;i++){
+    for(const L of [4,3,2]){
+      if(i+L>cw.length) continue;
+      const f=cw.slice(i,i+L).join(' ');
+      if(S.has(f)){ out.add(ws.slice(i,i+L).join(' ')); i+=L-1; break; }
+    } }
+  return [...out];
+}
 // A: авто-подсветка передатчиков в карточке СРАЗУ при показе (лёгкое выделение, клик → карточка равия)
 function autoHighlightNarr(text, card, out){
   let names; try{ names=isnadNarrators(text).filter(nm=>{ const t=(nm||'').trim(); return / بن | ابن /.test(' '+t+' ')||/^(?:أبو|أبي|أم|عبد|ابن)\s/.test(t+' '); }); }catch(e){ return; }
+  // M389: длинный текст (аппарат/акваль) — дополнить именами по словарю форм всего текста
+  if(String(text||'').length>280){
+    findKnownNames(text).then(extra=>{ try{ if(!extra.length) return;
+      const merged=[...new Set([...(names||[]), ...extra])];
+      [...card.querySelectorAll('.ar')].forEach(ad=>{ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
+        highlightNarratorsInDiv(ad, merged, nm=>{ out.style.display='block'; showNarratorBio(nm,out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }); });
+    }catch(e){} }).catch(()=>{});
+  }
   if(!names||!names.length) return;
   setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
     highlightNarratorsInDiv(ad, names, nm=>{ out.style.display='block'; showNarratorBio(nm,out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }); } }); }catch(e){} }, 0);
