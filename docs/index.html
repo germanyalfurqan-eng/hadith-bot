@@ -553,7 +553,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v357';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v358';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1683,7 +1683,14 @@ async function runSearch(explicit){
   _arabusOn=false;   // M-fix: новый поиск → Arabus сброшен в ВЫКЛ (по умолчанию выключен)
   let q=document.getElementById('q').value.trim(); const shown=q;
   if(!q){ toast('Введите запрос'); return; }
+  q=q.replace(/[​-‏‪-‮﻿⁦-⁩]/g,'');   // M438: НЕВИДИМКИ из копипасты Шамелы (ZWNJ и пр.) ломали матч — «в Мактабе находится, у нас нет»
   q=q.replace(/[،؛؟,;!]+/g,' ').replace(/\s+/g,' ').trim();   // M283: убрать пунктуацию (запятая прилипала к слову и ломала строгий матч)
+  // M439: ЦИТАТНЫЙ ФОРМАТ ШАМЕЛЫ — «Название книги» (том/стр): «фраза» → найти книгу и ОТКРЫТЬ на этой странице
+  try{
+    const cm=q.match(/^[«"”]([^«»""]{6,90})[»"“]\s*[\(（]?\s*(\d{1,2})\s*\/\s*(\d{1,4})\s*[\)）]?\s*[:：]?\s*[«"”]?([\s\S]{0,300})/);
+    if(cm){ const okGo=await openShamelaCitation(cm[1], +cm[2], +cm[3], (cm[4]||'').replace(/[»"“]+\s*$/,'').trim());
+      if(okGo){ logSearch(shown,'citation',1); return; } }
+  }catch(e){}
   saveRecent(shown); hideRecent();   // 🕐 запомнить запрос для «недавних»
   try{ _qHistPush(shown, tab); }catch(e){}   // M254: история для кнопки «↩ Назад»
   const res=document.getElementById('res'); _clearRenderQ(); res.innerHTML=''; _results=[]; _pick={items:[],sel:new Set(),excl:new Set(),kind:'',meaning:''};
@@ -2188,6 +2195,33 @@ async function _bkJumpHno(n){
     _bookView.pg=(chk.n!=null && chk.n<=n)?dest:lo; _bookView.want=null; _bookView.snaps=0; _bookLoad();
     toast('📖 №'+n+' — на этом листе или соседнем (нумерация по маркерам печати)');
   }catch(e){ toast('🔧 не вышло — попробуй ещё раз'); }
+}
+// M439: цитата Шамелы «Название книги» (том/стр): «фраза» → найти книгу в каталоге и открыть НА ТОМ ЖЕ месте
+async function openShamelaCitation(title, vol, page, phrase){
+  try{
+    const cat=await loadCatalog(); if(!cat||!cat.length) return false;
+    const tt=_dial(canon(title)); const tw=tt.split(' ').filter(w=>w.length>=3);
+    if(tw.length<2) return false;
+    let best=null, bs=0;
+    for(const b of cat){ const nm=_dial(canon(String(b.n||''))); let s=0; tw.forEach(w=>{ if(nm.indexOf(w)!==-1) s++; });
+      if(s>bs){ bs=s; best=b; } }
+    if(!best || bs<Math.max(2, tw.length-1)) return false;   // строгий матч — не угадываем чужую книгу
+    toast('📖 Цитата Мактабы: «'+String(best.n||'').slice(0,42)+'» · том '+vol+' · стр '+page+' — открываю…');
+    openBook(String(best.i), 1);
+    setTimeout(async()=>{ try{
+      if(vol>1) await _bkJumpVol(vol);
+      setTimeout(()=>{ try{
+        const m=document.getElementById('bookModal');
+        if(m&&m._inp&&m._jump){ m._inp.value=String(page); m._jump(); }
+        const ph=(phrase||'').replace(/[​-‏﻿]/g,'').trim();
+        if(ph.length>=6){ setTimeout(()=>{ try{
+          const fnd=[...document.querySelectorAll('#bookModal input[type=search]')][0];
+          if(fnd){ fnd.value=ph.split(' ').slice(0,5).join(' '); fnd.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})); }
+        }catch(e){} }, 3000); }
+      }catch(e){} }, vol>1?1200:200);
+    }catch(e){} }, 2600);
+    return true;
+  }catch(e){ return false; }
 }
 function _bkSavePos(){ try{ const pos=JSON.parse(localStorage.getItem('bk_pos')||'{}');
   pos[_bookView.id]={pg:_bookView.pg, t:Date.now()};
