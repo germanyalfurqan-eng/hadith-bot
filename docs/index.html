@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v326';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v327';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2486,16 +2486,65 @@ async function maktabaByNum(seq, n){
   const topSlots=new Map(); try{ f40.forEach(b=>{ const dd=document.createElement('div'); topSlots.set(String(b), dd); listTop.appendChild(dd); }); }catch(e){}
   // M362/M355: КАНОН МГНОВЕННО из локальных изданий (тексты уже у нас) — полная «классная» карточка cardHadith
   // со всеми инструментами БЕЗ ожидания turath; turath потом дополняет печати с томами/листами ниже в том же слоте
+  const _stdTxt={};   // M364: канон-текст стандартного издания (для сверки нумерации печатей)
+  let _edHide=false;  // M365 (объявлено ДО канон-колбэков)
+  // M364: печать канона сверяется со СТАНДАРТНЫМ изданием — «№5590 السلطانية = другой хадис» должен быть ВИДЕН
+  const _chkStd=(cardEl, code, sn)=>{ let tries=0; const t=()=>{ const stc=_stdTxt[code];
+      if(stc===undefined){ if(tries++<10) setTimeout(t, 700); return; } if(!stc) return;
+      try{ const i=sn.search(mark); const frag=i>=0?sn.slice(i):sn;
+        const fw=canon(stripDiac(frag).replace(/ـ/g,'')).split(' ').filter(w=>w.length>1).slice(1,8);
+        if(fw.length<4) return;
+        const hit=stc.indexOf(fw.slice(0,3).join(' '))!==-1 || stc.indexOf(fw.slice(2,5).join(' '))!==-1 || stc.indexOf(fw.slice(4,7).join(' '))!==-1;
+        if(!hit){ const b=document.createElement('div'); b.style.cssText='margin-top:5px;font-size:11px;color:#ffce63;border:1px dashed #b58a2e;border-radius:8px;padding:3px 8px;display:inline-block';
+          b.textContent='⚠️ в этой печати под №'+n+' — другой хадис (нумерация ≠ стандартной)'; cardEl.appendChild(b); } }catch(e){} };
+    setTimeout(t, 900); };
   CANON.forEach(code=>{ (async()=>{ try{
     const ec=(code==='ibnmajah')?'ibnmaja':code;
     const arr=await loadByCode(ec); if(seq!==_seq) return;
     const hh=(arr||[]).find(x=>String(x.num)===String(n)); if(!hh) return;
-    const wrap=document.createElement('div');
-    const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:11px;margin:2px 0 3px;color:#7fb3ff'; lbl.textContent='⚡ наше издание — мгновенно';
+    try{ _stdTxt[code]=canon(stripDiac(hh.text||'').replace(/ـ/g,'')); }catch(e){}
+    const wrap=document.createElement('div'); wrap.className='canonStd';
+    const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:11px;margin:2px 0 3px;color:#7fb3ff'; lbl.textContent='⚡ наше издание (стандартная нумерация) — мгновенно';
     wrap.appendChild(lbl); wrap.appendChild(cardHadith({code:ec, h:hh}, []));
     canonSlots[code].insertBefore(wrap, canonSlots[code].firstChild);
+    if(_edHide) canonSlots[code].querySelectorAll('.canonEd').forEach(c=>c.style.display='none');
     shown++; head.textContent='📚 Хадис №'+n+' — найдено книг: '+shown+' · ищу ещё по Мактабе…';
   }catch(e){} })(); });
+  // M368: НЕканонические первоисточники тоже «ПОД РУКОЙ» — тексты в шардах ./f40c/ на Pages (68 809 хадисов, 11 книг,
+  // вкл. Табари-асары): №N находится мгновенно БЕЗ сети-поиска; турат потом эти книги пропускает (seen)
+  const F40C=['21795','1446','12520','181','1733','748','1424','43','2170','36114','121382'];
+  F40C.forEach(bid=>{ (async()=>{ try{
+    const r=await fetch('./f40c/'+bid+'_'+Math.floor(n/300)+'.json'); if(!r.ok) return;
+    const m=await r.json(); const it=m[String(n)]; if(!it||!it[1]) return;
+    if(seq!==_seq || seen.has(bid)) return; seen.add(bid);
+    const wrap=document.createElement('div'); wrap.className='canonStd';
+    const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:11px;margin:2px 0 3px;color:#7fb3ff'; lbl.textContent='⚡ проштудированный первоисточник — мгновенно';
+    const card=document.createElement('div'); card.className='card';
+    const bn=bookName(bid)||('книга №'+bid);
+    const tr=(typeof _catTr!=='undefined'&&_catTr&&_catTr.map&&_catTr.map[bn])||null;
+    card.innerHTML='<div style="direction:rtl;text-align:right;font-weight:700;color:var(--link);font-size:15px">📖 '+esc((tr&&tr.voc)?tr.voc:bn)+'</div>'
+      +((tr&&tr.ru)?('<div style="font-size:12.5px;color:#bcd0ff;margin-top:2px">'+esc(tr.ru)+'</div>'):'');
+    const ar=document.createElement('div'); ar.className='ar'; ar.style.cssText='font-size:16px;line-height:2;margin-top:6px'; ar.textContent=it[1]; card.appendChild(ar);
+    const meta=document.createElement('div'); meta.className='meta';
+    try{ addTr(meta, card, it[1], null, {k:'mk|'+bid+'|'+n, type:'h', coll:bn, label:bn+' №'+n, text:it[1].slice(0,200)}); }catch(e){}
+    card.appendChild(meta);
+    if(it[0]){ const ob=document.createElement('button'); ob.className='mini'; ob.style.cssText='margin-top:6px;border:1px solid var(--border);padding:6px 12px;border-radius:9px';
+      ob.textContent='📖 Открыть в книге · лист '+it[0]; ob.onclick=()=>{ try{ openBook(bid, it[0]); }catch(e){} }; card.appendChild(ob); }
+    try{ enableArabusTap(ar); }catch(e){}
+    wrap.appendChild(lbl); wrap.appendChild(card);
+    (topSlots.get(bid)||listTop).appendChild(wrap);
+    shown++; head.textContent='📚 Хадис №'+n+' — найдено книг: '+shown+' · ищу ещё по Мактабе…';
+  }catch(e){} })(); });
+  // M365: тумблер «скрыть доп. печати» — оставить только стандартное издание каждого первоисточника
+  const edTglBox=document.createElement('div'); edTglBox.style.cssText='margin:0 0 7px';
+  const edTgl=document.createElement('span'); edTgl.style.cssText='cursor:pointer;font-size:11.5px;padding:3px 10px;border-radius:8px;border:1px solid var(--border);color:var(--hint)';
+  edTgl.textContent='☐ скрыть доп. печати (только стандарт)';
+  edTgl.onclick=()=>{ _edHide=!_edHide;
+    edTgl.textContent=(_edHide?'☑':'☐')+' скрыть доп. печати (только стандарт)';
+    edTgl.style.background=_edHide?'var(--btn)':''; edTgl.style.color=_edHide?'#fff':'var(--hint)'; edTgl.style.borderColor=_edHide?'var(--btn)':'var(--border)';
+    Object.values(canonSlots).forEach(sl=>{ if(!sl.querySelector('.canonStd')) return;   // скрывать печати только там, где стандарт есть
+      sl.querySelectorAll('.canonEd').forEach(c=>{ c.style.display=_edHide?'none':''; }); }); };
+  edTglBox.appendChild(edTgl); res.insertBefore(edTglBox, listCanon);
   const tail=document.createElement('div'); tail.style.cssText='text-align:center;margin:10px 0';
   const more=document.createElement('button'); more.className='mini'; more.style.cssText='border:1px solid var(--border);padding:8px 16px;border-radius:10px'; more.textContent='⬇️ Ещё книги с №'+n;
   tail.appendChild(more); res.appendChild(tail);
@@ -2565,7 +2614,9 @@ async function maktabaByNum(seq, n){
           if(!mark.test(sn)) continue;   // «300» из сноски/даты/URL — не маркер хадиса
           seen.add(bid); add++; shown++;
           const cc=_bid2code[bid];
-          if(cc) canonSlots[cc].appendChild(row(x, sn));   // M343: канонический слот; полная карточка уже сверху (локальная, M362)
+          if(cc){ const rEl=row(x, sn); rEl.classList.add('canonEd');   // M343: канонический слот; стандартная карточка сверху (M362)
+            if(_edHide && canonSlots[cc].querySelector('.canonStd')) rEl.style.display='none';   // M365
+            canonSlots[cc].appendChild(rEl); _chkStd(rEl, cc, sn); }   // M364: сверка нумерации печати со стандартом
           else if(f40.has(bid)) (topSlots.get(bid)||listTop).appendChild(row(x, sn));   // 📜 первоисточники — слоты в порядке списка 40
           else list.appendChild(row(x, sn));
         }
@@ -4797,7 +4848,25 @@ async function showNarratorCardLocal(name, host){
     h+='<div style="direction:ltr;text-align:left;font-size:13px;color:var(--text);margin-top:7px;line-height:1.6;border-top:1px dashed var(--border);padding-top:6px">📜 '+esc(bio.join(' '))+'</div>';
   }catch(e){}
   h+='</div>';
-  host.insertAdjacentHTML('afterbegin', h); return c;   // джарх موсуа рендерится ОТДЕЛЬНЫМ разделом ПОСЛЕ наших книг
+  host.insertAdjacentHTML('afterbegin', h);
+  // M367 (заявка по скрину: «где тут перевод на русский и где огласовки»): инструменты у САМОЙ шапки биографии
+  try{
+    const hdr=host.firstElementChild;
+    const sum=[c[1], c[2]?('الكنية: '+c[2]):'', c[3]?('النسب: '+c[3]):'', c[7]?('الطبقة: '+c[7]):'', c[5]?('قال ابن حجر: '+c[5]):'', c[6]?('قال الذهبي: '+c[6]):''].filter(Boolean).join('. ');
+    const tl=document.createElement('div'); tl.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;direction:ltr';
+    const tro=document.createElement('div'); tro.className='tr-out'; tro.style.cssText='display:none;margin-top:6px;direction:ltr;text-align:left';
+    const mk=(t,fn)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=t; b.style.cssText='font-size:12px;padding:4px 9px'; b.onclick=fn; return b; };
+    tl.appendChild(mk('🧠 Перевод (ИИ)', ()=>{ try{ tro.style.display='block'; translateTafsir(sum.slice(0,2000),'narrhdr'+c[0],c[0],0,tro,null); }catch(e){} }));
+    tl.appendChild(mk('◌ Огласовки (ИИ)', async()=>{ if(!BACKEND_URL){ toast('Нужен сервер'); return; }
+      try{ tro.style.display='block'; tro.textContent='…';
+        const r=await fetch(BACKEND_URL+'/tashkeel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:sum.slice(0,1800),source:'narrhdr'+c[0],num:0,initData:INITDATA})});
+        const j=await r.json().catch(()=>({}));
+        if(j&&j.text){ tro.innerHTML='<div class="ar" style="font-size:15px;line-height:2;direction:rtl;text-align:right">'+esc(j.text)+'</div>'; try{ enableArabusTap(tro); }catch(e){} }
+        else tro.textContent='не вышло — попробуй ещё раз'; }catch(e){ tro.textContent='🔧 сервис недоступен'; } }));
+    tl.appendChild(mk('📕 Arabus', ()=>{ _arabusOn=true; try{ loadRoots(); loadArabusLocal(); enableArabusTap(hdr); }catch(e){} hdr.style.cursor='pointer'; toast('📕 Arabus — тапай слово в шапке'); }));
+    hdr.appendChild(tl); hdr.appendChild(tro);
+  }catch(e){}
+  return c;   // джарх-моусуа рендерится ОТДЕЛЬНЫМ разделом ПОСЛЕ наших книг
 }
 // РАЗДЕЛ 2: полный джарх-тадиль из موسوعة (база Мактаба) + ИИ-инструменты (перевод/огласовки/Arabus)
 // M316: стена текста → разбивка по КНИГАМ-ИСТОЧНИКАМ (названия работают разделителями в конце фрагмента)
