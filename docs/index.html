@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v328';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v329';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2481,6 +2481,10 @@ async function maktabaByNum(seq, n){
   const listCanon=document.createElement('div'); res.appendChild(listCanon);
   const canonSlots={}; CANON.forEach(c=>{ const d=document.createElement('div'); canonSlots[c]=d; listCanon.appendChild(d); });
   const listTop=document.createElement('div'); res.appendChild(listTop);
+  // M374: видимая граница — где КОНЧАЮТСЯ первоисточники (появляется с первой не-первоисточной книгой)
+  const restHdr=document.createElement('div'); restHdr.style.cssText='display:none;margin:14px 0 6px;padding-top:9px;border-top:1px dashed var(--border);color:#7fb3ff;font-size:12.5px;font-weight:700';
+  restHdr.textContent='📚 Дальше — НЕ первоисточники (остальная Мактаба)';
+  res.appendChild(restHdr);
   const list=document.createElement('div'); res.appendChild(list);
   // M362: порядок ПРОЧИХ первоисточников = порядок списка 40 (слоты по f40), не порядок прихода из поиска
   const topSlots=new Map(); try{ f40.forEach(b=>{ const dd=document.createElement('div'); topSlots.set(String(b), dd); listTop.appendChild(dd); }); }catch(e){}
@@ -2627,7 +2631,7 @@ async function maktabaByNum(seq, n){
             btn.__n++; rEl.style.display=btn.__open?'':'none';
             sl.appendChild(rEl); _chkStd(rEl, cc, sn); _edBtnPaint(btn, sl); }   // M364: сверка нумерации
           else if(f40.has(bid)) (topSlots.get(bid)||listTop).appendChild(row(x, sn));   // 📜 первоисточники — слоты в порядке списка 40
-          else list.appendChild(row(x, sn));
+          else { restHdr.style.display='block'; list.appendChild(row(x, sn)); }   // M374: граница «дальше не первоисточники»
         }
         if(add===0) emptyRuns++; else emptyRuns=0;
         if(emptyRuns>=6 || page>=80) done=true;
@@ -4224,8 +4228,12 @@ function addTr(meta,card,text,ayah,fav){
   fbb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--link);padding:6px 10px';
   fbb.onclick=()=>openFeedback((fav&&fav.label)||'');
   meta.appendChild(fbb);
-  card.appendChild(out);
-  card.appendChild(exout);   // M208: блок нейро-объяснения
+  // M375/R39: перевод и объяснение — ВСЕГДА сразу под оригиналом (последним арабским блоком),
+  // а не в конце карточки после дерева/инструментов («перевод привязан к оригиналу» — универсальное правило)
+  try{ const ars=card.querySelectorAll('.ar'); const last=ars.length?ars[ars.length-1]:null;
+    if(last){ last.insertAdjacentElement('afterend', exout); last.insertAdjacentElement('afterend', out); }
+    else { card.appendChild(out); card.appendChild(exout); }
+  }catch(e){ card.appendChild(out); card.appendChild(exout); }
 }
 /* ===== ТАХРИДЖ «Где ещё передаётся» — авторитетно (sunnah.one) + широко (ВСЕ наши сборники, мульти-фразой) + прогресс % + клик по № → читалка. Особое внимание правильной взаимосвязи хадисов. ===== */
 const TAKH_MAIN=['bukhari','muslim','abudawud','tirmidhi','ibnmajah','nasai','malik','ahmad','muqbil','muhaymin'];
@@ -4920,12 +4928,9 @@ function renderMosuaJarh(c, out){
         if(fr.src) h+='<div style="font-size:11px;color:#9fb6d6;font-weight:700;margin-bottom:3px">📕 '+esc(fr.src)+'</div>';
         if(fr.t) h+='<div class="ar" style="font-size:13.5px;line-height:1.95">'+_mosuaHtml(fr.t)+'</div>';
         card.innerHTML=h;
-        // M369: перевод ПОД СВОЕЙ цитатой (а не одной простынёй в конце)
-        if(fr.t && fr.t.length>15){ const tb=document.createElement('button'); tb.className='mini'; tb.textContent='🌐 перевод'; tb.style.cssText='font-size:11px;padding:3px 9px;margin-top:4px';
-          const to=document.createElement('div'); to.className='tr-out'; to.style.cssText='display:none;margin-top:4px;direction:ltr;text-align:left';
-          tb.onclick=()=>{ to.style.display='block'; let hsh=0; const s=fr.t; for(let q=0;q<s.length;q++) hsh=(hsh*31+s.charCodeAt(q))>>>0;
-            try{ translateTafsir(s.slice(0,3000), 'mosua'+c[0], hsh%1000000, 0, to, null); }catch(e){} };
-          card.appendChild(tb); card.appendChild(to); }
+        // M369/M369b (поправка владельца): кнопка ОДНА (сверху), а переводы ложатся ПОД КАЖДОЙ цитатой (R39)
+        if(fr.t && fr.t.length>15){ card.classList.add('mosFr'); card.__t=fr.t;
+          const to=document.createElement('div'); to.className='tr-out mosTr'; to.style.cssText='display:none;margin-top:4px;direction:ltr;text-align:left'; card.appendChild(to); }
         host.appendChild(card); });
     } else {
       host.className='ar'; host.style.cssText='font-size:13.5px;line-height:1.95;white-space:pre-wrap;direction:rtl;text-align:right'; host.textContent=txt;
@@ -4934,7 +4939,28 @@ function renderMosuaJarh(c, out){
   _mosuaRenderInto(jt, c[8]);
   const tro=document.createElement('div'); tro.className='tr-out'; tro.style.cssText='display:none;margin-top:7px';
   const mk=(t,fn)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=t; b.style.cssText='font-size:12px;padding:4px 9px'; b.onclick=fn; return b; };
-  tools.appendChild(mk('🧠 Перевод (ИИ)', ()=>{ try{ translateTafsir((jt.dataset.txt||c[8]).slice(0,9000),'narrator'+c[0],c[0],0,tro,null); }catch(e){} }));
+  // M369b: одна кнопка — переводит цитаты ЛЕСЕНКОЙ, каждый перевод появляется под своей цитатой; повторный клик = стоп
+  const trAllBtn=mk('🧠 Перевод (ИИ)', null);
+  trAllBtn.onclick=async()=>{
+    const frs=[...jt.querySelectorAll('.mosFr')];
+    if(!frs.length){ try{ translateTafsir((jt.dataset.txt||c[8]).slice(0,9000),'narrator'+c[0],c[0],0,tro,null); }catch(e){} return; }
+    if(trAllBtn.__run){ trAllBtn.__run=false; trAllBtn.textContent='🧠 Перевод (ИИ)'; return; }
+    trAllBtn.__run=true;
+    for(let i=0;i<frs.length;i++){
+      if(!trAllBtn.__run) break;
+      trAllBtn.textContent='🧠 перевожу '+(i+1)+'/'+frs.length+' · нажми = стоп';
+      const fcard=frs[i]; const to=fcard.querySelector('.mosTr'); if(!to) continue;
+      to.style.display='block';
+      if(to.dataset.done!=='1'){
+        let hsh=0; const s=fcard.__t||''; for(let q=0;q<s.length;q++) hsh=(hsh*31+s.charCodeAt(q))>>>0;
+        try{ translateTafsir(s.slice(0,3000), 'mosua'+c[0], hsh%1000000, 0, to, null); }catch(e){}
+        to.dataset.done='1';
+        await new Promise(r=>setTimeout(r, 800));
+      }
+    }
+    trAllBtn.__run=false; trAllBtn.textContent='🧠 Перевод (ИИ) ✓';
+  };
+  tools.appendChild(trAllBtn);
   const tkb=mk('◌ Огласовки (ИИ)', null);
   tkb.onclick=async()=>{ if(jt.dataset.voc==='1'){ _mosuaRenderInto(jt, jt.dataset.txt||''); jt.dataset.voc=''; tkb.textContent='◌ Огласовки (ИИ)'; try{ enableArabusTap(jt); }catch(e){} return; }
     if(!BACKEND_URL){ toast('Нужен сервер'); return; } tkb.disabled=true; const p=tkb.textContent; tkb.textContent='…';
@@ -6380,6 +6406,12 @@ var _hsb=document.getElementById('hadScienceBtn'); if(_hsb) _hsb.onclick=()=>{ d
 var _cbr=document.getElementById('catBrowBtn'); if(_cbr) _cbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openCatalog(); };
 // M356: «Читать Коран» ПРОДОЛЖАЕТ с места, где остановился (cfg.qrLast: последняя читанная/слушанная сура+аят)
 function _qrResume(){ const L=cfg.qrLast; if(L&&L.s){ openQuranReader(L.s, L.a||0).then(()=>{ if(L.a) toast('📖 Продолжаем: '+L.s+':'+L.a+' · '+(SURA_NAMES[L.s-1]||'')); }); } else openQuranReader(_qrView.s||1, 0); }
+// M373: пункт меню «О программе» — манифест (зачаток главы о программе)
+try{ var _mmP=document.querySelector('#menuModal .panel');
+  if(_mmP && !document.getElementById('manifestRow')){ var _mr=document.createElement('div'); _mr.className='row menuClk'; _mr.id='manifestRow';
+    _mr.innerHTML='<span>⚖️ О программе · Манифест (PDF)</span><span class="go">›</span>';
+    _mr.onclick=()=>{ try{ openLink('https://germanyalfurqan-eng.github.io/hadith-bot/manifest.pdf'); }catch(e){} };
+    _mmP.appendChild(_mr); } }catch(e){}
 var _qro=document.getElementById('qrOpenBtn'); if(_qro) _qro.onclick=()=>{ document.getElementById('menuModal').style.display='none'; _qrResume(); };
 var _qrb=document.getElementById('quranReadBtn'); if(_qrb) _qrb.onclick=()=>_qrResume();
 var _qrn=document.getElementById('quranRandBtn'); if(_qrn) _qrn.onclick=_qrRandom;

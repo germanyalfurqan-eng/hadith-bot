@@ -4575,6 +4575,21 @@ async def _app_channel_watcher(application):
     while True:
         try:
             await asyncio.sleep(300)
+            # M373: разовая отправка МАНИФЕСТА (PDF) в канал — по маркеру manifest_flag.txt в корне репо
+            try:
+                rf = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/manifest_flag.txt",
+                                  headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
+                if rf.status_code == 200:
+                    flag = base64.b64decode(rf.json().get("content", "")).decode("utf-8").strip()
+                    jm = _journal_load()
+                    if flag and flag != (jm.get("manifest_post") or {}).get("flag", ""):
+                        await application.bot.send_document(APP_CHANNEL_ID,
+                            document="https://germanyalfurqan-eng.github.io/hadith-bot/manifest.pdf",
+                            caption="⚖️ МАНИФЕСТ О ПРОГРАММЕ «MUSLIMOON APP» — фундамент проекта (Конституция проекта). 11.06.2026")
+                        jm["manifest_post"] = {"flag": flag, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+                        _journal_save("манифест (PDF) → канал приложения")
+            except Exception as e:
+                print("manifest post error:", e)
             note = ""
             try:
                 rr = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_note.txt",
