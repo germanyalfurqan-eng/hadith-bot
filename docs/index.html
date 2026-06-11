@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v355';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v356';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2373,7 +2373,37 @@ async function _bookLoad(){
     aiPanel.appendChild(ab);
     let trOut=m.querySelector('#bookTrOut'); if(!trOut){ trOut=document.createElement('div'); trOut.id='bookTrOut'; trOut.className='tr-out'; tEl.parentNode.insertBefore(trOut, tEl.nextSibling); } trOut.style.display='none'; trOut.innerHTML='';
     const trb=document.createElement('button'); trb.className='mini'; trb.textContent='🧠 Перевод (ИИ)'; trb.title='Перевести страницу (ИИ, накопит.)';
-    trb.onclick=()=>{ const txt=tEl.dataset.txt||tEl.textContent||''; try{ translateTafsir(txt.slice(0,9000), 'book'+_bookView.id, _bookView.id, _bookView.pg, trOut, trb); }catch(e){} };
+    // M434 («мы же качали Бухари!»): печать КАНОНА → сперва ГОТОВЫЙ проф. перевод по №№ хадисов страницы (бесплатно, мгновенно); ИИ — только на остаток
+    const _BK2CODE={'1681':'bukhari','735':'bukhari','1376':'bukhari','1284':'bukhari','907':'bukhari','1727':'muslim','711':'muslim','1726':'abudawud','654':'abudawud','117359':'abudawud'};
+    const _aiTr=()=>{ const txt=tEl.dataset.txt||tEl.textContent||''; try{ translateTafsir(txt.slice(0,9000), 'book'+_bookView.id, _bookView.id, _bookView.pg, trOut, trb); }catch(e){} };
+    const _bkCode=_BK2CODE[String(_bookView.id)];
+    if(_bkCode){ trb.textContent='📘 Перевод (готовый)'; trb.title='У этой книги есть скачанный профессиональный перевод — бесплатно'; trb.style.cssText='background:#10331f;border:1px solid #2e9b5b;color:#bff5d4'; }
+    trb.onclick=async()=>{
+      const txt=tEl.dataset.txt||tEl.textContent||'';
+      if(_bkCode){
+        const nums=[...new Set([...txt.matchAll(/(?:^|[\n»\)\].:،؛])\s*([٠-٩]{1,5})\s*-\s/g)].map(mm=>_arNum(mm[1])))].slice(0,6);
+        if(nums.length){
+          trb.disabled=true; trb.textContent='⏳ беру готовый перевод… 0/'+nums.length;
+          trOut.style.display='block'; trOut.innerHTML='';
+          let got=0, done=0;
+          for(const n of nums){
+            let rnum=n;
+            if(_bkCode==='muslim'){ try{ const arr=await loadByCode('muslim'); const mm2=(arr||[]).find(h=>String(h.num)===String(n)); rnum=(mm2&&mm2.fw)||null; }catch(e){ rnum=null; } }
+            if(rnum!=null){ try{
+              const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-'+_bkCode+'/'+rnum+'.min.json')).json();
+              const h=(j.hadiths||[])[0];
+              if(h&&h.text){ got++; const d=document.createElement('div'); d.style.cssText='margin:7px 0;padding:8px 10px;border:1px solid #2e9b5b;border-radius:10px;background:rgba(46,155,91,.07);font-size:13.5px;line-height:1.6';
+                d.innerHTML='<div style="color:#7ee2a8;font-size:12px;margin-bottom:3px">📘 Хадис №'+n+' — готовый перевод (бесплатно):</div>'+esc(cleanRu(h.text));
+                trOut.appendChild(d); } }catch(e){} }
+            done++; trb.textContent='⏳ беру готовый перевод… '+done+'/'+nums.length;   // M430-правило: процесс виден, с долей
+          }
+          trb.disabled=false;
+          if(got){ trb.textContent='🧠 Перевести остальное на странице (ИИ)'; trb.style.cssText=''; trb.onclick=_aiTr; return; }
+          trOut.innerHTML='<div class="hint">Готовый перевод этих №№ не нашёлся — перевожу ИИ…</div>';
+        }
+      }
+      _aiTr();
+    };
     aiPanel.appendChild(trb);
     // #3/#4: полный пакет — объяснение (ИИ) + огласовки страницы книги
     const _bref={source:'book'+_bookView.id, num:_bookView.pg};
