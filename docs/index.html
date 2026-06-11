@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v344';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v345';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2998,7 +2998,8 @@ function showWordPopup(el, word, root, lemma, gram, ctx){
   const n = root ? ((_roots.r[root]||[]).length) : 0;
   const g = gramRu(gram);
   const pop=document.createElement('div'); pop.id='wordPop'; pop.className='card';
-  pop.style.cssText='position:absolute;z-index:300;max-width:min(340px,94vw);padding:11px 13px;font-size:14px;box-shadow:0 8px 28px rgba(0,0,0,.55)';
+  // M406: fixed + max-height со скроллом — карточка слова НИКОГДА не вылезает за низ экрана (даже когда Arabus дорастит контент)
+  pop.style.cssText='position:fixed;z-index:10006;max-width:min(340px,94vw);max-height:62vh;overflow:auto;padding:11px 13px;font-size:14px;box-shadow:0 8px 28px rgba(0,0,0,.55)';
   let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b style="font-size:22px;'+_AF+'">'+esc(word)+'</b><span id="wpX" style="cursor:pointer;color:var(--hint);font-size:18px">✕</span></div>';
   if(g) h+='<div style="margin-top:6px;color:var(--text)">📝 '+esc(g)+'</div>';
   if(lemma && rootKey(lemma)!==rootKey(word)) h+='<div style="margin-top:3px;color:var(--hint);font-size:13px">лемма: <b style="'+_AF+'">'+esc(lemma)+'</b></div>';
@@ -3009,8 +3010,18 @@ function showWordPopup(el, word, root, lemma, gram, ctx){
   h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><div style="color:#7fe3bf;font-weight:700;margin-bottom:4px">📕 Значения и формы (Arabus)</div><div id="wpArabusOut" style="margin-top:3px"></div></div>';
   pop.innerHTML=h; document.body.appendChild(pop);
   const r=el.getBoundingClientRect();
-  const left=Math.max(8, Math.min(window.scrollX+r.left-40, window.scrollX+document.documentElement.clientWidth-308));
-  pop.style.left=left+'px'; pop.style.top=(window.scrollY+r.bottom+6)+'px';
+  // M406: расчёт места — снизу не помещается → показываем НАД словом; и там не влезает → прижимаем в видимую область
+  const vw=document.documentElement.clientWidth, vh=window.innerHeight;
+  const left=Math.max(8, Math.min(r.left-40, vw-Math.min(340, vw*0.94)-8));
+  pop.style.left=left+'px'; pop.style.top='0px';
+  const ph=Math.min(pop.offsetHeight||220, vh*0.62);
+  let top=r.bottom+6;
+  if(top+ph>vh-8) top=r.top-ph-6;       // над словом
+  if(top<8) top=Math.max(8, vh-ph-8);   // совсем некуда — к низу видимой области
+  pop.style.top=top+'px';
+  // M406: контент дорастает асинхронно (Arabus/ИИ) — доклампливаем при каждом росте
+  try{ new ResizeObserver(()=>{ const pr=pop.getBoundingClientRect();
+    if(pr.bottom>vh-8) pop.style.top=Math.max(8, vh-8-pr.height)+'px'; }).observe(pop); }catch(e){}
   const x=pop.querySelector('#wpX'); if(x) x.onclick=closeWordPopup;
   const all=pop.querySelector('#wpAll'); if(all) all.onclick=()=>{ closeWordPopup(); showRootPlaces(root); };
   const aib=pop.querySelector('#wpAiBtn'); if(aib) aib.onclick=()=>wordAi(word, root, pop.querySelector('#wpAiOut'), aib, ctx);
