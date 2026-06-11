@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v325';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v326';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2455,6 +2455,12 @@ function maktabaCard(x){
    Идея: турат-индекс хранит маркеры «٣٠٠ -» в тексте → поиск фразы «<номер> -» отдаёт все книги, где есть хадис №N,
    с точным page_id для открытия. Книги появляются порциями; следующая порция готовится заранее (rootMargin 600px). */
 function _toArDigits(n){ return String(n).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]); }
+// M363: чистка текста страницы Шамелы от СНОСОК (линия ____, (تعليق الشاملة), [ر: ٤٩٠٩]) — они попадали в карточку как «часть хадиса»
+function _cleanShamela(t){ t=String(t||'');
+  t=t.split(/_{5,}/)[0];
+  t=t.replace(/\(تعليق الشاملة\)[\s\S]*$/,'');
+  t=t.replace(/\[\s*ر\s*:\s*[٠-٩0-9\s،]+\]/g,'');
+  return t.trim(); }
 async function maktabaByNum(seq, n){
   const res=document.getElementById('res');
   const arN=_toArDigits(n);
@@ -2474,9 +2480,22 @@ async function maktabaByNum(seq, n){
   const _bid2code={}; CANON.forEach(c=>(COLL_BIDS[c]||[]).forEach(b=>_bid2code[b]=c));
   const listCanon=document.createElement('div'); res.appendChild(listCanon);
   const canonSlots={}; CANON.forEach(c=>{ const d=document.createElement('div'); canonSlots[c]=d; listCanon.appendChild(d); });
-  let _autoExp=0;   // M343/M355: первые канонические карточки раскрываются ПОЛНЫМИ (текст+инструменты) сами
   const listTop=document.createElement('div'); res.appendChild(listTop);
   const list=document.createElement('div'); res.appendChild(list);
+  // M362: порядок ПРОЧИХ первоисточников = порядок списка 40 (слоты по f40), не порядок прихода из поиска
+  const topSlots=new Map(); try{ f40.forEach(b=>{ const dd=document.createElement('div'); topSlots.set(String(b), dd); listTop.appendChild(dd); }); }catch(e){}
+  // M362/M355: КАНОН МГНОВЕННО из локальных изданий (тексты уже у нас) — полная «классная» карточка cardHadith
+  // со всеми инструментами БЕЗ ожидания turath; turath потом дополняет печати с томами/листами ниже в том же слоте
+  CANON.forEach(code=>{ (async()=>{ try{
+    const ec=(code==='ibnmajah')?'ibnmaja':code;
+    const arr=await loadByCode(ec); if(seq!==_seq) return;
+    const hh=(arr||[]).find(x=>String(x.num)===String(n)); if(!hh) return;
+    const wrap=document.createElement('div');
+    const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:11px;margin:2px 0 3px;color:#7fb3ff'; lbl.textContent='⚡ наше издание — мгновенно';
+    wrap.appendChild(lbl); wrap.appendChild(cardHadith({code:ec, h:hh}, []));
+    canonSlots[code].insertBefore(wrap, canonSlots[code].firstChild);
+    shown++; head.textContent='📚 Хадис №'+n+' — найдено книг: '+shown+' · ищу ещё по Мактабе…';
+  }catch(e){} })(); });
   const tail=document.createElement('div'); tail.style.cssText='text-align:center;margin:10px 0';
   const more=document.createElement('button'); more.className='mini'; more.style.cssText='border:1px solid var(--border);padding:8px 16px;border-radius:10px'; more.textContent='⬇️ Ещё книги с №'+n;
   tail.appendChild(more); res.appendChild(tail);
@@ -2510,6 +2529,7 @@ async function maktabaByNum(seq, n){
         const r=await fetch(BACKEND_URL+'/book_page?id='+bid+'&pg='+x.page_id+'&initData='+encodeURIComponent(INITDATA));
         const j=await r.json().catch(()=>({}));
         let t=(j.text||'').replace(/<[^>]*>/g,'').replace(/ /g,' ');
+        t=_cleanShamela(t);   // M363: сноски Шамелы не должны попадать в карточку как «часть хадиса»
         const mm=t.match(mark); let txt='';
         if(mm){ const st=t.indexOf(mm[0])+ (mm[1]?mm[1].length:0); let rest=t.slice(st).replace(/^[^٠-٩]*[٠-٩]+\s*[-–—]\s*/,'');
           const nx=rest.search(/(^|[\n\s»\)\].:،؛])\s*[٠-٩]{1,5}\s*[-–—]\s/); txt=(nx>40?rest.slice(0,nx):rest).trim(); }
@@ -2523,8 +2543,6 @@ async function maktabaByNum(seq, n){
         try{ enableArabusTap(ar); }catch(e){}
       }catch(e){ fb.textContent='🔧 не вышло'; fb.disabled=false; }
     };
-    // M343/M355: канонические сборники раскрываются ПОЛНОЙ карточкой сами (с лесенкой задержек — не бомбим бэкенд)
-    if(auto && fb){ const ai=_autoExp++; if(ai<8) setTimeout(()=>{ try{ if(!fb.disabled && fb.style.display!=='none') fb.onclick(); }catch(e){} }, 280*ai+120); }
     return card;
   };
   let io; const observe=()=>{ try{ if(io) io.disconnect(); io=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting){ io.disconnect(); load(); } }); },{rootMargin:'600px'}); io.observe(more); }catch(e){} };
@@ -2547,8 +2565,9 @@ async function maktabaByNum(seq, n){
           if(!mark.test(sn)) continue;   // «300» из сноски/даты/URL — не маркер хадиса
           seen.add(bid); add++; shown++;
           const cc=_bid2code[bid];
-          if(cc) canonSlots[cc].appendChild(row(x, sn, true));   // M343: канонический слот (Бухари→Муслим→…) + авто-полная карточка
-          else (f40.has(bid)?listTop:list).appendChild(row(x, sn));   // 📜 остальные первоисточники — в верхнюю зону
+          if(cc) canonSlots[cc].appendChild(row(x, sn));   // M343: канонический слот; полная карточка уже сверху (локальная, M362)
+          else if(f40.has(bid)) (topSlots.get(bid)||listTop).appendChild(row(x, sn));   // 📜 первоисточники — слоты в порядке списка 40
+          else list.appendChild(row(x, sn));
         }
         if(add===0) emptyRuns++; else emptyRuns=0;
         if(emptyRuns>=6 || page>=80) done=true;
@@ -4474,11 +4493,15 @@ function _narrRow(c){   // строка-кандидат: имя (RTL) + рус-
   const r=document.createElement('div');
   r.style.cssText='padding:8px 11px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center';
   let ruN=''; try{ ruN=arNameRu(c.nm, 6); }catch(e){}
-  r.innerHTML='<span class="nsMeta" style="font-size:11px;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42%">'+(c.y?('وفاة ~'+c.y+'هـ'):'')+'</span>'
+  // M361: левая колонка РОВНАЯ (фикс-ширина) — минимальные данные: вафат / ранг (рождение+место добавим датасетом)
+  r.innerHTML='<span class="nsMeta" style="font-size:11px;color:var(--hint);flex:none;width:118px;line-height:1.4">'+(c.y?('<span dir="rtl">وفاة ~'+c.y+'هـ</span>'):'<span style="opacity:.4">—</span>')+'</span>'
     +'<span style="flex:1;min-width:0"><b style="display:block;direction:rtl;text-align:right;font-size:14.5px">'+esc(c.nm)+'</b>'
     +(ruN?('<span style="display:block;text-align:right;font-size:11px;color:#bcd0ff">≈ '+esc(ruN)+'</span>'):'')+'</span>';
   r.onclick=()=>{ try{hap('light');}catch(e){} narrOpen(c.nm); };
-  _narrCard(c.id).then(cc=>{ if(!cc) return; const m=[]; if(cc[4]) m.push('وفاة ~'+cc[4]+'هـ'); const rk=cc[5]||cc[6]; if(rk) m.push((''+rk).slice(0,42)); const el=r.querySelector('.nsMeta'); if(el) el.textContent=m.join(' · '); }).catch(()=>{});
+  _narrCard(c.id).then(cc=>{ if(!cc) return; const el=r.querySelector('.nsMeta'); if(!el) return;
+    const rk=cc[5]||cc[6];
+    el.innerHTML='<span dir="rtl" style="display:block">'+(cc[4]?('وفاة ~'+cc[4]+'هـ'):'<span style="opacity:.4">وفاة ؟</span>')+'</span>'
+      +(rk?('<span dir="rtl" style="display:block;color:#9aa7b8">'+esc((''+rk).slice(0,38))+'</span>'):''); }).catch(()=>{});
   return r;
 }
 /* — обратная транслитерация ар→рус для читаемости подсказок/биографий: словарь частых компонент имён + фонетический фолбэк — */
@@ -5254,6 +5277,7 @@ async function openIsnadVersions(text, out, ref){
           const rp=await fetch(BACKEND_URL+'/book_page?id='+x.book_id+'&pg='+x.page_id+'&initData='+encodeURIComponent(INITDATA));
           const jp=await rp.json().catch(()=>({}));
           let t=(jp.text||'').replace(/<[^>]*>/g,'').replace(/ /g,' ');
+          t=_cleanShamela(t);   // M363: без хвоста сносок
           const tc=canon(stripDiac(t).replace(/ـ/g,''));
           // вырезка хадиса вокруг якоря: назад до маркера «N -», вперёд до следующего маркера
           const ai=tc.indexOf(anchor); if(ai<0) continue;
