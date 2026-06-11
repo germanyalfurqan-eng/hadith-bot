@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v346';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v347';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2576,7 +2576,7 @@ async function maktabaByNum(seq, n){
     if(_dzb){ try{ dzChainInto(wrap, _dzb, n); }catch(e){} }
     canonSlots[code].insertBefore(wrap, canonSlots[code].firstChild);
     const _sb=canonSlots[code].__edBtn; if(_sb && !_sb.__open) canonSlots[code].querySelectorAll('.canonEd').forEach(c=>c.style.display='none');
-    shown++; shownF++; head.textContent='📚 Хадис №'+n+' — книг: '+shown+' · из них ПЕРВОИСТОЧНИКОВ: '+shownF+' из ~'+F40_DENOM+' нумерованных · ищу ещё…';
+    shown++; shownF++; if(SRC_OF_CODE[code]) srcSet.add(SRC_OF_CODE[code]); _headTxt(' · ищу ещё…');
   }catch(e){} })(); });
   // M368/M390: НЕканонические первоисточники тоже «ПОД РУКОЙ» — тексты в шардах ./f40c/ на Pages (71 464 хадиса, 11 книг,
   // вкл. Табари-асары с №1 — головы книг докачаны, сегментация взвешенным LIS): №N мгновенно БЕЗ сети; турат потом эти книги пропускает (seen)
@@ -2585,9 +2585,22 @@ async function maktabaByNum(seq, n){
     // · Зухд Ваки · Зухд Ханнада · Али ибн Хиджр · Шамаиль · Кыраа хальф аль-имам · Адаб муфрад · Мунтака · Раф аль-ядейн · Таухид · Кубра Насаи · Фадаиль · Ибн Хиббан التقاسيم
     '12981','18144','1456','8493','4407','10631','23101','13028','21545','13027','21544','700','8218','9647','278','1613','13011','8361','13136','537',
     // M407 (сверка со СПИСКОМ-40 владельца): الجهاد · المصنف الحوت+الشثري · مسند ابن أبي شيبة · مستخرج أبي نعيم · سنن سعيد (2 части) · الشمائل полный
-    '3610','9944','333','13155','5562','13122','1254','13037'];
+    '3610','9944','333','13155','5562','13122','1254','13037',
+    // M407б: полный муснад Рахавейха + Шафии ترتيب سنجر
+    '13159','9615'];
   // M407: эти печати — СБОРНИКИ ДЛЯ СВЕРКИ (Э2.1), НЕ первоисточники списка-40 (Табарани Кабир · Мустадрак · Джарх ва тадиль)
   const F40_AUX={'1733':1,'1424':1,'2170':1};
+  // M407в («42 — это как?!»): считаем ИСТОЧНИКИ-КНИГИ (список-40 + Табари = 41), печати — отдельной цифрой.
+  // Карта «печать → № источника» (несколько печатей одной книги = ОДИН источник).
+  const SRC_OF={ '1681':1,'735':1,'1376':1,'1284':1,'907':1, '1727':2,'711':2, '1726':3,'654':3,'117359':3,
+    '1435':4,'1363':4,'7895':4, '8361':5, '829':6,'1339':6, '1198':7,'98138':7, '1699':8,'8140':8,'16050':8,'28107':8,
+    '25794':9,'98139':9, '21795':10,'36114':10, '1446':11,'121382':11, '537':12, '18144':13, '278':14, '9944':15,'333':15,
+    '12520':16,'181':16, '8493':17, '9344':18,'9615':18, '1456':19, '13159':20,'1423':21, '10631':22, '4407':23, '23101':24, '13155':25,
+    '12981':26, '5562':27, '13122':28,'1254':28,'161':28, '9647':29, '1613':30, '8218':31, '9697':32, '13037':33,'700':33,
+    '13011':34, '13136':35, '13028':36, '21545':37, '13027':38, '21544':39, '3610':40, '43':41 };   // 41 = Табари (асары); все 40 пунктов списка закрыты печатями
+  const SRC_OF_CODE={bukhari:1,muslim:2,abudawud:3,tirmidhi:4,nasai:6,ibnmajah:7,malik:8,ahmad:9};
+  const srcSet=new Set();
+  const _headTxt=(tail)=>{ head.textContent='📚 Хадис №'+n+' — книг: '+shown+' · ПЕРВОИСТОЧНИКОВ: '+srcSet.size+' из 41 (печатей: '+shownF+')'+(tail||''); };
   F40C.forEach(bid=>{ (async()=>{ try{
     const r=await fetch('./f40c/'+bid+'_'+Math.floor(n/300)+'.json'); if(!r.ok) return;
     const m=await r.json(); const it=m[String(n)]; if(!it||!it[1]) return;
@@ -2611,8 +2624,8 @@ async function maktabaByNum(seq, n){
     try{ enableArabusTap(ar); }catch(e){}
     wrap.appendChild(lbl); wrap.appendChild(card);
     if(isAux){ restHdr.style.display='block'; list.appendChild(wrap); shown++; }   // M407: сборники — в нижнюю зону, в счётчик первоисточников НЕ идут
-    else { (topSlots.get(bid)||listTop).appendChild(wrap); shown++; shownF++; }
-    head.textContent='📚 Хадис №'+n+' — книг: '+shown+' · из них ПЕРВОИСТОЧНИКОВ: '+shownF+' из ~'+F40_DENOM+' нумерованных · ищу ещё…';
+    else { (topSlots.get(bid)||listTop).appendChild(wrap); shown++; shownF++; if(SRC_OF[bid]) srcSet.add(SRC_OF[bid]); }
+    _headTxt(' · ищу ещё…');
   }catch(e){} })(); });
   // M365/M372: глобальный тумблер «показать все доп. печати» (по умолчанию печати скрыты, у каждого слота своя кнопка)
   const edTglBox=document.createElement('div'); edTglBox.style.cssText='margin:0 0 7px';
@@ -2700,13 +2713,13 @@ async function maktabaByNum(seq, n){
           if(missing.indexOf(bid)<0) continue;   // старый бэкенд вернёт общий поиск — берём ТОЛЬКО недостающие первоисточники
           const sn=String(x.snip||'').replace(/<[^>]*>/g,'');
           if(!mark.test(sn)) continue;
-          seen.add(bid); add++; shown++; shownF++;
+          seen.add(bid); add++; shown++; shownF++; if(SRC_OF[bid]) srcSet.add(SRC_OF[bid]);
           (topSlots.get(bid)||listTop).appendChild(row(x, sn, true));
         }
         if(!add && p>=2) break;
       }
     }catch(e){}
-    head.textContent='📚 Хадис №'+n+' — книг: '+shown+' · из них ПЕРВОИСТОЧНИКОВ: '+shownF+' из ~'+F40_DENOM+' нумерованных';
+    _headTxt('');
   };
   let io; const observe=()=>{ try{ if(io) io.disconnect(); io=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting){ io.disconnect(); load(); } }); },{rootMargin:'600px'}); io.observe(more); }catch(e){} };
   const load=async()=>{
@@ -2728,7 +2741,7 @@ async function maktabaByNum(seq, n){
           if(!mark.test(sn)) continue;   // «300» из сноски/даты/URL — не маркер хадиса
           seen.add(bid); add++; shown++;
           const cc=_bid2code[bid];
-          if(cc){ shownF++; const sl=canonSlots[cc]; const rEl=row(x, sn); rEl.classList.add('canonEd');   // M343: канонический слот
+          if(cc){ shownF++; if(SRC_OF_CODE[cc]) srcSet.add(SRC_OF_CODE[cc]); const sl=canonSlots[cc]; const rEl=row(x, sn); rEl.classList.add('canonEd');   // M343: канонический слот
             // M372: печати по умолчанию СКРЫТЫ за кнопкой слота «▸ другие печати (N) · ⚠️ отличия»
             let btn=sl.__edBtn;
             if(!btn){ btn=document.createElement('button'); btn.className='mini'; btn.style.cssText='margin:2px 0 8px;font-size:11.5px;padding:5px 12px;border:1px dashed var(--border);border-radius:9px;color:var(--hint);background:transparent;cursor:pointer';
@@ -2737,18 +2750,18 @@ async function maktabaByNum(seq, n){
               sl.appendChild(btn); sl.__edBtn=btn; }
             btn.__n++; rEl.style.display=btn.__open?'':'none';
             sl.appendChild(rEl); _chkStd(rEl, cc, sn); _edBtnPaint(btn, sl); }   // M364: сверка нумерации
-          else if(f40.has(bid)){ shownF++; (topSlots.get(bid)||listTop).appendChild(row(x, sn, true)); }   // 📜 первоисточники — слоты + авторазворот (M388)
+          else if(f40.has(bid)){ shownF++; if(SRC_OF[bid]) srcSet.add(SRC_OF[bid]); (topSlots.get(bid)||listTop).appendChild(row(x, sn, true)); }   // 📜 первоисточники — слоты + авторазворот (M388)
           else { restHdr.style.display='block'; list.appendChild(row(x, sn)); }   // M374: граница «дальше не первоисточники»
         }
         if(add===0) emptyRuns++; else emptyRuns=0;
         if(emptyRuns>=6 || page>=80) done=true;
-        head.textContent='📚 Хадис №'+n+' — книг: '+shown+' · из них ПЕРВОИСТОЧНИКОВ: '+shownF+' из ~'+F40_DENOM+' нумерованных'+(done?'':' · листай вниз, ищу ещё…');
+        _headTxt(done?'':' · листай вниз, ищу ещё…');
       }
     }catch(e){}
     if(done) await fillF40();   // M390в: адресный добор недостающих печатей первоисточников
     busy=false;
     if(done){
-      more.disabled=true; more.textContent=shown?('Показаны все найденные книги: '+shown+' · первоисточников: '+shownF+' из ~'+F40_DENOM+' нумерованных'):'—';
+      more.disabled=true; more.textContent=shown?('Показаны все найденные книги: '+shown+' · первоисточников: '+srcSet.size+' из 41 (печатей: '+shownF+')'):'—';
       if(!shown){ head.textContent='📚 №'+n+': книгу с таким номером хадиса в Мактабе не нашёл.'; }
     } else { more.disabled=false; more.textContent='⬇️ Ещё книги с №'+n; observe(); }
   };
@@ -3271,7 +3284,11 @@ let _firstSrc=null;   // 40 первоисточников (загружаетс
 async function loadFirstSrc(){ if(_firstSrc) return _firstSrc; try{ const j=await (await fetch('./hadith/first_sources.json?'+Date.now())).json(); _firstSrc=j.sources||[]; }catch(e){ _firstSrc=[]; } return _firstSrc; }
 // найти лучшую книгу каталога под первоисточник (по токенам автора + названия; артикль ال не важен)
 function _dial(s){ return canon(s||'').split(/\s+/).map(w=>w.replace(/^ال/,'')).join(' ').trim(); }  // снять артикль ال у каждого токена
-function _matchSource(cat, src){ const ak=_dial(src.author_key), tk=_dial(src.title_key);
+function _matchSource(cat, src){
+  // M407б: у каждой записи списка-40 теперь ЯВНЫЙ bid (печать выбрана владельцем/нами) — резолв точный, без эвристик.
+  // Эвристика по токенам остаётся фолбэком (теряла Дарими «سنن≠مسند», Мусаннаф, Абу Яъля → секция показывала 35 вместо 40).
+  if(src.bid){ const hit=cat.find(b=>String(b.i)===String(src.bid)); if(hit) return hit; }
+  const ak=_dial(src.author_key), tk=_dial(src.title_key);
   const tkw=tk.split(' ').filter(w=>w.length>=3);
   let best=null, bestScore=-1;
   for(const b of cat){ const au=_dial(b.a||''), nm=_dial(b.n||''); if(ak && au.indexOf(ak)===-1) continue;
