@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v319';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v320';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -965,6 +965,17 @@ async function loadQuranRu(){
   }
   if(!Object.keys(map).length && quranRu) return quranRu;   // не затирать рабочий кеш пустотой
   quranRu=map; window._quranRuEd=ed; return quranRu; }
+// M336: параметрический загрузчик перевода Корана (кэш по изданию) — для читалки с режимом «оба перевода»
+const _qTrC={};
+async function loadQuranTr(ed){ if(_qTrC[ed]) return _qTrC[ed];
+  const map={};
+  try{
+    if(ed==='rus-abuadel'){ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/rus-abuadel.min.json')).json();
+      ((j&&j.quran)||[]).forEach(v=>{ map[v.chapter+':'+v.verse]=v.text; }); }
+    else { const j=await (await fetch(QURAN_RU_URL)).json(); j.forEach(v=>{ map[v.s+':'+v.a]=v.t; }); }
+  }catch(e){}
+  if(Object.keys(map).length) _qTrC[ed]=map;
+  return map; }
 let hadithRu=null;
 async function loadHadithRu(){ if(hadithRu)return hadithRu; setStatus('Загружаю русские переводы хадисов…');
   const j=await (await fetch('./hadith_ru.json')).json();
@@ -3775,7 +3786,15 @@ async function _qrLoad(){
   body.dataset.sura=String(s);   // какая сура сейчас показана (для привязки подсветки/скролла аудио к нужной суре)
   ttl.textContent='📖 Сура '+s+' · '+(SURA_NAMES[s-1]||'');
   body.innerHTML='<div class="hint">Загружаю…</div>';
-  const arr=await loadQuran(); let ru={}; try{ ru=await loadQuranRu(); }catch(e){}
+  const arr=await loadQuran();
+  // M336: перевод в читалке — Кулиев / Абу Адель / оба / без (cfg.qrTr; по умолчанию следует глобальной настройке qtr)
+  const trMode=cfg.qrTr||((cfg.qtr==='rus-abuadel')?'abuadel':'kuliev');
+  let ru={}, ru2=null;
+  if(trMode!=='none'){
+    try{ ru=await loadQuranTr(trMode==='abuadel'?'rus-abuadel':'rus-elmirkuliev'); }catch(e){}
+    if(trMode==='abuadel' && !Object.keys(ru).length){ try{ ru=await loadQuranTr('rus-elmirkuliev'); }catch(e){} }   // фолбэк: CDN недоступен → Кулиев
+    if(trMode==='both'){ try{ const m2=await loadQuranTr('rus-abuadel'); if(Object.keys(m2).length) ru2=m2; }catch(e){} }
+  }
   const ayahs=arr.filter(x=>x.s===s).sort((x,y)=>x.a-y.a);
   body.innerHTML='';
   // басмала отдельной шапкой (кроме Фатихи=1 и Тауба=9) — она идёт ДО суры, не часть аята
@@ -3793,7 +3812,8 @@ async function _qrLoad(){
     } else { ar.innerHTML=esc(_vtext)+_numMark; }
     try{ enableArabusTap(ar); if(_arabusOn) ar.style.cursor='pointer'; }catch(e){}
     blk.appendChild(ar);
-    const t=ru[s+':'+v.a]; if(t){ const rd=document.createElement('div'); rd.style.cssText='font-size:13.5px;color:var(--hint);margin-top:8px;padding-top:7px;border-top:1px solid rgba(255,255,255,.06);line-height:1.55'; rd.textContent=v.a+'. '+t; blk.appendChild(rd); }
+    const t=ru[s+':'+v.a]; if(t){ const rd=document.createElement('div'); rd.style.cssText='font-size:13.5px;color:var(--hint);margin-top:8px;padding-top:7px;border-top:1px solid rgba(255,255,255,.06);line-height:1.55'; rd.textContent=v.a+'. '+(ru2?'[Кулиев] ':'')+t; blk.appendChild(rd); }
+    if(ru2){ const t2=ru2[s+':'+v.a]; if(t2){ const rd2=document.createElement('div'); rd2.style.cssText='font-size:13.5px;color:#bcd0ff;margin-top:5px;line-height:1.55'; rd2.textContent=v.a+'. [Абу Адель] '+t2; blk.appendChild(rd2); } }
     // M166+: ▶️ аудио (Alafasy) + 🛠 все инструменты на этот аят (перевод/объяснить/тафсир/Arabus/где ещё)
     const ctl=document.createElement('div'); ctl.style.cssText='margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
     const au=document.createElement('button'); au.className='qrPlay'; au.textContent='▶'; au.title='Слушать (дальше читает подряд) · ещё раз — пауза';
@@ -3846,6 +3866,14 @@ async function _qrLoad(){
       b.style.borderColor='#2e9b5b'; b.style.color='#bff5d4'; b.style.background='#173d30'; toast('Скорость чтения: '+r[1]); };
     sprow.appendChild(b); });
   sp.appendChild(sprow);
+  // 📖 M336: перевод в читалке — Кулиев / Абу Адель / оба / без
+  const qtrow=document.createElement('div'); qtrow.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:9px;flex-wrap:wrap'; qtrow.innerHTML='<span style="font-size:13px;color:var(--hint)">📖 Перевод:</span>';
+  const _trCur=cfg.qrTr||((cfg.qtr==='rus-abuadel')?'abuadel':'kuliev');
+  [['kuliev','Кулиев'],['abuadel','Абу Адель'],['both','оба'],['none','без']].forEach(r=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=r[1];
+    const on=(_trCur===r[0]); b.style.cssText='border:1px solid '+(on?'#2e9b5b':'var(--border)')+';color:'+(on?'#bff5d4':'var(--text)')+';background:'+(on?'#173d30':'transparent')+';padding:7px 11px;border-radius:9px;font-size:13px;cursor:pointer';
+    b.onclick=()=>{ cfg.qrTr=r[0]; saveCfg(cfg); toast('Перевод в читалке: '+r[1]); _qrLoad(); };
+    qtrow.appendChild(b); });
+  sp.appendChild(qtrow);
   // 📖 ЧТЕНИЕ ПО СЛОВАМ — отдельные записи каждого слова (quran.com). ДВА режима:
   //   • тап по слову = озвучить ТОЛЬКО это слово;  • ▶ подряд = читает все слова по очереди сам.
   const wbWrap=document.createElement('div'); wbWrap.style.cssText='border:1px solid #6c5ce7;background:#2e1d4a;border-radius:10px;padding:9px;margin-bottom:9px';
