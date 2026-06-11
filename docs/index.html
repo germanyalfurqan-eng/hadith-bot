@@ -545,7 +545,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v313';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v314';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4825,7 +4825,7 @@ async function openIsnadTree(text, out){
   vb.onclick=()=>{ vb.disabled=true; vb.textContent='🔀 собираю версии…'; Promise.resolve(openIsnadVersions(text, vout)).finally(()=>{ vb.disabled=false; vb.textContent='🔀 Версии (طرق) — где расходятся'; }); };
   out.appendChild(vb); out.appendChild(vout);
 }
-// Режим версий (طرق): найти версии хадиса по матну в наших сборниках, показать цепочки и точки расхождения
+// Режим версий (طرق): версии хадиса в наших сборниках + ПО ВСЕЙ МАКТАБЕ (M329), тумблеры повторов цепочек/матнов
 async function openIsnadVersions(text, out){
   out.style.display='block'; out.innerHTML='<div class="hint">🔀 Ищу версии (طرق) по матну в наших сборниках…</div>';
   // матн = текст после иснада (после «‹›» / «يقول» / «قال رسول»)
@@ -4835,21 +4835,78 @@ async function openIsnadVersions(text, out){
   if(mw.length<5){ out.innerHTML='<span class="hint">Текст матна коротковат для надёжного сбора версий.</span>'; return; }
   const wins=[]; for(let i=0;i+4<mw.length;i++) wins.push(mw.slice(i,i+5).join(' '));
   const isVer=(ct)=>wins.some(w=>ct.indexOf(w)!==-1);
+  const anchor=wins[Math.floor(wins.length/2)]||wins[0];
+  const mKey=(fullCanon)=>{ const i=fullCanon.indexOf(anchor); return i>=0?fullCanon.slice(i, i+90):fullCanon.slice(-90); };   // ключ матна для дедупа повторов
   const COLS=['bukhari','muslim','abudawud','tirmidhi','nasai','ibnmaja','malik','ahmad','darimi'];
-  const versions=[{coll:'этот хадис', num:'', chain:isnadNarrators(text)}];
+  const versions=[{coll:'этот хадис', num:'', chain:isnadNarrators(text), mk:mKey(canon(flat))}];
   for(const code of COLS){ if(versions.length>=9) break;
-    try{ const arr=await loadByCode(code); for(const h of arr){ if(isVer(canon(h.text))){ const ch=isnadNarrators(h.text); if(ch.length){ versions.push({coll:arOf(code)||code, num:h.num, chain:ch}); } break; } } }catch(e){} }
-  if(versions.length<=1){ out.innerHTML='<span class="hint">Других версий по матну в основных сборниках не нашёл (бывает иная формулировка).</span>'; return; }
-  const freq={}; versions.forEach(v=>{ new Set(v.chain.map(canon)).forEach(cn=>freq[cn]=(freq[cn]||0)+1); });
-  let html='<div style="border:1px solid #6c5ce7;border-radius:12px;padding:11px;margin:6px 0;background:rgba(108,92,231,.06)">'
-    +'<div style="font-weight:700;color:#d9ccff;font-size:13.5px;margin-bottom:4px">🔀 Версии (طرق) хадиса · найдено '+versions.length+'</div>'
-    +'<div class="hint" style="font-size:11px;margin-bottom:8px">🟢 общие звенья — где версии СХОДЯТСЯ (مدار) · обычные — где РАСХОДЯТСЯ. Тап по имени → карточка равия.</div>';
-  versions.forEach(v=>{ html+='<div style="margin:8px 0;padding:7px 8px;border-right:3px solid var(--border);direction:rtl;text-align:right">'
-    +'<div style="font-size:12px;color:#bff5d4;font-weight:700;margin-bottom:4px">📖 '+esc(v.coll)+(v.num?(' №'+esc(String(v.num))):'')+'</div>'
-    +v.chain.map(nm=>{ const common=freq[canon(nm)]>1; return '<span class="vN" data-n="'+esc(nm)+'" style="cursor:pointer;display:inline-block;margin:2px;padding:3px 8px;border-radius:7px;font-size:13px;'+(common?'background:rgba(46,204,113,.18);color:#bff5d4;border:1px solid #2ecc71':'background:var(--bg);border:1px solid var(--border)')+'">'+esc(nm)+'</span>'; }).join('<span style="color:var(--hint)"> ← </span>')
-    +'</div>'; });
-  html+='</div>'; out.innerHTML=html;
-  out.querySelectorAll('.vN').forEach(el=>{ el.onclick=()=>{ const bx=document.createElement('div'); bx.style.marginTop='6px'; out.appendChild(bx); showNarratorBio(el.dataset.n, bx); try{ bx.scrollIntoView({block:'nearest'}); }catch(e){} }; });
+    try{ const arr=await loadByCode(code); for(const h of arr){ const ct=canon(h.text); if(isVer(ct)){ const ch=isnadNarrators(h.text); if(ch.length){ versions.push({coll:arOf(code)||code, num:h.num, chain:ch, mk:mKey(ct)}); } break; } } }catch(e){} }
+  const st={uniqC:false, uniqM:false, mkDone:false, busy:false};
+  const render=()=>{
+    let vs=versions.slice(); let hidC=0, hidM=0;
+    if(st.uniqC){ const seen=new Set(); vs=vs.filter(v=>{ const k=v.chain.map(canon).join('|'); if(!k) return true; if(seen.has(k)){ hidC++; return false; } seen.add(k); return true; }); }
+    if(st.uniqM){ const seen=new Set(); vs=vs.filter(v=>{ if(!v.mk) return true; if(seen.has(v.mk)){ hidM++; return false; } seen.add(v.mk); return true; }); }
+    const freq={}; vs.forEach(v=>{ new Set(v.chain.map(canon)).forEach(cn=>freq[cn]=(freq[cn]||0)+1); });
+    let html='<div style="border:1px solid #6c5ce7;border-radius:12px;padding:11px;margin:6px 0;background:rgba(108,92,231,.06)">'
+      +'<div style="font-weight:700;color:#d9ccff;font-size:13.5px;margin-bottom:4px">🔀 Версии (طرق) хадиса · показано '+vs.length+(versions.length>vs.length?(' из '+versions.length):'')+'</div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">'
+      +'<span class="vTgl" data-k="uniqC" style="cursor:pointer;font-size:11.5px;padding:3px 9px;border-radius:8px;'+(st.uniqC?'background:var(--btn);color:#fff':'border:1px solid var(--border);color:var(--hint)')+'">'+(st.uniqC?'☑':'☐')+' без повторов цепочек'+(hidC?(' ('+hidC+' скрыто)'):'')+'</span>'
+      +'<span class="vTgl" data-k="uniqM" style="cursor:pointer;font-size:11.5px;padding:3px 9px;border-radius:8px;'+(st.uniqM?'background:var(--btn);color:#fff':'border:1px solid var(--border);color:var(--hint)')+'">'+(st.uniqM?'☑':'☐')+' без повторов матна'+(hidM?(' ('+hidM+' скрыто)'):'')+'</span>'
+      +'</div>'
+      +'<div class="hint" style="font-size:11px;margin-bottom:8px">🟢 общие звенья — где версии СХОДЯТСЯ (مدار) · обычные — где РАСХОДЯТСЯ. Тап по имени → карточка равия; 🌐-версии — тап по книге → страница.</div>';
+    vs.forEach(v=>{ html+='<div style="margin:8px 0;padding:7px 8px;border-right:3px solid var(--border);direction:rtl;text-align:right">'
+      +'<div '+(v.bid?('class="vBk" data-bid="'+v.bid+'" data-pid="'+v.pid+'" style="cursor:pointer;"'):'style=""')+'><span style="font-size:12px;color:#bff5d4;font-weight:700">'+(v.bid?'🌐 ':'📖 ')+esc(v.coll)+(v.num?(' №'+esc(String(v.num))):'')+'</span></div>'
+      +'<div style="margin-top:4px">'
+      +v.chain.map(nm=>{ const common=freq[canon(nm)]>1; return '<span class="vN" data-n="'+esc(nm)+'" style="cursor:pointer;display:inline-block;margin:2px;padding:3px 8px;border-radius:7px;font-size:13px;'+(common?'background:rgba(46,204,113,.18);color:#bff5d4;border:1px solid #2ecc71':'background:var(--bg);border:1px solid var(--border)')+'">'+esc(nm)+'</span>'; }).join('<span style="color:var(--hint)"> ← </span>')
+      +'</div></div>'; });
+    html+='<div id="verMkRow" style="margin-top:8px"></div></div>';
+    out.innerHTML=html;
+    out.querySelectorAll('.vTgl').forEach(t=>t.onclick=()=>{ st[t.dataset.k]=!st[t.dataset.k]; render(); });
+    out.querySelectorAll('.vN').forEach(el=>{ el.onclick=()=>{ const bx=document.createElement('div'); bx.style.marginTop='6px'; out.appendChild(bx); showNarratorBio(el.dataset.n, bx); try{ bx.scrollIntoView({block:'nearest'}); }catch(e){} }; });
+    out.querySelectorAll('.vBk').forEach(el=>{ el.onclick=()=>{ try{ openBook(el.dataset.bid, +el.dataset.pid||1); }catch(e){} }; });
+    const row=out.querySelector('#verMkRow');
+    if(row && BACKEND_URL){
+      if(!st.mkDone){ const b=document.createElement('button'); b.className='mini'; b.style.cssText='width:100%;padding:8px;border:1px dashed #6c5ce7;border-radius:9px;color:#d9ccff';
+        b.textContent=st.busy?('⏳ '+(st.prog||'собираю по Мактабе…')):'🌐 Ещё версии по ВСЕЙ Мактабе'; b.disabled=!!st.busy;
+        b.onclick=()=>extendMk(); row.appendChild(b); }
+      else { row.innerHTML='<div class="hint" style="font-size:11px">🌐 Мактаба просмотрена: +'+(st.added||0)+' версий из других книг.</div>'; }
+    }
+  };
+  // M329: докачка версий по всей Мактабе — поиск якорной фразы → у каждой книги вырезаем хадис по маркеру → иснад
+  const extendMk=async()=>{
+    if(st.busy) return; st.busy=true; st.prog='ищу книги…'; render();
+    try{
+      const seenB=new Set(versions.filter(v=>v.bid).map(v=>String(v.bid)));
+      const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(anchor)+'&initData='+encodeURIComponent(INITDATA));
+      const j=await r.json().catch(()=>({}));
+      const cands=[]; const used=new Set();
+      for(const x of (j.data||[])){ const bid=String(x.book_id||''); if(!bid||used.has(bid)||seenB.has(bid)) continue;
+        used.add(bid); cands.push(x); if(cands.length>=10) break; }
+      let added=0;
+      for(let ci=0; ci<cands.length; ci++){ const x=cands[ci];
+        st.prog='книга '+(ci+1)+'/'+cands.length+'…'; try{ const bb=out.querySelector('#verMkRow button'); if(bb) bb.textContent='⏳ '+st.prog; }catch(e){}
+        try{
+          const rp=await fetch(BACKEND_URL+'/book_page?id='+x.book_id+'&pg='+x.page_id+'&initData='+encodeURIComponent(INITDATA));
+          const jp=await rp.json().catch(()=>({}));
+          let t=(jp.text||'').replace(/<[^>]*>/g,'').replace(/ /g,' ');
+          const tc=canon(stripDiac(t).replace(/ـ/g,''));
+          // вырезка хадиса вокруг якоря: назад до маркера «N -», вперёд до следующего маркера
+          const ai=tc.indexOf(anchor); if(ai<0) continue;
+          const MR=/[٠-٩]{1,5}\s*[-–—]\s/g; let segStart=0, num=''; let m;
+          while((m=MR.exec(tc))){ if(m.index<ai){ segStart=m.index; num=(m[0].match(/[٠-٩]+/)||[''])[0]; } else break; }
+          MR.lastIndex=ai; const nx=MR.exec(tc);
+          const seg=tc.slice(segStart, nx?nx.index:Math.min(tc.length, ai+900));
+          const ch=isnadNarrators(seg); if(!ch.length) continue;
+          versions.push({coll:(x.book_name||('книга '+x.book_id)), num:num, chain:ch, mk:mKey(tc), bid:String(x.book_id), pid:x.page_id});
+          added++;
+        }catch(e){}
+      }
+      st.added=added; st.mkDone=true;
+    }catch(e){}
+    st.busy=false; st.prog=''; render();
+  };
+  if(versions.length<=1 && !BACKEND_URL){ out.innerHTML='<span class="hint">Других версий по матну в основных сборниках не нашёл (бывает иная формулировка).</span>'; return; }
+  render();
 }
 // A: авто-подсветка передатчиков в карточке СРАЗУ при показе (лёгкое выделение, клик → карточка равия)
 function autoHighlightNarr(text, card, out){
