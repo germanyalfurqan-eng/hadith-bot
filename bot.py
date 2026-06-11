@@ -3308,15 +3308,21 @@ def _maktaba_item(x, cm):
         "snip": (x.get("snip") or x.get("text") or "")[:600],
     }
 
-def maktaba_search(q, page=1):
+def maktaba_search(q, page=1, book=None):
     """ОСНОВНОЙ поиск. Стр.1: сначала адресный запрос по 40 первоисточникам+избранному (наверх),
-    затем общий по всей Мактабе. Стр.>1: только общий (первоисточники уже показаны)."""
+    затем общий по всей Мактабе. Стр.>1: только общий (первоисточники уже показаны).
+    M390в: book = CSV book_id — АДРЕСНЫЙ поиск только по этим книгам (фронт добирает
+    недостающие печати первоисточников в номерном поиске; turath book_id принимает список)."""
     try:
         page = max(1, int(page))
     except Exception:
         page = 1
     try:
         cm = _maktaba_catmap_load()
+        if book:
+            fs = _turath_search(q, page, book)
+            items = [_maktaba_item(x, cm) for x in (fs.get("data") or [])]
+            return {"count": fs.get("count", 0), "data": items, "page": page, "first_n": len(items)}
         general = _turath_search(q, page)
         items = [_maktaba_item(x, cm) for x in (general.get("data") or [])]
         def gtier(it):
@@ -4240,7 +4246,8 @@ async def _api_serve(application=None):
             page = max(1, min(200, int(r.query.get('page') or 1)))
         except Exception:
             page = 1
-        res = await loop.run_in_executor(None, maktaba_search, q, page) if q else {'count': 0, 'data': [], 'page': 1}
+        book = re.sub(r'[^0-9,]', '', r.query.get('book') or '')[:500] or None   # M390в: адресный добор по книгам
+        res = await loop.run_in_executor(None, maktaba_search, q, page, book) if q else {'count': 0, 'data': [], 'page': 1}
         return _cors(web.json_response(res))
 
     async def rijal(r):

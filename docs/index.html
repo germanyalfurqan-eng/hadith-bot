@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v336';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v337';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2469,6 +2469,7 @@ async function maktabaByNum(seq, n){
   const arN=_toArDigits(n);
   const head=document.createElement('div'); head.className='hint'; head.style.cssText='color:#4ade80;font-size:13px;margin:0 0 8px';
   head.textContent='📚 Хадис №'+n+' — ищу по книгам всей Мактабы (первоисточники сверху)…';
+  const F40_DENOM=33;   // M390г: ЧЕСТНЫЙ знаменатель — столько НУМЕРОВАННЫХ печатей первоисточников знает поиск (канон 8 + шарды 11 + турат-печати)
   res.appendChild(head);
   try{ loadBooksMap(); }catch(e){} try{ loadBookTr(); }catch(e){} try{ loadWikiTitles(); }catch(e){}
   // 🎯 фильтр по ВЫБРАННЫМ ЧИПАМ сборников (замечание: «выделил Бухари — значит только Бухари №5590»)
@@ -2518,10 +2519,10 @@ async function maktabaByNum(seq, n){
     wrap.appendChild(lbl); wrap.appendChild(cardHadith({code:code, h:hh}, []));   // M379: UI-код канона (ibnmajah → ابن ماجه), данные грузились по ec
     canonSlots[code].insertBefore(wrap, canonSlots[code].firstChild);
     const _sb=canonSlots[code].__edBtn; if(_sb && !_sb.__open) canonSlots[code].querySelectorAll('.canonEd').forEach(c=>c.style.display='none');
-    shown++; shownF++; head.textContent='📚 Хадис №'+n+' — книг: '+shown+' · из них ПЕРВОИСТОЧНИКОВ: '+shownF+' · ищу ещё…';
+    shown++; shownF++; head.textContent='📚 Хадис №'+n+' — книг: '+shown+' · из них ПЕРВОИСТОЧНИКОВ: '+shownF+' из ~'+F40_DENOM+' нумерованных · ищу ещё…';
   }catch(e){} })(); });
-  // M368: НЕканонические первоисточники тоже «ПОД РУКОЙ» — тексты в шардах ./f40c/ на Pages (68 809 хадисов, 11 книг,
-  // вкл. Табари-асары): №N находится мгновенно БЕЗ сети-поиска; турат потом эти книги пропускает (seen)
+  // M368/M390: НЕканонические первоисточники тоже «ПОД РУКОЙ» — тексты в шардах ./f40c/ на Pages (71 464 хадиса, 11 книг,
+  // вкл. Табари-асары с №1 — головы книг докачаны, сегментация взвешенным LIS): №N мгновенно БЕЗ сети; турат потом эти книги пропускает (seen)
   const F40C=['21795','1446','12520','181','1733','748','1424','43','2170','36114','121382'];
   F40C.forEach(bid=>{ (async()=>{ try{
     const r=await fetch('./f40c/'+bid+'_'+Math.floor(n/300)+'.json'); if(!r.ok) return;
@@ -2543,7 +2544,7 @@ async function maktabaByNum(seq, n){
     try{ enableArabusTap(ar); }catch(e){}
     wrap.appendChild(lbl); wrap.appendChild(card);
     (topSlots.get(bid)||listTop).appendChild(wrap);
-    shown++; shownF++; head.textContent='📚 Хадис №'+n+' — книг: '+shown+' · из них ПЕРВОИСТОЧНИКОВ: '+shownF+' · ищу ещё…';
+    shown++; shownF++; head.textContent='📚 Хадис №'+n+' — книг: '+shown+' · из них ПЕРВОИСТОЧНИКОВ: '+shownF+' из ~'+F40_DENOM+' нумерованных · ищу ещё…';
   }catch(e){} })(); });
   // M365/M372: глобальный тумблер «показать все доп. печати» (по умолчанию печати скрыты, у каждого слота своя кнопка)
   const edTglBox=document.createElement('div'); edTglBox.style.cssText='margin:0 0 7px';
@@ -2607,6 +2608,38 @@ async function maktabaByNum(seq, n){
       if(ai>=0) setTimeout(()=>{ try{ if(!fb.disabled && fb.style.display!=='none') fb.onclick(); }catch(e){} }, 380*ai+150); }
     return card;
   };
+  // M390в: АДРЕСНЫЙ добор печатей первоисточников по bid (общий турат-обход рано стопится — шумные номера).
+  // Бэкенд передаёт &book= в turath (после Redeploy); старый бэкенд параметр игнорирует — фильтр по bid защищает.
+  let f40fill=false;
+  const fillF40=async()=>{
+    if(f40fill) return; f40fill=true;
+    try{
+      const missing=[]; f40.forEach(b=>{ const sb=String(b);
+        if(seen.has(sb)) return;
+        if(_scopeIds && _scopeIds.size && !_scopeIds.has(sb)) return;   // 🎯 рамка уважается
+        if(allow && !allow.has(sb)) return;   // 🎯 чипы уважаются
+        missing.push(sb); });
+      if(!missing.length) return;
+      head.textContent='📚 Хадис №'+n+' — адресно добираю печати первоисточников ('+missing.length+')…';
+      for(let p=1;p<=6;p++){
+        const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(arN+' -')+'&book='+missing.join(',')+'&page='+p+'&initData='+encodeURIComponent(INITDATA));
+        if(seq!==_seq) return;
+        const j=await r.json().catch(()=>({}));
+        const data=j.data||[]; if(!data.length) break;
+        let add=0;
+        for(const x of data){
+          const bid=String(x.book_id||''); if(!bid||seen.has(bid)) continue;
+          if(missing.indexOf(bid)<0) continue;   // старый бэкенд вернёт общий поиск — берём ТОЛЬКО недостающие первоисточники
+          const sn=String(x.snip||'').replace(/<[^>]*>/g,'');
+          if(!mark.test(sn)) continue;
+          seen.add(bid); add++; shown++; shownF++;
+          (topSlots.get(bid)||listTop).appendChild(row(x, sn, true));
+        }
+        if(!add && p>=2) break;
+      }
+    }catch(e){}
+    head.textContent='📚 Хадис №'+n+' — книг: '+shown+' · из них ПЕРВОИСТОЧНИКОВ: '+shownF+' из ~'+F40_DENOM+' нумерованных';
+  };
   let io; const observe=()=>{ try{ if(io) io.disconnect(); io=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting){ io.disconnect(); load(); } }); },{rootMargin:'600px'}); io.observe(more); }catch(e){} };
   const load=async()=>{
     if(busy||done) return; busy=true; more.disabled=true; more.textContent='⏳ ищу дальше…';
@@ -2641,12 +2674,13 @@ async function maktabaByNum(seq, n){
         }
         if(add===0) emptyRuns++; else emptyRuns=0;
         if(emptyRuns>=6 || page>=80) done=true;
-        head.textContent='📚 Хадис №'+n+' — книг: '+shown+' · из них ПЕРВОИСТОЧНИКОВ: '+shownF+(done?'':' · листай вниз, ищу ещё…');
+        head.textContent='📚 Хадис №'+n+' — книг: '+shown+' · из них ПЕРВОИСТОЧНИКОВ: '+shownF+' из ~'+F40_DENOM+' нумерованных'+(done?'':' · листай вниз, ищу ещё…');
       }
     }catch(e){}
+    if(done) await fillF40();   // M390в: адресный добор недостающих печатей первоисточников
     busy=false;
     if(done){
-      more.disabled=true; more.textContent=shown?('Показаны все найденные книги: '+shown+' · первоисточников: '+shownF):'—';
+      more.disabled=true; more.textContent=shown?('Показаны все найденные книги: '+shown+' · первоисточников: '+shownF+' из ~'+F40_DENOM+' нумерованных'):'—';
       if(!shown){ head.textContent='📚 №'+n+': книгу с таким номером хадиса в Мактабе не нашёл.'; }
     } else { more.disabled=false; more.textContent='⬇️ Ещё книги с №'+n; observe(); }
   };
