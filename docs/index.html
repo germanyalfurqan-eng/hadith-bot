@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v320';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v321';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -671,12 +671,12 @@ let _appReport=function(){};
 })();
 // 🛡 Защита загрузок: fetch с таймаутом. Зависшая книга (напр. Ибн аль-Мубарак) больше не вешает прогу:
 // по таймауту бросаем ошибку → она ловится, пишется в журнал ошибок (/api/errlog) и книга ПРОПУСКАЕТСЯ.
-async function fetchJSON(url, ms){ ms=ms||20000;
+async function fetchJSON(url, ms, opts){ ms=ms||20000;
   const ctl=new AbortController(); const t=setTimeout(()=>{ try{ctl.abort();}catch(e){} }, ms);
   try{ const r=await fetch(url,{signal:ctl.signal}); if(!r.ok) throw new Error('HTTP '+r.status); return await r.json(); }
   catch(e){ const ab=(e&&e.name==='AbortError');
     const reason=ab?('таймаут '+Math.round(ms/1000)+'с'):((e&&e.message)||'сбой сети');
-    try{ _appReport('Загрузка книги не удалась ('+reason+'): '+String(url).split('/').pop().slice(0,50), 'fetchJSON'); }catch(_){}
+    if(!(opts&&opts.silent)){ try{ _appReport('Загрузка книги не удалась ('+reason+'): '+String(url).split('/').pop().slice(0,50), 'fetchJSON'); }catch(_){} }   // M350: silent — когда выше есть штатный фолбэк
     const err=new Error('fetchJSON: '+reason); err._url=url; err._timeout=ab; throw err; }
   finally{ clearTimeout(t); }
 }
@@ -923,9 +923,11 @@ async function loadCollection(code){
   return cache[code];
 }
 // A-002: jsdelivr отдаёт 403 на отдельные файлы (ara-ibnmaja) → фолбэк на НАШЕ зеркало в docs/editions/
+// M350: фолбэк ШТАТНЫЙ → CDN-промах не шумит в журнале (silent), сам факт фолбэка — один репорт за сессию на издание
 async function fetchEdition(code){
-  try{ return await fetchJSON(EDITION_URL(code)); }
-  catch(e){ try{ if(typeof _appReport==='function') _appReport('CDN сбой ara-'+code+' → локальное зеркало'); }catch(_e){}
+  try{ return await fetchJSON(EDITION_URL(code), 20000, {silent:true}); }
+  catch(e){ try{ window._repMir=window._repMir||{};
+      if(typeof _appReport==='function' && !window._repMir[code]){ window._repMir[code]=1; _appReport('CDN сбой ara-'+code+' → работает локальное зеркало (штатно; 1 репорт/сессию)'); } }catch(_e){}
     return await fetchJSON('./editions/ara-'+code+'.min.json', 60000); }
 }
 let ahmadArr=null;
@@ -3703,12 +3705,34 @@ function _qrPlay(s, a){ _qrWordStop();
   au.onpause=()=>{ if(window._qrAudio===au && !au.ended){ _qrBtnSet(a,'▶'); try{_miniSync();}catch(e){} } };
   au.onended=_advance;
   au.play().catch(()=>{ _qrBtnSet(a,'▶'); toast('Аудио сейчас недоступно'); });
+  try{ cfg.qrLast={s:s,a:a}; saveCfg(cfg); }catch(e){}   // M356: помним, где слушал
+  // M353: Media Session — системный плеер (шторка/экран блокировки) держит аудио-сессию активной при свёрнутом Telegram
+  try{ if('mediaSession' in navigator){
+    navigator.mediaSession.metadata=new MediaMetadata({title:'Коран '+s+':'+a+' · '+(SURA_NAMES[s-1]||''), artist:'Muslimoon App', artwork:[{src:'./logo.png', sizes:'512x512', type:'image/png'}]});
+    navigator.mediaSession.setActionHandler('play', ()=>{ try{ window._qrAudio&&window._qrAudio.play(); }catch(e){} });
+    navigator.mediaSession.setActionHandler('pause', ()=>{ try{ window._qrAudio&&window._qrAudio.pause(); }catch(e){} });
+    navigator.mediaSession.setActionHandler('previoustrack', ()=>{ try{ _qrNav(-1); }catch(e){} });
+    navigator.mediaSession.setActionHandler('nexttrack', ()=>{ try{ _qrNav(1); }catch(e){} });
+  } }catch(e){}
   // предзагрузка СЛЕДУЮЩЕГО аята (чтобы не было паузы на загрузку между аятами)
   try{ const tot=(SURA_AYAHS[s-1]||0); let na=null; if(a<tot) na={s:s,a:a+1}; else if(s<114) na={s:s+1,a:1};
     if(na){ const pu='https://everyayah.com/data/'+(cfg.reciter||'Hudhaify_128kbps')+'/'+String(na.s).padStart(3,'0')+String(na.a).padStart(3,'0')+'.mp3';
       const pre=new Audio(); pre.preload='auto'; pre.src=pu; window._qrPre=pre; } }catch(e){}
 }
 function _qrBtnSet(a, txt){ const b=document.querySelector('#qr-'+a+' .qrPlay'); if(b) b.textContent=txt; }
+// M346: листание из плеера — аят ±1 (с переходом через границы сур) и сура ±1; работает и при закрытой читалке
+function _qrNav(d){ const n=window._qrNow||window._qrCur; if(!n||!n.s) return;
+  let s=n.s, a=(n.a||1)+d;
+  if(a<1){ if(s>1){ s--; a=SURA_AYAHS[s-1]||1; } else a=1; }
+  const tot=SURA_AYAHS[s-1]||1; if(a>tot){ if(s<114){ s++; a=1; } else a=tot; }
+  _qrJump(s,a); }
+function _qrNavSura(d){ const n=window._qrNow||window._qrCur; if(!n||!n.s) return;
+  let s=n.s+d; if(s<1)s=1; if(s>114)s=114; _qrJump(s,1); }
+function _qrJump(s,a){
+  const mm=document.getElementById('qrModal'), bodyEl=document.getElementById('qrBody');
+  const open=mm&&mm.style.display!=='none';
+  if(open && bodyEl && bodyEl.dataset.sura!==String(s)){ _qrView={s:s,a:a}; _qrLoad().then(()=>_qrPlay(s,a)); }
+  else _qrPlay(s,a); }
 function _qrToggle(s,a){
   if(window._qrAudio && window._qrCur && window._qrCur.s===s && window._qrCur.a===a){ if(window._qrAudio.paused){ window._qrAudio.play().catch(()=>{}); } else { window._qrAudio.pause(); } return; }
   _qrPlay(s,a);
@@ -3719,13 +3743,16 @@ async function openQuranReader(s,a){
   s=+s||1; if(s<1)s=1; if(s>114)s=114; _qrView={s:s,a:+a||0};
   let m=document.getElementById('qrModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='qrModal';
-    m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 10px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b id="qrTitle" style="font-size:14px">📖 Коран</b><button class="mini" id="qrClose" style="flex:none">закрыть ✕</button></div>'
+    m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 10px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b id="qrTitle" style="font-size:14px">📖 Коран</b><span style="display:flex;gap:7px;flex:none"><button class="mini" id="qrMini" title="Свернуть читалку — звук продолжит играть в плеере снизу" style="flex:none;border:1px solid #2e9b5b;color:#bff5d4;background:transparent">🎧 свернуть</button><button class="mini" id="qrClose" style="flex:none">закрыть ✕</button></span></div>'
      +'<input id="qrSearch" placeholder="🔎 № суры · 2:255 · название (рус/араб) · слово в аяте…" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:2px solid var(--btn);border-radius:10px;padding:9px 11px;font-size:15px;margin-bottom:8px">'
      +'<div id="qrSugg" style="display:none;flex-wrap:wrap;gap:6px;margin:-3px 0 9px"></div>'
      +'<div id="qrNav" style="display:flex;gap:6px;align-items:center;justify-content:center;margin:2px 0 10px;flex-wrap:wrap"></div><div id="qrBody" style="max-height:58vh;overflow:auto"></div></div>';
     document.body.appendChild(m);
     // закрытие читалки НЕ останавливает звук — он продолжает играть фоном (управление в мини-плеере)
     m.querySelector('#qrClose').onclick=()=>{ m.style.display='none'; try{_miniSync();}catch(e){} };
+    // M354: явная «🎧 свернуть» — человек ЗНАЕТ, что можно свернуть читалку и слушать дальше (звук и так не прерывается)
+    m.querySelector('#qrMini').onclick=()=>{ m.style.display='none'; try{_miniSync();}catch(e){}
+      try{ const playing=(window._qrAudio&&!window._qrAudio.paused)||window._qrWordAudio; if(playing) toast('🎧 Слушай дальше — плеер снизу'); }catch(e){} };
     m.addEventListener('click',e=>{ if(e.target===m){ m.style.display='none'; try{_miniSync();}catch(e){} } });
     const qs=m.querySelector('#qrSearch'); qs.addEventListener('keydown',e=>{ if(e.key==='Enter') _qrSearchGo(qs.value); });
     qs.addEventListener('input',()=>_qrSuggest(qs.value));
@@ -3784,6 +3811,7 @@ async function _qrLoad(){
   const m=document.getElementById('qrModal'); if(!m) return;
   const body=m.querySelector('#qrBody'), nav=m.querySelector('#qrNav'), ttl=m.querySelector('#qrTitle'); const s=_qrView.s;
   body.dataset.sura=String(s);   // какая сура сейчас показана (для привязки подсветки/скролла аудио к нужной суре)
+  try{ cfg.qrLast={s:s, a:_qrView.a||0}; saveCfg(cfg); }catch(e){}   // M356: помним, где читал (продолжение при следующем открытии)
   ttl.textContent='📖 Сура '+s+' · '+(SURA_NAMES[s-1]||'');
   body.innerHTML='<div class="hint">Загружаю…</div>';
   const arr=await loadQuran();
@@ -4991,7 +5019,7 @@ async function _vgMapBlock(ref, box){
       const tr=(typeof _catTr!=='undefined'&&_catTr&&_catTr.map&&_catTr.map[bn])||null;
       html+='<div style="direction:rtl;text-align:right;margin:5px 0"><b style="font-size:13px;color:var(--text)">📖 '+esc(bn)+'</b>'
         +((tr&&tr.ru)?('<span dir="ltr" style="unicode-bidi:isolate;font-size:11px;color:#bcd0ff"> · '+esc(tr.ru)+'</span>'):'')+' '
-        +arr.map(it=>'<span class="vgN" data-b="'+esc(String(it.b))+'" data-p="'+esc(String(it.p||''))+'" style="cursor:pointer;display:inline-block;margin:2px;padding:2px 8px;border-radius:7px;font-size:12px;background:rgba(46,155,91,.13);border:1px solid #2e9b5b;color:#bff5d4">№'+esc(String(it.h))+'</span>').join('')
+        +arr.map(it=>'<span class="vgN" dir="ltr" data-b="'+esc(String(it.b))+'" data-p="'+esc(String(it.p||''))+'" style="cursor:pointer;display:inline-block;unicode-bidi:isolate;margin:2px;padding:2px 8px;border-radius:7px;font-size:12px;background:rgba(46,155,91,.13);border:1px solid #2e9b5b;color:#bff5d4">№'+esc(String(it.h))+'</span>').join('')
         +'</div>'; });
     html+='</div>';
     box.innerHTML=html;
@@ -5989,13 +6017,25 @@ function applyFontScale(){ try{ const z=(cfg.fontScale||1), qz=(cfg.qrFontScale|
   const lbl=document.getElementById('fsLbl'); if(lbl) lbl.textContent=Math.round((_qrOpen()?qz:z)*100)+'%'; }catch(e){} }
 // === Фоновый мини-плеер аудио Корана: видно снизу, не мешает; «↪ к аяту» возвращает к читаемому аяту ===
 function _miniBuild(){ const bar=document.createElement('div'); bar.id='miniPlayer';
-  bar.style.cssText='position:fixed;left:10px;right:10px;bottom:10px;max-width:680px;margin:0 auto;z-index:9000;display:none;align-items:center;gap:8px;background:var(--card);border:1px solid var(--btn);border-radius:14px;padding:7px 10px;box-shadow:0 6px 22px rgba(0,0,0,.55)';
-  bar.innerHTML='<button id="miniPP" style="flex:none;width:38px;height:38px;border-radius:50%;border:none;background:var(--btn);color:#fff;font-size:16px;cursor:pointer">⏸</button>'
+  bar.style.cssText='position:fixed;left:10px;right:10px;bottom:10px;max-width:680px;margin:0 auto;z-index:9000;display:none;flex-direction:column;gap:5px;background:var(--card);border:1px solid var(--btn);border-radius:14px;padding:7px 10px;box-shadow:0 6px 22px rgba(0,0,0,.55)';
+  // M346: два ряда «как в плеерах»: сверху — что играет + действия; снизу — ⏮сура ‹аят ⏯ аят› сура⏭
+  const _nbtn='flex:none;border:1px solid var(--border);color:var(--text);background:transparent;border-radius:10px;min-width:44px;height:38px;font-size:16px;cursor:pointer';
+  bar.innerHTML='<div style="display:flex;align-items:center;gap:8px;width:100%">'
    +'<div id="miniLbl" style="flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Коран</div>'
    +'<button id="miniGo" title="Вернуться к читаемому аяту" style="flex:none;border:1px solid var(--btn);color:var(--btn);background:transparent;border-radius:10px;padding:7px 9px;font-size:13px;font-weight:600;cursor:pointer">↪ к аяту</button>'
-   +'<button id="miniMin" title="Свернуть — звук продолжит играть" style="flex:none;background:transparent;border:1px solid var(--border);color:var(--hint);border-radius:10px;padding:7px 9px;font-size:13px;font-weight:700;cursor:pointer">⌄ свернуть</button>'
-   +'<button id="miniX" title="Остановить аудио" style="flex:none;background:transparent;border:none;color:var(--hint);font-size:18px;cursor:pointer;padding:2px 4px">✕</button>';
+   +'<button id="miniMin" title="Свернуть — звук продолжит играть" style="flex:none;background:transparent;border:1px solid var(--border);color:var(--hint);border-radius:10px;padding:7px 9px;font-size:13px;font-weight:700;cursor:pointer">⌄</button>'
+   +'<button id="miniX" title="Остановить аудио" style="flex:none;background:transparent;border:none;color:var(--hint);font-size:18px;cursor:pointer;padding:2px 4px">✕</button></div>'
+   +'<div style="display:flex;align-items:center;justify-content:center;gap:9px;width:100%">'
+   +'<button id="miniPrevS" title="Предыдущая сура" style="'+_nbtn+'">⏮</button>'
+   +'<button id="miniPrevA" title="Предыдущий аят" style="'+_nbtn+';font-size:20px">‹</button>'
+   +'<button id="miniPP" style="flex:none;width:46px;height:46px;border-radius:50%;border:none;background:var(--btn);color:#fff;font-size:18px;cursor:pointer">⏸</button>'
+   +'<button id="miniNextA" title="Следующий аят" style="'+_nbtn+';font-size:20px">›</button>'
+   +'<button id="miniNextS" title="Следующая сура" style="'+_nbtn+'">⏭</button></div>';
   document.body.appendChild(bar);
+  bar.querySelector('#miniPrevA').onclick=()=>{ try{ _qrNav(-1); }catch(e){} };
+  bar.querySelector('#miniNextA').onclick=()=>{ try{ _qrNav(1); }catch(e){} };
+  bar.querySelector('#miniPrevS').onclick=()=>{ try{ _qrNavSura(-1); }catch(e){} };
+  bar.querySelector('#miniNextS').onclick=()=>{ try{ _qrNavSura(1); }catch(e){} };
   // свёрнутая «таблетка»: звук играет, экран свободен; тап = развернуть плеер обратно
   let dot=document.getElementById('miniDot');
   if(!dot){ dot=document.createElement('button'); dot.id='miniDot';
@@ -6092,8 +6132,10 @@ var _rb2=document.getElementById('readBtn2'); if(_rb2) _rb2.onclick=()=>{ docume
 var _rbr=document.getElementById('rootBrowBtn'); if(_rbr) _rbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openRootBrowser(); };
 var _hsb=document.getElementById('hadScienceBtn'); if(_hsb) _hsb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openHadithScience(); };
 var _cbr=document.getElementById('catBrowBtn'); if(_cbr) _cbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openCatalog(); };
-var _qro=document.getElementById('qrOpenBtn'); if(_qro) _qro.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openQuranReader(_qrView.s||1, 0); };
-var _qrb=document.getElementById('quranReadBtn'); if(_qrb) _qrb.onclick=()=>openQuranReader(_qrView.s||1, 0);
+// M356: «Читать Коран» ПРОДОЛЖАЕТ с места, где остановился (cfg.qrLast: последняя читанная/слушанная сура+аят)
+function _qrResume(){ const L=cfg.qrLast; if(L&&L.s){ openQuranReader(L.s, L.a||0).then(()=>{ if(L.a) toast('📖 Продолжаем: '+L.s+':'+L.a+' · '+(SURA_NAMES[L.s-1]||'')); }); } else openQuranReader(_qrView.s||1, 0); }
+var _qro=document.getElementById('qrOpenBtn'); if(_qro) _qro.onclick=()=>{ document.getElementById('menuModal').style.display='none'; _qrResume(); };
+var _qrb=document.getElementById('quranReadBtn'); if(_qrb) _qrb.onclick=()=>_qrResume();
 var _qrn=document.getElementById('quranRandBtn'); if(_qrn) _qrn.onclick=_qrRandom;
 var _qroot=document.getElementById('quranRootBtn'); if(_qroot) _qroot.onclick=()=>openRootBrowser();   // #2: поиск по корню заметной кнопкой в Аятах
 var _hrb=document.getElementById('hadithReadBtn'); if(_hrb) _hrb.onclick=()=>openCatalog();
