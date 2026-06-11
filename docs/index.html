@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v341';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v342';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2106,6 +2106,46 @@ function _bkApplyTheme(tEl){
   else if(th==='black'){ tEl.style.background='#000'; tEl.style.color='#d6d6d6'; tEl.style.borderColor='#222'; }
   else { tEl.style.background=''; tEl.style.color=''; tEl.style.borderColor=''; }
 }
+// M347: прыжок по ТОМУ — бинарный поиск первого листа с meta.vol >= t (живые мета turath; ~12-18 запросов, с тостом)
+async function _bkFetchMeta(pg){
+  try{ const r=await fetch(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+pg+'&initData='+encodeURIComponent(INITDATA));
+    const j=await r.json().catch(()=>({})); const mt=j.meta||{};
+    return {vol:(mt.vol!=null?parseInt(String(mt.vol).replace(/[^0-9]/g,'')):null), has:!!(j.text&&j.text.trim())};
+  }catch(e){ return null; }
+}
+async function _bkVolAt(pg){   // vol листа; пустой/служебный лист — пробуем соседний
+  let m=await _bkFetchMeta(pg);
+  if(m&&!m.has) return {end:true};
+  if(m&&m.vol==null){ const m2=await _bkFetchMeta(pg+1); if(m2&&m2.vol!=null) m={vol:m2.vol,has:true}; }
+  return m||{};
+}
+async function _bkJumpVol(tv){
+  toast('🔎 ищу начало тома '+tv+'…');
+  try{
+    let lo=1, hi=Math.max(_bookView.pg*2, 256), cap=0;
+    // разгон hi: пока том на hi < tv и книга не кончилась
+    while(cap++<10){ const m=await _bkVolAt(hi);
+      if(m.end){ break; }   // за концом — hi достаточен
+      if(m.vol!=null && m.vol>=tv) break;
+      if(hi>=60000) break; hi=Math.min(60000, hi*2); }
+    // бинарный поиск наименьшего pg с (vol>=tv | конец)
+    let it=0;
+    while(lo<hi && it++<18){ const mid=Math.floor((lo+hi)/2); const m=await _bkVolAt(mid);
+      if(m.end || (m.vol!=null && m.vol>=tv)) hi=mid; else lo=mid+1; }
+    const fin=await _bkVolAt(lo);
+    if(fin && fin.vol!=null && fin.vol===tv){ _bookView.pg=lo; _bookView.want=null; _bookView.snaps=0; _bookLoad(); toast('📖 том '+tv); }
+    else toast('Том '+tv+' не нашёлся (томов меньше?)');
+  }catch(e){ toast('🔧 не вышло — попробуй ещё раз'); }
+}
+// M347: прыжок по № ХАДИСА — мгновенно из локальных f40c-шардов (31 проштудированная печать)
+async function _bkJumpHno(n){
+  try{ const r=await fetch('./f40c/'+_bookView.id+'_'+Math.floor(n/300)+'.json');
+    if(r.ok){ const mm=await r.json(); const it=mm[String(n)];
+      if(it&&it[0]){ _bookView.pg=it[0]; _bookView.want=null; _bookView.snaps=0; _bookLoad(); toast('📖 хадис №'+n+' · лист '+it[0]); return; }
+      if(it){ toast('№'+n+' найден, но лист не определён в этой печати'); return; } }
+  }catch(e){}
+  toast('№-прыжок доступен в проштудированных печатях первоисточников (эта пока нет)');
+}
 function _bkSavePos(){ try{ const pos=JSON.parse(localStorage.getItem('bk_pos')||'{}');
   pos[_bookView.id]={pg:_bookView.pg, t:Date.now()};
   const ks=Object.keys(pos); if(ks.length>60){ ks.sort((a,b)=>(pos[a].t||0)-(pos[b].t||0)); delete pos[ks[0]]; }
@@ -2187,18 +2227,28 @@ async function _bookLoad(){
     _bookView.off = hasP ? (_bookView.pg-meta.page) : (_bookView.off||0);   // смещение «лист − печатная» для прыжка по печатному номеру
     try{ _bkSavePos(); }catch(e){}   // M318: запоминаем где читаем (вернёмся сюда же)
     try{ _bkApplyTheme(tEl); }catch(e){}
-    // ── M318: НИЗ-БАР ЛИСТАНИЯ (sticky bottom — большой палец достаёт; листание = главное действие чтения)
+    // ── M318/M347: НИЗ-БАР ЛИСТАНИЯ (sticky bottom) — отдельные поля ТОМ / СТРАНИЦА / № ХАДИСА (как в Мактабе)
     const bot=m.querySelector('#bookBotBar'); if(bot){ bot.innerHTML='';
       bot.appendChild(mk('⏮', ()=>{ if(_bookView.pg!==1){ _bookView.pg=1; _bookLoad(); } }, _bookView.pg<=1));
       bot.appendChild(mk('◀', ()=>{ if(_bookView.pg>1){ _bookView.pg--; _bookLoad(); } }, _bookView.pg<=1));
-      const inp=document.createElement('input'); inp.type='tel'; inp.value=hasP?meta.page:_bookView.pg;
-      inp.title=hasP?'Печатная страница — введи номер и Enter':('Лист №'+_bookView.pg);
-      inp.style.cssText='width:62px;text-align:center;background:var(--bg);color:var(--text);border:1px solid var(--btn);border-radius:8px;padding:7px 4px;font-size:15px;font-weight:700';
+      const _fld=(w,val,title)=>{ const i=document.createElement('input'); i.type='tel'; i.value=val; i.title=title;
+        i.style.cssText='width:'+w+'px;text-align:center;background:var(--bg);color:var(--text);border:1px solid var(--btn);border-radius:8px;padding:7px 3px;font-size:14px;font-weight:700'; return i; };
+      const _lb=t=>{ const s=document.createElement('span'); s.className='hint'; s.style.cssText='font-size:11px;color:var(--mark);white-space:nowrap'; s.textContent=t; return s; };
+      // ТОМ (M347): Enter → бинарный поиск первого листа тома по живым meta.vol
+      const vinp=_fld(38, (meta.vol!=null?String(meta.vol).replace(/[^0-9]/g,''):''), 'Том — введи номер и Enter (поиск начала тома)');
+      const vjump=()=>{ const tv=parseInt(vinp.value)||0; if(tv>0) _bkJumpVol(tv); };
+      vinp.onchange=vjump; vinp.addEventListener('keydown',e=>{ if(e.key==='Enter') vjump(); });
+      // СТРАНИЦА (печатная, want/off-механизм как был)
+      const inp=_fld(56, hasP?meta.page:_bookView.pg, hasP?'Печатная страница — введи номер и Enter':('Лист №'+_bookView.pg));
       const jump=()=>{ const t=Math.max(1,parseInt(inp.value)||1); if(hasP){ _bookView.want=t; _bookView.snaps=0; _bookView.pg=Math.max(1,t+(_bookView.off||0)); } else { _bookView.pg=t; } _bookLoad(); };
       inp.onchange=jump; inp.addEventListener('keydown',e=>{ if(e.key==='Enter') jump(); });
-      const lc=document.createElement('span'); lc.className='hint'; lc.style.cssText='font-size:12px;color:var(--mark);white-space:nowrap';
-      lc.textContent=(meta.vol?('т.'+meta.vol+' · '):'')+(hasP?'стр.':'лист');
-      bot.appendChild(lc); bot.appendChild(inp);
+      // № ХАДИСА (M347): мгновенный прыжок по проштудированным печатям (f40c: лист по номеру)
+      const hinp=_fld(56, '', '№ хадиса — введи номер и Enter (прыжок по проштудированной печати)');
+      const hjump=()=>{ const n=parseInt(hinp.value)||0; if(n>0) _bkJumpHno(n); };
+      hinp.onchange=hjump; hinp.addEventListener('keydown',e=>{ if(e.key==='Enter') hjump(); });
+      bot.appendChild(_lb('т.')); bot.appendChild(vinp);
+      bot.appendChild(_lb(hasP?'стр.':'лист')); bot.appendChild(inp);
+      bot.appendChild(_lb('№')); bot.appendChild(hinp);
       bot.appendChild(mk('▶', ()=>{ _bookView.pg++; _bookLoad(); }));
       m._jump=jump; m._inp=inp;
     }
