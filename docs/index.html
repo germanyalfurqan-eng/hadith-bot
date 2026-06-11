@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v332';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v333';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4570,7 +4570,20 @@ async function narrCandidates(qRaw){
   }
   out.sort((a,b)=>b.sc-a.sc); return out.slice(0,14);
 }
-function _narrRow(c){   // строка-кандидат: имя (RTL) + рус-транслит + мета (وفاة/ранг)
+// M385: ПРИВЫЧНОЕ имя (шухра) — как равия чаще всего зовут: первое имя + нисба (سفيان الثوري), кунья+нисба, или 2 первых слова
+const _shStopT={'يقال':1,'وقيل':1,'ويقال':1,'الله':1,'الرحمن':1,'الدين':1,'ابن':1,'ابو':1};
+function _shuhraOf(name, extRow){
+  const nm=String(name||'').trim(); const nw=nm.split(' ');
+  let nis=''; if(extRow&&extRow[0]){ const t=String(extRow[0]).split(' ').filter(w=>w.length>=4&&w.startsWith('ال')&&!_shStopT[w]); nis=t[0]||''; }   // ПЕРВЫЙ значимый: الثوري идёт раньше الكوفي
+  if(/^(ابو|أبو|ام|أم)$/.test(nw[0])&&nw.length>=2){ const kun=nw.slice(0,2).join(' '); return nis?(kun+' '+nis):kun; }
+  if(nis && nis!==nw[nw.length-1]) return nw[0]+' '+nis;
+  if(nw.length>3 && nw[1]==='بن') return nw.slice(0,3).join(' ');
+  return nw.slice(0,3).join(' ');
+}
+let _narrWiki=null;
+function loadNarrWiki(){ if(_narrWiki) return Promise.resolve(_narrWiki);
+  return fetch('./narrators_wiki.json').then(r=>r.ok?r.json():{}).then(j=>{_narrWiki=j||{};return _narrWiki;}).catch(()=>{_narrWiki={};return _narrWiki;}); }
+function _narrRow(c){   // строка-кандидат: ПРИВЫЧНОЕ имя (M385) + полное + рус + мета (وفاة/ранг)
   const r=document.createElement('div');
   r.style.cssText='padding:8px 11px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center';
   let ruN=''; try{ ruN=arNameRu(c.nm, 6); }catch(e){}
@@ -4583,16 +4596,15 @@ function _narrRow(c){   // строка-кандидат: имя (RTL) + рус-
     const rk=cc[5]||cc[6];
     el.innerHTML='<span dir="rtl" style="display:block">'+(cc[4]?('وفاة ~'+cc[4]+'هـ'):'<span style="opacity:.4">وفاة ؟</span>')+'</span>'
       +(rk?('<span dir="rtl" style="display:block;color:#9aa7b8">'+esc((''+rk).slice(0,38))+'</span>'):''); }).catch(()=>{});
-  // M382: ШУХРА видна в строке («суфьян саури» → видно «الثوري · ас-Саури»)
-  loadNarrExt().then(ext=>{ try{ const e=ext.get(c.id); if(!e||!e[0]) return;
-    const _shStop={'يقال':1,'وقيل':1,'ويقال':1,'الله':1,'الرحمن':1,'الدين':1,'ابن':1,'ابو':1};
-    const toks=e[0].split(' ').filter(w=>w.length>=4&&w.startsWith('ال')&&!_shStop[w]);
-    const tok=toks[toks.length-1]; if(!tok) return;   // нисба-шухра обычно ПОСЛЕДНЯЯ (الثوري، البصري)
-    const host=r.children[1]; if(!host||host.dataset.sh) return; host.dataset.sh='1';
-    let ruT=''; try{ ruT=_arWordRu(tok)||''; }catch(e2){}
-    const d=document.createElement('span'); d.style.cssText='display:block;text-align:right;font-size:11.5px;color:#ffd479';
-    d.innerHTML='<span dir="rtl">'+esc(tok)+'</span>'+(ruT?(' <span style="color:#cdb97a">· '+esc(ruT)+'</span>'):'');
-    host.appendChild(d); }catch(e){} }).catch(()=>{});
+  // M385/M382: заголовок строки = ПРИВЫЧНОЕ имя (шухра) жёлтым, полное — мелким под ним, рус — привычного
+  loadNarrExt().then(ext=>{ try{ const e=ext.get(c.id); const host=r.children[1]; if(!host||host.dataset.sh) return; host.dataset.sh='1';
+    const sh=_shuhraOf(c.nm, e);
+    if(!sh||stripDiac(sh)===stripDiac(c.nm)) return;
+    let ruS=''; try{ ruS=arNameRu(sh, 4); }catch(e2){}
+    host.innerHTML='<b style="display:block;direction:rtl;text-align:right;font-size:14.5px;color:#ffd479">'+esc(sh)+'</b>'
+      +'<span style="display:block;direction:rtl;text-align:right;font-size:11.5px;color:var(--hint)">'+esc(c.nm)+'</span>'
+      +(ruS?('<span style="display:block;text-align:right;font-size:11.5px;color:#bcd0ff">≈ '+esc(ruS)+'</span>'):'');
+  }catch(e){} }).catch(()=>{});
   return r;
 }
 /* — обратная транслитерация ар→рус для читаемости подсказок/биографий: словарь частых компонент имён + фонетический фолбэк — */
@@ -4877,10 +4889,19 @@ async function showNarratorCardLocal(name, host){
   const c=await _narrCard(id); if(!c) return null;   // [id,name,kunya,nisba,death,rankHajar,rankDhahabi,tabaqa,jarh]
   const row=(lbl,v)=>v?('<div style="margin:2px 0"><span style="color:var(--hint)">'+lbl+':</span> <b>'+esc(v)+'</b></div>'):'';
   const rank=(lbl,v)=>v?('<div style="margin:4px 0;padding:5px 9px;background:rgba(46,155,91,.13);border-radius:8px"><span style="color:var(--hint)">'+lbl+':</span> <b style="color:#bff5d4">'+esc(v)+'</b></div>'):'';
+  // M385: ① привычное имя крупно → ② полное → ③ рус привычное → ④ перевод полного → ⑤ Википедия (ru→en→ar)
+  let _ext=null; try{ _ext=(await loadNarrExt()).get(id); }catch(e){}
+  const _sh=_shuhraOf(c[1], _ext);
+  const _shDiff=!!_sh && stripDiac(_sh)!==stripDiac(c[1]||'');
   let h='<div style="border:1px solid #6c5ce7;border-radius:12px;padding:11px;margin:6px 0;background:rgba(108,92,231,.07);direction:rtl;text-align:right">'
-    +'<div style="font-weight:700;font-size:16px;color:#d9ccff">👤 '+esc(c[1])+'</div>';
+    +'<div style="font-weight:700;font-size:17px;color:#ffd479">👤 '+esc(_shDiff?_sh:c[1])+'</div>'
+    +(_shDiff?('<div style="font-size:13px;color:#d9ccff;margin-top:1px">'+esc(c[1])+'</div>'):'');
+  let _ruSh=''; try{ _ruSh=arNameRu(_shDiff?_sh:c[1],5); }catch(e){}
   let _ruNm=''; try{ _ruNm=arNameRu(c[1],7); }catch(e){}
-  if(_ruNm) h+='<div style="direction:ltr;text-align:left;font-size:12.5px;color:#bcd0ff;margin-top:1px">≈ '+esc(_ruNm)+'</div>';
+  if(_ruSh) h+='<div style="direction:ltr;text-align:left;font-size:13px;color:#bcd0ff;margin-top:2px">≈ '+esc(_ruSh)+'</div>';
+  if(_ruNm&&_shDiff&&_ruNm!==_ruSh) h+='<div style="direction:ltr;text-align:left;font-size:11.5px;color:#8fa3c7">полное: '+esc(_ruNm)+'</div>';
+  try{ const wk=(await loadNarrWiki())[String(id)];
+    if(wk&&wk.u) h+='<div style="direction:ltr;text-align:left;margin-top:3px"><span class="nWiki" data-u="'+esc(wk.u)+'" style="cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px"><b style="font-family:Georgia,serif">W</b> Википедия'+(wk.l?(' · '+esc(wk.l)):'')+' ↗</span></div>'; }catch(e){}
   h+='<div style="font-size:11px;color:var(--hint);margin:2px 0 7px">📖 موسوعة رواة الحديث (база Мактабы) · #'+c[0]+'</div>'
     +row('الكنية',c[2])+row('النسب',c[3])+row('سنة الوفاة',c[4]?('~'+c[4]+'هـ'):'')+row('الطبقة',c[7])
     +rank('الرتبة عند ابن حجر',c[5])+rank('الرتبة عند الذهبي',c[6])
@@ -4912,6 +4933,7 @@ async function showNarratorCardLocal(name, host){
         else tro.textContent='не вышло — попробуй ещё раз'; }catch(e){ tro.textContent='🔧 сервис недоступен'; } }));
     tl.appendChild(mk('📕 Arabus', ()=>{ _arabusOn=true; try{ loadRoots(); loadArabusLocal(); enableArabusTap(hdr); }catch(e){} hdr.style.cursor='pointer'; toast('📕 Arabus — тапай слово в шапке'); }));
     hdr.appendChild(tl); hdr.appendChild(tro);
+    hdr.querySelectorAll('.nWiki').forEach(b=>b.onclick=()=>{ try{ openLink(b.dataset.u); }catch(e){} });   // M385 ⑤
   }catch(e){}
   return c;   // джарх-моусуа рендерится ОТДЕЛЬНЫМ разделом ПОСЛЕ наших книг
 }
