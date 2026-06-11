@@ -7,6 +7,7 @@ import base64
 import hmac
 import hashlib
 import time
+import threading
 import collections
 import subprocess
 import shutil
@@ -1998,7 +1999,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
     # ============ ВЛАДЕЛЕЦ: ПАМЯТЬ ============
-    if is_owner(update) and text:
+    # M393: память/реестры — ТОЛЬКО из ЛИЧКИ владельца (в группе «запомни…» сохранял шутки в memory.json)
+    if is_owner(update) and text and getattr(update.effective_chat, "type", "") == "private":
         t_lower = text.lower().strip()
 
         # Обработка подтверждений
@@ -3428,6 +3430,48 @@ def turath_page(book_id, pg):
         return {'err': str(e)}
     return {}
 
+# M366: СЕРВЕРНЫЙ БУФЕР-ПРЕДЗАГРУЗКА страниц (принцип оперативки): LRU-кэш + прогрев соседних листов.
+# Листание читалки и «Текст + инструменты» отвечают из памяти; НЕ грузим 9000 книг — только то, что читают сейчас.
+_PG_CACHE = {}     # (bid, pg) -> результат turath_page
+_PG_ORDER = []     # LRU-порядок ключей
+_PG_MAX = 900      # ~900 страниц ≈ единицы МБ текста
+def _pg_cache_put(k, v):
+    try:
+        if k in _PG_CACHE:
+            try: _PG_ORDER.remove(k)
+            except ValueError: pass
+        _PG_CACHE[k] = v; _PG_ORDER.append(k)
+        while len(_PG_ORDER) > _PG_MAX:
+            old = _PG_ORDER.pop(0); _PG_CACHE.pop(old, None)
+    except Exception:
+        pass
+def turath_page_buf(book_id, pg):
+    bid = re.sub(r'[^0-9]', '', str(book_id or ''))[:8]
+    p = re.sub(r'[^0-9]', '', str(pg or '1'))[:6] or '1'
+    if not bid:
+        return {}
+    k = (bid, int(p))
+    hit = _PG_CACHE.get(k)
+    res = hit if (hit and hit.get('text')) else turath_page(bid, p)
+    if res and res.get('text'):
+        _pg_cache_put(k, res)
+    def _warm():   # прогрев pg+1, pg+2, pg-1 в фоне (читают вперёд; ошибки молча)
+        for d in (1, 2, -1):
+            kk = (bid, int(p) + d)
+            if kk[1] < 1 or kk in _PG_CACHE:
+                continue
+            try:
+                rr = turath_page(bid, str(kk[1]))
+                if rr and rr.get('text'):
+                    _pg_cache_put(kk, rr)
+            except Exception:
+                pass
+    try:
+        threading.Thread(target=_warm, daemon=True).start()
+    except Exception:
+        pass
+    return res
+
 # M201: ИИ-проверка цепочки передатчиков (иснада) — извлечь полный список имён. Кэш data/isnad_ai.json.
 _isnadai_cache = None
 def isnad_ai(text):
@@ -4085,7 +4129,7 @@ async def _api_serve(application=None):
             return _deny('app')
         if not rate_ok('bookpage:' + _uid(user, r), 60, 60):
             return _ratelimited()
-        res = await loop.run_in_executor(None, turath_page, r.query.get('id'), r.query.get('pg') or '1')
+        res = await loop.run_in_executor(None, turath_page_buf, r.query.get('id'), r.query.get('pg') or '1')   # M366: LRU+prefetch
         return _cors(web.json_response(res))
 
     async def devfeedback(r):
