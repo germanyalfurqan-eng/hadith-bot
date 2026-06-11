@@ -203,7 +203,7 @@
 
   <div class="searchbar" style="position:relative;margin-top:16px">
     <button id="recentBtn" title="🕐 Недавние запросы" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--hint);font-size:18px;cursor:pointer;padding:4px 6px;z-index:3">🕐</button>
-    <textarea id="q" rows="1" placeholder="Введите слово, фразу или № хадиса…" autocomplete="off" enterkeyhint="search" style="padding-left:36px;border:2px solid var(--btn);box-shadow:0 0 0 3px rgba(47,123,230,.18), 0 6px 22px rgba(47,123,230,.28);resize:none;overflow-y:hidden;line-height:1.45;max-height:132px;font-family:inherit;font-size:inherit;width:100%;box-sizing:border-box"></textarea><!-- M426: расширяемое поле как в GPT (Enter=поиск, Shift+Enter=перенос) -->
+    <textarea id="q" rows="1" placeholder="Слово, фраза или № хадиса…" autocomplete="off" enterkeyhint="search" style="padding-left:36px;border:2px solid var(--btn);box-shadow:0 0 0 3px rgba(47,123,230,.18), 0 6px 22px rgba(47,123,230,.28);resize:none;overflow-y:hidden;line-height:1.45;max-height:132px;font-family:inherit;font-size:inherit;width:100%;box-sizing:border-box"></textarea><!-- M426: расширяемое поле как в GPT (Enter=поиск, Shift+Enter=перенос) -->
     <button id="qBack" title="↩ Вернуть прошлый запрос" style="display:none;position:absolute;right:128px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--hint);font-size:19px;cursor:pointer;padding:4px 7px;z-index:3">↩</button>
     <button id="qClear" title="Очистить поиск" style="display:none;position:absolute;right:94px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--hint);font-size:20px;cursor:pointer;padding:4px 8px;z-index:3">✕</button>
     <button class="go" id="goBtn" title="Искать по запросу">Найти</button>
@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v354';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v355';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -556,7 +556,8 @@ async function _checkUpdate(){ try{
   const latest=(await r.text()).trim(); if(!latest || latest===APPVER) return;
   const ln=parseInt((latest.match(/\d+/)||[])[0]||'0'), cn=parseInt((APPVER.match(/\d+/)||[])[0]||'0');
   if(ln && cn && ln<=cn) return;   // только СТРОГО новее
-  const doReload=()=>location.replace(location.pathname+'?v='+encodeURIComponent(latest)+location.hash);
+  const doReload=async()=>{ try{ if(window.caches&&caches.keys){ const ks=await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))); } }catch(e){}
+    location.replace(location.pathname+'?v='+encodeURIComponent(latest)+'&t='+Date.now()+location.hash); };   // M430: TG-кэш пробивается двойным бастером + чисткой caches
   // только открыл, ничего не делал, ещё не перезагружались → тихо обновить
   if(!window.__interacted && sessionStorage.getItem('verReloaded')!=='1'){ sessionStorage.setItem('verReloaded','1'); doReload(); return; }
   if(_updShownFor===latest || document.getElementById('updBanner')) return;   // баннер для этой версии уже показан
@@ -566,7 +567,7 @@ async function _checkUpdate(){ try{
   const txt=document.createElement('span'); txt.innerHTML='🔄 Вышло обновление <b>'+latest+'</b>';
   const go=document.createElement('button'); go.textContent='Обновить';
   go.style.cssText='background:#2f7be6;color:#fff;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:14px;font-weight:700';
-  go.addEventListener('click',e=>{ e.preventDefault(); e.stopPropagation(); doReload(); });
+  go.addEventListener('click',e=>{ e.preventDefault(); e.stopPropagation(); go.disabled=true; go.textContent='⏳ обновляю…'; doReload(); });   // M430: видимая загрузка
   const wn=document.createElement('button'); wn.textContent='💬 Что нового'; wn.title='Посмотреть пункты обновления';
   wn.style.cssText='background:transparent;color:#cfe0ff;border:1px solid #2f7be6;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:13px';
   wn.addEventListener('click',e=>{ e.stopPropagation(); try{ window.showUpdateNotes(latest); }catch(err){} });
@@ -1086,7 +1087,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   var _mo=document.querySelector('.chip[data-mode="matnonly"]'); if(_mo) _mo.style.display = tab==='hadith'?'':'none';  // «не искать в иснаде» — только хадисы
   var _nc=document.querySelector('.chip[data-mode="narr"]'); if(_nc){ _nc.style.display = tab==='hadith'?'':'none';   // 👤 «Передатчик» — в Аятах не к месту (замечание владельца)
     if(tab!=='hadith' && modes.narr){ modes.narr=false; _nc.classList.remove('on'); try{ hideNarrSugg(); }catch(e){} } }
-  document.getElementById('q').placeholder = tab==='hadith'?'Введите слово, фразу или № хадиса…':'Введите слово, № суры или сура:аят (2:255)…';
+  document.getElementById('q').placeholder = tab==='hadith'?'Слово, фраза или № хадиса…':'Слово, № суры или 2:255…';
   document.getElementById('res').innerHTML=''; setStatus(''); updateQuranHelper();
   try{ hideRecent(); }catch(e){}   // M256: недавние не авто-показ — только по 🕐
 });
@@ -6926,7 +6927,7 @@ function goHome(){
   document.querySelectorAll('.modes .chip').forEach(c=>c.classList.remove('on'));
   var _nb=document.getElementById('neuroBox'); if(_nb) _nb.style.display='none';
   var _mm2=document.getElementById('modesMore'); if(_mm2) _mm2.style.display='none'; var _mmb=document.getElementById('moreModes'); if(_mmb){ _mmb.textContent='⚙️ ещё ▾'; _mmb.classList.remove('on'); }
-  document.getElementById('q').placeholder='Введите слово, фразу или № хадиса…';
+  document.getElementById('q').placeholder='Слово, фраза или № хадиса…';
   document.getElementById('res').innerHTML=''; setStatus(''); try{localStorage.removeItem('muslimoon_state');}catch(e){} document.querySelector('.tab[data-tab="hadith"]').click(); renderCols(); updateExtraSel(); var _qh=document.getElementById('qHelper'); if(_qh)_qh.style.display='none'; var _qs=document.getElementById('qSugg'); if(_qs)_qs.style.display='none'; var _tl=document.getElementById('tlSugg'); if(_tl){_tl.style.display='none';_tl.innerHTML='';} var _bsg=document.getElementById('bookSugg'); if(_bsg){_bsg.style.display='none';_bsg.innerHTML='';} try{window.scrollTo(0,0);}catch(e){} }
 document.getElementById('brand').onclick=goHome;
 var _hb=document.getElementById('homeBtn'); if(_hb) _hb.onclick=goHome;
