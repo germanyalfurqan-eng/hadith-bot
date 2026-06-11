@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v339';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v340';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2517,6 +2517,9 @@ async function maktabaByNum(seq, n){
     const wrap=document.createElement('div'); wrap.className='canonStd';
     const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:11px;margin:2px 0 3px;color:#7fb3ff'; lbl.textContent='⚡ наше издание (стандартная нумерация) — мгновенно';
     wrap.appendChild(lbl); wrap.appendChild(cardHadith({code:code, h:hh}, []));   // M379: UI-код канона (ibnmajah → ابن ماجه), данные грузились по ec
+    // 🧬 M378b: цепочка по кодам Э1.1 — печать канона в dz-шардах (Муватты 1699 в dz нет — блок просто не появится)
+    const _dzb={bukhari:'1681',muslim:'1727',abudawud:'1726',tirmidhi:'1435',nasai:'829',ibnmajah:'1198',ahmad:'25794'}[code];
+    if(_dzb){ try{ dzChainInto(wrap, _dzb, n); }catch(e){} }
     canonSlots[code].insertBefore(wrap, canonSlots[code].firstChild);
     const _sb=canonSlots[code].__edBtn; if(_sb && !_sb.__open) canonSlots[code].querySelectorAll('.canonEd').forEach(c=>c.style.display='none');
     shown++; shownF++; head.textContent='📚 Хадис №'+n+' — книг: '+shown+' · из них ПЕРВОИСТОЧНИКОВ: '+shownF+' из ~'+F40_DENOM+' нумерованных · ищу ещё…';
@@ -2544,6 +2547,7 @@ async function maktabaByNum(seq, n){
     card.appendChild(meta);
     if(it[0]){ const ob=document.createElement('button'); ob.className='mini'; ob.style.cssText='margin-top:6px;border:1px solid var(--border);padding:6px 12px;border-radius:9px';
       ob.textContent='📖 Открыть в книге · лист '+it[0]; ob.onclick=()=>{ try{ openBook(bid, it[0]); }catch(e){} }; card.appendChild(ob); }
+    try{ dzChainInto(card, bid, n); }catch(e){}   // 🧬 M378b: цепочка по кодам Э1.1
     try{ enableArabusTap(ar); }catch(e){}
     wrap.appendChild(lbl); wrap.appendChild(card);
     (topSlots.get(bid)||listTop).appendChild(wrap);
@@ -4522,6 +4526,89 @@ async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.lengt
     if(cn.indexOf(nm+' ')===0 && nm.length>coverLen && nm.indexOf(' ')>0){ cover=it[1]; coverLen=nm.length; } }
   return exact!=null?exact:(cover!=null?cover:pref); }
 async function _narrCard(id){ const b=Math.floor(id/100); if(!_narrShard[b]){ try{ _narrShard[b]=await (await fetch('./narr/'+b+'.json')).json(); }catch(e){ _narrShard[b]={}; } } return (_narrShard[b]||{})[String(id)]||null; }
+/* ===== 🧬 M378b (Сессия 15): dz-СЛОЙ Э1.1 — КОДЫ передатчиков в интерфейсе =====
+   dz/b<bid>_<num//500>.json {num:[код…]} — цепочка хадиса: код = id базы (число) ИЛИ 'U…' (наш код неопознанной формы, приказ M378)
+   dz/u<sh>.json {U:[форма,частота,примеры]} + dz/un<sh>.json {U:[[bid,num,leaf]…]} — реестр/участие U-кодов, sh = md5(U)[:4]%64
+   dz/n<id//200>.json {id:[[bid,num,leaf]…]} — ТОЧНОЕ участие опознанного равия (по штудированным иснадам, не текст-поиск) */
+function _md5x(d){var r=M378(V378(Y378(X378(d),8*d.length)));return r.toLowerCase()}
+function M378(d){for(var _,m="0123456789abcdef",f="",r=0;r<d.length;r++)_=d.charCodeAt(r),f+=m.charAt(_>>>4&15)+m.charAt(15&_);return f}
+function X378(d){for(var _=Array(d.length>>2),m=0;m<_.length;m++)_[m]=0;for(m=0;m<8*d.length;m+=8)_[m>>5]|=(255&d.charCodeAt(m/8))<<m%32;return _}
+function V378(d){for(var _="",m=0;m<32*d.length;m+=8)_+=String.fromCharCode(d[m>>5]>>>m%32&255);return _}
+function Y378(d,_){d[_>>5]|=128<<_%32,d[14+(_+64>>>9<<4)]=_;for(var m=1732584193,f=-271733879,r=-1732584194,i=271733878,n=0;n<d.length;n+=16){var h=m,t=f,g=r,e=i;f=ii378(f=ii378(f=ii378(f=ii378(f=hh378(f=hh378(f=hh378(f=hh378(f=gg378(f=gg378(f=gg378(f=gg378(f=ff378(f=ff378(f=ff378(f=ff378(f,r=ff378(r,i=ff378(i,m=ff378(m,f,r,i,d[n+0],7,-680876936),f,r,d[n+1],12,-389564586),m,f,d[n+2],17,606105819),i,m,d[n+3],22,-1044525330),r=ff378(r,i=ff378(i,m=ff378(m,f,r,i,d[n+4],7,-176418897),f,r,d[n+5],12,1200080426),m,f,d[n+6],17,-1473231341),i,m,d[n+7],22,-45705983),r=ff378(r,i=ff378(i,m=ff378(m,f,r,i,d[n+8],7,1770035416),f,r,d[n+9],12,-1958414417),m,f,d[n+10],17,-42063),i,m,d[n+11],22,-1990404162),r=ff378(r,i=ff378(i,m=ff378(m,f,r,i,d[n+12],7,1804603682),f,r,d[n+13],12,-40341101),m,f,d[n+14],17,-1502002290),i,m,d[n+15],22,1236535329),r=gg378(r,i=gg378(i,m=gg378(m,f,r,i,d[n+1],5,-165796510),f,r,d[n+6],9,-1069501632),m,f,d[n+11],14,643717713),i,m,d[n+0],20,-373897302),r=gg378(r,i=gg378(i,m=gg378(m,f,r,i,d[n+5],5,-701558691),f,r,d[n+10],9,38016083),m,f,d[n+15],14,-660478335),i,m,d[n+4],20,-405537848),r=gg378(r,i=gg378(i,m=gg378(m,f,r,i,d[n+9],5,568446438),f,r,d[n+14],9,-1019803690),m,f,d[n+3],14,-187363961),i,m,d[n+8],20,1163531501),r=gg378(r,i=gg378(i,m=gg378(m,f,r,i,d[n+13],5,-1444681467),f,r,d[n+2],9,-51403784),m,f,d[n+7],14,1735328473),i,m,d[n+12],20,-1926607734),r=hh378(r,i=hh378(i,m=hh378(m,f,r,i,d[n+5],4,-378558),f,r,d[n+8],11,-2022574463),m,f,d[n+11],16,1839030562),i,m,d[n+14],23,-35309556),r=hh378(r,i=hh378(i,m=hh378(m,f,r,i,d[n+1],4,-1530992060),f,r,d[n+4],11,1272893353),m,f,d[n+7],16,-155497632),i,m,d[n+10],23,-1094730640),r=hh378(r,i=hh378(i,m=hh378(m,f,r,i,d[n+13],4,681279174),f,r,d[n+0],11,-358537222),m,f,d[n+3],16,-722521979),i,m,d[n+6],23,76029189),r=hh378(r,i=hh378(i,m=hh378(m,f,r,i,d[n+9],4,-640364487),f,r,d[n+12],11,-421815835),m,f,d[n+15],16,530742520),i,m,d[n+2],23,-995338651),r=ii378(r,i=ii378(i,m=ii378(m,f,r,i,d[n+0],6,-198630844),f,r,d[n+7],10,1126891415),m,f,d[n+14],15,-1416354905),i,m,d[n+5],21,-57434055),r=ii378(r,i=ii378(i,m=ii378(m,f,r,i,d[n+12],6,1700485571),f,r,d[n+3],10,-1894986606),m,f,d[n+10],15,-1051523),i,m,d[n+1],21,-2054922799),r=ii378(r,i=ii378(i,m=ii378(m,f,r,i,d[n+8],6,1873313359),f,r,d[n+15],10,-30611744),m,f,d[n+6],15,-1560198380),i,m,d[n+13],21,1309151649),r=ii378(r,i=ii378(i,m=ii378(m,f,r,i,d[n+4],6,-145523070),f,r,d[n+11],10,-1120210379),m,f,d[n+2],15,718787259),i,m,d[n+9],21,-343485551),m=sa378(m,h),f=sa378(f,t),r=sa378(r,g),i=sa378(i,e)}return Array(m,f,r,i)}
+function cmn378(d,_,m,f,r,i){return sa378(rol378(sa378(sa378(_,d),sa378(f,i)),r),m)}
+function ff378(d,_,m,f,r,i,n){return cmn378(_&m|~_&f,d,_,r,i,n)}
+function gg378(d,_,m,f,r,i,n){return cmn378(_&f|m&~f,d,_,r,i,n)}
+function hh378(d,_,m,f,r,i,n){return cmn378(_^m^f,d,_,r,i,n)}
+function ii378(d,_,m,f,r,i,n){return cmn378(m^(_|~f),d,_,r,i,n)}
+function sa378(d,_){var m=(65535&d)+(65535&_);return(d>>16)+(_>>16)+(m>>16)<<16|65535&m}
+function rol378(d,_){return d<<_|d>>>32-_}
+let _dzBC={}, _dzUC={}, _dzUNC={}, _dzNC={};
+async function _dzFetch(cc,key,url){ if(!(key in cc)){ try{ const r=await fetch(url); cc[key]=r.ok?await r.json():null; }catch(e){ cc[key]=null; } } return cc[key]; }
+async function dzChain(bid,num){ const k=String(bid)+'_'+Math.floor(+num/500); const m=await _dzFetch(_dzBC,k,'./dz/b'+k+'.json'); return (m&&m[String(num)])||null; }
+function _dzShU(code){ return parseInt(_md5x(code).slice(0,4),16)%64; }
+async function dzUReg(code){ const sh=_dzShU(code); const m=await _dzFetch(_dzUC,sh,'./dz/u'+sh+'.json'); return (m&&m[code])||null; }
+async function dzUPart(code){ const sh=_dzShU(code); const m=await _dzFetch(_dzUNC,sh,'./dz/un'+sh+'.json'); return (m&&m[code])||null; }
+async function dzPart(id){ const sh=Math.floor(id/200); const m=await _dzFetch(_dzNC,sh,'./dz/n'+sh+'.json'); return (m&&m[String(id)])||null; }
+function _dzPlaceRow(bid,num,leaf){
+  const bn=(typeof bookName==='function'&&bookName(String(bid)))||('книга №'+bid);
+  const d=document.createElement('div'); d.style.cssText='display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 4px;border-bottom:1px solid var(--border);cursor:pointer';
+  d.innerHTML='<span style="direction:rtl;text-align:right;flex:1;font-size:13px;color:var(--text)">'+esc(bn)+'</span><span style="flex:none;font-size:12px;color:#7fb3ff">№'+esc(String(num))+(leaf?(' · 📖 лист '+esc(String(leaf))):'')+'</span>';
+  d.onclick=()=>{ try{ hap('light'); }catch(e){} if(leaf){ try{ openBook(String(bid), leaf); }catch(e){} } else { const q=document.getElementById('q'); if(q){ q.value=String(num); runSearch(true); } } };
+  return d;
+}
+async function openUCard(code){
+  let m=document.getElementById('uModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='uModal';
+    m.innerHTML='<div class="panel" style="max-width:560px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b id="uTitle">🧬 Карточка неотождествлённой формы</b><button class="mini" id="uClose" style="flex:none">закрыть ✕</button></div><div id="uBody" style="max-height:70vh;overflow:auto;margin-top:9px"></div></div>';
+    document.body.appendChild(m); m.querySelector('#uClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
+  m.style.zIndex='10004'; m.style.display='flex';
+  const body=m.querySelector('#uBody'); body.innerHTML='<div class="hint">⏳ беру реестр…</div>';
+  const [reg, part]=await Promise.all([dzUReg(code), dzUPart(code)]);
+  body.innerHTML='';
+  const head=document.createElement('div');
+  head.innerHTML='<div style="font-size:19px;direction:rtl;text-align:right;color:var(--mark)">'+esc((reg&&reg[0])||'(форма неизвестна)')+'</div>'
+    +'<div class="hint" style="font-size:11.5px;margin-top:4px">код '+esc(code)+' · встречается в иснадах '+esc(String((reg&&reg[1])||'?'))+' раз</div>'
+    +'<div class="hint" style="font-size:11.5px;margin-top:4px">⚠️ Форма пока НЕ отождествлена с карточкой равия (или маджхуль). Кандидаты появятся с итерациями дизамбигуации Э1.1 — честный U-код вместо ложной привязки (приказ M378: у каждого передатчика есть ID).</div>';
+  body.appendChild(head);
+  if(reg&&reg[0]){ const sb=document.createElement('button'); sb.className='mini'; sb.style.cssText='margin:9px 0;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px';
+    sb.textContent='🔎 Искать эту форму точной фразой по сборникам';
+    sb.onclick=()=>{ m.style.display='none'; const q=document.getElementById('q'); if(q){ q.value='"'+reg[0]+'"'; _narrBypass=true; runSearch(true); } };
+    body.appendChild(sb); }
+  if(part&&part.length){
+    const lb=document.createElement('div'); lb.className='hint'; lb.style.cssText='font-size:12px;margin:7px 0 3px'; lb.textContent='📍 Места в штудированных иснадах ('+part.length+'):';
+    body.appendChild(lb);
+    const list=document.createElement('div'); body.appendChild(list);
+    let shown=0; const step=25;
+    const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:8px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px';
+    const draw=()=>{ part.slice(shown, shown+step).forEach(p=>list.appendChild(_dzPlaceRow(p[0],p[1],p[2]))); shown=Math.min(part.length, shown+step);
+      more.textContent='⬇️ Показать ещё ниже ('+(part.length-shown)+')'; more.style.display=shown>=part.length?'none':''; };
+    more.onclick=draw; draw(); body.appendChild(more);
+  }
+}
+async function dzChainInto(host, bid, num){
+  try{
+    const codes=await dzChain(bid, num); if(!codes||!codes.length) return;
+    const box=document.createElement('div'); box.style.cssText='margin-top:8px;padding-top:7px;border-top:1px dashed var(--border)';
+    const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:11px;margin-bottom:4px';
+    lbl.textContent='🧬 Цепочка по кодам Э1.1 (тап — карточка):';
+    box.appendChild(lbl);
+    const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl'; box.appendChild(row);
+    codes.slice(0,14).forEach(c=>{
+      const b=document.createElement('span');
+      b.style.cssText='cursor:pointer;font-size:12.5px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.03)';
+      if(typeof c==='number'){ b.textContent='#'+c; b.style.color='#9fd3a8'; b.title='опознан — id базы '+c;
+        _narrCard(c).then(v=>{ if(v&&v[1]) b.textContent=v[1].split(' ').slice(0,3).join(' '); }).catch(()=>{});
+        b.onclick=()=>{ _narrCard(c).then(v=>{ if(v&&v[1]) openNarratorRijal(v[1]); else toast('карточка не нашлась'); }).catch(()=>{}); };
+      } else { b.textContent=String(c).slice(0,8); b.style.color='#ffce63'; b.title='не отождествлён — наш U-код (тап: карточка формы)';
+        dzUReg(c).then(u=>{ if(u&&u[0]) b.textContent=u[0].split(' ').slice(0,3).join(' ')+' ؟'; }).catch(()=>{});
+        b.onclick=()=>openUCard(c);
+      }
+      row.appendChild(b);
+    });
+    host.appendChild(box);
+  }catch(e){}
+}
 /* ===== 👤 РЕЖИМ ПОИСКА ПЕРЕДАТЧИКА (Сессия 13, Ф-10): автоподсказки из 18989 равиев; рус↔араб «скелет согласных» ===== */
 // Идея Ф-10: имя по-русски и по-арабски сводим к скелету согласных в общем алфавите (ث/س/ص→s, ح/خ/ه→h, ق/ك→k…),
 // слабые و/ي (и рус у/ю/и/й/в) — только в strict-скелете; артикли (ال / «аль-/ас-…») срезаем; хвостовую ه/«ха» (ة) срезаем.
@@ -4736,6 +4823,31 @@ async function narrOpen(nm){
   const hbHint=document.createElement('div'); hbHint.className='hint'; hbHint.style.cssText='font-size:11px;margin:-3px 0 8px';
   hbHint.textContent='Ищется имя ЦЕЛИКОМ как словосочетание — тёзки по куску слова не цепляются. Места, где он назван коротко (просто «هشام»), подключатся после дизамбигуации по цепочке (Э1.1).';
   box.appendChild(hbHint);
+  // 🧬 M378b: ТОЧНОЕ участие по кодам Э1.1 (штудированные иснады 33 печатей, включая короткие формы — это не текст-поиск)
+  const cb=document.createElement('button'); cb.className='mini'; cb.style.cssText='width:100%;padding:9px;margin-bottom:8px;font-size:13px;border:1px solid #2e6b9b;color:#bfe0f5;background:#16314d;border-radius:10px;cursor:pointer';
+  cb.textContent='🧬 Участие по кодам Э1.1 (точно, по штудированным иснадам)';
+  cb.onclick=async()=>{ cb.disabled=true; cb.textContent='⏳ беру коды…';
+    try{
+      const id=await _narrLookup(nm);
+      if(id==null){ cb.textContent='🧬 код для этой формы не найден — попробуй полное имя'; cb.disabled=false; return; }
+      const places=await dzPart(id);
+      if(!places||!places.length){ cb.textContent='🧬 в штудированных иснадах мест пока нет (Э1.1 итерируется)'; return; }
+      cb.style.display='none';
+      const bx=document.createElement('div'); bx.style.cssText='margin-bottom:8px';
+      const lb=document.createElement('div'); lb.className='hint'; lb.style.cssText='font-size:12px;margin:2px 0 4px';
+      lb.textContent='🧬 Точное участие (код #'+id+'): мест '+places.length+(places.length>=400?'+ (показаны первые 400)':'')+':';
+      bx.appendChild(lb);
+      const list=document.createElement('div'); bx.appendChild(list);
+      let shown=0; const step=30;
+      const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:7px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px';
+      const draw=()=>{ places.slice(shown,shown+step).forEach(p=>list.appendChild(_dzPlaceRow(p[0],p[1],p[2]))); shown=Math.min(places.length,shown+step);
+        more.textContent='⬇️ Показать ещё ниже ('+(places.length-shown)+')'; more.style.display=shown>=places.length?'none':''; };
+      more.onclick=draw; draw(); bx.appendChild(more);
+      cb.parentNode.insertBefore(bx, cb);
+      try{ loadBooksMap(); }catch(e){}
+    }catch(e){ cb.textContent='🔧 не вышло — попробуй ещё раз'; cb.disabled=false; }
+  };
+  box.appendChild(cb);
   const out=document.createElement('div'); box.appendChild(out);
   await showNarratorBio(nm, out);
   try{ window.scrollTo({top:res.offsetTop-8,behavior:'smooth'}); }catch(e){}
