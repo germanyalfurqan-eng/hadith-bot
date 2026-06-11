@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v329';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v330';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4466,9 +4466,14 @@ function loadNarrNames(){ if(_narrNames) return Promise.resolve(_narrNames); if(
   _narrNamesP=fetch('./narrators_names.json').then(r=>r.ok?r.json():null).then(j=>{_narrNames=j||[];return _narrNames;}).catch(()=>{_narrNames=[];return _narrNames;}); return _narrNamesP; }
 function _narrCanon(s){ s=(s||'').replace(/[ً-ْـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه'); return s.replace(/\s+/g,' ').trim(); }
 async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.length) return null; const cn=_narrCanon(name); if(cn.length<4) return null;
-  let exact=null, pref=null, prefLen=1e9;   // иснад даёт КОРОТКУЮ форму → DB-имя начинается с искомого; берём самое короткое (базовый равий)
-  for(const it of idx){ const nm=it[0]; if(nm===cn){ exact=it[1]; break; } if(nm.indexOf(cn+' ')===0 && nm.length<prefLen){ pref=it[1]; prefLen=nm.length; } }
-  return exact!=null?exact:pref; }
+  // Ф-04б (M377): ДВУСТОРОННИЙ префикс — иснад бывает и КОРОЧЕ базы (سفيان → سفيان بن سعيد…), и ДЛИННЕЕ
+  // (с нисбой: عبد الرحمن بن غنم الأشعري при базе عبد الرحمن بن غنم) → cover-матч (имя базы = префикс запроса, ≥2 слов, длиннейшее)
+  let exact=null, pref=null, prefLen=1e9, cover=null, coverLen=0;
+  for(const it of idx){ const nm=it[0];
+    if(nm===cn){ exact=it[1]; break; }
+    if(nm.indexOf(cn+' ')===0 && nm.length<prefLen){ pref=it[1]; prefLen=nm.length; }
+    if(cn.indexOf(nm+' ')===0 && nm.length>coverLen && nm.indexOf(' ')>0){ cover=it[1]; coverLen=nm.length; } }
+  return exact!=null?exact:(cover!=null?cover:pref); }
 async function _narrCard(id){ const b=Math.floor(id/100); if(!_narrShard[b]){ try{ _narrShard[b]=await (await fetch('./narr/'+b+'.json')).json(); }catch(e){ _narrShard[b]={}; } } return (_narrShard[b]||{})[String(id)]||null; }
 /* ===== 👤 РЕЖИМ ПОИСКА ПЕРЕДАТЧИКА (Сессия 13, Ф-10): автоподсказки из 18989 равиев; рус↔араб «скелет согласных» ===== */
 // Идея Ф-10: имя по-русски и по-арабски сводим к скелету согласных в общем алфавите (ث/س/ص→s, ح/خ/ه→h, ق/ك→k…),
@@ -5209,6 +5214,21 @@ async function _buildIsnadTreeData(vs){
       if(plain.length<3||/^[حو\s]+$/.test(plain)) continue;
       if(/^(أبو|ابو|أبي|ابي|ابن|أم|عبد|بن)$/.test(plain.trim())) continue;   // одиночное служебное слово (остаток تحويل/обрыва) — не узел
       if(plain.split(/\s+/).length>5 && !isNameLike(nm)) continue;
+      // M376: «X أو Y» = شك الراوي — сомнение равия МЕЖДУ ДВУМЯ личностями (не «одно неопознанное имя»)
+      const altP=nm.split(/\s+أو\s+/);
+      if(altP.length===2 && altP.every(p=>stripDiac(p).trim().length>=4)){
+        const ka=canon(plain);
+        if(!node.ch.has(ka)){
+          const a=[];
+          for(const p0 of altP){ const pn=_nomCase(p0.trim().replace(/^و\s+/,'')); let pid=null; try{ pid=await _narrLookup(pn); }catch(e){}
+            let pg=null, pf='', pk='', pd=null;
+            if(pid!=null){ try{ const cc=await _narrCard(pid); if(cc){ pg=_narrGrade(cc[5]||'',cc[6]||''); pf=cc[1]||''; pk=cc[2]||''; pd=cc[4]||null; } }catch(e){} }
+            a.push({nm:pn, id:pid, grade:pg, full:pf, kun:pk, death:pd}); }
+          const known=a.find(x=>x.id!=null);
+          const nda={nm:a.map(x=>x.nm).join(' ⁄ '), alt:a, id:(known?known.id:null), grade:(known?known.grade:null), death:null, ch:new Map(), srcs:[], n:0, i:flat.length};
+          flat.push(nda); node.ch.set(ka, nda); }
+        node=node.ch.get(ka); node.n++; continue;
+      }
       let id=null; try{ id=await _narrLookup(nm); }catch(e){}
       if(id==null && !isNameLike(nm)) continue;
       const k=canon(plain);
@@ -5244,6 +5264,7 @@ function _shajaraSVG(d){
       +'<rect x="'+(x-wN/2)+'" y="'+(y-NH/2)+'" width="'+wN+'" height="'+NH+'" rx="9" fill="'+fill+'" stroke="'+stroke+'" stroke-width="'+(isM?2.5:1.4)+'"'+dash+'/>'
       +'<text x="'+x+'" y="'+(y+5)+'" text-anchor="middle" direction="rtl" font-size="13" fill="var(--text)">'+esc(nd.nm.length>22?nd.nm.slice(0,21)+'…':nd.nm)+(nd.n>1?' ×'+nd.n:'')+'</text>'
       +(isM?('<text x="'+x+'" y="'+(y-NH/2-5)+'" text-anchor="middle" font-size="10" fill="#f1c40f">مدار</text>'):'')
+      +(nd.alt?('<text x="'+x+'" y="'+(y-NH/2-5)+'" text-anchor="middle" font-size="9.5" fill="#ffd479">شك الراوي — один из двух</text>'):'')
       +'</g>';
     if(nd.srcs.length){ let sy=y+NH/2+14;
       nd.srcs.slice(0,3).forEach(s=>{ const lab=(s.coll||'')+(s.num?(' №'+s.num):'');
@@ -5284,6 +5305,20 @@ function _treeAccordion(d){
   return '<div style="direction:rtl;text-align:right">'+rec(d.root)+'</div>';
 }
 function _narrMini(nd, bio, out){
+  // M376: узел-альтернатива (شك الراوي) — показываем ОБЕ личности, каждая со своей карточкой
+  if(nd.alt){
+    bio.innerHTML='<div style="margin-top:8px;padding:9px 11px;border:1px solid var(--border);border-radius:10px;background:var(--bg);direction:rtl;text-align:right">'
+      +'<div style="font-weight:700;font-size:13.5px;color:#ffd479">شك الراوي — сомнение передатчика: один из двух</div>'
+      +nd.alt.map((x,ix)=>'<div style="margin-top:6px;padding:7px 9px;border:1px solid '+(x.grade?x.grade.c:'var(--border)')+';border-radius:9px;background:'+(x.grade?x.grade.bg:'transparent')+'">'
+        +'<b style="font-size:14px;color:var(--text)">'+esc(x.nm)+'</b>'
+        +(x.full&&stripDiac(x.full)!==stripDiac(x.nm)?('<div style="font-size:12px;color:var(--hint)">'+esc(x.full)+(x.kun?(' · '+esc(x.kun)):'')+'</div>'):'')
+        +'<div style="font-size:11.5px;margin-top:2px">'+(x.death?('وفاة ~'+esc(String(x.death))+'هـ · '):'')+(x.grade?('<b style="color:'+x.grade.c+'">'+esc(x.grade.g)+'</b>'):'<span style="color:var(--hint)">'+(x.id==null?'не опознан в базе':'нет оценки')+'</span>')+'</div>'
+        +(x.id!=null?('<button class="mini nmAlt" data-ix="'+ix+'" style="margin-top:5px;border:1px solid #6c5ce7;color:#d9ccff;background:transparent;padding:5px 10px;border-radius:8px">👤 Полная карточка</button>'):'')
+        +'</div>').join('')
+      +'</div>';
+    bio.querySelectorAll('.nmAlt').forEach(b=>b.onclick=()=>{ const x=nd.alt[+b.dataset.ix]; const bx=document.createElement('div'); bx.style.marginTop='6px'; out.appendChild(bx); showNarratorBio(x.nm, bx); try{ bx.scrollIntoView({block:'nearest'}); }catch(e){} });
+    return;
+  }
   const g=nd.grade;
   bio.innerHTML='<div style="margin-top:8px;padding:9px 11px;border:1px solid '+(g?g.c:'var(--border)')+';border-radius:10px;background:'+(g?g.bg:'var(--bg)')+';direction:rtl;text-align:right">'
     +'<div style="font-weight:700;font-size:14.5px;color:var(--text)">'+esc(nd.nm)+'</div>'
@@ -6406,11 +6441,42 @@ var _hsb=document.getElementById('hadScienceBtn'); if(_hsb) _hsb.onclick=()=>{ d
 var _cbr=document.getElementById('catBrowBtn'); if(_cbr) _cbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openCatalog(); };
 // M356: «Читать Коран» ПРОДОЛЖАЕТ с места, где остановился (cfg.qrLast: последняя читанная/слушанная сура+аят)
 function _qrResume(){ const L=cfg.qrLast; if(L&&L.s){ openQuranReader(L.s, L.a||0).then(()=>{ if(L.a) toast('📖 Продолжаем: '+L.s+':'+L.a+' · '+(SURA_NAMES[L.s-1]||'')); }); } else openQuranReader(_qrView.s||1, 0); }
-// M373: пункт меню «О программе» — манифест (зачаток главы о программе)
+// M373: пункт меню «О программе» — манифест ОТКРЫВАЕТСЯ ВНУТРИ приложения (PDF.js локально, R37),
+// вёрстка/шрифты/абзацы — точь-в-точь как в PDF (рендер страниц в canvas)
+async function openManifest(){
+  let m=document.getElementById('mfModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='mfModal';
+    m.innerHTML='<div class="panel" style="max-width:740px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 10px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:14px">⚖️ Манифест о программе</b><button class="mini" id="mfClose" style="flex:none">закрыть ✕</button></div><div id="mfBody" style="max-height:74vh;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch"><div class="hint">⏳ Открываю манифест…</div></div></div>';
+    document.body.appendChild(m);
+    m.querySelector('#mfClose').onclick=()=>{ m.style.display='none'; };
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+  }
+  m.style.display='flex';
+  const body=m.querySelector('#mfBody');
+  if(body.dataset.done==='1') return;
+  try{
+    if(!window.pdfjsLib){ await new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='./pdfjs/pdf.min.js'; s.onload=res; s.onerror=rej; document.head.appendChild(s); });
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc='./pdfjs/pdf.worker.min.js'; }
+    const doc=await window.pdfjsLib.getDocument('./manifest.pdf').promise;
+    body.innerHTML='';
+    const W=Math.min(700, (m.querySelector('.panel').clientWidth||700)-34);
+    for(let p=1;p<=doc.numPages;p++){
+      const pg=await doc.getPage(p);
+      const v0=pg.getViewport({scale:1});
+      const scale=(W/v0.width)*(window.devicePixelRatio||1.5);
+      const vp=pg.getViewport({scale});
+      const cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height;
+      cv.style.cssText='width:100%;display:block;background:#fff;border-radius:8px;margin:0 0 10px;box-shadow:0 2px 10px rgba(0,0,0,.4)';
+      body.appendChild(cv);
+      await pg.render({canvasContext:cv.getContext('2d'), viewport:vp}).promise;
+    }
+    body.dataset.done='1';
+  }catch(e){ body.innerHTML='<div class="hint">PDF-просмотр не завёлся на этом устройстве — открываю файл напрямую…</div>'; try{ openLink('https://germanyalfurqan-eng.github.io/hadith-bot/manifest.pdf'); }catch(_e){} }
+}
 try{ var _mmP=document.querySelector('#menuModal .panel');
   if(_mmP && !document.getElementById('manifestRow')){ var _mr=document.createElement('div'); _mr.className='row menuClk'; _mr.id='manifestRow';
-    _mr.innerHTML='<span>⚖️ О программе · Манифест (PDF)</span><span class="go">›</span>';
-    _mr.onclick=()=>{ try{ openLink('https://germanyalfurqan-eng.github.io/hadith-bot/manifest.pdf'); }catch(e){} };
+    _mr.innerHTML='<span>⚖️ О программе · Манифест</span><span class="go">›</span>';
+    _mr.onclick=()=>{ try{ document.getElementById('menuModal').style.display='none'; }catch(e){} openManifest(); };
     _mmP.appendChild(_mr); } }catch(e){}
 var _qro=document.getElementById('qrOpenBtn'); if(_qro) _qro.onclick=()=>{ document.getElementById('menuModal').style.display='none'; _qrResume(); };
 var _qrb=document.getElementById('quranReadBtn'); if(_qrb) _qrb.onclick=()=>_qrResume();
