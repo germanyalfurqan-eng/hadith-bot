@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v318';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v319';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4993,7 +4993,35 @@ async function openIsnadVersions(text, out, ref){
   const versions=[{coll:'этот хадис', num:'', chain:isnadNarrators(text), mk:mKey(canon(flat))}];
   for(const code of COLS){ if(versions.length>=9) break;
     try{ const arr=await loadByCode(code); for(const h of arr){ const ct=canon(h.text); if(isVer(ct)){ const ch=isnadNarrators(h.text); if(ch.length){ versions.push({coll:arOf(code)||code, num:h.num, chain:ch, mk:mKey(ct)}); } break; } } }catch(e){} }
-  const st={uniqM:false, mkDone:false, busy:false};
+  const st={uniqM:false, mkDone:false, busy:false, tree:false};
+  // M329c: дерево-граф от Пророка ﷺ — реверс цепочек в trie; ветка = расхождение; مدار = самый глубокий узел всех версий
+  const treeHtml=(vs)=>{
+    // чистка ТОЛЬКО для дерева: хвосты глаголов передачи и обрывки тахвиля «ح و» (мусор isnadNarrators не лечим глобально — Э1.1)
+    const cleanNm=nm=>String(nm||'').replace(/\s+(قال|قالا|قالت|قالوا)\s*$/,'').replace(/\s*ح\s*و?\s*$/,'').trim();
+    const root={nm:'النبي ﷺ', ch:new Map(), srcs:[], n:0};
+    vs.forEach(v=>{ if(!v.chain.length) return; let node=root; root.n++;
+      const rev=[...v.chain].reverse();
+      for(const nm0 of rev){ const nm=cleanNm(nm0); if(nm.length<3||/^[حو\s]+$/.test(nm)) continue;
+        const k=canon(nm); if(!node.ch.has(k)) node.ch.set(k,{nm, ch:new Map(), srcs:[], n:0}); node=node.ch.get(k); node.n++; }
+      v.srcs.forEach(s=>node.srcs.push(s)); });
+    let madar=null, cur=root;
+    while(true){ const kids=[...cur.ch.values()]; const k=(kids.length===1&&kids[0].n===root.n)?kids[0]:null; if(!k) break; cur=k; madar=cur; }
+    const srcB=s=>'<span '+(s.bid?('class="vBk" data-bid="'+esc(String(s.bid))+'" data-pid="'+esc(String(s.pid||''))+'" style="cursor:pointer;'):'style="')+'font-size:10.5px;border-radius:6px;padding:1px 6px;background:rgba(46,155,91,.12);color:#bff5d4;border:1px solid #2e9b5b;white-space:nowrap;margin:0 2px">'+(s.bid?'🌐 ':'📖 ')+esc(s.coll)+(s.num?(' №'+esc(String(s.num))):'')+'</span>';
+    const rec=(node,depth)=>{ const pad=Math.min(depth,8)*14; const isM=(node===madar);
+      let h='<div style="margin:3px '+pad+'px 0 0;direction:rtl;text-align:right">'
+        +(depth?'<span style="color:var(--hint);font-size:11px">└ </span>':'')
+        +(depth
+          ? '<span class="vN" data-n="'+esc(node.nm)+'" style="cursor:pointer;display:inline-block;padding:3px 9px;border-radius:8px;font-size:13px;'
+            +(isM?'background:rgba(241,196,15,.18);border:1.5px solid #f1c40f;color:#ffe9a8;font-weight:700':(node.n>1?'background:rgba(46,204,113,.15);border:1px solid #2ecc71;color:#bff5d4':'background:var(--bg);border:1px solid var(--border)'))
+            +'">'+esc(node.nm)+(node.n>1?(' <b style="font-size:10.5px">×'+node.n+'</b>'):'')+(isM?' · مدار':'')+'</span>'
+          : '<span style="display:inline-block;padding:3px 10px;border-radius:8px;font-size:13.5px;font-weight:700;background:rgba(52,152,219,.15);border:1px solid #3498db;color:#bfe0ff">☪️ '+esc(node.nm)+'</span>')
+        +(node.srcs.length?(' '+node.srcs.map(srcB).join('')):'')
+        +'</div>';
+      [...node.ch.values()].sort((a,b)=>b.n-a.n).forEach(c=>{ h+=rec(c,depth+1); });
+      return h; };
+    return '<div style="overflow-x:auto;padding:4px 0">'+rec(root,0)+'</div>'
+      +'<div class="hint" style="font-size:10.5px;margin-top:4px">🟡 مدار — звено, через которое проходят ВСЕ версии (дальше пути расходятся); 🟢 общие звенья ветвей; источники у конца ветки. Тап по имени → карточка равия.</div>';
+  };
   const render=()=>{
     // M329b (заявка: «уникальная версия — ГДЕ передаётся»): ОДИНАКОВЫЕ цепочки СЛИВАЮТСЯ в одну запись со списком источников
     const byChain=new Map(); let hidM=0;
@@ -5010,9 +5038,11 @@ async function openIsnadVersions(text, out, ref){
       +'<div style="font-weight:700;color:#d9ccff;font-size:13.5px;margin-bottom:4px">🔀 Уникальных цепочек (طرق): '+vs.length+' <span style="font-weight:400;color:var(--hint)">· записей-источников: '+versions.length+'</span></div>'
       +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">'
       +'<span class="vTgl" data-k="uniqM" style="cursor:pointer;font-size:11.5px;padding:3px 9px;border-radius:8px;'+(st.uniqM?'background:var(--btn);color:#fff':'border:1px solid var(--border);color:var(--hint)')+'">'+(st.uniqM?'☑':'☐')+' без повторов матна'+(hidM?(' ('+hidM+' скрыто)'):'')+'</span>'
+      +'<span class="vTgl" data-k="tree" style="cursor:pointer;font-size:11.5px;padding:3px 9px;border-radius:8px;'+(st.tree?'background:var(--btn);color:#fff':'border:1px solid var(--border);color:var(--hint)')+'">'+(st.tree?'☑':'☐')+' 🌳 деревом от Пророка ﷺ</span>'
       +'</div>'
-      +'<div class="hint" style="font-size:11px;margin-bottom:8px">Одинаковые цепочки слиты — у каждой видно, в КАКИХ источниках передаётся. 🟢 общие звенья (مدار). Тап по имени → карточка равия; тап по 🌐-источнику → страница книги.</div>';
-    vs.forEach(v=>{ html+='<div style="margin:8px 0;padding:7px 8px;border-right:3px solid var(--border);direction:rtl;text-align:right">'
+      +'<div class="hint" style="font-size:11px;margin-bottom:8px">'+(st.tree?'Дерево передачи: от Пророка ﷺ вниз по передатчикам; где ветка делится — версии расходятся.':'Одинаковые цепочки слиты — у каждой видно, в КАКИХ источниках передаётся. 🟢 общие звенья (مدار). Тап по имени → карточка равия; тап по 🌐-источнику → страница книги.')+'</div>';
+    if(st.tree){ html+=treeHtml(vs); }
+    else vs.forEach(v=>{ html+='<div style="margin:8px 0;padding:7px 8px;border-right:3px solid var(--border);direction:rtl;text-align:right">'
       +'<div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">'
       +v.srcs.map(s=>'<span '+(s.bid?('class="vBk" data-bid="'+s.bid+'" data-pid="'+s.pid+'" style="cursor:pointer;'):'style="')+'font-size:11.5px;border-radius:7px;padding:2px 8px;background:rgba(46,155,91,.12);color:#bff5d4;border:1px solid #2e9b5b;white-space:nowrap">'+(s.bid?'🌐 ':'📖 ')+esc(s.coll)+(s.num?(' №'+esc(String(s.num))):'')+'</span>').join('')
       +'</div>'
