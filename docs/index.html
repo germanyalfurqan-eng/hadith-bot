@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v317';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v318';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4067,7 +4067,7 @@ function addTr(meta,card,text,ayah,fav){
   if(!ayah){ const nb=document.createElement('button');nb.className='tr-btn';nb.textContent='🌳 Передатчики';nb.title='Древо иснада: цепочка передатчиков, цвет = достоверность по учёным';
     nb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
     const nbout=document.createElement('div');nbout.className='tr-out';
-    nb.onclick=()=>{ if(nbout.dataset.loaded==='1'){ const vis=nbout.style.display!=='none'; nbout.style.display=vis?'none':'block'; try{hap('light');}catch(e){} return; } openIsnadTree(text, nbout); nbout.dataset.loaded='1'; };   // повторный клик — свернуть/развернуть
+    nb.onclick=()=>{ if(nbout.dataset.loaded==='1'){ const vis=nbout.style.display!=='none'; nbout.style.display=vis?'none':'block'; try{hap('light');}catch(e){} return; } openIsnadTree(text, nbout, refOf(fav)); nbout.dataset.loaded='1'; };   // повторный клик — свернуть/развернуть; ref → Э2.2-карта версий
     meta.appendChild(nb); card.appendChild(nbout);
     try{ autoHighlightNarr(text, card, nbout); }catch(e){} }   // A: подсветить передатчиков СРАЗУ (кликабельны без нажатия кнопки)
   const fbb=document.createElement('button');fbb.className='tr-btn';fbb.textContent='✍️ Сообщить нам';fbb.title='Написать нам об ошибке/замечании';
@@ -4895,7 +4895,7 @@ function _narrGrade(rankH, rankZ){
   return {g:'нет оценки', c:'#95a5a6', bg:'rgba(149,165,166,.1)', r:null};
 }
 // B: ДРЕВО ИСНАДА — цепочка передатчиков, цвет звена = достоверность по учёным; тап → полная карточка
-async function openIsnadTree(text, out){
+async function openIsnadTree(text, out, ref){
   let names; try{ names=isnadNarrators(text).filter(nm=>{ const t=(nm||'').trim(); return / بن | ابن /.test(' '+t+' ')||/^(?:أبو|أبي|أم|عبد|ابن)\s/.test(t+' '); }); }catch(e){ names=[]; }
   out.style.display='block';
   if(!names.length){ out.innerHTML='<span class="hint">Не удалось выделить цепочку передатчиков из этого текста.</span>'; return; }
@@ -4923,17 +4923,68 @@ async function openIsnadTree(text, out){
   // режим версий (طرق): собрать версии хадиса и показать, где цепочки расходятся
   const vb=document.createElement('button'); vb.className='mini'; vb.style.cssText='display:block;width:100%;margin:9px 0 2px;padding:9px;border:1px solid #6c5ce7;border-radius:10px;background:#2e1d4a;color:#d9ccff;font-weight:700;cursor:pointer'; vb.textContent='🔀 Версии (طرق) — где расходятся';
   const vout=document.createElement('div'); vout.style.marginTop='6px';
-  vb.onclick=()=>{ vb.disabled=true; vb.textContent='🔀 собираю версии…'; Promise.resolve(openIsnadVersions(text, vout)).finally(()=>{ vb.disabled=false; vb.textContent='🔀 Версии (طرق) — где расходятся'; }); };
+  vb.onclick=()=>{ vb.disabled=true; vb.textContent='🔀 собираю версии…'; Promise.resolve(openIsnadVersions(text, vout, ref)).finally(()=>{ vb.disabled=false; vb.textContent='🔀 Версии (طرق) — где расходятся'; }); };
   out.appendChild(vb); out.appendChild(vout);
 }
-// Режим версий (طرق): версии хадиса в наших сборниках + ПО ВСЕЙ МАКТАБЕ (M329), тумблеры повторов цепочек/матнов
-async function openIsnadVersions(text, out){
-  out.style.display='block'; out.innerHTML='<div class="hint">🔀 Ищу версии (طرق) по матну в наших сборниках…</div>';
+// Э2.2: карта версий из ОФЛАЙН-штудирования первоисточников (ver_groups → шарды ./vg/): (книга, № печати) → все места хадиса
+const _vgIdxC={}, _vgShC={};
+async function _vgJ(url, cache, key){ if(cache[key]!==undefined) return cache[key];
+  try{ const r=await fetch(url); cache[key]=r.ok?await r.json():null; }catch(e){ cache[key]=null; }
+  return cache[key]; }
+async function vgFind(bid, num){
+  if(!bid||!num) return null;
+  const idx=await _vgJ('./vg/i'+bid+'.json', _vgIdxC, String(bid)); if(!idx) return null;
+  const gid=idx[String(num)]; if(gid===undefined) return null;
+  const k=Math.floor(gid/512);
+  const sh=await _vgJ('./vg/g'+k+'.json', _vgShC, k); if(!sh||!sh[String(gid)]) return null;
+  return {gid, g:sh[String(gid)]};
+}
+// ⚡ Э2.2: мгновенный блок «Карта версий» (без сети-бэкенда: статические шарды Pages)
+async function _vgMapBlock(ref, box){
+  try{
+    let cands=[];
+    if(ref&&ref.bid&&ref.num) cands=[{b:String(ref.bid), h:+ref.num}];
+    else if(ref&&ref.source&&ref.num){
+      const ids=COLL_BIDS[ref.source]||COLL_BIDS[String(ref.source)+'h']||(ref.source==='ibnmaja'?COLL_BIDS['ibnmajah']:null)||[];
+      cands=ids.map(b=>({b, h:+ref.num}));
+    }
+    if(!cands.length) return;
+    let hit=null, hb=null;
+    for(const c of cands){ const f=await vgFind(c.b, c.h); if(f){ hit=f; hb=c.b; break; } }
+    if(!hit) return;
+    try{ await loadBooksMap(); }catch(e){} try{ await loadBookTr(); }catch(e){}
+    const byB=new Map();
+    hit.g.items.forEach(it=>{ const b=String(it.b); if(!byB.has(b)) byB.set(b,[]); byB.get(b).push(it); });
+    const order=[...byB.keys()].sort((a,b)=>(a===hb?-1:b===hb?1:byB.get(b).length-byB.get(a).length));
+    let html='<div style="border:1px solid #2e9b5b;border-radius:12px;padding:11px;margin:6px 0;background:rgba(46,155,91,.07)">'
+      +'<div style="font-weight:700;color:#bff5d4;font-size:13.5px">⚡ Карта версий: этот хадис в <span dir="ltr" style="unicode-bidi:isolate">'+byB.size+' первоисточниках · '+hit.g.items.length+' мест</span></div>'
+      +'<div class="hint" style="font-size:11px;margin:3px 0 7px">Первоисточники проштудированы заранее (Э2) — мгновенно, без поиска. №№ по печати Шамелы; тап → книга на этом месте.'+(ref.bid?'':' ⚠️ Привязка по № сборника — сверяй текст.')+'</div>';
+    order.forEach(b=>{ const arr=byB.get(b); const bn=bookName(b)||('книга №'+b);
+      const tr=(typeof _catTr!=='undefined'&&_catTr&&_catTr.map&&_catTr.map[bn])||null;
+      html+='<div style="direction:rtl;text-align:right;margin:5px 0"><b style="font-size:13px;color:var(--text)">📖 '+esc(bn)+'</b>'
+        +((tr&&tr.ru)?('<span dir="ltr" style="unicode-bidi:isolate;font-size:11px;color:#bcd0ff"> · '+esc(tr.ru)+'</span>'):'')+' '
+        +arr.map(it=>'<span class="vgN" data-b="'+esc(String(it.b))+'" data-p="'+esc(String(it.p||''))+'" style="cursor:pointer;display:inline-block;margin:2px;padding:2px 8px;border-radius:7px;font-size:12px;background:rgba(46,155,91,.13);border:1px solid #2e9b5b;color:#bff5d4">№'+esc(String(it.h))+'</span>').join('')
+        +'</div>'; });
+    html+='</div>';
+    box.innerHTML=html;
+    box.querySelectorAll('.vgN').forEach(el=>{ el.onclick=()=>{ try{ hap('light'); }catch(e){}
+      const p=+el.dataset.p||0;
+      if(!p){ try{ toast('У этого места нет листа — в книге найди '+el.textContent+' через «🔎 По книге»'); }catch(e){} }
+      try{ openBook(el.dataset.b, p||1); }catch(e){} }; });
+  }catch(e){}
+}
+// Режим версий (طرق): ⚡ Э2.2-карта (мгновенно) + версии в наших сборниках + ПО ВСЕЙ МАКТАБЕ (M329), тумблеры повторов
+async function openIsnadVersions(text, out, ref){
+  out.style.display='block'; out.innerHTML='';
+  const e2div=document.createElement('div'); const liveDiv=document.createElement('div');
+  out.appendChild(e2div); out.appendChild(liveDiv);
+  _vgMapBlock(ref, e2div);   // мгновенная карта — параллельно живому сбору
+  liveDiv.innerHTML='<div class="hint">🔀 Ищу версии (طرق) по матну в наших сборниках…</div>';
   // матн = текст после иснада (после «‹›» / «يقول» / «قال رسول»)
   const flat=stripDiac(text).replace(/ـ/g,'');
   const matn=(flat.split(/«|»|\sيقول\s|قال رسول|قال النبي|سمعت رسول|سمع النبي/).slice(1).join(' ')||flat);
   const mw=canon(matn).split(' ').filter(w=>w.length>=2);
-  if(mw.length<5){ out.innerHTML='<span class="hint">Текст матна коротковат для надёжного сбора версий.</span>'; return; }
+  if(mw.length<5){ liveDiv.innerHTML='<span class="hint">Текст матна коротковат для надёжного сбора версий.</span>'; return; }
   const wins=[]; for(let i=0;i+4<mw.length;i++) wins.push(mw.slice(i,i+5).join(' '));
   const isVer=(ct)=>wins.some(w=>ct.indexOf(w)!==-1);
   const anchor=wins[Math.floor(wins.length/2)]||wins[0];
@@ -4969,11 +5020,11 @@ async function openIsnadVersions(text, out){
       +v.chain.map(nm=>{ const common=freq[canon(nm)]>1; return '<span class="vN" data-n="'+esc(nm)+'" style="cursor:pointer;display:inline-block;margin:2px;padding:3px 8px;border-radius:7px;font-size:13px;'+(common?'background:rgba(46,204,113,.18);color:#bff5d4;border:1px solid #2ecc71':'background:var(--bg);border:1px solid var(--border)')+'">'+esc(nm)+'</span>'; }).join('<span style="color:var(--hint)"> ← </span>')
       +'</div></div>'; });
     html+='<div id="verMkRow" style="margin-top:8px"></div></div>';
-    out.innerHTML=html;
-    out.querySelectorAll('.vTgl').forEach(t=>t.onclick=()=>{ st[t.dataset.k]=!st[t.dataset.k]; render(); });
-    out.querySelectorAll('.vN').forEach(el=>{ el.onclick=()=>{ const bx=document.createElement('div'); bx.style.marginTop='6px'; out.appendChild(bx); showNarratorBio(el.dataset.n, bx); try{ bx.scrollIntoView({block:'nearest'}); }catch(e){} }; });
-    out.querySelectorAll('.vBk').forEach(el=>{ el.onclick=()=>{ try{ openBook(el.dataset.bid, +el.dataset.pid||1); }catch(e){} }; });
-    const row=out.querySelector('#verMkRow');
+    liveDiv.innerHTML=html;
+    liveDiv.querySelectorAll('.vTgl').forEach(t=>t.onclick=()=>{ st[t.dataset.k]=!st[t.dataset.k]; render(); });
+    liveDiv.querySelectorAll('.vN').forEach(el=>{ el.onclick=()=>{ const bx=document.createElement('div'); bx.style.marginTop='6px'; out.appendChild(bx); showNarratorBio(el.dataset.n, bx); try{ bx.scrollIntoView({block:'nearest'}); }catch(e){} }; });
+    liveDiv.querySelectorAll('.vBk').forEach(el=>{ el.onclick=()=>{ try{ openBook(el.dataset.bid, +el.dataset.pid||1); }catch(e){} }; });
+    const row=liveDiv.querySelector('#verMkRow');
     if(row && BACKEND_URL){
       if(!st.mkDone){ const b=document.createElement('button'); b.className='mini'; b.style.cssText='width:100%;padding:8px;border:1px dashed #6c5ce7;border-radius:9px;color:#d9ccff';
         b.textContent=st.busy?('⏳ '+(st.prog||'собираю по Мактабе…')):'🌐 Ещё версии по ВСЕЙ Мактабе'; b.disabled=!!st.busy;
@@ -4993,7 +5044,7 @@ async function openIsnadVersions(text, out){
         used.add(bid); cands.push(x); if(cands.length>=10) break; }
       let added=0;
       for(let ci=0; ci<cands.length; ci++){ const x=cands[ci];
-        st.prog='книга '+(ci+1)+'/'+cands.length+'…'; try{ const bb=out.querySelector('#verMkRow button'); if(bb) bb.textContent='⏳ '+st.prog; }catch(e){}
+        st.prog='книга '+(ci+1)+'/'+cands.length+'…'; try{ const bb=liveDiv.querySelector('#verMkRow button'); if(bb) bb.textContent='⏳ '+st.prog; }catch(e){}
         try{
           const rp=await fetch(BACKEND_URL+'/book_page?id='+x.book_id+'&pg='+x.page_id+'&initData='+encodeURIComponent(INITDATA));
           const jp=await rp.json().catch(()=>({}));
@@ -5014,7 +5065,7 @@ async function openIsnadVersions(text, out){
     }catch(e){}
     st.busy=false; st.prog=''; render();
   };
-  if(versions.length<=1 && !BACKEND_URL){ out.innerHTML='<span class="hint">Других версий по матну в основных сборниках не нашёл (бывает иная формулировка).</span>'; return; }
+  if(versions.length<=1 && !BACKEND_URL){ liveDiv.innerHTML='<span class="hint">Других версий по матну в основных сборниках не нашёл (бывает иная формулировка).</span>'; return; }
   render();
 }
 // A: авто-подсветка передатчиков в карточке СРАЗУ при показе (лёгкое выделение, клик → карточка равия)
@@ -5105,6 +5156,7 @@ async function doTashkeel(text,out,btn,ref){
 function refOf(fav){ if(!fav||!fav.k) return null; const p=String(fav.k).split('|');
   if(p[0]==='h') return {source:p[1], num:p[2]};
   if(p[0]==='m') return {source:'muhaymin', num:p[1]};
+  if(p[0]==='mk') return {bid:p[1], num:p[2]};   // Э2.2: номерная карточка Мактабы — точная книга Шамелы + № печати
   return null; }
 async function doTranslateAyah(s,a,out,btn,ed){
   ed = ed || cfg.qtr || 'rus-elmirkuliev';
