@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v347';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v348';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2525,6 +2525,15 @@ async function maktabaByNum(seq, n){
   head.textContent='📚 Хадис №'+n+' — ищу по книгам всей Мактабы (первоисточники сверху)…';
   const F40_DENOM=58;   // M390г/M388b/M407: ЧЕСТНЫЙ знаменатель — нумерованные печати ПЕРВОИСТОЧНИКОВ списка-40 (без сборников-сверки 1733/1424/2170; +8 печатей M407)
   res.appendChild(head);
+  // M408: в режиме «Передатчик» чистые цифры идут в №-поиск ХАДИСОВ (так решено ранее) — но даём кнопку «а может это ID равия?»
+  if(typeof modes!=='undefined' && modes.narr){ (async()=>{ try{
+    const cc=await _narrCard(+n); if(!cc||!cc[1]) return;
+    const bar=document.createElement('button'); bar.className='mini';
+    bar.style.cssText='display:block;width:100%;margin:0 0 8px;padding:9px;border:1px solid #6c5ce7;color:#d9ccff;background:rgba(108,92,231,.10);border-radius:10px;font-size:13px;cursor:pointer;text-align:right;direction:rtl';
+    bar.innerHTML='👤 Это номер ПЕРЕДАТЧИКА? Открыть карточку <b>#'+(+n)+'</b> — '+esc(cc[1].split(' ').slice(0,5).join(' '))+' ←';
+    bar.onclick=()=>{ try{ hap('light'); }catch(e){} narrOpen(cc[1]); };
+    res.insertBefore(bar, head.nextSibling);
+  }catch(e){} })(); }
   try{ loadBooksMap(); }catch(e){} try{ loadBookTr(); }catch(e){} try{ loadWikiTitles(); }catch(e){}
   // 🎯 фильтр по ВЫБРАННЫМ ЧИПАМ сборников (замечание: «выделил Бухари — значит только Бухари №5590»)
   let allow=null;
@@ -4589,6 +4598,7 @@ function highlightNarratorsInDiv(ad, names, onClick){
     const frag=document.createDocumentFragment(); let pos=0;
     picked.forEach(m=>{ if(m.i>pos) frag.appendChild(document.createTextNode(txt.slice(pos,m.i)));
       const span=document.createElement('span'); span.textContent=txt.slice(m.i,m.i+m.len);
+      span.className='nhl'; span.dataset.nm=m.nm;   // M411: класс+имя — для дописывания #кодов
       span.style.cssText='cursor:pointer;color:#ffd479;border-bottom:1px dashed #ffd479;font-weight:600'; span.title='Нажми: кто это + слова учёных';
       span.onclick=(e)=>{ e.stopPropagation(); onClick(m.nm); };
       frag.appendChild(span); pos=m.i+m.len; });
@@ -5674,11 +5684,24 @@ async function _renderIsnadTree(vs, box, st, out){
       +'<span class="vTm" data-m="shajara" style="cursor:pointer;font-size:11.5px;padding:3px 10px;border-radius:8px;'+(mode==='shajara'?'background:var(--btn);color:#fff':'border:1px solid var(--border);color:var(--hint)')+'">🌳 шаджара (схема)</span>'
       +'<span class="vTm" data-m="comp" style="cursor:pointer;font-size:11.5px;padding:3px 10px;border-radius:8px;'+(mode==='comp'?'background:var(--btn);color:#fff':'border:1px solid var(--border);color:var(--hint)')+'">📑 компактно</span>'
       +(mode==='shajara'?'<span class="vZm" data-z="-" title="Уменьшить" style="cursor:pointer;font-size:14px;padding:2px 10px;border:1px solid var(--border);border-radius:8px;color:var(--text)">⊖</span><span class="vZm" data-z="+" title="Увеличить" style="cursor:pointer;font-size:14px;padding:2px 10px;border:1px solid var(--border);border-radius:8px;color:var(--text)">⊕</span><span class="hint" style="font-size:10.5px">двумя пальцами — зум</span>':'')
+      +'<span class="vIds" style="cursor:pointer;font-size:11.5px;padding:3px 10px;border-radius:8px;'+(st.showIds?'background:var(--btn);color:#fff':'border:1px solid var(--border);color:var(--hint)')+'" title="Номера — наши коды базы Э1.1, не часть иснада">'+(st.showIds?'☑':'☐')+' № передатчиков</span>'
       +'</div>'
       +(mode==='shajara'?_shajaraSVG(d):_treeAccordion(d))
       +'<div class="hint" style="font-size:10.5px;margin-top:5px">Цвет = достоверность по учёным (🟢 ثقة · 🟡 صدوق · 🟠 ضعيف · ⚪ нет оценки) · золотая рамка = مدار · пунктир = не опознан в базе · тап по имени → мини-карточка.</div>'
       +'<div class="tnBio"></div>';
     box.querySelectorAll('.vTm').forEach(b=>b.onclick=()=>{ st.treeMode=b.dataset.m; _renderIsnadTree(vs, box, st, out); });
+    // M410: галочка «№ передатчиков» — дописать #id к каждому опознанному узлу (наши коды, не часть иснада)
+    const idsT=box.querySelector('.vIds'); if(idsT) idsT.onclick=()=>{ st.showIds=!st.showIds;
+      if(st.showIds && !st._idsToasted){ st._idsToasted=1; toast('ℹ️ № — наши коды базы Э1.1, это НЕ часть иснада'); }
+      _renderIsnadTree(vs, box, st, out); };
+    if(st.showIds){ box.querySelectorAll('.tnN').forEach(el=>{ try{ const nd=d.flat[+el.dataset.i]; if(!nd||nd.id==null) return;
+      if(el.tagName&&el.tagName.toLowerCase()==='g'){ const t=el.querySelector('text'); if(t){
+        const c=document.createElementNS('http://www.w3.org/2000/svg','text');
+        c.setAttribute('x',t.getAttribute('x')); c.setAttribute('y',String(+t.getAttribute('y')+13));
+        c.setAttribute('text-anchor','middle'); c.setAttribute('font-size','8.5'); c.setAttribute('fill','#5b87b5');
+        c.textContent='#'+nd.id; el.appendChild(c); } }
+      else { const s=document.createElement('span'); s.style.cssText='font-size:10px;color:#5b87b5;margin:0 4px;user-select:none'; s.textContent='#'+nd.id; el.appendChild(s); }
+    }catch(e){} }); }
     if(mode==='shajara'){ const wrap=box.querySelector('.shjWrap');
       if(wrap){ _wirePinch(wrap, st);
         box.querySelectorAll('.vZm').forEach(b=>b.onclick=()=>{ st.shjSc=Math.min(3, Math.max(0.5, (st.shjSc||1)*(b.dataset.z==='+'?1.25:0.8))); _applyShjScale(wrap, st.shjSc); });
@@ -5850,6 +5873,35 @@ async function doNarrators(text, out, btn){
     vb.style.cssText='background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:6px 10px;margin-top:7px;font-size:13px';
     vb.title='ИИ перепроверит и дополнит выделение передатчиков (если эвристика кого-то пропустила)';
     vb.onclick=()=>verifyIsnadAI(text, names, arDivs, out, vb); out.appendChild(vb);
+    // M409: дерево-шаджара СРАЗУ отсюда (не только из вкладки версий)
+    const tb=document.createElement('button'); tb.className='tr-btn'; tb.textContent='🌳 Шаджара (дерево цепочки)';
+    tb.style.cssText='background:#173d30;border:1px solid #2e9b5b;color:#bff5d4;padding:6px 10px;margin:7px 6px 0 0;font-size:13px';
+    tb.onclick=async()=>{ tb.disabled=true; tb.textContent='⏳ строю дерево…';
+      const tbox=document.createElement('div'); tbox.style.marginTop='8px'; out.appendChild(tbox);
+      try{ await _renderIsnadTree([{chain:names, srcs:[{coll:'этот хадис', num:''}]}], tbox, {treeMode:null}, out); tb.style.display='none'; }
+      catch(e){ tb.textContent='🔧 не вышло'; tb.disabled=false; } };
+    out.appendChild(tb);
+    // M411: номера передатчиков ПРЯМО В ТЕКСТЕ (в скобках после имени) + честное уведомление
+    const idsB=document.createElement('button'); idsB.className='tr-btn'; idsB.textContent='#️⃣ Номера передатчиков в тексте';
+    idsB.style.cssText='background:#16314d;border:1px solid #2e6b9b;color:#bfe0f5;padding:6px 10px;margin:7px 0 0;font-size:13px';
+    idsB.onclick=async()=>{
+      const card2=btn.closest('.card'); if(!card2) return;
+      if(idsB.dataset.on){ idsB.dataset.on=''; idsB.style.opacity='';
+        card2.querySelectorAll('.nidSup').forEach(s=>s.remove()); return; }
+      idsB.dataset.on='1'; idsB.style.opacity='.75';
+      let added=0;
+      for(const sp of card2.querySelectorAll('.nhl')){
+        if(sp.nextSibling && sp.nextSibling.className==='nidSup') continue;
+        const id=await _narrLookup(sp.dataset.nm||sp.textContent);
+        const tag=document.createElement('span'); tag.className='nidSup';
+        tag.style.cssText='font-size:10px;color:#5b87b5;vertical-align:super;margin:0 2px;user-select:none';
+        tag.textContent='(#'+(id!=null?id:'؟')+')';
+        sp.parentNode.insertBefore(tag, sp.nextSibling); added++;
+      }
+      if(added) toast('ℹ️ Номера (#) добавлены НАМИ — коды базы Э1.1, это НЕ часть текста хадиса');
+      else toast('Сначала подсвети передатчиков (кнопка 🌿 Передатчики)');
+    };
+    out.appendChild(idsB);
   } else {
     // 2-й клик — список именами (тоже кликаются → биография)
     out.style.display='block';
