@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v349';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v350';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2092,13 +2092,14 @@ function openBook(bookId, startPg){
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='bookModal';
     // M318 (редизайн по совету GPT, R31): компакт-шапка · тогглы инструментов · текст с книжной типографикой · sticky-низ листания
     m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0;padding-bottom:0;display:flex;flex-direction:column;max-height:92vh">'
-      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 6px;padding:11px 16px 8px;border-bottom:1px solid var(--border)"><b id="bookTitle" style="font-size:14px;line-height:1.35;flex:1;min-width:0">📖 Книга</b><button class="mini" id="bookClose" style="flex:none">✕</button></div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 6px;padding:11px 16px 8px;border-bottom:1px solid var(--border)"><button class="mini" id="bookBack" style="flex:none;border:1px solid var(--btn);color:var(--link);font-weight:700" title="Вернуться к результатам поиска">← назад</button><b id="bookTitle" style="font-size:14px;line-height:1.35;flex:1;min-width:0">📖 Книга</b><button class="mini" id="bookClose" style="flex:none">✕</button></div>'
       +'<div id="bookNav" style="display:flex;gap:6px;align-items:center;justify-content:center;margin-bottom:6px;flex-wrap:wrap"></div>'
       +'<div id="bookText" style="direction:rtl;text-align:right;font-size:19px;line-height:2.1;text-align:justify;font-family:\'Noto Naskh Arabic\',\'Amiri\',\'Traditional Arabic\',\'Scheherazade New\',serif;border:1px solid var(--border);border-radius:10px;padding:14px 15px;flex:1;min-height:30vh;overflow:auto"></div>'
       +'<div id="bookBotBar" style="position:sticky;bottom:0;z-index:20;background:var(--card);margin:6px -16px 0;padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap"></div>'
       +'</div>';
     document.body.appendChild(m);
     m.querySelector('#bookClose').onclick=()=>{ m.style.display='none'; };
+    m.querySelector('#bookBack').onclick=()=>{ m.style.display='none'; };   // M419: «← назад» = вернуться к результатам (модал поверх, они на месте)
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
   }
   m.style.display='flex'; _bookLoad();
@@ -2141,14 +2142,36 @@ async function _bkJumpVol(tv){
     else toast('Том '+tv+' не нашёлся (томов меньше?)');
   }catch(e){ toast('🔧 не вышло — попробуй ещё раз'); }
 }
-// M347: прыжок по № ХАДИСА — мгновенно из локальных f40c-шардов (31 проштудированная печать)
+// M347/M418: прыжок по № ХАДИСА — мгновенно из f40c; для ОСТАЛЬНЫХ книг — бинарный поиск по маркерам «N -»
+// live-страниц (как «رقم الحديث/الرقم المسلسل» на shamela.ws — работает у любой нумерованной книги)
+function _arNum(s){ return parseInt(String(s).replace(/[٠-٩]/g,ch=>'٠١٢٣٤٥٦٧٨٩'.indexOf(ch))); }
+async function _bkHnoAt(pg){
+  for(let d=0; d<3; d++){
+    const r=await _bookFetchClean(pg+d);
+    if(!r||!r.clean){ if(d===0) return {end:true}; continue; }
+    const m=r.clean.match(/(?:^|[\n»\)\].:،؛])\s*([٠-٩]{1,5})\s*-\s/);
+    if(m) return {n:_arNum(m[1])};
+  }
+  return {};
+}
 async function _bkJumpHno(n){
   try{ const r=await fetch('./f40c/'+_bookView.id+'_'+Math.floor(n/300)+'.json');
     if(r.ok){ const mm=await r.json(); const it=mm[String(n)];
-      if(it&&it[0]){ _bookView.pg=it[0]; _bookView.want=null; _bookView.snaps=0; _bookLoad(); toast('📖 хадис №'+n+' · лист '+it[0]); return; }
-      if(it){ toast('№'+n+' найден, но лист не определён в этой печати'); return; } }
+      if(it&&it[0]){ _bookView.pg=it[0]; _bookView.want=null; _bookView.snaps=0; _bookLoad(); toast('📖 хадис №'+n+' · лист '+it[0]); return; } }
   }catch(e){}
-  toast('№-прыжок доступен в проштудированных печатях первоисточников (эта пока нет)');
+  toast('🔎 ищу №'+n+' по листам книги…');
+  try{
+    let lo=1, hi=Math.max((_bookView.pg||1)*2, 256), cap=0;
+    while(cap++<10){ const m=await _bkHnoAt(hi);
+      if(m.end || (m.n!=null && m.n>=n) || hi>=60000) break; hi=Math.min(60000, hi*2); }
+    let it2=0;
+    while(lo<hi && it2++<18){ const mid=(lo+hi)>>1; const m=await _bkHnoAt(mid);
+      if(m.end || (m.n!=null && m.n>=n)) hi=mid; else lo=mid+1; }
+    const dest=Math.max(1, lo-1);
+    const chk=await _bkHnoAt(dest);
+    _bookView.pg=(chk.n!=null && chk.n<=n)?dest:lo; _bookView.want=null; _bookView.snaps=0; _bookLoad();
+    toast('📖 №'+n+' — на этом листе или соседнем (нумерация по маркерам печати)');
+  }catch(e){ toast('🔧 не вышло — попробуй ещё раз'); }
 }
 function _bkSavePos(){ try{ const pos=JSON.parse(localStorage.getItem('bk_pos')||'{}');
   pos[_bookView.id]={pg:_bookView.pg, t:Date.now()};
@@ -2233,28 +2256,37 @@ async function _bookLoad(){
     try{ _bkApplyTheme(tEl); }catch(e){}
     // ── M318/M347: НИЗ-БАР ЛИСТАНИЯ (sticky bottom) — отдельные поля ТОМ / СТРАНИЦА / № ХАДИСА (как в Мактабе)
     const bot=m.querySelector('#bookBotBar'); if(bot){ bot.innerHTML='';
-      bot.appendChild(mk('⏮', ()=>{ if(_bookView.pg!==1){ _bookView.pg=1; _bookLoad(); } }, _bookView.pg<=1));
-      bot.appendChild(mk('◀', ()=>{ if(_bookView.pg>1){ _bookView.pg--; _bookLoad(); } }, _bookView.pg<=1));
+      bot.appendChild(mk('⏮', ()=>{ if(_bookView.pg!==1){ _bookView.pg=1; _bookLoad(); } }, _bookView.pg<=1));   // M418: ◀▶ переехали крупными кнопками ниже
       const _fld=(w,val,title)=>{ const i=document.createElement('input'); i.type='tel'; i.value=val; i.title=title;
         i.style.cssText='width:'+w+'px;text-align:center;background:var(--bg);color:var(--text);border:1px solid var(--btn);border-radius:8px;padding:7px 3px;font-size:14px;font-weight:700'; return i; };
       const _lb=t=>{ const s=document.createElement('span'); s.className='hint'; s.style.cssText='font-size:11px;color:var(--mark);white-space:nowrap'; s.textContent=t; return s; };
+      // M418: прыжки ТОЛЬКО по Enter (onchange срабатывал при потере фокуса → бинпоиск стартовал сам и «всё зависало»)
       // ТОМ (M347): Enter → бинарный поиск первого листа тома по живым meta.vol
-      const vinp=_fld(38, (meta.vol!=null?String(meta.vol).replace(/[^0-9]/g,''):''), 'Том — введи номер и Enter (поиск начала тома)');
+      const vinp=_fld(38, (meta.vol!=null?String(meta.vol).replace(/[^0-9]/g,''):''), 'Том — введи номер и нажми Enter (поиск начала тома)');
       const vjump=()=>{ const tv=parseInt(vinp.value)||0; if(tv>0) _bkJumpVol(tv); };
-      vinp.onchange=vjump; vinp.addEventListener('keydown',e=>{ if(e.key==='Enter') vjump(); });
+      vinp.addEventListener('keydown',e=>{ if(e.key==='Enter') vjump(); });
       // СТРАНИЦА (печатная, want/off-механизм как был)
-      const inp=_fld(56, hasP?meta.page:_bookView.pg, hasP?'Печатная страница — введи номер и Enter':('Лист №'+_bookView.pg));
+      const inp=_fld(56, hasP?meta.page:_bookView.pg, hasP?'Печатная страница — введи номер и нажми Enter':('Лист №'+_bookView.pg));
       const jump=()=>{ const t=Math.max(1,parseInt(inp.value)||1); if(hasP){ _bookView.want=t; _bookView.snaps=0; _bookView.pg=Math.max(1,t+(_bookView.off||0)); } else { _bookView.pg=t; } _bookLoad(); };
-      inp.onchange=jump; inp.addEventListener('keydown',e=>{ if(e.key==='Enter') jump(); });
-      // № ХАДИСА (M347): мгновенный прыжок по проштудированным печатям (f40c: лист по номеру)
-      const hinp=_fld(56, '', '№ хадиса — введи номер и Enter (прыжок по проштудированной печати)');
+      inp.addEventListener('keydown',e=>{ if(e.key==='Enter') jump(); });
+      // № ХАДИСА (M347/M418): мгновенно из f40c; нет в шардах → бинарный поиск по маркерам «N -» live-страниц (как رقم الحديث Шамелы)
+      const hinp=_fld(56, '', '№ хадиса / الرقم المسلسل — введи номер и нажми Enter');
       const hjump=()=>{ const n=parseInt(hinp.value)||0; if(n>0) _bkJumpHno(n); };
-      hinp.onchange=hjump; hinp.addEventListener('keydown',e=>{ if(e.key==='Enter') hjump(); });
+      hinp.addEventListener('keydown',e=>{ if(e.key==='Enter') hjump(); });
       bot.appendChild(_lb('т.')); bot.appendChild(vinp);
       bot.appendChild(_lb(hasP?'стр.':'лист')); bot.appendChild(inp);
       bot.appendChild(_lb('№')); bot.appendChild(hinp);
-      bot.appendChild(mk('▶', ()=>{ _bookView.pg++; _bookLoad(); }));
       m._jump=jump; m._inp=inp;
+      // M418: ЯСНЫЕ крупные кнопки листания — на всю ширину второй строкой
+      const nav2=document.createElement('div'); nav2.style.cssText='display:flex;gap:7px;width:100%;margin-top:6px';
+      const bPrev=document.createElement('button'); bPrev.className='mini'; bPrev.textContent='◀ Предыдущая страница';
+      bPrev.style.cssText='flex:1;min-height:44px;font-size:13px;font-weight:700;border:1px solid var(--btn);color:var(--link);border-radius:10px'+(_bookView.pg<=1?';opacity:.4':'');
+      bPrev.disabled=_bookView.pg<=1; bPrev.onclick=()=>{ if(_bookView.pg>1){ try{hap('light');}catch(e){} _bookView.pg--; _bookLoad(); } };
+      const bNext=document.createElement('button'); bNext.className='mini'; bNext.textContent='Следующая страница ▶';
+      bNext.style.cssText='flex:1;min-height:44px;font-size:13px;font-weight:700;border:1px solid var(--btn);color:var(--link);border-radius:10px';
+      bNext.onclick=()=>{ try{hap('light');}catch(e){} _bookView.pg++; _bookLoad(); };
+      nav2.appendChild(bPrev); nav2.appendChild(bNext);
+      bot.appendChild(nav2);
     }
     // ── РЯД ТОГГЛОВ: ⚙️ Инструменты (поиск/копия/ссылка/шрифт/тема) + 🧠 ИИ — панели по требованию, чтение не загромождено
     const tgl=document.createElement('div'); tgl.style.cssText='display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap';
@@ -2693,9 +2725,10 @@ async function maktabaByNum(seq, n){
         try{ enableArabusTap(ar); }catch(e){}
       }catch(e){ fb.textContent='🔧 не вышло'; fb.disabled=false; }
     };
-    // M388: непокрытые шардами ПЕЧАТИ ПЕРВОИСТОЧНИКОВ разворачиваются сами (лесенка ≤5) — единый «классный» вид
-    if(auto && fb){ const ai=(maktabaByNum.__ae=(maktabaByNum.__ae||0))<5 ? maktabaByNum.__ae++ : -1;
-      if(ai>=0) setTimeout(()=>{ try{ if(!fb.disabled && fb.style.display!=='none') fb.onclick(); }catch(e){} }, 380*ai+150); }
+    // M388/M414: ВСЕ карточки одинаковые — авторазворот ЛЕНИВО, когда карточка попадает в экран (не дудосим бэкенд)
+    if(auto && fb){ try{ const io2=new IntersectionObserver(es=>{ es.forEach(en=>{ if(en.isIntersecting){ io2.disconnect();
+        setTimeout(()=>{ try{ if(!fb.disabled && fb.style.display!=='none') fb.onclick(); }catch(e){} }, 120); } }); },{rootMargin:'300px'});
+      io2.observe(card); }catch(e){ setTimeout(()=>{ try{ fb.onclick(); }catch(_e){} }, 300); } }
     return card;
   };
   // M390в: АДРЕСНЫЙ добор печатей первоисточников по bid (общий турат-обход рано стопится — шумные номера).
@@ -2760,7 +2793,7 @@ async function maktabaByNum(seq, n){
             btn.__n++; rEl.style.display=btn.__open?'':'none';
             sl.appendChild(rEl); _chkStd(rEl, cc, sn); _edBtnPaint(btn, sl); }   // M364: сверка нумерации
           else if(f40.has(bid)){ shownF++; if(SRC_OF[bid]) srcSet.add(SRC_OF[bid]); (topSlots.get(bid)||listTop).appendChild(row(x, sn, true)); }   // 📜 первоисточники — слоты + авторазворот (M388)
-          else { restHdr.style.display='block'; list.appendChild(row(x, sn)); }   // M374: граница «дальше не первоисточники»
+          else { restHdr.style.display='block'; list.appendChild(row(x, sn, true)); }   // M374 граница; M414: нижняя зона тоже разворачивается
         }
         if(add===0) emptyRuns++; else emptyRuns=0;
         if(emptyRuns>=6 || page>=80) done=true;
@@ -4594,7 +4627,11 @@ function highlightNarratorsInDiv(ad, names, onClick){
     if(!ms.length) return;
     ms.sort((a,b)=>a.i-b.i || b.len-a.len);
     const picked=[]; let lastEnd=-1;
-    for(const m of ms){ if(m.i>=lastEnd){ picked.push(m); lastEnd=m.i+m.len; } }   // без перекрытий
+    for(const m of ms){ if(m.i>=lastEnd){
+      // M416: НЕ подсвечивать форму сразу после بن/ابن — это ОТЕЦ внутри полного имени сына (المطلب بن عبد الله…)
+      const pre=txt.slice(Math.max(0,m.i-5), m.i);
+      if(/(?:^|[\s،])(?:بن|ابن)\s$/.test(pre)) continue;
+      picked.push(m); lastEnd=m.i+m.len; } }   // без перекрытий
     const frag=document.createDocumentFragment(); let pos=0;
     picked.forEach(m=>{ if(m.i>pos) frag.appendChild(document.createTextNode(txt.slice(pos,m.i)));
       const span=document.createElement('span'); span.textContent=txt.slice(m.i,m.i+m.len);
@@ -5008,10 +5045,24 @@ async function narrSuggest(q){
 }
 let _narrBypass=false;   // разовый обход narr-перехвата: «найти ХАДИСЫ этого равия» обычным поиском
 async function narrOpen(nm){
-  hideNarrSugg(); const qi=document.getElementById('q'); if(qi){ qi.value=nm; try{ const qc=document.getElementById('qClear'); if(qc) qc.style.display='block'; }catch(e){} }
+  hideNarrSugg(); const qi=document.getElementById('q');
+  const _prevQ=qi?qi.value:'';
+  if(qi){ qi.value=nm; try{ const qc=document.getElementById('qClear'); if(qc) qc.style.display='block'; }catch(e){} }
   try{ saveRecent(nm); }catch(e){}
-  const res=document.getElementById('res'); try{ _clearRenderQ(); }catch(e){} res.innerHTML='';
+  const res=document.getElementById('res'); try{ _clearRenderQ(); }catch(e){}
+  // M419: результаты поиска НЕ теряем — прячем во фрагмент (живые обработчики сохраняются), кнопка «← назад» вернёт как было
+  if(res.childNodes.length && !res.dataset.narrCard){ const fr=document.createDocumentFragment(); while(res.firstChild) fr.appendChild(res.firstChild);
+    window._resBack=fr; window._resBackQ=_prevQ; }
+  res.innerHTML=''; res.dataset.narrCard='1';
   const box=document.createElement('div'); box.className='card'; box.style.cssText='padding:11px'; res.appendChild(box);
+  if(window._resBack){ const bk=document.createElement('button'); bk.className='mini';
+    bk.style.cssText='width:100%;padding:10px;margin-bottom:9px;border:1px solid var(--btn);color:var(--link);background:transparent;border-radius:10px;font-weight:700;font-size:13.5px;cursor:pointer';
+    bk.textContent='← Назад к результатам поиска';
+    bk.onclick=()=>{ try{hap('light');}catch(e){} res.innerHTML=''; delete res.dataset.narrCard;
+      res.appendChild(window._resBack); window._resBack=null;
+      const q2=document.getElementById('q'); if(q2&&window._resBackQ!==undefined) q2.value=window._resBackQ;
+      try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(e){} };
+    box.appendChild(bk); }
   // 🔎 заявка владельца: «хишам ибн аммار — почему не находит 5590 Бухари» → кнопка поиска ХАДИСОВ с участием равия
   const hb=document.createElement('button'); hb.className='go'; hb.style.cssText='width:100%;padding:9px;margin-bottom:8px;font-size:14px';
   const shortNm=nm.split(' ').slice(0,3).join(' ');
@@ -5224,7 +5275,12 @@ const _CRIT_DEATH={'аш-Шафии':820,'Яхья ибн Маин':847,'Али 
  'Абу Зураа ар-Рази':878,'Абу Дауд ас-Сиджистани':889,'аль-Фасауи':890,'ат-Тирмизи':892,'Ибн Аби Шайба (М. б. Усман)':909,'ан-Насаи':915,
  'ат-Табари':923,'Ибн Аби Хайсама':924,'Ибн Аммар аш-Шахид':929,'ат-Тахауи':933,'аль-Укайли':934,'Ибн Аби Хатим ар-Рази':938,
  'Ибн Ади аль-Джурджани':976,'Абуш-Шайх аль-Асбахани':979,'ад-Даракутни':995,'аль-Хаким':1014,'аль-Мукаддами':936};
-function _critOrd(n){ return _CRIT_DEATH[String(n||'').trim()]||1500; }
+// M417: порядок критиков = ЭТАЛОННЫЙ СПИСОК 48 владельца (его нумерация = авторитетность); не входящие в 48 — ПОСЛЕ, по вафату
+const _CRIT_48={'аш-Шафии':27,'Али ибн аль-Мадини':29,'Ахмад ибн Ханбаль':31,'Абу Зураа ар-Рази':36,'аль-Бухари':37,'Муслим':38,
+ 'Абу Дауд ас-Сиджистани':39,'ан-Насаи':40,'ат-Табари':41,'ат-Тахауи':42,'Ибн Аби Хатим ар-Рази':43,'аль-Укайли':44,
+ 'Абуш-Шайх аль-Асбахани':46,'Ибн Аммар аш-Шахид':47,'ад-Даракутни':48};
+function _critOrd(n){ const k=String(n||'').trim(); if(_CRIT_48[k]!=null) return _CRIT_48[k];
+  return 100+(_CRIT_DEATH[k]||1500)/10; }
 // #5 шаг2: СВОДКА ПО МУТАБАРУНАМ — у каких критиков равий засвидетельствован (✅) / у каких не найден (⬜). Чистый фронт (narrbk + rijal_books_map, личная сверка 18989).
 async function renderMutabarunSummary(id, box, out){
   try{
@@ -5406,6 +5462,37 @@ async function showNarratorBio(name, out){
   // Идентификация (имя/كنية/نسب/وفاة/طبقة/رتبة + бейдж) — без джарха
   let c=null; try{ c=await showNarratorCardLocal(name, out); }catch(e){}
   const foundLocal=!!c;
+  // M416: ПОЛНОЕ ИМЯ — строкой всегда (нет в базе → честно «неизвестно») + кнопки участия ИЗ ЛЮБОЙ карточки
+  try{
+    const fi=document.createElement('div'); fi.style.cssText='font-size:12px;color:var(--hint);margin:4px 0;direction:rtl;text-align:right';
+    fi.innerHTML='<span style="color:var(--hint)">الاسم الكامل (полное имя):</span> '+(c&&c[1]?('<b style="color:var(--text)">'+esc(c[1])+'</b>'):'<i>неизвестно (форма не отождествлена — честный U-статус, итерации Э1.1)</i>');
+    out.appendChild(fi);
+    const pw=document.createElement('div'); pw.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px';
+    const hb2=document.createElement('button'); hb2.className='mini'; hb2.style.cssText='flex:1;min-width:46%;padding:8px;border:1px solid var(--border);border-radius:9px;font-size:12px';
+    const short2=name.split(' ').slice(0,3).join(' ');
+    hb2.textContent='🔎 Хадисы с его участием';
+    hb2.onclick=()=>{ try{hap('light');}catch(e){} const q=document.getElementById('q'); if(q) q.value='"'+short2+'"'; _narrBypass=true;
+      try{ const nM=document.getElementById('narrModal'); if(nM) nM.style.display='none'; }catch(e){} runSearch(true); };
+    pw.appendChild(hb2);
+    if(c){ const cb2=document.createElement('button'); cb2.className='mini'; cb2.style.cssText='flex:1;min-width:46%;padding:8px;border:1px solid #2e6b9b;color:#bfe0f5;background:#16314d;border-radius:9px;font-size:12px';
+      cb2.textContent='🧬 Участие по кодам Э1.1';
+      cb2.onclick=async()=>{ cb2.disabled=true; cb2.textContent='⏳…';
+        const places=await dzPart(c[0]);
+        if(!places||!places.length){ cb2.textContent='🧬 мест пока нет (Э1.1)'; return; }
+        try{ await loadBooksMap(); }catch(e){}
+        cb2.style.display='none';
+        const bx2=document.createElement('div');
+        const lb2=document.createElement('div'); lb2.className='hint'; lb2.style.cssText='font-size:12px;margin:2px 0 4px'; lb2.textContent='🧬 Точное участие (код #'+c[0]+'): мест '+places.length+':';
+        bx2.appendChild(lb2); const ls2=document.createElement('div'); bx2.appendChild(ls2);
+        let sh2=0; const mr2=document.createElement('button'); mr2.className='mini'; mr2.style.cssText='margin-top:6px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px';
+        const dr2=()=>{ places.slice(sh2,sh2+30).forEach(p=>ls2.appendChild(_dzPlaceRow(p[0],p[1],p[2]))); sh2=Math.min(places.length,sh2+30);
+          mr2.textContent='⬇️ Показать ещё ниже ('+(places.length-sh2)+')'; mr2.style.display=sh2>=places.length?'none':'block'; };
+        mr2.onclick=dr2; dr2(); bx2.appendChild(mr2);
+        pw.parentNode.insertBefore(bx2, pw.nextSibling);
+      };
+      pw.appendChild(cb2); }
+    out.appendChild(pw);
+  }catch(e){}
   // #5 (вердикты вверх): готовый джарх-тадиль учёных из موسوعة — СРАЗУ под карточкой (как в ТГ-образце: цитаты+источник+ثقة)
   if(c && c[8]){ try{ renderMosuaJarh(c, out); }catch(e){} }
   if(c){ try{ renderNarrVerdicts(c[0], out); }catch(e){} }   // 📚 оценки из 149 трудов (наш глубокий анализ — цитаты+квалификация)
