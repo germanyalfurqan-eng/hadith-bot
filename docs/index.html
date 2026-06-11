@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v348';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v349';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4709,6 +4709,71 @@ async function dzChainInto(host, bid, num){
     host.appendChild(box);
   }catch(e){}
 }
+/* ===== 📋 M412: ОБЩАЯ ТАБЛИЦА ПЕРЕДАТЧИКОВ (18 989) — сортировки, фильтры передачи, переход по #id ===== */
+let _narrTbl=null,_narrTblP=null;
+function loadNarrTable(){ if(_narrTbl) return Promise.resolve(_narrTbl); if(_narrTblP) return _narrTblP;
+  _narrTblP=fetch('./narr_table.json').then(r=>r.ok?r.json():[]).then(a=>{ _narrTbl=a||[]; return _narrTbl; }).catch(()=>{ _narrTbl=[]; return _narrTbl; }); return _narrTblP; }
+let _dzNPC={};
+async function dzNP(id){ const sh=Math.floor(id/200); const m=await _dzFetch(_dzNPC,sh,'./np/'+sh+'.json'); return (m&&m[String(id)])||null; }
+async function openNarrTable(opts){
+  opts=opts||{};
+  let m=document.getElementById('ntModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='ntModal';
+    m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 8px;padding:13px 16px 10px;border-bottom:1px solid var(--border)"><b id="ntTitle" style="font-size:14.5px">📋 Таблица передатчиков</b><button class="mini" id="ntClose" style="flex:none">закрыть ✕</button></div>'
+      +'<div id="ntBar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px"></div>'
+      +'<div id="ntInfo" class="hint" style="font-size:11.5px;margin-bottom:6px"></div>'
+      +'<div id="ntList" style="max-height:64vh;overflow:auto"></div></div>';
+    document.body.appendChild(m); m.querySelector('#ntClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
+  m.style.zIndex='10005'; m.style.display='flex';
+  const all=await loadNarrTable();
+  const st={q:(opts.focusId!=null?('#'+opts.focusId):''), sort:opts.filterIds?'cnt':'id', shown:0};
+  const bar=m.querySelector('#ntBar'), list=m.querySelector('#ntList'), info=m.querySelector('#ntInfo');
+  m.querySelector('#ntTitle').textContent=opts.title||('📋 Таблица передатчиков ('+all.length+')');
+  info.textContent=opts.filterIds?'Сортировка по числу совместных звеньев в штудированных иснадах (наши коды Э1.1).'
+    :'Все равии базы موسوعة رواة الحديث. Сортируй и листай; тап по строке — карточка. Места рождения/смерти появятся с датасетом M361b.';
+  const SORTS=opts.filterIds?[['cnt','🔗 по связям'],['id','#№'],['alpha','🔤'],['death','وفاة'],['fame','🏆']]
+    :[['id','#№'],['alpha','🔤 алфавит'],['death','وفاة год'],['fame','🏆 известность']];
+  bar.innerHTML='<input id="ntQ" placeholder="фильтр: имя или #номер" style="flex:1;min-width:150px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13.5px" value="'+esc(st.q)+'">'
+    +SORTS.map(s=>'<span class="ntS" data-k="'+s[0]+'" style="cursor:pointer;font-size:11.5px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);color:var(--hint)">'+s[1]+'</span>').join('');
+  const cnt=opts.filterIds||null;
+  const paint=()=>{ bar.querySelectorAll('.ntS').forEach(s=>{ const on=s.dataset.k===st.sort;
+    s.style.background=on?'var(--btn)':''; s.style.color=on?'#fff':'var(--hint)'; s.style.borderColor=on?'var(--btn)':'var(--border)'; }); };
+  const rows=()=>{ let v=all;
+    if(cnt) v=v.filter(r=>cnt.has(r[0]));
+    const q=(st.q||'').trim();
+    if(q){ const mId=q.match(/^#?(\d{1,5})$/); if(mId) v=v.filter(r=>String(r[0]).indexOf(mId[1])===0);
+      else { const cq=_narrCanon(q); v=v.filter(r=>r[1].indexOf(cq)>=0); } }
+    const f={id:(a,b)=>a[0]-b[0], alpha:(a,b)=>a[1].localeCompare(b[1],'ar'), death:(a,b)=>((a[2]||9999)-(b[2]||9999)), fame:(a,b)=>(b[3]-a[3]), cnt:(a,b)=>((cnt.get(b[0])||0)-(cnt.get(a[0])||0))}[st.sort];
+    return v.slice().sort(f); };
+  let cur=[];
+  const draw=(reset)=>{ if(reset){ list.innerHTML=''; st.shown=0; cur=rows();
+      const old=m.querySelector('#ntMore'); if(old) old.remove(); }
+    const part=cur.slice(st.shown, st.shown+60); st.shown+=part.length;
+    part.forEach(r=>{ const d=document.createElement('div');
+      d.style.cssText='display:flex;gap:9px;align-items:center;padding:7px 4px;border-bottom:1px solid var(--border);cursor:pointer'+(opts.focusId===r[0]?';background:rgba(108,92,231,.14);border-radius:8px':'');
+      d.innerHTML='<span style="flex:none;width:56px;font-size:11px;color:#5b87b5">#'+r[0]+(cnt?('<b style="display:block;color:#9fd3a8">×'+(cnt.get(r[0])||0)+'</b>'):'')+'</span>'
+        +'<span style="flex:1;direction:rtl;text-align:right;font-size:14.5px">'+esc(r[1])+'</span>'
+        +'<span style="flex:none;font-size:11px;color:var(--hint)" dir="rtl">'+(r[2]?('وفاة ~'+r[2]+'هـ'):'—')+'</span>';
+      d.onclick=()=>{ m.style.display='none'; narrOpen(r[1]); };
+      list.appendChild(d); });
+    let more=m.querySelector('#ntMore');
+    if(!more){ more=document.createElement('button'); more.id='ntMore'; more.className='mini';
+      more.style.cssText='display:block;width:100%;margin-top:8px;padding:9px;border:1px solid var(--border);border-radius:10px';
+      more.onclick=()=>draw(false); list.parentNode.appendChild(more); }
+    more.textContent='⬇️ Показать ещё ниже ('+(cur.length-st.shown)+')';
+    more.style.display=st.shown>=cur.length?'none':'block';
+    info.textContent=(cnt?'🔗 связей: '+cur.length+' · ':'всего: '+cur.length+' · ')+(opts.filterIds?'сорт по совместным звеньям':'тап по строке — карточка равия');
+  };
+  bar.querySelectorAll('.ntS').forEach(s=>s.onclick=()=>{ st.sort=s.dataset.k; paint(); draw(true); });
+  const qi=bar.querySelector('#ntQ'); let qt; qi.oninput=()=>{ clearTimeout(qt); qt=setTimeout(()=>{ st.q=qi.value; draw(true); }, 250); };
+  paint(); draw(true);
+}
+// клики: «база Мактабы» → shamela.ws/narrator/<id>; «#id» → наша таблица
+document.addEventListener('click', e=>{
+  const sh=e.target&&e.target.closest&&e.target.closest('.shamNarr'); if(sh){ e.preventDefault(); e.stopPropagation(); try{ openLink('https://shamela.ws/narrator/'+sh.dataset.id); }catch(_e){ window.open('https://shamela.ws/narrator/'+sh.dataset.id,'_blank'); } return; }
+  const nt=e.target&&e.target.closest&&e.target.closest('.ntOpen'); if(nt){ e.stopPropagation(); openNarrTable({focusId:+nt.dataset.id}); }
+});
 /* ===== 👤 РЕЖИМ ПОИСКА ПЕРЕДАТЧИКА (Сессия 13, Ф-10): автоподсказки из 18989 равиев; рус↔араб «скелет согласных» ===== */
 // Идея Ф-10: имя по-русски и по-арабски сводим к скелету согласных в общем алфавите (ث/س/ص→s, ح/خ/ه→h, ق/ك→k…),
 // слабые و/ي (и рус у/ю/и/й/в) — только в strict-скелете; артикли (ال / «аль-/ас-…») срезаем; хвостовую ه/«ха» (ة) срезаем.
@@ -4928,10 +4993,11 @@ function _narrRenderSugg(){
   // 'fame' = как пришло (скоринг известность+точность)
   const hd=document.createElement('div'); hd.style.cssText='padding:5px 11px;border-bottom:1px solid var(--border);font-size:11px;color:var(--hint);display:flex;justify-content:space-between;align-items:center;gap:8px';
   const mkS=(t,k,title)=>'<span class="nsSort" data-k="'+k+'" title="'+title+'" style="cursor:pointer;padding:1px 7px;border-radius:6px;'+(_narrSort===k?'background:var(--btn);color:#fff':'border:1px solid var(--border)')+'">'+t+'</span>';
-  hd.innerHTML='<span>👤 Похожие передатчики — выбери:</span><span style="display:flex;gap:4px">'+mkS('🏆','fame','Сортировка: по известности (по умолчанию)')+mkS('📅','year','Сортировка: по году смерти')+mkS('🔤','alpha','Сортировка: по алфавиту')+'</span>';
+  hd.innerHTML='<span>👤 Похожие передатчики — выбери:</span><span style="display:flex;gap:4px"><span class="nsTbl" title="Открыть общую таблицу всех 18 989 передатчиков" style="cursor:pointer;padding:1px 7px;border-radius:6px;border:1px solid var(--border)">📋</span>'+mkS('🏆','fame','Сортировка: по известности (по умолчанию)')+mkS('📅','year','Сортировка: по году смерти')+mkS('🔤','alpha','Сортировка: по алфавиту')+'</span>';
   box.innerHTML=''; box.appendChild(hd);
   view.forEach(c=>box.appendChild(_narrRow(c)));
   hd.querySelectorAll('.nsSort').forEach(s=>s.onclick=(e)=>{ e.stopPropagation(); _narrSort=s.dataset.k; _narrRenderSugg(); });
+  const tb=hd.querySelector('.nsTbl'); if(tb) tb.onclick=(e)=>{ e.stopPropagation(); openNarrTable({}); };   // M412
   box.style.display='block';
 }
 async function narrSuggest(q){
@@ -4984,6 +5050,19 @@ async function narrOpen(nm){
     }catch(e){ cb.textContent='🔧 не вышло — попробуй ещё раз'; cb.disabled=false; }
   };
   box.appendChild(cb);
+  // M412: учителя/ученики по штудированным парам (dz-цепочки) → отфильтрованная таблица
+  const tt=document.createElement('div'); tt.style.cssText='display:flex;gap:7px;margin-bottom:8px';
+  const mkTS=(lbl,key)=>{ const b=document.createElement('button'); b.className='mini'; b.style.cssText='flex:1;padding:8px;border:1px solid var(--border);border-radius:10px;font-size:12.5px'; b.textContent=lbl;
+    b.onclick=async()=>{ b.disabled=true;
+      try{ const id=await _narrLookup(nm); if(id==null){ b.textContent='код не найден'; return; }
+        const np=await dzNP(id); const arr=np&&np[key];
+        if(!arr||!arr.length){ b.textContent=lbl+' — пока нет (Э1.1)'; return; }
+        openNarrTable({title:(key==='t'?'👨‍🏫 Учителя: ':'👨‍🎓 Ученики: ')+nm.split(' ').slice(0,3).join(' '), filterIds:new Map(arr)});
+        b.disabled=false;
+      }catch(e){ b.textContent='🔧'; } };
+    return b; };
+  tt.appendChild(mkTS('👨‍🏫 Его учителя','t')); tt.appendChild(mkTS('👨‍🎓 Его ученики','s'));
+  box.appendChild(tt);
   const out=document.createElement('div'); box.appendChild(out);
   await showNarratorBio(nm, out);
   try{ window.scrollTo({top:res.offsetTop-8,behavior:'smooth'}); }catch(e){}
@@ -5207,7 +5286,7 @@ async function showNarratorCardLocal(name, host){
   try{ const fl=(await loadNarrFlags())[String(id)]; if(fl) h+='<div style="margin-top:3px">'+_flagBadge(fl, c[1])+'</div>'; }catch(e){}   // M386+M402 (тап → его хадисы в Сахихах)
   try{ const wk=(await loadNarrWiki())[String(id)];
     if(wk&&wk.u) h+='<div style="direction:ltr;text-align:left;margin-top:3px"><span class="nWiki" data-u="'+esc(wk.u)+'" style="cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px"><b style="font-family:Georgia,serif">W</b> Википедия'+(wk.l?(' · '+esc(wk.l)):'')+' ↗</span></div>'; }catch(e){}
-  h+='<div style="font-size:11px;color:var(--hint);margin:2px 0 7px">📖 موسوعة رواة الحديث (база Мактабы) · #'+c[0]+'</div>'
+  h+='<div style="font-size:11px;margin:2px 0 7px">📖 <span class="shamNarr" data-id="'+c[0]+'" style="color:var(--link);cursor:pointer;text-decoration:underline dotted" title="Открыть эту карточку на сайте shamela.ws">موسوعة رواة الحديث (база Мактабы) ↗</span> · <span class="ntOpen" data-id="'+c[0]+'" style="color:#5b87b5;cursor:pointer;font-weight:700" title="Открыть общую таблицу передатчиков на этом номере">#'+c[0]+' 📋</span></div>'
     +row('الكنية',c[2])+row('النسب',c[3])+row('سنة الوفاة',c[4]?('~'+c[4]+'هـ'):'')+row('الطبقة',c[7])
     +rank('الرتبة عند ابن حجر',c[5])+rank('الرتبة عند الذهبي',c[6])
     +((c[5]||c[6])?'<div style="font-size:10.5px;color:var(--hint);margin-top:2px">↑ поздние своды — справочно (Ибн Хаджар и аз-Захаби НЕ из 48 мутабарунов); эталон — акваль 48 из 150 книг, разделы ниже (R38)</div>':'');
