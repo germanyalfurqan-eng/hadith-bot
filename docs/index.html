@@ -203,7 +203,7 @@
 
   <div class="searchbar" style="position:relative;margin-top:16px">
     <button id="recentBtn" title="🕐 Недавние запросы" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--hint);font-size:18px;cursor:pointer;padding:4px 6px;z-index:3">🕐</button>
-    <input type="text" id="q" placeholder="Введите слово, фразу или № хадиса…" autocomplete="off" enterkeyhint="search" style="padding-left:36px;border:2px solid var(--btn);box-shadow:0 0 0 3px rgba(47,123,230,.18), 0 6px 22px rgba(47,123,230,.28)">
+    <textarea id="q" rows="1" placeholder="Введите слово, фразу или № хадиса…" autocomplete="off" enterkeyhint="search" style="padding-left:36px;border:2px solid var(--btn);box-shadow:0 0 0 3px rgba(47,123,230,.18), 0 6px 22px rgba(47,123,230,.28);resize:none;overflow-y:hidden;line-height:1.45;max-height:132px;font-family:inherit;font-size:inherit;width:100%;box-sizing:border-box"></textarea><!-- M426: расширяемое поле как в GPT (Enter=поиск, Shift+Enter=перенос) -->
     <button id="qBack" title="↩ Вернуть прошлый запрос" style="display:none;position:absolute;right:128px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--hint);font-size:19px;cursor:pointer;padding:4px 7px;z-index:3">↩</button>
     <button id="qClear" title="Очистить поиск" style="display:none;position:absolute;right:94px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--hint);font-size:20px;cursor:pointer;padding:4px 8px;z-index:3">✕</button>
     <button class="go" id="goBtn" title="Искать по запросу">Найти</button>
@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v350';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v351';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1905,8 +1905,17 @@ async function runSearch(explicit){
   const wideWill = (tab==='hadith' && explicit && (isArabic(shown) || numMode || (modes.ai && count<5)));   // по умолчанию ищем и по ВСЕЙ Мактабе (вкл. номер) — догрузка прогрессивная
   if(!count && seq===_seq){
     if(tab==='quran' && !strict && await tryRootFallback(shown, seq)){ /* M212/M225: показал по корню (в строгом режиме — не подменяем) */ }
-    else if(wideWill){ res.innerHTML='<div class="status">🔎 В наших книгах точного совпадения нет — ищу по всей библиотеке…</div>'; }
-    else if(!res.querySelector('.corrGo')){ res.innerHTML='<div class="status">Ничего не найдено 🤷</div>'; addNotFoundBtn(res, shown); }   // M173: не затирать баннер; +«сообщите нам»
+    else if(wideWill){ res.innerHTML='<div class="status">🔎 В ПЕРВОИСТОЧНИКАХ хадисов точного совпадения нет, но уже ищу по всей Мактабе (8 589 книг) — секунду… <span class="ldot">⏳</span></div>'; }   // M420: одним предложением, чтобы человек не ушёл
+    else if(!res.querySelector('.corrGo')){ res.innerHTML='<div class="status">Ничего не найдено 🤷</div>';
+      // M423: смысловой запрос (русский/длинный) при нуле — БОЛЬШАЯ кнопка ИИ-поиска, чтобы человек не ушёл с пустыми руками
+      try{ const q0=document.getElementById('q').value.trim();
+        if(!modes.ai && q0 && !isArabic(q0) && q0.split(/\s+/).length>=2){
+          const ab=document.createElement('button');
+          ab.style.cssText='display:block;width:100%;max-width:520px;margin:10px auto;padding:13px;border-radius:12px;border:1px solid #6c5ce7;color:#e0d7ff;background:linear-gradient(135deg,rgba(108,92,231,.30),rgba(58,45,94,.25));font-size:14.5px;font-weight:700;cursor:pointer';
+          ab.textContent='🧠 Похоже, ты описал СМЫСЛ хадиса — искать по смыслу (ИИ)?';
+          ab.onclick=()=>{ modes.ai=true; const ac=document.querySelector('.chip[data-mode="ai"]'); if(ac) ac.classList.add('on'); runSearch(true); };
+          res.appendChild(ab); } }catch(e){}
+      addNotFoundBtn(res, shown); }   // M173: не затирать баннер; +«сообщите нам»
   }
   // Поиск по ВСЕЙ библиотеке: наши книги выше (если нашлись), ниже — остальной корпус (sunnah.one). Только при явном «Найти»/Enter.
   if(_scopeIds && _scopeIds.size && explicit && shown && tab==='hadith'){ await appendMaktaba(seq, wideQ||shown); }   // 🎯 поиск в выбранных книгах (риджаль-149 и т.п.)
@@ -4637,7 +4646,9 @@ function highlightNarratorsInDiv(ad, names, onClick){
       const span=document.createElement('span'); span.textContent=txt.slice(m.i,m.i+m.len);
       span.className='nhl'; span.dataset.nm=m.nm;   // M411: класс+имя — для дописывания #кодов
       span.style.cssText='cursor:pointer;color:#ffd479;border-bottom:1px dashed #ffd479;font-weight:600'; span.title='Нажми: кто это + слова учёных';
-      span.onclick=(e)=>{ e.stopPropagation(); onClick(m.nm); };
+      span.onclick=(e)=>{ e.stopPropagation();
+        try{ onClick(m.nm); }catch(_e){ try{ openNarratorRijal(m.nm); }catch(__e){} }   // M427: клик обязан сработать — фолбэк в модал-карточку
+      };
       frag.appendChild(span); pos=m.i+m.len; });
     if(pos<txt.length) frag.appendChild(document.createTextNode(txt.slice(pos)));
     node.parentNode.replaceChild(frag, node);
@@ -4806,6 +4817,14 @@ async function openNarrTable(opts){
   const qi=bar.querySelector('#ntQ'); let qt; qi.oninput=()=>{ clearTimeout(qt); qt=setTimeout(()=>{ st.q=qi.value; draw(true); }, 250); };
   paint(); draw(true);
 }
+// M425: Esc (с компа) закрывает ВЕРХНЕЕ открытое окно — не надо «лезть в рестарт»; Alt+← = «назад» где есть
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'){ const open=[...document.querySelectorAll('.modal')].filter(m=>m.style.display==='flex'||m.style.display==='block');
+    if(open.length){ const top=open.reduce((a,b)=>((+getComputedStyle(a).zIndex||0)>=(+getComputedStyle(b).zIndex||0)?a:b)); top.style.display='none'; e.preventDefault(); return; }
+    const wp=document.getElementById('wordPop'); if(wp){ try{ closeWordPopup(); }catch(_e){ wp.remove(); } e.preventDefault(); } }
+  if(e.altKey && e.key==='ArrowLeft'){ const bk=[...document.querySelectorAll('button')].find(b=>b.offsetParent && (b.textContent.indexOf('← Назад к результатам')===0||b.textContent==='← назад'));
+    if(bk){ bk.click(); e.preventDefault(); } }
+});
 // клики: «база Мактабы» → shamela.ws/narrator/<id>; «#id» → наша таблица
 document.addEventListener('click', e=>{
   const sh=e.target&&e.target.closest&&e.target.closest('.shamNarr'); if(sh){ e.preventDefault(); e.stopPropagation(); try{ openLink('https://shamela.ws/narrator/'+sh.dataset.id); }catch(_e){ window.open('https://shamela.ws/narrator/'+sh.dataset.id,'_blank'); } return; }
@@ -4911,13 +4930,27 @@ async function narrCandidates(qRaw){
     for(const it of idx){
       const s=Math.max(score(_narrRuMatch(qsk, it[2])), score(it[5]?_narrRuMatch(qsk, it[5]):null));   // полные слова ИЛИ «короткий профиль» (имя+нисба)
       if(s<-1e8) continue;
-      out.push({nm:it[0], id:it[1], sc: s - it[0].length*0.01 + Math.min(it[3],150)*0.09 - it[4], y:it[6]||0}); }
+      // M424: ОДНОСЛОВНЫЙ запрос («хишам») — известность решает сильнее, но ТОЛЬКО при сильном матче слова
+      // (s≥13 ≈ слово совпало с первой позиции без растяжки; иначе буст поднимал знаменитостей-НЕхишамов)
+      const fameW=(qsk.length===1 && s>=13)?0.35:0.09;
+      out.push({nm:it[0], id:it[1], sc: s - it[0].length*0.01 + Math.min(it[3],150)*fameW - it[4], y:it[6]||0}); }
     // 🌟 гарант: знаменитая шухра из словаря — всегда первой
     const fam=_NARR_FAMOUS[_narrFamKey(qRaw)];
     if(fam){ const hit=idx.find(it=>it[0].indexOf(fam)===0);
       if(hit){ const j=out.findIndex(c=>c.id===hit[1]); if(j>=0) out.splice(j,1); out.unshift({nm:hit[0], id:hit[1], sc:999}); } }
   }
-  out.sort((a,b)=>b.sc-a.sc); return out.slice(0,14);
+  out.sort((a,b)=>b.sc-a.sc);
+  // M424: однословный запрос («хишам») = десятки тёзок, а датасет «известности» у тёзок шумный →
+  // топ-40 пересортировываем по РЕАЛЬНОМУ участию в штудированных иснадах (dz, число мест) — Ибн Аммар с сотнями мест выше тёзок с нулём
+  if(/[а-яё]/i.test(qRaw) && qRaw.trim().split(/\s+/).length===1 && out.length>3){
+    const top=out.slice(0,80);
+    try{ await Promise.all(top.map(async c=>{ if(c.id==null){ c.pp=0; return; }
+      try{ const p=await dzPart(c.id); c.pp=p?p.length:0; }catch(e){ c.pp=0; } }));
+      top.sort((a,b)=>((b.pp||0)-(a.pp||0))||(b.sc-a.sc));
+    }catch(e){}
+    return top.slice(0,20);
+  }
+  return out.slice(0,14);
 }
 // M385: ПРИВЫЧНОЕ имя (шухра) — как равия чаще всего зовут: первое имя + нисба (سفيان الثوري), кунья+нисба, или 2 первых слова
 const _shStopT={'يقال':1,'وقيل':1,'ويقال':1,'الله':1,'الرحمن':1,'الدين':1,'ابن':1,'ابو':1};
@@ -4940,7 +4973,8 @@ function _flagBadge(f, nm){ if(!f) return '';
 function _flagSearch(nm, f){
   if(!nm) return;
   try{ hap('light'); }catch(e){}
-  try{ selCols.clear(); (f==='b'?['bukhari']:(f==='m'?['muslim']:['bukhari','muslim'])).forEach(c=>selCols.add(c)); renderCols(); }catch(e){}
+  try{ clearSearchScope(); }catch(e){}   // M427: рамка scope перебивала чипы — выдавало «все места» вместо Бухари
+  try{ selCols.clear(); selExtra&&selExtra.clear&&selExtra.clear(); (f==='b'?['bukhari']:(f==='m'?['muslim']:['bukhari','muslim'])).forEach(c=>selCols.add(c)); renderCols(); }catch(e){}
   try{ const nM=document.getElementById('narrModal'); if(nM) nM.style.display='none'; }catch(e){}
   const q=document.getElementById('q'); if(q) q.value='"'+nm.split(' ').slice(0,3).join(' ')+'"';
   _narrBypass=true; try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(e){}
@@ -6216,6 +6250,10 @@ function toAr(s){const m={'0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥',
 
 /* ===================== НЕЙРО (локальный словарь смысла) ===================== */
 const MEANING = {
+  // M423 (промах поиска «али…наказание за питье» → Муслим 1707): фразы версий хадиса Али о хадде за хамр
+  'наказан':['لم يسنه','ما كنت لأقيم على أحد حدا','حد الخمر','جلد في الخمر'], 'хадд':['لم يسنه','حد الخمر','ما كنت لأقيم على أحد حدا'],
+  'вино':['الخمر','شارب الخمر','حد الخمر','لم يسنه'], 'хамр':['الخمر','شارب الخمر','حد الخمر'], 'опьян':['الخمر','مسكر','شارب الخمر'],
+  'питье':['الخمر','شارب الخمر','لم يسنه'], 'питьё':['الخمر','شارب الخمر','لم يسنه'], 'алкогол':['الخمر','مسكر','شارب الخمر'], 'выпив':['الخمر','شارب الخمر'],
   'музык':['المعازف','معازف','الغناء','غناء','المزمار','مزمار'], 'music':['المعازف','معازف','الغناء','غناء'], 'песн':['الغناء','غناء'], 'song':['الغناء','غناء'], 'инструмент':['المعازف','معازف'], 'танц':['الرقص'],
   'изображен':['إن أصحاب هذه الصور يعذبون','نمرقة فيها تصاوير','أحيوا ما خلقتم','لا تدخل الملائكة بيتا فيه صورة','لعن الله المصورين'], 'картин':['إن أصحاب هذه الصور يعذبون','لا تدخل الملائكة بيتا فيه صورة'], 'статуи':['التماثيل','إن أصحاب هذه الصور يعذبون'], 'статуй':['التماثيل','هذه التماثيل'], 'изваян':['التماثيل'], 'тамасиль':['التماثيل','هذه التماثيل'], 'тасавир':['تصاوير','إن أصحاب هذه الصور يعذبون'], 'фотограф':['المصورين','إن أصحاب هذه الصور يعذبون'], 'рисова':['المصورين','إن أصحاب هذه الصور يعذبون'], 'image':['إن أصحاب هذه الصور يعذبون','لا تدخل الملائكة بيتا فيه صورة'], 'picture':['إن أصحاب هذه الصور يعذبون'], 'ангел':['لا تدخل الملائكة بيتا فيه صورة','لا تدخل الملائكة بيتا فيه كلب'],
   'намерен':['إنما الأعمال بالنيات','النية'], 'intention':['إنما الأعمال بالنيات','النية'], 'ниях':['النية'],
@@ -6835,7 +6873,11 @@ document.getElementById('goBtn').onclick=()=>{ hap('medium'); try{collapseBookSu
   qc.onclick=()=>{ qi.value=''; upd(); var r=document.getElementById('res'); if(r) r.innerHTML=''; try{setStatus('');}catch(e){}
     var tl=document.getElementById('tlSugg'); if(tl){tl.style.display='none';tl.innerHTML='';} var qh=document.getElementById('qHelper'); if(qh) qh.style.display='none'; qi.focus(); }; })();
 (function(){ let t; const el=document.getElementById('q');
-  el.addEventListener('keydown',e=>{ if(e.key==='Enter'){ clearTimeout(t); try{collapseBookSugg();}catch(e){} runSearch(true); } });   // Enter → авто-свернуть подсказки книг
+  // M426: авторост textarea (до ~5 строк) — большой запрос виден целиком, правится в любом месте
+  const _grow=()=>{ try{ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight, 132)+'px'; el.style.overflowY=el.scrollHeight>132?'auto':'hidden'; }catch(e){} };
+  el.addEventListener('input', _grow); setTimeout(_grow, 50);
+  el.addEventListener('keydown',e=>{ if(e.key==='Enter'){ if(e.shiftKey) return;   // Shift+Enter = перенос строки
+      e.preventDefault(); clearTimeout(t); try{collapseBookSugg();}catch(e){} runSearch(true); } });   // Enter → поиск
   el.addEventListener('input',()=>{ clearTimeout(t); const v=el.value.trim();
     if(v.length<2){ if(!v){document.getElementById('res').innerHTML='';setStatus('');} return; }
     if(modes.ai) return;   // режим «По смыслу (ИИ)»: НЕ дёргать ИИ на каждую букву (тратит ключ) — только по «Найти»/Enter
