@@ -4580,7 +4580,40 @@ async def _api_serve(application=None):
         pass
     print("API server on port", port)
 
+async def _req_imgs_export(application):
+    """TB-4/M437: скрины заявок владельца — ВЫГРУЗИТЬ В data/req_img/<id>.json (b64), чтобы Claude видел их сам.
+    One-shot на старте: проходит по requests[] с imgkey, докачивает отсутствующие (старые file_id живы)."""
+    try:
+        j = _journal_load()
+        todo = [r for r in j.get("requests", []) if r.get("imgkey") and not r.get("img_saved")]
+        n = 0
+        for r in todo[:30]:
+            try:
+                f = await application.bot.get_file(r["imgkey"])
+                import base64
+                from io import BytesIO
+                bio = BytesIO()
+                await f.download_to_memory(out=bio)
+                b64 = "data:image/jpeg;base64," + base64.b64encode(bio.getvalue()).decode()
+                _data_put("req_img/%d.json" % int(r["id"]), {"b64": b64, "d": r.get("d", "")}, "req img %s" % r["id"])
+                r["img_saved"] = True
+                n += 1
+            except Exception:
+                pass
+        if n:
+            _journal_save("выгружено скринов заявок: %d" % n)
+            try:
+                await application.bot.send_message(OWNER_ID, "📤 Скрины твоих заявок выгружены в журнал (%d шт) — Claude теперь видит их сам." % n)
+            except Exception:
+                pass
+    except Exception as e:
+        print("req imgs export failed:", e)
+
 async def _setup(application):
+    try:
+        await _req_imgs_export(application)
+    except Exception:
+        pass
     try:
         from telegram import MenuButtonWebApp, WebAppInfo
         btn = MenuButtonWebApp(text="𝗠𝗨𝗦𝗟𝗜𝗠𝗢𝗢𝗡-𝗔𝗣𝗣", web_app=WebAppInfo(url=WEBAPP_URL))   # имя кнопки приложения — вариант владельца
