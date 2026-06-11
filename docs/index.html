@@ -129,6 +129,8 @@
   button,.chip,.col,.tab,.tr-btn,.gear,.mini{transition:transform .08s ease,background .15s ease,opacity .15s}
   button:active,.chip:active,.col:active,.tab:active,.tr-btn:active,.gear:active{transform:scale(.94)}
   .card{animation:fadeIn .16s ease}
+  /* M334 ОПТИМИЗАЦИЯ: изоляция layout + офф-скрин карточки не рендерятся (длинные списки результатов летают) */
+  #res .card{contain:content;content-visibility:auto;contain-intrinsic-size:auto 230px}
   @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
   /* gate */
   .gate{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;
@@ -234,7 +236,7 @@
     <div class="chip" data-mode="matnonly" title="Искать совпадение только в тексте хадиса (матн), не в цепочке передатчиков (иснаде)">📜 Не искать в иснаде</div>
     <div class="chip" id="neuroChip" data-mode="neuro" title="Расширенный: вручную подобрать/поправить арабские фразы перед поиском">🔬 Расширенный</div>
   </div>
-  <div class="hint" style="margin:6px 0 8px">Слово, фраза или № (напр. <b>2:255</b>, <b>бухари 333</b>, <b>амалю ният</b>). Можно неточно — «🧠 По смыслу» поймёт. <span id="helpBtn" style="color:var(--link);cursor:pointer;font-weight:600">ⓘ Как искать</span></div>
+  <div class="hint" style="margin:6px 0 8px">Слово, фраза или № (напр. <b>2:255</b>, <b>бухари 333</b>, <b>амалю ният</b>). <b>"в кавычках"</b> = точное словосочетание; с огласовками — режим «َ Огласовки точно». <span id="helpBtn" style="color:var(--link);cursor:pointer;font-weight:600">ⓘ Как искать</span></div>
   <div id="quranReadRow" style="display:none;margin:8px 0;gap:8px;flex-wrap:wrap">
     <button id="quranRootBtn" title="Найти все слова Корана от одного корня (напр. نصر → все производные)" style="background:#10331f;border:1px solid #2e9b5b;color:#bff5d4;padding:9px 14px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;flex:1;min-width:150px">🌳 Поиск по корню</button>
     <button id="quranReadBtn" title="Открыть Коран для чтения (вся сура, листание, аудio, разбор слов)" style="background:transparent;border:1px solid #a8862e;color:#ffd75e;padding:12px 14px;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;flex:1;min-width:150px">📖 Открыть Коран</button>
@@ -545,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v316';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v317';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -739,8 +741,8 @@ function parseRuSourceNum(s){
 }
 function parseQuery(q){
   return q.split('|').map(g=>{
-    const terms=[]; const re=/"([^"]+)"|(\S+)/g; let m;
-    while((m=re.exec(g))){ let phrase=m[1]!==undefined; let t=phrase?m[1]:m[2]; let neg=false;
+    const terms=[]; const re=/"([^"]+)"|«([^»]+)»|(\S+)/g; let m;   // M335: кавычки (вкл. «ёлочки») = ТОЧНАЯ фраза
+    while((m=re.exec(g))){ let phrase=(m[1]!==undefined)||(m[2]!==undefined); let t=phrase?(m[1]!==undefined?m[1]:m[2]):m[3]; let neg=false;
       if(!phrase && t[0]==='-'){neg=true;t=t.slice(1);} if(t) terms.push({t,phrase,neg}); }
     return terms;
   }).filter(g=>g.length);
@@ -1296,7 +1298,9 @@ var _mm=document.getElementById('moreModes'); if(_mm) _mm.onclick=()=>{ const b=
 var _vb=document.getElementById('verBadge'); if(_vb) _vb.textContent=APPVER;
 /* Удобно убрать клавиатуру: тап по пустому месту (не по полю/кнопке) — снимает фокус → клавиатура прячется */
 document.addEventListener('pointerdown',function(e){ const ae=document.activeElement;
-  if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA') && !(e.target.closest&&e.target.closest('input,textarea,select,button,a,.chip,.col,.exrow,.tab,.gear'))) ae.blur();
+  if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA') && !(e.target.closest&&e.target.closest('input,textarea,select,button,a,.chip,.col,.exrow,.tab,.gear'))){
+    try{ if(ae.selectionStart!==ae.selectionEnd) return; }catch(_e){}   // M334: идёт ВЫДЕЛЕНИЕ в поле — не прятать клавиатуру («выходит-заходит»)
+    ae.blur(); }
 }, true);
 
 /* ===================== ПОИСК ===================== */
@@ -2663,6 +2667,7 @@ function cardHadith(d,groups){
   const canRead = !d.noNav && isReadable(code);   // M102: клик по источнику → читалка на этом хадисе
   meta.innerHTML='<span class="src'+(canRead?' srcnav':'')+'"'+(canRead?' title="Открыть в читалке на этом хадисе">📖 ':'>')+arOf(code)+' · №'+h.num+'</span>';
   meta.innerHTML+=authBadge(code, h.grade, (h.num||h.n));   // достоверность: НАША оценка (по номеру) → иначе оценка источника
+  try{ ourHukmBadge(code, (h.num||h.n), meta, card); }catch(e){}   // M341: хукм НАШИХ мухаддисов (hadis_isnad) — ПЕРВЫМ приоритетом, с причинами и ссылками
   if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp){ sp.style.cursor='pointer'; sp.onclick=()=>openReader(code,String(h.num)); } }
   // «في المهيمن №…» больше НЕ инлайн-бейджем — показывается в «🔗 Где ещё передаётся».
   addTr(meta,card,h.text,null,{k:'h|'+code+'|'+h.num,type:'h',coll:arOf(code),label:arOf(code)+' №'+h.num,text:(h.text||'').slice(0,200)}); card.appendChild(meta); return card;
@@ -4530,6 +4535,34 @@ async function narrAiResolve(q, host){
 let _rijalBkMap=null, _rijalBkMapP=null, _narrBkShard={};   // предрасчёт: в каких НАШИХ трудах мутабарунов есть равий (личная проверка 18989)
 function loadRijalBooksMap(){ if(_rijalBkMap) return Promise.resolve(_rijalBkMap); if(_rijalBkMapP) return _rijalBkMapP; _rijalBkMapP=fetch('./rijal_books_map.json').then(r=>r.ok?r.json():null).then(j=>{_rijalBkMap=j||{};return _rijalBkMap;}).catch(()=>{_rijalBkMap={};return _rijalBkMap;}); return _rijalBkMapP; }
 async function _narrBooks(id){ const b=Math.floor(id/100); if(!_narrBkShard[b]){ try{ _narrBkShard[b]=await (await fetch('./narrbk/'+b+'.json')).json(); }catch(e){ _narrBkShard[b]={}; } } return (_narrBkShard[b]||{})[String(id)]||[]; }
+// M341: НАШИ хукмы (Абу Шуэйб аль-Майдани / Абу Сафия, t.me/hadis_isnad) — бейдж в карточке хадиса с причинами и ссылками
+let _ourHukm=null,_ourHukmP=null;
+function loadOurHukm(){ if(_ourHukm) return Promise.resolve(_ourHukm); if(_ourHukmP) return _ourHukmP;
+  _ourHukmP=fetch('./our_hukm.json').then(r=>r.ok?r.json():{}).then(j=>{ _ourHukm=j||{}; return _ourHukm; }).catch(()=>{ _ourHukm={}; return _ourHukm; }); return _ourHukmP; }
+function ourHukmBadge(code, num, meta, card){
+  loadOurHukm().then(h=>{ const v=h && h[String(code)+':'+String(num)]; if(!v) return;
+    const b=document.createElement('span'); b.className='src';
+    b.style.cssText='cursor:pointer;background:#3d1717;color:#ff9b7a;border:1px solid #b3502e;margin-inline-start:6px;white-space:nowrap';
+    b.textContent='⛔ '+(v.ru||'недостоверный')+' — наш разбор'; b.title='Хукм наших мухаддисов — нажми: причины и ссылки';
+    let box=null;
+    b.onclick=()=>{ if(box){ box.style.display=box.style.display==='none'?'block':'none'; return; }
+      box=document.createElement('div'); box.style.cssText='border:1px solid #b3502e;border-radius:10px;padding:9px 11px;margin-top:7px;background:rgba(179,80,46,.08)';
+      let hh='<div style="font-weight:700;color:#ff9b7a;font-size:13px">⛔ '+esc(v.ru||'недостоверный')+'</div>';
+      if(v.by) hh+='<div style="font-size:11.5px;color:var(--hint);margin-top:2px">вынес: '+esc(v.by)+(v.date?(' · '+esc(v.date)):'')+'</div>';
+      (v.reasons||[]).forEach(r=>{ hh+='<div style="font-size:13px;margin-top:5px">• '+esc(r.t||'')+(r.rule?(' <span style="color:#ffd479;font-size:11px">['+esc(r.rule)+']</span>'):'')+'</div>'; });
+      if(v.links&&v.links.length){ hh+='<div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap">'+v.links.map(l=>'<span class="ohL" data-u="'+esc(l.u)+'" style="cursor:pointer;color:var(--link);font-size:12px;text-decoration:underline">🔗 '+esc(l.t||'разбор')+'</span>').join('')+'</div>'; }
+      box.innerHTML=hh; card.appendChild(box);
+      box.querySelectorAll('.ohL').forEach(a=>a.onclick=()=>{ try{ openLink(a.dataset.u); }catch(e){} });
+      try{ box.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} };
+    meta.appendChild(b); });
+}
+// M333: глоссарий терминов джарх ва тадиль (переводы Claude) — клик по слову-вердикту → перевод+сила
+let _jarhGl=null, _jarhGlP=null;
+function loadJarhGl(){ if(_jarhGl) return Promise.resolve(_jarhGl); if(_jarhGlP) return _jarhGlP;
+  _jarhGlP=fetch('./jarh_glossary.json').then(r=>r.ok?r.json():{}).then(j=>{ _jarhGl=j||{}; return _jarhGl; }).catch(()=>{ _jarhGl={}; return _jarhGl; }); return _jarhGlP; }
+function jarhExplain(word){ const g=_jarhGl||{}; word=(word||'').trim();
+  let k=g[word]?word:Object.keys(g).find(x=>x!=='note'&&(word.indexOf(x)===0||x.indexOf(word)===0));
+  if(!k) return null; const v=g[k]; return k+' — '+v.ru+(v.f?(' · '+v.f):'')+(v.n?(' · '+v.n):''); }
 // 📚 ГЛУБОКИЙ АНАЛИЗ: оценки равия (цитаты+квалификация) из 149 трудов риджаля (наш разбор → narrverd шарды)
 let _narrVerdShard={};
 async function _narrVerd(id){ const b=Math.floor(id/100); if(!_narrVerdShard[b]){ try{ _narrVerdShard[b]=await (await fetch('./narrverd/'+b+'.json')).json(); }catch(e){ _narrVerdShard[b]={}; } } return (_narrVerdShard[b]||{})[String(id)]||null; }
@@ -4584,7 +4617,7 @@ async function renderNarrVerdicts(id, host){
       const verds=(it.q.v||[]);
       let h='<div style="font-size:11.5px;color:#9fb6d6">📕 '+esc(it.b.b)+(it.b.a?(' — '+esc(it.b.a)):'')
         +((it.q.w && cat.k!=='sama')?(' <span style="font-size:10.5px;border-radius:6px;padding:1px 6px;white-space:nowrap;background:rgba(255,212,121,.12);color:#ffd479;border:1px solid #b8860b" title="Кто вынес это суждение (атрибуция автоматическая — проверяй по источнику)">🗣 '+esc(it.q.w)+'</span>'):'')
-        +(verds.length?(' <span style="font-size:10.5px;border-radius:6px;padding:1px 6px;white-space:nowrap;background:'+cat.bg+';color:'+cat.tx+';border:1px solid '+cat.col+'">'+esc(verds.join(' · '))+'</span>'):'')+'</div>';
+        +(verds.length?(' '+verds.map(w=>'<span class="vTerm" data-w="'+esc(w)+'" title="Нажми — перевод термина" style="cursor:pointer;font-size:10.5px;border-radius:6px;padding:1px 6px;white-space:nowrap;background:'+cat.bg+';color:'+cat.tx+';border:1px solid '+cat.col+'">'+esc(w)+'</span>').join(' ')):'')+'</div>';
       h+='<div style="direction:rtl;text-align:right;font-size:14px;line-height:1.78;margin-top:3px">…'+esc(it.q.q)+'…</div>';
       if(it.q.p!=null) h+='<div style="margin-top:2px"><span class="vOpen" data-bid="'+it.b.i+'" data-pg="'+it.q.p+'" style="cursor:pointer;color:var(--link);font-size:11px">📖 открыть в книге (стр. '+it.q.p+')</span></div>';
       card.innerHTML=h;
@@ -4598,6 +4631,8 @@ async function renderNarrVerdicts(id, host){
   hdr.onclick=()=>{ const op=body.style.display!=='none'; body.style.display=op?'none':'block'; hdr.querySelector('.vTg').textContent=op?'▸':'▾'; };
   sec.appendChild(hdr); sec.appendChild(body); host.appendChild(sec);
   body.querySelectorAll('.vOpen').forEach(o=>o.onclick=()=>{ try{ var mm=document.getElementById('catModal'); if(mm) mm.style.display='none'; openBook(+o.dataset.bid, +o.dataset.pg||1); }catch(e){} });
+  try{ loadJarhGl(); }catch(e){}
+  body.querySelectorAll('.vTerm').forEach(t=>t.onclick=(e)=>{ e.stopPropagation(); loadJarhGl().then(()=>{ const ex=jarhExplain(t.dataset.w); toast(ex||('«'+t.dataset.w+'» — термина пока нет в глоссарии')); }); });
 }
 // #5 шаг2: СВОДКА ПО МУТАБАРУНАМ — у каких критиков равий засвидетельствован (✅) / у каких не найден (⬜). Чистый фронт (narrbk + rijal_books_map, личная сверка 18989).
 async function renderMutabarunSummary(id, box, out){
@@ -5782,7 +5817,7 @@ document.getElementById('goBtn').onclick=()=>{ hap('medium'); try{collapseBookSu
     if(modes.narr){ if(/^[\d٠-٩\s:№#×.]+$/.test(v)){ hideNarrSugg(); } else { t=setTimeout(()=>narrSuggest(v),230); return; } }   // 👤 передатчик: живые подсказки; ЧИСЛА идут дальше — обычный поиск по номеру
     // НЕ авто-искать НЕОДНОЗНАЧНЫЙ номер аята (235 → 2:35 / 23:5): пусть помощник покажет варианты, юзер выберет
     if(tab==='quran'){ const mn=v.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)); if(/^\d{2,6}$/.test(mn) && (mn.length>=4 || +mn>114) && ayahCandidates(mn).length>1){ return; } }
-    t=setTimeout(()=>runSearch(true),350); });   // explicit=true → поиск идёт и по всей библиотеке (как по умолчанию)
+    t=setTimeout(()=>runSearch(true),500); });   // M334: 350→500мс — меньше тяжёлых перезапусков при наборе (плавность поля)
 })();
 document.getElementById('neuroRun').onclick=neuroRun;
 /* Кнопка «наверх» (появляется при прокрутке вниз) */

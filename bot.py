@@ -4646,8 +4646,31 @@ async def _on_error(update, context):
     err = str(context.error); print("ERR:", err)
     if 'Conflict' in err:  # две копии бота — не спамим, settle сам
         return
+    # M338: ошибки БОТА регистрируются в общий журнал с номером B-NNN (B=Bot), с дедупом и существом
+    eid = ''
     try:
-        await context.bot.send_message(LOG_CHAT_ID, "⚠️ Ошибка бота:\n" + err[:700])
+        cur = _data_get("errors.json", []) or []
+        if not isinstance(cur, list): cur = []
+        key = ('bot|' + err[:160])
+        existing = None
+        for e in cur:
+            if e.get('key') == key: existing = e; break
+        if existing:
+            existing['count'] = existing.get('count', 1) + 1
+            eid = existing.get('eid', '')
+        else:
+            _seq = max([e.get('bseq', 0) for e in cur] or [0]) + 1
+            eid = 'B-%03d' % _seq
+            try: _where = (update and getattr(update, 'effective_chat', None) and str(update.effective_chat.id)) or 'bot'
+            except Exception: _where = 'bot'
+            cur.append({'key': key, 'msg': err[:500], 'where': _where, 'ver': 'bot', 'stack': '',
+                        'uid': '', 'count': 1, 'fixed': False, 'bseq': _seq, 'eid': eid})
+            cur = cur[-400:]
+        _data_put("errors.json", cur, f"boterr: {err[:40]}")
+    except Exception:
+        pass
+    try:
+        await context.bot.send_message(LOG_CHAT_ID, ("🐞 ОШИБКА БОТА %s\n%s\n(в журнале; решить: «ошибка решена %s»)" % (eid or '—', err[:600], eid)) if eid else ("⚠️ Ошибка бота:\n" + err[:700]))
     except Exception:
         pass
 app.add_error_handler(_on_error)
