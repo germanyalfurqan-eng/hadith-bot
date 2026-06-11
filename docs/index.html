@@ -139,7 +139,7 @@
   .gate p{color:var(--hint);max-width:360px}
   /* modal управление */
   .modal{position:fixed;inset:0;background:#000a;display:none;align-items:flex-start;justify-content:center;z-index:80;padding:14px;padding-top:calc(40px + env(safe-area-inset-top,0px));overflow:auto}
-  .modal .panel{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;max-width:460px;width:100%;max-height:90vh;overflow:auto}
+  .modal .panel{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;max-width:460px;width:100%;max-height:90vh;overflow:auto;overscroll-behavior:contain}
   .row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:8px}
   .sw{width:46px;height:26px;border-radius:14px;background:#3a4658;position:relative;cursor:pointer;flex:none}
   .sw.on{background:var(--ok)}
@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v321';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v322';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3746,7 +3746,7 @@ async function openQuranReader(s,a){
     m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 10px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b id="qrTitle" style="font-size:14px">📖 Коран</b><span style="display:flex;gap:7px;flex:none"><button class="mini" id="qrMini" title="Свернуть читалку — звук продолжит играть в плеере снизу" style="flex:none;border:1px solid #2e9b5b;color:#bff5d4;background:transparent">🎧 свернуть</button><button class="mini" id="qrClose" style="flex:none">закрыть ✕</button></span></div>'
      +'<input id="qrSearch" placeholder="🔎 № суры · 2:255 · название (рус/араб) · слово в аяте…" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:2px solid var(--btn);border-radius:10px;padding:9px 11px;font-size:15px;margin-bottom:8px">'
      +'<div id="qrSugg" style="display:none;flex-wrap:wrap;gap:6px;margin:-3px 0 9px"></div>'
-     +'<div id="qrNav" style="display:flex;gap:6px;align-items:center;justify-content:center;margin:2px 0 10px;flex-wrap:wrap"></div><div id="qrBody" style="max-height:58vh;overflow:auto"></div></div>';
+     +'<div id="qrNav" style="display:flex;gap:6px;align-items:center;justify-content:center;margin:2px 0 10px;flex-wrap:wrap"></div><div id="qrBody" style="max-height:58vh;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch"></div></div>';
     document.body.appendChild(m);
     // закрытие читалки НЕ останавливает звук — он продолжает играть фоном (управление в мини-плеере)
     m.querySelector('#qrClose').onclick=()=>{ m.style.display='none'; try{_miniSync();}catch(e){} };
@@ -3814,6 +3814,8 @@ async function _qrLoad(){
   try{ cfg.qrLast={s:s, a:_qrView.a||0}; saveCfg(cfg); }catch(e){}   // M356: помним, где читал (продолжение при следующем открытии)
   ttl.textContent='📖 Сура '+s+' · '+(SURA_NAMES[s-1]||'');
   body.innerHTML='<div class="hint">Загружаю…</div>';
+  // M357: zoom НЕ на скроллере! zoom на #qrBody ломал тач-хиттест (WebKit): палец «мимо» → скроллился фон.
+  // Содержимое — во внутреннюю обёртку #qrZoom, масштаб применяется к ней (applyFontScale).
   const arr=await loadQuran();
   // M336: перевод в читалке — Кулиев / Абу Адель / оба / без (cfg.qrTr; по умолчанию следует глобальной настройке qtr)
   const trMode=cfg.qrTr||((cfg.qtr==='rus-abuadel')?'abuadel':'kuliev');
@@ -3825,8 +3827,10 @@ async function _qrLoad(){
   }
   const ayahs=arr.filter(x=>x.s===s).sort((x,y)=>x.a-y.a);
   body.innerHTML='';
+  const zw=document.createElement('div'); zw.id='qrZoom'; body.appendChild(zw);   // M357: масштаб живёт здесь, скроллер чистый
+  try{ zw.style.zoom=(cfg.qrFontScale||1); }catch(e){}
   // басмала отдельной шапкой (кроме Фатихи=1 и Тауба=9) — она идёт ДО суры, не часть аята
-  if(s!==1 && s!==9){ const bh=document.createElement('div'); bh.style.cssText='text-align:center;font-size:25px;'+_AF+';color:var(--mark);padding:8px 0 10px;border-bottom:1px solid var(--border);margin-bottom:6px;direction:rtl'; bh.textContent='بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ'; body.appendChild(bh); }
+  if(s!==1 && s!==9){ const bh=document.createElement('div'); bh.style.cssText='text-align:center;font-size:25px;'+_AF+';color:var(--mark);padding:8px 0 10px;border-bottom:1px solid var(--border);margin-bottom:6px;direction:rtl'; bh.textContent='بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ'; zw.appendChild(bh); }
   ayahs.forEach(v=>{ const blk=document.createElement('div'); blk.id='qr-'+v.a;
     blk.style.cssText='border-bottom:1px solid var(--border);padding:9px 4px'+(v.a===_qrView.a?';background:rgba(74,222,128,.10);border-radius:8px':'');
     let _vtext=(v.a===1 && s!==1 && s!==9)?_stripBasmala(v.text):v.text;   // у аята 1 убрать приклеенную басмалу
@@ -3856,7 +3860,7 @@ async function _qrLoad(){
         tools.insertBefore(meta, tools.firstChild); tools.dataset.f='1'; }
       tools.style.display='block'; };
     ctl.appendChild(au); ctl.appendChild(tb); blk.appendChild(ctl); blk.appendChild(tools);
-    body.appendChild(blk);
+    zw.appendChild(blk);
   });
   nav.innerHTML='';
   const mk=(t,fn,dis)=>{ const b=document.createElement('button'); b.textContent=t; if(dis)b.disabled=true; b.onclick=fn;
@@ -6012,7 +6016,8 @@ if(tg && tg.BackButton){ try{ tg.BackButton.onClick(()=>{ if(!_closeTopModal()){
 function _qrOpen(){ const m=document.getElementById('qrModal'); return !!(m && m.style.display && m.style.display!=='none'); }
 function applyFontScale(){ try{ const z=(cfg.fontScale||1), qz=(cfg.qrFontScale||1);   // Коран — ОТДЕЛЬНЫЙ размер, не влияет на остальное
   ['res','bookText'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.zoom=z; });
-  const qb=document.getElementById('qrBody'); if(qb) qb.style.zoom=qz;
+  const qzw=document.getElementById('qrZoom'); const qb=document.getElementById('qrBody');
+  if(qzw){ qzw.style.zoom=qz; if(qb) qb.style.zoom=''; } else if(qb) qb.style.zoom=qz;   // M357: zoom на обёртке, не на скроллере (и снять старый с qrBody)
   document.querySelectorAll('.tr-out').forEach(el=>el.style.zoom=z);
   const lbl=document.getElementById('fsLbl'); if(lbl) lbl.textContent=Math.round((_qrOpen()?qz:z)*100)+'%'; }catch(e){} }
 // === Фоновый мини-плеер аудио Корана: видно снизу, не мешает; «↪ к аяту» возвращает к читаемому аяту ===
@@ -6051,9 +6056,14 @@ function _miniBuild(){ const bar=document.createElement('div'); bar.id='miniPlay
   bar.querySelector('#miniX').onclick=()=>{ try{ window._qrStopped=true; if(window._qrAudio){window._qrAudio.onended=null;window._qrAudio.pause();window._qrAudio=null;} _qrWordStop(); }catch(e){} bar.style.display='none'; const d=document.getElementById('miniDot'); if(d) d.style.display='none'; };
   return bar; }
 function _miniSync(){ try{
+  // M357: пока открыт ЛЮБОЙ модал — фон под ним не прокручивается (палец крутил задний фон вместо читалки)
+  try{ const lock=_visModals().length>0; const want=lock?'hidden':''; if(document.body.style.overflow!==want) document.body.style.overflow=want; }catch(e){}
   let bar=document.getElementById('miniPlayer'); const dot=document.getElementById('miniDot');
   // показываем плеер по «сессии» — пока чтение не остановлено явно; при переходе аят→аят НЕ моргаем
   if(!window._qrNow || window._qrStopped){ if(bar) bar.style.display='none'; if(dot) dot.style.display='none'; return; }
+  // M358: при ОТКРЫТОЙ читалке Корана плеер не показываем (в читалке свои кнопки) — плеер появляется, когда читалку свернул
+  const _qm=document.getElementById('qrModal');
+  if(_qm && _qm.style.display && _qm.style.display!=='none'){ if(bar) bar.style.display='none'; if(dot) dot.style.display='none'; return; }
   if(!bar) bar=_miniBuild();
   // свёрнуто (#3): показываем компактную таблетку, полный плеер прячем; звук играет дальше
   if(window._miniCollapsed){ const d=document.getElementById('miniDot'); if(d && d.style.display!=='flex') d.style.display='flex'; bar.style.display='none'; return; }
