@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v327';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v328';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2487,7 +2487,9 @@ async function maktabaByNum(seq, n){
   // M362/M355: КАНОН МГНОВЕННО из локальных изданий (тексты уже у нас) — полная «классная» карточка cardHadith
   // со всеми инструментами БЕЗ ожидания turath; turath потом дополняет печати с томами/листами ниже в том же слоте
   const _stdTxt={};   // M364: канон-текст стандартного издания (для сверки нумерации печатей)
-  let _edHide=false;  // M365 (объявлено ДО канон-колбэков)
+  let _edHide=true;   // M372 (решение владельца): доп. печати СКРЫТЫ по умолчанию — раскрытие кнопкой слота
+  const _edBtnPaint=(btn, sl)=>{ btn.textContent=(btn.__open?'▾ скрыть другие печати':'▸ другие печати')+' ('+btn.__n+')'+(sl.dataset.diff?' · ⚠️ есть отличия':'');
+    if(sl.dataset.diff){ btn.style.borderColor='#b58a2e'; btn.style.color='#ffce63'; } };
   // M364: печать канона сверяется со СТАНДАРТНЫМ изданием — «№5590 السلطانية = другой хадис» должен быть ВИДЕН
   const _chkStd=(cardEl, code, sn)=>{ let tries=0; const t=()=>{ const stc=_stdTxt[code];
       if(stc===undefined){ if(tries++<10) setTimeout(t, 700); return; } if(!stc) return;
@@ -2496,7 +2498,8 @@ async function maktabaByNum(seq, n){
         if(fw.length<4) return;
         const hit=stc.indexOf(fw.slice(0,3).join(' '))!==-1 || stc.indexOf(fw.slice(2,5).join(' '))!==-1 || stc.indexOf(fw.slice(4,7).join(' '))!==-1;
         if(!hit){ const b=document.createElement('div'); b.style.cssText='margin-top:5px;font-size:11px;color:#ffce63;border:1px dashed #b58a2e;border-radius:8px;padding:3px 8px;display:inline-block';
-          b.textContent='⚠️ в этой печати под №'+n+' — другой хадис (нумерация ≠ стандартной)'; cardEl.appendChild(b); } }catch(e){} };
+          b.textContent='⚠️ в этой печати под №'+n+' — другой хадис (нумерация ≠ стандартной)'; cardEl.appendChild(b);
+          try{ const sl2=cardEl.parentNode; if(sl2){ sl2.dataset.diff='1'; if(sl2.__edBtn) _edBtnPaint(sl2.__edBtn, sl2); } }catch(e){} } }catch(e){} };
     setTimeout(t, 900); };
   CANON.forEach(code=>{ (async()=>{ try{
     const ec=(code==='ibnmajah')?'ibnmaja':code;
@@ -2507,7 +2510,7 @@ async function maktabaByNum(seq, n){
     const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:11px;margin:2px 0 3px;color:#7fb3ff'; lbl.textContent='⚡ наше издание (стандартная нумерация) — мгновенно';
     wrap.appendChild(lbl); wrap.appendChild(cardHadith({code:ec, h:hh}, []));
     canonSlots[code].insertBefore(wrap, canonSlots[code].firstChild);
-    if(_edHide) canonSlots[code].querySelectorAll('.canonEd').forEach(c=>c.style.display='none');
+    const _sb=canonSlots[code].__edBtn; if(_sb && !_sb.__open) canonSlots[code].querySelectorAll('.canonEd').forEach(c=>c.style.display='none');
     shown++; head.textContent='📚 Хадис №'+n+' — найдено книг: '+shown+' · ищу ещё по Мактабе…';
   }catch(e){} })(); });
   // M368: НЕканонические первоисточники тоже «ПОД РУКОЙ» — тексты в шардах ./f40c/ на Pages (68 809 хадисов, 11 книг,
@@ -2535,15 +2538,15 @@ async function maktabaByNum(seq, n){
     (topSlots.get(bid)||listTop).appendChild(wrap);
     shown++; head.textContent='📚 Хадис №'+n+' — найдено книг: '+shown+' · ищу ещё по Мактабе…';
   }catch(e){} })(); });
-  // M365: тумблер «скрыть доп. печати» — оставить только стандартное издание каждого первоисточника
+  // M365/M372: глобальный тумблер «показать все доп. печати» (по умолчанию печати скрыты, у каждого слота своя кнопка)
   const edTglBox=document.createElement('div'); edTglBox.style.cssText='margin:0 0 7px';
   const edTgl=document.createElement('span'); edTgl.style.cssText='cursor:pointer;font-size:11.5px;padding:3px 10px;border-radius:8px;border:1px solid var(--border);color:var(--hint)';
-  edTgl.textContent='☐ скрыть доп. печати (только стандарт)';
-  edTgl.onclick=()=>{ _edHide=!_edHide;
-    edTgl.textContent=(_edHide?'☑':'☐')+' скрыть доп. печати (только стандарт)';
-    edTgl.style.background=_edHide?'var(--btn)':''; edTgl.style.color=_edHide?'#fff':'var(--hint)'; edTgl.style.borderColor=_edHide?'var(--btn)':'var(--border)';
-    Object.values(canonSlots).forEach(sl=>{ if(!sl.querySelector('.canonStd')) return;   // скрывать печати только там, где стандарт есть
-      sl.querySelectorAll('.canonEd').forEach(c=>{ c.style.display=_edHide?'none':''; }); }); };
+  edTgl.textContent='☐ показать все доп. печати';
+  edTgl.onclick=()=>{ _edHide=!_edHide; const open=!_edHide;
+    edTgl.textContent=(open?'☑':'☐')+' показать все доп. печати';
+    edTgl.style.background=open?'var(--btn)':''; edTgl.style.color=open?'#fff':'var(--hint)'; edTgl.style.borderColor=open?'var(--btn)':'var(--border)';
+    Object.values(canonSlots).forEach(sl=>{ if(!sl.__edBtn) return; sl.__edBtn.__open=open;
+      sl.querySelectorAll('.canonEd').forEach(c=>{ c.style.display=open?'':'none'; }); _edBtnPaint(sl.__edBtn, sl); }); };
   edTglBox.appendChild(edTgl); res.insertBefore(edTglBox, listCanon);
   const tail=document.createElement('div'); tail.style.cssText='text-align:center;margin:10px 0';
   const more=document.createElement('button'); more.className='mini'; more.style.cssText='border:1px solid var(--border);padding:8px 16px;border-radius:10px'; more.textContent='⬇️ Ещё книги с №'+n;
@@ -2614,9 +2617,15 @@ async function maktabaByNum(seq, n){
           if(!mark.test(sn)) continue;   // «300» из сноски/даты/URL — не маркер хадиса
           seen.add(bid); add++; shown++;
           const cc=_bid2code[bid];
-          if(cc){ const rEl=row(x, sn); rEl.classList.add('canonEd');   // M343: канонический слот; стандартная карточка сверху (M362)
-            if(_edHide && canonSlots[cc].querySelector('.canonStd')) rEl.style.display='none';   // M365
-            canonSlots[cc].appendChild(rEl); _chkStd(rEl, cc, sn); }   // M364: сверка нумерации печати со стандартом
+          if(cc){ const sl=canonSlots[cc]; const rEl=row(x, sn); rEl.classList.add('canonEd');   // M343: канонический слот
+            // M372: печати по умолчанию СКРЫТЫ за кнопкой слота «▸ другие печати (N) · ⚠️ отличия»
+            let btn=sl.__edBtn;
+            if(!btn){ btn=document.createElement('button'); btn.className='mini'; btn.style.cssText='margin:2px 0 8px;font-size:11.5px;padding:5px 12px;border:1px dashed var(--border);border-radius:9px;color:var(--hint);background:transparent;cursor:pointer';
+              btn.__n=0; btn.__open=!_edHide;
+              btn.onclick=()=>{ btn.__open=!btn.__open; sl.querySelectorAll('.canonEd').forEach(cd=>cd.style.display=btn.__open?'':'none'); _edBtnPaint(btn, sl); };
+              sl.appendChild(btn); sl.__edBtn=btn; }
+            btn.__n++; rEl.style.display=btn.__open?'':'none';
+            sl.appendChild(rEl); _chkStd(rEl, cc, sn); _edBtnPaint(btn, sl); }   // M364: сверка нумерации
           else if(f40.has(bid)) (topSlots.get(bid)||listTop).appendChild(row(x, sn));   // 📜 первоисточники — слоты в порядке списка 40
           else list.appendChild(row(x, sn));
         }
@@ -4784,14 +4793,20 @@ async function renderNarrVerdicts(id, host){
   try{ loadJarhGl(); }catch(e){}
   body.querySelectorAll('.vTerm').forEach(t=>t.onclick=(e)=>{ e.stopPropagation(); loadJarhGl().then(()=>{ const ex=jarhExplain(t.dataset.w); toast(ex||('«'+t.dataset.w+'» — термина пока нет в глоссарии')); }); });
 }
+// M371: ЕДИНЫЙ порядок критиков ВЕЗДЕ — хронология по году смерти, РАННИЕ ПЕРВЫМИ (дух R38: ранние имамы — эталон)
+const _CRIT_DEATH={'аш-Шафии':820,'Яхья ибн Маин':847,'Али ибн аль-Мадини':849,'Ахмад ибн Ханбаль':855,'аль-Бухари':870,'Муслим':875,
+ 'Абу Зураа ар-Рази':878,'Абу Дауд ас-Сиджистани':889,'аль-Фасауи':890,'ат-Тирмизи':892,'Ибн Аби Шайба (М. б. Усман)':909,'ан-Насаи':915,
+ 'ат-Табари':923,'Ибн Аби Хайсама':924,'Ибн Аммар аш-Шахид':929,'ат-Тахауи':933,'аль-Укайли':934,'Ибн Аби Хатим ар-Рази':938,
+ 'Ибн Ади аль-Джурджани':976,'Абуш-Шайх аль-Асбахани':979,'ад-Даракутни':995,'аль-Хаким':1014,'аль-Мукаддами':936};
+function _critOrd(n){ return _CRIT_DEATH[String(n||'').trim()]||1500; }
 // #5 шаг2: СВОДКА ПО МУТАБАРУНАМ — у каких критиков равий засвидетельствован (✅) / у каких не найден (⬜). Чистый фронт (narrbk + rijal_books_map, личная сверка 18989).
 async function renderMutabarunSummary(id, box, out){
   try{
     const [books, map] = await Promise.all([_narrBooks(id), loadRijalBooksMap()]);
     if(!map || !Object.keys(map).length){ box.remove&&box.remove(); return; }
-    const found=[...new Set((books||[]).map(b=>map[String(b)]).filter(Boolean))].sort((a,b)=>(''+a).localeCompare(''+b,'ru'));
+    const found=[...new Set((books||[]).map(b=>map[String(b)]).filter(Boolean))].sort((a,b)=>(_critOrd(a)-_critOrd(b))||(''+a).localeCompare(''+b,'ru'));   // M371: ранние первыми
     const all=[...new Set(Object.values(map).filter(Boolean))];
-    const notFound=all.filter(c=>found.indexOf(c)===-1).sort((a,b)=>(''+a).localeCompare(''+b,'ru'));
+    const notFound=all.filter(c=>found.indexOf(c)===-1).sort((a,b)=>(_critOrd(a)-_critOrd(b))||(''+a).localeCompare(''+b,'ru'));
     // НЕЙТРАЛЬНО (замечание владельца: ✅-галки выглядели как «похвалил» ДО квалификации!)
     box.style.cssText='border:1px solid #3a5b9b;border-radius:12px;padding:11px;margin:8px 0;background:rgba(58,91,155,.08)';
     box.innerHTML='<div style="font-weight:700;color:#bcd2ff;font-size:13.5px;margin-bottom:7px">📊 По критикам наших 149 книг: у кого ЕСТЬ записи об этом передатчике <span style="font-weight:400;color:var(--hint)">('+all.length+' критиков-авторов; эталонный список 48 мутабарунов — ниже)</span></div>';
@@ -4837,7 +4852,8 @@ async function showNarratorCardLocal(name, host){
   if(_ruNm) h+='<div style="direction:ltr;text-align:left;font-size:12.5px;color:#bcd0ff;margin-top:1px">≈ '+esc(_ruNm)+'</div>';
   h+='<div style="font-size:11px;color:var(--hint);margin:2px 0 7px">📖 موسوعة رواة الحديث (база Мактабы) · #'+c[0]+'</div>'
     +row('الكنية',c[2])+row('النسب',c[3])+row('سنة الوفاة',c[4]?('~'+c[4]+'هـ'):'')+row('الطبقة',c[7])
-    +rank('الرتبة عند ابن حجر',c[5])+rank('الرتبة عند الذهبي',c[6]);
+    +rank('الرتبة عند ابن حجر',c[5])+rank('الرتبة عند الذهبي',c[6])
+    +((c[5]||c[6])?'<div style="font-size:10.5px;color:var(--hint);margin-top:2px">↑ поздние своды — справочно (Ибн Хаджар и аз-Захаби НЕ из 48 мутабарунов); эталон — акваль 48 из 150 книг, разделы ниже (R38)</div>':'');
   // 📜 биография-сводка по-русски (заявка: «первым делом общая признанная биография на арабском и русском»)
   try{
     const bio=[];
@@ -4903,7 +4919,14 @@ function renderMosuaJarh(c, out){
         let h='';
         if(fr.src) h+='<div style="font-size:11px;color:#9fb6d6;font-weight:700;margin-bottom:3px">📕 '+esc(fr.src)+'</div>';
         if(fr.t) h+='<div class="ar" style="font-size:13.5px;line-height:1.95">'+_mosuaHtml(fr.t)+'</div>';
-        card.innerHTML=h; host.appendChild(card); });
+        card.innerHTML=h;
+        // M369: перевод ПОД СВОЕЙ цитатой (а не одной простынёй в конце)
+        if(fr.t && fr.t.length>15){ const tb=document.createElement('button'); tb.className='mini'; tb.textContent='🌐 перевод'; tb.style.cssText='font-size:11px;padding:3px 9px;margin-top:4px';
+          const to=document.createElement('div'); to.className='tr-out'; to.style.cssText='display:none;margin-top:4px;direction:ltr;text-align:left';
+          tb.onclick=()=>{ to.style.display='block'; let hsh=0; const s=fr.t; for(let q=0;q<s.length;q++) hsh=(hsh*31+s.charCodeAt(q))>>>0;
+            try{ translateTafsir(s.slice(0,3000), 'mosua'+c[0], hsh%1000000, 0, to, null); }catch(e){} };
+          card.appendChild(tb); card.appendChild(to); }
+        host.appendChild(card); });
     } else {
       host.className='ar'; host.style.cssText='font-size:13.5px;line-height:1.95;white-space:pre-wrap;direction:rtl;text-align:right'; host.textContent=txt;
     }
@@ -4990,8 +5013,9 @@ async function doRijalCorpus(name, out, btn){
     sb.appendChild(mkS('📕 По сборникам','book')); sb.appendChild(mkS('✍️ По авторам','author'));
     head.appendChild(sb); out.appendChild(head);
     let arr=st.all.slice();
-    if(st.sort==='author') arr.sort((a,b)=>(''+(a.critic||'')).localeCompare(''+(b.critic||''),'ru')||(''+(a.book_name||'')).localeCompare(''+(b.book_name||'')));
-    else arr.sort((a,b)=>(''+(a.book_name||'')).localeCompare(''+(b.book_name||'')));
+    // M371: и здесь критики в ТОМ ЖЕ порядке, что чипы сверху (хронология, ранние первыми)
+    if(st.sort==='author') arr.sort((a,b)=>(_critOrd(a.critic)-_critOrd(b.critic))||(''+(a.critic||'')).localeCompare(''+(b.critic||''),'ru')||(''+(a.book_name||'')).localeCompare(''+(b.book_name||'')));
+    else arr.sort((a,b)=>(_critOrd(a.critic)-_critOrd(b.critic))||(''+(a.book_name||'')).localeCompare(''+(b.book_name||'')));
     let lastG='\x00', gwrap=null;
     arr.forEach(x=>{ const g=st.sort==='author'?(x.critic||'—'):(x.book_name||'—');
       if(g!==lastG){ lastG=g;
