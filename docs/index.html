@@ -547,7 +547,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v322';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v323';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5033,6 +5033,113 @@ async function _vgMapBlock(ref, box){
       try{ openBook(el.dataset.b, p||1); }catch(e){} }; });
   }catch(e){}
 }
+/* ===== M349: дерево передачи от Пророка ﷺ — «шаджара» (SVG-схема, как в книгах тахриджа) + «компактно» (аккордеон).
+   Чистка узлов: опознание по базе 18989 равиев (ранг → цвет), падеж в именительный (أبي→أبو), огласовки сохраняются
+   из текста источника, обрывки матна/тахвиля отсеиваются. Неопознанное звено НЕ выбрасывается (иначе цепочка соврёт) — серый пунктир. ===== */
+function _nomCase(nm){ const ws=nm.split(/\s+/); const f=stripDiac(ws[0]||'');
+  if(f==='أبي'||f==='ابي'||f==='أبا'||f==='ابا') ws[0]='أبو';
+  return ws.join(' '); }
+async function _buildIsnadTreeData(vs){
+  try{ await loadNarrNames(); }catch(e){}
+  const clean=nm=>String(nm||'').replace(/\s+(قال|قالا|قالت|قالوا)\s*$/,'').replace(/\s*ح\s*و?\s*$/,'').trim();
+  const isNameLike=t=>{ const p=stripDiac(t); return / بن | ابن /.test(' '+p+' ')||/^(?:أبو|أبي|أبا|أم|عبد|ابن)\s/.test(p+' '); };
+  const root={nm:'النَّبِيُّ ﷺ', ch:new Map(), srcs:[], n:0, grade:null, id:null, root:1};
+  const flat=[];
+  for(const v of vs){ if(!v.chain||!v.chain.length) continue; let node=root; root.n++;
+    const rev=[...v.chain].reverse();
+    for(const nm0 of rev){ const nm=_nomCase(clean(nm0)); const plain=stripDiac(nm);
+      if(plain.length<3||/^[حو\s]+$/.test(plain)) continue;
+      if(/^(أبو|ابو|أبي|ابي|ابن|أم|عبد|بن)$/.test(plain.trim())) continue;   // одиночное служебное слово (остаток تحويل/обрыва) — не узел
+      if(plain.split(/\s+/).length>5 && !isNameLike(nm)) continue;
+      let id=null; try{ id=await _narrLookup(nm); }catch(e){}
+      if(id==null && !isNameLike(nm)) continue;
+      const k=canon(plain);
+      if(!node.ch.has(k)){ const nd={nm, id, grade:null, death:null, ch:new Map(), srcs:[], n:0, i:flat.length}; flat.push(nd); node.ch.set(k, nd);
+        if(id!=null){ try{ const cc=await _narrCard(id); if(cc){ nd.grade=_narrGrade(cc[5]||'', cc[6]||''); nd.death=cc[4]||null; nd.full=cc[1]||''; nd.kun=cc[2]||''; } }catch(e){} } }
+      node=node.ch.get(k); node.n++; }
+    v.srcs.forEach(s=>node.srcs.push(s)); }
+  let madar=null, cur=root;
+  while(true){ const kids=[...cur.ch.values()]; const k=(kids.length===1&&kids[0].n===root.n)?kids[0]:null; if(!k) break; cur=k; madar=cur; }
+  return {root, madar, flat};
+}
+function _vSrcB(s){ return '<span '+(s.bid?('class="vBk" data-bid="'+esc(String(s.bid))+'" data-pid="'+esc(String(s.pid||''))+'" style="cursor:pointer;'):'style="')+'font-size:10.5px;border-radius:6px;padding:1px 6px;background:rgba(46,155,91,.12);color:#bff5d4;border:1px solid #2e9b5b;white-space:nowrap;margin:0 2px">'+(s.bid?'🌐 ':'📖 ')+esc(s.coll)+(s.num?(' №'+esc(String(s.num))):'')+'</span>'; }
+function _shajaraSVG(d){
+  const SW=150, VS=86, NH=34;
+  let leaf=0, maxD=0;
+  const place=(nd,depth)=>{ nd.d=depth; if(depth>maxD)maxD=depth;
+    const kids=[...nd.ch.values()].sort((a,b)=>b.n-a.n);
+    if(!kids.length){ nd.x=leaf++; } else { kids.forEach(k=>place(k,depth+1)); nd.x=(kids[0].x+kids[kids.length-1].x)/2; } };
+  place(d.root,0);
+  const W=Math.max(leaf*SW+30, 320), H=(maxD+1)*VS+110;
+  const PX=nd=>W-(nd.x*SW+SW/2+15), PY=nd=>nd.d*VS+26;
+  let edges='', nodes='';
+  const draw=(nd)=>{
+    const x=PX(nd), y=PY(nd);
+    [...nd.ch.values()].forEach(k=>{ const cx=PX(k), cy=PY(k);
+      edges+='<path d="M'+x+' '+(y+NH/2)+' C'+x+' '+(y+VS*0.6)+' '+cx+' '+(cy-VS*0.45)+' '+cx+' '+(cy-NH/2)+'" stroke="#5a5f7a" stroke-width="1.5" fill="none"/>'; });
+    const g=nd.grade, isM=(nd===d.madar);
+    const stroke=isM?'#f1c40f':(nd.root?'#3498db':(g?g.c:'#6b7080'));
+    const fill=nd.root?'rgba(52,152,219,.13)':(isM?'rgba(241,196,15,.13)':(g?g.bg:'transparent'));
+    const dash=(nd.id==null&&!nd.root)?' stroke-dasharray="4 3"':'';
+    const wN=Math.max(84, Math.min(SW-8, 18+(nd.nm.length*6.4)));
+    nodes+='<g class="tnN" data-i="'+(nd.i!==undefined?nd.i:-1)+'" style="cursor:pointer">'
+      +'<rect x="'+(x-wN/2)+'" y="'+(y-NH/2)+'" width="'+wN+'" height="'+NH+'" rx="9" fill="'+fill+'" stroke="'+stroke+'" stroke-width="'+(isM?2.5:1.4)+'"'+dash+'/>'
+      +'<text x="'+x+'" y="'+(y+5)+'" text-anchor="middle" direction="rtl" font-size="13" fill="var(--text)">'+esc(nd.nm.length>22?nd.nm.slice(0,21)+'…':nd.nm)+(nd.n>1?' ×'+nd.n:'')+'</text>'
+      +(isM?('<text x="'+x+'" y="'+(y-NH/2-5)+'" text-anchor="middle" font-size="10" fill="#f1c40f">مدار</text>'):'')
+      +'</g>';
+    if(nd.srcs.length){ let sy=y+NH/2+14;
+      nd.srcs.slice(0,3).forEach(s=>{ const lab=(s.coll||'')+(s.num?(' №'+s.num):'');
+        nodes+='<g class="tnB" data-bid="'+esc(String(s.bid||''))+'" data-pid="'+esc(String(s.pid||''))+'" style="cursor:pointer"><rect x="'+(x-wN/2)+'" y="'+(sy-9)+'" width="'+wN+'" height="18" rx="9" fill="rgba(46,155,91,.13)" stroke="#2e9b5b" stroke-width="1"/><text x="'+x+'" y="'+(sy+4)+'" text-anchor="middle" direction="rtl" font-size="10.5" fill="#bff5d4">'+esc(lab.length>20?lab.slice(0,19)+'…':lab)+'</text></g>'; sy+=22; });
+      if(nd.srcs.length>3) nodes+='<text x="'+x+'" y="'+(sy+3)+'" text-anchor="middle" font-size="10" fill="var(--hint)">+'+(nd.srcs.length-3)+'</text>'; }
+    [...nd.ch.values()].forEach(draw); };
+  draw(d.root);
+  return '<div style="overflow-x:auto;direction:rtl"><svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" style="display:block">'+edges+nodes+'</svg></div>';
+}
+function _treeAccordion(d){
+  const rec=(nd)=>{ const kids=[...nd.ch.values()].sort((a,b)=>b.n-a.n);
+    const isM=(nd===d.madar); const g=nd.grade;
+    const dot=nd.root?'':'<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+(g?g.c:'#6b7080')+';margin-left:5px"></span>';
+    let row;
+    if(nd.root) row='<div style="padding:5px 10px;border:1px solid #3498db;border-radius:9px;display:inline-block;color:#bfe0ff;font-weight:700;font-size:13.5px">'+esc(nd.nm)+'</div>';
+    else row='<div style="padding:4px 0;font-size:13.5px">'
+      +(kids.length?('<span class="accTg" style="cursor:pointer;color:var(--hint);font-size:12px;padding:2px 6px">▾</span>'):'<span style="color:var(--hint);font-size:12px;padding:2px 6px">·</span>')
+      +dot+'<span class="tnN" data-i="'+nd.i+'" style="cursor:pointer;'+(isM?'border:1.5px solid #f1c40f;border-radius:7px;padding:2px 7px;color:#ffe9a8;font-weight:700':'color:var(--text)')+'">'+esc(nd.nm)+'</span>'
+      +(nd.n>1?(' <b style="font-size:10.5px;color:var(--hint)">×'+nd.n+'</b>'):'')+(isM?' <span style="font-size:10px;color:#f1c40f">مدار</span>':'')
+      +(nd.srcs.length?(' '+nd.srcs.map(_vSrcB).join('')):'')+'</div>';
+    let h='<div>'+row;
+    if(kids.length) h+='<div class="accKids" style="margin-right:13px;padding-right:10px;border-right:1.5px solid rgba(255,255,255,.13)">'+kids.map(rec).join('')+'</div>';
+    return h+'</div>'; };
+  return '<div style="direction:rtl;text-align:right">'+rec(d.root)+'</div>';
+}
+function _narrMini(nd, bio, out){
+  const g=nd.grade;
+  bio.innerHTML='<div style="margin-top:8px;padding:9px 11px;border:1px solid '+(g?g.c:'var(--border)')+';border-radius:10px;background:'+(g?g.bg:'var(--bg)')+';direction:rtl;text-align:right">'
+    +'<div style="font-weight:700;font-size:14.5px;color:var(--text)">'+esc(nd.nm)+'</div>'
+    +(nd.full&&stripDiac(nd.full)!==stripDiac(nd.nm)?('<div style="font-size:12.5px;color:var(--hint);margin-top:2px">'+esc(nd.full)+(nd.kun?(' · '+esc(nd.kun)):'')+'</div>'):(nd.kun?('<div style="font-size:12.5px;color:var(--hint);margin-top:2px">'+esc(nd.kun)+'</div>'):''))
+    +'<div style="font-size:12px;margin-top:4px">'+(nd.death?('وفاة ~'+esc(String(nd.death))+'هـ · '):'')+(g?('<b style="color:'+g.c+'">'+esc(g.g)+'</b>'):'<span style="color:var(--hint)">'+(nd.id==null?'не опознан в базе равиев':'нет оценки')+'</span>')+'</div>'
+    +(nd.id!=null?'<button class="mini nmFull" style="margin-top:7px;border:1px solid #6c5ce7;color:#d9ccff;background:transparent;padding:6px 12px;border-radius:9px">👤 Полная карточка</button>':'')
+    +'</div>';
+  const fb=bio.querySelector('.nmFull'); if(fb) fb.onclick=()=>{ const bx=document.createElement('div'); bx.style.marginTop='6px'; out.appendChild(bx); showNarratorBio(nd.nm, bx); try{ bx.scrollIntoView({block:'nearest'}); }catch(e){} };
+}
+async function _renderIsnadTree(vs, box, st, out){
+  if(!box) return;
+  try{
+    const d=box.__d || (box.__d=await _buildIsnadTreeData(vs));
+    if(!d.root.ch.size){ box.innerHTML='<span class="hint">Цепочки не распознаны — дерево пустое.</span>'; return; }
+    const mode=st.treeMode||((innerWidth<480)?'comp':'shajara');
+    box.innerHTML='<div style="display:flex;gap:6px;margin:2px 0 8px;flex-wrap:wrap">'
+      +'<span class="vTm" data-m="shajara" style="cursor:pointer;font-size:11.5px;padding:3px 10px;border-radius:8px;'+(mode==='shajara'?'background:var(--btn);color:#fff':'border:1px solid var(--border);color:var(--hint)')+'">🌳 шаджара (схема)</span>'
+      +'<span class="vTm" data-m="comp" style="cursor:pointer;font-size:11.5px;padding:3px 10px;border-radius:8px;'+(mode==='comp'?'background:var(--btn);color:#fff':'border:1px solid var(--border);color:var(--hint)')+'">📑 компактно</span></div>'
+      +(mode==='shajara'?_shajaraSVG(d):_treeAccordion(d))
+      +'<div class="hint" style="font-size:10.5px;margin-top:5px">Цвет = достоверность по учёным (🟢 ثقة · 🟡 صدوق · 🟠 ضعيف · ⚪ нет оценки) · золотая рамка = مدار · пунктир = не опознан в базе · тап по имени → мини-карточка.</div>'
+      +'<div class="tnBio"></div>';
+    box.querySelectorAll('.vTm').forEach(b=>b.onclick=()=>{ st.treeMode=b.dataset.m; _renderIsnadTree(vs, box, st, out); });
+    box.querySelectorAll('.accTg').forEach(b=>b.onclick=()=>{ const kk=b.parentNode.parentNode.querySelector('.accKids'); if(kk){ const vis=kk.style.display!=='none'; kk.style.display=vis?'none':'block'; b.textContent=vis?'◂':'▾'; } });
+    const bio=box.querySelector('.tnBio');
+    box.querySelectorAll('.tnN').forEach(el=>{ el.onclick=()=>{ const nd=d.flat[+el.dataset.i]; if(!nd) return; _narrMini(nd, bio, out); try{ bio.scrollIntoView({block:'nearest'}); }catch(e){} }; });
+    box.querySelectorAll('.tnB').forEach(el=>{ el.onclick=(ev)=>{ ev.stopPropagation(); if(el.dataset.bid) try{ openBook(el.dataset.bid, +el.dataset.pid||1); }catch(e){} }; });
+  }catch(e){ box.innerHTML='<span class="hint">🔧 дерево не построилось</span>'; }
+}
 // Режим версий (طرق): ⚡ Э2.2-карта (мгновенно) + версии в наших сборниках + ПО ВСЕЙ МАКТАБЕ (M329), тумблеры повторов
 async function openIsnadVersions(text, out, ref){
   out.style.display='block'; out.innerHTML='';
@@ -5053,35 +5160,7 @@ async function openIsnadVersions(text, out, ref){
   const versions=[{coll:'этот хадис', num:'', chain:isnadNarrators(text), mk:mKey(canon(flat))}];
   for(const code of COLS){ if(versions.length>=9) break;
     try{ const arr=await loadByCode(code); for(const h of arr){ const ct=canon(h.text); if(isVer(ct)){ const ch=isnadNarrators(h.text); if(ch.length){ versions.push({coll:arOf(code)||code, num:h.num, chain:ch, mk:mKey(ct)}); } break; } } }catch(e){} }
-  const st={uniqM:false, mkDone:false, busy:false, tree:false};
-  // M329c: дерево-граф от Пророка ﷺ — реверс цепочек в trie; ветка = расхождение; مدار = самый глубокий узел всех версий
-  const treeHtml=(vs)=>{
-    // чистка ТОЛЬКО для дерева: хвосты глаголов передачи и обрывки тахвиля «ح و» (мусор isnadNarrators не лечим глобально — Э1.1)
-    const cleanNm=nm=>String(nm||'').replace(/\s+(قال|قالا|قالت|قالوا)\s*$/,'').replace(/\s*ح\s*و?\s*$/,'').trim();
-    const root={nm:'النبي ﷺ', ch:new Map(), srcs:[], n:0};
-    vs.forEach(v=>{ if(!v.chain.length) return; let node=root; root.n++;
-      const rev=[...v.chain].reverse();
-      for(const nm0 of rev){ const nm=cleanNm(nm0); if(nm.length<3||/^[حو\s]+$/.test(nm)) continue;
-        const k=canon(nm); if(!node.ch.has(k)) node.ch.set(k,{nm, ch:new Map(), srcs:[], n:0}); node=node.ch.get(k); node.n++; }
-      v.srcs.forEach(s=>node.srcs.push(s)); });
-    let madar=null, cur=root;
-    while(true){ const kids=[...cur.ch.values()]; const k=(kids.length===1&&kids[0].n===root.n)?kids[0]:null; if(!k) break; cur=k; madar=cur; }
-    const srcB=s=>'<span '+(s.bid?('class="vBk" data-bid="'+esc(String(s.bid))+'" data-pid="'+esc(String(s.pid||''))+'" style="cursor:pointer;'):'style="')+'font-size:10.5px;border-radius:6px;padding:1px 6px;background:rgba(46,155,91,.12);color:#bff5d4;border:1px solid #2e9b5b;white-space:nowrap;margin:0 2px">'+(s.bid?'🌐 ':'📖 ')+esc(s.coll)+(s.num?(' №'+esc(String(s.num))):'')+'</span>';
-    const rec=(node,depth)=>{ const pad=Math.min(depth,8)*14; const isM=(node===madar);
-      let h='<div style="margin:3px '+pad+'px 0 0;direction:rtl;text-align:right">'
-        +(depth?'<span style="color:var(--hint);font-size:11px">└ </span>':'')
-        +(depth
-          ? '<span class="vN" data-n="'+esc(node.nm)+'" style="cursor:pointer;display:inline-block;padding:3px 9px;border-radius:8px;font-size:13px;'
-            +(isM?'background:rgba(241,196,15,.18);border:1.5px solid #f1c40f;color:#ffe9a8;font-weight:700':(node.n>1?'background:rgba(46,204,113,.15);border:1px solid #2ecc71;color:#bff5d4':'background:var(--bg);border:1px solid var(--border)'))
-            +'">'+esc(node.nm)+(node.n>1?(' <b style="font-size:10.5px">×'+node.n+'</b>'):'')+(isM?' · مدار':'')+'</span>'
-          : '<span style="display:inline-block;padding:3px 10px;border-radius:8px;font-size:13.5px;font-weight:700;background:rgba(52,152,219,.15);border:1px solid #3498db;color:#bfe0ff">☪️ '+esc(node.nm)+'</span>')
-        +(node.srcs.length?(' '+node.srcs.map(srcB).join('')):'')
-        +'</div>';
-      [...node.ch.values()].sort((a,b)=>b.n-a.n).forEach(c=>{ h+=rec(c,depth+1); });
-      return h; };
-    return '<div style="overflow-x:auto;padding:4px 0">'+rec(root,0)+'</div>'
-      +'<div class="hint" style="font-size:10.5px;margin-top:4px">🟡 مدار — звено, через которое проходят ВСЕ версии (дальше пути расходятся); 🟢 общие звенья ветвей; источники у конца ветки. Тап по имени → карточка равия.</div>';
-  };
+  const st={uniqM:false, mkDone:false, busy:false, tree:false, treeMode:null};
   const render=()=>{
     // M329b (заявка: «уникальная версия — ГДЕ передаётся»): ОДИНАКОВЫЕ цепочки СЛИВАЮТСЯ в одну запись со списком источников
     const byChain=new Map(); let hidM=0;
@@ -5101,7 +5180,7 @@ async function openIsnadVersions(text, out, ref){
       +'<span class="vTgl" data-k="tree" style="cursor:pointer;font-size:11.5px;padding:3px 9px;border-radius:8px;'+(st.tree?'background:var(--btn);color:#fff':'border:1px solid var(--border);color:var(--hint)')+'">'+(st.tree?'☑':'☐')+' 🌳 деревом от Пророка ﷺ</span>'
       +'</div>'
       +'<div class="hint" style="font-size:11px;margin-bottom:8px">'+(st.tree?'Дерево передачи: от Пророка ﷺ вниз по передатчикам; где ветка делится — версии расходятся.':'Одинаковые цепочки слиты — у каждой видно, в КАКИХ источниках передаётся. 🟢 общие звенья (مدار). Тап по имени → карточка равия; тап по 🌐-источнику → страница книги.')+'</div>';
-    if(st.tree){ html+=treeHtml(vs); }
+    if(st.tree){ html+='<div id="vTreeBox"><div class="hint">🌳 Строю дерево — опознаю равиев по базе…</div></div>'; }
     else vs.forEach(v=>{ html+='<div style="margin:8px 0;padding:7px 8px;border-right:3px solid var(--border);direction:rtl;text-align:right">'
       +'<div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">'
       +v.srcs.map(s=>'<span '+(s.bid?('class="vBk" data-bid="'+s.bid+'" data-pid="'+s.pid+'" style="cursor:pointer;'):'style="')+'font-size:11.5px;border-radius:7px;padding:2px 8px;background:rgba(46,155,91,.12);color:#bff5d4;border:1px solid #2e9b5b;white-space:nowrap">'+(s.bid?'🌐 ':'📖 ')+esc(s.coll)+(s.num?(' №'+esc(String(s.num))):'')+'</span>').join('')
@@ -5114,6 +5193,7 @@ async function openIsnadVersions(text, out, ref){
     liveDiv.querySelectorAll('.vTgl').forEach(t=>t.onclick=()=>{ st[t.dataset.k]=!st[t.dataset.k]; render(); });
     liveDiv.querySelectorAll('.vN').forEach(el=>{ el.onclick=()=>{ const bx=document.createElement('div'); bx.style.marginTop='6px'; out.appendChild(bx); showNarratorBio(el.dataset.n, bx); try{ bx.scrollIntoView({block:'nearest'}); }catch(e){} }; });
     liveDiv.querySelectorAll('.vBk').forEach(el=>{ el.onclick=()=>{ try{ openBook(el.dataset.bid, +el.dataset.pid||1); }catch(e){} }; });
+    if(st.tree){ try{ _renderIsnadTree(vs, liveDiv.querySelector('#vTreeBox'), st, out); }catch(e){} }
     const row=liveDiv.querySelector('#verMkRow');
     if(row && BACKEND_URL){
       if(!st.mkDone){ const b=document.createElement('button'); b.className='mini'; b.style.cssText='width:100%;padding:8px;border:1px dashed #6c5ce7;border-radius:9px;color:#d9ccff';
@@ -5146,7 +5226,11 @@ async function openIsnadVersions(text, out, ref){
           while((m=MR.exec(tc))){ if(m.index<ai){ segStart=m.index; num=(m[0].match(/[٠-٩]+/)||[''])[0]; } else break; }
           MR.lastIndex=ai; const nx=MR.exec(tc);
           const seg=tc.slice(segStart, nx?nx.index:Math.min(tc.length, ai+900));
-          const ch=isnadNarrators(seg); if(!ch.length) continue;
+          // M349: имена для дерева берём из ОРИГИНАЛА (с огласовками) — вырезаем тот же хадис по маркеру «num -» в неканоненном тексте
+          let segO='';
+          try{ if(num){ const m1=t.search(new RegExp('(^|[^٠-٩])'+num+'\\s*[-–—]'));
+            if(m1>=0){ const rest=t.slice(m1); const m2=rest.slice(8).search(/(^|[\n\s»\)\].:،؛])[٠-٩]{1,5}\s*[-–—]\s/); segO=(m2>40?rest.slice(0,8+m2):rest.slice(0,1600)); } } }catch(e){}
+          const ch=isnadNarrators(segO||seg); if(!ch.length) continue;
           versions.push({coll:(x.book_name||('книга '+x.book_id)), num:num, chain:ch, mk:mKey(tc), bid:String(x.book_id), pid:x.page_id});
           added++;
         }catch(e){}
