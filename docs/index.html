@@ -553,7 +553,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v363';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v364';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3059,7 +3059,11 @@ function rootKey(w){ return canon(w).replace(/[^ء-ي]/g,''); }   // ключ к
 function qWordsHTML(text, groups, rootHi){
   const disp=cfg.noDiac?stripDiac(text):text;
   const terms=[]; (groups||[]).forEach(g=>g.forEach(t=>{ if(!t.neg){ const c=canon(t.t); if(c) terms.push(c); } }));
-  return disp.split(/\s+/).filter(Boolean).map(w=>{ const c=canon(w); let hit=false;
+  return disp.split(/\s+/).filter(Boolean).map(w=>{
+    // TB-6: паузные знаки (ۖ ۚ ۗ…) — НЕ слова: были .qw и сдвигали нумерацию пословного аудио
+    // quran.com (58 токенов против их 50 в 2:255 → «нажал الله — звучит другое слово»)
+    if(!/[ء-ي]/.test(w)) return '<span class="qpz" style="color:var(--hint)">'+esc(w)+'</span>';
+    const c=canon(w); let hit=false;
     if(terms.length && c) hit=terms.some(t=>c.indexOf(t)!==-1);
     if(!hit && rootHi && _roots && _roots.f){ const e=_roots.f[c.replace(/[^ء-ي]/g,'')]; if(e && e[0]===rootHi) hit=true; }
     return '<span class="qw'+(hit?' hit':'')+'">'+esc(w)+'</span>'; }).join(' ');
