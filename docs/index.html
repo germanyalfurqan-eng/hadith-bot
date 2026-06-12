@@ -565,7 +565,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v388';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v389';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5058,6 +5058,7 @@ function chainRender(){
     +'<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">'
     +'<label style="font-size:12.5px;color:var(--text);display:flex;gap:5px;align-items:center;cursor:pointer"><input type="checkbox" id="chainAdj"'+(window._chainAdj?' checked':'')+'> рядом в цепи (учитель↔ученик)</label>'
     +(n<2?'<span class="hint" style="font-size:11.5px;color:#e0b34a">введи как минимум двух — потом жми «Найти цепь» сверху</span>':'<span class="hint" style="font-size:11.5px">жми «🔎 Найти цепь» сверху · фильтры форм передачи (حدثنا/عن) добавим скоро</span>')
+    +'<span id="chainBaseLink" title="Открыть базу самых частых цепей передачи (реестр иснадов M449)" style="cursor:pointer;color:#c9b8ff;font-size:12px;border:1px solid #6c5ce7;border-radius:8px;padding:3px 9px;margin-inline-start:auto">⛓ База иснадов</span>'
     +'</div><div id="chainOut" style="margin-top:6px"></div>';
   // M469: ясная ОТМЕТКА об известных связях (np-пары штудирования) — информируем, выбор за человеком
   if(n>=2){ (async()=>{ try{
@@ -5073,6 +5074,7 @@ function chainRender(){
   }catch(e){} })(); }
   b.querySelectorAll('.chDel').forEach(x=>x.onclick=()=>{ const c=_chainSel[+x.dataset.i]; _chainSel.splice(+x.dataset.i,1); chainRender();
     try{ _undoPush('удаление звена '+c.nm.split(' ').slice(0,2).join(' '), ()=>{ _chainSel.push(c); chainRender(); }); }catch(e){} });
+  const _cbl=b.querySelector('#chainBaseLink'); if(_cbl) _cbl.onclick=()=>{ try{ openIsnadBase(); }catch(e){} };
   const adj=b.querySelector('#chainAdj'); if(adj) adj.onchange=()=>{ window._chainAdj=adj.checked; };
   const cx=b.querySelector('#chainX'); if(cx) cx.onclick=()=>{ chainModeOff(); };   // R46: закрыть = выключить режим
   _chainSyncGo();   // R45: ОДНА кнопка — главная «Найти» становится «Найти цепь» (дубль в боксе убран)
@@ -5387,6 +5389,21 @@ async function _isnadInfo(codes){
   const rec=(m&&m[cid])||null;
   return {cid, n:(rec?rec.n:1), ex:(rec?rec.ex:[])};
 }
+// чипы звеньев цепи (опознан #id зелёным → карточка равия · U-код жёлтым «форма ؟» → карточка формы) — единый рендер (R45)
+function _dzChips(codes, row){
+  codes.slice(0,16).forEach(c=>{
+    const b=document.createElement('span');
+    b.style.cssText='cursor:pointer;font-size:12.5px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.03)';
+    if(typeof c==='number'){ b.textContent='#'+c; b.style.color='#9fd3a8'; b.title='опознан — id базы '+c;
+      _narrCard(c).then(v=>{ if(v&&v[1]) b.textContent=v[1].split(' ').slice(0,3).join(' '); }).catch(()=>{});
+      b.onclick=()=>{ _narrCard(c).then(v=>{ if(v&&v[1]) openNarratorRijal(v[1]); else toast('карточка не нашлась'); }).catch(()=>{}); };
+    } else { b.textContent=String(c).slice(0,8); b.style.color='#ffce63'; b.title='не отождествлён — наш U-код (тап: карточка формы)';
+      dzUReg(c).then(u=>{ if(u&&u[0]) b.textContent=u[0].split(' ').slice(0,3).join(' ')+' ؟'; }).catch(()=>{});
+      b.onclick=()=>openUCard(c);
+    }
+    row.appendChild(b);
+  });
+}
 async function dzChainInto(host, bid, num){
   try{
     const codes=await dzChain(bid, num); if(!codes||!codes.length) return;
@@ -5395,18 +5412,7 @@ async function dzChainInto(host, bid, num){
     lbl.textContent='🧬 Цепочка по кодам Э1.1 (тап — карточка):';
     box.appendChild(lbl);
     const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl'; box.appendChild(row);
-    codes.slice(0,14).forEach(c=>{
-      const b=document.createElement('span');
-      b.style.cssText='cursor:pointer;font-size:12.5px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.03)';
-      if(typeof c==='number'){ b.textContent='#'+c; b.style.color='#9fd3a8'; b.title='опознан — id базы '+c;
-        _narrCard(c).then(v=>{ if(v&&v[1]) b.textContent=v[1].split(' ').slice(0,3).join(' '); }).catch(()=>{});
-        b.onclick=()=>{ _narrCard(c).then(v=>{ if(v&&v[1]) openNarratorRijal(v[1]); else toast('карточка не нашлась'); }).catch(()=>{}); };
-      } else { b.textContent=String(c).slice(0,8); b.style.color='#ffce63'; b.title='не отождествлён — наш U-код (тап: карточка формы)';
-        dzUReg(c).then(u=>{ if(u&&u[0]) b.textContent=u[0].split(' ').slice(0,3).join(' ')+' ؟'; }).catch(()=>{});
-        b.onclick=()=>openUCard(c);
-      }
-      row.appendChild(b);
-    });
+    _dzChips(codes, row);
     // M449: вечный КОД ЦЕПИ этого хадиса + «та же цепь ещё в N хадисах» (ткни пальцем → код цепи)
     try{
       const info=await _isnadInfo(codes);
@@ -5434,6 +5440,52 @@ async function dzChainInto(host, bid, num){
     }catch(e){}
     host.appendChild(box);
   }catch(e){}
+}
+/* ===== ⛓ M449: БАЗА ИСНАДОВ — браузер самых частых цепей передачи (наглядная «база иснадов» из реестра 230k) ===== */
+let _topChains=null;
+async function openIsnadBase(){
+  let m=document.getElementById('isnadBaseModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='isnadBaseModal';
+    m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 8px;padding:13px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:14.5px">⛓ База иснадов — частые цепи</b><button class="mini" id="ibClose" style="flex:none">закрыть ✕</button></div>'
+      +'<div class="hint" style="font-size:11.5px;margin-bottom:8px">Самые повторяющиеся цепи передачи (полные иснады, ≥4 звеньев) из 230 524 цепей реестра (M449). Тап по передатчику — карточка; «где встречается» — хадисы с этой цепью. Формы передачи (حدثنا/عن) — этап Э-Ц2.</div>'
+      +'<div id="ibList" style="max-height:66vh;overflow:auto"></div></div>';
+    document.body.appendChild(m); m.querySelector('#ibClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
+  m.style.zIndex='10006'; m.style.display='flex';
+  const list=m.querySelector('#ibList'); list.innerHTML='<div class="hint">⏳ загружаю реестр цепей…</div>';
+  if(!_topChains){ try{ const r=await fetch('./isnad/top_chains.json'); _topChains=r.ok?await r.json():[]; }catch(e){ _topChains=[]; } }
+  list.innerHTML='';
+  if(!_topChains.length){ list.innerHTML='<div class="hint">Реестр недоступен.</div>'; return; }
+  const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:10px;width:100%;padding:9px;border:1px solid var(--border);border-radius:9px';
+  let shown=0; const step=30;
+  const draw=()=>{
+    _topChains.slice(shown, shown+step).forEach((ch,idx)=>{
+      const rank=shown+idx+1;
+      const d=document.createElement('div'); d.style.cssText='padding:8px 4px;border-bottom:1px solid var(--border)';
+      const tp=document.createElement('div'); tp.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px';
+      tp.innerHTML='<span style="font-size:12px;color:var(--hint)">#'+rank+' · <b style="color:#bcd0ff;font-family:monospace">'+esc(ch.cid)+'</b></span><span style="font-size:12px;color:#9fd3a8;font-weight:700">📊 '+ch.n+' хадис'+_pluralHadith(ch.n)+'</span>';
+      d.appendChild(tp);
+      const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl'; d.appendChild(row);
+      _dzChips(ch.seq, row);
+      const pl=document.createElement('span'); pl.style.cssText='display:inline-block;margin-top:5px;cursor:pointer;color:var(--link);font-size:12px';
+      pl.textContent='📍 где встречается ('+ch.n+')';
+      const lst=document.createElement('div'); lst.style.cssText='display:none;margin-top:4px';
+      pl.onclick=async()=>{ if(lst.style.display!=='none'){ lst.style.display='none'; return; } lst.style.display='block';
+        if(lst.dataset.built) return; lst.dataset.built='1';
+        try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){}
+        let info=null; try{ info=await _isnadInfo(ch.seq); }catch(e){}
+        const ex=(info&&info.ex)||[];
+        ex.slice(0,40).forEach(p=>lst.appendChild(_dzPlaceRow(p[0],p[1],null)));
+        if(ch.n>ex.length){ const mo=document.createElement('div'); mo.className='hint'; mo.style.cssText='font-size:10.5px;margin-top:3px'; mo.textContent='… показаны первые '+ex.length; lst.appendChild(mo); }
+      };
+      d.appendChild(pl); d.appendChild(lst);
+      list.appendChild(d);
+    });
+    shown=Math.min(_topChains.length, shown+step);
+    more.textContent='⬇️ Показать ещё ('+(_topChains.length-shown)+')'; more.style.display=shown>=_topChains.length?'none':'';
+    list.appendChild(more);   // держим кнопку внизу
+  };
+  draw(); more.onclick=draw;
 }
 /* ===== 📋 M412: ОБЩАЯ ТАБЛИЦА ПЕРЕДАТЧИКОВ (18 989) — сортировки, фильтры передачи, переход по #id ===== */
 let _narrTbl=null,_narrTblP=null;
