@@ -563,7 +563,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v379';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v380';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1237,16 +1237,32 @@ function collapseBookSugg(){ _bsCollapsed=true; const box=document.getElementByI
 function updateBookSugg(){
   const box=document.getElementById('bookSugg'); if(!box) return;
   const v=(document.getElementById('q').value||'').trim();
-  if(modes.narr){ box.style.display='none'; box.innerHTML=''; return; }   // 👤 режим передатчика: книжные подсказки не к месту
-  if(tab!=='hadith' || v.length<2 || v.length>22 || !isArabic(v)){ box.style.display='none'; box.innerHTML=''; return; }
+  if(modes.narr||modes.chain){ box.style.display='none'; box.innerHTML=''; return; }   // 👤/⛓: книжные подсказки не к месту
+  const isAr=isArabic(v), isRu=/[а-яё]/i.test(v);
+  if(tab!=='hadith' || v.length<2 || v.length>30 || (!isAr && !isRu)){ box.style.display='none'; box.innerHTML=''; return; }
   _bsCollapsed=false;   // при наборе — развёрнуто (свернётся при нажатии «Найти»)
   clearTimeout(_bsT);
   _bsT=setTimeout(async()=>{
     if(((document.getElementById('q').value||'').trim())!==v) return;
     let cat; try{ cat=await loadCatalog(); }catch(e){ return; }
     if(!cat || ((document.getElementById('q').value||'').trim())!==v) return;
-    const cq=canon(v); if(!cq){ box.style.display='none'; return; }
-    const hits=cat.filter(b=>{ const nm=canon(b.n||''),au=canon(b.a||''); return nm.indexOf(cq)!==-1||au.indexOf(cq)!==-1; });
+    let hits=[];
+    if(isAr){
+      const cq=canon(v); if(!cq){ box.style.display='none'; return; }
+      hits=cat.filter(b=>{ const nm=canon(b.n||''),au=canon(b.a||''); return nm.indexOf(cq)!==-1||au.indexOf(cq)!==-1; });
+    } else {
+      // M466: РУССКИЙ ввод («Ибн Хаджар», «фатх аль-бари») — по рус-названиям, вики-именам и скелету Ф-10
+      try{ await loadBookTr(); await loadWikiTitles(); }catch(e){}
+      const lv=v.toLowerCase().replace(/ё/g,'е');
+      hits=cat.filter(b=>{ const tr=((window._catTr&&_catTr.map&&_catTr.map[b.n])||{}).ru||'';
+        const wk=(window._wikiT||{})[String(b.i)]; const wn=(wk&&wk.name)||'';
+        return (tr&&tr.toLowerCase().replace(/ё/g,'е').indexOf(lv)!==-1)||(wn&&wn.toLowerCase().replace(/ё/g,'е').indexOf(lv)!==-1); });
+      if(!hits.length && v.length>=4 && typeof _skelRu==='function'){   // скелет-фолбэк: «табарани» → الطبراني
+        if(!window._catSkel){ window._catSkel=cat.map(b=>{ let s=''; ((b.n||'')+' '+(b.a||'')).split(/\s+/).forEach(w=>{ try{ s+=(_skelAr(stripDiac(w))[1]||'')+' '; }catch(e){} }); return s; }); }
+        const qs=v.split(/\s+/).map(w=>{ try{ return _skelRu(w.replace(/['’`-]/g,''))[1]||''; }catch(e){ return ''; } }).filter(s=>s.length>=2);
+        if(qs.length) hits=cat.filter((b,i)=>qs.every(s=>window._catSkel[i].indexOf(s)!==-1));
+      }
+    }
     if(!hits.length || _bsClosedQ===v){ box.style.display='none'; box.innerHTML=''; return; }
     _renderBookSugg(hits, v);
   }, 240);
