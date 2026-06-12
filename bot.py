@@ -4452,6 +4452,38 @@ async def _api_serve(application=None):
             await loop.run_in_executor(None, searchlog_add, q, tab, cnt)
         return _cors(web.json_response({'ok': True}))
 
+    # M459 Э-С2: статистика ВЫБОРОВ всех юзеров — «после такого запроса чаще выбирают то-то» (ранжирование).
+    # POST {kind, q, key}: kind=narr|hadith|book|ayah|chain, q=запрос, key=что выбрали (id/код). Копим в data/picks.json.
+    _picks_cache = {'d': None}
+    def _picks_load():
+        if _picks_cache['d'] is None:
+            _picks_cache['d'] = _data_get('picks.json', {}) or {}
+        return _picks_cache['d']
+    def _picks_add(kind, q, key):
+        d = _picks_load()
+        bucket = d.setdefault(kind + '|' + q.lower()[:48], {})
+        bucket[key] = int(bucket.get(key, 0)) + 1
+        if len(d) > 8000:                       # кэп словаря запросов
+            d.pop(next(iter(d)))
+        _data_put('picks.json', d, f'picks: {kind}|{q[:24]} -> {key}')
+    async def picklog(r):
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('app', user):
+            return _cors(web.json_response({'ok': False}))
+        if not rate_ok('pick:' + _uid(user, r), limit=30, window=60):
+            return _cors(web.json_response({'ok': False}))
+        kind = (d.get('kind') or '')[:10]; q = (d.get('q') or '')[:60]; key = str(d.get('key') or '')[:40]
+        if kind and q and key:
+            await loop.run_in_executor(None, _picks_add, kind, q, key)
+        return _cors(web.json_response({'ok': True}))
+    async def topclicks(r):
+        # отдать агрегат по запросу (фронт бустит «как выбирают люди» — Э-С3)
+        q = (r.query.get('q') or '').lower()[:48]; kind = (r.query.get('kind') or 'narr')[:10]
+        d = _picks_load().get(kind + '|' + q, {})
+        top = sorted(d.items(), key=lambda kv: -kv[1])[:10]
+        return _cors(web.json_response({'top': top}))
+
     async def takhrij_read(r):
         # M67h: отдать накопленный تخريج (взаимосвязь) по source+num; гейт = вход в приложение
         user = verify_init_data(r.headers.get('X-Init-Data') or r.query.get('initData'))
@@ -4559,6 +4591,7 @@ async def _api_serve(application=None):
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
                   web.post('/api/feedback', feedback), web.post('/api/searchlog', searchlog),
+                  web.post('/api/pick', picklog), web.get('/api/topclicks', topclicks),
                   web.post('/api/tashkeel', tashkeel),
                   web.get('/api/takhrij', takhrij_read), web.post('/api/takhrij', takhrij_save),
                   web.get('/api/narrator', narrator), web.post('/api/narrator_ai', narrator_ai), web.post('/api/hit', hit),
