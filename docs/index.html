@@ -368,6 +368,7 @@
     <div class="row"><span>📋 Таблица всех передатчиков (18 989 равиев)</span><button class="go" id="narrTblBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>📊 Таблица цепей передачи (база иснадов)</span><button class="go" id="chainTblBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>🧱 Поиск по иснаду — конструктор цепи</span><button class="go" id="isnadCtorBtn" style="padding:5px 12px">Открыть</button></div>
+    <div class="row"><span>📒 Таблица всех хадисов (идентификация)</span><button class="go" id="hadTblBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row" style="opacity:.55"><span>📌 Фетвы и ответы (нумерованные)</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>📚 Полезные ресурсы</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>🔊 Озвучка аятов</span><span>скоро</span></div>
@@ -569,7 +570,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v404';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v405';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5736,6 +5737,70 @@ async function openIsnadBase(){
   const cb=m.querySelector('#ibClean'); if(cb){ cb.checked=false; cb.onchange=()=>{ kind=cb.checked?'clean':'all'; reset(); }; }
   await reset(); more.onclick=draw;
 }
+/* ===== 📒 M449: ТАБЛИЦА ВСЕХ ХАДИСОВ (идентификация без матна/иснада) — слово владельца 14.06.
+   Строка: общий № · книга·№ · код цепи · id передатчиков · № версии · № уник. хадиса. Данные htab/p<N>.json. ===== */
+let _htMeta=undefined; const _htPage={};
+async function openHadithTable(){
+  let m=document.getElementById('hadTblModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='hadTblModal';
+    m.innerHTML='<div class="panel" style="max-width:720px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 8px;padding:13px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:14.5px">📒 Таблица всех хадисов — идентификация</b><button class="mini" id="htClose" style="flex:none">закрыть ✕</button></div>'
+      +'<div class="hint" style="font-size:11.5px;margin-bottom:6px">Каждый хадис 64 первоисточников: <b>общий №</b> (точные копии своего не получают) · <b>код цепи</b> (передатчики+формы) · <b>id передатчиков</b> · <b>№ версии</b> (точь-в-точь иснад+матн) · <b>№ уникального хадиса</b> (по матну — ветки вместе). Тап по строке — открыть хадис.</div>'
+      +'<input id="htQ" placeholder="фильтр: общий № / №версии (v123) / №хадиса (u45) / код цепи" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;margin-bottom:6px">'
+      +'<div id="htInfo" class="hint" style="font-size:11px;margin-bottom:6px"></div>'
+      +'<div id="htList" style="max-height:62vh;overflow:auto"></div></div>';
+    document.body.appendChild(m); m.querySelector('#htClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
+  m.style.zIndex='10006'; m.style.display='flex';
+  const list=m.querySelector('#htList'), info=m.querySelector('#htInfo'), q=m.querySelector('#htQ');
+  list.innerHTML='<div class="hint">⏳ загружаю таблицу…</div>';
+  if(_htMeta===undefined){ try{ const r=await fetch('./htab/meta.json?v='+APPVER); _htMeta=r.ok?await r.json():null; }catch(e){ _htMeta=null; } }
+  if(!_htMeta){ list.innerHTML='<div class="hint">Таблица недоступна.</div>'; return; }
+  try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr()]); }catch(e){}
+  info.innerHTML='Хадисов: <b>'+_htMeta.total.toLocaleString('ru')+'</b> · общих №: <b>'+_htMeta.general.toLocaleString('ru')+'</b> · уник. версий: <b>'+_htMeta.uniq_ver.toLocaleString('ru')+'</b> · уник. хадисов: <b>'+_htMeta.uniq_had.toLocaleString('ru')+'</b> · точных копий: '+_htMeta.dups.toLocaleString('ru');
+  let loaded=[], pagesLoaded=0, shown=0; const step=40; let filt='';
+  async function ensure(upto){ while(loaded.length<upto && pagesLoaded<_htMeta.pages){ let pg=_htPage[pagesLoaded];
+    if(!pg){ try{ const r=await fetch('./htab/p'+pagesLoaded+'.json?v='+APPVER); pg=r.ok?await r.json():[]; }catch(e){ pg=[]; } _htPage[pagesLoaded]=pg; }
+    loaded=loaded.concat(pg); pagesLoaded++; } }
+  const rowEl=(r)=>{
+    const [g,b,n,cid,v,u,dup]=r;
+    const d=document.createElement('div'); d.style.cssText='padding:7px 4px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12.5px';
+    const bn=(typeof bookName==='function'&&bookName(String(b)))||('книга '+b);
+    d.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;align-items:center">'
+      +'<span style="color:'+(dup?'#e0b34a':'#9fd3a8')+';font-weight:700;flex:none">'+(dup?('копияв.'+v):('№'+Math.abs(g)))+'</span>'
+      +'<span dir="rtl" style="flex:1;text-align:right;color:var(--link);font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(bn)+' · №'+n+'</span></div>'
+      +'<div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:3px;color:var(--hint);font-size:11px">'
+      +(cid?'<span title="Код цепи передачи (передатчики+формы)">⛓ <b style="color:#bcd0ff;font-family:monospace">'+esc(cid)+'</b></span>':'<span style="opacity:.5">⛓ —</span>')
+      +'<span title="Уникальная ВЕРСИЯ (точь-в-точь иснад+матн)">версия <b style="color:#cdbcff">V'+v+'</b></span>'
+      +'<span title="Уникальный ХАДИС (по матну; разные иснады = ветки одного хадиса)">хадис <b style="color:#9fd3a8">U'+u+'</b></span></div>'
+      +'<div class="htIds" style="margin-top:3px"></div>';
+    // id передатчиков из реестра цепи (ленив)
+    if(cid){ (async()=>{ try{ const rec=await _regRec(cid); if(rec&&rec.s){ const ids=rec.s.filter(x=>typeof x==='number');
+      d.querySelector('.htIds').innerHTML='<span style="font-size:11px;color:var(--hint)">id передатчиков: </span><span style="font-family:monospace;font-size:11px;color:#9fd3a8">'+(ids.length?ids.join(' · '):'—')+'</span>'; } }catch(e){} })(); }
+    d.onclick=()=>{ try{ openByCodeNum(String(b), n); }catch(e){ try{ openBook(String(b), n); }catch(_e){} } };
+    return d;
+  };
+  const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:10px;width:100%;padding:9px;border:1px solid var(--border);border-radius:9px';
+  const matchF=(r)=>{ if(!filt) return true; const f=filt.toLowerCase();
+    if(f[0]==='v') return ('v'+r[4])===f; if(f[0]==='u') return ('u'+r[5])===f;
+    if(f[0]==='c'||f.startsWith('c')){ if((r[3]||'').toLowerCase().indexOf(f)>=0) return true; }
+    const num=f.replace(/[^0-9]/g,''); if(num) return String(Math.abs(r[0]))===num||String(r[4])===num||String(r[5])===num;
+    return (r[3]||'').toLowerCase().indexOf(f)>=0; };
+  const draw=async()=>{ more.textContent='⏳…'; more.disabled=true;
+    if(filt){ // фильтр — грузим все страницы (один раз) и фильтруем
+      await ensure(_htMeta.total);
+      const res=loaded.filter(matchF);
+      res.slice(shown,shown+step).forEach(r=>list.insertBefore(rowEl(r), more)); shown+=Math.min(step,Math.max(0,res.length-shown));
+      info.firstChild&&(info.innerHTML='Найдено по фильтру: <b>'+res.length.toLocaleString('ru')+'</b> · показано '+shown);
+      const done=shown>=res.length; more.textContent=done?'— всё показано —':'⬇️ Показать ещё'; more.disabled=done; return; }
+    await ensure(shown+step);
+    loaded.slice(shown,shown+step).forEach(r=>list.insertBefore(rowEl(r), more)); shown=Math.min(loaded.length,shown+step);
+    const done=shown>=loaded.length && pagesLoaded>=_htMeta.pages;
+    more.textContent=done?'— все хадисы показаны —':'⬇️ Показать ещё (всего '+_htMeta.total.toLocaleString('ru')+')'; more.disabled=done; };
+  const baseInfo=info.innerHTML;
+  const reset=async()=>{ list.innerHTML=''; shown=0; if(!filt) info.innerHTML=baseInfo; list.appendChild(more); await draw(); };
+  let tmr=null; q.oninput=()=>{ clearTimeout(tmr); tmr=setTimeout(()=>{ filt=q.value.trim(); reset(); }, 250); };
+  more.onclick=draw; await reset();
+}
 /* ===== 🧱 M483: «конструкция иснада» живёт ВНУТРИ режима «⛓ Цепь» (R45 — не множить сущности).
    Здесь только данные-хелперы pchain/reg; вход из меню = ярлык, включающий режим Цепь с порядком «строго». ===== */
 var _pchC={};
@@ -8249,6 +8314,7 @@ var _hsb=document.getElementById('hadScienceBtn'); if(_hsb) _hsb.onclick=()=>{ d
 var _ntb=document.getElementById('narrTblBtn'); if(_ntb) _ntb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openNarrTable(); }catch(e){} };
 var _ctb=document.getElementById('chainTblBtn'); if(_ctb) _ctb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openIsnadBase(); }catch(e){} };
 var _icb=document.getElementById('isnadCtorBtn'); if(_icb) _icb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openIsnadCtor(); }catch(e){} };   // M483 конструктор иснада
+var _htb=document.getElementById('hadTblBtn'); if(_htb) _htb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openHadithTable(); }catch(e){} };   // M449 таблица всех хадисов
 var _cbr=document.getElementById('catBrowBtn'); if(_cbr) _cbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openCatalog(); };
 // M356: «Читать Коран» ПРОДОЛЖАЕТ с места, где остановился (cfg.qrLast: последняя читанная/слушанная сура+аят)
 function _qrResume(){ const L=cfg.qrLast; if(L&&L.s){ openQuranReader(L.s, L.a||0).then(()=>{ if(L.a) toast('📖 Продолжаем: '+L.s+':'+L.a+' · '+(SURA_NAMES[L.s-1]||'')); }); } else openQuranReader(_qrView.s||1, 0); }
