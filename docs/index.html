@@ -570,7 +570,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v409';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v410';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4806,7 +4806,9 @@ async function doTakhrij(text, ref, out, btn, force){
         .sort((a,b)=>rank(a&&typeof a==='object'?a.g:null)-rank(b&&typeof b==='object'?b.g:null));
       const row=document.createElement('div'); row.style.cssText='direction:rtl;font-size:14px;margin:2px 0';
       const lbl=document.createElement('span'); lbl.textContent=arOf(code)+': '; row.appendChild(lbl);
-      items.forEach((it,i)=>{ const nm=(it&&typeof it==='object')?it.n:it; const g=(it&&typeof it==='object')?it.g:null;
+      items.forEach((it,i)=>{ let nm=(it&&typeof it==='object')?it.n:it; const g=(it&&typeof it==='object')?it.g:null;
+        if(typeof nm==='string'&&/[{}'\[\]]/.test(nm)){ const mm=nm.match(/\d+/); nm=mm?mm[0]:null; }   // битый sci-кэш (Python-repr «{'n':646}») → вытащить число
+        if(nm==null||nm==='') return;
         const col=(g==='same'?'#4ade80':g==='similar'?'#f0b86e':'var(--link)');
         const a=document.createElement('span'); a.textContent='№'+nm; a.title='Открыть в читалке на этом хадисе';
         a.style.cssText='color:'+col+';cursor:pointer'; a.onclick=()=>openReader(code,nm); row.appendChild(a);
@@ -5779,7 +5781,8 @@ async function openHadithTable(){
     const _vEl=d.querySelector('.htV'); if(_vEl) _vEl.onclick=(e)=>{ e.stopPropagation(); q.value='v'+v; q.dispatchEvent(new Event('input')); };
     const _uEl=d.querySelector('.htU'); if(_uEl) _uEl.onclick=(e)=>{ e.stopPropagation(); q.value='u'+u; q.dispatchEvent(new Event('input')); };
     const _sEl=d.querySelector('.htS'); if(_sEl) _sEl.onclick=(e)=>{ e.stopPropagation(); q.value='s'+su; q.dispatchEvent(new Event('input')); };
-    d.onclick=()=>{ try{ openByCodeNum(String(b), n); }catch(e){ try{ openBook(String(b), n); }catch(_e){} } };
+    d.onclick=()=>{ try{ const mm=document.getElementById('hadTblModal'); if(mm) mm.style.display='none'; }catch(e){}   // R46: закрыть таблицу, иначе читалка открывается ПОД ней (баг «бардак»)
+      try{ openByCodeNum(String(b), n); }catch(e){ try{ openBook(String(b), n); }catch(_e){} } };
     return d;
   };
   const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:10px;width:100%;padding:9px;border:1px solid var(--border);border-radius:9px';
