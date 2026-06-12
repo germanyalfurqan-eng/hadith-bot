@@ -563,7 +563,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v382';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v383';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5136,6 +5136,8 @@ function _curContext(){
   // приоритет: открытая книга → читалка Корана → карточка равия → текущий поиск/цепь
   try{ const bm=document.getElementById('bookModal'); if(bm&&bm.style.display==='flex'&&window._bookView) return {t:'book', bid:_bookView.id, pg:_bookView.pg}; }catch(e){}
   try{ const qm=document.getElementById('qrModal'); if(qm&&qm.style.display&&qm.style.display!=='none'&&window._qrView) return {t:'quran', s:_qrView.s, a:_qrView.a||1}; }catch(e){}
+  try{ const vt=document.querySelector('#res .vTgl');   // M463-хвост: открыт блок Версий/дерева → шарим ссылку на ЭТОТ хадис
+    if(vt&&vt.offsetParent&&window._lastVerRef&&(_lastVerRef.coll||_lastVerRef.num)) return {t:'q', q:String(_lastVerRef.coll||'')+' '+String(_lastVerRef.num||''), tab:'hadith'}; }catch(e){}
   try{ const res=document.getElementById('res'); if(res&&res.dataset.narrCard&&window._lastNarrNm) return {t:'narr', nm:_lastNarrNm}; }catch(e){}
   try{ if(typeof modes!=='undefined'&&modes.chain&&_chainSel.length>=2) return {t:'chain', sel:_chainSel.slice(), adj:!!window._chainAdj, names:_chainSel.map(c=>c.nm.split(' ').slice(0,2).join(' '))}; }catch(e){}
   const q=(document.getElementById('q')||{}).value||'';
@@ -6585,6 +6587,7 @@ async function openIsnadVersions(text, out, ref){
   const st={uniqM:false, mkDone:false, busy:false, tree:false, treeMode:null};
   const render=()=>{
     // M329b (заявка: «уникальная версия — ГДЕ передаётся»): ОДИНАКОВЫЕ цепочки СЛИВАЮТСЯ в одну запись со списком источников
+    try{ window._lastVerRef=ref||window._lastVerRef; }catch(e){}   // M463-хвост: share знает, ЧЕЙ блок версий/дерево открыт
     const byChain=new Map(); let hidM=0;
     versions.forEach(v=>{ const k=v.chain.map(canon).join('|')||('@'+Math.random());
       if(!byChain.has(k)) byChain.set(k,{chain:v.chain, srcs:[], mk:v.mk});
