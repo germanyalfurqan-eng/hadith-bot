@@ -569,7 +569,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v403';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v404';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5122,6 +5122,14 @@ async function dzChainFull(bid,num){ const r=await _dzRec(bid,num); if(!r) retur
 const _FORM_RU={TH:'حدثنا',THi:'حدثني',AKH:'أخبرنا',AKHi:'أخبرني',ANB:'أنبأنا',SAM:'سمعت',AN:'عن',ANN:'أنّ',QAL:'قال',NA:'نا'};
 const _FORM_TIP={TH:'حدّثنا — диктовка/слышание в группе (سماع)',THi:'حدّثني — лично мне (سماع, выше точность)',AKH:'أخبرنا — чтение шейху (قراءة على الشيخ)',AKHi:'أخبرني — قراءة лично',ANB:'أنبأنا — у поздних = إجازة (слабее سماع)',SAM:'سمعت — явное слышание (سماع صريح)',AN:'عن — «от» (عنعنة; у мудаллиса возможен тадлис)',ANN:'أنّ — «что» (форма عنعنة)',QAL:'قال — «сказал» (بلاغ/неуточнённо)',NA:'نا — сокращение (حدثنا/أخبرنا)'};
 const _FORM_CLASS={TH:'S',THi:'S',SAM:'S',AKH:'Q',AKHi:'Q',ANB:'I',AN:'A',ANN:'A',QAL:'L',NA:'?'};
+// фильтр форм передачи на рёбрах конструктора (слово владельца «полный спектр عن/حدثنا/سمعت с подсказками»)
+const _FORM_FILTER=[['','↔ любая форма'],['AN','عن (عنعنة)'],['ANN','أنّ'],['TH','حدّثنا (سماع)'],['AKH','أخبرنا (قراءة)'],['ANB','أنبأنا (إجازة)'],['SAM','سمعت (سماع صريح)'],['!AN','أي صريح (НЕ عن — для тадлиса)']];
+function _formMatch(got, want){
+  if(!want) return true;
+  if(want==='!AN') return got && _FORM_CLASS[got]!=='A';   // явная передача (не عنعنة)
+  return got===want;
+}
+function _formFilterOpts(cur){ return _FORM_FILTER.map(o=>'<option value="'+o[0]+'"'+(o[0]===(cur||'')?' selected':'')+'>'+o[1]+'</option>').join(''); }
 function _dzShU(code){ return parseInt(_md5x(code).slice(0,4),16)%64; }
 async function dzUReg(code){ const sh=_dzShU(code); const m=await _dzFetch(_dzUC,sh,'./dz/u'+sh+'.json'); return (m&&m[code])||null; }
 async function dzUPart(code){ const sh=_dzShU(code); const m=await _dzFetch(_dzUNC,sh,'./dz/un'+sh+'.json'); return (m&&m[code])||null; }
@@ -5140,8 +5148,16 @@ function _chainBox(){
 function chainRender(){
   const b=_chainBox(); const n=_chainSel.length;
   b.style.display=(typeof modes!=='undefined'&&modes.chain)?'block':'none';
-  const chips=_chainSel.map((c,i)=>'<span style="display:inline-flex;align-items:center;gap:6px;background:#2e1d4a;border:1px solid #6c5ce7;border-radius:9px;padding:5px 9px;margin:2px;direction:rtl"><b style="font-size:13.5px">'+esc(c.nm)+'</b><span style="font-size:10px;color:#9b8bd0">#'+c.id+'</span><span class="chDel" data-i="'+i+'" style="cursor:pointer;color:#e07f7f;font-weight:700;padding:0 3px">✕</span></span>').join('');
   const md=window._chainMode||'any';
+  window._chainForms=(window._chainForms||[]).slice(0,Math.max(0,_chainSel.length-1));
+  const _sh2=nm=>esc(String(nm||'').split(' ').slice(0,2).join(' '));
+  const chipParts=[];
+  _chainSel.forEach((c,i)=>{
+    chipParts.push('<span style="display:inline-flex;align-items:center;gap:6px;background:#2e1d4a;border:1px solid #6c5ce7;border-radius:9px;padding:5px 9px;margin:2px;direction:rtl"><b style="font-size:13.5px">'+esc(c.nm)+'</b><span style="font-size:10px;color:#9b8bd0">#'+c.id+'</span><span class="chDel" data-i="'+i+'" style="cursor:pointer;color:#e07f7f;font-weight:700;padding:0 3px">✕</span></span>');
+    if(i<_chainSel.length-1 && md==='seq'){ const fv=window._chainForms[i]||'';
+      chipParts.push('<select class="chForm" data-e="'+i+'" title="Форма передачи на этом звене: как '+_sh2(_chainSel[i].nm)+' получил от '+_sh2(_chainSel[i+1].nm)+'" style="margin:2px;font-size:11px;background:'+(fv?'#173d30':'var(--bg)')+';color:'+(fv?'#bff5d4':'var(--hint)')+';border:1px solid '+(fv?'#2e9b5b':'var(--border)')+';border-radius:7px;padding:3px 5px;direction:rtl">'+_formFilterOpts(fv)+'</select>'); }
+  });
+  const chips=chipParts.join('');
   b.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:13px;color:#c9b8ff;font-weight:700">⛓ Цепь передачи — набирай имя в поиске и тапай подсказку (нужно от 2):</span><span id="chainX" title="Свернуть и выключить режим Цепь" style="cursor:pointer;color:#e07f7f;font-weight:700;border:1px solid var(--border);border-radius:6px;padding:1px 8px;flex:none">✕</span></div>'
     +'<div style="display:flex;flex-wrap:wrap;align-items:center">'+(chips||'<span class="hint" style="font-size:12px">пока никто не выбран</span>')+'</div>'
     +'<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap;font-size:12.5px;color:var(--text)">'
@@ -5170,6 +5186,8 @@ function chainRender(){
     try{ _undoPush('удаление звена '+c.nm.split(' ').slice(0,2).join(' '), ()=>{ _chainSel.push(c); chainRender(); }); }catch(e){} });
   const _cbl=b.querySelector('#chainBaseLink'); if(_cbl) _cbl.onclick=()=>{ try{ openIsnadBase(); }catch(e){} };
   b.querySelectorAll('input[name="chOrd"]').forEach(r=>r.onchange=()=>{ window._chainMode=r.value; window._chainAdj=(r.value==='adj'); chainRender(); });
+  b.querySelectorAll('.chForm').forEach(s=>s.onchange=()=>{ window._chainForms=window._chainForms||[]; window._chainForms[+s.dataset.e]=s.value;
+    s.style.background=s.value?'#173d30':'var(--bg)'; s.style.color=s.value?'#bff5d4':'var(--hint)'; s.style.borderColor=s.value?'#2e9b5b':'var(--border)'; });   // M486: форма-фильтр ребра
   const cx=b.querySelector('#chainX'); if(cx) cx.onclick=()=>{ chainModeOff(); };   // R46: закрыть = выключить режим
   _chainSyncGo();   // R45: ОДНА кнопка — главная «Найти» становится «Найти цепь» (дубль в боксе убран)
 }
@@ -5404,15 +5422,32 @@ async function chainRunSeq(out){
   if(!arr.length){
     out.innerHTML='<div class="hint" style="color:#e0b34a">Цепей с такой конструкцией ПОДРЯД не нашлось. Проверь порядок (1-й передаёт ОТ 2-го) или переключись на «вместе в иснаде»/«рядом».</div>'; return; }
   try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){}
-  const recs=[];
-  for(let i=0;i<arr.length && i<400;i++){ const rec=await _regRec(arr[i]); if(rec) recs.push({cid:arr[i], n:rec.n, ex:rec.ex, s:rec.s, f:rec.f});
-    if(i%50===0) out.innerHTML='<div class="hint">⏳ загружаю цепи… '+i+'/'+Math.min(arr.length,400)+'</div>'; }
+  // M486: фильтр ФОРМ передачи на рёбрах + подсчёт ДОСТУПНЫХ форм (подсказка) — выравниваем подцепь в цепи
+  const wantForms=window._chainForms||[]; const anyForm=wantForms.some(Boolean);
+  const _alignStart=(seq)=>{ for(let st=0; st+groups.length<=seq.length; st++){ let ok=true;
+      for(let k=0;k<groups.length;k++){ if(groups[k].indexOf(seq[st+k])<0){ ok=false; break; } } if(ok) return st; } return -1; };
+  const availForms=Array.from({length:Math.max(0,groups.length-1)},()=>({}));   // на каждом ребре: какие формы встречаются (для подсказки)
+  let allRecs=[];
+  for(let i=0;i<arr.length && i<600;i++){ const rec=await _regRec(arr[i]); if(rec) allRecs.push({cid:arr[i], n:rec.n, ex:rec.ex, s:rec.s, f:rec.f});
+    if(i%60===0) out.innerHTML='<div class="hint">⏳ загружаю цепи… '+i+'/'+Math.min(arr.length,600)+'</div>'; }
+  // собрать доступные формы по рёбрам (по ВСЕМ найденным, до фильтра)
+  allRecs.forEach(rc=>{ if(!rc.f) return; const st=_alignStart(rc.s); if(st<0) return;
+    for(let k=0;k<groups.length-1;k++){ const g=rc.f[st+k+1]||''; const cnt=rc.n||1; availForms[k][g]=(availForms[k][g]||0)+cnt; } });
+  // применить фильтр форм
+  const recs=allRecs.filter(rc=>{ if(!anyForm) return true; if(!rc.f) return false; const st=_alignStart(rc.s); if(st<0) return false;
+    for(let k=0;k<wantForms.length;k++){ if(!wantForms[k]) continue; if(!_formMatch(rc.f[st+k+1]||'', wantForms[k])) return false; } return true; });
   recs.sort((a,b)=>(b.n||0)-(a.n||0));
   const totH=recs.reduce((s,r)=>s+(r.n||0),0);
   out.innerHTML='';
   const hd=document.createElement('div'); hd.style.cssText='font-size:13.5px;font-weight:700;color:#c9b8ff;margin:4px 0 6px';
-  hd.textContent='🧱 Конструкция '+_chainSel.map(c=>c.nm.split(' ').slice(0,2).join(' ')).join(' ← ')+': цепей '+arr.length+(arr.length>400?' (показаны 400)':'')+' · хадисов '+totH;
+  hd.textContent='🧱 Конструкция '+_chainSel.map(c=>c.nm.split(' ').slice(0,2).join(' ')).join(' ← ')+(anyForm?' (фильтр форм)':'')+': цепей '+recs.length+' · хадисов '+totH;
   out.appendChild(hd);
+  // ПОДСКАЗКА доступных форм на каждом ребре (слово владельца «с подсказками»)
+  for(let k=0;k<groups.length-1;k++){ const fm=availForms[k]; const ks=Object.keys(fm).filter(x=>x).sort((a,b)=>fm[b]-fm[a]); if(!ks.length) continue;
+    const hint=document.createElement('div'); hint.style.cssText='font-size:11px;color:var(--hint);margin:1px 0 4px';
+    hint.innerHTML='ребро '+(k+1)+' ('+esc(_chainSel[k].nm.split(' ').slice(0,2).join(' '))+'←'+esc(_chainSel[k+1].nm.split(' ').slice(0,2).join(' '))+') — формы: '
+      +ks.map(g=>'<b dir="rtl" style="color:'+((_FORM_CLASS[g]==='A')?'#e0b34a':'#9fd3a8')+'">'+(_FORM_RU[g]||g)+'</b>×'+fm[g]).join(' · ');
+    out.appendChild(hint); }
   let shown=0; const step=20;
   const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:8px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px';
   const draw=()=>{ recs.slice(shown,shown+step).forEach(rc=>{
@@ -5731,7 +5766,7 @@ let _narrTbl=null,_narrTblP=null;
 function loadNarrTable(){ if(_narrTbl) return Promise.resolve(_narrTbl); if(_narrTblP) return _narrTblP;
   _narrTblP=fetch('./narr_table.json').then(r=>r.ok?r.json():[]).then(a=>{ _narrTbl=a||[]; return _narrTbl; }).catch(()=>{ _narrTbl=[]; return _narrTbl; }); return _narrTblP; }
 let _dzNPC={};
-async function dzNP(id){ const sh=Math.floor(id/200); const m=await _dzFetch(_dzNPC,sh,'./np/'+sh+'.json'); return (m&&m[String(id)])||null; }
+async function dzNP(id){ const sh=Math.floor(id/200); const m=await _dzFetch(_dzNPC,sh,'./np/'+sh+'.json?v='+APPVER); return (m&&m[String(id)])||null; }
 async function openNarrTable(opts){
   opts=opts||{};
   let m=document.getElementById('ntModal');
@@ -5996,7 +6031,7 @@ function _genBadge(rk, death){
 // M386: رجال الشيخين/البخاري/مسلم — флаги из штудирования иснадов (dz)
 let _narrFlags=null;
 function loadNarrFlags(){ if(_narrFlags) return Promise.resolve(_narrFlags);
-  return fetch('./narrators_flags.json').then(r=>r.ok?r.json():{}).then(j=>{_narrFlags=j||{};return _narrFlags;}).catch(()=>{_narrFlags={};return _narrFlags;}); }
+  return fetch('./narrators_flags.json?v='+APPVER).then(r=>r.ok?r.json():{}).then(j=>{_narrFlags=j||{};return _narrFlags;}).catch(()=>{_narrFlags={};return _narrFlags;}); }
 function _flagBadge(f, nm){ if(!f) return '';
   const t=f==='bm'?'رجال الشيخين':(f==='b'?'رجال البخاري':'رجال مسلم');
   return '<span dir="rtl" class="flgB" data-f="'+esc(f)+'" data-nm="'+esc(nm||'')+'" style="display:inline-block;cursor:pointer;font-size:10.5px;border:1px solid #2e9b5b;color:#bff5d4;background:rgba(46,155,91,.12);border-radius:7px;padding:1px 7px;margin-top:2px" title="По нашему штудированию иснадов. ТАП: его хадисы в '+(f==='bm'?'обоих Сахихах':(f==='b'?'Сахихе аль-Бухари':'Сахихе Муслима'))+'">📗 '+t+' ↗</span>'; }
