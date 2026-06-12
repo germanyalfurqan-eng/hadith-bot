@@ -554,7 +554,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v366';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v367';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4972,7 +4972,7 @@ async function chainRun(){
     if(adj){ const s=[...idxs].sort((a,b)=>a-b); let ok=true; for(let t=1;t<s.length;t++) if(s[t]-s[t-1]!==1){ ok=false; break; } if(!ok) continue; }
     hits.push([bid,num,leaf]);
   }
-  try{ await loadBooksMap(); }catch(e){}   // M403-урок: названия книг ДО рендера мест
+  try{ await Promise.all([loadBooksMap(), loadBookTr(), loadWikiTitles()]); }catch(e){}   // M403-урок + M449: название/огласовки/рус/вики ДО рендера
   out.innerHTML='';
   const hd=document.createElement('div'); hd.style.cssText='font-size:13.5px;font-weight:700;color:#c9b8ff;margin:4px 0 6px';
   hd.textContent='⛓ '+_chainSel.map(c=>c.nm.split(' ').slice(0,2).join(' ')).join(' + ')+(adj?' — РЯДОМ в иснаде':' — вместе в иснаде')+': хадисов '+hits.length;
@@ -4983,10 +4983,21 @@ async function chainRun(){
   out.insertAdjacentHTML('beforeend','<div class="hint" style="font-size:11px;margin-top:4px">🧬 источник: штудированные иснады Э1.1 (64 печати первоисточников). Условия форм передачи — этап Э-Ц2.</div>');
 }
 function _dzPlaceRow(bid,num,leaf){
-  const bn=(typeof bookName==='function'&&bookName(String(bid)))||('книга №'+bid);
+  // M449-замечание владельца: «ид книги недостаточно» — название (с огласовками, если выверено) + рус + Википедия
+  const id=String(bid);
+  const meta=(window._catTr&&_catTr.map&&_catTr.map[id])||{};
+  const wiki=((window._wikiT)||{})[id];
+  const ar=meta.voc||((typeof bookName==='function'&&bookName(id))||'');
+  const ru=meta.ru||((wiki&&/[А-Яа-яЁё]/.test(wiki.name||''))?wiki.name:'');
   const d=document.createElement('div'); d.style.cssText='display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 4px;border-bottom:1px solid var(--border);cursor:pointer';
-  d.innerHTML='<span style="direction:rtl;text-align:right;flex:1;font-size:13px;color:var(--text)">'+esc(bn)+'</span><span style="flex:none;font-size:12px;color:#7fb3ff">№'+esc(String(num))+(leaf?(' · 📖 лист '+esc(String(leaf))):'')+'</span>';
-  d.onclick=()=>{ try{ hap('light'); }catch(e){} if(leaf){ try{ openBook(String(bid), leaf); }catch(e){} } else { const q=document.getElementById('q'); if(q){ q.value=String(num); runSearch(true); } } };
+  d.innerHTML='<span style="flex:1;min-width:0">'
+    +'<span class="dzBn" data-b="'+esc(id)+'" style="display:block;direction:rtl;text-align:right;font-size:13.5px;color:var(--text)">'+esc(ar||('книга №'+id))+'</span>'
+    +(ru?('<span style="display:block;text-align:right;font-size:11px;color:#bcd0ff">'+esc(ru)+'</span>'):'')+'</span>'
+    +((wiki&&wiki.url)?('<span class="dzW" title="Википедия о книге" style="flex:none;cursor:pointer;font-size:11.5px;border:1px solid var(--border);border-radius:6px;padding:2px 7px;color:#9fc3e8;font-weight:700">W</span>'):'')
+    +'<span style="flex:none;font-size:12px;color:#7fb3ff;text-align:left">№'+esc(String(num))+(leaf?('<span style="display:block;font-size:11px">📖 лист '+esc(String(leaf))+'</span>'):'')+'</span>';
+  d.onclick=()=>{ try{ hap('light'); }catch(e){} if(leaf){ try{ openBook(id, leaf); }catch(e){} } else { const q=document.getElementById('q'); if(q){ q.value=String(num); runSearch(true); } } };
+  const w=d.querySelector('.dzW'); if(w) w.onclick=(e)=>{ e.stopPropagation(); try{ openLink(wiki.url); }catch(_e){ window.open(wiki.url,'_blank'); } };
+  if(!ar){ try{ loadBooksMap().then(()=>{ const el=d.querySelector('.dzBn'); const nm=bookName(id); if(el&&nm) el.textContent=nm; }); }catch(e){} }   // страховка: карта догрузилась — имя дописать (не оставлять «книга №»)
   return d;
 }
 async function openUCard(code){
