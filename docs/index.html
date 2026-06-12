@@ -563,7 +563,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v377';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v378';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5319,6 +5319,7 @@ async function openNarrTable(opts){
   m.style.zIndex='10005'; m.style.display='flex';
   const all=await loadNarrTable();
   try{ await loadNarrVoc(); }catch(e){}   // TB-11: огласованные имена (M361c) в строках, где уже готовы
+  try{ await loadNarrWiki(); }catch(e){}  // M467: вики-ссылки равиев (ru→en→ar) прямо в строках
   const st={q:(opts.focusId!=null?('#'+opts.focusId):''), sort:opts.filterIds?'cnt':'id', shown:0};
   const bar=m.querySelector('#ntBar'), list=m.querySelector('#ntList'), info=m.querySelector('#ntInfo');
   m.querySelector('#ntTitle').textContent=opts.title||('📋 Таблица передатчиков ('+all.length+')');
@@ -5347,13 +5348,29 @@ async function openNarrTable(opts){
       // TB-11: огласованное имя (M361c, где есть) + нисба/кунья мелко + ранг Ибн Хаджара цветом
       const voc=(_narrVoc&&(_narrVoc[String(r[0])]||_narrVoc[r[1]]))||'';   // ключ voc = ID равия (M361c)
       const rk=(r[4]||'').trim(); const rc=/ثق|أوثق|حافظ|إمام/.test(rk)?'#4eb573':/صدوق/.test(rk)?'#9fd3a8':/صحاب/.test(rk)?'#e8c35a':/ضعيف|متروك|كذاب|منكر/.test(rk)?'#e07f7f':'#9aa7b5';
-      d.innerHTML='<span style="flex:none;width:56px;font-size:11px;color:#5b87b5">#'+r[0]+(cnt?('<b style="display:block;color:#9fd3a8">×'+(cnt.get(r[0])||0)+'</b>'):'')+'</span>'
+      let ruN=''; try{ ruN=arNameRu(r[1],4); }catch(e){}                       // M467: перевод имени
+      const wk=(window._narrWiki||{})[String(r[0])];                            // M467: вики ru→en→ar
+      d.innerHTML='<span style="flex:none;width:56px;font-size:11px;color:#5b87b5">#'+r[0]+(cnt?('<b style="display:block;color:#9fd3a8">×'+(cnt.get(r[0])||0)+'</b>'):'')
+        +'<span class="ntT" data-k="t" data-id="'+r[0]+'" data-nm="'+esc(r[1])+'" title="От кого передавал (учителя)" style="display:block;cursor:pointer;font-size:12px;margin-top:3px">👨‍🏫</span>'
+        +'<span class="ntT" data-k="s" data-id="'+r[0]+'" data-nm="'+esc(r[1])+'" title="Кто от него передавал (ученики)" style="display:block;cursor:pointer;font-size:12px">👨‍🎓</span></span>'
         +'<span style="flex:1;direction:rtl;text-align:right;min-width:0"><span style="font-size:14.5px;'+(voc?_AF+';font-size:16px':'')+'">'+esc(voc||r[1])+'</span>'
-        +(r[5]?('<span style="display:block;font-size:10.5px;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r[5])+'</span>'):'')+'</span>'
+        +(ruN?('<span style="display:block;font-size:10.5px;color:#bcd0ff">≈ '+esc(ruN)+'</span>'):'')
+        +(r[5]?('<span style="display:block;font-size:10.5px;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r[5])+'</span>'):'')
+        +'<span style="display:block;margin-top:2px">'
+          +((wk&&wk.u)?('<span class="ntW" data-u="'+esc(wk.u)+'" title="Википедия" style="cursor:pointer;font-size:10px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:0 6px;margin-inline-start:4px"><b style="font-family:Georgia,serif">W</b>'+(wk.l&&wk.l!=='ru'?(' '+esc(wk.l)):'')+' ↗</span>'):'')
+          +(((cfg.shLink||'wiki')!=='off')?('<span class="ntSh" data-id="'+r[0]+'" title="Карточка на сайте موسوعة рواة" style="cursor:pointer;font-size:10px;color:#bfe3cf;border:1px solid #2e7d5a;border-radius:4px;padding:0 6px"><b style="font-family:Georgia,serif">ش</b> موسوعة ↗</span>'):'')
+        +'</span></span>'
         +'<span style="flex:none;text-align:left">'+(rk?('<span style="display:block;font-size:11px;color:'+rc+';font-weight:700" dir="rtl">'+esc(rk)+'</span>'):'')
         +((typeof _genBadge==='function'&&_genBadge(rk,r[2]))?('<span style="display:block;font-size:10px;color:'+_genBadge(rk,r[2])[1]+'" dir="rtl" title="'+esc(_genBadge(rk,r[2])[2]||'')+'">'+(_genBadge(rk,r[2])[3]||esc(_genBadge(rk,r[2])[0]))+'</span>'):'')
         +'<span style="display:block;font-size:10.5px;color:var(--hint)" dir="rtl">'+(r[2]?('وفاة ~'+r[2]+'هـ'):'—')+'</span></span>';
       d.onclick=()=>{ m.style.display='none'; narrOpen(r[1]); };
+      const _w=d.querySelector('.ntW'); if(_w) _w.onclick=(e)=>{ e.stopPropagation(); try{ openLink(_w.dataset.u); }catch(_e){} };
+      const _s=d.querySelector('.ntSh'); if(_s) _s.onclick=(e)=>{ e.stopPropagation(); try{ openLink('https://shamela.ws/narrator/'+_s.dataset.id); }catch(_e){} };
+      d.querySelectorAll('.ntT').forEach(t=>t.onclick=async(e)=>{ e.stopPropagation();   // M467: фильтр «от кого/кому» прямо из таблицы
+        try{ const np=await dzNP(+t.dataset.id); const arr=(np&&np[t.dataset.k])||[];
+          if(!arr.length){ toast('Пар в штудированных иснадах пока нет'); return; }
+          openNarrTable({title:(t.dataset.k==='t'?'👨‍🏫 Учителя: ':'👨‍🎓 Ученики: ')+t.dataset.nm.split(' ').slice(0,3).join(' '), filterIds:new Map(arr)});
+        }catch(_e){} });
       list.appendChild(d); });
     let more=m.querySelector('#ntMore');
     if(!more){ more=document.createElement('button'); more.id='ntMore'; more.className='mini';
