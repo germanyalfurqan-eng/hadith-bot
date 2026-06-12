@@ -174,6 +174,8 @@
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
+      <div class="gear" id="histHdr" style="display:block" title="🕐 История действий — вернуться на любой недавний этап">🕐</div>
+      <div class="gear" id="shareHdr" style="display:block" title="📤 Поделиться местом — ссылка приведёт человека ровно сюда">📤</div>
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
       <div class="gear" id="setBtn" style="display:block" title="⚙️ Настройки (перевод Корана, огласовки, иснад, тема)">⚙️</div>
       <div class="gear" id="menuBtn" style="display:block" title="☰ Ещё — дополнительные функции и сервисы">☰</div>
@@ -237,8 +239,6 @@
     <div class="chip" data-mode="matnonly" title="Искать совпадение только в тексте хадиса (матн), не в цепочке передатчиков (иснаде)">📜 Не искать в иснаде</div>
     <div class="chip" id="neuroChip" data-mode="neuro" title="Расширенный: вручную подобрать/поправить арабские фразы перед поиском">🔬 Расширенный</div>
     <div class="chip" data-mode="any" title="M461: универсальный поиск ЛЮБОГО текста по всей Мактабе (слова учёных, джарх, тафсир — не только хадисы)">🌐 Любой текст</div>
-    <div class="chip" id="histBtn" title="Последние действия — вернуться на любой этап (M462)">🕐 История</div>
-    <div class="chip" id="shareBtn" title="Скопировать ссылку на текущее место — человек попадёт ровно сюда же (M463)">📤 Поделиться местом</div>
   </div>
   <div class="hint" style="margin:6px 0 8px">Слово, фраза или № (напр. <b>2:255</b>, <b>бухари 333</b>, <b>амалю ният</b>). <b>"в кавычках"</b> = точное словосочетание; с огласовками — режим «َ Огласовки точно». <span id="helpBtn" style="color:var(--link);cursor:pointer;font-weight:600">ⓘ Как искать</span></div>
   <div id="quranReadRow" style="display:none;margin:8px 0;gap:8px;flex-wrap:wrap">
@@ -563,7 +563,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v381';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v382';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1366,8 +1366,8 @@ document.getElementById('selAll').onclick=()=>{ COLLECTIONS.forEach(c=>selCols.a
 document.getElementById('selNone').onclick=()=>{ selCols.clear(); renderCols(); };
 /* ⚙️ ещё — показать/скрыть доп. режимы */
 var _mm=document.getElementById('moreModes'); if(_mm) _mm.onclick=()=>{ const b=document.getElementById('modesMore'); const open=b.style.display==='none'; b.style.display=open?'flex':'none'; _mm.textContent=open?'⚙️ свернуть ▴':'⚙️ ещё ▾'; _mm.classList.toggle('on',open); };
-var _hb=document.getElementById('histBtn'); if(_hb) _hb.onclick=()=>openHistory();           // M462
-var _sb=document.getElementById('shareBtn'); if(_sb) _sb.onclick=()=>shareCurrent();         // M463
+var _hb=document.getElementById('histHdr'); if(_hb) _hb.onclick=()=>openHistory();           // M462 (TB-20: вверху, возле настроек)
+var _sb=document.getElementById('shareHdr'); if(_sb) _sb.onclick=()=>shareCurrent();         // M463 (TB-20)
 var _vb=document.getElementById('verBadge'); if(_vb) _vb.textContent=APPVER;
 /* Удобно убрать клавиатуру: тап по пустому месту (не по полю/кнопке) — снимает фокус → клавиатура прячется */
 document.addEventListener('pointerdown',function(e){ const ae=document.activeElement;
@@ -5526,10 +5526,19 @@ async function narrCandidates(qRaw){
       if(hits.length){ const hit=hits.reduce((a,b)=>((b[3]||0)>(a[3]||0)?b:a));
         const j=out.findIndex(c=>c.id===hit[1]); if(j>=0) out.splice(j,1); out.unshift({nm:hit[0], id:hit[1], sc:999}); } }
   }
-  // M459 (статистика выборов): что ЭТОТ юзер уже выбирал по такому запросу — выше (локально, мгновенно;
-  // общая статистика всех юзеров — серверный этап, bot.py-пакет)
+  // M459 (статистика выборов): что ЭТОТ юзер уже выбирал по такому запросу — выше (локально, мгновенно)
   try{ const pb=JSON.parse(localStorage.getItem('narr_picks')||'{}')[qRaw.trim().toLowerCase()]||{};
     out.forEach(c=>{ if(c.sc!==999 && c.id!=null && pb[c.id]) c.sc+=Math.min(pb[c.id],5)*4; }); }catch(e){}
+  // Э-С3: ОБЩИЕ выборы всех юзеров (topclicks; кэш на запрос; до Redeploy сервер молчит — буста просто нет)
+  try{ if(BACKEND_URL){ const ck='narr|'+qRaw.trim().toLowerCase();
+    window._tcCache=window._tcCache||{};
+    const tc=_tcCache[ck];
+    if(tc===undefined){ _tcCache[ck]=null;
+      fetch(BACKEND_URL+'/topclicks?kind=narr&q='+encodeURIComponent(qRaw.trim().toLowerCase()))
+        .then(r=>r.ok?r.json():null).then(j=>{ _tcCache[ck]=(j&&j.top)||[]; }).catch(()=>{ _tcCache[ck]=[]; }); }
+    if(Array.isArray(tc)&&tc.length){ const tm=new Map(tc.map(p=>[String(p[0]),p[1]]));
+      out.forEach(c=>{ const n=tm.get(String(c.id)); if(c.sc!==999&&n) c.sc+=Math.min(n,8)*2.5; }); }
+  } }catch(e){}
   out.sort((a,b)=>b.sc-a.sc);
   // M424: однословный запрос («хишам») = десятки тёзок, а датасет «известности» у тёзок шумный →
   // топ-40 пересортировываем по РЕАЛЬНОМУ участию в штудированных иснадах (dz, число мест) — Ибн Аммар с сотнями мест выше тёзок с нулём
@@ -6662,7 +6671,11 @@ async function openIsnadVersions(text, out, ref){
 let _allFormsSet=null;
 async function _buildFormsSet(){ if(_allFormsSet) return _allFormsSet;
   const idx=await loadNarrNames(); _allFormsSet=new Set();
-  for(const it of idx){ const n=it[0]; const wc=n.split(' ').length; if(wc>=2&&wc<=4&&n.length>=7) _allFormsSet.add(n); }
+  for(const it of idx){ const n=it[0]; const wc=n.split(' ').length;
+    if(wc>=2&&wc<=4&&n.length>=7) _allFormsSet.add(n);
+    // TB-19 («Аъмаш не выделен»): ОДНОСЛОВНЫЕ шухры с артиклем (الاعمش/الزهري/الثوري) — безопасный класс
+    // (в матне такие нисбы-формы почти не встречаются; голые имена مالك/عاصم НЕ включаем — шумели бы в матне)
+    else if(wc===1&&/^ال/.test(n)&&n.length>=5) _allFormsSet.add(n); }
   return _allFormsSet; }
 async function findKnownNames(text){
   const S=await _buildFormsSet(); const out=new Set();
