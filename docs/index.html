@@ -565,7 +565,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v384';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v385';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1646,26 +1646,33 @@ async function openRootBrowser(){
   };
   const pasteBtn=m.querySelector('#rootPaste'); if(pasteBtn) pasteBtn.onclick=async()=>{ try{ const t=await navigator.clipboard.readText(); if(t){ wInp.value=t.trim(); wInp.focus(); m.querySelector('#rootDet').onclick(); } else toast('Буфер пуст'); }catch(e){ toast('Разреши доступ к буферу или вставь вручную'); } };
   wInp.addEventListener('keydown',e=>{ if(e.key==='Enter') m.querySelector('#rootDet').onclick(); });
-  // МЕДЛЕННАЯ наглядная анимация-пример с пальцем-указателем 👆, который «нажимает» буквы
-  async function demo(){ cur=''; refresh(); const seq=['ن','ص','ر'];
-    let fp=m.querySelector('#rootFinger'); if(!fp){ fp=document.createElement('div'); fp.id='rootFinger'; fp.textContent='👆'; fp.style.cssText='position:fixed;z-index:99;font-size:32px;pointer-events:none;transition:left .8s ease,top .8s ease,transform .2s;filter:drop-shadow(0 2px 5px rgba(0,0,0,.6))'; document.body.appendChild(fp); }
-    fp.style.opacity='1';
-    try{ toast('Пример: набираю корень نصر — следи за пальцем 👆'); }catch(e){}
-    await new Promise(r=>setTimeout(r,900));
+  // МЕДЛЕННАЯ наглядная анимация-пример с пальцем 👆. Замечания владельца: не наслаивать повторный запуск,
+  // НЕ перескакивать мгновенно в начале (даём разглядеть клавиатуру), и есть кнопка «■ стоп».
+  async function demo(){
+    if(window._rootDemoOn){ window._rootDemoStop=true; return; }   // повторный клик во время анимации = стоп
+    window._rootDemoOn=true; window._rootDemoStop=false;
+    const db=m.querySelector('#rootDemo'); const dbTxt=db?db.textContent:''; if(db) db.textContent='■ стоп';
+    cur=''; refresh(); const seq=['ن','ص','ر'];
+    let fp=m.querySelector('#rootFinger'); if(!fp){ fp=document.createElement('div'); fp.id='rootFinger'; fp.textContent='👆'; fp.style.cssText='position:fixed;z-index:99;font-size:32px;pointer-events:none;transition:left 1.1s ease,top 1.1s ease,transform .2s;filter:drop-shadow(0 2px 5px rgba(0,0,0,.6))'; document.body.appendChild(fp); }
+    const fin=()=>{ fp.style.opacity='0'; window._rootDemoOn=false; if(db) db.textContent=dbTxt||'▶ пример (نصر)'; };
+    try{ toast('Пример: набираю корень نصر — следи за пальцем 👆 (повторный тап ▶ = стоп)'); }catch(e){}
+    // старт: палец появляется НАД клавиатурой и даёт ей 2с «осмотреться» (было: мгновенный скачок)
+    try{ const kb=lettersEl.getBoundingClientRect(); fp.style.left=(kb.left+kb.width/2)+'px'; fp.style.top=(kb.top-6)+'px'; fp.style.opacity='1'; }catch(e){ fp.style.opacity='1'; }
+    await new Promise(r=>setTimeout(r,2000)); if(window._rootDemoStop) return fin();
     for(const L of seq){
       const lb=[...lettersEl.children].find(x=>x.dataset.l===L);
       if(lb){ const rc=lb.getBoundingClientRect(); fp.style.left=(rc.left+rc.width/2-8)+'px'; fp.style.top=(rc.bottom-8)+'px'; }
-      await new Promise(r=>setTimeout(r,900));   // палец «долетает» до буквы
+      await new Promise(r=>setTimeout(r,1200)); if(window._rootDemoStop) return fin();   // палец «долетает»
       if(lb){ lb.style.transition='all .2s'; lb.style.boxShadow='0 0 16px #4ade80'; lb.style.background='#173d30'; lb.style.transform='scale(1.2)'; }
       fp.style.transform='translateY(5px) scale(.88)';   // нажатие
       await new Promise(r=>setTimeout(r,260)); fp.style.transform='';
       cur+=L; refresh(); curEl.style.transform='scale(1.4)'; curEl.style.color='#7fe3bf';
-      await new Promise(r=>setTimeout(r,1100));
+      await new Promise(r=>setTimeout(r,1100)); if(window._rootDemoStop) return fin();
       if(lb){ lb.style.boxShadow=''; lb.style.background=''; lb.style.transform=''; }
       curEl.style.transform=''; curEl.style.color='var(--mark)';
       await new Promise(r=>setTimeout(r,350));
     }
-    fp.style.opacity='0';
+    fin();
     try{ toast('💡 Готово: теперь выбери корень в списке → все аяты. Или впиши слово сверху.'); }catch(e){}
   }
   m.querySelector('#rootDemo').onclick=demo;
@@ -5046,7 +5053,8 @@ function anyBoxShow(on){
     b.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:12.5px;color:#bfe3cf"><b>🌐 Любой текст:</b> ищу слово-в-слово по ВСЕЙ Мактабе (8589 книг) — слова учёных, джарх, тафсир, сноски. <span id="anyHelp" style="color:var(--link);cursor:pointer;text-decoration:underline dotted">ⓘ правила ввода</span></span>'
       +'<span id="anyModeX" title="Свернуть и выключить режим" style="cursor:pointer;color:#e07f7f;font-weight:700;border:1px solid var(--border);border-radius:6px;padding:1px 8px;flex:none">✕</span></div>'
       +'<div id="anyHelpBody" style="display:none;margin-top:7px;font-size:12px;color:var(--text);line-height:1.65;border-top:1px dashed var(--border);padding-top:7px">'
-      +'• <b>Фраза как есть</b> — ищется точное вхождение (порядок слов важен).<br>'
+      +'• <b>Слова без кавычек</b> — страницы со ВСЕМИ словами (порядок НЕ важен; проверено: 40=40 на перестановке).<br>'
+      +'• <b>"В кавычках"</b> — точная фраза слово-в-слово (порядок важен) — как и везде у нас.<br>'
       +'• <b>Огласовки можно</b> — мы их снимем сами (ташкиль не мешает).<br>'
       +'• <b>Альтернативы через |</b> — «منكر الحديث | متروك الحديث»: прогоню каждый вариант и объединю.<br>'
       +'• <b>Невидимые символы копипасты</b> (из Шамелы/PDF) чистятся сами.<br>'
