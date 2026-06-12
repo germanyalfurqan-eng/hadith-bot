@@ -570,7 +570,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v407';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v408';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5756,13 +5756,13 @@ async function openHadithTable(){
   if(_htMeta===undefined){ try{ const r=await fetch('./htab/meta.json?v='+APPVER); _htMeta=r.ok?await r.json():null; }catch(e){ _htMeta=null; } }
   if(!_htMeta){ list.innerHTML='<div class="hint">Таблица недоступна.</div>'; return; }
   try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr()]); }catch(e){}
-  info.innerHTML='Хадисов: <b>'+_htMeta.total.toLocaleString('ru')+'</b> · общих №: <b>'+_htMeta.general.toLocaleString('ru')+'</b> · уник. версий: <b>'+_htMeta.uniq_ver.toLocaleString('ru')+'</b> · уник. хадисов: <b>'+_htMeta.uniq_had.toLocaleString('ru')+'</b> · точных копий: '+_htMeta.dups.toLocaleString('ru');
+  info.innerHTML='Хадисов: <b>'+_htMeta.total.toLocaleString('ru')+'</b> · общих №: <b>'+_htMeta.general.toLocaleString('ru')+'</b> · уник. версий: <b>'+_htMeta.uniq_ver.toLocaleString('ru')+'</b> · уник. хадисов: <b>'+_htMeta.uniq_had.toLocaleString('ru')+'</b>'+(_htMeta.uniq_smart?(' · СМЫСЛОВЫХ (ветки بالمعنى): <b style="color:#e0b34a">'+_htMeta.uniq_smart.toLocaleString('ru')+'</b>'):'')+' · точных копий: '+_htMeta.dups.toLocaleString('ru');
   let loaded=[], pagesLoaded=0, shown=0; const step=40; let filt='';
   async function ensure(upto){ while(loaded.length<upto && pagesLoaded<_htMeta.pages){ let pg=_htPage[pagesLoaded];
     if(!pg){ try{ const r=await fetch('./htab/p'+pagesLoaded+'.json?v='+APPVER); pg=r.ok?await r.json():[]; }catch(e){ pg=[]; } _htPage[pagesLoaded]=pg; }
     loaded=loaded.concat(pg); pagesLoaded++; } }
   const rowEl=(r)=>{
-    const [g,b,n,cid,v,u,dup]=r;
+    const [g,b,n,cid,v,u,dup,su]=r;
     const d=document.createElement('div'); d.style.cssText='padding:7px 4px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12.5px';
     const bn=(typeof bookName==='function'&&bookName(String(b)))||('книга '+b);
     d.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;align-items:center">'
@@ -5771,19 +5771,20 @@ async function openHadithTable(){
       +'<div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:3px;color:var(--hint);font-size:11px">'
       +(cid?'<span title="Код цепи передачи (передатчики+формы)">⛓ <b style="color:#bcd0ff;font-family:monospace">'+esc(cid)+'</b></span>':'<span style="opacity:.5">⛓ —</span>')
       +'<span class="htV" data-v="'+v+'" title="Уникальная ВЕРСИЯ (точь-в-точь иснад+матн). Тап — все точные копии этой версии" style="cursor:pointer">версия <b style="color:#cdbcff">V'+v+'</b></span>'
-      +'<span class="htU" data-u="'+u+'" title="Уникальный ХАДИС (по матну). Тап — все ВЕТКИ этого хадиса (разные иснады = один хадис)" style="cursor:pointer">хадис <b style="color:#9fd3a8">U'+u+'</b> 🌿</span></div>'
+      +'<span class="htU" data-u="'+u+'" title="Уникальный ХАДИС (по матну точь-в-точь). Тап — все ВЕТКИ" style="cursor:pointer">хадис <b style="color:#9fd3a8">U'+u+'</b></span>'+(su?('<span class="htS" data-s="'+su+'" title="СМЫСЛОВОЙ хадис (رواية بالمعنى — пересказы другими словами объединены). Тап — все смысловые версии" style="cursor:pointer">смысл <b style="color:#e0b34a">S'+su+'</b> 🌿</span>'):'')+'</div>'
       +'<div class="htIds" style="margin-top:3px"></div>';
     // id передатчиков из реестра цепи (ленив)
     if(cid){ (async()=>{ try{ const rec=await _regRec(cid); if(rec&&rec.s){ const ids=rec.s.filter(x=>typeof x==='number');
       d.querySelector('.htIds').innerHTML='<span style="font-size:11px;color:var(--hint)">id передатчиков: </span><span style="font-family:monospace;font-size:11px;color:#9fd3a8">'+(ids.length?ids.join(' · '):'—')+'</span>'; } }catch(e){} })(); }
     const _vEl=d.querySelector('.htV'); if(_vEl) _vEl.onclick=(e)=>{ e.stopPropagation(); q.value='v'+v; q.dispatchEvent(new Event('input')); };
     const _uEl=d.querySelector('.htU'); if(_uEl) _uEl.onclick=(e)=>{ e.stopPropagation(); q.value='u'+u; q.dispatchEvent(new Event('input')); };
+    const _sEl=d.querySelector('.htS'); if(_sEl) _sEl.onclick=(e)=>{ e.stopPropagation(); q.value='s'+su; q.dispatchEvent(new Event('input')); };
     d.onclick=()=>{ try{ openByCodeNum(String(b), n); }catch(e){ try{ openBook(String(b), n); }catch(_e){} } };
     return d;
   };
   const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:10px;width:100%;padding:9px;border:1px solid var(--border);border-radius:9px';
   const matchF=(r)=>{ if(!filt) return true; const f=filt.toLowerCase();
-    if(f[0]==='v') return ('v'+r[4])===f; if(f[0]==='u') return ('u'+r[5])===f;
+    if(f[0]==='v') return ('v'+r[4])===f; if(f[0]==='u') return ('u'+r[5])===f; if(f[0]==='s'&&!isNaN(+f.slice(1))) return ('s'+(r[7]||0))===f;
     if(f[0]==='c'||f.startsWith('c')){ if((r[3]||'').toLowerCase().indexOf(f)>=0) return true; }
     const num=f.replace(/[^0-9]/g,''); if(num) return String(Math.abs(r[0]))===num||String(r[4])===num||String(r[5])===num;
     return (r[3]||'').toLowerCase().indexOf(f)>=0; };
