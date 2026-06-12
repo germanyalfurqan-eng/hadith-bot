@@ -569,7 +569,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v398';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v399';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5135,11 +5135,17 @@ function chainRender(){
   const b=_chainBox(); const n=_chainSel.length;
   b.style.display=(typeof modes!=='undefined'&&modes.chain)?'block':'none';
   const chips=_chainSel.map((c,i)=>'<span style="display:inline-flex;align-items:center;gap:6px;background:#2e1d4a;border:1px solid #6c5ce7;border-radius:9px;padding:5px 9px;margin:2px;direction:rtl"><b style="font-size:13.5px">'+esc(c.nm)+'</b><span style="font-size:10px;color:#9b8bd0">#'+c.id+'</span><span class="chDel" data-i="'+i+'" style="cursor:pointer;color:#e07f7f;font-weight:700;padding:0 3px">✕</span></span>').join('');
+  const md=window._chainMode||'any';
   b.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:13px;color:#c9b8ff;font-weight:700">⛓ Цепь передачи — набирай имя в поиске и тапай подсказку (нужно от 2):</span><span id="chainX" title="Свернуть и выключить режим Цепь" style="cursor:pointer;color:#e07f7f;font-weight:700;border:1px solid var(--border);border-radius:6px;padding:1px 8px;flex:none">✕</span></div>'
     +'<div style="display:flex;flex-wrap:wrap;align-items:center">'+(chips||'<span class="hint" style="font-size:12px">пока никто не выбран</span>')+'</div>'
-    +'<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">'
-    +'<label style="font-size:12.5px;color:var(--text);display:flex;gap:5px;align-items:center;cursor:pointer"><input type="checkbox" id="chainAdj"'+(window._chainAdj?' checked':'')+'> рядом в цепи (учитель↔ученик)</label>'
-    +(n<2?'<span class="hint" style="font-size:11.5px;color:#e0b34a">введи как минимум двух — потом жми «Найти цепь» сверху</span>':'<span class="hint" style="font-size:11.5px">жми «🔎 Найти цепь» сверху · фильтры форм передачи (حدثنا/عن) добавим скоро</span>')
+    +'<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap;font-size:12.5px;color:var(--text)">'
+    +'<label style="display:flex;gap:4px;align-items:center;cursor:pointer" title="Все выбранные стоят где-то в одном иснаде (порядок не важен)"><input type="radio" name="chOrd" value="any"'+(md==='any'?' checked':'')+'> вместе в иснаде</label>'
+    +'<label style="display:flex;gap:4px;align-items:center;cursor:pointer" title="Выбранные стоят рядом (соседние звенья), порядок не важен"><input type="radio" name="chOrd" value="adj"'+(md==='adj'?' checked':'')+'> рядом</label>'
+    +'<label style="display:flex;gap:4px;align-items:center;cursor:pointer" title="КОНСТРУКЦИЯ иснада: звенья стоят ПОДРЯД ровно в порядке ввода (1-й передаёт от 2-го, 2-й от 3-го…) — мгновенный поиск по реестру цепей"><input type="radio" name="chOrd" value="seq"'+(md==='seq'?' checked':'')+'> 🧱 строго по порядку (конструкция)</label>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">'
+    +(n<2?'<span class="hint" style="font-size:11.5px;color:#e0b34a">введи как минимум двух — потом жми «Найти цепь» сверху</span>'
+        :'<span class="hint" style="font-size:11.5px">'+(md==='seq'?'⚠️ в конструкции ПОРЯДОК ВВОДА = ПОРЯДОК ЦЕПИ (1-й передаёт от 2-го…)':'жми «🔎 Найти цепь» сверху')+' · формы передачи (حدثنا/عن) добавим скоро</span>')
     +'<span id="chainBaseLink" title="Открыть базу самых частых цепей передачи (реестр иснадов M449)" style="cursor:pointer;color:#c9b8ff;font-size:12px;border:1px solid #6c5ce7;border-radius:8px;padding:3px 9px;margin-inline-start:auto">⛓ База иснадов</span>'
     +'</div><div id="chainOut" style="margin-top:6px"></div>';
   // M469: ясная ОТМЕТКА об известных связях (np-пары штудирования) — информируем, выбор за человеком
@@ -5157,7 +5163,7 @@ function chainRender(){
   b.querySelectorAll('.chDel').forEach(x=>x.onclick=()=>{ const c=_chainSel[+x.dataset.i]; _chainSel.splice(+x.dataset.i,1); chainRender();
     try{ _undoPush('удаление звена '+c.nm.split(' ').slice(0,2).join(' '), ()=>{ _chainSel.push(c); chainRender(); }); }catch(e){} });
   const _cbl=b.querySelector('#chainBaseLink'); if(_cbl) _cbl.onclick=()=>{ try{ openIsnadBase(); }catch(e){} };
-  const adj=b.querySelector('#chainAdj'); if(adj) adj.onchange=()=>{ window._chainAdj=adj.checked; };
+  b.querySelectorAll('input[name="chOrd"]').forEach(r=>r.onchange=()=>{ window._chainMode=r.value; window._chainAdj=(r.value==='adj'); chainRender(); });
   const cx=b.querySelector('#chainX'); if(cx) cx.onclick=()=>{ chainModeOff(); };   // R46: закрыть = выключить режим
   _chainSyncGo();   // R45: ОДНА кнопка — главная «Найти» становится «Найти цепь» (дубль в боксе убран)
 }
@@ -5326,7 +5332,7 @@ function addChainNarr(c){
   _undoPush('добавление звена '+c.nm.split(' ').slice(0,2).join(' '), ()=>{ const k=_chainSel.findIndex(x=>x.id===c.id); if(k>=0){ _chainSel.splice(k,1); chainRender(); } });
   const q=document.getElementById('q'); if(q){ q.value=''; q.focus();
     const ORD=['1-го','2-го','3-го','4-го','5-го'];   // поэтапный ввод (слово владельца): человек понимает, КОГО вводит
-    q.placeholder='⛓ Имя '+(ORD[_chainSel.length]||(_chainSel.length+1)+'-го')+' передатчика (порядок ввода ≠ порядок в цепи)…'; }
+    q.placeholder='⛓ Имя '+(ORD[_chainSel.length]||(_chainSel.length+1)+'-го')+' передатчика '+((window._chainMode==='seq')?'(он передаёт ОТ следующего — порядок ввода = ПОРЯДОК ЦЕПИ)':'(порядок ввода ≠ порядок в цепи)')+'…'; }
   try{ hideNarrSugg(); }catch(e){}
   chainRender();
   toast('⛓ Добавлен: '+c.nm.split(' ').slice(0,3).join(' ')+(_chainSel.length<2?' — добавь ещё одного':' — жми «Найти цепь»'));
@@ -5341,8 +5347,9 @@ async function _aliasGroup(id){
 }
 async function chainRun(){
   chainRender();
-  try{ _actPush({t:'chain', sel:_chainSel.slice(), adj:!!window._chainAdj, names:_chainSel.map(c=>c.nm.split(' ').slice(0,2).join(' '))}); }catch(e){}   // M462/M463
+  try{ _actPush({t:'chain', sel:_chainSel.slice(), adj:!!window._chainAdj, mode:window._chainMode||'any', names:_chainSel.map(c=>c.nm.split(' ').slice(0,2).join(' '))}); }catch(e){}   // M462/M463
   const out=document.getElementById('chainOut'); if(!out) return;
+  if((window._chainMode||'any')==='seq'){ return chainRunSeq(out); }   // M483: конструкция иснада (R45 — внутри ЭТОГО же режима)
   const ids=_chainSel.map(c=>c.id);
   out.innerHTML='<div class="hint">⏳ Собираю участие выбранных… </div>';
   const groups=await Promise.all(ids.map(id=>_aliasGroup(id)));   // M454: дубль-id = тот же человек
@@ -5352,7 +5359,7 @@ async function chainRun(){
   if(miss.length){ out.innerHTML='<div class="hint" style="color:#e0b34a">⚠️ Нет размеченного участия (Э1.1) у: '+miss.map(c=>esc(c.nm.split(' ').slice(0,3).join(' '))).join('، ')+'. Короткие формы опознаются итерациями дизамбигуации — попробуй более полную форму имени.</div>'; return; }
   let ai=0; parts.forEach((p,i)=>{ if(p.length<parts[ai].length) ai=i; });
   const anchor=parts[ai];
-  const warn=anchor.length>=400?'<div class="hint" style="font-size:11px;color:#e0b34a">⚠️ даже самый редкий из выбранных усечён кэпом 400 — выдача может быть неполной</div>':'';
+  const warn='';   // кэп участия снят v398 (слово владельца) — выдача полная
   const adj=!!window._chainAdj;
   const hits=[];
   for(let k=0;k<anchor.length;k++){
@@ -5374,6 +5381,53 @@ async function chainRun(){
   hits.slice(0,200).forEach(h=>out.appendChild(_dzPlaceRow(h[0],h[1],h[2])));
   if(hits.length>200) out.insertAdjacentHTML('beforeend','<div class="hint">показаны первые 200</div>');
   out.insertAdjacentHTML('beforeend','<div class="hint" style="font-size:11px;margin-top:4px">🧬 источник: штудированные иснады Э1.1 (64 печати первоисточников). Условия форм передачи — этап Э-Ц2.</div>');
+}
+// M483: «строго по порядку» = КОНСТРУКЦИЯ иснада — мгновенный поиск по индексу смежных пар pchain
+// (порядок ВЫБОРА = порядок цепи: 1-й передаёт от 2-го). Алиасы M454 учитываются объединением пар.
+async function chainRunSeq(out){
+  out.innerHTML='<div class="hint">⏳ Ищу конструкцию по реестру цепей…</div>';
+  const groups=await Promise.all(_chainSel.map(c=>_aliasGroup(c.id)));
+  let cids=null;
+  for(let i=0;i<groups.length-1;i++){
+    let lst=[];
+    for(const a of groups[i]) for(const b of groups[i+1]){ try{ lst=lst.concat(await _pchGet(a,b)); }catch(e){} }
+    if(!cids) cids=new Set(lst); else { const s2=new Set(lst); cids=new Set([...cids].filter(x=>s2.has(x))); }
+    if(!cids.size) break;
+  }
+  const arr=[...(cids||[])];
+  if(!arr.length){
+    out.innerHTML='<div class="hint" style="color:#e0b34a">Цепей с такой конструкцией ПОДРЯД не нашлось. Проверь порядок (1-й передаёт ОТ 2-го) или переключись на «вместе в иснаде»/«рядом».</div>'; return; }
+  try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){}
+  const recs=[];
+  for(let i=0;i<arr.length && i<400;i++){ const rec=await _regRec(arr[i]); if(rec) recs.push({cid:arr[i], n:rec.n, ex:rec.ex, s:rec.s});
+    if(i%50===0) out.innerHTML='<div class="hint">⏳ загружаю цепи… '+i+'/'+Math.min(arr.length,400)+'</div>'; }
+  recs.sort((a,b)=>(b.n||0)-(a.n||0));
+  const totH=recs.reduce((s,r)=>s+(r.n||0),0);
+  out.innerHTML='';
+  const hd=document.createElement('div'); hd.style.cssText='font-size:13.5px;font-weight:700;color:#c9b8ff;margin:4px 0 6px';
+  hd.textContent='🧱 Конструкция '+_chainSel.map(c=>c.nm.split(' ').slice(0,2).join(' ')).join(' ← ')+': цепей '+arr.length+(arr.length>400?' (показаны 400)':'')+' · хадисов '+totH;
+  out.appendChild(hd);
+  let shown=0; const step=20;
+  const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:8px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px';
+  const draw=()=>{ recs.slice(shown,shown+step).forEach(rc=>{
+      const d=document.createElement('div'); d.style.cssText='padding:8px 2px;border-bottom:1px solid var(--border)';
+      const tp=document.createElement('div'); tp.style.cssText='display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:5px';
+      tp.innerHTML='<span style="font-size:11.5px;color:var(--hint)"><b style="color:#bcd0ff;font-family:monospace">'+esc(rc.cid)+'</b></span><span style="font-size:12px;color:#9fd3a8;font-weight:700">📊 '+(rc.n||1)+' хадис'+_pluralHadith(rc.n||1)+'</span>';
+      d.appendChild(tp);
+      const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl'; d.appendChild(row);
+      if(rc.s) _dzChips(rc.s, row);
+      const pl=document.createElement('span'); pl.style.cssText='display:inline-block;margin-top:5px;cursor:pointer;color:var(--link);font-size:12px';
+      pl.textContent='📍 хадисы с этой цепью ('+(rc.n||1)+')';
+      const lst=document.createElement('div'); lst.style.cssText='display:none;margin-top:4px';
+      pl.onclick=()=>{ if(lst.style.display!=='none'){ lst.style.display='none'; return; } lst.style.display='block';
+        if(lst.dataset.b) return; lst.dataset.b='1';
+        (rc.ex||[]).forEach(p=>lst.appendChild(_dzPlaceRow(p[0],p[1],null))); };
+      d.appendChild(pl); d.appendChild(lst); out.insertBefore(d, more);
+    });
+    shown=Math.min(recs.length, shown+step);
+    more.textContent= shown>=recs.length ? '— все цепи показаны —' : '⬇️ Показать ещё ниже ('+(recs.length-shown)+')';
+    more.disabled=shown>=recs.length; };
+  out.appendChild(more); more.onclick=draw; draw();
 }
 function _dzPlaceRow(bid,num,leaf){
   // M449-замечание владельца: «ид книги недостаточно» — название (с огласовками, если выверено) + рус + Википедия
@@ -5637,9 +5691,8 @@ async function openIsnadBase(){
   const cb=m.querySelector('#ibClean'); if(cb){ cb.checked=false; cb.onchange=()=>{ kind=cb.checked?'clean':'all'; reset(); }; }
   await reset(); more.onclick=draw;
 }
-/* ===== 🧱 M483 СТРАТЕГИЧЕСКОЕ: КОНСТРУКТОР ИСНАДА — поиск по КОНСТРУКЦИИ цепи (смежные звенья по порядку).
-   Индекс смежных пар pchain/<a%64>.json {"ученик_учитель":[cid…]} (58 718 пар из реестра 230k).
-   Поиск X→Y→Z = пересечение cids(X_Y) ∩ cids(Y_Z); состав цепи (s) теперь в reg-шардах. ===== */
+/* ===== 🧱 M483: «конструкция иснада» живёт ВНУТРИ режима «⛓ Цепь» (R45 — не множить сущности).
+   Здесь только данные-хелперы pchain/reg; вход из меню = ярлык, включающий режим Цепь с порядком «строго». ===== */
 var _pchC={};
 async function _pchGet(a,b){
   const bk=((a%64)+64)%64;
@@ -5653,95 +5706,15 @@ async function _regRec(cid){
   if(m===undefined){ try{ const r=await fetch('./isnad/reg_'+pref+'.json'); m=r.ok?await r.json():{}; }catch(e){ m={}; } _isnRegC[pref]=m; }
   return (m&&m[cid])||null;
 }
-async function openIsnadCtor(){
-  let m=document.getElementById('isnadCtorModal');
-  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='isnadCtorModal';
-    m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 8px;padding:13px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:14.5px">🧱 Конструктор иснада — поиск по конструкции цепи</b><button class="mini" id="icClose" style="flex:none">закрыть ✕</button></div>'
-      +'<div class="hint" style="font-size:11.5px;margin-bottom:7px">Собери цепь по порядку, КАК ЧИТАЕТСЯ ИСНАД (сверху вниз): 1-й передаёт от 2-го, 2-й — от 3-го… Найдём все цепи, где эти звенья стоят ИМЕННО ПОДРЯД в этом порядке, и все хадисы с ними. Звенья — только опознанные равии базы (формы передачи حدثنا/عن добавим следующим этапом).</div>'
-      +'<div id="icChips" style="display:flex;gap:6px;flex-wrap:wrap;direction:rtl;margin-bottom:7px"></div>'
-      +'<input id="icQ" placeholder="имя звена (араб/рус) — выбери из подсказок…" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-size:13.5px">'
-      +'<div id="icSugg" style="margin-top:4px;border:1px solid var(--border);border-radius:10px;overflow:hidden;display:none;max-height:220px;overflow-y:auto"></div>'
-      +'<button id="icGo" class="go" style="width:100%;margin-top:9px;padding:10px;font-size:14px" disabled>🧱 Найти цепи с этой конструкцией</button>'
-      +'<div id="icInfo" class="hint" style="font-size:11.5px;margin-top:6px"></div>'
-      +'<div id="icOut" style="max-height:50vh;overflow:auto;margin-top:6px"></div></div>';
-    document.body.appendChild(m); m.querySelector('#icClose').onclick=()=>m.style.display='none';
-    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
-    const sel=[];   // [{id,nm}] — порядок = порядок цепи (ученик → учитель → …)
-    const chips=m.querySelector('#icChips'), q=m.querySelector('#icQ'), sugg=m.querySelector('#icSugg'),
-          go=m.querySelector('#icGo'), info=m.querySelector('#icInfo'), out=m.querySelector('#icOut');
-    const drawChips=()=>{ chips.innerHTML='';
-      sel.forEach((s,i)=>{ const c=document.createElement('span');
-        c.style.cssText='display:inline-flex;gap:6px;align-items:center;font-size:12.5px;padding:4px 10px;border-radius:8px;border:1px solid #6c5ce7;background:rgba(108,92,231,.12);color:#dcd2ff';
-        c.innerHTML='<b>'+(i+1)+'.</b> <span dir="rtl">'+esc(s.nm.split(' ').slice(0,4).join(' '))+'</span> <span data-i="'+i+'" style="cursor:pointer;color:#e08f8f">✕</span>';
-        c.querySelector('[data-i]').onclick=(e)=>{ sel.splice(+e.target.dataset.i,1); drawChips(); };
-        chips.appendChild(c);
-        if(i<sel.length-1){ const a=document.createElement('span'); a.style.cssText='align-self:center;color:var(--hint)'; a.textContent='⬅'; a.title='передаёт от'; chips.appendChild(a); } });
-      go.disabled=sel.length<2;
-      go.textContent= sel.length<2 ? '🧱 добавь минимум 2 звена (подряд в цепи)' : '🧱 Найти цепи с этой конструкцией ('+sel.length+' звен.)';
-    };
-    let tmr=null;
-    q.oninput=()=>{ clearTimeout(tmr); const v=q.value.trim();
-      if(!v){ sugg.style.display='none'; sugg.innerHTML=''; return; }   // R46: пустой ввод прячет подсказки
-      tmr=setTimeout(async()=>{ try{
-        const cands=await narrCandidates(v); sugg.innerHTML='';
-        if(!cands||!cands.length){ sugg.style.display='none'; return; }
-        cands.slice(0,8).forEach(c=>{ const r=document.createElement('div');
-          r.style.cssText='padding:7px 11px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center';
-          r.innerHTML='<span style="font-size:11px;color:#5b87b5;flex:none">#'+c.id+'</span><span dir="rtl" style="flex:1;text-align:right;font-size:14px">'+esc(c.nm)+'</span>';
-          _narrCard(c.id).then(cc=>{ if(cc&&cc[4]) r.firstChild.textContent='#'+c.id+' · '+cc[4]+'هـ'; }).catch(()=>{});
-          r.onclick=()=>{ sel.push({id:c.id,nm:c.nm}); q.value=''; sugg.style.display='none'; sugg.innerHTML=''; drawChips(); };
-          sugg.appendChild(r); });
-        sugg.style.display='block';
-      }catch(e){ sugg.style.display='none'; } }, 220);
-    };
-    go.onclick=async()=>{ if(sel.length<2) return;
-      go.disabled=true; const prev=go.textContent; go.textContent='⏳ ищу конструкцию…'; out.innerHTML=''; info.textContent='';
-      try{
-        // пересечение смежных пар (в seq: ученик→учитель = наш порядок выбора)
-        let cids=null;
-        for(let i=0;i<sel.length-1;i++){
-          const lst=await _pchGet(sel[i].id, sel[i+1].id);
-          info.textContent='пара '+(i+1)+'/'+(sel.length-1)+': цепей '+lst.length;
-          if(!cids) cids=new Set(lst); else { const s2=new Set(lst); cids=new Set([...cids].filter(x=>s2.has(x))); }
-          if(!cids.size) break;
-        }
-        const arr=[...(cids||[])];
-        if(!arr.length){ info.textContent='Цепей с такой конструкцией ПОДРЯД не нашлось. Подсказка: проверь порядок (1-й передаёт ОТ 2-го) или убери промежуточное звено.'; go.disabled=false; go.textContent=prev; return; }
-        // тянем составы и места, сортируем по числу хадисов
-        try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr()]); }catch(e){}
-        const recs=[];
-        for(let i=0;i<arr.length && i<400;i++){ const rec=await _regRec(arr[i]); if(rec) recs.push({cid:arr[i], ...rec}); if(i%40===0) info.textContent='загружаю цепи… '+i+'/'+Math.min(arr.length,400); }
-        recs.sort((a,b)=>(b.n||0)-(a.n||0));
-        const totH=recs.reduce((s,r)=>s+(r.n||0),0);
-        info.textContent='Найдено цепей: '+arr.length+(arr.length>400?' (показаны 400)':'')+' · хадисов с ними: '+totH;
-        let shown=0; const step=20;
-        const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:8px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px';
-        const draw=()=>{ recs.slice(shown,shown+step).forEach(rc=>{
-            const d=document.createElement('div'); d.style.cssText='padding:8px 2px;border-bottom:1px solid var(--border)';
-            const tp=document.createElement('div'); tp.style.cssText='display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:5px';
-            tp.innerHTML='<span style="font-size:11.5px;color:var(--hint)"><b style="color:#bcd0ff;font-family:monospace">'+esc(rc.cid)+'</b></span><span style="font-size:12px;color:#9fd3a8;font-weight:700">📊 '+(rc.n||1)+' хадис'+_pluralHadith(rc.n||1)+'</span>';
-            d.appendChild(tp);
-            const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl'; d.appendChild(row);
-            if(rc.s) _dzChips(rc.s, row);
-            const pl=document.createElement('span'); pl.style.cssText='display:inline-block;margin-top:5px;cursor:pointer;color:var(--link);font-size:12px';
-            pl.textContent='📍 хадисы с этой цепью ('+(rc.n||1)+')';
-            const lst=document.createElement('div'); lst.style.cssText='display:none;margin-top:4px';
-            pl.onclick=()=>{ if(lst.style.display!=='none'){ lst.style.display='none'; return; } lst.style.display='block';
-              if(lst.dataset.b) return; lst.dataset.b='1';
-              (rc.ex||[]).forEach(p=>lst.appendChild(_dzPlaceRow(p[0],p[1],null))); };
-            d.appendChild(pl); d.appendChild(lst); out.insertBefore(d, more);
-          });
-          shown=Math.min(recs.length, shown+step);
-          more.textContent= shown>=recs.length ? '— все цепи показаны —' : '⬇️ Показать ещё ниже ('+(recs.length-shown)+')';
-          more.disabled=shown>=recs.length; };
-        out.appendChild(more); more.onclick=draw; draw();
-      }catch(e){ info.textContent='🔧 не получилось — попробуй ещё раз'; }
-      go.disabled=false; go.textContent=prev;
-    };
-    m._draw=drawChips;
-  }
-  m.style.zIndex='10006'; m.style.display='flex';
-  try{ loadNarrNames(); }catch(e){}
+function openIsnadCtor(){   // ярлык меню «Поиск по иснаду»: тот же режим Цепь, порядок = «строго (конструкция)»
+  try{
+    window._chainMode='seq'; window._chainAdj=false;
+    if(typeof modes!=='undefined' && !modes.chain){ const c=document.querySelector('.chip[data-mode="chain"]'); if(c) c.click(); else { modes.chain=true; } }
+    chainRender();
+    const q=document.getElementById('q'); if(q){ q.focus(); }
+    try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(e){}
+    toast('🧱 Конструктор иснада = режим «Цепь», порядок «строго». Вводи звенья ПО ПОРЯДКУ цепи (1-й передаёт от 2-го).');
+  }catch(e){}
 }
 /* ===== 📋 M412: ОБЩАЯ ТАБЛИЦА ПЕРЕДАТЧИКОВ (18 989) — сортировки, фильтры передачи, переход по #id ===== */
 let _narrTbl=null,_narrTblP=null;
