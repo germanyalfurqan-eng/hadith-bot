@@ -565,7 +565,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v386';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v387';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4705,11 +4705,18 @@ function matnPhrases(text){
     const ph=words.slice(s,s+len).join(' '); if(ph.length>=10 && !seen.has(ph)){ seen.add(ph); out.push(ph); } }
   return out;
 }
+// ===== TB-22c: шингл-градация кандидатов тахриджа — отделить «✓ тот же хадис» от «≈ похожий отрывок» =====
+// Корень TB-22: широкий мульти-фразовый поиск даёт и точные совпадения, и просто общий фрагмент — числа без градации «выглядят рандомом».
+function _tkShingles(canonStr,n){ const w=(canonStr||'').split(' ').filter(x=>x.length>1); const s=new Set(); for(let i=0;i+n<=w.length;i++) s.add(w.slice(i,i+n).join(' ')); return s; }
+function _tkOverlap(a,b){ if(!a.size||!b.size) return 0; const small=a.size<=b.size?a:b, big=a.size<=b.size?b:a; let inter=0; small.forEach(x=>{ if(big.has(x)) inter++; }); return inter/small.size; }   // overlap-коэффициент по МЕНЬШЕМУ матну (короткая версия ⊂ длинной = тот же хадис)
+const TKH_SAME_THR=0.33;   // overlap биграмм ≥ порога → «тот же хадис»; ниже → «похожий отрывок». 0.33 калибровано: тот же матн с РАЗНЫМ иснадом даёт ~0.35–0.5 (иснад различается, ~половина текста), общий фрагмент — ~0.1–0.25 (разрыв ~2×).
+function _tkGrade(srcSh,candText){ if(!srcSh||!srcSh.size) return 'similar'; const cSh=_tkShingles(canon(splitIsnad(candText)[1]||candText),2); return _tkOverlap(srcSh,cSh)>=TKH_SAME_THR?'same':'similar'; }
 async function doTakhrij(text, ref, out, btn, force){
   const myseq=++_takhSeq;                       // новый запуск отменяет предыдущий
   const aborted=()=>myseq!==_takhSeq;
   btn.disabled=true; const prev=btn.textContent; btn.textContent='ищу…'; out.style.display='block';
   const phrases=matnPhrases(text);
+  const _srcSh=_tkShingles(canon(splitIsnad(text)[1]||text),2);   // TB-22c: биграммы матна источника для градации кандидатов
   const skipCode=(ref&&ref.source)||'', skipNum=String((ref&&ref.num)||'');
   out.innerHTML='';
   const mk=()=>{ const d=document.createElement('div'); out.appendChild(d); return d; };
@@ -4719,13 +4726,25 @@ async function doTakhrij(text, ref, out, btn, force){
   function renderMuh(){ if(muhNums.size){ const nums=[...muhNums].join(', ');
       muhSec.innerHTML='<div dir="ltr" style="border:1px solid var(--border);border-radius:8px;padding:5px 8px;margin-top:6px;font-size:13px;color:var(--hint)">📖 Также в нашем указателе аль-Мухаймин: № '+esc(nums)+' <span style="opacity:.7">(книга в обработке)</span></div>'; } else muhSec.innerHTML=''; }
   function renderLoc(){ locBox.innerHTML='';
-    Object.keys(found).forEach(code=>{ const nums=found[code];
+    // TB-22c: каждый № помечается ✓ «тот же хадис» / ≈ «похожий отрывок» (по совпадению текста); «тот же» — вперёд. Старый кэш (массив строк) — без бейджа.
+    let graded=false; const body=document.createElement('div');
+    const rank=g=>(g==='same'?0:g==='similar'?1:2);
+    Object.keys(found).forEach(code=>{ const items=(found[code]||[]).slice()
+        .sort((a,b)=>rank(a&&typeof a==='object'?a.g:null)-rank(b&&typeof b==='object'?b.g:null));
       const row=document.createElement('div'); row.style.cssText='direction:rtl;font-size:14px;margin:2px 0';
       const lbl=document.createElement('span'); lbl.textContent=arOf(code)+': '; row.appendChild(lbl);
-      nums.forEach((nm,i)=>{ const a=document.createElement('span'); a.textContent='№'+nm; a.title='Открыть в читалке на этом хадисе';
-        a.style.cssText='color:var(--link);cursor:pointer'; a.onclick=()=>openReader(code,nm); row.appendChild(a);
-        if(i<nums.length-1){ const s=document.createElement('span'); s.textContent='، '; row.appendChild(s); } });
-      locBox.appendChild(row); }); }
+      items.forEach((it,i)=>{ const nm=(it&&typeof it==='object')?it.n:it; const g=(it&&typeof it==='object')?it.g:null;
+        const col=(g==='same'?'#4ade80':g==='similar'?'#f0b86e':'var(--link)');
+        const a=document.createElement('span'); a.textContent='№'+nm; a.title='Открыть в читалке на этом хадисе';
+        a.style.cssText='color:'+col+';cursor:pointer'; a.onclick=()=>openReader(code,nm); row.appendChild(a);
+        if(g){ graded=true; const bd=document.createElement('span'); bd.textContent=(g==='same'?' ✓':' ≈');
+          bd.title=(g==='same'?'тот же хадис (текст совпадает)':'похожий отрывок (совпадает лишь часть текста)');
+          bd.style.cssText='color:'+col+';font-size:12px'; row.appendChild(bd); }
+        if(i<items.length-1){ const s=document.createElement('span'); s.textContent='، '; row.appendChild(s); } });
+      body.appendChild(row); });
+    if(graded){ const lg=document.createElement('div'); lg.style.cssText='font-size:11px;color:var(--hint);margin:1px 0 5px';
+      lg.innerHTML='<span style="color:#4ade80">✓ тот же хадис</span> · <span style="color:#f0b86e">≈ похожий отрывок</span> <span style="opacity:.7">(по совпадению текста)</span>'; locBox.appendChild(lg); }
+    locBox.appendChild(body); }
   // ПОЛНЫЙ научный تخريج: парсим prose в кликабельные «сборник №№» (по ВСЕМ риватаям) + хукм + полный текст.
   function renderSci(prose, hukm){
     const refs=parseTakhreej(prose||''); const byCode={};
@@ -4769,6 +4788,20 @@ async function doTakhrij(text, ref, out, btn, force){
     const cnt=Object.keys(found).length;
     locHead.innerHTML='<div style="color:var(--hint);font-size:12px;margin:8px 0 4px">🔗 В наших сборниках <span style="color:#9fb4cc">♻️ из нашей базы'+(t.d?(' · '+esc(t.d)):'')+'</span>'+(cnt?' (клик по № — читалка):':':')+'</div>';
     moreSec.innerHTML=''; moreSec.appendChild(refreshBtn());
+    regradeCache();   // TB-22c: дослать градацию ✓/≈ старым (негранёным) кэш-записям
+  }
+  // TB-22c: записи из кэша в СТАРОМ формате (массив строк, без градации) — догрузить тексты кандидатов и проставить «тот же/похожий», обновить UI (кэш не пересохраняем, чтобы не затереть научный تخريج)
+  async function regradeCache(){
+    if(!_srcSh.size) return;
+    const codes=Object.keys(found).filter(c=>{ const a=found[c]; return a&&a.length&&typeof a[0]!=='object'; });
+    for(const code of codes){ if(aborted()) return;
+      try{ const arr=await loadByCode(code); if(aborted()) return;
+        const byNum={}; arr.forEach(h=>{ byNum[String(h.num)]=h.text; });
+        found[code]=found[code].map(nm=>({n:String(nm), g:(byNum[String(nm)]?_tkGrade(_srcSh,byNum[String(nm)]):'similar')}));
+        renderLoc();
+      }catch(e){}
+      await _yield();
+    }
   }
   if(!force && BACKEND_URL && tkSrc && tkNum!==''){
     try{ const r=await fetch(BACKEND_URL+'/takhrij?source='+encodeURIComponent(tkSrc)+'&num='+encodeURIComponent(tkNum)+'&initData='+encodeURIComponent(INITDATA));
@@ -4811,8 +4844,8 @@ async function doTakhrij(text, ref, out, btn, force){
       try{ const arr=await loadByCode(code); if(aborted()) return false;
         const hits=[];
         for(const h of arr){ if(code===skipCode && String(h.num)===skipNum) continue;
-          if(phrases.some(p=>canon(h.text).indexOf(p)!==-1)){ hits.push(String(h.num)); if(hits.length>=8) break; } }
-        if(hits.length){ if(code==='muhaymin'){ hits.forEach(n=>muhNums.add(n)); renderMuh(); } else { found[code]=hits; renderLoc(); } }
+          if(phrases.some(p=>canon(h.text).indexOf(p)!==-1)){ hits.push({n:String(h.num), g:_tkGrade(_srcSh, h.text)}); if(hits.length>=8) break; } }   // TB-22c: каждому кандидату — оценка «тот же/похожий»
+        if(hits.length){ if(code==='muhaymin'){ hits.forEach(it=>muhNums.add(it.n)); renderMuh(); } else { found[code]=hits; renderLoc(); } }
       }catch(e){}
       await _yield();
     }
