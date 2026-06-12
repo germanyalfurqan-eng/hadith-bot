@@ -554,7 +554,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v367';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v368';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1714,7 +1714,8 @@ async function runSearch(explicit){
   // ЧИСЛА — НЕ имена: «5590» должен открыть хадис по номеру → пропускаем в обычный поиск (замечание владельца)
   if(_narrBypass){ _narrBypass=false; }   // «🔎 Хадисы с его участием»: один запуск мимо narr-перехвата (текст имени → обычный поиск)
   else if(modes.narr && (/^#\s*\d{1,5}$/.test(q.trim()) || !/^[\d٠-٩\s:№#×.]+$/.test(q))){ await narrRun(q, seq); logSearch(shown,'narr',0); return; }   // M405: «#2433» = равий по ID
-  else if(typeof modes!=='undefined' && modes.chain && !/^[\d٠-٩\s:№#×.]+$/.test(q)){ try{ narrSuggest(q.trim()); }catch(e){} toast('⛓ Выбери передатчика из подсказок (Enter не ищет в режиме Цепь)'); return; }   // M447
+  else if(typeof modes!=='undefined' && modes.chain && !q.trim() && _chainSel.length>=2){ chainRun(); return; }   // M447/R45: Enter при пустом поле = «Найти цепь»
+  else if(typeof modes!=='undefined' && modes.chain && !/^[\d٠-٩\s:№#×.]+$/.test(q)){ try{ narrSuggest(q.trim()); }catch(e){} toast('⛓ Выбери передатчика из подсказок'); return; }   // M447
   // 📚 M314: чистое ЧИСЛО на «Хадисы» = № хадиса → список книг ВСЕЙ Мактабы с этим номером (ленивая подгрузка по скроллу)
   {
     const _num=q.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[№#\s]/g,'');
@@ -4931,13 +4932,19 @@ function chainRender(){
   b.innerHTML='<div style="font-size:13px;color:#c9b8ff;font-weight:700;margin-bottom:6px">⛓ Цепь передачи — набирай имя в поиске и тапай подсказку (нужно от 2):</div>'
     +'<div style="display:flex;flex-wrap:wrap;align-items:center">'+(chips||'<span class="hint" style="font-size:12px">пока никто не выбран</span>')+'</div>'
     +'<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">'
-    +'<button id="chainGo" class="go" style="padding:9px 16px;font-size:14px'+(n<2?';opacity:.45;cursor:not-allowed':'')+'">🔎 Найти цепь</button>'
     +'<label style="font-size:12.5px;color:var(--text);display:flex;gap:5px;align-items:center;cursor:pointer"><input type="checkbox" id="chainAdj"'+(window._chainAdj?' checked':'')+'> рядом в цепи (учитель↔ученик)</label>'
-    +(n<2?'<span class="hint" style="font-size:11.5px;color:#e0b34a">введи как минимум двух передатчиков</span>':'<span class="hint" style="font-size:11.5px">условия форм передачи (حدثنا/عن) — этап Э-Ц2</span>')
+    +(n<2?'<span class="hint" style="font-size:11.5px;color:#e0b34a">введи как минимум двух — потом жми «Найти цепь» сверху</span>':'<span class="hint" style="font-size:11.5px">жми «🔎 Найти цепь» сверху · формы передачи (حدثنا/عن) — этап Э-Ц2</span>')
     +'</div><div id="chainOut" style="margin-top:6px"></div>';
   b.querySelectorAll('.chDel').forEach(x=>x.onclick=()=>{ _chainSel.splice(+x.dataset.i,1); chainRender(); });
   const adj=b.querySelector('#chainAdj'); if(adj) adj.onchange=()=>{ window._chainAdj=adj.checked; };
-  const go=b.querySelector('#chainGo'); if(go) go.onclick=()=>{ if(_chainSel.length>=2) chainRun(); else toast('⛓ Нужны минимум два передатчика'); };
+  _chainSyncGo();   // R45: ОДНА кнопка — главная «Найти» становится «Найти цепь» (дубль в боксе убран)
+}
+function _chainSyncGo(){
+  const g=document.getElementById('goBtn'); if(!g) return;
+  const on=(typeof modes!=='undefined'&&modes.chain);
+  if(on){ g.textContent='🔎 Найти цепь'; const ok=_chainSel.length>=2;
+    g.style.opacity=ok?'':'0.45'; g.title=ok?'Найти хадисы с этой цепью':'Выбери минимум двух передатчиков'; }
+  else { g.textContent='Найти'; g.style.opacity=''; g.title='Искать по запросу'; }
 }
 function addChainNarr(c){
   if(!c||c.id==null){ toast('У этой формы нет ID — выбери опознанного равия'); return; }
@@ -4993,7 +5000,7 @@ function _dzPlaceRow(bid,num,leaf){
   d.innerHTML='<span style="flex:1;min-width:0">'
     +'<span class="dzBn" data-b="'+esc(id)+'" style="display:block;direction:rtl;text-align:right;font-size:13.5px;color:var(--text)">'+esc(ar||('книга №'+id))+'</span>'
     +(ru?('<span style="display:block;text-align:right;font-size:11px;color:#bcd0ff">'+esc(ru)+'</span>'):'')+'</span>'
-    +((wiki&&wiki.url)?('<span class="dzW" title="Википедия о книге" style="flex:none;cursor:pointer;font-size:11.5px;border:1px solid var(--border);border-radius:6px;padding:2px 7px;color:#9fc3e8;font-weight:700">W</span>'):'')
+    +((wiki&&wiki.url)?('<span class="dzW" title="Википедия о книге" style="flex:none;cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px;white-space:nowrap"><b style="font-family:Georgia,serif">W</b> Википедия ↗</span>'):'')
     +'<span style="flex:none;font-size:12px;color:#7fb3ff;text-align:left">№'+esc(String(num))+(leaf?('<span style="display:block;font-size:11px">📖 лист '+esc(String(leaf))+'</span>'):'')+'</span>';
   d.onclick=()=>{ try{ hap('light'); }catch(e){} if(leaf){ try{ openBook(id, leaf); }catch(e){} } else { const q=document.getElementById('q'); if(q){ q.value=String(num); runSearch(true); } } };
   const w=d.querySelector('.dzW'); if(w) w.onclick=(e)=>{ e.stopPropagation(); try{ openLink(wiki.url); }catch(_e){ window.open(wiki.url,'_blank'); } };
@@ -7202,7 +7209,9 @@ let toastT; function toast(t){const el=document.getElementById('toast');el.textC
   clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2800);}
 
 /* ===================== СТАРТ ===================== */
-document.getElementById('goBtn').onclick=()=>{ hap('medium'); try{collapseBookSugg();}catch(e){} Promise.resolve(runSearch(true)).then(()=>{ try{ hap((_results&&_results.length)?'ok':'err'); }catch(e){} }); };   // «Найти» → авто-свернуть подсказки книг
+document.getElementById('goBtn').onclick=()=>{ hap('medium');
+  if(typeof modes!=='undefined'&&modes.chain){ if(_chainSel.length>=2) chainRun(); else toast('⛓ Выбери минимум двух передатчиков из подсказок'); return; }   // R45: одна кнопка на режим Цепь
+  try{collapseBookSugg();}catch(e){} Promise.resolve(runSearch(true)).then(()=>{ try{ hap((_results&&_results.length)?'ok':'err'); }catch(e){} }); };   // «Найти» → авто-свернуть подсказки книг
 // M254: кнопка «↩ Назад» — вернуть предыдущий распознанный запрос
 (function(){ var qb=document.getElementById('qBack'); if(qb) qb.onclick=()=>{ try{ hap('light'); }catch(e){} qBack(); }; })();
 // M254: кнопка очистки поиска ✕
