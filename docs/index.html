@@ -569,7 +569,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v399';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v400';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5115,7 +5115,12 @@ function sa378(d,_){var m=(65535&d)+(65535&_);return(d>>16)+(_>>16)+(m>>16)<<16|
 function rol378(d,_){return d<<_|d>>>32-_}
 let _dzBC={}, _dzUC={}, _dzUNC={}, _dzNC={};
 async function _dzFetch(cc,key,url){ if(!(key in cc)){ try{ const r=await fetch(url); cc[key]=r.ok?await r.json():null; }catch(e){ cc[key]=null; } } return cc[key]; }
-async function dzChain(bid,num){ const k=String(bid)+'_'+Math.floor(+num/500); const m=await _dzFetch(_dzBC,k,'./dz/b'+k+'.json'); return (m&&m[String(num)])||null; }
+async function _dzRec(bid,num){ const k=String(bid)+'_'+Math.floor(+num/500); const m=await _dzFetch(_dzBC,k,'./dz/b'+k+'.json'); return (m&&m[String(num)])||null; }
+// Э-И2: запись хадиса теперь {s:[коды], f:[формы передачи]}; старый формат — просто [коды]. dzChain отдаёт SEQ (совместимость).
+async function dzChain(bid,num){ const r=await _dzRec(bid,num); return r? (Array.isArray(r)?r:(r.s||null)) : null; }
+async function dzChainFull(bid,num){ const r=await _dzRec(bid,num); if(!r) return null; return Array.isArray(r)? {seq:r,forms:[]} : {seq:r.s||[], forms:r.f||[]}; }
+const _FORM_RU={TH:'حدثنا',AKH:'أخبرنا',SAM:'سمعت',AN:'عن',QAL:'قال'};
+const _FORM_TIP={TH:'حدّثنا/حدّثني — прямое слышание (تحديث)',AKH:'أخبرنا/أنبأنا — извещение (قراءة/إجازة)',SAM:'سمعت — явное слышание (سماع صريح)',AN:'عن — «от» (عنعنة; у мудаллиса возможен тадлис)',QAL:'قال — «сказал» (بلاغ/неуточнённо)'};
 function _dzShU(code){ return parseInt(_md5x(code).slice(0,4),16)%64; }
 async function dzUReg(code){ const sh=_dzShU(code); const m=await _dzFetch(_dzUC,sh,'./dz/u'+sh+'.json'); return (m&&m[code])||null; }
 async function dzUPart(code){ const sh=_dzShU(code); const m=await _dzFetch(_dzUNC,sh,'./dz/un'+sh+'.json'); return (m&&m[code])||null; }
@@ -5145,7 +5150,7 @@ function chainRender(){
     +'</div>'
     +'<div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">'
     +(n<2?'<span class="hint" style="font-size:11.5px;color:#e0b34a">введи как минимум двух — потом жми «Найти цепь» сверху</span>'
-        :'<span class="hint" style="font-size:11.5px">'+(md==='seq'?'⚠️ в конструкции ПОРЯДОК ВВОДА = ПОРЯДОК ЦЕПИ (1-й передаёт от 2-го…)':'жми «🔎 Найти цепь» сверху')+' · формы передачи (حدثنا/عن) добавим скоро</span>')
+        :'<span class="hint" style="font-size:11.5px">'+(md==='seq'?'⚠️ в конструкции ПОРЯДОК ВВОДА = ПОРЯДОК ЦЕПИ (1-й передаёт от 2-го…)':'жми «🔎 Найти цепь» сверху')+' · между именами — форма передачи (حدثنا/عن/سمعت)</span>')
     +'<span id="chainBaseLink" title="Открыть базу самых частых цепей передачи (реестр иснадов M449)" style="cursor:pointer;color:#c9b8ff;font-size:12px;border:1px solid #6c5ce7;border-radius:8px;padding:3px 9px;margin-inline-start:auto">⛓ База иснадов</span>'
     +'</div><div id="chainOut" style="margin-top:6px"></div>';
   // M469: ясная ОТМЕТКА об известных связях (np-пары штудирования) — информируем, выбор за человеком
@@ -5399,7 +5404,7 @@ async function chainRunSeq(out){
     out.innerHTML='<div class="hint" style="color:#e0b34a">Цепей с такой конструкцией ПОДРЯД не нашлось. Проверь порядок (1-й передаёт ОТ 2-го) или переключись на «вместе в иснаде»/«рядом».</div>'; return; }
   try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){}
   const recs=[];
-  for(let i=0;i<arr.length && i<400;i++){ const rec=await _regRec(arr[i]); if(rec) recs.push({cid:arr[i], n:rec.n, ex:rec.ex, s:rec.s});
+  for(let i=0;i<arr.length && i<400;i++){ const rec=await _regRec(arr[i]); if(rec) recs.push({cid:arr[i], n:rec.n, ex:rec.ex, s:rec.s, f:rec.f});
     if(i%50===0) out.innerHTML='<div class="hint">⏳ загружаю цепи… '+i+'/'+Math.min(arr.length,400)+'</div>'; }
   recs.sort((a,b)=>(b.n||0)-(a.n||0));
   const totH=recs.reduce((s,r)=>s+(r.n||0),0);
@@ -5415,7 +5420,7 @@ async function chainRunSeq(out){
       tp.innerHTML='<span style="font-size:11.5px;color:var(--hint)"><b style="color:#bcd0ff;font-family:monospace">'+esc(rc.cid)+'</b></span><span style="font-size:12px;color:#9fd3a8;font-weight:700">📊 '+(rc.n||1)+' хадис'+_pluralHadith(rc.n||1)+'</span>';
       d.appendChild(tp);
       const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl'; d.appendChild(row);
-      if(rc.s) _dzChips(rc.s, row);
+      if(rc.s) _dzChips(rc.s, row, rc.f);
       const pl=document.createElement('span'); pl.style.cssText='display:inline-block;margin-top:5px;cursor:pointer;color:var(--link);font-size:12px';
       pl.textContent='📍 хадисы с этой цепью ('+(rc.n||1)+')';
       const lst=document.createElement('div'); lst.style.cssText='display:none;margin-top:4px';
@@ -5514,12 +5519,13 @@ var _md5=(function(){
   function s2b(st){var bn=[],i;for(i=0;i<st.length*8;i+=8){bn[i>>5]|=(st.charCodeAt(i/8)&0xFF)<<(i%32);}return bn;}
   return function(s){return b2h(core(s2b(s),s.length*8));};
 })();
-function _chainCid(codes){ return 'C'+_md5(codes.map(String).join('|')).slice(0,10); }
+// Э-И2: cid РАЗЛИЧАЕТ формы передачи (как в Python-билдере: seq + '#' + forms) — «через عن» ≠ «через حدثنا»
+function _chainCid(codes, forms){ return 'C'+_md5(codes.map(String).join('|')+'#'+((forms||[]).join('|'))).slice(0,10); }
 function _pluralHadith(n){ n=Math.abs(n)%100; var n1=n%10; if(n>10&&n<20) return 'ов'; if(n1>1&&n1<5) return 'а'; if(n1===1) return ''; return 'ов'; }
 var _isnRegC={};
-async function _isnadInfo(codes){
+async function _isnadInfo(codes, forms){
   if(!codes||codes.length<2) return null;
-  const cid=_chainCid(codes), pref=cid.slice(1,3);
+  const cid=_chainCid(codes, forms), pref=cid.slice(1,3);
   let m=_isnRegC[pref];
   if(m===undefined){ try{ const r=await fetch('./isnad/reg_'+pref+'.json'); m=r.ok?await r.json():{}; }catch(e){ m={}; } _isnRegC[pref]=m; }
   const rec=(m&&m[cid])||null;
@@ -5560,7 +5566,7 @@ async function _dzLinkSummary(codes){
 }
 // чипы звеньев цепи (опознан #id зелёным → карточка равия · U-код жёлтым «форма ؟» → карточка формы) — единый рендер (R45)
 // между двумя опознанными соседями — коннектор: ✓ если их связь учитель→ученик подтверждена تهذيب الكمال (M475)
-function _dzChips(codes, row){
+function _dzChips(codes, row, forms){
   const arr=codes.slice(0,16);
   arr.forEach((c,i)=>{
     const b=document.createElement('span');
@@ -5573,32 +5579,35 @@ function _dzChips(codes, row){
       b.onclick=()=>openUCard(c);
     }
     row.appendChild(b);
-    // коннектор к следующему звену (в цепи c=ученик, arr[i+1]=учитель) — метим, если связь известна аль-Мизи
-    if(i<arr.length-1 && typeof c==='number' && typeof arr[i+1]==='number'){
+    // коннектор к следующему звену: ФОРМА передачи (Э-И2: forms[i+1] = как звено i+1 передало i) + ✓ если связь подтверждена аль-Мизи
+    if(i<arr.length-1){
+      const frm=forms&&forms[i+1];
       const sep=document.createElement('span');
-      sep.style.cssText='align-self:center;font-size:12px;line-height:1;opacity:.35;color:var(--hint);user-select:none';
-      sep.textContent='·';
-      _tlinkTeacher(c, arr[i+1]).then(rz=>{ if(rz!==null){
-        sep.textContent='✓'; sep.style.color='#6cc18a'; sep.style.opacity='1'; sep.style.fontWeight='700'; sep.style.cursor='help';
-        const src=_ramzHuman(rz);
-        sep.title='روى عنه ✓ — связь учитель→ученик подтверждена классическим تهذيب الكمال (аль-Мизи)'+(src?'\nзафиксирована в: '+src:'');
-      } }).catch(()=>{});
+      sep.style.cssText='align-self:center;display:inline-flex;flex-direction:column;align-items:center;line-height:1.1;user-select:none';
+      const fl=(frm&&_FORM_RU[frm])?('<span dir="rtl" style="font-size:10px;color:#86b8e0;cursor:help" title="'+esc(_FORM_TIP[frm]||'')+'">'+_FORM_RU[frm]+'</span>'):'';
+      sep.innerHTML=fl+'<span class="cmark" style="font-size:12px;opacity:.4;color:var(--hint)">·</span>';
+      if(typeof c==='number' && typeof arr[i+1]==='number'){
+        _tlinkTeacher(c, arr[i+1]).then(rz=>{ if(rz!==null){ const cm=sep.querySelector('.cmark');
+          cm.textContent='✓'; cm.style.color='#6cc18a'; cm.style.opacity='1'; cm.style.fontWeight='700'; cm.style.cursor='help';
+          const src=_ramzHuman(rz); sep.title='روى عنه ✓ — связь учитель→ученик подтверждена تهذيب الكمال'+(src?(' · '+src):''); } }).catch(()=>{});
+      }
       row.appendChild(sep);
     }
   });
 }
 async function dzChainInto(host, bid, num){
   try{
-    const codes=await dzChain(bid, num); if(!codes||!codes.length) return;
+    const full=await dzChainFull(bid, num); if(!full||!full.seq||!full.seq.length) return;
+    const codes=full.seq, forms=full.forms;
     const box=document.createElement('div'); box.style.cssText='margin-top:8px;padding-top:7px;border-top:1px dashed var(--border)';
     const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:11px;margin-bottom:4px';
-    lbl.textContent='🧬 Цепочка по кодам Э1.1 (тап — карточка):';
+    lbl.textContent='🧬 Цепочка по кодам Э1.1 (форма передачи между именами · тап — карточка):';
     box.appendChild(lbl);
-    const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl'; box.appendChild(row);
-    _dzChips(codes, row);
+    const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl;align-items:flex-start'; box.appendChild(row);
+    _dzChips(codes, row, forms);
     // M449: вечный КОД ЦЕПИ этого хадиса + «та же цепь ещё в N хадисах» (ткни пальцем → код цепи)
     try{
-      const info=await _isnadInfo(codes);
+      const info=await _isnadInfo(codes, forms);
       if(info){
         const idn=codes.filter(c=>typeof c==='number').length;
         const ci=document.createElement('div'); ci.style.cssText='margin-top:7px;font-size:11px;color:var(--hint);display:flex;gap:10px;align-items:center;flex-wrap:wrap';
@@ -5668,14 +5677,14 @@ async function openIsnadBase(){
     tp.innerHTML='<span style="font-size:12px;color:var(--hint)">#'+rank+' · <b style="color:#bcd0ff;font-family:monospace">'+esc(ch.cid)+'</b> · <span style="color:'+(idn===ch.seq.length?'#9fd3a8':'#e0b34a')+'" title="опознано звеньев / всего (остальные — U-коды коротких форм)">опознано '+idn+'/'+ch.seq.length+'</span></span><span style="font-size:12px;color:#9fd3a8;font-weight:700">📊 '+ch.n+' хадис'+_pluralHadith(ch.n)+'</span>';
     d.appendChild(tp);
     const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl'; d.appendChild(row);
-    _dzChips(ch.seq, row);
+    _dzChips(ch.seq, row, ch.f);
     const pl=document.createElement('span'); pl.style.cssText='display:inline-block;margin-top:5px;cursor:pointer;color:var(--link);font-size:12px';
     pl.textContent='📍 где встречается ('+ch.n+')';
     const lst=document.createElement('div'); lst.style.cssText='display:none;margin-top:4px';
     pl.onclick=async()=>{ if(lst.style.display!=='none'){ lst.style.display='none'; return; } lst.style.display='block';
       if(lst.dataset.built) return; lst.dataset.built='1';
       try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){}
-      let inf=null; try{ inf=await _isnadInfo(ch.seq); }catch(e){}
+      let inf=null; try{ inf=await _isnadInfo(ch.seq, ch.f); }catch(e){}
       const ex=(inf&&inf.ex)||[];
       ex.slice(0,40).forEach(p=>lst.appendChild(_dzPlaceRow(p[0],p[1],null)));
       if(ch.n>ex.length){ const mo=document.createElement('div'); mo.className='hint'; mo.style.cssText='font-size:10.5px;margin-top:3px'; mo.textContent='… показаны первые '+ex.length; lst.appendChild(mo); } };
