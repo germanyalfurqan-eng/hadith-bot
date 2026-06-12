@@ -563,7 +563,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v375';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v376';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -943,13 +943,12 @@ async function loadCollection(code){
 // M350: фолбэк ШТАТНЫЙ → CDN-промах не шумит в журнале (silent), сам факт фолбэка — один репорт за сессию на издание
 // M395 (разбор журнала ошибок Сессии 15): ibnmaja на jsdelivr 403 СТАБИЛЬНО v285→v339 (A-001…A-027) —
 // идём СРАЗУ на наше зеркало (R37): минус мёртвый запрос на старте и минус шум в журнале
-const MIRROR_FIRST={ibnmaja:1};
+// M464 «исправь навсегда» (13.06): jsdelivr 403-ил то одно издание, то другое (ibnmaja v285→, потом тупили другие
+// по 20с таймаута) → ВСЕ издания fawazahmed0 ЗАЗЕРКАЛЕНЫ к нам (docs/editions/, R37) и грузятся СРАЗУ со своего;
+// CDN — только фолбэк на случай отсутствия зеркала.
 async function fetchEdition(code){
-  if(MIRROR_FIRST[code]) return await fetchJSON('./editions/ara-'+code+'.min.json', 60000);
-  try{ return await fetchJSON(EDITION_URL(code), 20000, {silent:true}); }
-  catch(e){ try{ window._repMir=window._repMir||{};
-      if(typeof _appReport==='function' && !window._repMir[code]){ window._repMir[code]=1; _appReport('CDN сбой ara-'+code+' → работает локальное зеркало (штатно; 1 репорт/сессию)'); } }catch(_e){}
-    return await fetchJSON('./editions/ara-'+code+'.min.json', 60000); }
+  try{ return await fetchJSON('./editions/ara-'+code+'.min.json', 60000, {silent:true}); }
+  catch(e){ return await fetchJSON(EDITION_URL(code), 15000); }
 }
 let ahmadArr=null;
 async function loadAhmad(){ if(ahmadArr)return ahmadArr; setStatus('Загружаю Муснад Ахмада (большой)…');
@@ -1180,7 +1179,7 @@ async function aiResolvePhrase(v, box){
 function updateTranslitSugg(){
   const box=document.getElementById('tlSugg'); if(!box) return;
   const v=(document.getElementById('q').value||'').trim();
-  if(modes.narr){ box.style.display='none'; box.innerHTML=''; return; }   // 👤 режим передатчика: транслит-подсказки ХАДИСОВ не путают юзера
+  if(modes.narr||modes.chain||modes.any){ box.style.display='none'; box.innerHTML=''; return; }   // 👤/⛓/🌐: транслит-чип хадисов («هشيما» при «хишам») тут не к месту — есть свои подсказки
   // показываем только для НЕ-арабского ТЕКСТОВОГО запроса (не число, не сура:аят, есть буквы)
   if(!v || v.length<2 || isArabic(v) || /^\d/.test(v) || /[٠-٩]/.test(v) || !/[a-zа-яё]/i.test(v)){ box.style.display='none'; box.innerHTML=''; return; }
   clearTimeout(_tlT);
@@ -1330,7 +1329,7 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.datas
   if(m==='chain'){ const inp=document.getElementById('q');   // ⛓ M447: режим «Цепь»
     if(modes.chain){ if(modes.ai){ modes.ai=false; const ac=document.querySelector('.chip[data-mode="ai"]'); if(ac) ac.classList.remove('on'); }
       if(modes.narr){ modes.narr=false; const nc=document.querySelector('.chip[data-mode="narr"]'); if(nc) nc.classList.remove('on'); narrBoxShow(false); }
-      inp.placeholder='⛓ Имя передатчика-звена (араб/рус) → выбери из подсказок…';
+      inp.placeholder='⛓ Имя 1-го передатчика (араб/рус) → выбери из подсказок…';
       chainRender();
       if(!inp.value.trim()) toast('⛓ Режим «Цепь»: набирай имя — выбери 2+ передатчиков из подсказок');
       else narrSuggest(inp.value.trim());
@@ -3214,7 +3213,7 @@ function showWordPopup(el, word, root, lemma, gram, ctx){
   const g = gramRu(gram);
   const pop=document.createElement('div'); pop.id='wordPop'; pop.className='card';
   // M406: fixed + max-height со скроллом — карточка слова НИКОГДА не вылезает за низ экрана (даже когда Arabus дорастит контент)
-  pop.style.cssText='position:fixed;z-index:10006;max-width:min(340px,94vw);max-height:62vh;overflow:auto;padding:11px 13px;font-size:14px;box-shadow:0 8px 28px rgba(0,0,0,.55)';
+  pop.style.cssText='position:fixed;z-index:10006;max-width:min(360px,94vw);max-height:64vh;overflow:auto;padding:12px 14px;font-size:15.5px;box-shadow:0 8px 28px rgba(0,0,0,.55)';   // №7: шрифт чуть крупнее
   let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b style="font-size:22px;'+_AF+'">'+esc(word)+'</b><span id="wpX" style="cursor:pointer;color:var(--hint);font-size:18px">✕</span></div>';
   const ga=gramAr(gram);   // M404: часть речи и по-русски, и по-арабски (термин نحو)
   if(g) h+='<div style="margin-top:6px;color:var(--text)">📝 '+esc(g)+(ga?(' · <b style="'+_AF+';font-size:15px;color:var(--mark)">'+esc(ga)+'</b>'):'')+'</div>';
@@ -4811,9 +4810,12 @@ function isnadNarrators(text){
     // разделить совместных передатчиков по «و», НО не рвать составное имя после «بن/ابن» (وقاص, وكيع — часть имени)
     const raw=seg.split(/\s+(?=و\S)/), merged=[];
     raw.forEach(p=>{ if(merged.length && /(?:^|\s)(?:بن|ابن)$/.test(merged[merged.length-1])) merged[merged.length-1]+=' '+p; else merged.push(p); });
-    merged.forEach(p=>{ p=p.replace(/^و/,'').replace(/\s+(?:قال|يقول|أنه|قالت|رضي|رضى)$/,'').trim();
-      const w=p.split(' ').filter(Boolean).length;
-      if(p.length>3 && w>=1 && w<=6 && !/رسول الله|النبي|صلى الله|وسلم/.test(p)) parts.push(p); });
+    merged.forEach(p0=>{
+      // M376/№10: «أبو عامر أو أبو مالك» = شك الراوي — это ДВА передатчика, «أو» НЕ часть имени → сплит
+      p0.split(/\s+أو\s+/).forEach(p=>{
+        p=p.replace(/^و/,'').replace(/\s+(?:قال|يقول|أنه|قالت|رضي|رضى)$/,'').trim();
+        const w=p.split(' ').filter(Boolean).length;
+        if(p.length>3 && w>=1 && w<=6 && !/رسول الله|النبي|صلى الله|وسلم/.test(p)) parts.push(p); }); });
   });
   return [...new Set(parts)].slice(0,12);
 }
@@ -5149,7 +5151,9 @@ function addChainNarr(c){
   if(_chainSel.length>=5){ toast('Пока максимум 5 звеньев'); return; }
   _chainSel.push({id:c.id, nm:c.nm});
   _undoPush('добавление звена '+c.nm.split(' ').slice(0,2).join(' '), ()=>{ const k=_chainSel.findIndex(x=>x.id===c.id); if(k>=0){ _chainSel.splice(k,1); chainRender(); } });
-  const q=document.getElementById('q'); if(q){ q.value=''; q.focus(); }
+  const q=document.getElementById('q'); if(q){ q.value=''; q.focus();
+    const ORD=['1-го','2-го','3-го','4-го','5-го'];   // поэтапный ввод (слово владельца): человек понимает, КОГО вводит
+    q.placeholder='⛓ Имя '+(ORD[_chainSel.length]||(_chainSel.length+1)+'-го')+' передатчика (порядок ввода ≠ порядок в цепи)…'; }
   try{ hideNarrSugg(); }catch(e){}
   chainRender();
   toast('⛓ Добавлен: '+c.nm.split(' ').slice(0,3).join(' ')+(_chainSel.length<2?' — добавь ещё одного':' — жми «Найти цепь»'));
@@ -5332,6 +5336,8 @@ async function openNarrTable(opts){
       more.onclick=()=>draw(false); list.parentNode.appendChild(more); }
     more.textContent='⬇️ Показать ещё ниже ('+(cur.length-st.shown)+')';
     more.style.display=st.shown>=cur.length?'none':'block';
+    // №9: автоподгрузка при прокрутке — листается само, без постоянных нажатий
+    try{ if(more._io) more._io.disconnect(); if(st.shown<cur.length){ more._io=new IntersectionObserver(es=>{ es.forEach(x=>{ if(x.isIntersecting){ more._io.disconnect(); draw(false); } }); },{root:list,rootMargin:'250px'}); more._io.observe(more); } }catch(e){}
     info.textContent=(cnt?'🔗 связей: '+cur.length+' · ':'всего: '+cur.length+' · ')+(opts.filterIds?'сорт по совместным звеньям':'тап по строке — карточка равия');
   };
   bar.querySelectorAll('.ntS').forEach(s=>s.onclick=()=>{ st.sort=s.dataset.k; paint(); draw(true); });
@@ -5717,7 +5723,8 @@ async function narrOpen(nm){
     return b; };
   tt.appendChild(mkTS('👨‍🏫 Его учителя','t')); tt.appendChild(mkTS('👨‍🎓 Его ученики','s'));
   box.appendChild(tt);
-  const out=document.createElement('div'); box.appendChild(out);
+  const out=document.createElement('div'); out.dataset.noPartBtns='1';   // R45: кнопки участия уже СВЕРХУ карточки — внизу не дублируем
+  box.appendChild(out);
   await showNarratorBio(nm, out);
   try{ window.scrollTo({top:res.offsetTop-8,behavior:'smooth'}); }catch(e){}
 }
@@ -6070,6 +6077,8 @@ async function showNarratorBio(name, out){
     const fi=document.createElement('div'); fi.style.cssText='font-size:12px;color:var(--hint);margin:4px 0;direction:rtl;text-align:right';
     fi.innerHTML='<span style="color:var(--hint)">الاسم الكامل (полное имя):</span> '+(c&&c[1]?('<b style="color:var(--text)">'+esc(c[1])+'</b>'):'<i>неизвестно (форма не отождествлена — честный U-статус, итерации Э1.1)</i>');
     out.appendChild(fi);
+    if(out.dataset&&out.dataset.noPartBtns){ /* кнопки участия уже сверху (narrOpen) — дубль не строим (R45, замечание «зачем два раза») */ }
+    else{
     const pw=document.createElement('div'); pw.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px';
     const hb2=document.createElement('button'); hb2.className='mini'; hb2.style.cssText='flex:1;min-width:46%;padding:8px;border:1px solid var(--border);border-radius:9px;font-size:12px';
     const short2=name.split(' ').slice(0,3).join(' ');
@@ -6095,6 +6104,7 @@ async function showNarratorBio(name, out){
       };
       pw.appendChild(cb2); }
     out.appendChild(pw);
+    }   // конец else (дубль кнопок не строим при noPartBtns)
   }catch(e){}
   // #5 (вердикты вверх): готовый джарх-тадиль учёных из موسوعة — СРАЗУ под карточкой (как в ТГ-образце: цитаты+источник+ثقة)
   if(c && c[8]){ try{ renderMosuaJarh(c, out); }catch(e){} }
