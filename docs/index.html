@@ -553,7 +553,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v361';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v362';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4480,6 +4480,9 @@ function addTr(meta,card,text,ayah,fav){
     if(tr.dataset.shown==='1'){ out.style.display='none'; tr.dataset.shown=''; tr.style.boxShadow=''; if(tr.dataset.t0!==undefined) tr.title=tr.dataset.t0; return; }   // повторный клик — скрыть перевод
     await (ayah ? doTranslateAyah(ayah.s,ayah.a,out,tr) : doTranslate(text,out,tr,refOf(fav)));
     if(out.style.display!=='none' && (out.textContent||'').trim()){ tr.dataset.shown='1'; if(tr.dataset.t0===undefined) tr.dataset.t0=tr.title||''; tr.style.boxShadow='0 0 8px rgba(74,222,128,.6)'; tr.title='Нажми ещё раз, чтобы скрыть перевод'; }
+    // M397б: подсветить ПЕРЕДАТЧИКОВ в русском переводе (скелет-матч Ф-10 к именам цепочки)
+    if(!ayah) try{ const nms=isnadNarrators(text).filter(nm=>{ const t=(nm||'').trim(); return / بن | ابن /.test(' '+t+' ')||/^(?:أبو|أبي|أم|عبد|ابن)\s/.test(t+' '); });
+      if(nms.length) highlightNarrRuInDiv(out, nms, nm=>{ try{ openNarratorRijal(nm); }catch(e){} }); }catch(e){}
   };
   meta.appendChild(tr);
   // M208: кнопка «Объяснить просто» (нейро-шарх/тафсир) — для хадисов и аятов
@@ -4773,6 +4776,78 @@ function highlightNarratorsInDiv(ad, names, onClick){
       span.onclick=(e)=>{ e.stopPropagation();
         try{ onClick(m.nm); }catch(_e){ try{ openNarratorRijal(m.nm); }catch(__e){} }   // M427: клик обязан сработать — фолбэк в модал-карточку
       };
+      frag.appendChild(span); pos=m.i+m.len; });
+    if(pos<txt.length) frag.appendChild(document.createTextNode(txt.slice(pos)));
+    node.parentNode.replaceChild(frag, node);
+  });
+}
+// M397а: РЕЛЯЦИОННЫЕ звенья иснада (عن أبيه/جده/أمه…) — тоже передатчики, но «именем отношения».
+// Подсвечиваем зелёным пунктиром; клик = объяснение (личность определяется по цепочке — Э1.1).
+const _REL_FORMS=[['أبيه','«от своего отца» — отец предыдущего передатчика'],['أبيها','«от своего отца» — отец предыдущей передатчицы'],
+  ['جده','«от своего деда» — дед предыдущего передатчика'],['جدته','«от своей бабушки»'],['أمه','«от своей матери»'],
+  ['عمه','«от своего дяди» (по отцу)'],['خاله','«от своего дяди» (по матери)'],['أخيه','«от своего брата»'],['مولاه','«от своего маула» (вольноотпущенник/патрон)']];
+function _diaPat(w){ const D='[\\u064B-\\u0652\\u0670\\u0640]*'; return [...w].map(ch=>ch+D).join(''); }
+function highlightRelationalInDiv(ad){
+  if(ad.dataset.relOn) return; ad.dataset.relOn='1';
+  const VERBS='(?:'+['عن','حدثني','حدثنا','سمعت','أخبرني','أخبرنا','ثني','ثنا'].map(_diaPat).join('|')+')';
+  const pats=_REL_FORMS.map(([f,ru])=>({f,ru,re:new RegExp('(?:^|[\\s،؛:])('+VERBS+'[\\s]+'+_diaPat(f)+')(?![ء-ي])','g')}));
+  const walker=document.createTreeWalker(ad, NodeFilter.SHOW_TEXT, null); const nodes=[];
+  while(walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(node=>{ if(node.parentNode && node.parentNode.closest && node.parentNode.closest('.nhl')) return;
+    const txt=node.nodeValue; const ms=[];
+    for(const p of pats){ p.re.lastIndex=0; let m;
+      while((m=p.re.exec(txt))){ const st=m.index+m[0].indexOf(m[1]); ms.push({i:st,len:m[1].length,ru:p.ru,f:p.f}); } }
+    if(!ms.length) return;
+    ms.sort((a,b)=>a.i-b.i); const picked=[]; let lastEnd=-1;
+    for(const m of ms){ if(m.i>=lastEnd){ picked.push(m); lastEnd=m.i+m.len; } }
+    const frag=document.createDocumentFragment(); let pos=0;
+    picked.forEach(m=>{ if(m.i>pos) frag.appendChild(document.createTextNode(txt.slice(pos,m.i)));
+      const span=document.createElement('span'); span.textContent=txt.slice(m.i,m.i+m.len);
+      span.style.cssText='cursor:help;color:#8fe3a8;border-bottom:1px dashed #4eb573';
+      span.title='Реляционное звено цепочки';
+      span.onclick=(e)=>{ e.stopPropagation(); toast('🌿 '+m.ru+'. Конкретная личность определяется по соседям цепочки (коды Э1.1).'); };
+      frag.appendChild(span); pos=m.i+m.len; });
+    if(pos<txt.length) frag.appendChild(document.createTextNode(txt.slice(pos)));
+    node.parentNode.replaceChild(frag, node);
+  });
+}
+// M397б: подсветка передатчиков В РУССКОМ ПЕРЕВОДЕ — матч слов перевода к арабским именам цепочки
+// скелетами согласных Ф-10 (Ибн Аббас ↔ ابن عباس). Клик = карточка равия (по арабскому имени).
+function highlightNarrRuInDiv(div, arNames, onClick){
+  if(!div || div.dataset.ruNarrOn) return; div.dataset.ruNarrOn='1';
+  const items=[];
+  for(const nm of (arNames||[])){ let ws=stripDiac(nm).split(/\s+/).filter(Boolean);
+    // «عبد الله/عبد الرحمن…» по-русски ОДНО слово (Абдуллах) — склеиваем пару СКЕЛЕТАМИ (артикль второго слова срезается сам)
+    const sk=[]; for(let k=0;k<ws.length;k++){
+      if(ws[k]==='عبد'&&ws[k+1]){ sk.push((_skelAr(ws[k])[1]||'')+(_skelAr(ws[k+1])[1]||'')); k++; }
+      else sk.push(_skelAr(ws[k])[1]||''); }   // короткий скелет (عروة→'r') = ДЖОКЕР в матче, не выбрасываем — рвёт последовательность
+    const strong=sk.filter(s=>s.length>=2).length;
+    if(strong && (strong>=2 || sk.join('').length>=3)) items.push({nm, sk}); }   // ≥2 сильных слов, или 1 длинное (سفيان)
+  if(!items.length) return;
+  const walker=document.createTreeWalker(div, NodeFilter.SHOW_TEXT, null); const nodes=[];
+  while(walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(node=>{ const txt=node.nodeValue;
+    const toks=[]; const re=/[А-Яа-яЁё][А-Яа-яЁё'’`\-]*/g; let m;
+    while((m=re.exec(txt))) toks.push({w:m[0], i:m.index});
+    if(!toks.length) return;
+    const tsk=toks.map(t=>(_skelRu(t.w.replace(/['’`]/g,''))[1]||''));
+    const picked=[];
+    for(let i=0;i<toks.length;i++){
+      for(const it of items){ const L=it.sk.length; if(i+L>toks.length) continue;
+        let ok=true; for(let k=0;k<L;k++){ const a=it.sk[k];
+          if(a.length<2) continue;                                   // джокер: слабое арабское слово принимает любой рус-токен
+          if(!tsk[i+k] || tsk[i+k]!==a){ ok=false; break; } }
+        if(ok && it.sk[0].length>=2 && (!tsk[i] || tsk[i]!==it.sk[0])) ok=false;   // первое слово обязано совпасть реально
+        if(ok){ const start=toks[i].i, end=toks[i+L-1].i+toks[i+L-1].w.length;
+          picked.push({i:start,len:end-start,nm:it.nm}); i+=L-1; break; } }
+    }
+    if(!picked.length) return;
+    const frag=document.createDocumentFragment(); let pos=0;
+    picked.forEach(m=>{ if(m.i>pos) frag.appendChild(document.createTextNode(txt.slice(pos,m.i)));
+      const span=document.createElement('span'); span.textContent=txt.slice(m.i,m.i+m.len);
+      span.style.cssText='cursor:pointer;color:#ffd479;border-bottom:1px dashed #ffd479;font-weight:600';
+      span.title='Передатчик: '+m.nm+' — нажми (кто это + слова учёных)';
+      span.onclick=(e)=>{ e.stopPropagation(); try{ onClick(m.nm); }catch(_e){ try{ openNarratorRijal(m.nm); }catch(__e){} } };
       frag.appendChild(span); pos=m.i+m.len; });
     if(pos<txt.length) frag.appendChild(document.createTextNode(txt.slice(pos)));
     node.parentNode.replaceChild(frag, node);
@@ -6175,7 +6250,9 @@ function autoHighlightNarr(text, card, out){
   }
   if(!names||!names.length) return;
   setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
-    highlightNarratorsInDiv(ad, names, nm=>{ out.style.display='block'; showNarratorBio(nm,out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }); } }); }catch(e){} }, 0);
+    highlightNarratorsInDiv(ad, names, nm=>{ out.style.display='block'; showNarratorBio(nm,out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }); }
+    try{ highlightRelationalInDiv(ad); }catch(e){}   // M397а: عن أبيه/جده — тоже звенья
+  }); }catch(e){} }, 0);
 }
 async function doNarrators(text, out, btn){
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }
