@@ -568,7 +568,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v392';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v393';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5392,9 +5392,36 @@ async function _isnadInfo(codes){
   const rec=(m&&m[cid])||null;
   return {cid, n:(rec?rec.n:1), ex:(rec?rec.ex:[])};
 }
+// M475: связи учитель↔ученик из تهذيب الكمال (эталон аль-Мизи) — для метки подтверждённых смежностей цепи
+var _tlinkCache={};
+async function _tlinkGet(id){
+  const b=((id%100)+100)%100;
+  let m=_tlinkCache[b];
+  if(m===undefined){ try{ const r=await fetch('./tlink/'+b+'.json'); m=r.ok?await r.json():{}; }catch(e){ m={}; } _tlinkCache[b]=m; }
+  return m[String(id)]||null;
+}
+// teacher — учитель student по Тахзибу? → рамз сборника ('' если без рамза) или null
+async function _tlinkTeacher(student, teacher){
+  const rec=await _tlinkGet(student); if(!rec) return null;
+  const v=rec[String(teacher)]; if(!v||v[0]!=='T') return null;
+  const i=v.indexOf(':'); return i>=0? v.slice(i+1) : '';
+}
+const _RAMZ_RU={'خ':'Бухари','م':'Муслим','د':'Абу Дауд','ت':'Тирмизи','س':'Насаи','ق':'Ибн Маджа','ع':'все шесть','بخ':'аль-Адаб аль-муфрад','مد':'Абу Дауд (Марасиль)','تم':'аш-Шамаиль','سي':'Насаи (Амаль)','كن':'Насаи (Кубра)','فق':'Ибн Маджа (Тафсир)'};
+function _ramzHuman(rz){ if(!rz) return ''; return rz.trim().split(/\s+/).map(t=>_RAMZ_RU[t]||t).join(', '); }
+async function _dzLinkSummary(codes){
+  const arr=codes.slice(0,16); let total=0, conf=0;
+  for(let i=0;i<arr.length-1;i++){
+    if(typeof arr[i]==='number' && typeof arr[i+1]==='number'){ total++;
+      try{ if(await _tlinkTeacher(arr[i], arr[i+1])!==null) conf++; }catch(e){}
+    }
+  }
+  return {total, conf};
+}
 // чипы звеньев цепи (опознан #id зелёным → карточка равия · U-код жёлтым «форма ؟» → карточка формы) — единый рендер (R45)
+// между двумя опознанными соседями — коннектор: ✓ если их связь учитель→ученик подтверждена تهذيب الكمال (M475)
 function _dzChips(codes, row){
-  codes.slice(0,16).forEach(c=>{
+  const arr=codes.slice(0,16);
+  arr.forEach((c,i)=>{
     const b=document.createElement('span');
     b.style.cssText='cursor:pointer;font-size:12.5px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.03)';
     if(typeof c==='number'){ b.textContent='#'+c; b.style.color='#9fd3a8'; b.title='опознан — id базы '+c;
@@ -5405,6 +5432,18 @@ function _dzChips(codes, row){
       b.onclick=()=>openUCard(c);
     }
     row.appendChild(b);
+    // коннектор к следующему звену (в цепи c=ученик, arr[i+1]=учитель) — метим, если связь известна аль-Мизи
+    if(i<arr.length-1 && typeof c==='number' && typeof arr[i+1]==='number'){
+      const sep=document.createElement('span');
+      sep.style.cssText='align-self:center;font-size:12px;line-height:1;opacity:.35;color:var(--hint);user-select:none';
+      sep.textContent='·';
+      _tlinkTeacher(c, arr[i+1]).then(rz=>{ if(rz!==null){
+        sep.textContent='✓'; sep.style.color='#6cc18a'; sep.style.opacity='1'; sep.style.fontWeight='700'; sep.style.cursor='help';
+        const src=_ramzHuman(rz);
+        sep.title='روى عنه ✓ — связь учитель→ученик подтверждена классическим تهذيب الكمال (аль-Мизи)'+(src?'\nзафиксирована в: '+src:'');
+      } }).catch(()=>{});
+      row.appendChild(sep);
+    }
   });
 }
 async function dzChainInto(host, bid, num){
@@ -5425,6 +5464,13 @@ async function dzChainInto(host, bid, num){
         ci.innerHTML='<span title="Вечный код этой цепи передачи (M449) — одинаков у всех хадисов с этим иснадом">⛓ Код цепи: <b style="color:#bcd0ff;font-family:monospace">'+esc(info.cid)+'</b></span>'
           +'<span title="Сколько звеньев цепи опознано по базе равиев (остальные — U-коды коротких форм, ждут дизамбигуации Э1.1)" style="color:'+(idn===codes.length?'#9fd3a8':'#e0b34a')+'">опознано '+idn+'/'+codes.length+'</span>';
         box.appendChild(ci);
+        // M475: сводка подтверждённых классикой связей (تهذيب الكمال) среди смежных опознанных звеньев
+        (async()=>{ try{ const s=await _dzLinkSummary(codes); if(s.total>0){
+          const ls=document.createElement('span'); ls.style.color=(s.conf>0?'#6cc18a':'var(--hint)');
+          ls.title='Сколько смежных пар опознанных передатчиков подтверждены как «учитель→ученик» классическим تهذيب الكمال (аль-Мизи). ✓ между именами — подтверждённая связь.';
+          ls.innerHTML='🔗 связи: <b>'+s.conf+'/'+s.total+'</b> подтв. الكمال';
+          ci.appendChild(ls);
+        } }catch(e){} })();
         if(info.n>=2){
           const others=info.ex.filter(p=>!(String(p[0])===String(bid)&&String(p[1])===String(num)));
           const bt=document.createElement('span'); bt.style.cssText='cursor:pointer;color:var(--link)';
