@@ -560,7 +560,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v370';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v371';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3781,12 +3781,17 @@ async function _critBio(c, host, btn){
 let _wikiT=null, _wikiTP=null;
 // 📗 чип «Шамела ↗» (заявка 13.06): ссылка книги на shamela.ws/book/<id> — ЕДИНЫЙ формат чипов (R45:
 // форма как у Википедии — бордер+серифная буква+↗; цвет — фирменный зелёный Мактабы). cfg.shLink: wiki|reader|off.
-function _shamChip(bid){
+function _shamChip(bid, leaf){
   if((cfg.shLink||'wiki')!=='wiki') return '';
-  return '<span class="shamLink" data-b="'+esc(String(bid))+'" title="Эта книга на сайте Мактабы аш-Шамиля" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:#bfe3cf;border:1px solid #2e7d5a;border-radius:4px;padding:2px 8px;background:rgba(46,125,90,.10);white-space:nowrap"><b style="font-family:Georgia,\'Times New Roman\',serif;font-size:13px;line-height:1">ش</b> Шамела ↗</span>';
+  // leaf: нумерация страниц shamela.ws = наш «лист» (проверено фразой: shamela.ws/book/1424/2245 = turath pg 2245) → ссылка ровно на СТРАНИЦУ
+  return '<span class="shamLink" data-b="'+esc(String(bid))+'"'+(leaf?(' data-l="'+esc(String(leaf))+'"'):'')+' title="'+(leaf?'Эта СТРАНИЦА на сайте Мактабы аш-Шамиля':'Эта книга на сайте Мактабы аш-Шамиля')+'" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:#bfe3cf;border:1px solid #2e7d5a;border-radius:4px;padding:2px 8px;background:rgba(46,125,90,.10);white-space:nowrap"><b style="font-family:Georgia,\'Times New Roman\',serif;font-size:13px;line-height:1">ش</b> Шамела ↗</span>';
 }
 document.addEventListener('click',e=>{ const s=e.target&&e.target.closest&&e.target.closest('.shamLink');
-  if(s){ e.stopPropagation(); e.preventDefault(); const u='https://shamela.ws/book/'+s.dataset.b; try{ openLink(u); }catch(_e){ window.open(u,'_blank'); } } }, true);
+  if(s){ e.stopPropagation(); e.preventDefault();
+    let l=s.dataset.l;
+    if(!l && s.closest('#bookModal') && window._bookView && _bookView.pg) l=_bookView.pg;   // шапка читалки → ТЕКУЩАЯ страница
+    const u='https://shamela.ws/book/'+s.dataset.b+(l?('/'+l):'');
+    try{ openLink(u); }catch(_e){ window.open(u,'_blank'); } } }, true);
 function loadWikiTitles(){ if(_wikiT) return Promise.resolve(_wikiT); if(_wikiTP) return _wikiTP;
   _wikiTP=fetch('./wiki_titles_verified.json').then(r=>r.ok?r.json():{}).then(j=>{ _wikiT=j||{}; window._wikiT=_wikiT; return _wikiT; }).catch(()=>{ _wikiT={}; window._wikiT={}; return _wikiT; }); return _wikiTP; }
 async function openCatalog(q0){   // q0 (опц.) — начальный запрос: открыть каталог сразу с фильтром по нему (без гонки таймингов)
@@ -5034,7 +5039,7 @@ function _dzPlaceRow(bid,num,leaf){
     +'<span class="dzBn" data-b="'+esc(id)+'" style="display:block;direction:rtl;text-align:right;font-size:13.5px;color:var(--text)">'+esc(ar||('книга №'+id))+'</span>'
     +(ru?('<span style="display:block;text-align:right;font-size:11px;color:#bcd0ff">'+esc(ru)+'</span>'):'')+'</span>'
     +((wiki&&wiki.url)?('<span class="dzW" title="Википедия о книге" style="flex:none;cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px;white-space:nowrap"><b style="font-family:Georgia,serif">W</b> Википедия ↗</span>'):'')
-    +_shamChip(id)
+    +_shamChip(id, leaf)
     +'<span style="flex:none;font-size:12px;color:#7fb3ff;text-align:left">№'+esc(String(num))+(leaf?('<span style="display:block;font-size:11px">📖 лист '+esc(String(leaf))+'</span>'):'')+'</span>';
   d.onclick=()=>{ try{ hap('light'); }catch(e){} if(leaf){ try{ openBook(id, leaf); }catch(e){} } else { const q=document.getElementById('q'); if(q){ q.value=String(num); runSearch(true); } } };
   const w=d.querySelector('.dzW'); if(w) w.onclick=(e)=>{ e.stopPropagation(); try{ openLink(wiki.url); }catch(_e){ window.open(wiki.url,'_blank'); } };
