@@ -364,6 +364,9 @@
     <div class="row"><span>➕ Добавить сборники в ПОИСК (выбор)</span><button class="go" id="extraBtn2" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>🌿 Корни Корана (выбрать корень → аяты)</span><button class="go" id="rootBrowBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>📜 Наука хадиса (мусталях) — правила достоверности</span><button class="go" id="hadScienceBtn" style="padding:5px 12px">Открыть</button></div>
+    <div class="hint" style="margin:8px 0 2px;font-size:12px">🧬 Передатчики и иснады</div>
+    <div class="row"><span>📋 Таблица всех передатчиков (18 989 равиев)</span><button class="go" id="narrTblBtn" style="padding:5px 12px">Открыть</button></div>
+    <div class="row"><span>📊 Таблица цепей передачи (база иснадов)</span><button class="go" id="chainTblBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row" style="opacity:.55"><span>📌 Фетвы и ответы (нумерованные)</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>📚 Полезные ресурсы</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>🔊 Озвучка аятов</span><span>скоро</span></div>
@@ -565,7 +568,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v391';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v392';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5444,54 +5447,62 @@ async function dzChainInto(host, bid, num){
   }catch(e){}
 }
 /* ===== ⛓ M449: БАЗА ИСНАДОВ — браузер самых частых цепей передачи (наглядная «база иснадов» из реестра 230k) ===== */
-let _topChains=null;
+let _topChains=null, _chMeta=undefined; const _chPageCache={};
 async function openIsnadBase(){
   let m=document.getElementById('isnadBaseModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='isnadBaseModal';
-    m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 8px;padding:13px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:14.5px">⛓ База иснадов — частые цепи</b><button class="mini" id="ibClose" style="flex:none">закрыть ✕</button></div>'
-      +'<div class="hint" style="font-size:11.5px;margin-bottom:6px">Самые повторяющиеся цепи передачи (полные иснады, ≥4 звеньев) из 230 524 цепей реестра (M449). Тап по передатчику — карточка; «где встречается» — хадисы с этой цепью. Формы передачи (حدثنا/عن) — этап Э-Ц2.</div>'
-      +'<label style="display:flex;gap:6px;align-items:center;cursor:pointer;font-size:12px;color:var(--text);margin-bottom:8px"><input type="checkbox" id="ibClean"> ✓ только полностью опознанные цепи (все звенья = равии базы)</label>'
-      +'<div id="ibList" style="max-height:62vh;overflow:auto"></div></div>';
+    m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 8px;padding:13px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:14.5px">📊 Таблица цепей передачи</b><button class="mini" id="ibClose" style="flex:none">закрыть ✕</button></div>'
+      +'<div class="hint" style="font-size:11.5px;margin-bottom:6px">Все цепи передачи (иснады) реестра M449, по убыванию частоты — листай сплошняком. Тап по передатчику — карточка; «где встречается» — хадисы с этой цепью. Формы передачи (حدثنا/عن) — этап Э-Ц2.</div>'
+      +'<label style="display:flex;gap:6px;align-items:center;cursor:pointer;font-size:12px;color:var(--text);margin-bottom:4px"><input type="checkbox" id="ibClean"> ✓ только полностью опознанные цепи (все звенья = равии базы)</label>'
+      +'<div id="ibInfo" class="hint" style="font-size:11px;margin-bottom:6px"></div>'
+      +'<div id="ibList" style="max-height:60vh;overflow:auto"></div></div>';
     document.body.appendChild(m); m.querySelector('#ibClose').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
   m.style.zIndex='10006'; m.style.display='flex';
-  const list=m.querySelector('#ibList'); list.innerHTML='<div class="hint">⏳ загружаю реестр цепей…</div>';
-  if(!_topChains){ try{ const r=await fetch('./isnad/top_chains.json'); _topChains=r.ok?await r.json():[]; }catch(e){ _topChains=[]; } }
+  const list=m.querySelector('#ibList'), info=m.querySelector('#ibInfo');
+  list.innerHTML='<div class="hint">⏳ загружаю реестр цепей…</div>';
+  if(_chMeta===undefined){ try{ const r=await fetch('./isnad/chains_meta.json'); _chMeta=r.ok?await r.json():null; }catch(e){ _chMeta=null; } }
+  if(!_chMeta && !_topChains){ try{ const r=await fetch('./isnad/top_chains.json'); _topChains=r.ok?await r.json():[]; }catch(e){ _topChains=[]; } }
   list.innerHTML='';
-  if(!_topChains.length){ list.innerHTML='<div class="hint">Реестр недоступен.</div>'; return; }
+  let kind='all', loaded=[], pagesLoaded=0, shown=0; const step=30;
+  const totOf=()=> _chMeta? (kind==='clean'?_chMeta.nClean:_chMeta.nAll) : loaded.length;
+  const pgOf=()=> _chMeta? (kind==='clean'?_chMeta.pagesClean:_chMeta.pagesAll) : 1;
+  async function ensure(upto){
+    if(_chMeta){ while(loaded.length<upto && pagesLoaded<pgOf()){ const k=kind+'_'+pagesLoaded; let pg=_chPageCache[k];
+        if(!pg){ try{ const r=await fetch('./isnad/chains_'+kind+'_p'+pagesLoaded+'.json'); pg=r.ok?await r.json():[]; }catch(e){ pg=[]; } _chPageCache[k]=pg; }
+        loaded=loaded.concat(pg); pagesLoaded++; } }
+    else { loaded = kind==='clean'? (_topChains||[]).filter(ch=>ch.seq.every(x=>typeof x==='number')) : (_topChains||[]); }
+  }
   const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:10px;width:100%;padding:9px;border:1px solid var(--border);border-radius:9px';
-  let shown=0; const step=30; let data=_topChains;
-  const draw=()=>{
-    data.slice(shown, shown+step).forEach((ch,idx)=>{
-      const rank=shown+idx+1;
-      const idn=ch.seq.filter(x=>typeof x==='number').length;
-      const d=document.createElement('div'); d.style.cssText='padding:8px 4px;border-bottom:1px solid var(--border)';
-      const tp=document.createElement('div'); tp.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px';
-      tp.innerHTML='<span style="font-size:12px;color:var(--hint)">#'+rank+' · <b style="color:#bcd0ff;font-family:monospace">'+esc(ch.cid)+'</b> · <span style="color:'+(idn===ch.seq.length?'#9fd3a8':'#e0b34a')+'" title="опознано звеньев / всего (остальные — U-коды коротких форм)">опознано '+idn+'/'+ch.seq.length+'</span></span><span style="font-size:12px;color:#9fd3a8;font-weight:700">📊 '+ch.n+' хадис'+_pluralHadith(ch.n)+'</span>';
-      d.appendChild(tp);
-      const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl'; d.appendChild(row);
-      _dzChips(ch.seq, row);
-      const pl=document.createElement('span'); pl.style.cssText='display:inline-block;margin-top:5px;cursor:pointer;color:var(--link);font-size:12px';
-      pl.textContent='📍 где встречается ('+ch.n+')';
-      const lst=document.createElement('div'); lst.style.cssText='display:none;margin-top:4px';
-      pl.onclick=async()=>{ if(lst.style.display!=='none'){ lst.style.display='none'; return; } lst.style.display='block';
-        if(lst.dataset.built) return; lst.dataset.built='1';
-        try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){}
-        let info=null; try{ info=await _isnadInfo(ch.seq); }catch(e){}
-        const ex=(info&&info.ex)||[];
-        ex.slice(0,40).forEach(p=>lst.appendChild(_dzPlaceRow(p[0],p[1],null)));
-        if(ch.n>ex.length){ const mo=document.createElement('div'); mo.className='hint'; mo.style.cssText='font-size:10.5px;margin-top:3px'; mo.textContent='… показаны первые '+ex.length; lst.appendChild(mo); }
-      };
-      d.appendChild(pl); d.appendChild(lst);
-      list.appendChild(d);
-    });
-    shown=Math.min(data.length, shown+step);
-    more.textContent='⬇️ Показать ещё ('+(data.length-shown)+')'; more.style.display=shown>=data.length?'none':'';
-    list.appendChild(more);   // держим кнопку внизу
+  const rowEl=(ch,rank)=>{
+    const idn=ch.seq.filter(x=>typeof x==='number').length;
+    const d=document.createElement('div'); d.style.cssText='padding:8px 4px;border-bottom:1px solid var(--border)';
+    const tp=document.createElement('div'); tp.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px';
+    tp.innerHTML='<span style="font-size:12px;color:var(--hint)">#'+rank+' · <b style="color:#bcd0ff;font-family:monospace">'+esc(ch.cid)+'</b> · <span style="color:'+(idn===ch.seq.length?'#9fd3a8':'#e0b34a')+'" title="опознано звеньев / всего (остальные — U-коды коротких форм)">опознано '+idn+'/'+ch.seq.length+'</span></span><span style="font-size:12px;color:#9fd3a8;font-weight:700">📊 '+ch.n+' хадис'+_pluralHadith(ch.n)+'</span>';
+    d.appendChild(tp);
+    const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl'; d.appendChild(row);
+    _dzChips(ch.seq, row);
+    const pl=document.createElement('span'); pl.style.cssText='display:inline-block;margin-top:5px;cursor:pointer;color:var(--link);font-size:12px';
+    pl.textContent='📍 где встречается ('+ch.n+')';
+    const lst=document.createElement('div'); lst.style.cssText='display:none;margin-top:4px';
+    pl.onclick=async()=>{ if(lst.style.display!=='none'){ lst.style.display='none'; return; } lst.style.display='block';
+      if(lst.dataset.built) return; lst.dataset.built='1';
+      try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){}
+      let inf=null; try{ inf=await _isnadInfo(ch.seq); }catch(e){}
+      const ex=(inf&&inf.ex)||[];
+      ex.slice(0,40).forEach(p=>lst.appendChild(_dzPlaceRow(p[0],p[1],null)));
+      if(ch.n>ex.length){ const mo=document.createElement('div'); mo.className='hint'; mo.style.cssText='font-size:10.5px;margin-top:3px'; mo.textContent='… показаны первые '+ex.length; lst.appendChild(mo); } };
+    d.appendChild(pl); d.appendChild(lst); return d;
   };
-  const reset=()=>{ list.innerHTML=''; shown=0; if(!data.length){ list.innerHTML='<div class="hint">Полностью опознанных цепей в этом топе нет (короткие формы ждут Э1.1 v6).</div>'; return; } draw(); };
-  const cb=m.querySelector('#ibClean'); if(cb){ cb.checked=false; cb.onchange=()=>{ data=cb.checked?_topChains.filter(ch=>ch.seq.every(x=>typeof x==='number')):_topChains; reset(); }; }
-  reset(); more.onclick=draw;
+  const draw=async()=>{ more.textContent='⏳…'; more.disabled=true; await ensure(shown+step);
+    loaded.slice(shown,shown+step).forEach((ch,i)=>list.insertBefore(rowEl(ch,shown+i+1), more));
+    shown=Math.min(loaded.length, shown+step);
+    const tot=totOf(); if(info) info.textContent='Цепей: '+tot.toLocaleString('ru')+' · показано '+shown;
+    const done=(shown>=loaded.length) && (!_chMeta || pagesLoaded>=pgOf());
+    more.textContent=done?'— все цепи показаны —':'⬇️ Показать ещё (всего '+tot.toLocaleString('ru')+')'; more.disabled=done; };
+  const reset=async()=>{ list.innerHTML=''; loaded=[]; pagesLoaded=0; shown=0; list.appendChild(more); await draw(); };
+  const cb=m.querySelector('#ibClean'); if(cb){ cb.checked=false; cb.onchange=()=>{ kind=cb.checked?'clean':'all'; reset(); }; }
+  await reset(); more.onclick=draw;
 }
 /* ===== 📋 M412: ОБЩАЯ ТАБЛИЦА ПЕРЕДАТЧИКОВ (18 989) — сортировки, фильтры передачи, переход по #id ===== */
 let _narrTbl=null,_narrTblP=null;
@@ -7946,6 +7957,8 @@ var _tfC=document.getElementById('tafsirClose'); if(_tfC) _tfC.onclick=()=>{ doc
 var _rb2=document.getElementById('readBtn2'); if(_rb2) _rb2.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openReader(); };
 var _rbr=document.getElementById('rootBrowBtn'); if(_rbr) _rbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openRootBrowser(); };
 var _hsb=document.getElementById('hadScienceBtn'); if(_hsb) _hsb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openHadithScience(); };
+var _ntb=document.getElementById('narrTblBtn'); if(_ntb) _ntb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openNarrTable(); }catch(e){} };
+var _ctb=document.getElementById('chainTblBtn'); if(_ctb) _ctb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openIsnadBase(); }catch(e){} };
 var _cbr=document.getElementById('catBrowBtn'); if(_cbr) _cbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openCatalog(); };
 // M356: «Читать Коран» ПРОДОЛЖАЕТ с места, где остановился (cfg.qrLast: последняя читанная/слушанная сура+аят)
 function _qrResume(){ const L=cfg.qrLast; if(L&&L.s){ openQuranReader(L.s, L.a||0).then(()=>{ if(L.a) toast('📖 Продолжаем: '+L.s+':'+L.a+' · '+(SURA_NAMES[L.s-1]||'')); }); } else openQuranReader(_qrView.s||1, 0); }
