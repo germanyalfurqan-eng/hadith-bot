@@ -568,7 +568,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v394';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v395';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3737,6 +3737,29 @@ async function openNarratorRijal(name){
           body.appendChild(gp);
         }
       }
+      // 📗📘 отметки Сахихайн со ссылкой на места (вопрос владельца): хадисы этого равия в Бухари/Муслиме по нашей разметке
+      const sah=await _sahGet(_vid2);
+      if(sah && (sah.b||sah.m)){
+        const sb=document.createElement('div'); sb.style.cssText='margin-top:9px';
+        sb.innerHTML='<span style="color:var(--hint);font-size:12px">📗 В Сахихайн (места по нашей разметке иснадов):</span>';
+        const wrap=document.createElement('div'); wrap.style.cssText='display:flex;gap:7px;flex-wrap:wrap;margin-top:5px'; sb.appendChild(wrap);
+        const lst=document.createElement('div'); lst.style.cssText='margin-top:6px'; sb.appendChild(lst);
+        const mk=(bid,label,arr)=>{ if(!arr||!arr.length) return;
+          const chip=document.createElement('span'); chip.style.cssText='cursor:pointer;font-size:12.5px;padding:4px 12px;border-radius:20px;border:1px solid #2e9b5b;color:#bff5d4;background:rgba(46,155,91,.1);font-weight:600';
+          chip.textContent=label+' · '+arr.length; chip.title='Открыть хадисы '+label+', где он в иснаде (по нашей dz-разметке)';
+          chip.onclick=async()=>{ const open=chip.dataset.open==='1'; chip.dataset.open=open?'':'1';
+            if(open){ lst.innerHTML=''; return; }
+            lst.innerHTML='<div class="hint" style="font-size:11px">⏳…</div>';
+            try{ await loadBooksMap(); }catch(e){}
+            lst.innerHTML='<div class="hint" style="font-size:11px;margin-bottom:3px">'+label+' — мест '+arr.length+(arr.length>80?' (первые 80)':'')+':</div>';
+            arr.slice(0,80).forEach(n=>lst.appendChild(_dzPlaceRow(bid,n,null)));
+          };
+          wrap.appendChild(chip);
+        };
+        mk(1681,'📗 صحيح البخاري', sah.b);
+        mk(1727,'📘 صحيح مسلم', sah.m);
+        body.appendChild(sb);
+      }
       const rec=await _tlinkGet(_vid2);
       if(rec){
         const teachers=[], students=[];
@@ -5434,6 +5457,14 @@ async function _tlinkGet(id){
   const b=((id%100)+100)%100;
   let m=_tlinkCache[b];
   if(m===undefined){ try{ const r=await fetch('./tlink/'+b+'.json'); m=r.ok?await r.json():{}; }catch(e){ m={}; } _tlinkCache[b]=m; }
+  return m[String(id)]||null;
+}
+// отметки Сахихайн: места равия в صحيح البخاري(1681)/صحيح مسلم(1727) по нашей dz-разметке
+var _sahCache={};
+async function _sahGet(id){
+  const b=((id%100)+100)%100;
+  let m=_sahCache[b];
+  if(m===undefined){ try{ const r=await fetch('./sahihayn/'+b+'.json'); m=r.ok?await r.json():{}; }catch(e){ m={}; } _sahCache[b]=m; }
   return m[String(id)]||null;
 }
 // teacher — учитель student по Тахзибу? → рамз сборника ('' если без рамза) или null
