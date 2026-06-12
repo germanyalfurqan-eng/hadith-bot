@@ -568,7 +568,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v395';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v396';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2511,7 +2511,7 @@ async function _bookLoad(){
                 d.innerHTML='<div style="color:#7ee2a8;font-size:12px;margin-bottom:3px">📘 Хадис №'+n+' — готовый перевод (бесплатно):</div>'+esc(cleanRu(h.text));
                 trOut.appendChild(d);
                 // M397б: передатчики кликабельны и в переводе читалки (имена цепочек со страницы)
-                try{ const nms=isnadNarrators(txt).filter(nm=>{ const t2=(nm||'').trim(); return / بن | ابن /.test(' '+t2+' ')||/^(?:أبو|أبي|أم|عبد|ابن)\s/.test(t2+' '); });
+                try{ const nms=isnadNarrators(txt).filter(_keepNarr);
                   if(nms.length) highlightNarrRuInDiv(d, nms, nm=>{ try{ openNarratorRijal(nm); }catch(e){} }); }catch(e){} } }catch(e){} }
             done++; trb.textContent='⏳ беру готовый перевод… '+done+'/'+nums.length;   // M430-правило: процесс виден, с долей
           }
@@ -4650,7 +4650,7 @@ function addTr(meta,card,text,ayah,fav){
     await (ayah ? doTranslateAyah(ayah.s,ayah.a,out,tr) : doTranslate(text,out,tr,refOf(fav)));
     if(out.style.display!=='none' && (out.textContent||'').trim()){ tr.dataset.shown='1'; if(tr.dataset.t0===undefined) tr.dataset.t0=tr.title||''; tr.style.boxShadow='0 0 8px rgba(74,222,128,.6)'; tr.title='Нажми ещё раз, чтобы скрыть перевод'; }
     // M397б: подсветить ПЕРЕДАТЧИКОВ в русском переводе (скелет-матч Ф-10 к именам цепочки)
-    if(!ayah) try{ const nms=isnadNarrators(text).filter(nm=>{ const t=(nm||'').trim(); return / بن | ابن /.test(' '+t+' ')||/^(?:أبو|أبي|أم|عبد|ابن)\s/.test(t+' '); });
+    if(!ayah) try{ const nms=isnadNarrators(text).filter(_keepNarr);
       if(nms.length) highlightNarrRuInDiv(out, nms, nm=>{ try{ openNarratorRijal(nm); }catch(e){} }); }catch(e){}
   };
   meta.appendChild(tr);
@@ -4954,6 +4954,16 @@ function isnadNarrators(text){
         if(p.length>3 && w>=1 && w<=6 && !/رسول الله|النبي|صلى الله|وسلم/.test(p)) parts.push(p); }); });
   });
   return [...new Set(parts)].slice(0,12);
+}
+// фильтр имён для подсветки/древа (вопрос владельца «не все передатчики кликабельны»):
+// бн/ابن/абу/абд (полные имена) ИЛИ одиночные имена и лакабы >=4 букв (الأعمش/الليث/شعبة/معمر) —
+// раньше одиночные отсекались и оставались без кнопки. Служебные слова не пропускаем.
+function _keepNarr(nm){ const t=(nm||'').trim();
+  if(/ بن | ابن /.test(' '+t+' ')||/^(?:أبو|أبي|أبا|أم|عبد|ابن)\s/.test(t+' ')) return true;
+  const w=t.split(/\s+/).filter(Boolean);
+  if(w.length<=2){ const a=t.replace(/[^ء-ي]/g,'');
+    if(a.length>=4 && !/^(?:قال|قالا|قالت|كان|ثنا|نا|ثني|عن|أن|إن|ثم|وقد|قد|به|له|عنه|عنها|كلهم|جميعا)$/.test(t)) return true; }
+  return false;
 }
 // Подсветить передатчиков ПРЯМО в тексте иснада (клик по имени → биография). Безопасно: ходим по текстовым узлам.
 function highlightNarratorsInDiv(ad, names, onClick){
@@ -6614,7 +6624,7 @@ function _narrGrade(rankH, rankZ){
 }
 // B: ДРЕВО ИСНАДА — цепочка передатчиков, цвет звена = достоверность по учёным; тап → полная карточка
 async function openIsnadTree(text, out, ref){
-  let names; try{ names=isnadNarrators(text).filter(nm=>{ const t=(nm||'').trim(); return / بن | ابن /.test(' '+t+' ')||/^(?:أبو|أبي|أم|عبد|ابن)\s/.test(t+' '); }); }catch(e){ names=[]; }
+  let names; try{ names=isnadNarrators(text).filter(_keepNarr); }catch(e){ names=[]; }
   out.style.display='block';
   if(!names.length){ out.innerHTML='<span class="hint">Не удалось выделить цепочку передатчиков из этого текста.</span>'; return; }
   out.innerHTML='<div class="hint">🌳 Строю древо иснада с оценкой достоверности…</div>';
@@ -6995,7 +7005,7 @@ async function findKnownNames(text){
 }
 // A: авто-подсветка передатчиков в карточке СРАЗУ при показе (лёгкое выделение, клик → карточка равия)
 function autoHighlightNarr(text, card, out){
-  let names; try{ names=isnadNarrators(text).filter(nm=>{ const t=(nm||'').trim(); return / بن | ابن /.test(' '+t+' ')||/^(?:أبو|أبي|أم|عبد|ابن)\s/.test(t+' '); }); }catch(e){ return; }
+  let names; try{ names=isnadNarrators(text).filter(_keepNarr); }catch(e){ return; }
   // M389: длинный текст (аппарат/акваль) — дополнить именами по словарю форм всего текста
   if(String(text||'').length>280){
     findKnownNames(text).then(extra=>{ try{ if(!extra.length) return;
