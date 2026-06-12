@@ -563,7 +563,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v376';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v377';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2769,6 +2769,19 @@ async function maktabaByNum(seq, n){
   const SRC_OF_CODE={bukhari:1,muslim:2,abudawud:3,tirmidhi:4,nasai:6,ibnmajah:7,malik:8,ahmad:9};
   const srcSet=new Set();
   const _headTxt=(tail)=>{ head.textContent='📚 Хадис №'+n+' — книг: '+shown+' · ПЕРВОИСТОЧНИКОВ: '+srcSet.size+' из 41 (печатей: '+shownF+')'+(tail||''); };
+  // M468: прозрачность «N из 41» — кнопка-список, КАКИЕ первоисточники не вошли и почему
+  const nfBtn=document.createElement('button'); nfBtn.className='mini'; nfBtn.style.cssText='font-size:11.5px;padding:4px 10px;margin:2px 0 6px;border:1px dashed var(--border)';
+  nfBtn.textContent='ℹ️ какие не вошли';
+  const nfOut=document.createElement('div'); nfOut.style.cssText='display:none;font-size:12px;border:1px dashed var(--border);border-radius:9px;padding:8px 10px;margin:0 0 8px;color:var(--hint)';
+  nfBtn.onclick=async()=>{ if(nfOut.style.display==='block'){ nfOut.style.display='none'; return; }
+    try{ await loadBooksMap(); }catch(e){}
+    const first={}; Object.keys(SRC_OF).forEach(b=>{ const s=SRC_OF[b]; if(!(s in first)) first[s]=b; });
+    const miss=[]; for(let s=1;s<=41;s++){ if(!srcSet.has(s)) miss.push(s); }
+    nfOut.innerHTML=miss.length?('<b style="color:var(--text)">Не вошли ('+miss.length+'):</b> №'+n+' в печатях этих книг не найден — у книги меньше хадисов либо иная нумерация:'
+      +'<div style="direction:rtl;text-align:right;margin-top:4px;line-height:1.8">'+miss.map(s=>'• '+esc((typeof bookName==='function'&&bookName(first[s]))||('источник №'+s))).join('<br>')+'</div>')
+      :'<b style="color:#7ee2a8">Все 41 первоисточник вошли ✓</b>';
+    nfOut.style.display='block'; };
+  head.insertAdjacentElement('afterend', nfOut); head.insertAdjacentElement('afterend', nfBtn);
   F40C.forEach(bid=>{ (async()=>{ try{
     const r=await fetch('./f40c/'+bid+'_'+Math.floor(n/300)+'.json'); if(!r.ok) return;
     const m=await r.json(); const it=m[String(n)]; if(!it||!it[1]) return;
@@ -4985,6 +4998,18 @@ function chainRender(){
     +'<label style="font-size:12.5px;color:var(--text);display:flex;gap:5px;align-items:center;cursor:pointer"><input type="checkbox" id="chainAdj"'+(window._chainAdj?' checked':'')+'> рядом в цепи (учитель↔ученик)</label>'
     +(n<2?'<span class="hint" style="font-size:11.5px;color:#e0b34a">введи как минимум двух — потом жми «Найти цепь» сверху</span>':'<span class="hint" style="font-size:11.5px">жми «🔎 Найти цепь» сверху · фильтры форм передачи (حدثنا/عن) добавим скоро</span>')
     +'</div><div id="chainOut" style="margin-top:6px"></div>';
+  // M469: ясная ОТМЕТКА об известных связях (np-пары штудирования) — информируем, выбор за человеком
+  if(n>=2){ (async()=>{ try{
+    const known=[];
+    for(let i=0;i<_chainSel.length;i++) for(let j=0;j<_chainSel.length;j++){
+      if(i===j) continue;
+      const np=await dzNP(_chainSel[i].id); if(!np) continue;
+      const hit=(np.t||[]).find(p=>p[0]===_chainSel[j].id);   // j — учитель i
+      if(hit) known.push('📎 известно: <b>'+esc(_chainSel[j].nm.split(' ').slice(0,2).join(' '))+'</b> — учитель <b>'+esc(_chainSel[i].nm.split(' ').slice(0,2).join(' '))+'</b> ('+hit[1]+' совместных звеньев)');
+    }
+    const kd=b.querySelector('#chainKnown')||(()=>{ const d=document.createElement('div'); d.id='chainKnown'; d.style.cssText='font-size:11.5px;color:#9fd3a8;margin-top:5px;line-height:1.6'; b.querySelector('#chainOut').parentNode.insertBefore(d, b.querySelector('#chainOut')); return d; })();
+    kd.innerHTML=known.length?known.join('<br>')+'<span style="color:var(--hint)"> · это подсказка из наших иснадов, НЕ ограничение поиска</span>':'';
+  }catch(e){} })(); }
   b.querySelectorAll('.chDel').forEach(x=>x.onclick=()=>{ const c=_chainSel[+x.dataset.i]; _chainSel.splice(+x.dataset.i,1); chainRender();
     try{ _undoPush('удаление звена '+c.nm.split(' ').slice(0,2).join(' '), ()=>{ _chainSel.push(c); chainRender(); }); }catch(e){} });
   const adj=b.querySelector('#chainAdj'); if(adj) adj.onchange=()=>{ window._chainAdj=adj.checked; };
