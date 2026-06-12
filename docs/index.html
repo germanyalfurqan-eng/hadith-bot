@@ -553,7 +553,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v362';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v363';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4974,6 +4974,7 @@ async function openNarrTable(opts){
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
   m.style.zIndex='10005'; m.style.display='flex';
   const all=await loadNarrTable();
+  try{ await loadNarrVoc(); }catch(e){}   // TB-11: огласованные имена (M361c) в строках, где уже готовы
   const st={q:(opts.focusId!=null?('#'+opts.focusId):''), sort:opts.filterIds?'cnt':'id', shown:0};
   const bar=m.querySelector('#ntBar'), list=m.querySelector('#ntList'), info=m.querySelector('#ntInfo');
   m.querySelector('#ntTitle').textContent=opts.title||('📋 Таблица передатчиков ('+all.length+')');
@@ -4999,9 +5000,14 @@ async function openNarrTable(opts){
     const part=cur.slice(st.shown, st.shown+60); st.shown+=part.length;
     part.forEach(r=>{ const d=document.createElement('div');
       d.style.cssText='display:flex;gap:9px;align-items:center;padding:7px 4px;border-bottom:1px solid var(--border);cursor:pointer'+(opts.focusId===r[0]?';background:rgba(108,92,231,.14);border-radius:8px':'');
+      // TB-11: огласованное имя (M361c, где есть) + нисба/кунья мелко + ранг Ибн Хаджара цветом
+      const voc=(_narrVoc&&(_narrVoc[String(r[0])]||_narrVoc[r[1]]))||'';   // ключ voc = ID равия (M361c)
+      const rk=(r[4]||'').trim(); const rc=/ثق|أوثق|حافظ|إمام/.test(rk)?'#4eb573':/صدوق/.test(rk)?'#9fd3a8':/صحاب/.test(rk)?'#e8c35a':/ضعيف|متروك|كذاب|منكر/.test(rk)?'#e07f7f':'#9aa7b5';
       d.innerHTML='<span style="flex:none;width:56px;font-size:11px;color:#5b87b5">#'+r[0]+(cnt?('<b style="display:block;color:#9fd3a8">×'+(cnt.get(r[0])||0)+'</b>'):'')+'</span>'
-        +'<span style="flex:1;direction:rtl;text-align:right;font-size:14.5px">'+esc(r[1])+'</span>'
-        +'<span style="flex:none;font-size:11px;color:var(--hint)" dir="rtl">'+(r[2]?('وفاة ~'+r[2]+'هـ'):'—')+'</span>';
+        +'<span style="flex:1;direction:rtl;text-align:right;min-width:0"><span style="font-size:14.5px;'+(voc?_AF+';font-size:16px':'')+'">'+esc(voc||r[1])+'</span>'
+        +(r[5]?('<span style="display:block;font-size:10.5px;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r[5])+'</span>'):'')+'</span>'
+        +'<span style="flex:none;text-align:left">'+(rk?('<span style="display:block;font-size:11px;color:'+rc+';font-weight:700" dir="rtl">'+esc(rk)+'</span>'):'')
+        +'<span style="display:block;font-size:10.5px;color:var(--hint)" dir="rtl">'+(r[2]?('وفاة ~'+r[2]+'هـ'):'—')+'</span></span>';
       d.onclick=()=>{ m.style.display='none'; narrOpen(r[1]); };
       list.appendChild(d); });
     let more=m.querySelector('#ntMore');
