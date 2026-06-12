@@ -570,7 +570,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v410';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v411';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4799,34 +4799,34 @@ async function doTakhrij(text, ref, out, btn, force){
   function renderMuh(){ if(muhNums.size){ const nums=[...muhNums].join(', ');
       muhSec.innerHTML='<div dir="ltr" style="border:1px solid var(--border);border-radius:8px;padding:5px 8px;margin-top:6px;font-size:13px;color:var(--hint)">📖 Также в нашем указателе аль-Мухаймин: № '+esc(nums)+' <span style="opacity:.7">(книга в обработке)</span></div>'; } else muhSec.innerHTML=''; }
   function renderLoc(){ locBox.innerHTML='';
-    // TB-22c: каждый № помечается ✓ «тот же хадис» / ≈ «похожий отрывок» (по совпадению текста); «тот же» — вперёд. Старый кэш (массив строк) — без бейджа.
-    let graded=false; const body=document.createElement('div');
-    const rank=g=>(g==='same'?0:g==='similar'?1:2);
-    Object.keys(found).forEach(code=>{ const items=(found[code]||[]).slice()
-        .sort((a,b)=>rank(a&&typeof a==='object'?a.g:null)-rank(b&&typeof b==='object'?b.g:null));
-      const row=document.createElement('div'); row.style.cssText='direction:rtl;font-size:14px;margin:2px 0';
-      const lbl=document.createElement('span'); lbl.textContent=arOf(code)+': '; row.appendChild(lbl);
-      items.forEach((it,i)=>{ let nm=(it&&typeof it==='object')?it.n:it; const g=(it&&typeof it==='object')?it.g:null;
-        if(typeof nm==='string'&&/[{}'\[\]]/.test(nm)){ const mm=nm.match(/\d+/); nm=mm?mm[0]:null; }   // битый sci-кэш (Python-repr «{'n':646}») → вытащить число
-        if(nm==null||nm==='') return;
-        const col=(g==='same'?'#4ade80':g==='similar'?'#f0b86e':'var(--link)');
-        const a=document.createElement('span'); a.textContent='№'+nm; a.title='Открыть в читалке на этом хадисе';
-        a.style.cssText='color:'+col+';cursor:pointer'; a.onclick=()=>openReader(code,nm); row.appendChild(a);
-        if(g){ graded=true; const bd=document.createElement('span'); bd.textContent=(g==='same'?' ✓':' ≈');
-          bd.title=(g==='same'?'тот же хадис (текст совпадает)':'похожий отрывок (совпадает лишь часть текста)');
-          bd.style.cssText='color:'+col+';font-size:12px'; row.appendChild(bd); }
-        if(i<items.length-1){ const s=document.createElement('span'); s.textContent='، '; row.appendChild(s); } });
-      body.appendChild(row); });
-    if(graded){ const lg=document.createElement('div'); lg.style.cssText='font-size:11px;color:var(--hint);margin:1px 0 5px';
-      lg.innerHTML='<span style="color:#4ade80">✓ тот же хадис</span> · <span style="color:#f0b86e">≈ похожий отрывок</span> <span style="opacity:.7">(по совпадению текста)</span>'; locBox.appendChild(lg); }
-    locBox.appendChild(body); }
+    // Ф-17: РАЗДЕЛЯЕМ «✓ тот же хадис» (высокое совпадение текста) и «≈ похожий отрывок» (общий фрагмент — МОЖЕТ БЫТЬ ДРУГОЙ СЛУЧАЙ).
+    // «похожие» НЕ объединяются как один хадис (кейс 5590-музыка ≠ 87-присяга) → отдельно, свёрнуто, с предупреждением.
+    const _num=(it)=>{ let nm=(it&&typeof it==='object')?it.n:it; if(typeof nm==='string'&&/[{}'\[\]]/.test(nm)){ const mm=nm.match(/\d+/); nm=mm?mm[0]:null; } return nm; };
+    const _g=(it)=>(it&&typeof it==='object')?it.g:null;
+    const sameBody=document.createElement('div'), simBody=document.createElement('div');
+    let nSame=0, nSim=0;
+    Object.keys(found).forEach(code=>{ const items=(found[code]||[]);
+      const sames=[], sims=[];
+      items.forEach(it=>{ const nm=_num(it); if(nm==null||nm==='') return; (_g(it)==='similar'?sims:sames).push(nm); });
+      const mkRow=(arr,col,tgt)=>{ if(!arr.length) return; const row=document.createElement('div'); row.style.cssText='direction:rtl;font-size:14px;margin:2px 0';
+        row.appendChild(Object.assign(document.createElement('span'),{textContent:arOf(code)+': '}));
+        arr.forEach((nm,i)=>{ const a=document.createElement('span'); a.textContent='№'+nm; a.style.cssText='color:'+col+';cursor:pointer'; a.title='Открыть в читалке'; a.onclick=()=>openReader(code,nm); row.appendChild(a);
+          if(i<arr.length-1) row.appendChild(Object.assign(document.createElement('span'),{textContent:'، '})); });
+        tgt.appendChild(row); };
+      mkRow(sames,'#4ade80',sameBody); nSame+=sames.length;
+      mkRow(sims,'#f0b86e',simBody); nSim+=sims.length; });
+    if(nSame){ const h=document.createElement('div'); h.style.cssText='font-size:12px;color:#4ade80;margin:4px 0 2px'; h.textContent='✓ тот же хадис (источники этой версии):'; locBox.appendChild(h); locBox.appendChild(sameBody); }
+    if(nSim){ const det=document.createElement('details'); det.style.cssText='margin-top:6px';
+      det.innerHTML='<summary style="cursor:pointer;color:#f0b86e;font-size:12px">≈ похожие по тексту ('+nSim+') — могут быть ДРУГИЕ случаи, не один хадис</summary>';
+      const note=document.createElement('div'); note.style.cssText='font-size:11px;color:var(--hint);margin:3px 0'; note.textContent='Совпадает лишь часть текста — не объединяем как один хадис (проверяйте по тахриджу учёных выше).';
+      det.appendChild(note); det.appendChild(simBody); locBox.appendChild(det); } }
   // ПОЛНЫЙ научный تخريج: парсим prose в кликабельные «сборник №№» (по ВСЕМ риватаям) + хукм + полный текст.
   function renderSci(prose, hukm){
     const refs=parseTakhreej(prose||''); const byCode={};
     refs.forEach(r=>{ byCode[r.code]=byCode[r.code]||new Set(); r.nums.forEach(n=>byCode[r.code].add(n)); });
     const codes=Object.keys(byCode);
     let html='<div style="border:1px solid var(--border);border-radius:10px;padding:8px;margin:2px 0 8px">'
-      +'<div style="font-size:12px;margin-bottom:4px"><span style="color:#4ade80">🌐 Научный تخريج</span> <span style="color:var(--hint)">(sunnah.one · учёные)</span>'+(hukm?' · <span style="color:#4ade80">'+esc(hukm)+'</span>':'')+'</div>';
+      +'<div style="font-size:12px;margin-bottom:4px"><span style="color:#4ade80">🌐 Тот же хадис — تخريج учёных</span> <span style="color:var(--hint)">(sunnah.one · версии одного хадиса)</span>'+(hukm?' · <span style="color:#4ade80">'+esc(hukm)+'</span>':'')+'</div>';
     if(codes.length) html+='<div style="font-size:12px;color:var(--hint);margin-bottom:3px">📋 Передаётся также (клик по № — читалка):</div><div id="sciRefs"></div>';
     if(prose) html+='<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--hint);font-size:12px">📜 Полный текст تخريج (учёные)</summary><div style="direction:rtl;text-align:right;font-size:14px;line-height:1.7;margin-top:4px">'+esc(prose)+'</div></details>';
     html+='</div>'; sciSec.innerHTML=html;
@@ -4861,7 +4861,7 @@ async function doTakhrij(text, ref, out, btn, force){
     else sciSec.innerHTML='';
     if(t.local){ Object.keys(t.local).forEach(c=>{ found[c]=t.local[c]; }); } renderLoc();
     const cnt=Object.keys(found).length;
-    locHead.innerHTML='<div style="color:var(--hint);font-size:12px;margin:8px 0 4px">🔗 В наших сборниках <span style="color:#9fb4cc">♻️ из нашей базы'+(t.d?(' · '+esc(t.d)):'')+'</span>'+(cnt?' (клик по № — читалка):':':')+'</div>';
+    locHead.innerHTML='<div style="color:var(--hint);font-size:12px;margin:8px 0 4px">📚 Поиск ПО ТЕКСТУ в наших сборниках <span style="color:#9fb4cc">♻️ из нашей базы'+(t.d?(' · '+esc(t.d)):'')+'</span>'+(cnt?' (клик по № — читалка):':':')+'</div>';
     moreSec.innerHTML=''; moreSec.appendChild(refreshBtn());
     regradeCache();   // TB-22c: дослать градацию ✓/≈ старым (негранёным) кэш-записям
   }
@@ -4915,7 +4915,7 @@ async function doTakhrij(text, ref, out, btn, force){
     const total=codes.length; let done=0;
     for(const code of codes){ if(aborted()){ return false; } done++;
       const pct=Math.round(done/total*100);
-      locHead.innerHTML='<div style="color:var(--hint);font-size:12px;margin:8px 0 4px">🔗 В наших сборниках — проверяю '+esc(arOf(code))+'… '+done+'/'+total+' ('+pct+'%)</div>';
+      locHead.innerHTML='<div style="color:var(--hint);font-size:12px;margin:8px 0 4px">📚 Поиск по тексту в наших сборниках — проверяю '+esc(arOf(code))+'… '+done+'/'+total+' ('+pct+'%)</div>';
       try{ const arr=await loadByCode(code); if(aborted()) return false;
         const hits=[];
         for(const h of arr){ if(code===skipCode && String(h.num)===skipNum) continue;
@@ -4929,7 +4929,7 @@ async function doTakhrij(text, ref, out, btn, force){
   const ok=await scan(TAKH_MAIN.concat(TAKH_SMALL));
   if(aborted()) { btn.disabled=false; btn.textContent=prev; return; }
   const cnt=Object.keys(found).length;
-  locHead.innerHTML='<div style="color:var(--hint);font-size:12px;margin:8px 0 4px">🔗 В наших сборниках'+(cnt?' (клик по № — открыть в читалке):':' — совпадений не нашёл:')+'</div>';
+  locHead.innerHTML='<div style="color:var(--hint);font-size:12px;margin:8px 0 4px">📚 Поиск по тексту в наших сборниках'+(cnt?" (✓ тот же · ≈ похожий; клик по № — читалка):":' — совпадений не нашёл:')+'</div>';
   // 4) Крупные издания (~75 МБ) — по кнопке, чтобы не качать лишнее на мобильном
   moreSec.innerHTML='';
   const moreBtn=document.createElement('button'); moreBtn.className='tr-btn';
@@ -4938,7 +4938,7 @@ async function doTakhrij(text, ref, out, btn, force){
   moreBtn.title='Загрузит крупные сборники (~75 МБ) и поищет в них — с прогрессом';
   moreBtn.onclick=async()=>{ moreBtn.disabled=true; const seq2=myseq; await scan(TAKH_BIG);
     if(seq2!==_takhSeq) return; const c2=Object.keys(found).length;
-    locHead.innerHTML='<div style="color:var(--hint);font-size:12px;margin:8px 0 4px">🔗 В наших сборниках'+(c2?' (клик по № — открыть в читалке):':' — совпадений не нашёл:')+'</div>';
+    locHead.innerHTML='<div style="color:var(--hint);font-size:12px;margin:8px 0 4px">📚 Поиск по тексту в наших сборниках'+(c2?" (✓ тот же · ≈ похожий; клик по № — читалка):":' — совпадений не нашёл:')+'</div>';
     moreSec.innerHTML='<div class="hint" style="font-size:12px;margin-top:4px">✓ Проверены и крупные издания.</div>'; saveTakh(); };
   moreSec.appendChild(moreBtn);
   btn.disabled=false; btn.textContent=prev;
