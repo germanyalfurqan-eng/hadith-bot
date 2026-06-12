@@ -367,6 +367,7 @@
     <div class="hint" style="margin:8px 0 2px;font-size:12px">🧬 Передатчики и иснады</div>
     <div class="row"><span>📋 Таблица всех передатчиков (18 989 равиев)</span><button class="go" id="narrTblBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>📊 Таблица цепей передачи (база иснадов)</span><button class="go" id="chainTblBtn" style="padding:5px 12px">Открыть</button></div>
+    <div class="row"><span>🧱 Поиск по иснаду — конструктор цепи</span><button class="go" id="isnadCtorBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row" style="opacity:.55"><span>📌 Фетвы и ответы (нумерованные)</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>📚 Полезные ресурсы</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>🔊 Озвучка аятов</span><span>скоро</span></div>
@@ -568,7 +569,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v397';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v398';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5636,6 +5637,112 @@ async function openIsnadBase(){
   const cb=m.querySelector('#ibClean'); if(cb){ cb.checked=false; cb.onchange=()=>{ kind=cb.checked?'clean':'all'; reset(); }; }
   await reset(); more.onclick=draw;
 }
+/* ===== 🧱 M483 СТРАТЕГИЧЕСКОЕ: КОНСТРУКТОР ИСНАДА — поиск по КОНСТРУКЦИИ цепи (смежные звенья по порядку).
+   Индекс смежных пар pchain/<a%64>.json {"ученик_учитель":[cid…]} (58 718 пар из реестра 230k).
+   Поиск X→Y→Z = пересечение cids(X_Y) ∩ cids(Y_Z); состав цепи (s) теперь в reg-шардах. ===== */
+var _pchC={};
+async function _pchGet(a,b){
+  const bk=((a%64)+64)%64;
+  let m=_pchC[bk];
+  if(m===undefined){ try{ const r=await fetch('./pchain/'+bk+'.json'); m=r.ok?await r.json():{}; }catch(e){ m={}; } _pchC[bk]=m; }
+  return m[a+'_'+b]||[];
+}
+async function _regRec(cid){
+  const pref=cid.slice(1,3);
+  let m=_isnRegC[pref];
+  if(m===undefined){ try{ const r=await fetch('./isnad/reg_'+pref+'.json'); m=r.ok?await r.json():{}; }catch(e){ m={}; } _isnRegC[pref]=m; }
+  return (m&&m[cid])||null;
+}
+async function openIsnadCtor(){
+  let m=document.getElementById('isnadCtorModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='isnadCtorModal';
+    m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 8px;padding:13px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:14.5px">🧱 Конструктор иснада — поиск по конструкции цепи</b><button class="mini" id="icClose" style="flex:none">закрыть ✕</button></div>'
+      +'<div class="hint" style="font-size:11.5px;margin-bottom:7px">Собери цепь по порядку, КАК ЧИТАЕТСЯ ИСНАД (сверху вниз): 1-й передаёт от 2-го, 2-й — от 3-го… Найдём все цепи, где эти звенья стоят ИМЕННО ПОДРЯД в этом порядке, и все хадисы с ними. Звенья — только опознанные равии базы (формы передачи حدثنا/عن добавим следующим этапом).</div>'
+      +'<div id="icChips" style="display:flex;gap:6px;flex-wrap:wrap;direction:rtl;margin-bottom:7px"></div>'
+      +'<input id="icQ" placeholder="имя звена (араб/рус) — выбери из подсказок…" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-size:13.5px">'
+      +'<div id="icSugg" style="margin-top:4px;border:1px solid var(--border);border-radius:10px;overflow:hidden;display:none;max-height:220px;overflow-y:auto"></div>'
+      +'<button id="icGo" class="go" style="width:100%;margin-top:9px;padding:10px;font-size:14px" disabled>🧱 Найти цепи с этой конструкцией</button>'
+      +'<div id="icInfo" class="hint" style="font-size:11.5px;margin-top:6px"></div>'
+      +'<div id="icOut" style="max-height:50vh;overflow:auto;margin-top:6px"></div></div>';
+    document.body.appendChild(m); m.querySelector('#icClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+    const sel=[];   // [{id,nm}] — порядок = порядок цепи (ученик → учитель → …)
+    const chips=m.querySelector('#icChips'), q=m.querySelector('#icQ'), sugg=m.querySelector('#icSugg'),
+          go=m.querySelector('#icGo'), info=m.querySelector('#icInfo'), out=m.querySelector('#icOut');
+    const drawChips=()=>{ chips.innerHTML='';
+      sel.forEach((s,i)=>{ const c=document.createElement('span');
+        c.style.cssText='display:inline-flex;gap:6px;align-items:center;font-size:12.5px;padding:4px 10px;border-radius:8px;border:1px solid #6c5ce7;background:rgba(108,92,231,.12);color:#dcd2ff';
+        c.innerHTML='<b>'+(i+1)+'.</b> <span dir="rtl">'+esc(s.nm.split(' ').slice(0,4).join(' '))+'</span> <span data-i="'+i+'" style="cursor:pointer;color:#e08f8f">✕</span>';
+        c.querySelector('[data-i]').onclick=(e)=>{ sel.splice(+e.target.dataset.i,1); drawChips(); };
+        chips.appendChild(c);
+        if(i<sel.length-1){ const a=document.createElement('span'); a.style.cssText='align-self:center;color:var(--hint)'; a.textContent='⬅'; a.title='передаёт от'; chips.appendChild(a); } });
+      go.disabled=sel.length<2;
+      go.textContent= sel.length<2 ? '🧱 добавь минимум 2 звена (подряд в цепи)' : '🧱 Найти цепи с этой конструкцией ('+sel.length+' звен.)';
+    };
+    let tmr=null;
+    q.oninput=()=>{ clearTimeout(tmr); const v=q.value.trim();
+      if(!v){ sugg.style.display='none'; sugg.innerHTML=''; return; }   // R46: пустой ввод прячет подсказки
+      tmr=setTimeout(async()=>{ try{
+        const cands=await narrCandidates(v); sugg.innerHTML='';
+        if(!cands||!cands.length){ sugg.style.display='none'; return; }
+        cands.slice(0,8).forEach(c=>{ const r=document.createElement('div');
+          r.style.cssText='padding:7px 11px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center';
+          r.innerHTML='<span style="font-size:11px;color:#5b87b5;flex:none">#'+c.id+'</span><span dir="rtl" style="flex:1;text-align:right;font-size:14px">'+esc(c.nm)+'</span>';
+          _narrCard(c.id).then(cc=>{ if(cc&&cc[4]) r.firstChild.textContent='#'+c.id+' · '+cc[4]+'هـ'; }).catch(()=>{});
+          r.onclick=()=>{ sel.push({id:c.id,nm:c.nm}); q.value=''; sugg.style.display='none'; sugg.innerHTML=''; drawChips(); };
+          sugg.appendChild(r); });
+        sugg.style.display='block';
+      }catch(e){ sugg.style.display='none'; } }, 220);
+    };
+    go.onclick=async()=>{ if(sel.length<2) return;
+      go.disabled=true; const prev=go.textContent; go.textContent='⏳ ищу конструкцию…'; out.innerHTML=''; info.textContent='';
+      try{
+        // пересечение смежных пар (в seq: ученик→учитель = наш порядок выбора)
+        let cids=null;
+        for(let i=0;i<sel.length-1;i++){
+          const lst=await _pchGet(sel[i].id, sel[i+1].id);
+          info.textContent='пара '+(i+1)+'/'+(sel.length-1)+': цепей '+lst.length;
+          if(!cids) cids=new Set(lst); else { const s2=new Set(lst); cids=new Set([...cids].filter(x=>s2.has(x))); }
+          if(!cids.size) break;
+        }
+        const arr=[...(cids||[])];
+        if(!arr.length){ info.textContent='Цепей с такой конструкцией ПОДРЯД не нашлось. Подсказка: проверь порядок (1-й передаёт ОТ 2-го) или убери промежуточное звено.'; go.disabled=false; go.textContent=prev; return; }
+        // тянем составы и места, сортируем по числу хадисов
+        try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr()]); }catch(e){}
+        const recs=[];
+        for(let i=0;i<arr.length && i<400;i++){ const rec=await _regRec(arr[i]); if(rec) recs.push({cid:arr[i], ...rec}); if(i%40===0) info.textContent='загружаю цепи… '+i+'/'+Math.min(arr.length,400); }
+        recs.sort((a,b)=>(b.n||0)-(a.n||0));
+        const totH=recs.reduce((s,r)=>s+(r.n||0),0);
+        info.textContent='Найдено цепей: '+arr.length+(arr.length>400?' (показаны 400)':'')+' · хадисов с ними: '+totH;
+        let shown=0; const step=20;
+        const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:8px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px';
+        const draw=()=>{ recs.slice(shown,shown+step).forEach(rc=>{
+            const d=document.createElement('div'); d.style.cssText='padding:8px 2px;border-bottom:1px solid var(--border)';
+            const tp=document.createElement('div'); tp.style.cssText='display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:5px';
+            tp.innerHTML='<span style="font-size:11.5px;color:var(--hint)"><b style="color:#bcd0ff;font-family:monospace">'+esc(rc.cid)+'</b></span><span style="font-size:12px;color:#9fd3a8;font-weight:700">📊 '+(rc.n||1)+' хадис'+_pluralHadith(rc.n||1)+'</span>';
+            d.appendChild(tp);
+            const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl'; d.appendChild(row);
+            if(rc.s) _dzChips(rc.s, row);
+            const pl=document.createElement('span'); pl.style.cssText='display:inline-block;margin-top:5px;cursor:pointer;color:var(--link);font-size:12px';
+            pl.textContent='📍 хадисы с этой цепью ('+(rc.n||1)+')';
+            const lst=document.createElement('div'); lst.style.cssText='display:none;margin-top:4px';
+            pl.onclick=()=>{ if(lst.style.display!=='none'){ lst.style.display='none'; return; } lst.style.display='block';
+              if(lst.dataset.b) return; lst.dataset.b='1';
+              (rc.ex||[]).forEach(p=>lst.appendChild(_dzPlaceRow(p[0],p[1],null))); };
+            d.appendChild(pl); d.appendChild(lst); out.insertBefore(d, more);
+          });
+          shown=Math.min(recs.length, shown+step);
+          more.textContent= shown>=recs.length ? '— все цепи показаны —' : '⬇️ Показать ещё ниже ('+(recs.length-shown)+')';
+          more.disabled=shown>=recs.length; };
+        out.appendChild(more); more.onclick=draw; draw();
+      }catch(e){ info.textContent='🔧 не получилось — попробуй ещё раз'; }
+      go.disabled=false; go.textContent=prev;
+    };
+    m._draw=drawChips;
+  }
+  m.style.zIndex='10006'; m.style.display='flex';
+  try{ loadNarrNames(); }catch(e){}
+}
 /* ===== 📋 M412: ОБЩАЯ ТАБЛИЦА ПЕРЕДАТЧИКОВ (18 989) — сортировки, фильтры передачи, переход по #id ===== */
 let _narrTbl=null,_narrTblP=null;
 function loadNarrTable(){ if(_narrTbl) return Promise.resolve(_narrTbl); if(_narrTblP) return _narrTblP;
@@ -8097,6 +8204,7 @@ var _rbr=document.getElementById('rootBrowBtn'); if(_rbr) _rbr.onclick=()=>{ doc
 var _hsb=document.getElementById('hadScienceBtn'); if(_hsb) _hsb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openHadithScience(); };
 var _ntb=document.getElementById('narrTblBtn'); if(_ntb) _ntb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openNarrTable(); }catch(e){} };
 var _ctb=document.getElementById('chainTblBtn'); if(_ctb) _ctb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openIsnadBase(); }catch(e){} };
+var _icb=document.getElementById('isnadCtorBtn'); if(_icb) _icb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openIsnadCtor(); }catch(e){} };   // M483 конструктор иснада
 var _cbr=document.getElementById('catBrowBtn'); if(_cbr) _cbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openCatalog(); };
 // M356: «Читать Коран» ПРОДОЛЖАЕТ с места, где остановился (cfg.qrLast: последняя читанная/слушанная сура+аят)
 function _qrResume(){ const L=cfg.qrLast; if(L&&L.s){ openQuranReader(L.s, L.a||0).then(()=>{ if(L.a) toast('📖 Продолжаем: '+L.s+':'+L.a+' · '+(SURA_NAMES[L.s-1]||'')); }); } else openQuranReader(_qrView.s||1, 0); }
