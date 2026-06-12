@@ -236,6 +236,9 @@
   <div class="modes" id="modesMore" style="display:none">
     <div class="chip" data-mode="matnonly" title="Искать совпадение только в тексте хадиса (матн), не в цепочке передатчиков (иснаде)">📜 Не искать в иснаде</div>
     <div class="chip" id="neuroChip" data-mode="neuro" title="Расширенный: вручную подобрать/поправить арабские фразы перед поиском">🔬 Расширенный</div>
+    <div class="chip" data-mode="any" title="M461: универсальный поиск ЛЮБОГО текста по всей Мактабе (слова учёных, джарх, тафсир — не только хадисы)">🌐 Любой текст</div>
+    <div class="chip" id="histBtn" title="Последние действия — вернуться на любой этап (M462)">🕐 История</div>
+    <div class="chip" id="shareBtn" title="Скопировать ссылку на текущее место — человек попадёт ровно сюда же (M463)">📤 Поделиться местом</div>
   </div>
   <div class="hint" style="margin:6px 0 8px">Слово, фраза или № (напр. <b>2:255</b>, <b>бухари 333</b>, <b>амалю ният</b>). <b>"в кавычках"</b> = точное словосочетание; с огласовками — режим «َ Огласовки точно». <span id="helpBtn" style="color:var(--link);cursor:pointer;font-weight:600">ⓘ Как искать</span></div>
   <div id="quranReadRow" style="display:none;margin:8px 0;gap:8px;flex-wrap:wrap">
@@ -560,7 +563,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v374';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v375';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1333,6 +1336,14 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.datas
       else narrSuggest(inp.value.trim());
     } else { inp.placeholder=(tab==='hadith'?'Слова, фраза или № хадиса…':'Слова, фраза или № (2:255)…'); hideNarrSugg(); chainRender(); }
     return; }   // chain не запускает обычный пересчёт
+  if(m==='any'){ const inp=document.getElementById('q');   // 🌐 M461: любой текст по всей Мактабе
+    if(modes.any){ ['ai','narr','chain'].forEach(x=>{ if(modes[x]){ modes[x]=false; const c=document.querySelector('.chip[data-mode="'+x+'"]'); if(c) c.classList.remove('on'); } });
+      try{ narrBoxShow(false); chainRender(); hideNarrSugg(); }catch(e){}
+      inp.placeholder='🌐 Любой текст по всей Мактабе (слова учёных, джарх, тафсир)…';
+      anyBoxShow(true);
+      if(inp.value.trim()) runSearch(true);
+    } else { inp.placeholder=(tab==='hadith'?'Слова, фраза или № хадиса…':'Слова, фраза или № (2:255)…'); anyBoxShow(false); }
+    return; }
   if(document.getElementById('q').value.trim()) runSearch();   // сразу пересчитать с новым режимом
 });
 var _ct=document.getElementById('colsToggle'); if(_ct) _ct.onclick=()=>{ const b=document.getElementById('colsBody'); const open=b.style.display==='none'; b.style.display=open?'block':'none'; var a=document.getElementById('colsArrow'); if(a) a.textContent=open?'▴':'▾'; };
@@ -1340,6 +1351,8 @@ document.getElementById('selAll').onclick=()=>{ COLLECTIONS.forEach(c=>selCols.a
 document.getElementById('selNone').onclick=()=>{ selCols.clear(); renderCols(); };
 /* ⚙️ ещё — показать/скрыть доп. режимы */
 var _mm=document.getElementById('moreModes'); if(_mm) _mm.onclick=()=>{ const b=document.getElementById('modesMore'); const open=b.style.display==='none'; b.style.display=open?'flex':'none'; _mm.textContent=open?'⚙️ свернуть ▴':'⚙️ ещё ▾'; _mm.classList.toggle('on',open); };
+var _hb=document.getElementById('histBtn'); if(_hb) _hb.onclick=()=>openHistory();           // M462
+var _sb=document.getElementById('shareBtn'); if(_sb) _sb.onclick=()=>shareCurrent();         // M463
 var _vb=document.getElementById('verBadge'); if(_vb) _vb.textContent=APPVER;
 /* Удобно убрать клавиатуру: тап по пустому месту (не по полю/кнопке) — снимает фокус → клавиатура прячется */
 document.addEventListener('pointerdown',function(e){ const ae=document.activeElement;
@@ -1723,6 +1736,7 @@ async function runSearch(explicit){
   // ЧИСЛА — НЕ имена: «5590» должен открыть хадис по номеру → пропускаем в обычный поиск (замечание владельца)
   if(_narrBypass){ _narrBypass=false; }   // «🔎 Хадисы с его участием»: один запуск мимо narr-перехвата (текст имени → обычный поиск)
   else if(modes.narr && (/^#\s*\d{1,5}$/.test(q.trim()) || !/^[\d٠-٩\s:№#×.]+$/.test(q))){ await narrRun(q, seq); logSearch(shown,'narr',0); return; }   // M405: «#2433» = равий по ID
+  else if(typeof modes!=='undefined' && modes.any && q.trim() && !/^\d{1,4}$/.test(q.trim())){ _actPush({t:'q',q:shown,tab:tab}); await anyTextSearch(q, seq); return; }   // 🌐 M461
   else if(typeof modes!=='undefined' && modes.chain && !q.trim() && _chainSel.length>=2){ chainRun(); return; }   // M447/R45: Enter при пустом поле = «Найти цепь»
   else if(typeof modes!=='undefined' && modes.chain && !/^[\d٠-٩\s:№#×.]+$/.test(q)){ try{ narrSuggest(q.trim()); }catch(e){} toast('⛓ Выбери передатчика из подсказок'); return; }   // M447
   // 📚 M314: чистое ЧИСЛО на «Хадисы» = № хадиса → список книг ВСЕЙ Мактабы с этим номером (ленивая подгрузка по скроллу)
@@ -1781,6 +1795,7 @@ async function runSearch(explicit){
   // M189: термины для оценки релевантности (слова запроса); ИИ-поиск → сразу по релевантности (лучшие вперёд)
   try{ _lastQueryTerms=[...new Set(groups.flat().filter(x=>!x.neg).flatMap(x=>canon(x.t).split(/\s+/)).filter(w=>w.length>=3))]; if(aiPhrases) relMode=true; }catch(e){}
   try{ localStorage.setItem('muslimoon_state',JSON.stringify({tab,q:shown,cols:[...selCols]})); }catch(e){}
+  try{ _actPush({t:'q', q:shown, tab:tab}); }catch(e){}   // M462: история действий
   const numMode=/^\d{1,7}$/.test(q);
   const rootMode = modes.root && !numMode;
   const rootForms={}; let qSkels=[];
@@ -2132,6 +2147,7 @@ function openBook(bookId, startPg){
   // M318: ПРОДОЛЖИТЬ ЧТЕНИЕ — если страница не указана, возвращаемся туда, где остановились
   if(!startPg){ try{ const pos=JSON.parse(localStorage.getItem('bk_pos')||'{}'); if(pos[id]&&pos[id].pg>1){ sp=pos[id].pg; setTimeout(()=>toast('▶ Продолжаю со стр. '+sp+' (читал ранее)'),300); } }catch(e){} }
   _bookView={id:id, pg:sp};
+  try{ _actPush({t:'book', bid:id, pg:sp}); }catch(e){}   // M462
   let m=document.getElementById('bookModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='bookModal';
     // M318 (редизайн по совету GPT, R31): компакт-шапка · тогглы инструментов · текст с книжной типографикой · sticky-низ листания
@@ -4185,6 +4201,7 @@ function _qrRandom(){ const s=1+Math.floor(Math.random()*114); const tot=(SURA_A
   Promise.resolve(openQuranReader(s,a)).then(()=>{ setTimeout(()=>_qrPlay(s,a),300); }); toast('🔀 '+(SURA_NAMES[s-1]||'')+' '+s+':'+a); }
 async function openQuranReader(s,a){
   s=+s||1; if(s<1)s=1; if(s>114)s=114; _qrView={s:s,a:+a||0};
+  try{ _actPush({t:'quran', s:s, a:+a||1}); }catch(e){}   // M462
   let m=document.getElementById('qrModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='qrModal';
     m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 10px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b id="qrTitle" style="font-size:14px">📖 Коран</b><span style="display:flex;gap:7px;flex:none"><button class="mini" id="qrMini" title="Свернуть читалку — звук продолжит играть в плеере снизу" style="flex:none;border:1px solid #2e9b5b;color:#bff5d4;background:transparent">🎧 свернуть</button><button class="mini" id="qrClose" style="flex:none">закрыть ✕</button></span></div>'
@@ -4972,6 +4989,123 @@ function chainRender(){
   const cx=b.querySelector('#chainX'); if(cx) cx.onclick=()=>{ chainModeOff(); };   // R46: закрыть = выключить режим
   _chainSyncGo();   // R45: ОДНА кнопка — главная «Найти» становится «Найти цепь» (дубль в боксе убран)
 }
+/* ===== M461: 🌐 ЛЮБОЙ ТЕКСТ — универсальный поиск по ВСЕЙ Мактабе (стратегический паритет с Шамелой:
+   слова учёных/джарх/тафсир, не только хадисы). Идём прямо в /api/maktaba (он находит и аппарат). ===== */
+function anyBoxShow(on){
+  let b=document.getElementById('anyModeBox');
+  if(!on){ if(b) b.style.display='none'; return; }
+  if(!b){ b=document.createElement('div'); b.id='anyModeBox';
+    b.style.cssText='margin:8px 0;padding:9px 11px;border:1px solid #2e7d5a;border-radius:12px;background:rgba(46,125,90,.08)';
+    b.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:12.5px;color:#bfe3cf"><b>🌐 Любой текст:</b> ищу слово-в-слово по ВСЕЙ Мактабе (8589 книг) — слова учёных, джарх, тафсир, сноски. <span id="anyHelp" style="color:var(--link);cursor:pointer;text-decoration:underline dotted">ⓘ правила ввода</span></span>'
+      +'<span id="anyModeX" title="Свернуть и выключить режим" style="cursor:pointer;color:#e07f7f;font-weight:700;border:1px solid var(--border);border-radius:6px;padding:1px 8px;flex:none">✕</span></div>'
+      +'<div id="anyHelpBody" style="display:none;margin-top:7px;font-size:12px;color:var(--text);line-height:1.65;border-top:1px dashed var(--border);padding-top:7px">'
+      +'• <b>Фраза как есть</b> — ищется точное вхождение (порядок слов важен).<br>'
+      +'• <b>Огласовки можно</b> — мы их снимем сами (ташкиль не мешает).<br>'
+      +'• <b>Альтернативы через |</b> — «منكر الحديث | متروك الحديث»: прогоню каждый вариант и объединю.<br>'
+      +'• <b>Невидимые символы копипасты</b> (из Шамелы/PDF) чистятся сами.<br>'
+      +'• Цитата Шамелы формата <b>«Книга» (том/стр): «фраза»</b> — открою книгу прямо на странице.<br>'
+      +'• Для хадисов лучше обычный режим (там переводы/инструменты); этот — для «любого угла» библиотеки.</div>';
+    const anchor=document.getElementById('res'); anchor.parentNode.insertBefore(b, anchor);
+    b.querySelector('#anyModeX').onclick=()=>{ try{ modes.any=false; const c=document.querySelector('.chip[data-mode="any"]'); if(c) c.classList.remove('on'); }catch(e){} anyBoxShow(false); };
+    b.querySelector('#anyHelp').onclick=()=>{ const h=b.querySelector('#anyHelpBody'); h.style.display=h.style.display==='none'?'block':'none'; };
+  }
+  b.style.display='block';
+}
+async function anyTextSearch(qRaw, seq){
+  const res=document.getElementById('res'); res.innerHTML='';
+  const head=document.createElement('div'); head.className='hint'; head.style.cssText='color:#bfe3cf;font-size:13px;margin:0 0 8px';
+  res.appendChild(head);
+  // чистка: невидимки + огласовки (Ф-02/M438); альтернативы по |
+  const clean=s=>s.replace(/[​-‏﻿؜]/g,'').replace(/[ً-ْٰـ]/g,'').replace(/\s+/g,' ').trim();
+  const variants=qRaw.split('|').map(clean).filter(Boolean).slice(0,5);
+  if(!variants.length){ head.textContent='Введи текст для поиска.'; return; }
+  await loadBooksMap(); try{ await Promise.all([loadBookTr(), loadWikiTitles()]); }catch(e){}
+  let total=0;
+  for(let vi=0; vi<variants.length; vi++){
+    const v=variants[vi];
+    head.textContent='🌐 Ищу по всей Мактабе'+(variants.length>1?(' · вариант '+(vi+1)+'/'+variants.length):'')+'…';
+    try{
+      const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(v)+'&initData='+encodeURIComponent(INITDATA));
+      if(seq!==undefined&&seq!==_seq) return;
+      const j=await r.json().catch(()=>({}));
+      const data=j.data||[];
+      if(variants.length>1 && data.length){ const vh=document.createElement('div'); vh.className='hint'; vh.style.cssText='margin:8px 0 4px;font-size:12px'; vh.innerHTML='— вариант «'+esc(v.slice(0,40))+'»: '+data.length; res.appendChild(vh); }
+      data.forEach(x=>{
+        total++;
+        const d=document.createElement('div'); d.className='card'; d.style.cssText='padding:10px;margin:7px 0';
+        const bid=String(x.book_id||''); const bn=x.book_name||bookName(bid)||('книга №'+bid);
+        const meta=(window._catTr&&_catTr.map&&_catTr.map[bn])||{};
+        d.innerHTML='<div style="direction:rtl;text-align:right;font-weight:700;color:var(--link);font-size:14.5px;cursor:pointer" class="anyOpen">📖 '+esc((meta.voc)||bn)+'</div>'
+          +(x.snip||x.text?('<div style="direction:rtl;text-align:right;font-size:13.5px;line-height:1.9;margin-top:5px">'+esc(String(x.snip||x.text).slice(0,220))+'…</div>'):'')
+          +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center"><button class="mini anyGo" style="font-size:12px;padding:5px 11px">📖 Открыть страницу</button>'+_shamChip(bid, x.page_id)+'</div>';
+        const go=()=>{ try{ _actPush({t:'book', bid:bid, pg:x.page_id}); }catch(e){} openBook(bid, x.page_id); };
+        d.querySelector('.anyOpen').onclick=go; d.querySelector('.anyGo').onclick=go;
+        res.appendChild(d);
+      });
+    }catch(e){}
+  }
+  head.textContent=total?('🌐 Вся Мактаба: найдено '+total+' (первые страницы; уточни фразу, если много лишнего)'):'🤷 По всей Мактабе не нашёл. Попробуй короче кусок или вариант через |.';
+}
+/* ===== M462: 🕐 ИСТОРИЯ ДЕЙСТВИЙ — вернуться на любой недавний этап ===== */
+function _actPush(a){ try{ a.ts=Date.now(); const d=JSON.parse(localStorage.getItem('act_log')||'[]');
+  const k=JSON.stringify({...a,ts:0}); if(d.length&&JSON.stringify({...d[d.length-1],ts:0})===k) return;   // дубль подряд не пишем
+  d.push(a); while(d.length>20) d.shift(); localStorage.setItem('act_log',JSON.stringify(d)); }catch(e){} }
+function _actLabel(a){
+  if(a.t==='q') return '🔎 Поиск: '+(a.q||'').slice(0,40);
+  if(a.t==='narr') return '👤 Равий: '+(a.nm||'').split(' ').slice(0,3).join(' ');
+  if(a.t==='book') return '📖 Книга '+(typeof bookName==='function'&&bookName(String(a.bid))||('№'+a.bid))+' · лист '+a.pg;
+  if(a.t==='quran') return '📖 Коран '+a.s+':'+(a.a||1);
+  if(a.t==='chain') return '⛓ Цепь: '+(a.names||[]).join(' + ');
+  return JSON.stringify(a).slice(0,40);
+}
+async function _replayAct(a){
+  try{
+    if(a.t==='q'){ const q=document.getElementById('q'); q.value=a.q||''; runSearch(true); return; }
+    if(a.t==='narr'){ narrOpen(a.nm); return; }
+    if(a.t==='book'){ openBook(String(a.bid), a.pg); return; }
+    if(a.t==='quran'){ openQuranReader(a.s, a.a||1); return; }
+    if(a.t==='chain'){ if(typeof modes!=='undefined'&&!modes.chain){ const c=document.querySelector('.chip[data-mode="chain"]'); if(c) c.click(); }
+      window._chainSel.length=0; (a.sel||[]).forEach(x=>_chainSel.push(x)); window._chainAdj=!!a.adj; chainRender(); if(_chainSel.length>=2) chainRun(); return; }
+  }catch(e){ toast('Не удалось вернуться на этот этап'); }
+}
+function openHistory(){
+  let m=document.getElementById('histModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='histModal';
+    m.innerHTML='<div class="panel" style="max-width:560px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;background:var(--card);margin:-16px -16px 8px;padding:13px 16px 9px;border-bottom:1px solid var(--border)"><b>🕐 История действий</b><button class="mini" id="histClose">закрыть ✕</button></div><div id="histList"></div></div>';
+    document.body.appendChild(m);
+    m.querySelector('#histClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+  }
+  const list=m.querySelector('#histList'); list.innerHTML='';
+  let d=[]; try{ d=JSON.parse(localStorage.getItem('act_log')||'[]'); }catch(e){}
+  if(!d.length) list.innerHTML='<div class="hint">Пока пусто — действия (поиски, книги, равии, цепи) будут появляться здесь.</div>';
+  d.slice().reverse().forEach(a=>{
+    const row=document.createElement('div'); row.style.cssText='padding:9px 6px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center';
+    const dt=a.ts?new Date(a.ts):null;
+    row.innerHTML='<span style="flex:1;min-width:0;font-size:13.5px">'+esc(_actLabel(a))+'</span><span style="flex:none;font-size:11px;color:var(--hint)">'+(dt?dt.toLocaleTimeString().slice(0,5):'')+'</span>';
+    row.onclick=()=>{ m.style.display='none'; _replayAct(a); };
+    list.appendChild(row);
+  });
+  m.style.display='flex';
+}
+/* ===== M463: 📤 ПОДЕЛИТЬСЯ МЕСТОМ — ссылка воспроизводит текущий контекст у получателя ===== */
+function _curContext(){
+  // приоритет: открытая книга → читалка Корана → карточка равия → текущий поиск/цепь
+  try{ const bm=document.getElementById('bookModal'); if(bm&&bm.style.display==='flex'&&window._bookView) return {t:'book', bid:_bookView.id, pg:_bookView.pg}; }catch(e){}
+  try{ const qm=document.getElementById('qrModal'); if(qm&&qm.style.display&&qm.style.display!=='none'&&window._qrView) return {t:'quran', s:_qrView.s, a:_qrView.a||1}; }catch(e){}
+  try{ const res=document.getElementById('res'); if(res&&res.dataset.narrCard&&window._lastNarrNm) return {t:'narr', nm:_lastNarrNm}; }catch(e){}
+  try{ if(typeof modes!=='undefined'&&modes.chain&&_chainSel.length>=2) return {t:'chain', sel:_chainSel.slice(), adj:!!window._chainAdj, names:_chainSel.map(c=>c.nm.split(' ').slice(0,2).join(' '))}; }catch(e){}
+  const q=(document.getElementById('q')||{}).value||'';
+  return {t:'q', q:q, tab:(typeof tab!=='undefined'?tab:'hadith')};
+}
+function shareCurrent(){
+  const ctx=_curContext();
+  let payload=''; try{ payload=btoa(unescape(encodeURIComponent(JSON.stringify(ctx)))); }catch(e){ toast('Не удалось собрать ссылку'); return; }
+  const url='https://germanyalfurqan-eng.github.io/hadith-bot/#go='+payload;
+  const done=()=>toast('📤 Ссылка скопирована — получатель попадёт ровно сюда: '+_actLabel(ctx));
+  try{ navigator.clipboard.writeText(url).then(done).catch(()=>{ prompt('Скопируй ссылку:', url); });
+  }catch(e){ prompt('Скопируй ссылку:', url); }
+}
 // 👤 R46: поясняющий бокс режима Передатчик (как в Цепи) — что происходит + «✕» выключить
 function narrBoxShow(on){
   let b=document.getElementById('narrModeBox');
@@ -5030,6 +5164,7 @@ async function _aliasGroup(id){
 }
 async function chainRun(){
   chainRender();
+  try{ _actPush({t:'chain', sel:_chainSel.slice(), adj:!!window._chainAdj, names:_chainSel.map(c=>c.nm.split(' ').slice(0,2).join(' '))}); }catch(e){}   // M462/M463
   const out=document.getElementById('chainOut'); if(!out) return;
   const ids=_chainSel.map(c=>c.id);
   out.innerHTML='<div class="hint">⏳ Собираю участие выбранных… </div>';
@@ -5512,6 +5647,7 @@ async function narrSuggest(q){
 }
 let _narrBypass=false;   // разовый обход narr-перехвата: «найти ХАДИСЫ этого равия» обычным поиском
 async function narrOpen(nm){
+  try{ window._lastNarrNm=nm; _actPush({t:'narr', nm:nm}); }catch(e){}   // M462/M463
   hideNarrSugg(); const qi=document.getElementById('q');
   const _prevQ=qi?qi.value:'';
   if(qi){ qi.value=nm; try{ const qc=document.getElementById('qClear'); if(qc) qc.style.display='block'; }catch(e){} }
@@ -7729,6 +7865,12 @@ async function boot(){
         if(st.q) document.getElementById('q').value=st.q; }
     }catch(e){}
     renderCols();
+    // M463: пришли по share-ссылке #go=… → воспроизвести то же место у получателя
+    try{ const m=location.hash.match(/#go=([^&]+)/);
+      if(m){ const ctx=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
+        history.replaceState(null,'',location.pathname+location.search);
+        setTimeout(()=>{ try{ _replayAct(ctx); toast('📤 Открываю место по ссылке…'); }catch(e){} }, 600); }
+    }catch(e){}
   }else{
     document.getElementById('gate').style.display='flex';
     if(USER&&USER.first_name) document.getElementById('gateMsg').textContent='Салам, '+USER.first_name+'! 🔒 Доступ пока только для владельца. Скоро откроем больше — ин ша Аллах.';
