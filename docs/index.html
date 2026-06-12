@@ -553,7 +553,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v360';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v361';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3048,6 +3048,12 @@ let _roots=null, _rootsP=null;
 async function loadRoots(){ if(_roots) return _roots; if(_rootsP) return _rootsP;
   _rootsP=(async()=>{ try{ const j=await (await fetch('./quran_roots.json')).json(); _roots=j; return j; }
     catch(e){ _roots={f:{},r:{},rf:{},ro:{}}; return _roots; } })(); return _rootsP; }
+// M404: индекс «корень → страница статьи» в 6 авторитетных словарях (dict_pages.json, локально R37)
+let _dictPg=null,_dictPgP=null;
+async function loadDictPages(){ if(_dictPg) return _dictPg; if(_dictPgP) return _dictPgP;
+  _dictPgP=(async()=>{ try{ _dictPg=await (await fetch('./dict_pages.json')).json(); }
+    catch(e){ _dictPg={meta:{order:[],ar:[],ru:[],dec:{}},roots:{}}; } return _dictPg; })(); return _dictPgP; }
+function _dictLeaf(page,dec){ if(!page||!dec) return 0; if(dec==='B') return page; if(dec==='A1') return Math.floor(page/10)+1; return Math.floor(page/10); }   // Ф-11: без калибровки (dec) лист не считаем
 function rootKey(w){ return canon(w).replace(/[^ء-ي]/g,''); }   // ключ как в quran_roots.json
 // аят словами-кнопками: подсветка поисковых слов и (в режиме «места корня») слов нужного корня
 function qWordsHTML(text, groups, rootHi){
@@ -3127,6 +3133,20 @@ function gramRu(code){
   if(has('MOOD:SUBJ')) out.push('сослагат.'); if(has('MOOD:JUS')) out.push('усечён.');
   return [...new Set(out)].join(', ');
 }
+// M404: часть речи ПО-АРАБСКИ (термины نحو) из того же кода корпуса
+function gramAr(code){
+  if(!code) return '';
+  const t=code.split('|'); const pos=t[0]; const has=x=>t.indexOf(x)!==-1; const out=[];
+  const POS={V:'فعل',N:'اسم',PN:'اسم علم',ADJ:'صفة',PRON:'ضمير',DEM:'اسم إشارة',REL:'اسم موصول',
+    P:'حرف جر',PREP:'حرف جر',ADV:'ظرف',T:'ظرف زمان',LOC:'ظرف مكان',CONJ:'حرف عطف',SUB:'حرف مصدري',
+    DET:'أداة تعريف',NEG:'حرف نفي',INTG:'حرف استفهام',COND:'حرف شرط',ACC:'حرف نصب',CERT:'حرف تحقيق',
+    EMPH:'حرف توكيد',FUT:'حرف استقبال',VOC:'حرف نداء',REM:'حرف استئناف',RES:'أداة حصر',EXH:'حرف تحضيض',
+    PRP:'لام التعليل',INL:'حروف مقطعة'};
+  out.push(POS[pos]||'كلمة');
+  if(has('PERF')) out.push('ماض'); if(has('IMPF')) out.push('مضارع'); if(has('IMPV')) out.push('أمر');
+  if(has('PASS')) out.push('مبني للمجهول');
+  return out.join(' ');
+}
 async function onWordTap(word, el, ctx){
   // режим «по словам»: в читалке Корана тап по слову = озвучить ТОЛЬКО это слово (без попапа)
   if(window._qrWordMode && el && el.classList && el.classList.contains('qw') && el.closest && el.closest('#qrBody')){ if(_qrSayWord(el)) return; }
@@ -3143,10 +3163,12 @@ function showWordPopup(el, word, root, lemma, gram, ctx){
   // M406: fixed + max-height со скроллом — карточка слова НИКОГДА не вылезает за низ экрана (даже когда Arabus дорастит контент)
   pop.style.cssText='position:fixed;z-index:10006;max-width:min(340px,94vw);max-height:62vh;overflow:auto;padding:11px 13px;font-size:14px;box-shadow:0 8px 28px rgba(0,0,0,.55)';
   let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b style="font-size:22px;'+_AF+'">'+esc(word)+'</b><span id="wpX" style="cursor:pointer;color:var(--hint);font-size:18px">✕</span></div>';
-  if(g) h+='<div style="margin-top:6px;color:var(--text)">📝 '+esc(g)+'</div>';
+  const ga=gramAr(gram);   // M404: часть речи и по-русски, и по-арабски (термин نحو)
+  if(g) h+='<div style="margin-top:6px;color:var(--text)">📝 '+esc(g)+(ga?(' · <b style="'+_AF+';font-size:15px;color:var(--mark)">'+esc(ga)+'</b>'):'')+'</div>';
   if(lemma && rootKey(lemma)!==rootKey(word)) h+='<div style="margin-top:3px;color:var(--hint);font-size:13px">лемма: <b style="'+_AF+'">'+esc(lemma)+'</b></div>';
   if(root){ h+='<div style="margin-top:6px">🌿 Корень: <b style="font-size:19px;color:var(--mark);'+_AF+'">'+esc(root)+'</b></div>'+
-    '<div id="wpAll" style="margin-top:9px;color:var(--link);cursor:pointer;font-weight:600">📍 Все места этого корня в Коране ('+n+')</div>'; }
+    '<div id="wpAll" style="margin-top:9px;color:var(--link);cursor:pointer;font-weight:600">📍 Все места этого корня в Коране ('+n+')</div>'+
+    '<div id="wpDicts" style="margin-top:8px"></div>'; }   // M404: кнопки словарей (наполняются асинхронно)
   ;   // корня в нашей базе нет — значения подтянет Arabus ниже
   h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><button id="wpAiBtn" class="tr-btn" style="background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:6px 10px;font-size:13px;width:100%">🧠 Перевод слова (ИИ) — проверить</button><div id="wpAiOut" style="margin-top:5px"></div></div>';
   h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><div style="color:#7fe3bf;font-weight:700;margin-bottom:4px">📕 Значения и формы (Arabus)</div><div id="wpArabusOut" style="margin-top:3px"></div></div>';
@@ -3168,6 +3190,26 @@ function showWordPopup(el, word, root, lemma, gram, ctx){
   const all=pop.querySelector('#wpAll'); if(all) all.onclick=()=>{ closeWordPopup(); showRootPlaces(root); };
   const aib=pop.querySelector('#wpAiBtn'); if(aib) aib.onclick=()=>wordAi(word, root, pop.querySelector('#wpAiOut'), aib, ctx);
   showArabusInline(word, pop.querySelector('#wpArabusOut'), root);   // авто-загрузка значений+форм Arabus (с подсказкой-корнем)
+  // M404: статья корня в 6 авторитетных словарях — кнопки с переходом читалкой ровно на страницу статьи
+  if(root) (async()=>{ try{
+    const D=await loadDictPages(); const host=pop.querySelector('#wpDicts'); if(!host) return;
+    const e=D.roots && D.roots[root]; const ety=(D.ety||{})[root];
+    if(!e && !ety){ host.style.display='none'; return; }
+    const SHORT=['لسان العرب','المفردات (قرآن)','مقاييس','تاج العروس','القاموس','النهاية (حديث)'];
+    let bs='';
+    (e||[]).forEach((pg,i)=>{ const bid=D.meta.order[i]; const leaf=_dictLeaf(pg, (D.meta.dec||{})[String(bid)]);
+      if(leaf) bs+='<button class="mini wpDict" data-b="'+bid+'" data-l="'+leaf+'" title="'+esc(D.meta.ru[i]||'')+'" style="font-size:12px;padding:4px 9px">📖 '+SHORT[i]+'</button>'; });
+    let hh='';
+    if(ety) hh+='<div style="margin-bottom:6px;border:1px solid var(--border);border-radius:9px;padding:7px 9px;background:var(--bg)">'
+      +'<div style="font-size:12px;color:var(--link);font-weight:700;margin-bottom:3px">🌱 Этимология корня — مقاييس اللغة (Ибн Фарис):</div>'
+      +'<div style="direction:rtl;text-align:right;'+_AF+';font-size:16px;line-height:1.8">'+esc(ety)+'…</div></div>';
+    if(bs) hh+='<div style="color:var(--link);font-weight:700;margin-bottom:4px;font-size:13px">📚 Словари — статья корня:</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:5px;direction:rtl;justify-content:flex-end">'+bs+'</div>';
+    if(!hh){ host.style.display='none'; return; }
+    host.innerHTML=hh;
+    host.querySelectorAll('.wpDict').forEach(b=>b.onclick=()=>{ const t=b.title; closeWordPopup();
+      toast('📖 '+(t||'Открываю словарь')+' — статья корня '+root); openBook(b.dataset.b, b.dataset.l); });
+  }catch(e){} })();
 }
 // ИИ-перевод/проверка ОДНОГО слова (точный перевод+корень, приоритет над Arabus; копится; владельцу уведомление)
 async function wordAi(word, root, host, btn, ctx){
@@ -4109,6 +4151,8 @@ async function openQuranReader(s,a){
     const qs=m.querySelector('#qrSearch'); qs.addEventListener('keydown',e=>{ if(e.key==='Enter') _qrSearchGo(qs.value); });
     qs.addEventListener('input',()=>_qrSuggest(qs.value));
   }
+  // TB-5: применить сохранённую ширину читалки (слайдер в «⚙️ Настройки чтения»)
+  try{ const v=+cfg.qrWidth||0; const p=m.querySelector('.panel'); if(p&&v) p.style.maxWidth=(v>=1600?'96vw':v+'px'); }catch(e){}
   m.style.display='flex'; await _qrLoad();
 }
 let _qrSugT;
@@ -4250,6 +4294,15 @@ async function _qrLoad(){
       b.style.borderColor='#2e9b5b'; b.style.color='#bff5d4'; b.style.background='#173d30'; toast('Скорость чтения: '+r[1]); };
     sprow.appendChild(b); });
   sp.appendChild(sprow);
+  // ↔ TB-5: ширина читалки — слайдер мышкой (ПК), на телефоне панель и так почти во весь экран
+  const wrow=document.createElement('div'); wrow.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:9px;flex-wrap:wrap';
+  wrow.innerHTML='<span style="font-size:13px;color:var(--hint)">↔ Ширина:</span>';
+  const wsl=document.createElement('input'); wsl.type='range'; wsl.min='680'; wsl.max='1600'; wsl.step='20'; wsl.value=String(cfg.qrWidth||680); wsl.style.cssText='flex:1;min-width:140px;cursor:pointer';
+  const wlab=document.createElement('span'); wlab.style.cssText='font-size:12px;color:var(--hint);min-width:52px;text-align:right';
+  const _wApply=()=>{ const v=+wsl.value||680; const p=document.querySelector('#qrModal .panel'); if(p) p.style.maxWidth=(v>=1600?'96vw':v+'px'); wlab.textContent=(v>=1600?'на весь экран':v+'px'); };
+  wsl.oninput=()=>{ cfg.qrWidth=+wsl.value; _wApply(); };
+  wsl.onchange=()=>{ saveCfg(cfg); toast('↔ Ширина читалки: '+wlab.textContent); };
+  wrow.appendChild(wsl); wrow.appendChild(wlab); _wApply(); sp.appendChild(wrow);
   // 📖 M336: перевод в читалке — Кулиев / Абу Адель / оба / без
   const qtrow=document.createElement('div'); qtrow.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:9px;flex-wrap:wrap'; qtrow.innerHTML='<span style="font-size:13px;color:var(--hint)">📖 Перевод:</span>';
   const _trCur=cfg.qrTr||((cfg.qtr==='rus-abuadel')?'abuadel':'kuliev');
