@@ -569,7 +569,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v400';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v401';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5119,8 +5119,9 @@ async function _dzRec(bid,num){ const k=String(bid)+'_'+Math.floor(+num/500); co
 // Э-И2: запись хадиса теперь {s:[коды], f:[формы передачи]}; старый формат — просто [коды]. dzChain отдаёт SEQ (совместимость).
 async function dzChain(bid,num){ const r=await _dzRec(bid,num); return r? (Array.isArray(r)?r:(r.s||null)) : null; }
 async function dzChainFull(bid,num){ const r=await _dzRec(bid,num); if(!r) return null; return Array.isArray(r)? {seq:r,forms:[]} : {seq:r.s||[], forms:r.f||[]}; }
-const _FORM_RU={TH:'حدثنا',AKH:'أخبرنا',SAM:'سمعت',AN:'عن',QAL:'قال'};
-const _FORM_TIP={TH:'حدّثنا/حدّثني — прямое слышание (تحديث)',AKH:'أخبرنا/أنبأنا — извещение (قراءة/إجازة)',SAM:'سمعت — явное слышание (سماع صريح)',AN:'عن — «от» (عنعنة; у мудаллиса возможен тадлис)',QAL:'قال — «сказал» (بلاغ/неуточнённо)'};
+const _FORM_RU={TH:'حدثنا',THi:'حدثني',AKH:'أخبرنا',AKHi:'أخبرني',ANB:'أنبأنا',SAM:'سمعت',AN:'عن',ANN:'أنّ',QAL:'قال',NA:'نا'};
+const _FORM_TIP={TH:'حدّثنا — диктовка/слышание в группе (سماع)',THi:'حدّثني — лично мне (سماع, выше точность)',AKH:'أخبرنا — чтение шейху (قراءة على الشيخ)',AKHi:'أخبرني — قراءة лично',ANB:'أنبأنا — у поздних = إجازة (слабее سماع)',SAM:'سمعت — явное слышание (سماع صريح)',AN:'عن — «от» (عنعنة; у мудаллиса возможен тадлис)',ANN:'أنّ — «что» (форма عنعنة)',QAL:'قال — «сказал» (بلاغ/неуточнённо)',NA:'نا — сокращение (حدثنا/أخبرنا)'};
+const _FORM_CLASS={TH:'S',THi:'S',SAM:'S',AKH:'Q',AKHi:'Q',ANB:'I',AN:'A',ANN:'A',QAL:'L',NA:'?'};
 function _dzShU(code){ return parseInt(_md5x(code).slice(0,4),16)%64; }
 async function dzUReg(code){ const sh=_dzShU(code); const m=await _dzFetch(_dzUC,sh,'./dz/u'+sh+'.json'); return (m&&m[code])||null; }
 async function dzUPart(code){ const sh=_dzShU(code); const m=await _dzFetch(_dzUNC,sh,'./dz/un'+sh+'.json'); return (m&&m[code])||null; }
@@ -5520,7 +5521,7 @@ var _md5=(function(){
   return function(s){return b2h(core(s2b(s),s.length*8));};
 })();
 // Э-И2: cid РАЗЛИЧАЕТ формы передачи (как в Python-билдере: seq + '#' + forms) — «через عن» ≠ «через حدثنا»
-function _chainCid(codes, forms){ return 'C'+_md5(codes.map(String).join('|')+'#'+((forms||[]).join('|'))).slice(0,10); }
+function _chainCid(codes, forms){ const fc=(forms||[]).map(f=>(_FORM_CLASS[f]!==undefined?_FORM_CLASS[f]:f)); return 'C'+_md5(codes.map(String).join('|')+'#'+fc.join('|')).slice(0,10); }
 function _pluralHadith(n){ n=Math.abs(n)%100; var n1=n%10; if(n>10&&n<20) return 'ов'; if(n1>1&&n1<5) return 'а'; if(n1===1) return ''; return 'ов'; }
 var _isnRegC={};
 async function _isnadInfo(codes, forms){
