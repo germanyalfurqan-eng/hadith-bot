@@ -332,6 +332,8 @@
   /* --gk = интенсивность свечения (1→0 за 10 нажатий, потом авто-выкл) */
   @keyframes logoGlow{ 0%{filter:drop-shadow(0 0 10px rgba(80,160,255,.45)) brightness(1)} 35%{filter:drop-shadow(0 0 calc(22px*var(--gk,1)) rgba(150,215,255,.9)) brightness(calc(1 + .4*var(--gk,1)))} 100%{filter:drop-shadow(0 0 10px rgba(80,160,255,.45)) brightness(1)} }
   #brandLogo.refreshing{ animation:logoGlow 1.1s ease-out }
+  /* TB-25: на узких экранах 🕐/📤 не теснят шапку */
+  @media (max-width:430px){ #histHdr,#shareHdr{ display:none !important } }
   /* свет из верхнего-левого угла (от лого) проходит по приложению — обновление «светом» */
   #appShine{ position:fixed; inset:0; pointer-events:none; z-index:9998; opacity:0;
     background:radial-gradient(120% 90% at 11% 5%, rgba(160,215,255,.34), rgba(120,190,255,.14) 34%, rgba(120,190,255,0) 62%); }
@@ -563,7 +565,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v383';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v384';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1368,6 +1370,8 @@ document.getElementById('selNone').onclick=()=>{ selCols.clear(); renderCols(); 
 var _mm=document.getElementById('moreModes'); if(_mm) _mm.onclick=()=>{ const b=document.getElementById('modesMore'); const open=b.style.display==='none'; b.style.display=open?'flex':'none'; _mm.textContent=open?'⚙️ свернуть ▴':'⚙️ ещё ▾'; _mm.classList.toggle('on',open); };
 var _hb=document.getElementById('histHdr'); if(_hb) _hb.onclick=()=>openHistory();           // M462 (TB-20: вверху, возле настроек)
 var _sb=document.getElementById('shareHdr'); if(_sb) _sb.onclick=()=>shareCurrent();         // M463 (TB-20)
+// TB-24: «Поделиться» пока ТОЛЬКО владельцу (ссылка светит github.io — сайт юзерам пока не показываем)
+try{ if(_sb && !(typeof isOwner!=='undefined'&&isOwner)) _sb.style.display='none'; }catch(e){}
 var _vb=document.getElementById('verBadge'); if(_vb) _vb.textContent=APPVER;
 /* Удобно убрать клавиатуру: тап по пустому месту (не по полю/кнопке) — снимает фокус → клавиатура прячется */
 document.addEventListener('pointerdown',function(e){ const ae=document.activeElement;
@@ -5367,7 +5371,7 @@ async function openNarrTable(opts){
       const voc=(_narrVoc&&(_narrVoc[String(r[0])]||_narrVoc[r[1]]))||'';   // ключ voc = ID равия (M361c)
       const rk=(r[4]||'').trim(); const rc=/ثق|أوثق|حافظ|إمام/.test(rk)?'#4eb573':/صدوق/.test(rk)?'#9fd3a8':/صحاب/.test(rk)?'#e8c35a':/ضعيف|متروك|كذاب|منكر/.test(rk)?'#e07f7f':'#9aa7b5';
       let ruN=''; try{ ruN=arNameRu(r[1],4); }catch(e){}                       // M467: перевод имени
-      const wk=(window._narrWiki||{})[String(r[0])];                            // M467: вики ru→en→ar
+      const wk=_WIKI_NARR_OK?((window._narrWiki||{})[String(r[0])]):null;            // M467/TB-26: до валидации — скрыто
       d.innerHTML='<span style="flex:none;width:56px;font-size:11px;color:#5b87b5">#'+r[0]+(cnt?('<b style="display:block;color:#9fd3a8">×'+(cnt.get(r[0])||0)+'</b>'):'')
         +'<span class="ntT" data-k="t" data-id="'+r[0]+'" data-nm="'+esc(r[1])+'" title="От кого передавал (учителя)" style="display:block;cursor:pointer;font-size:12px;margin-top:3px">👨‍🏫</span>'
         +'<span class="ntT" data-k="s" data-id="'+r[0]+'" data-nm="'+esc(r[1])+'" title="Кто от него передавал (ученики)" style="display:block;cursor:pointer;font-size:12px">👨‍🎓</span></span>'
@@ -5604,6 +5608,7 @@ function _flagSearch(nm, f){
   runSearch(true);
 }
 document.addEventListener('click', e=>{ const b=e.target&&e.target.closest&&e.target.closest('.flgB'); if(!b) return; e.stopPropagation(); _flagSearch(b.dataset.nm||'', b.dataset.f||''); });
+const _WIKI_NARR_OK=false;   // TB-26: краул дал ТЁЗОК (равий→король Саудии!) — чипы скрыты до пере-краула с валидацией эпохи (M471)
 let _narrWiki=null;
 function loadNarrWiki(){ if(_narrWiki) return Promise.resolve(_narrWiki);
   return fetch('./narrators_wiki.json').then(r=>r.ok?r.json():{}).then(j=>{_narrWiki=j||{};return _narrWiki;}).catch(()=>{_narrWiki={};return _narrWiki;}); }
@@ -6022,7 +6027,7 @@ async function showNarratorCardLocal(name, host){
   if(_ruNm&&_shDiff&&_ruNm!==_ruSh) h+='<div style="direction:ltr;text-align:left;font-size:11.5px;color:#8fa3c7">полное: '+esc(_ruNm)+'</div>';
   try{ const fl=(await loadNarrFlags())[String(id)]; if(fl) h+='<div style="margin-top:3px">'+_flagBadge(fl, c[1])+'</div>'; }catch(e){}   // M386+M402 (тап → его хадисы в Сахихах)
   try{ const wk=(await loadNarrWiki())[String(id)];
-    if(wk&&wk.u) h+='<div style="direction:ltr;text-align:left;margin-top:3px"><span class="nWiki" data-u="'+esc(wk.u)+'" style="cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px"><b style="font-family:Georgia,serif">W</b> Википедия'+(wk.l?(' · '+esc(wk.l)):'')+' ↗</span></div>'; }catch(e){}
+    if(_WIKI_NARR_OK&&wk&&wk.u) h+='<div style="direction:ltr;text-align:left;margin-top:3px"><span class="nWiki" data-u="'+esc(wk.u)+'" style="cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px"><b style="font-family:Georgia,serif">W</b> Википедия'+(wk.l?(' · '+esc(wk.l)):'')+' ↗</span></div>'; }catch(e){}
   h+='<div style="font-size:11px;margin:2px 0 7px">'+(((cfg.shLink||'wiki')!=='off')?('📖 <span class="shamNarr" data-id="'+c[0]+'" style="color:var(--link);cursor:pointer;text-decoration:underline dotted" title="Открыть эту карточку на сайте shamela.ws">موسوعة رواة الحديث (база Мактабы) ↗</span> · '):'')+'<span class="ntOpen" data-id="'+c[0]+'" style="color:#5b87b5;cursor:pointer;font-weight:700" title="Открыть общую таблицу передатчиков на этом номере">#'+c[0]+' 📋</span></div>'
     +row('الكنية',c[2])+row('النسب',c[3])+row('سنة الوفاة',c[4]?('~'+c[4]+'هـ'):'')+row('الطبقة',c[7])
     +rank('الرتبة عند ابن حجر',c[5])+rank('الرتبة عند الذهبي',c[6])
