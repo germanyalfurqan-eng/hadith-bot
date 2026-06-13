@@ -65,6 +65,7 @@ function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>'
 async function jget(u){ if(cache[u]!==undefined)return cache[u]; try{const r=await fetch(u);cache[u]=r.ok?await r.json():null}catch(e){cache[u]=null} return cache[u]; }
 function shardOf(place){const [b,n]=place.split('|');return b+'_'+Math.floor(parseInt(n)/META.txt_bucket);}
 async function loadTxt(place){const o=await jget('sift/txt/'+shardOf(place)+'.json');return o?o[place]:null;}
+async function loadDet(place){const bid=place.split('|')[0];const o=await jget('sift/det_'+bid+'.json');return o?o[place]:null;}
 async function loadEsn(place){const o=await jget('sift/esn/'+shardOf(place)+'.json');return o?o[place]:null;}
 async function loadNarr(){if(!NARR)NARR=await jget('sift/narr.json');return NARR||{};}
 async function loadChain(cc){const o=await jget('sift/chain_'+cc.slice(0,3)+'.json');return o?o[cc]:null;}
@@ -124,6 +125,7 @@ function chainNamesHtml(e){
 async function expandRow(e,det){
   if(det.dataset.loaded){det.classList.toggle('open');return;}
   det.dataset.loaded='1';
+  const d=await loadDet(e.place); if(d) Object.assign(e,d);
   const txt=await loadTxt(e.place);
   let h='';
   h+='<div class="full">'+esc(txt||e.matn)+'</div>';
@@ -181,7 +183,7 @@ function render(){
   const sel=document.getElementById('book');
   if(lm&&lm.books){
     sel.innerHTML=lm.books.map(b=>'<option value="'+b.bid+'">'+esc(b.name)+' ('+b.count+')</option>').join('');
-    curBid=lm.books[0].bid; sel.value=curBid;
+    curBid=lm.books.some(b=>b.bid==='1681')?'1681':lm.books[0].bid; sel.value=curBid;
   }
   loadBook(curBid);
 })();
