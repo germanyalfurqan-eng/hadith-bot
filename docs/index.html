@@ -577,7 +577,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v422';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v423';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2202,7 +2202,7 @@ function openBook(bookId, startPg){
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='bookModal';
     // M318 (редизайн по совету GPT, R31): компакт-шапка · тогглы инструментов · текст с книжной типографикой · sticky-низ листания
     m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0;padding-bottom:0;display:flex;flex-direction:column;max-height:92vh">'
-      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 6px;padding:11px 16px 8px;border-bottom:1px solid var(--border)"><button class="mini" id="bookBack" style="flex:none;border:1px solid var(--btn);color:var(--link);font-weight:700" title="Вернуться к результатам поиска">← назад</button><b id="bookTitle" style="font-size:14px;line-height:1.35;flex:1;min-width:0">📖 Книга</b><button class="mini" id="bookClose" style="flex:none">✕</button></div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 6px;padding:11px 16px 8px;border-bottom:1px solid var(--border)"><button class="mini" id="bookBack" style="flex:none;border:1px solid var(--btn);color:var(--link);font-weight:700" title="Вернуться к результатам поиска">← назад</button><b id="bookTitle" style="font-size:14px;line-height:1.35;flex:1;min-width:0">📖 Книга</b><span style="display:flex;gap:3px;flex:none;align-items:center"><button class="mini" id="bkFM" title="Меньше шрифт" style="padding:3px 9px;font-weight:700;font-size:13px">А−</button><button class="mini" id="bkFP" title="Больше шрифт" style="padding:3px 9px;font-weight:700;font-size:13px">А+</button></span><button class="mini" id="bookClose" style="flex:none">✕</button></div>'
       +'<div id="bookNav" style="display:flex;gap:6px;align-items:center;justify-content:center;margin-bottom:6px;flex-wrap:wrap"></div>'
       +'<div id="bookText" style="direction:rtl;text-align:right;font-size:19px;line-height:2.1;text-align:justify;font-family:\'Noto Naskh Arabic\',\'Amiri\',\'Traditional Arabic\',\'Scheherazade New\',serif;border:1px solid var(--border);border-radius:10px;padding:14px 15px;flex:1;min-height:30vh;overflow:auto"></div>'
       +'<div id="bookBotBar" style="position:sticky;bottom:0;z-index:20;background:var(--card);margin:6px -16px 0;padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap"></div>'
@@ -2211,6 +2211,10 @@ function openBook(bookId, startPg){
     m.querySelector('#bookClose').onclick=()=>{ m.style.display='none'; };
     m.querySelector('#bookBack').onclick=()=>{ m.style.display='none'; };   // M419: «← назад» = вернуться к результатам (модал поверх, они на месте)
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+    // TB: регулятор шрифта читалки книги (А−/А+) — как в Коране, свой размер bkFontScale, сохраняется
+    const _bkf=(d)=>{ cfg.bkFontScale=Math.min(2.4,Math.max(0.7,Math.round(((cfg.bkFontScale||1)+d)*100)/100)); saveCfg(cfg); _applyBkFont(); try{toast('🔤 Шрифт книги: '+Math.round(cfg.bkFontScale*100)+'%');}catch(e){} };
+    m.querySelector('#bkFM').onclick=()=>_bkf(-0.12);
+    m.querySelector('#bkFP').onclick=()=>_bkf(0.12);
   }
   // 📗 cfg.shLink==='reader': ссылка на Шамилю В ШАПКЕ читалки книги (вариант из Настроек, M451)
   try{ let sr=m.querySelector('#bookShamRow');
@@ -2220,8 +2224,10 @@ function openBook(bookId, startPg){
       sr.innerHTML='<span class="shamLink" data-b="'+esc(id)+'" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:#bfe3cf;border:1px solid #2e7d5a;border-radius:4px;padding:2px 8px;background:rgba(46,125,90,.10)"><b style="font-family:Georgia,serif;font-size:13px">ش</b> Шамела ↗</span>';
     } else if(sr) sr.remove();
   }catch(e){}
-  m.style.display='flex'; _bookLoad();
+  m.style.display='flex'; _bookLoad(); _applyBkFont();
 }
+// TB: применить размер шрифта читалки книги к #bookText (база 19px × bkFontScale) — как регулятор Корана
+function _applyBkFont(){ try{ const t=document.getElementById('bookText'); if(t) t.style.fontSize=Math.round(19*(cfg.bkFontScale||1))+'px'; }catch(e){} }
 // M318: тема текста читалки (тёмная / сепия / чёрная-AMOLED) — на контейнере текста
 function _bkApplyTheme(tEl){
   const th=cfg.bkTheme||'dark';
