@@ -482,6 +482,11 @@
       <div class="ah"><div><div class="at">🔐 Доступы (кто что видит)</div><div class="ad">Кому открыт вход, перевод, нейро, бот. Главный рубильник «ВСЁ ВСЕМ».</div></div>
         <button class="go" id="accBtn" style="padding:6px 12px">Открыть</button></div>
     </div>
+    <!-- TB-24: тумблер кнопки «Поделиться местом» (ссылка светит github-адрес — скрыть при показе экрана) -->
+    <div class="accf">
+      <div class="ah"><div><div class="at">📤 Кнопка «Поделиться местом»</div><div class="ad">Ссылка ведёт на github-адрес сайта. Скрой кнопку у себя, когда показываешь экран.</div></div>
+        <button class="go" id="shareTgl" style="padding:6px 12px" onclick="toggleShareHdr()">…</button></div>
+    </div>
     <!-- M428: ЕДИНЫЙ журнал заявок (бот TB + апп TA + чат M) из req_status.json — синхронизирован с деплоями -->
     <div class="accf">
       <div class="ah"><div><div class="at">📋 Журнал заявок (полный)</div><div class="ad">Все коды: M (чат) · TB (бот) · TA (апп). Статусы, причины, сроки — обновляется с каждым деплоем.</div></div>
@@ -572,7 +577,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v417';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v418';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1382,8 +1387,15 @@ document.getElementById('selNone').onclick=()=>{ selCols.clear(); renderCols(); 
 var _mm=document.getElementById('moreModes'); if(_mm) _mm.onclick=()=>{ const b=document.getElementById('modesMore'); const open=b.style.display==='none'; b.style.display=open?'flex':'none'; _mm.textContent=open?'⚙️ свернуть ▴':'⚙️ ещё ▾'; _mm.classList.toggle('on',open); };
 var _hb=document.getElementById('histHdr'); if(_hb) _hb.onclick=()=>openHistory();           // M462 (TB-20: вверху, возле настроек)
 var _sb=document.getElementById('shareHdr'); if(_sb) _sb.onclick=()=>shareCurrent();         // M463 (TB-20)
-// TB-24: «Поделиться» пока ТОЛЬКО владельцу (ссылка светит github.io — сайт юзерам пока не показываем)
-try{ if(_sb && !(typeof isOwner!=='undefined'&&isOwner)) _sb.style.display='none'; }catch(e){}
+// TB-24: «Поделиться» ТОЛЬКО владельцу (ссылка светит github.io) + тумблер скрытия у себя (показ экрана)
+function applyShareHdr(){ try{ if(!_sb) return;
+  var owner=(typeof isOwner!=='undefined'&&isOwner);
+  var off=localStorage.getItem('shareHdrOff')==='1';
+  _sb.style.display=(owner&&!off)?'block':'none';
+  var tg=document.getElementById('shareTgl'); if(tg) tg.textContent=off?'Скрыта — показать':'Видна — скрыть';
+}catch(e){} }
+function toggleShareHdr(){ try{ localStorage.setItem('shareHdrOff', localStorage.getItem('shareHdrOff')==='1'?'0':'1'); applyShareHdr(); }catch(e){} }
+applyShareHdr();
 var _vb=document.getElementById('verBadge'); if(_vb) _vb.textContent=APPVER;
 /* Удобно убрать клавиатуру: тап по пустому месту (не по полю/кнопке) — снимает фокус → клавиатура прячется */
 document.addEventListener('pointerdown',function(e){ const ae=document.activeElement;
