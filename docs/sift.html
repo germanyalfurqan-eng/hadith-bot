@@ -19,6 +19,9 @@ main{padding:8px}
 .row{background:var(--card);border:1px solid var(--bd);border-radius:10px;margin:6px 0;padding:8px 10px}
 .head{display:flex;align-items:center;gap:8px;cursor:pointer}
 .num{background:#243049;border-radius:6px;padding:2px 8px;font-weight:700;font-size:13px;white-space:nowrap}
+.code{background:#1c3a2a;border:1px solid #2f6b46;color:#7df0a8;border-radius:6px;padding:2px 7px;font-size:12px;font-weight:700;white-space:nowrap;font-family:monospace}
+.tahrij{direction:rtl;text-align:right;font-size:13px;color:#cfe;background:#10221a;border:1px solid #244;border-radius:7px;padding:5px 8px;margin:3px 0;line-height:1.7}
+.ids{font-family:monospace;font-size:11px;color:#9cf;direction:ltr;word-break:break-all}
 .vd{font-size:12px;color:var(--mut);flex:1}
 .vd .v{color:var(--ok)}
 .vd .b{color:var(--warn)}
@@ -87,20 +90,26 @@ function render(){
    shown.map(e=>{
     const vClass = e.suspect?'b':(e.versions>1?'v':'');
     const rowStyle = e.suspect?' style="border-color:var(--bad)"':'';
-    const fams = (e.fam||[]).map(p=>{
-      const sel = p===e.place; return '<span class="tag s"'+(sel?' style="border-color:#54a0ff;color:#54a0ff"':'')+'>'+esc(p)+'</span>';
+    const fams = (e.fam_codes||(e.fam||[]).map(p=>[p,''])).map(pc=>{
+      const p=pc[0], code=pc[1]||''; const sel = p===e.place;
+      return '<span class="tag s"'+(sel?' style="border-color:#54a0ff;color:#54a0ff"':'')+'>'+esc(p)+(code?' <b style="color:#7df0a8">'+esc(code)+'</b>':'')+'</span>';
     }).join('');
+    const tahrijHtml = (e.tahrij&&e.tahrij.length)? e.tahrij.map(t=>'<div class="tahrij">'+esc(t)+'</div>').join('') : '<span style="color:var(--mut);font-size:12px">тахридж учёных не приложен (одиночка/прямой матн)</span>';
+    const idsHtml = (e.chain_ids&&e.chain_ids.length)? '<span class="ids">'+e.chain_ids.join(' · ')+'</span>' : '<span style="color:var(--mut);font-size:11px">цепь id Мактабы не найдена</span>';
     const bords = (e.border||[]).map(b=>'<span class="tag w">'+esc(b.place)+' '+esc(b.coll)+' · текст '+Math.round((b.ov||0)*100)+'%</span>').join('');
     return '<div class="row"'+rowStyle+'>'+
       '<div class="head" onclick="this.parentNode.querySelector(\'.det\').classList.toggle(\'open\')">'+
         '<span class="num">'+esc(e.book)+' '+e.n+'</span>'+
+        (e.code?'<span class="code">'+esc(e.code)+'</span>':'')+
         '<span class="vd"><span class="'+vClass+'">'+esc(e.verdict)+'</span></span>'+
         (e.hukm?'<span class="hukm">'+esc(e.hukm)+'</span>':'')+
       '</div>'+
       '<div class="matn">'+esc(e.matn)+'…</div>'+
       '<div class="chain">'+chainHtml(e.chain)+'</div>'+
       '<div class="det">'+
-        '<div class="lbl">Семья (версии одного случая) — '+(e.versions)+':</div><div class="fam">'+fams+'</div>'+
+        '<div class="lbl">✅ Одобренный тахридж (по чему слил):</div>'+tahrijHtml+
+        '<div class="lbl" style="margin-top:5px">Передатчики — id Мактабы (موسوعة, снизу-вверх, последний=автор):</div><div style="margin:2px 0">'+idsHtml+'</div>'+
+        '<div class="lbl" style="margin-top:5px">Семья (версия V · путь P каждого) — '+(e.versions)+':</div><div class="fam">'+fams+'</div>'+
         (e.nborder? '<div class="lbl">⚠ Спорные ниточки (мой разбор + гугл):</div><div class="bord">'+bords+(e.nborder>(e.border||[]).length?' <span style="color:var(--mut)">…+'+(e.nborder-(e.border||[]).length)+'</span>':'')+'</div>':'')+
         (e.hdnoise? '<div class="lbl" style="margin-top:4px">шум hadeeth.db (чужой № на странице): '+e.hdnoise+'</div>':'')+
       '</div>'+
