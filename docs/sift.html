@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>📖 Штудирование хадисов — живой журнал выверки</title>
+<style>
+:root{--bg:#0f1420;--card:#19202e;--bd:#2a3548;--tx:#e8eef7;--mut:#8da0bb;--ok:#37d67a;--warn:#ffb454;--bad:#ff6b6b;--ar:#ffe9b0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px}
+header{position:sticky;top:0;background:#121826;border-bottom:1px solid var(--bd);padding:10px 12px;z-index:5}
+h1{margin:0 0 6px;font-size:16px}
+.stats{display:flex;gap:8px;flex-wrap:wrap;font-size:12px}
+.pill{background:var(--card);border:1px solid var(--bd);border-radius:20px;padding:3px 10px}
+.pill b{color:var(--ok)}
+.bar{height:5px;background:#222c3e;border-radius:3px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#37d67a,#54a0ff)}
+main{padding:8px}
+.row{background:var(--card);border:1px solid var(--bd);border-radius:10px;margin:6px 0;padding:8px 10px}
+.head{display:flex;align-items:center;gap:8px;cursor:pointer}
+.num{background:#243049;border-radius:6px;padding:2px 8px;font-weight:700;font-size:13px;white-space:nowrap}
+.vd{font-size:12px;color:var(--mut);flex:1}
+.vd .v{color:var(--ok)}
+.vd .b{color:var(--warn)}
+.matn{direction:rtl;text-align:right;font-size:16px;color:var(--ar);margin:6px 0;line-height:1.7;font-family:'Traditional Arabic','Scheherazade',serif}
+.chain{direction:rtl;text-align:right;font-size:13px;color:#bcd;margin:2px 0 6px;line-height:1.8}
+.chain .a{color:#7fd1ff}
+.chain .au{color:var(--ok);font-weight:700}
+.det{display:none;margin-top:6px;border-top:1px dashed var(--bd);padding-top:6px}
+.det.open{display:block}
+.fam,.bord{font-size:12px;margin:3px 0}
+.tag{display:inline-block;background:#223;border:1px solid var(--bd);border-radius:5px;padding:1px 6px;margin:2px;font-size:11px}
+.tag.s{border-color:#2f6b46}
+.tag.w{border-color:#7a5a23;color:var(--warn)}
+.lbl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.hukm{color:var(--ok);font-size:12px}
+.ref{font-size:11px;color:var(--mut);margin-top:8px;text-align:center}
+button{background:#243049;color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:5px 12px;font-size:13px}
+input{background:#0c111b;color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:6px 10px;font-size:13px;width:120px}
+</style>
+</head>
+<body>
+<header>
+  <h1>📖 Штудирование хадисов — живой журнал выверки <span style="color:var(--mut);font-size:12px">M499</span></h1>
+  <div class="stats" id="stats">загрузка…</div>
+  <div class="bar"><i id="bar" style="width:0"></i></div>
+  <div style="margin-top:6px;display:flex;gap:6px;align-items:center">
+    <input id="q" placeholder="№ или слово…" oninput="render()">
+    <button onclick="reload()">⟳ Обновить</button>
+    <label style="font-size:12px;color:var(--mut)"><input type="checkbox" id="auto" style="width:auto" checked> авто 30с</label>
+  </div>
+</header>
+<main id="list"></main>
+<script>
+let DATA=[];
+function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+function chainHtml(ch){
+  if(!ch||!ch.length) return '<span style="color:var(--mut)">цепь Мактабы не найдена</span>';
+  return ch.map((n,i)=>{
+    let cls = i===ch.length-1?'au':'a';
+    let role = i===0?' <small style="color:var(--mut)">(сахаби)</small>': (i===ch.length-1?' <small style="color:var(--mut)">(автор)</small>':'');
+    return '<span class="'+cls+'">'+esc(n)+'</span>'+role;
+  }).join(' <span style="color:var(--mut)">←</span> ');
+}
+function reload(){
+  fetch('sift_log.json?_='+Date.now()).then(r=>r.json()).then(d=>{DATA=d;render()}).catch(e=>{document.getElementById('stats').textContent='нет данных'});
+}
+function render(){
+  const q=(document.getElementById('q').value||'').trim();
+  let rows=DATA;
+  if(q){ rows=DATA.filter(e=> (''+e.n).includes(q) || (e.matn||'').includes(q) || (e.book||'').includes(q)); }
+  const susp=DATA.filter(e=>e.suspect).length;
+  const fam=DATA.filter(e=>e.versions>1&&!e.suspect).length;
+  const bord=DATA.reduce((a,e)=>a+(e.nborder||0),0);
+  const single=DATA.filter(e=>e.versions<=1).length;
+  document.getElementById('stats').innerHTML=
+    '<span class="pill">разобрано <b>'+DATA.length+'</b></span>'+
+    '<span class="pill">чистых семей <b>'+fam+'</b></span>'+
+    '<span class="pill">одиночек '+single+'</span>'+
+    '<span class="pill">⚠ крупных на проверке <span style="color:var(--bad)">'+susp+'</span></span>'+
+    '<span class="pill">спорных ниточек <span style="color:var(--warn)">'+bord+'</span></span>';
+  const last=DATA.length?DATA[DATA.length-1].n:0;
+  document.getElementById('bar').style.width=Math.min(100,(DATA.length/120*100))+'%';
+  const L=document.getElementById('list');
+  L.innerHTML = rows.slice().reverse().map(e=>{
+    const vClass = e.suspect?'b':(e.versions>1?'v':'');
+    const rowStyle = e.suspect?' style="border-color:var(--bad)"':'';
+    const fams = (e.fam||[]).map(p=>{
+      const sel = p===e.place; return '<span class="tag s"'+(sel?' style="border-color:#54a0ff;color:#54a0ff"':'')+'>'+esc(p)+'</span>';
+    }).join('');
+    const bords = (e.border||[]).map(b=>'<span class="tag w">'+esc(b.place)+' '+esc(b.coll)+' · текст '+Math.round((b.ov||0)*100)+'%</span>').join('');
+    return '<div class="row"'+rowStyle+'>'+
+      '<div class="head" onclick="this.parentNode.querySelector(\'.det\').classList.toggle(\'open\')">'+
+        '<span class="num">'+esc(e.book)+' '+e.n+'</span>'+
+        '<span class="vd"><span class="'+vClass+'">'+esc(e.verdict)+'</span></span>'+
+        (e.hukm?'<span class="hukm">'+esc(e.hukm)+'</span>':'')+
+      '</div>'+
+      '<div class="matn">'+esc(e.matn)+'…</div>'+
+      '<div class="chain">'+chainHtml(e.chain)+'</div>'+
+      '<div class="det">'+
+        '<div class="lbl">Семья (версии одного случая) — '+(e.versions)+':</div><div class="fam">'+fams+'</div>'+
+        (e.nborder? '<div class="lbl">⚠ Спорные ниточки (мой разбор + гугл):</div><div class="bord">'+bords+(e.nborder>(e.border||[]).length?' <span style="color:var(--mut)">…+'+(e.nborder-(e.border||[]).length)+'</span>':'')+'</div>':'')+
+        (e.hdnoise? '<div class="lbl" style="margin-top:4px">шум hadeeth.db (чужой № на странице): '+e.hdnoise+'</div>':'')+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+function reload2(){ reload(); }
+reload();
+setInterval(()=>{ if(document.getElementById('auto').checked) reload(); },30000);
+</script>
+</body>
+</html>
