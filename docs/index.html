@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v416</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v417</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -572,7 +572,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v416';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v417';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3120,6 +3120,11 @@ function cardHadith(d,groups){
   meta.innerHTML+=authBadge(code, h.grade, (h.num||h.n));   // достоверность: НАША оценка (по номеру) → иначе оценка источника
   try{ ourHukmBadge(code, (h.num||h.n), meta, card); }catch(e){}   // M341: хукм НАШИХ мухаддисов (hadis_isnad) — ПЕРВЫМ приоритетом, с причинами и ссылками
   if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp){ sp.style.cursor='pointer'; sp.onclick=()=>openReader(code,String(h.num)); } }
+  // Муслим: доп. номера (сквозной по всей книге + внутри раздела) — мелко, серым, НЕ путая с основным №
+  if(code==='muslim'){ (async()=>{ try{ const nm=await _muslimNums(h.num); if(nm){ const sp=meta.querySelector('.src');
+    if(sp){ const ex=document.createElement('span'); ex.style.cssText='font-size:10px;color:var(--hint);margin:0 6px 0 8px;white-space:nowrap;opacity:.8';
+      ex.title='Основной номер хадиса — №'+h.num+' (нумерация Абд аль-Баки, эталон учёных). Дополнительно для справки: сквозной номер по всей книге и номер хадиса внутри раздела — не путать с основным.';
+      ex.textContent='ⓘ сквозной '+nm[0]+' · в разделе '+nm[1]; sp.parentNode.insertBefore(ex, sp.nextSibling); } } }catch(e){} })(); }
   // «في المهيمن №…» больше НЕ инлайн-бейджем — показывается в «🔗 Где ещё передаётся».
   addTr(meta,card,h.text,null,{k:'h|'+code+'|'+h.num,type:'h',coll:arOf(code),label:arOf(code)+' №'+h.num,text:(h.text||'').slice(0,200)}); card.appendChild(meta); return card;
 }
@@ -7336,6 +7341,9 @@ async function doTashkeel(text,out,btn,ref){
 // isnad.link deep-link: наш код сборника → slug книги + глава по номеру хадиса (карта isnad/chapters.json)
 const ISNAD_SLUG={bukhari:'sahih-al-buhari',muslim:'sahih-muslim',abudawud:'sunan-abu-dauda',tirmidhi:'sunan-at-tirmizi',nasai:'sunan-an-nasai',ibnmajah:'sunan-ibn-madzhah'};
 let _isnadCh=undefined;
+// тройная нумерация Муслима: основа = №хадиса (Абд аль-Баки, как в h.num), доп. = сквозной + внутри-раздела
+let _mNums=undefined;
+async function _muslimNums(num){ if(_mNums===undefined){ try{ const r=await fetch('./isnad/muslim_nums.json?v='+APPVER); _mNums=r.ok?await r.json():{}; }catch(e){ _mNums={}; } } return _mNums[String(num)]||null; }
 async function _isnadUrl(source,num){ const slug=ISNAD_SLUG[source]; if(!slug) return null; num=parseInt(num); if(!num) return null;
   if(_isnadCh===undefined){ try{ const r=await fetch('./isnad/chapters.json?v='+APPVER); _isnadCh=r.ok?await r.json():{}; }catch(e){ _isnadCh={}; } }
   const chs=(_isnadCh[source]||[]); let best=null;
