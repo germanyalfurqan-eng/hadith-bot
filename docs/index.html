@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v417</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v425</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -413,7 +413,7 @@
       </div>
     </div>
     <div id="readView" style="display:none">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;position:sticky;top:46px;background:var(--card);z-index:5;padding:5px 0">
         <button class="mini" id="readBack">← к выбору</button>
         <span class="hint" id="readPos" style="margin:0"></span>
       </div>
@@ -577,7 +577,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v424';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v425';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4863,7 +4863,9 @@ async function doTakhrij(text, ref, out, btn, force){
     btn.disabled=false; btn.textContent=prev; return;
   }
   try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr()]); }catch(e){}
-  const pl=await _thPlaces(su); if(aborted()) return;
+  let pl=await _thPlaces(su); if(aborted()) return;
+  // Сессия21: НЕ показывать сам этот хадис (та же книга+№) как «другую версию» — это и есть он сам (жалоба владельца: «тахридж Бухари его же изданием»)
+  if(ref&&ref.source!=null){ const rs=String(ref.source), rn=String(ref.num); pl=pl.filter(p=>!(String(p[0])===rs&&String(p[1])===rn)); }
   tkSec.innerHTML='';
   const head=document.createElement('div'); head.style.cssText='font-size:12px;color:#9fd3a8;margin:2px 0 4px';
   head.innerHTML='🌿 Наш тахридж: уникальный хадис <b>№'+su+'</b>'+(pl.length>1?(' · <b>'+_ruVers(pl.length)+'</b> по сборникам (клик по № — читалка):'):' — других версий среди 64 печатей не найдено.');
@@ -4904,11 +4906,18 @@ function isnadNarrators(text){
 // фильтр имён для подсветки/древа (вопрос владельца «не все передатчики кликабельны»):
 // бн/ابن/абу/абд (полные имена) ИЛИ одиночные имена и лакабы >=4 букв (الأعمش/الليث/شعبة/معمر) —
 // раньше одиночные отсекались и оставались без кнопки. Служебные слова не пропускаем.
+// Сессия21: опознан ли кандидат как РАВИЙ в موسوعة (по первому слову имени). null = индекс ещё не загружен (не блокируем).
+function _narrIndexed(cn){ const S=window._narrKnownW; if(!S){ try{ loadNarrNames&&loadNarrNames(); }catch(e){} return null; } if(!S.size) return null;
+  const F=window._narrKnownF;
+  if((cn||'').indexOf(' ')>=0) return !!(F&&(F.has(cn)||F.has(cn.replace(/^ال/,''))));   // составное (رحمة الله) — только ТОЧНОЕ полное имя
+  return S.has(cn)||S.has(cn.replace(/^ال/,'')); }
 function _keepNarr(nm){ const t=(nm||'').trim();
   if(/ بن | ابن /.test(' '+t+' ')||/^(?:أبو|أبي|أبا|أم|عبد|ابن)\s/.test(t+' ')) return true;
   const w=t.split(/\s+/).filter(Boolean);
   if(w.length<=2){ const a=t.replace(/[^ء-ي]/g,'');
-    if(a.length>=4 && !/^(?:قال|قالا|قالت|كان|ثنا|نا|ثني|عن|أن|إن|ثم|وقد|قد|به|له|عنه|عنها|كلهم|جميعا)$/.test(t)) return true; }
+    if(a.length>=4 && !/^(?:قال|قالا|قالت|كان|ثنا|نا|ثني|عن|أن|إن|ثم|وقد|قد|به|له|عنه|عنها|كلهم|جميعا|واحد|واحده|رحمه|صدور|قدميه|قدمي|ثوب|يقول|سمعت|اخبرنا|حدثنا)$/.test(t)){
+      if(_narrIndexed(_narrCanon(t))===false) return false;   // не равий موسوعة (صدور/رحمة/واحد) → не подсвечивать
+      return true; } }
   return false;
 }
 // Подсветить передатчиков ПРЯМО в тексте иснада (клик по имени → биография). Безопасно: ходим по текстовым узлам.
@@ -5021,6 +5030,8 @@ function loadNarrNames(){ if(_narrNames) return Promise.resolve(_narrNames); if(
     // M381: расширенный индекс форм (كنية/نسب: أبو مالك الأشعري، الحسن البصري…) — уникальные вливаются в общий
     try{ const r2=await fetch('./narrators_names2.json'); if(r2.ok){ const n2=await r2.json();
       (n2.u||[]).forEach(p=>_narrNames.push(p)); window._narrMulti=n2.m||[]; } }catch(e){}
+    // Сессия21: набор ПЕРВЫХ слов имён равиев موسوعة — проверка подсветки (واحد/رحمة/صدور — НЕ имена → не метим)
+    try{ const S=new Set(), F=new Set(); _narrNames.forEach(p=>{ const nm=p[0]||''; if(!nm) return; F.add(nm); const f=nm.split(' ')[0]; if(f&&f.length>1){ S.add(f); S.add(f.replace(/^ال/,'')); } }); window._narrKnownW=S; window._narrKnownF=F; }catch(e){}
     return _narrNames; }).catch(()=>{_narrNames=[];return _narrNames;}); return _narrNamesP; }
 function _narrCanon(s){ s=(s||'').replace(/[ً-ْـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه'); return s.replace(/\s+/g,' ').trim(); }
 async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.length) return null; const cn=_narrCanon(name); if(cn.length<4) return null;
