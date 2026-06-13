@@ -577,7 +577,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v420';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v421';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -6854,7 +6854,11 @@ async function openIsnadTree(text, out, ref){
   try{ await loadNarrNames(); }catch(e){}
   const nodes=[];
   for(const nm of names){ let id=null; try{ id=await _narrLookup(nm); }catch(e){} let cc=null; if(id!=null){ try{ cc=await _narrCard(id); }catch(e){} }
-    nodes.push({nm, rankH:cc?cc[5]:'', gr:_narrGrade(cc?cc[5]:'', cc?cc[6]:'')}); }
+    let gr=_narrGrade(cc?cc[5]:'', cc?cc[6]:''); const tnm=(nm||'').trim();
+    // TB-ТРЕВОГА: голая кунья (أبو/أم X, ≤3 слов) опознана как СЛАБАЯ (r≤1) — НЕНАДЁЖНО (десятки однофамильцев, сахаби спутан
+    // с чужим слабым). Сахаби — عدول, не «ضعيف». Не клеймим: показываем «нет оценки» (лучше неизвестно, чем ложная слабость).
+    if(gr.r!=null && gr.r<=1 && /^(أبو|أبي|أم)\s/.test(tnm) && tnm.split(/\s+/).length<=3){ gr={g:'нет оценки (кунья — неоднозначно)', c:'#95a5a6', bg:'rgba(149,165,166,.1)', r:null}; cc=null; }
+    nodes.push({nm, rankH:cc?cc[5]:'', gr}); }
   // общая оценка цепочки = по слабейшему звену (хадис крепок настолько, насколько крепок самый слабый равий)
   const known=nodes.filter(n=>n.gr.r!=null); const unknown=nodes.length-known.length;
   let verd='';
