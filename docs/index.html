@@ -577,7 +577,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v421';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v422';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5569,7 +5569,7 @@ async function dzChainInto(host, bid, num){
       if(info){
         const idn=codes.filter(c=>typeof c==='number').length;
         const ci=document.createElement('div'); ci.style.cssText='margin-top:7px;font-size:11px;color:var(--hint);display:flex;gap:10px;align-items:center;flex-wrap:wrap';
-        ci.innerHTML='<span title="Вечный код этой цепи передачи (M449) — одинаков у всех хадисов с этим иснадом">⛓ Код цепи: <b style="color:#bcd0ff;font-family:monospace">'+esc(info.cid)+'</b></span>'
+        ci.innerHTML='<span title="Вечный код этой цепи передачи (M449) — одинаков у всех хадисов с этим иснадом">⛓ Код цепи: <b style="color:#bcd0ff;font-family:monospace;cursor:pointer;text-decoration:underline" onclick="openIsnadBase(\''+esc(info.cid)+'\')" title="Открыть таблицу цепей и найти эту цепь — где ещё встречается">'+esc(info.cid)+' ↗</b></span>'
           +'<span title="Сколько звеньев цепи опознано по базе равиев (остальные — U-коды коротких форм, ждут дизамбигуации Э1.1)" style="color:'+(idn===codes.length?'#9fd3a8':'#e0b34a')+'">опознано '+idn+'/'+codes.length+'</span>';
         box.appendChild(ci);
         // M475: сводка подтверждённых классикой связей (تهذيب الكمال) среди смежных опознанных звеньев
@@ -5602,16 +5602,45 @@ async function dzChainInto(host, bid, num){
 }
 /* ===== ⛓ M449: БАЗА ИСНАДОВ — браузер самых частых цепей передачи (наглядная «база иснадов» из реестра 230k) ===== */
 let _topChains=null, _chMeta=undefined; const _chPageCache={};
-async function openIsnadBase(){
+// Поиск в таблице цепей: по коду цепи (C…) → показать саму цепь + где встречается; по имени → резолв id равия.
+async function ibDoSearch(q, focusEl, listEl){
+  focusEl.innerHTML=''; if(!q) return;
+  if(/^C[0-9a-fA-F]{6,}/.test(q)){   // код цепи
+    let rec=null; try{ rec=await _regRec(q); }catch(e){}
+    if(!rec){ focusEl.innerHTML='<div class="hint">Цепь '+esc(q)+' не найдена в реестре.</div>'; return; }
+    const seq=rec.s||rec.seq||[]; const idn=seq.filter(x=>typeof x==='number').length;
+    const d=document.createElement('div'); d.style.cssText='border:1px solid #6c5ce7;border-radius:11px;padding:10px;margin-bottom:9px;background:rgba(108,92,231,.09)';
+    d.innerHTML='<div style="font-size:12px;color:#c9b8ff;margin-bottom:6px">⛓ Эта цепь <b style="font-family:monospace">'+esc(q)+'</b> · <span style="color:'+(idn===seq.length?'#9fd3a8':'#e0b34a')+'">опознано '+idn+'/'+seq.length+'</span> · <b style="color:#9fd3a8">📊 '+rec.n+' хадис'+_pluralHadith(rec.n)+'</b></div>';
+    const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl'; d.appendChild(row);
+    try{ _dzChips(seq, row, rec.f||rec.forms); }catch(e){}
+    focusEl.appendChild(d);
+    return;
+  }
+  // имя передатчика → id (Ф-04)
+  focusEl.innerHTML='<div class="hint">⏳ опознаю «'+esc(q)+'»…</div>';
+  let id=null; try{ await loadNarrNames(); id=await _narrLookup(q); }catch(e){}
+  if(id==null){ focusEl.innerHTML='<div class="hint">Передатчик «'+esc(q)+'» не опознан — уточни имя (или это короткая форма, ждёт дизамбигуации).</div>'; return; }
+  let cc=null; try{ cc=await _narrCard(id); }catch(e){}
+  focusEl.innerHTML='<div style="border:1px solid #2e9b5b;border-radius:11px;padding:10px;margin-bottom:9px;background:rgba(46,155,91,.08)"><div style="direction:rtl;text-align:right;font-weight:700;color:#bff5d4">👤 '+esc(cc?cc[1]:q)+' <span style="font-size:11px;color:var(--hint)">id '+id+'</span></div>'
+    +'<div style="font-size:12px;color:var(--hint);margin-top:3px">Чтобы увидеть ВСЕ цепи и хадисы с этим передатчиком — режим <b>«🔗 Цепь»</b> или <b>«👤 Передатчик»</b> в поиске (добавь его чипом). Здесь ищи по коду цепи (C…).</div></div>';
+}
+async function openIsnadBase(focusCid){
   let m=document.getElementById('isnadBaseModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='isnadBaseModal';
     m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 8px;padding:13px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:14.5px">📊 Таблица цепей передачи</b><button class="mini" id="ibClose" style="flex:none">закрыть ✕</button></div>'
-      +'<div class="hint" style="font-size:11.5px;margin-bottom:6px">Все цепи передачи (иснады) реестра M449, по убыванию частоты — листай сплошняком. Тап по передатчику — карточка; «где встречается» — хадисы с этой цепью. Формы передачи (حدثنا/عن) — этап Э-Ц2.</div>'
+      +'<div class="hint" style="font-size:11.5px;margin-bottom:6px">Все цепи передачи (иснады) реестра M449, по убыванию частоты. Тап по передатчику — карточка; «где встречается» — хадисы с этой цепью.</div>'
+      +'<input id="ibSearch" placeholder="🔍 Поиск: код цепи (C…) или имя передатчика (الأعمش)…" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:9px;padding:8px 11px;background:var(--bg);color:var(--text);font-size:13px;margin-bottom:6px">'
+      +'<div id="ibFocus"></div>'
       +'<label style="display:flex;gap:6px;align-items:center;cursor:pointer;font-size:12px;color:var(--text);margin-bottom:4px"><input type="checkbox" id="ibClean"> ✓ только полностью опознанные цепи (все звенья = равии базы)</label>'
       +'<div id="ibInfo" class="hint" style="font-size:11px;margin-bottom:6px"></div>'
-      +'<div id="ibList" style="max-height:60vh;overflow:auto"></div></div>';
+      +'<div id="ibList" style="max-height:54vh;overflow:auto"></div></div>';
     document.body.appendChild(m); m.querySelector('#ibClose').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
+  // поиск по коду цепи / имени передатчика (Ф-04: резолв имени → id → цепи с ним)
+  const _ibS=m.querySelector('#ibSearch'); const _ibF=m.querySelector('#ibFocus');
+  _ibS.oninput=()=>{ clearTimeout(window._ibsT); window._ibsT=setTimeout(()=>ibDoSearch(_ibS.value.trim(), _ibF, m.querySelector('#ibList')), 350); };
+  _ibF.innerHTML='';
+  if(focusCid){ _ibS.value=focusCid; setTimeout(()=>ibDoSearch(focusCid, _ibF, m.querySelector('#ibList')), 60); }
   m.style.zIndex='10006'; m.style.display='flex';
   const list=m.querySelector('#ibList'), info=m.querySelector('#ibInfo');
   list.innerHTML='<div class="hint">⏳ загружаю реестр цепей…</div>';
