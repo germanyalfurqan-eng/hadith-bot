@@ -50,10 +50,10 @@ button{background:#243049;color:var(--tx);border:1px solid var(--bd);border-radi
 <header>
   <h1>📖 Штудирование хадисов <span style="color:var(--mut);font-size:12px">M499 · жми хадис</span></h1>
   <div class="stats" id="stats">загрузка…</div>
-  <div style="margin-top:6px;display:flex;gap:6px;align-items:center">
+  <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+    <select id="book" onchange="loadBook(this.value)" style="background:#0c111b;color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:6px 8px;font-size:13px"></select>
     <input id="q" placeholder="№ или слово…" oninput="render()">
-    <button onclick="reload()">⟳</button>
-    <label style="font-size:12px;color:var(--mut)"><input type="checkbox" id="auto" style="width:auto"> авто 30с</label>
+    <button onclick="loadBook(curBid)">⟳</button>
   </div>
 </header>
 <main id="list"></main>
@@ -140,7 +140,13 @@ async function expandRow(e,det){
   det.innerHTML=h; det.classList.add('open');
 }
 
-function reload(){ fetch('sift_log.json?_='+Date.now()).then(r=>r.json()).then(d=>{DATA=d;BYP={};d.forEach(e=>BYP[e.place]=e);render()}).catch(()=>{document.getElementById('stats').textContent='нет данных'}); }
+let curBid='1681';
+async function loadBook(bid){
+  curBid=bid; document.getElementById('list').innerHTML='<div class="ref">загрузка книги…</div>';
+  const d=await jget('sift/log_'+bid+'.json');
+  DATA=d||[]; BYP={}; DATA.forEach(e=>BYP[e.place]=e); render();
+}
+function reload(){ loadBook(curBid); }
 function render(){
   const q=(document.getElementById('q').value||'').trim();
   let rows=DATA;
@@ -169,8 +175,16 @@ function render(){
      '</div>';
    }).join('');
 }
-(async()=>{ META=(await jget('sift/meta.json'))||META; reload(); })();
-setInterval(()=>{if(document.getElementById('auto').checked)reload();},30000);
+(async()=>{
+  META=(await jget('sift/meta.json'))||META;
+  const lm=await jget('sift/log_meta.json');
+  const sel=document.getElementById('book');
+  if(lm&&lm.books){
+    sel.innerHTML=lm.books.map(b=>'<option value="'+b.bid+'">'+esc(b.name)+' ('+b.count+')</option>').join('');
+    curBid=lm.books[0].bid; sel.value=curBid;
+  }
+  loadBook(curBid);
+})();
 </script>
 </body>
 </html>
