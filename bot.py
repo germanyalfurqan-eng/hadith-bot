@@ -2541,10 +2541,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg = f"📖 {NAMES.get(collection, collection)}, №{number}\n\n"
             if ar:
                 msg += f"🔤 {ar}\n\n"
+            if not tr and ar:
+                tr = translate_matn(ar, owner=is_owner(update))   # нет готового перевода → ИИ-перевод (кэш) — чтобы у КАЖДОГО хадиса был красивый пост араб+рус (синхрон с приложением)
+                if tr: lang = "рус"
             if tr:
-                msg += f"🌍 ({lang}): {tr}\n"
-            elif collection == "muslim" and ar:
-                msg += "ℹ️ Арабский — по нумерации Абд аль-Баки (как в приложении и у учёных). Готовый русский перевод для этого номера ещё сверяется.\n"
+                msg += f"🌍 {tr}\n"
             if gr:
                 msg += f"\n📊 {gr}"
             msg += f"\n\n📚 {NAMES.get(collection, collection)}, №{number}"
