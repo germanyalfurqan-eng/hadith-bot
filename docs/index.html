@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v426</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v427</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -577,7 +577,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v426';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v427';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4757,7 +4757,7 @@ function addTr(meta,card,text,ayah,fav){
     const nbout=document.createElement('div');nbout.className='tr-out';
     nb.onclick=()=>{ if(nbout.dataset.loaded==='1'){ const vis=nbout.style.display!=='none'; nbout.style.display=vis?'none':'block'; try{hap('light');}catch(e){} return; } openIsnadTree(text, nbout, refOf(fav)); nbout.dataset.loaded='1'; };   // повторный клик — свернуть/развернуть; ref → Э2.2-карта версий
     meta.appendChild(nb); card.appendChild(nbout);
-    try{ autoHighlightNarr(text, card, nbout); }catch(e){} }   // A: подсветить передатчиков СРАЗУ (кликабельны без нажатия кнопки)
+    try{ autoHighlightNarr(text, card, nbout, refOf(fav)); }catch(e){} }   // A: подсветить передатчиков СРАЗУ (точно по таблице codif; кликабельны без нажатия кнопки)
   const fbb=document.createElement('button');fbb.className='tr-btn';fbb.textContent='✍️ Сообщить нам';fbb.title='Написать нам об ошибке/замечании';
   fbb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--link);padding:6px 10px';
   fbb.onclick=()=>openFeedback((fav&&fav.label)||'');
@@ -7285,8 +7285,34 @@ async function findKnownNames(text){
     } }
   return [...out];
 }
-// A: авто-подсветка передатчиков в карточке СРАЗУ при показе (лёгкое выделение, клик → карточка равия)
-function autoHighlightNarr(text, card, out){
+// Сессия21 (M500-интеграция): точные передатчики хадиса ИЗ таблицы кодификации (codif-шарды) — апп НЕ угадывает, а читает id таблицы.
+let _codifCache={};
+async function codifChain(bid,num){ const key=bid+'_'+Math.floor(+num/500);
+  if(!(key in _codifCache)){ try{ const r=await fetch('./codif/'+key+'.json?v='+APPVER); _codifCache[key]=r.ok?await r.json():null; }catch(e){ _codifCache[key]=null; } }
+  const m=_codifCache[key]; return m?(m[String(num)]||null):null; }
+function _codifPlace(ref){ if(!ref) return null; const b=ref.source!=null?ref.source:(ref.bid!=null?ref.bid:null); if(b==null||ref.num==null) return null; return {bid:String(b), num:String(ref.num)}; }
+// подсветка ТОЛЬКО реальных передатчиков этого хадиса (из таблицы), клик → ИМЕННО их карточка (id таблицы, не угадка типа 224→215)
+async function _codifHighlight(text, card, out, place){
+  const rec=await codifChain(place.bid, place.num); if(!rec||!rec.i||!rec.i.length) return false;
+  const tbl=[]; for(const x of rec.i){ if(x==='?') continue; let c=null; try{ c=await _narrCard(x); }catch(e){} if(c&&c[1]) tbl.push({id:String(x), full:c[1], cf:_narrCanon(c[1])}); }
+  if(!tbl.length) return false;
+  let forms=[]; try{ forms=isnadNarrators(text)||[]; }catch(e){}
+  const f2full={}, names=[];
+  for(const F of forms){ const CF=_narrCanon(F); if(CF.length<3) continue;
+    let hit=null; for(const t of tbl){ if(t.cf===CF || t.cf.indexOf(CF+' ')===0 || (CF.split(' ').length>=2 && CF.indexOf(t.cf+' ')===0)){ hit=t; break; } }
+    if(hit){ f2full[F]=hit.full; names.push(F); } }
+  if(!names.length) return false;
+  setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
+    highlightNarratorsInDiv(ad, names, nm=>{ const full=f2full[nm]||nm; out.style.display='block'; showNarratorBio(full,out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }); }
+    try{ highlightRelationalInDiv(ad); }catch(e){} }); }catch(e){} }, 0);
+  return true;
+}
+// A: авто-подсветка передатчиков в карточке. Сперва — ТОЧНАЯ по таблице (codif); нет данных по хадису → старый эвристический путь.
+function autoHighlightNarr(text, card, out, ref){
+  try{ const pl=_codifPlace(ref); if(pl){ _codifHighlight(text,card,out,pl).then(ok=>{ if(!ok){ try{_autoHLGuess(text,card,out);}catch(e){} } }).catch(()=>{ try{_autoHLGuess(text,card,out);}catch(e){} }); return; } }catch(e){}
+  _autoHLGuess(text,card,out);
+}
+function _autoHLGuess(text, card, out){
   let names; try{ names=isnadNarrators(text).filter(_keepNarr); }catch(e){ return; }
   // M389: длинный текст (аппарат/акваль) — дополнить именами по словарю форм всего текста
   if(String(text||'').length>280){
