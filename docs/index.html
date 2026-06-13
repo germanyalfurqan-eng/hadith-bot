@@ -369,6 +369,7 @@
     <div class="row"><span>📊 Таблица цепей передачи (база иснадов)</span><button class="go" id="chainTblBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>🧱 Поиск по иснаду — конструктор цепи</span><button class="go" id="isnadCtorBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>📒 Таблица всех хадисов (идентификация)</span><button class="go" id="hadTblBtn" style="padding:5px 12px">Открыть</button></div>
+    <div class="row"><span>🌿 Тахридж — уникальные хадисы (версии по случаю)</span><button class="go" id="tahrijBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row" style="opacity:.55"><span>📌 Фетвы и ответы (нумерованные)</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>📚 Полезные ресурсы</span><span>скоро</span></div>
     <div class="row" style="opacity:.55"><span>🔊 Озвучка аятов</span><span>скоро</span></div>
@@ -570,7 +571,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v412';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v413';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5741,6 +5742,56 @@ async function openIsnadBase(){
   const cb=m.querySelector('#ibClean'); if(cb){ cb.checked=false; cb.onchange=()=>{ kind=cb.checked?'clean':'all'; reset(); }; }
   await reset(); more.onclick=draw;
 }
+/* ===== 🌿 M495: ТАХРИДЖ — УНИКАЛЬНЫЕ ХАДИСЫ (версии одного случая, формула Ф-17). Данные tahrij/. ===== */
+let _thMeta=undefined; const _thIdxPage={}, _thSp={};
+async function _thPlaces(su){ const b=((su%100)+100)%100; let m=_thSp[b];
+  if(m===undefined){ try{ const r=await fetch('./tahrij/sp_'+b+'.json?v='+APPVER); m=r.ok?await r.json():{}; }catch(e){ m={}; } _thSp[b]=m; }
+  return m[String(su)]||[]; }
+async function openTahrijTable(){
+  let m=document.getElementById('tahrijModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='tahrijModal';
+    m.innerHTML='<div class="panel" style="max-width:720px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 8px;padding:13px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:14.5px">🌿 Тахридж — уникальные хадисы</b><button class="mini" id="thClose" style="flex:none">закрыть ✕</button></div>'
+      +'<div class="hint" style="font-size:11.5px;margin-bottom:6px">Один уникальный хадис = ОДИН случай с Пророком ﷺ, переданный разными путями/формулировками (Ф-17). Сортировка по числу версий. Тап — все версии по сборникам (клик по № — читалка).</div>'
+      +'<div id="thInfo" class="hint" style="font-size:11px;margin-bottom:6px"></div>'
+      +'<div id="thList" style="max-height:64vh;overflow:auto"></div></div>';
+    document.body.appendChild(m); m.querySelector('#thClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
+  m.style.zIndex='10006'; m.style.display='flex';
+  const list=m.querySelector('#thList'), info=m.querySelector('#thInfo');
+  list.innerHTML='<div class="hint">⏳ загружаю тахридж…</div>';
+  if(_thMeta===undefined){ try{ const r=await fetch('./tahrij/meta.json?v='+APPVER); _thMeta=r.ok?await r.json():null; }catch(e){ _thMeta=null; } }
+  if(!_thMeta){ list.innerHTML='<div class="hint">Недоступно.</div>'; return; }
+  try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr()]); }catch(e){}
+  info.innerHTML='Хадисов 64 первоисточников: <b>'+_thMeta.total.toLocaleString('ru')+'</b> · уникальных хадисов: <b>'+_thMeta.uniq.toLocaleString('ru')+'</b> · из них с версиями (тахридж): <b style="color:#9fd3a8">'+_thMeta.multi.toLocaleString('ru')+'</b>';
+  list.innerHTML=''; let loaded=[], pg=0, shown=0; const step=30;
+  async function ensure(upto){ while(loaded.length<upto && pg<(_thMeta.idx_pages||0)){ let p=_thIdxPage[pg];
+    if(!p){ try{ const r=await fetch('./tahrij/idx_p'+pg+'.json?v='+APPVER); p=r.ok?await r.json():[]; }catch(e){ p=[]; } _thIdxPage[pg]=p; }
+    loaded=loaded.concat(p); pg++; } }
+  const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:10px;width:100%;padding:9px;border:1px solid var(--border);border-radius:9px';
+  const rowEl=(r)=>{ const [su,nv,mt]=r;
+    const d=document.createElement('div'); d.style.cssText='padding:8px 4px;border-bottom:1px solid var(--border);cursor:pointer';
+    const tp=document.createElement('div'); tp.style.cssText='display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:4px';
+    tp.innerHTML='<span style="font-size:11.5px;color:var(--hint)">🌿 хадис <b style="color:#9fd3a8">№'+su+'</b></span><span style="font-size:12px;color:#9fd3a8;font-weight:700">'+nv+' верс'+(nv%10===1&&nv%100!==11?'ия':(nv%10>=2&&nv%10<=4&&(nv%100<10||nv%100>=20)?'ии':'ий'))+'</span>';
+    d.appendChild(tp);
+    const mtd=document.createElement('div'); mtd.dir='rtl'; mtd.style.cssText='font-size:14px;text-align:right;color:var(--text);line-height:1.7'; mtd.textContent=mt+'…'; d.appendChild(mtd);
+    const lst=document.createElement('div'); lst.style.cssText='display:none;margin-top:5px'; d.appendChild(lst);
+    d.onclick=async()=>{ if(lst.style.display!=='none'){ lst.style.display='none'; return; } lst.style.display='block';
+      if(lst.dataset.b) return; lst.dataset.b='1'; lst.innerHTML='<div class="hint" style="font-size:11px">⏳…</div>';
+      const pl=await _thPlaces(su); const byb={}; pl.forEach(([b,n])=>{ (byb[b]=byb[b]||[]).push(n); });
+      lst.innerHTML='<div class="hint" style="font-size:11px;margin-bottom:2px">📚 Версии этого хадиса по сборникам ('+pl.length+'):</div>';
+      Object.keys(byb).forEach(b=>{ const row=document.createElement('div'); row.style.cssText='direction:rtl;font-size:13px;margin:2px 0';
+        const bn=(typeof bookName==='function'&&bookName(String(b)))||('книга '+b);
+        row.appendChild(Object.assign(document.createElement('span'),{textContent:bn+': ',style:'color:var(--hint)'}));
+        byb[b].sort((x,y)=>x-y).forEach((n,i)=>{ const a=document.createElement('span'); a.textContent='№'+n; a.style.cssText='color:var(--link);cursor:pointer'; a.onclick=(e)=>{ e.stopPropagation(); try{ openByCodeNum(String(b),n); }catch(_e){ try{ openBook(String(b),n); }catch(__e){} } };
+          row.appendChild(a); if(i<byb[b].length-1) row.appendChild(Object.assign(document.createElement('span'),{textContent:'، '})); });
+        lst.appendChild(row); }); };
+    return d; };
+  const draw=async()=>{ more.textContent='⏳…'; more.disabled=true; await ensure(shown+step);
+    loaded.slice(shown,shown+step).forEach(r=>list.insertBefore(rowEl(r),more)); shown=Math.min(loaded.length,shown+step);
+    const done=shown>=loaded.length && pg>=(_thMeta.idx_pages||0);
+    more.textContent=done?'— все показаны —':'⬇️ Показать ещё (всего '+_thMeta.multi.toLocaleString('ru')+')'; more.disabled=done; };
+  list.appendChild(more); more.onclick=draw; await draw();
+}
 /* ===== 📒 M449: ТАБЛИЦА ВСЕХ ХАДИСОВ (идентификация без матна/иснада) — слово владельца 14.06.
    Строка: общий № · книга·№ · код цепи · id передатчиков · № версии · № уник. хадиса. Данные htab/p<N>.json. ===== */
 let _htMeta=undefined; const _htPage={};
@@ -8327,6 +8378,7 @@ var _ntb=document.getElementById('narrTblBtn'); if(_ntb) _ntb.onclick=()=>{ docu
 var _ctb=document.getElementById('chainTblBtn'); if(_ctb) _ctb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openIsnadBase(); }catch(e){} };
 var _icb=document.getElementById('isnadCtorBtn'); if(_icb) _icb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openIsnadCtor(); }catch(e){} };   // M483 конструктор иснада
 var _htb=document.getElementById('hadTblBtn'); if(_htb) _htb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openHadithTable(); }catch(e){} };   // M449 таблица всех хадисов
+var _thb=document.getElementById('tahrijBtn'); if(_thb) _thb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openTahrijTable(); }catch(e){} };   // M495 тахридж уникальных хадисов
 var _cbr=document.getElementById('catBrowBtn'); if(_cbr) _cbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openCatalog(); };
 // M356: «Читать Коран» ПРОДОЛЖАЕТ с места, где остановился (cfg.qrLast: последняя читанная/слушанная сура+аят)
 function _qrResume(){ const L=cfg.qrLast; if(L&&L.s){ openQuranReader(L.s, L.a||0).then(()=>{ if(L.a) toast('📖 Продолжаем: '+L.s+':'+L.a+' · '+(SURA_NAMES[L.s-1]||'')); }); } else openQuranReader(_qrView.s||1, 0); }
