@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v427</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v428</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -577,7 +577,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v427';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v428';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4864,9 +4864,9 @@ async function doTakhrij(text, ref, out, btn, force){
   }
   try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr()]); }catch(e){}
   let pl=await _thPlaces(su); if(aborted()) return;
-  // Сессия21/v426: НЕ показывать сам хадис как «версию». ⚠️ refOf даёт source (h-карточка) ИЛИ bid (mk-карточка Мактабы, refOf стр.7425) — в v425 проверял только source → для mk (Бухари 666) фильтр пропускался. Теперь обе формы:
-  const _selfB=ref?String(ref.source!=null?ref.source:(ref.bid!=null?ref.bid:'')):'', _selfN=ref?String(ref.num!=null?ref.num:''):'';
-  if(_selfB) pl=pl.filter(p=>!(String(p[0])===_selfB&&String(p[1])===_selfN));
+  // Сессия21/v428: НЕ показывать сам хадис как «версию». Через _codifPlace (слаг→bid) — иначе для h-карточек (source='bukhari') не совпадало с местом [1681|..].
+  const _self=_codifPlace(ref);
+  if(_self) pl=pl.filter(p=>!(String(p[0])===_self.bid&&String(p[1])===_self.num));
   tkSec.innerHTML='';
   const head=document.createElement('div'); head.style.cssText='font-size:12px;color:#9fd3a8;margin:2px 0 4px';
   head.innerHTML='🌿 Наш тахридж: уникальный хадис <b>№'+su+'</b>'+(pl.length>1?(' · <b>'+_ruVers(pl.length)+'</b> по сборникам (клик по № — читалка):'):' — других версий среди 64 печатей не найдено.');
@@ -7290,20 +7290,61 @@ let _codifCache={};
 async function codifChain(bid,num){ const key=bid+'_'+Math.floor(+num/500);
   if(!(key in _codifCache)){ try{ const r=await fetch('./codif/'+key+'.json?v='+APPVER); _codifCache[key]=r.ok?await r.json():null; }catch(e){ _codifCache[key]=null; } }
   const m=_codifCache[key]; return m?(m[String(num)]||null):null; }
-function _codifPlace(ref){ if(!ref) return null; const b=ref.source!=null?ref.source:(ref.bid!=null?ref.bid:null); if(b==null||ref.num==null) return null; return {bid:String(b), num:String(ref.num)}; }
+// слаг сборника (h-карточка) → bid кодификации. Только издания, где № совпадает с нашей таблицей (иначе пропускаем → фолбэк).
+const _SLUG2BID={bukhari:'1681',muslim:'1727',nasai:'829',ibnmajah:'1198',ahmad:'25794',malik:'28107'};
+function _codifPlace(ref){ if(!ref||ref.num==null) return null;
+  let b=null;
+  if(ref.bid!=null) b=String(ref.bid);                                              // mk-карточка Мактабы — уже turath-bid
+  else if(ref.source!=null){ const s=String(ref.source); b=_SLUG2BID[s]||(/^\d+$/.test(s)?s:null); }   // h-карточка — слаг→bid
+  if(!b) return null;
+  return {bid:b, num:String(ref.num)};
+}
 // подсветка ТОЛЬКО реальных передатчиков этого хадиса (из таблицы), клик → ИМЕННО их карточка (id таблицы, не угадка типа 224→215)
+// сегменты иснада В ПОРЯДКЕ ТЕКСТА: режем по глаголам передачи (для позиционного связывания с цепью таблицы)
+function _isnadSlots(text){
+  // ⚠️ фолдим хамзу (أإآ→ا, ئ→ي, ؤ→و, ء→''): stripDiac хамзу сохраняет, а глаголы передачи (أخبرنا/أخبرني) и «أنه» иначе не режутся
+  let c=stripDiac(String(text||'')).replace(/ـ/g,'').replace(/[أإآ]/g,'ا').replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/ء/g,'');
+  c=c.split(/«|»|\sيقول|قال رسول|قال النبي|عن النبي|سمع النبي|سمعت رسول|سمعت النبي|ان النبي|ان رسول الله|رايت النبي|رايت رسول/)[0]||c;
+  const VERB=/\s*(?:حدثناه|حدثنا|حدثني|اخبرنا|اخبرني|انبانا|انباني|سمعت|سمع|عن|قالا|قالوا|قال|ثنا)\s+/g;
+  const out=[];
+  for(let seg of c.split(VERB)){
+    seg=(seg||'').replace(/[،,.:؛«»()\[\]"]/g,' ').replace(/\s+/g,' ').trim();
+    seg=seg.replace(/رضي الله عنه?م?ا?|صلي الله عليه وسلم|عليه السلام|رحمه الله/g,'').replace(/\s+/g,' ').trim();
+    seg=seg.replace(/\s+(?:انه|انها|ان|قال|قالت|يقول)$/,'').trim();
+    if(seg.length<3) continue;
+    if(/^(?:رسول الله|النبي|الله)(?:\s|$)/.test(seg)) continue;
+    out.push(seg);
+  }
+  return out;
+}
 async function _codifHighlight(text, card, out, place){
+  // ПРАВИЛО синхронности (слово владельца): подсвечиваем РОВНО передатчиков таблицы — ни лишних, ни пропущенных.
+  // Основной путь — ПОЗИЦИОННАЯ бижекция: слот иснада i ↔ id цепи таблицы i (без угадывания по имени).
   const rec=await codifChain(place.bid, place.num); if(!rec||!rec.i||!rec.i.length) return false;
-  const tbl=[]; for(const x of rec.i){ if(x==='?') continue; let c=null; try{ c=await _narrCard(x); }catch(e){} if(c&&c[1]) tbl.push({id:String(x), full:c[1], cf:_narrCanon(c[1])}); }
-  if(!tbl.length) return false;
-  let forms=[]; try{ forms=isnadNarrators(text)||[]; }catch(e){}
+  let ids=rec.i.slice().reverse(); if(ids.length>1) ids=ids.slice(1);   // порядок текста, без верхнего (автор-собиратель, его имени в матне нет)
+  const slots=_isnadSlots(text);
   const f2full={}, names=[];
-  for(const F of forms){ const CF=_narrCanon(F); if(CF.length<3) continue;
-    let hit=null; for(const t of tbl){ if(t.cf===CF || t.cf.indexOf(CF+' ')===0 || (CF.split(' ').length>=2 && CF.indexOf(t.cf+' ')===0)){ hit=t; break; } }
-    if(hit){ f2full[F]=hit.full; names.push(F); } }
+  const full=async id=>{ if(id==='?') return null; let c=null; try{ c=await _narrCard(id); }catch(e){} return c&&c[1]?c[1]:null; };
+  if(slots.length && slots.length===ids.length){
+    for(let i=0;i<slots.length;i++){ if(ids[i]==='?') continue; const fl=await full(ids[i]); if(fl && !(slots[i] in f2full)){ f2full[slots[i]]=fl; names.push(slots[i]); } }
+  } else {
+    // запас (число слотов ≠ цепи): матч КАЖДОГО id таблицы по формам (имя-префиксы + кунья + нисба), أبو/أبا/أبي → أبو
+    const norm=s=>_narrCanon(s).replace(/(^|\s)اب[اي](\s)/g,'$1ابو$2');
+    const ct=' '+norm(stripDiac(String(text||'')).replace(/ـ/g,''))+' ';
+    const seen=new Set();
+    for(const id of rec.i){ if(id==='?'||seen.has(String(id))) continue; seen.add(String(id));
+      let c=null; try{ c=await _narrCard(id); }catch(e){} if(!c||!c[1]) continue;
+      const cands=[], wo=String(c[1]).split(/\s+/).filter(Boolean);
+      for(let L=Math.min(wo.length,7);L>=2;L--) cands.push(wo.slice(0,L).join(' '));
+      if(c[2]) cands.push(String(c[2]).split(/\s+/).slice(0,2).join(' '));         // кунья (أبو هريرة)
+      if(c[3]) String(c[3]).split(/\s+/).forEach(t=>{ if(t.length>=4&&/^ال/.test(t)) cands.push(t); });  // нисба-токены (الزهري)
+      let pick=null; for(const cand of cands){ const cc=norm(cand); if(cc.length<4) continue; if(ct.indexOf(' '+cc)>=0){ pick=cand; break; } }
+      if(pick && !(pick in f2full)){ f2full[pick]=c[1]; names.push(pick); }
+    }
+  }
   if(!names.length) return false;
   setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
-    highlightNarratorsInDiv(ad, names, nm=>{ const full=f2full[nm]||nm; out.style.display='block'; showNarratorBio(full,out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }); }
+    highlightNarratorsInDiv(ad, names, nm=>{ const fl=f2full[nm]||nm; out.style.display='block'; showNarratorBio(fl,out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }); }
     try{ highlightRelationalInDiv(ad); }catch(e){} }); }catch(e){} }, 0);
   return true;
 }
