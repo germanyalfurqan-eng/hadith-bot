@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v442</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v443</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -587,7 +587,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v442';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v443';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1169,6 +1169,8 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   var _mo=document.querySelector('.chip[data-mode="matnonly"]'); if(_mo) _mo.style.display = tab==='hadith'?'':'none';  // «не искать в иснаде» — только хадисы
   var _nc=document.querySelector('.chip[data-mode="narr"]'); if(_nc){ _nc.style.display = tab==='hadith'?'':'none';   // 👤 «Передатчик» — в Аятах не к месту (замечание владельца)
     if(tab!=='hadith' && modes.narr){ modes.narr=false; _nc.classList.remove('on'); try{ hideNarrSugg(); }catch(e){} } }
+  ['chain','any','neuro'].forEach(function(md){ var _c=document.querySelector('.chip[data-mode="'+md+'"]'); if(_c){ _c.style.display = tab==='hadith'?'':'none';   // #60: ⛓Цепь / 🌐Любой текст / 🔬Расширенный — иснад/Мактаба-режимы, в разделе Аяты (Коран) не нужны
+    if(tab!=='hadith' && modes[md]){ modes[md]=false; _c.classList.remove('on'); if(md==='chain'){ try{ _chainSel.length=0; var _co=document.getElementById('chainOut'); if(_co) _co.innerHTML=''; }catch(e){} } } } });
   document.getElementById('q').placeholder = tab==='hadith'?'Слово, фраза или № хадиса…':'Слово, № суры или 2:255…';
   document.getElementById('res').innerHTML=''; setStatus(''); updateQuranHelper();
   try{ hideRecent(); }catch(e){}   // M256: недавние не авто-показ — только по 🕐
@@ -8232,6 +8234,14 @@ async function renderTasks(){
   var tt=document.getElementById('tToggle'); if(tt) tt.onclick=()=>{ _tasksShowDone=!_tasksShowDone; renderTasks(); };
   // #8: РЕАЛЬНЫЕ заявки владельца из бота (публичная data-ветка) — синхронизация в аппе (раньше показывался только статичный tasks.json)
   try{ const rj=await (await fetch('https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/data/journal.json?'+Date.now())).json();
+    // #59: СОСТОЯНИЕ + статистика (сколько потрачено) прямо в Кабинете
+    try{ const u=(rj&&rj.usage&&rj.usage.totals)||{}; const sr=(rj&&rj.searches)||{};
+      let hs='<div style="margin-top:16px;border-top:2px solid #2e9b5b;padding-top:9px"><b>📊 Состояние и статистика:</b></div>'
+        +'<div style="font-size:13px;line-height:1.75;margin-top:3px">🧠 ИИ-вызовов: <b>'+(u.calls||0)+'</b> <span style="color:var(--hint)">(свежих '+(u.fresh||0)+' = расход ключа · из кэша '+(u.cached||0)+' — бесплатно)</span><br>🔎 поисков всего: <b>'+(sr.total||0)+'</b> · 🌐 переводов в базе: <b>'+(rj.translations?Object.keys(rj.translations).length:0)+'</b><br>👥 юзеров с ИИ: <b>'+(u.by_user?Object.keys(u.by_user).length:0)+'</b></div>';
+      if(u.by_user){ const tu=Object.values(u.by_user).sort((a,b)=>(b.fresh||0)-(a.fresh||0)).slice(0,5);
+        hs+='<div style="font-size:12px;color:var(--hint);margin-top:3px">💸 Топ по ИИ-расходу: '+tu.map(x=>esc(String(x.name||'?'))+' ('+(x.fresh||0)+')').join(' · ')+'</div>'; }
+      out.insertAdjacentHTML('beforeend', hs);
+    }catch(e){}
     const reqs=(rj&&rj.requests)||[];
     if(reqs.length){ const openR=reqs.filter(r=>!r.done), doneR=reqs.filter(r=>r.done);
       let h2='<div style="margin-top:16px;border-top:2px solid var(--btn);padding-top:9px"><b>📨 Мои заявки из бота — открытых '+openR.length+' · выполнено '+doneR.length+':</b> <span style="color:var(--hint);font-size:11px">(синхрон с журналом бота)</span></div>';
