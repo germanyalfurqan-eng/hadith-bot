@@ -176,7 +176,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v494</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v495</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -198,8 +198,8 @@
   </div>
 
   <div id="colsWrap">
-    <div class="lbl" id="colsToggle" style="cursor:pointer;user-select:none;color:var(--link);display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:rgba(108,92,231,.10);border-radius:20px;padding:6px 12px;font-size:13px;font-weight:600">🔎 <span id="colCount"></span> <span id="colsArrow" style="opacity:.8">▾</span></div>
-    <div id="colsBody" style="display:none">
+    <div class="lbl" id="colsToggle" style="cursor:pointer;user-select:none;color:var(--link);display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:rgba(108,92,231,.10);border-radius:20px;padding:6px 12px;font-size:13px;font-weight:600">🔎 <span id="colCount"></span> <span id="colsArrow" style="opacity:.8">▴</span></div>
+    <div id="colsBody">
       <div id="colsFav" style="margin-bottom:8px"></div>
       <div class="cols" id="cols"></div>
       <div class="colbar">
@@ -309,6 +309,7 @@
     <div class="row"><span>🎨 Выделять иснад (цепочку) серым</span><div class="sw" id="isnadSw"></div></div>
     <div class="row"><span>🙈 Скрывать иснад (показывать только матн)</span><div class="sw" id="hideIsnadSw"></div></div>
     <div class="row"><span>📖 Кнопка «Страница в Мактабе» на карточках хадиса</span><div class="sw" id="maktabaSw"></div></div>
+    <div class="row"><span>🔊 Озвучка хадиса <span style="color:var(--hint);font-size:11px">(кнопка на карточке, синтез речи)</span></span><div class="sw" id="ttsSw"></div></div>
     <div class="row"><span>🎯 Строгий поиск: только где есть ВСЕ слова <span style="color:var(--hint);font-size:11px">(выкл → покажет и близкие)</span></span><div class="sw" id="strictSw"></div></div>
     <div class="row"><span>🔡 Автоподсказки в Коране (списком при вводе номера)</span><div class="sw" id="acSw"></div></div>
     <div class="row"><span>🌿 Тап по слову аята → корень + все места в Коране</span><div class="sw" id="wtSw"></div></div>
@@ -606,7 +607,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v494';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v495';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5006,15 +5007,14 @@ function addTr(meta,card,text,ayah,fav){
     if(out && out.style.display!=='none'){ const trv=(out.dataset.tr||'').trim()||(out.textContent||'').trim(); if(trv) s+='\n\n'+trv; }
     copyWithSig(s); };
   meta.appendChild(cp);
-  // M32: озвучка хадиса (матн) синтезом речи устройства — клиентский TTS, без внешнего источника. Аяты не трогаем (у них аудио чтецов).
-  if(!ayah && typeof window!=='undefined' && 'speechSynthesis' in window){
+  // M32: озвучка хадиса синтезом речи устройства — клиентский TTS. Аяты не трогаем (у них аудио чтецов). #145: можно отключить в Настройках (cfg.noTts).
+  if(!ayah && !cfg.noTts && typeof window!=='undefined' && 'speechSynthesis' in window){
     const sp=document.createElement('button'); sp.className='tr-btn'; sp.textContent='🔊';
     sp.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
     sp.title='Озвучить хадис (синтез речи устройства; нужен арабский голос в системе)';
     sp.onclick=()=>{ try{
       if(speechSynthesis.speaking){ speechSynthesis.cancel(); sp.textContent='🔊'; return; }
-      let mt=''; try{ mt=(splitIsnad(text)[1]||text); }catch(e){ mt=text; }
-      mt=String(mt||'').replace(/[«»]/g,'').replace(/\([^)]*\)/g,' ').trim(); if(!mt) return;
+      let mt=String(text||'').replace(/[«»]/g,'').replace(/\([^)]*\)/g,' ').trim(); if(!mt) return;   // #146: читаем ВЕСЬ хадис (иснад+матн), не только матн
       const u=new SpeechSynthesisUtterance(mt); u.lang='ar-SA'; u.rate=0.88;
       try{ const vs=speechSynthesis.getVoices(); const av=vs.find(v=>/^ar/i.test(v.lang)); if(av) u.voice=av; }catch(e){}
       u.onend=()=>{ sp.textContent='🔊'; }; u.onerror=()=>{ sp.textContent='🔊'; toast('Озвучка: нет арабского голоса в системе'); };
@@ -8806,6 +8806,7 @@ var _qsw=document.getElementById('qrSwipeSw'); if(_qsw){ _qsw.classList.toggle('
 var _str=document.getElementById('strictSw'); if(_str){ _str.classList.toggle('on',cfg.strictSearch!==false); _str.onclick=()=>{ cfg.strictSearch=(cfg.strictSearch===false); saveCfg(cfg); _str.classList.toggle('on',cfg.strictSearch!==false); toast(cfg.strictSearch!==false?'🎯 Строгий поиск ВКЛ — только все слова':'Строгий поиск ВЫКЛ — покажет и близкие'); }; }   // M283-тумблер
 var _hpw=document.getElementById('hapticSw'); if(_hpw){ _hpw.classList.toggle('on',cfg.haptic!==false); _hpw.onclick=()=>{ cfg.haptic=(cfg.haptic===false); saveCfg(cfg); _hpw.classList.toggle('on',cfg.haptic!==false); if(cfg.haptic!==false){ _hapErr=0; hap('light'); } }; }
 var _mkw=document.getElementById('maktabaSw'); if(_mkw){ _mkw.classList.toggle('on',cfg.maktabaBtn!==false); _mkw.onclick=()=>{ cfg.maktabaBtn=(cfg.maktabaBtn===false); saveCfg(cfg); _mkw.classList.toggle('on',cfg.maktabaBtn!==false); }; }
+var _ttsw=document.getElementById('ttsSw'); if(_ttsw){ _ttsw.classList.toggle('on',!cfg.noTts); _ttsw.onclick=()=>{ cfg.noTts=!cfg.noTts; saveCfg(cfg); _ttsw.classList.toggle('on',!cfg.noTts); toast(cfg.noTts?'🔇 Озвучка хадисов выкл':'🔊 Озвучка хадисов вкл'); }; }   // #145
 var _vfw=document.getElementById('verifySw'); if(_vfw){ _vfw.classList.toggle('on',cfg.verify!==false); _vfw.onclick=()=>{ cfg.verify=!(cfg.verify!==false); saveCfg(cfg); _vfw.classList.toggle('on',cfg.verify!==false); toast(cfg.verify?'🛡 Независимая сверка ВКЛ':'Сверка выкл'); }; }   // независимая сверка передатчиков
 // #79: вся строка настроек нажимаемая — клик по строке с тумблером переключает его (не только по самому тумблеру)
 (function(){ var sm=document.getElementById('settingsModal'); if(!sm||sm._rowClick) return; sm._rowClick=true;
