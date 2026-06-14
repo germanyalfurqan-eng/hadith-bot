@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v445</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v446</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -309,6 +309,7 @@
     <div class="row"><span>🕐 Недавние поиски (показывать при пустом поле)</span><div class="sw" id="recentSw"></div></div>
     <div class="row"><span>▶️ Авто-переход на следующую суру <span style="color:var(--hint);font-size:11px">(в плеере/чтеце Корана)</span></span><div class="sw" id="qrAutoNextSw"></div></div>
     <div class="row"><span>🎚 Крутилка быстрой прокрутки в Коране <span style="color:var(--hint);font-size:11px">(бар слева — тянуть, листать суру)</span></span><div class="sw" id="qrThumbSw"></div></div>
+    <div class="row"><span>👆 Свайп влево/вправо — смена суры <span style="color:var(--hint);font-size:11px">(в читалке Корана)</span></span><div class="sw" id="qrSwipeSw"></div></div>
     <div class="row"><span>⬇️ Авто-переход к переводу тафсира (когда он ниже)</span><div class="sw" id="tafJumpSw"></div></div>
     <div class="row"><span>📳 Тактильная отдача (вибро) на действия</span><div class="sw" id="hapticSw"></div></div>
     <div class="row"><span>🔥 Популярное (что чаще ищут, при пустом поле)</span><div class="sw" id="popSw"></div></div>
@@ -587,7 +588,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v445';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v446';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1104,9 +1105,7 @@ async function openByCodeNum(bid, num){
       if(hit){ openBook(b, hit.page_id||hit.page||1); return; }
     }catch(e){}
   }
-  const code=_BID2CODE[b];
-  if(code && isReadable(code)){ openReader(code, n); return; }   // основной сборник → наш ридер на точном хадисе
-  openBook(b);
+  openBook(b);   // #66: «Страница в Мактабе» ВСЕГДА открывает turath-страницу Мактабы (даже если точную не нашли — книгу с начала), НЕ наш локальный ридер (жалоба «подвязал читалку в приложении, а не мактаба»)
 }
 // short_ref Мухаймина («البخاري ١٣٢» / «أحمد ٩٧٤٩») → {bid,num} страницы Мактабы (только 8 основных, без под-работ «الصغرى»/«في …»).
 // Цифры бывают и арабские (U+0660-9), и расширенные (U+06F0-9) — учитываем оба диапазона.
@@ -1170,7 +1169,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   var _mo=document.querySelector('.chip[data-mode="matnonly"]'); if(_mo) _mo.style.display = tab==='hadith'?'':'none';  // «не искать в иснаде» — только хадисы
   var _nc=document.querySelector('.chip[data-mode="narr"]'); if(_nc){ _nc.style.display = tab==='hadith'?'':'none';   // 👤 «Передатчик» — в Аятах не к месту (замечание владельца)
     if(tab!=='hadith' && modes.narr){ modes.narr=false; _nc.classList.remove('on'); try{ hideNarrSugg(); }catch(e){} } }
-  ['chain','any','neuro'].forEach(function(md){ var _c=document.querySelector('.chip[data-mode="'+md+'"]'); if(_c){ _c.style.display = tab==='hadith'?'':'none';   // #60: ⛓Цепь / 🌐Любой текст / 🔬Расширенный — иснад/Мактаба-режимы, в разделе Аяты (Коран) не нужны
+  ['chain','any'].forEach(function(md){ var _c=document.querySelector('.chip[data-mode="'+md+'"]'); if(_c){ _c.style.display = tab==='hadith'?'':'none';   // #60/#67: ⛓Цепь / 🌐Любой текст — иснад/Мактаба-режимы, в Аятах не нужны (но 🔬Расширенный ВЕРНУЛ — полезен для подбора фраз и в Коране, заявка #67)
     if(tab!=='hadith' && modes[md]){ modes[md]=false; _c.classList.remove('on'); if(md==='chain'){ try{ _chainSel.length=0; var _co=document.getElementById('chainOut'); if(_co) _co.innerHTML=''; }catch(e){} } } } });
   document.getElementById('q').placeholder = tab==='hadith'?'Слово, фраза или № хадиса…':'Слово, № суры или 2:255…';
   document.getElementById('res').innerHTML=''; setStatus(''); updateQuranHelper();
@@ -4442,6 +4441,15 @@ function _qrFastScrollSetup(){
     _qrThumbSync=show;
   }
   const b=document.getElementById('qrBody'); if(b && !b._fsScrollWired){ b._fsScrollWired=true; b.addEventListener('scroll',()=>{ try{_qrThumbSync();}catch(e){} }); }
+  // #69: свайп влево/вправо = смена суры (выключаемо в Настройках, cfg.qrSwipe)
+  if(b && !b._swipeWired){ b._swipeWired=true; var _sx=0,_sy=0,_stt=0;
+    b.addEventListener('touchstart',function(e){ if(e.touches.length!==1) return; _sx=e.touches[0].clientX; _sy=e.touches[0].clientY; _stt=Date.now(); },{passive:true});
+    b.addEventListener('touchend',function(e){ if(cfg.qrSwipe===false) return; var t=e.changedTouches&&e.changedTouches[0]; if(!t||Date.now()-_stt>600) return;
+      var dx=t.clientX-_sx, dy=t.clientY-_sy;
+      if(Math.abs(dx)>70 && Math.abs(dx)>Math.abs(dy)*2){ var cur=(window._qrView&&_qrView.s)||1;
+        if(dx<0 && cur<114){ _qrView={s:cur+1,a:0}; _qrLoad(); try{toast('→ сура '+(cur+1)+'. '+(SURA_NAMES[cur]||''));}catch(_e){} }
+        else if(dx>0 && cur>1){ _qrView={s:cur-1,a:0}; _qrLoad(); try{toast('← сура '+(cur-1)+'. '+(SURA_NAMES[cur-2]||''));}catch(_e){} } } },{passive:true});
+  }
   setTimeout(()=>{ try{_qrThumbSync();}catch(e){} }, 80);
 }
 async function openQuranReader(s,a){
@@ -4572,10 +4580,10 @@ async function _qrLoad(){
   });
   nav.innerHTML='';
   // #47: навигация суры — компактнее + сворачиваемый блок (шапка съедала пол-экрана). Тогл запоминается.
-  const navToggle=document.createElement('button'); navToggle.className='mini';
-  navToggle.style.cssText='border:1px solid var(--border);color:var(--text);padding:7px 13px;border-radius:9px;font-size:13px;cursor:pointer';
+  const navToggle=document.createElement('button'); navToggle.className='mini';   // #68: яснее и красивее (брендовая пилюля, понятные подписи свернуть/развернуть)
+  navToggle.style.cssText='border:1px solid #6c5ce7;color:#d9d0ff;background:rgba(108,92,231,.15);padding:8px 16px;border-radius:11px;font-size:13.5px;font-weight:600;cursor:pointer';
   const navBox=document.createElement('div'); navBox.style.cssText='width:100%;flex-wrap:wrap;align-items:center;justify-content:center;gap:3px;margin-top:6px';
-  const _navApply=()=>{ const op=cfg.qrNavOpen!==false; navBox.style.display=op?'flex':'none'; navToggle.textContent=op?('📑 '+s+'. '+(SURA_NAMES[s-1]||'')+' · свернуть ▴'):('📑 Сура '+s+' · сменить/настройки ▾'); };
+  const _navApply=()=>{ const op=cfg.qrNavOpen!==false; navBox.style.display=op?'flex':'none'; navToggle.textContent=op?('▴ Свернуть панель — '+s+'. '+(SURA_NAMES[s-1]||'')):('📑 '+s+'. '+(SURA_NAMES[s-1]||'')+' — сменить суру / настройки ▾'); };
   navToggle.onclick=()=>{ cfg.qrNavOpen=(cfg.qrNavOpen===false); saveCfg(cfg); _navApply(); };
   nav.appendChild(navToggle); nav.appendChild(navBox);
   const mk=(t,fn,dis)=>{ const b=document.createElement('button'); b.textContent=t; if(dis)b.disabled=true; b.onclick=fn;
@@ -8373,6 +8381,7 @@ var _rcw=document.getElementById('recentSw'); if(_rcw){ _rcw.classList.toggle('o
 var _tjw=document.getElementById('tafJumpSw'); if(_tjw){ _tjw.classList.toggle('on',cfg.tafJump!==false); _tjw.onclick=()=>{ cfg.tafJump=(cfg.tafJump===false); saveCfg(cfg); _tjw.classList.toggle('on',cfg.tafJump!==false); }; }
 var _qan=document.getElementById('qrAutoNextSw'); if(_qan){ _qan.classList.toggle('on',cfg.qrAutoNext!==false); _qan.onclick=()=>{ cfg.qrAutoNext=(cfg.qrAutoNext===false); saveCfg(cfg); _qan.classList.toggle('on',cfg.qrAutoNext!==false); }; }   // M275: тумблер авто-перехода чтеца Корана
 var _qts=document.getElementById('qrThumbSw'); if(_qts){ _qts.classList.toggle('on',cfg.qrThumb!==false); _qts.onclick=()=>{ cfg.qrThumb=(cfg.qrThumb===false); saveCfg(cfg); _qts.classList.toggle('on',cfg.qrThumb!==false); try{_qrThumbSync();}catch(e){} }; }   // #46: тумблер крутилки прокрутки Корана
+var _qsw=document.getElementById('qrSwipeSw'); if(_qsw){ _qsw.classList.toggle('on',cfg.qrSwipe!==false); _qsw.onclick=()=>{ cfg.qrSwipe=(cfg.qrSwipe===false); saveCfg(cfg); _qsw.classList.toggle('on',cfg.qrSwipe!==false); }; }   // #69: тумблер свайпа смены суры
 var _str=document.getElementById('strictSw'); if(_str){ _str.classList.toggle('on',cfg.strictSearch!==false); _str.onclick=()=>{ cfg.strictSearch=(cfg.strictSearch===false); saveCfg(cfg); _str.classList.toggle('on',cfg.strictSearch!==false); toast(cfg.strictSearch!==false?'🎯 Строгий поиск ВКЛ — только все слова':'Строгий поиск ВЫКЛ — покажет и близкие'); }; }   // M283-тумблер
 var _hpw=document.getElementById('hapticSw'); if(_hpw){ _hpw.classList.toggle('on',cfg.haptic!==false); _hpw.onclick=()=>{ cfg.haptic=(cfg.haptic===false); saveCfg(cfg); _hpw.classList.toggle('on',cfg.haptic!==false); if(cfg.haptic!==false){ _hapErr=0; hap('light'); } }; }
 var _mkw=document.getElementById('maktabaSw'); if(_mkw){ _mkw.classList.toggle('on',cfg.maktabaBtn!==false); _mkw.onclick=()=>{ cfg.maktabaBtn=(cfg.maktabaBtn===false); saveCfg(cfg); _mkw.classList.toggle('on',cfg.maktabaBtn!==false); }; }
