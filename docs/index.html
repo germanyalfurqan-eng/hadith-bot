@@ -96,7 +96,7 @@
        font-size:15px;background:var(--bg);color:var(--text);resize:vertical;min-height:50px}
   .card{background:rgba(20,30,44,.62);backdrop-filter:blur(9px) saturate(1.1);-webkit-backdrop-filter:blur(9px) saturate(1.1);
         border:1px solid rgba(120,150,200,.16);border-radius:14px;padding:12px;margin-bottom:10px;box-shadow:0 4px 18px #0006}
-  .ar{font-size:calc(19px * var(--txtScale,1));line-height:2;direction:rtl;text-align:right;font-family:"Traditional Arabic","Amiri",serif}
+  .ar{font-size:calc(19px * var(--txtScale,1));line-height:2;direction:rtl;text-align:right;font-family:var(--arFont,"Traditional Arabic","Amiri",serif)}
   .qw{cursor:pointer;border-radius:4px;padding:0 1px;transition:background .18s,color .18s,box-shadow .18s}
   .qw:hover,.qw:active{background:rgba(74,158,255,.28)}
   .qw.hit{background:var(--mark);color:#241c00}
@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v437</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v438</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -319,6 +319,13 @@
       <select id="themeSel" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 8px">
         <option value="dark">Тёмная</option>
         <option value="light">Светлая</option>
+      </select></div>
+    <div class="row"><span>🔡 Шрифт арабского текста <span style="color:var(--hint);font-size:11px">(если буквы «вытянутые»)</span></span>
+      <select id="arFontSel" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 8px">
+        <option value="trad">Традиционный (узкий)</option>
+        <option value="amiri">Amiri (насх)</option>
+        <option value="naskh">Noto Naskh (чёткий)</option>
+        <option value="sans">Без засечек</option>
       </select></div>
     <div class="row"><span>📗 Ссылка на Мактабу Шамилю (shamela.ws) у книг</span>
       <select id="shLinkSel" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 8px">
@@ -579,7 +586,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v437';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v438';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -690,6 +697,10 @@ let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,s
 if(!cfg._rpoff){ cfg.recent=false; cfg.popular=false; cfg._rpoff=1; saveCfg(cfg); }   // разовое: выключить Недавнее/Популярное по умолчанию (можно вернуть в Настройках)
 function applyTheme(){ document.body.classList.toggle('light', cfg.theme==='light'); }
 try{ applyTheme(); }catch(e){}
+// #51: выбор шрифта арабского текста (некоторым «Traditional Arabic» кажется вытянутым)
+const _AR_FONTS={trad:'"Traditional Arabic","Amiri",serif', amiri:'"Amiri",serif', naskh:'"Noto Naskh Arabic","Amiri",serif', sans:'"Segoe UI","Noto Sans Arabic",system-ui,sans-serif'};
+function applyArFont(){ try{ document.documentElement.style.setProperty('--arFont', _AR_FONTS[cfg.arFont]||_AR_FONTS.trad); }catch(e){} }
+try{ applyArFont(); }catch(e){}
 
 /* ===================== СЕРВЕРНЫЙ ДОСТУП (G9) ===================== */
 const INITDATA = (tg && tg.initData) || '';
@@ -2900,7 +2911,7 @@ async function maktabaByNum(seq, n){
     const meta=document.createElement('div'); meta.className='meta';
     try{ addTr(meta, card, it[1], null, {k:'mk|'+bid+'|'+n, type:'h', coll:bn, label:bn+' №'+n, text:it[1].slice(0,200)}); }catch(e){}
     card.appendChild(meta);
-    if(it[0]){ const ob=document.createElement('span'); ob.style.cssText='display:inline-block;margin-top:6px;color:var(--link);cursor:pointer;font-weight:700;font-size:13.5px;text-decoration:underline';
+    if(it[0]){ const ob=document.createElement('span'); ob.style.cssText='display:inline-block;margin-top:6px;color:var(--link);cursor:pointer;font-weight:700;font-size:13.5px';   // #48: убрано подчёркивание — было непостоянно (та же книга вверху без подчёркивания); цвет ссылки достаточно
       ob.textContent='📖 '+bn+' №'+n; ob.title='Открыть '+bn+' №'+n+' в книге (лист '+it[0]+')'; ob.onclick=()=>{ try{ openBook(bid, it[0]); }catch(e){} }; card.appendChild(ob); }   // R45: «Книга №» активная ссылка как везде (не «открыть в книге»)
     try{ dzChainInto(card, bid, n); }catch(e){}   // 🧬 M378b: цепочка по кодам Э1.1
     try{ enableArabusTap(ar); }catch(e){}
@@ -8292,6 +8303,7 @@ try{ if(tg&&tg.onEvent){   // на десктопе/старом TG fullscreen �
 if(cfg.fullscreen && _fsSupported()){ applyFullscreen(); }   // восстановить при следующем открытии
 var _gl=document.getElementById('glowSw'); if(_gl){ _gl.classList.toggle('on',!cfg.noLogoGlow); _gl.onclick=()=>{ cfg.noLogoGlow=!cfg.noLogoGlow; saveCfg(cfg); _gl.classList.toggle('on',!cfg.noLogoGlow); toast(cfg.noLogoGlow?'Свечение выключено':'✨ Свечение включено'); }; }
 var _th=document.getElementById('themeSel'); if(_th){ _th.value=cfg.theme||'dark'; _th.onchange=()=>{ cfg.theme=_th.value; saveCfg(cfg); applyTheme(); toast(cfg.theme==='light'?'Светлая тема ☀️':'Тёмная тема 🌙'); }; }
+var _arf=document.getElementById('arFontSel'); if(_arf){ _arf.value=cfg.arFont||'trad'; _arf.onchange=()=>{ cfg.arFont=_arf.value; saveCfg(cfg); applyArFont(); toast('🔡 Шрифт арабского изменён'); }; }   // #51
 var _rcw=document.getElementById('recentSw'); if(_rcw){ _rcw.classList.toggle('on',cfg.recent!==false); _rcw.onclick=()=>{ cfg.recent=(cfg.recent===false); saveCfg(cfg); _rcw.classList.toggle('on',cfg.recent!==false); if(cfg.recent===false) hideRecent(); }; }
 var _tjw=document.getElementById('tafJumpSw'); if(_tjw){ _tjw.classList.toggle('on',cfg.tafJump!==false); _tjw.onclick=()=>{ cfg.tafJump=(cfg.tafJump===false); saveCfg(cfg); _tjw.classList.toggle('on',cfg.tafJump!==false); }; }
 var _qan=document.getElementById('qrAutoNextSw'); if(_qan){ _qan.classList.toggle('on',cfg.qrAutoNext!==false); _qan.onclick=()=>{ cfg.qrAutoNext=(cfg.qrAutoNext===false); saveCfg(cfg); _qan.classList.toggle('on',cfg.qrAutoNext!==false); }; }   // M275: тумблер авто-перехода чтеца Корана
