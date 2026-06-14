@@ -96,7 +96,7 @@
        font-size:15px;background:var(--bg);color:var(--text);resize:vertical;min-height:50px}
   .card{background:rgba(20,30,44,.62);backdrop-filter:blur(9px) saturate(1.1);-webkit-backdrop-filter:blur(9px) saturate(1.1);
         border:1px solid rgba(120,150,200,.16);border-radius:14px;padding:12px;margin-bottom:10px;box-shadow:0 4px 18px #0006}
-  .ar{font-size:19px;line-height:2;direction:rtl;text-align:right;font-family:"Traditional Arabic","Amiri",serif}
+  .ar{font-size:calc(19px * var(--txtScale,1));line-height:2;direction:rtl;text-align:right;font-family:"Traditional Arabic","Amiri",serif}
   .qw{cursor:pointer;border-radius:4px;padding:0 1px;transition:background .18s,color .18s,box-shadow .18s}
   .qw:hover,.qw:active{background:rgba(74,158,255,.28)}
   .qw.hit{background:var(--mark);color:#241c00}
@@ -117,7 +117,7 @@
   .grade{background:#22303f;border-radius:8px;padding:2px 8px}
   .srcchk{color:#ffb74d;font-size:10px;margin-left:4px;cursor:help}
   .tr-btn{padding:6px 12px;background:var(--btn);color:#fff;font-size:13px}
-  .tr-out{margin-top:8px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:14px;display:none}
+  .tr-out{margin-top:8px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:calc(14px * var(--txtScale,1));display:none}
   mark{background:var(--mark);color:#241c00;border-radius:3px;padding:0 1px}
   .isnad{color:var(--hint)}
   .matn{color:#fff;font-weight:700}
@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v436</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v437</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -579,7 +579,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v436';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v437';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8444,10 +8444,11 @@ if(tg && tg.BackButton){ try{ tg.BackButton.onClick(()=>{ if(!_closeTopModal()){
 // M-flood #26+#28: плавающая панель справа — размер текста (A+/A−) и «вверх»
 function _qrOpen(){ const m=document.getElementById('qrModal'); return !!(m && m.style.display && m.style.display!=='none'); }
 function applyFontScale(){ try{ const z=(cfg.fontScale||1), qz=(cfg.qrFontScale||1);   // Коран — ОТДЕЛЬНЫЙ размер, не влияет на остальное
-  ['res','bookText'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.zoom=z; });
+  // #57: на экране результатов масштабируем ТЕКСТ (.ar/.tr-out через --txtScale), а НЕ зумим всё (кнопки/карточки остаются)
+  const rs=document.getElementById('res'); if(rs){ rs.style.zoom=''; rs.style.setProperty('--txtScale', z); }
+  const bt=document.getElementById('bookText'); if(bt) bt.style.zoom=z;   // книга — отдельная читалка, зум допустим
   const qzw=document.getElementById('qrZoom'); const qb=document.getElementById('qrBody');
   if(qzw){ qzw.style.zoom=qz; if(qb) qb.style.zoom=''; } else if(qb) qb.style.zoom=qz;   // M357: zoom на обёртке, не на скроллере (и снять старый с qrBody)
-  document.querySelectorAll('.tr-out').forEach(el=>el.style.zoom=z);
   const lbl=document.getElementById('fsLbl'); if(lbl) lbl.textContent=Math.round((_qrOpen()?qz:z)*100)+'%'; }catch(e){} }
 // === Фоновый мини-плеер аудио Корана: видно снизу, не мешает; «↪ к аяту» возвращает к читаемому аяту ===
 function _miniBuild(){ const bar=document.createElement('div'); bar.id='miniPlayer';
@@ -8534,7 +8535,7 @@ function updateFloatTools(){ try{ const w=document.getElementById('floatTools');
   // «100%» между A+ и A− — это и есть СБРОС (нажми, чтобы вернуть стандарт)
   const lbl=document.createElement('button'); lbl.id='fsLbl'; lbl.title='Нажми — сбросить размер до 100%';
   lbl.style.cssText='width:42px;height:30px;border-radius:14px;border:1px dashed var(--border);background:var(--card);color:var(--hint);font-size:10px;font-weight:700;cursor:pointer;line-height:1;box-shadow:0 3px 12px rgba(0,0,0,.45)'; lbl.textContent='100%';
-  lbl.onclick=()=>{ cfg.fontScale=1; saveCfg(cfg); applyFontScale(); toast('🔤 Размер сброшен: 100%'); };
+  lbl.onclick=()=>{ const q=_qrOpen(); const key=q?'qrFontScale':'fontScale'; cfg[key]=1; saveCfg(cfg); applyFontScale(); toast('🔤 Размер '+(q?'Корана':'текста')+' сброшен: 100%'); };   // #53: сбрасываем АКТИВНЫЙ ключ (в читалке Корана — qrFontScale), иначе «сброшено» врало
   const minus=mkf('A−',()=>setScale(-0.1),'Мельче текст');
   fsGroup.appendChild(plus); fsGroup.appendChild(lbl); fsGroup.appendChild(minus);
   const up=mkf('▲',()=>{ const sc=_activeScroller(); if(sc){ sc.scrollTo({top:0,behavior:'smooth'}); } else { window.scrollTo({top:0,behavior:'smooth'}); } },'Наверх','floatUp');
