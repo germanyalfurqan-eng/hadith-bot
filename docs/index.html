@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v434</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v435</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -579,7 +579,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v434';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v435';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5217,6 +5217,12 @@ function anyBoxShow(on){
   }
   b.style.display='block';
 }
+// #23: сниппет «Любого текста» приходит от turath с сырой разметкой (<em>совпадение</em>, <a href="inr://…">, <span>).
+// Снять теги: <em>→подсветка <mark>, ссылки/прочие теги убрать. Текст экранируется, <mark> сохраняется.
+function _cleanTurathSnip(s){ s=String(s||'');
+  s=s.replace(/<em>/gi,'@@MK@@').replace(/<\/em>/gi,'@@EK@@');
+  s=s.replace(/<[^>]*>/g,'');   // убрать все теги (<a inr://…>, <span>, прочее) — текст ссылки остаётся
+  return esc(s).split('@@MK@@').join('<mark>').split('@@EK@@').join('</mark>'); }
 async function anyTextSearch(qRaw, seq){
   const res=document.getElementById('res'); res.innerHTML='';
   const head=document.createElement('div'); head.className='hint'; head.style.cssText='color:#bfe3cf;font-size:13px;margin:0 0 8px';
@@ -5241,11 +5247,20 @@ async function anyTextSearch(qRaw, seq){
         const d=document.createElement('div'); d.className='card'; d.style.cssText='padding:10px;margin:7px 0';
         const bid=String(x.book_id||''); const bn=x.book_name||bookName(bid)||('книга №'+bid);
         const meta=(window._catTr&&_catTr.map&&_catTr.map[bn])||{};
+        const _rawSnip=String(x.snip||x.text||'');
         d.innerHTML='<div style="direction:rtl;text-align:right;font-weight:700;color:var(--link);font-size:14.5px;cursor:pointer" class="anyOpen">📖 '+esc((meta.voc)||bn)+'</div>'
-          +(x.snip||x.text?('<div style="direction:rtl;text-align:right;font-size:13.5px;line-height:1.9;margin-top:5px">'+esc(String(x.snip||x.text).slice(0,220))+'…</div>'):'')
-          +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center"><button class="mini anyGo" style="font-size:12px;padding:5px 11px">📖 Открыть страницу</button>'+_shamChip(bid, x.page_id)+'</div>';
+          +(_rawSnip?('<div style="direction:rtl;text-align:right;font-size:13.5px;line-height:1.9;margin-top:5px">'+_cleanTurathSnip(_rawSnip.slice(0,240))+'…</div>'):'')   // #23: убраны сырые теги turath, совпадение подсвечено
+          +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center"><button class="mini anyGo" style="font-size:12px;padding:5px 11px">📖 Открыть страницу</button>'+(_rawSnip?'<button class="mini anyTr" style="font-size:12px;padding:5px 11px;color:var(--link)">🌐 Перевести</button>':'')+_shamChip(bid, x.page_id)+'</div><div class="anyTrOut" style="display:none;margin-top:6px;font-size:13px;line-height:1.6;border-top:1px dashed var(--border);padding-top:6px"></div>';   // #23: кнопка перевода
         const go=()=>{ try{ _actPush({t:'book', bid:bid, pg:x.page_id}); }catch(e){} openBook(bid, x.page_id); };
         d.querySelector('.anyOpen').onclick=go; d.querySelector('.anyGo').onclick=go;
+        const _trb=d.querySelector('.anyTr'); if(_trb) _trb.onclick=async()=>{ const o=d.querySelector('.anyTrOut'); if(!o) return;   // #23: перевод сниппета через /translate
+          if(o.dataset.done){ o.style.display=o.style.display==='none'?'block':'none'; return; }
+          if(!BACKEND_URL){ toast('Перевод работает на сервере'); return; }
+          o.style.display='block'; o.innerHTML='<span class="hint">🧠 Перевожу…</span>'; _trb.style.pointerEvents='none';
+          try{ const plain=_cleanTurathSnip(_rawSnip).replace(/<\/?mark>/g,'');
+            const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:plain.slice(0,1500),source:'maktaba',num:String(bid||''),initData:INITDATA})});
+            const j=await r.json().catch(()=>({})); o.innerHTML=j&&j.ru?('<span style="color:var(--hint);font-style:italic">Перевод (ИИ):</span> '+esc(j.ru)):'<span class="hint">Не удалось перевести</span>'; o.dataset.done='1';
+          }catch(e){ o.innerHTML='<span class="hint">🔧 сервис недоступен</span>'; } _trb.style.pointerEvents=''; };
         res.appendChild(d);
       });
     }catch(e){}
@@ -5948,7 +5963,8 @@ async function openNarrTable(opts){
   const all=await loadNarrTable();
   try{ await loadNarrVoc(); }catch(e){}   // TB-11: огласованные имена (M361c) в строках, где уже готовы
   try{ await loadNarrWiki(); }catch(e){}  // M467: вики-ссылки равиев (ru→en→ar) прямо в строках
-  const st={q:(opts.focusId!=null?('#'+opts.focusId):''), sort:opts.filterIds?'cnt':'id', shown:0};
+  const st={q:'', sort:opts.filterIds?'cnt':'id', shown:0};   // #11: НЕ загонять #focusId в фильтр (показывало 1 строку → «таблица пустая»); открываем ВСЮ таблицу, искомого подсвечиваем
+  if(opts.focusId!=null){ try{ setTimeout(()=>{ try{ const fr=m.querySelector('#ntFocusRow'); if(fr) fr.scrollIntoView({block:'center'}); else toast('Открыта общая таблица (18 989) — листай или фильтруй сверху'); }catch(e){} }, 300); }catch(e){} }
   const bar=m.querySelector('#ntBar'), list=m.querySelector('#ntList'), info=m.querySelector('#ntInfo');
   m.querySelector('#ntTitle').textContent=opts.title||('📋 Таблица передатчиков ('+all.length+')');
   info.textContent=opts.filterIds?'Сортировка по числу совместных звеньев в штудированных иснадах (наши коды Э1.1).'
@@ -5975,6 +5991,7 @@ async function openNarrTable(opts){
     const part=cur.slice(st.shown, st.shown+60); st.shown+=part.length;
     part.forEach(r=>{ const d=document.createElement('div');
       d.style.cssText='display:flex;gap:9px;align-items:center;padding:7px 4px;border-bottom:1px solid var(--border);cursor:pointer'+(opts.focusId===r[0]?';background:rgba(108,92,231,.14);border-radius:8px':'');
+      if(opts.focusId===r[0]) d.id='ntFocusRow';   // #11: якорь для прокрутки к искомому равию
       // TB-11: огласованное имя (M361c, где есть) + нисба/кунья мелко + ранг Ибн Хаджара цветом
       const voc=(_narrVoc&&(_narrVoc[String(r[0])]||_narrVoc[r[1]]))||'';   // ключ voc = ID равия (M361c)
       const rk=(r[4]||'').trim(); const rc=/ثق|أوثق|حافظ|إمام/.test(rk)?'#4eb573':/صدوق/.test(rk)?'#9fd3a8':/صحاب/.test(rk)?'#e8c35a':/ضعيف|متروك|كذاب|منكر/.test(rk)?'#e07f7f':'#9aa7b5';
