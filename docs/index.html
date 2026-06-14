@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v454</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v455</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -218,6 +218,7 @@
     <div id="qSuggR" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto"></div>
   </div>
   <div id="narrSugg" style="display:none;margin:-2px 0 8px;border:1px solid #6c5ce7;border-radius:12px;background:var(--card);overflow:hidden;max-height:300px;overflow-y:auto;box-shadow:0 6px 18px #0006"></div>
+  <div id="narrHint" style="display:none;align-items:center;gap:8px;margin:-2px 0 8px;padding:7px 11px;border:1px solid #6c5ce7;border-radius:10px;background:rgba(108,92,231,.10)"></div><!-- #85: ненавязчивая подсказка карточки равия в обычном поиске -->
   <div id="recentBox" style="display:none;margin:-4px 0 8px;border:1px solid var(--border);border-radius:10px;background:var(--card);overflow:hidden;box-shadow:0 6px 18px #0006">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 11px;border-bottom:1px solid var(--border)"><span class="hint" style="font-size:11px">🕐 Недавние</span><span><span id="recentClr" style="cursor:pointer;color:var(--link);font-size:11px">очистить</span> <span id="recentClose" style="cursor:pointer;color:var(--hint);font-size:14px;margin-inline-start:8px">✕</span></span></div>
     <div id="recentList"></div>
@@ -594,7 +595,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v454';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v455';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -6549,6 +6550,31 @@ async function narrSuggest(q){
   if(!cands.length){ box.style.display='none'; return; }
   _narrLastCands=cands; _narrRenderSugg();
 }
+// #85: в ОБЫЧНОМ поиске — ненавязчивая подсказка «это похоже на передатчика → открыть карточку», когда запрос ЯВНО имя равия.
+let _narrHintSeq=0; const _narrHintNo=new Set();
+async function _narrHintNormal(q){
+  const box=document.getElementById('narrHint'); if(!box) return;
+  const key=(q||'').trim().toLowerCase();
+  if(!key || _narrHintNo.has(key) || (typeof modes!=='undefined' && (modes.narr||modes.chain||modes.ai))){ box.style.display='none'; return; }
+  if(/^["'«].*["'»]$/.test(q.trim())){ box.style.display='none'; return; }          // точная фраза — не подсказывать
+  if(/^[\d٠-٩\s:№#×.]+$/.test(q.trim())){ box.style.display='none'; return; }        // номер/ссылка — не имя
+  const my=++_narrHintSeq;
+  let cands=[]; try{ cands=await narrCandidates(q); }catch(e){}
+  if(my!==_narrHintSeq) return;
+  const top=cands&&cands[0], second=cands&&cands[1]; const s1=top?top.sc:0, s2=second?second.sc:0; const ar=isArabic(q);
+  // ОЧЕВИДНОЕ имя (заявка): араб — точное(200)/префикс(100); рус — знаменитость(999) или уверенный многословный с запасом над 2-м.
+  // (обычные слова «молитва»/«صحيح»/«كتاب» дают sc 30–82 и НЕ проходят — проверено)
+  const ok = top && (ar ? s1>=100 : (s1===999 || (q.trim().split(/\s+/).length>=2 && s1>=55 && (s1-s2)>=10)));
+  if(!ok){ box.style.display='none'; return; }
+  const nm=top.nm, shortNm=nm.split(' ').slice(0,4).join(' ');
+  box.innerHTML='';
+  const a=document.createElement('span'); a.style.cssText='flex:1;cursor:pointer;display:flex;align-items:center;gap:7px;min-width:0';
+  a.innerHTML='<span style="font-size:15px;flex:none">👤</span><span style="font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis">Похоже на передатчика — <b style="font-family:\'Traditional Arabic\',serif">'+esc(shortNm)+'</b> · <span style="color:var(--link)">карточка ›</span></span>';
+  a.onclick=()=>{ try{hap('light');}catch(e){} box.style.display='none'; try{ narrOpen(nm); }catch(e){} };
+  const x=document.createElement('span'); x.textContent='✕'; x.title='Скрыть подсказку для этого запроса'; x.style.cssText='cursor:pointer;opacity:.55;font-size:13px;padding:0 2px;flex:none';
+  x.onclick=(e)=>{ e.stopPropagation(); _narrHintNo.add(key); box.style.display='none'; };
+  box.appendChild(a); box.appendChild(x); box.style.display='flex';
+}
 let _narrBypass=false;   // разовый обход narr-перехвата: «найти ХАДИСЫ этого равия» обычным поиском
 async function narrOpen(nm){
   try{ window._lastNarrNm=nm; _actPush({t:'narr', nm:nm}); }catch(e){}   // M462/M463
@@ -8545,13 +8571,13 @@ document.getElementById('goBtn').onclick=()=>{ hap('medium');
   el.addEventListener('keydown',e=>{ if(e.key==='Enter'){ if(e.shiftKey) return;   // Shift+Enter = перенос строки
       e.preventDefault(); clearTimeout(t); try{collapseBookSugg();}catch(e){} runSearch(true); } });   // Enter → поиск
   el.addEventListener('input',()=>{ clearTimeout(t); const v=el.value.trim();
-    if(v.length<2){ if(!v){document.getElementById('res').innerHTML='';setStatus('');} return; }
+    if(v.length<2){ if(!v){document.getElementById('res').innerHTML='';setStatus('');} const _nh=document.getElementById('narrHint'); if(_nh) _nh.style.display='none'; return; }
     if(modes.ai) return;   // режим «По смыслу (ИИ)»: НЕ дёргать ИИ на каждую букву (тратит ключ) — только по «Найти»/Enter
     if(!v.trim()){ try{ hideNarrSugg(); }catch(e){} }   // R46: пустое поле — подсказки равиев закрываются сами
     if(modes.narr||modes.chain){ if(/^[\d٠-٩\s:№#×.]+$/.test(v)){ hideNarrSugg(); } else { t=setTimeout(()=>narrSuggest(v),230); return; } }   // 👤 передатчик/⛓ цепь: живые подсказки; ЧИСЛА идут дальше — обычный поиск по номеру
     // НЕ авто-искать НЕОДНОЗНАЧНЫЙ номер аята (235 → 2:35 / 23:5): пусть помощник покажет варианты, юзер выберет
     if(tab==='quran'){ const mn=v.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)); if(/^\d{2,6}$/.test(mn) && (mn.length>=4 || +mn>114) && ayahCandidates(mn).length>1){ return; } }
-    t=setTimeout(()=>runSearch(true),500); });   // M334: 350→500мс — меньше тяжёлых перезапусков при наборе (плавность поля)
+    t=setTimeout(()=>{ runSearch(true); if(tab!=='quran'){ try{ _narrHintNormal(v); }catch(e){} } },500); });   // M334: 350→500мс — меньше тяжёлых перезапусков при наборе (плавность поля) · #85: подсказка карточки равия
 })();
 document.getElementById('neuroRun').onclick=neuroRun;
 /* Кнопка «наверх» (появляется при прокрутке вниз) */
