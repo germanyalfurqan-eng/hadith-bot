@@ -176,7 +176,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v495</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v496</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -607,7 +607,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v495';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v496';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -6368,9 +6368,14 @@ document.addEventListener('keydown', e=>{
   if(e.altKey && e.key==='ArrowLeft'){ const bk=[...document.querySelectorAll('button')].find(b=>b.offsetParent && (b.textContent.indexOf('← Назад к результатам')===0||b.textContent==='← назад'));
     if(bk){ bk.click(); e.preventDefault(); } }
 });
-// клики: «база Мактабы» → shamela.ws/narrator/<id>; «#id» → наша таблица
+// #141: наш_id → sunnah_sid (мост mid2sid) для ссылки sunnah.com/narrator/<sid> на карточке равия
+let _mid2sid=null,_mid2sidP=null;
+function loadMid2Sid(){ if(_mid2sid) return Promise.resolve(_mid2sid); if(_mid2sidP) return _mid2sidP;
+  _mid2sidP=fetch('./mid2sid.json?v='+APPVER).then(r=>r.ok?r.json():{}).then(j=>{ _mid2sid=j||{}; return _mid2sid; }).catch(()=>{ _mid2sid={}; return _mid2sid; }); return _mid2sidP; }
+// клики: «база Мактабы» → shamela.ws/narrator/<id>; sunnah.com → sunnah.com/narrator/<sid>; «#id» → наша таблица
 document.addEventListener('click', e=>{
   const sh=e.target&&e.target.closest&&e.target.closest('.shamNarr'); if(sh){ e.preventDefault(); e.stopPropagation(); try{ openLink('https://shamela.ws/narrator/'+sh.dataset.id); }catch(_e){ window.open('https://shamela.ws/narrator/'+sh.dataset.id,'_blank'); } return; }
+  const sn=e.target&&e.target.closest&&e.target.closest('.snNarr'); if(sn){ e.preventDefault(); e.stopPropagation(); try{ openLink(sn.dataset.u); }catch(_e){ window.open(sn.dataset.u,'_blank'); } return; }   // #141 sunnah.com
   const nt=e.target&&e.target.closest&&e.target.closest('.ntOpen'); if(nt){ e.stopPropagation(); openNarrTable({focusId:+nt.dataset.id}); }
 });
 /* ===== 👤 РЕЖИМ ПОИСКА ПЕРЕДАТЧИКА (Сессия 13, Ф-10): автоподсказки из 18989 равиев; рус↔араб «скелет согласных» ===== */
@@ -7081,7 +7086,8 @@ async function showNarratorCardLocal(name, host){
   try{ const fl=(await loadNarrFlags())[String(id)]; if(fl) h+='<div style="margin-top:3px">'+_flagBadge(fl, c[1])+'</div>'; }catch(e){}   // M386+M402 (тап → его хадисы в Сахихах)
   try{ const wk=(await loadNarrWiki())[String(id)];
     if(_WIKI_NARR_OK&&wk&&wk.u) h+='<div style="direction:ltr;text-align:left;margin-top:3px"><span class="nWiki" data-u="'+esc(wk.u)+'" style="cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px"><b style="font-family:Georgia,serif">W</b> Википедия'+(wk.l?(' · '+esc(wk.l)):'')+' ↗</span></div>'; }catch(e){}
-  h+='<div style="font-size:11px;margin:2px 0 7px">'+(((cfg.shLink||'wiki')!=='off')?('📖 <span class="shamNarr" data-id="'+c[0]+'" style="color:var(--link);cursor:pointer;text-decoration:underline dotted" title="Открыть эту карточку на сайте shamela.ws">موسوعة رواة الحديث (база Мактабы) ↗</span> · '):'')+'<span class="ntOpen" data-id="'+c[0]+'" style="color:#5b87b5;cursor:pointer;font-weight:700" title="Открыть общую таблицу передатчиков на этом номере">#'+c[0]+' 📋</span></div>'
+  let _snSid=''; try{ _snSid=(await loadMid2Sid())[String(c[0])]||''; }catch(e){}   // #141
+  h+='<div style="font-size:11px;margin:2px 0 7px">'+(((cfg.shLink||'wiki')!=='off')?('📖 <span class="shamNarr" data-id="'+c[0]+'" style="color:var(--link);cursor:pointer;text-decoration:underline dotted" title="Открыть эту карточку на сайте shamela.ws">موسوعة رواة الحديث (база Мактабы) ↗</span> · '):'')+(_snSid?('<span class="snNarr" data-u="https://sunnah.com/narrator/'+esc(_snSid)+'" style="color:#7fb0d8;cursor:pointer;text-decoration:underline dotted" title="Карточка передатчика на sunnah.com">🌐 sunnah.com ↗</span> · '):'')+'<span class="ntOpen" data-id="'+c[0]+'" style="color:#5b87b5;cursor:pointer;font-weight:700" title="Открыть общую таблицу передатчиков на этом номере">#'+c[0]+' 📋</span></div>'
     +row('الكنية',c[2])+row('النسب',c[3])+row('سنة الوفاة',c[4]?('~'+c[4]+'هـ'):'')+row('الطبقة',c[7])
     +rank('الرتبة عند ابن حجر',c[5])+rank('الرتبة عند الذهبي',c[6])
     +((c[5]||c[6])?'<div style="font-size:10.5px;color:var(--hint);margin-top:2px">↑ поздние своды — справочно (Ибн Хаджар и аз-Захаби НЕ из 48 мутабарунов); эталон — акваль 48 из 150 книг, разделы ниже (R38)</div>':'');
