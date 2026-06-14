@@ -173,7 +173,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v468</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v469</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -599,7 +599,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v468';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v469';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7712,8 +7712,13 @@ async function verifyNarr(card, place, text){
     box.innerHTML=h;
     box.querySelectorAll('.vChip').forEach(ch=>{ if(ch.dataset.mid) ch.onclick=(e)=>{ e.stopPropagation(); try{ openLink('https://shamela.ws/narrator/'+ch.dataset.mid); }catch(_e){} }; });
     card.appendChild(box);
-    // АНТИ-СПАМ: НЕ слать каждое расхождение в журнал/бот (это флудило A-051). Копим ЛОКАЛЬНО для сводного отчёта владельцу.
-    if(alarm){ try{ const K='verify_mismatch'; const j=JSON.parse(localStorage.getItem(K)||'{}'); j[place.bid+':'+place.num]={a:authCount,o:ourMids.length,m:missing,e:extra,t:Date.now()}; localStorage.setItem(K,JSON.stringify(j)); }catch(e){} }
+    // Уведомление об ошибке ШЛЁТСЯ (владелец просил оставить), но с ЗАЩИТОЙ ОТ СПАМА: одну и ту же ошибку (этот хадис) не повторяем чаще раза в 12ч.
+    if(alarm){ try{ const K='verify_mismatch'; const j=JSON.parse(localStorage.getItem(K)||'{}'); const kk=place.bid+':'+place.num;
+      const prev=j[kk]; const now=Date.now(); const RPT=12*3600*1000;
+      const sendNow = !prev || !prev.r || (now - prev.r > RPT);
+      j[kk]={a:authCount,o:ourMids.length,m:missing,e:extra,t:now,r:(sendNow?now:(prev?prev.r:now))}; localStorage.setItem(K,JSON.stringify(j));
+      if(sendNow){ _appReport('🚨[ИДЕНТИФ.ПЕРЕДАТЧИКОВ] '+place.bid+':'+place.num+' эталон('+srcLbl+') '+authCount+' / приложение '+ourMids.length+(missing.length?(' · пропущ:'+missing.join(',')):'')+(extra.length?(' · лишн:'+extra.join(',')):''), 'verifyNarr'); }
+    }catch(e){} }
   }catch(e){}
 }
 function _autoHLGuess(text, card, out){
