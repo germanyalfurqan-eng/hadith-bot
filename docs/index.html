@@ -173,7 +173,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v466</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v467</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -599,7 +599,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v466';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v467';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7651,7 +7651,7 @@ async function _codifHighlight(text, card, out, place){
 // A: авто-подсветка передатчиков в карточке. Сперва — ТОЧНАЯ по таблице (codif); нет данных по хадису → старый эвристический путь.
 function autoHighlightNarr(text, card, out, ref){
   try{ const pl=_codifPlace(ref); if(pl){ _codifHighlight(text,card,out,pl).then(ok=>{ if(!ok){ try{_autoHLGuess(text,card,out);}catch(e){} } }).catch(()=>{ try{_autoHLGuess(text,card,out);}catch(e){} });
-    try{ if(cfg.verify) verifyNarr(card, pl); }catch(e){}   // #VERIFY: независимая сверка с эталоном
+    try{ if(cfg.verify) verifyNarr(card, pl, text); }catch(e){}   // #VERIFY: независимая сверка с эталоном (text → автономный парс на сборниках без краула)
     return; } }catch(e){}
   _autoHLGuess(text,card,out);
 }
@@ -7662,37 +7662,57 @@ let _verCache={};
 async function _verifyChain(bid,num){ const key=bid+'_'+Math.floor(+num/500);
   if(!(key in _verCache)){ try{ const r=await fetch('./verify/'+key+'.json?v='+APPVER); _verCache[key]=r.ok?await r.json():null; }catch(e){ _verCache[key]=null; } }
   const m=_verCache[key]; return m?(m[String(num)]||null):null; }
-async function verifyNarr(card, place){
+// формы передачи между именами (для подписи в схеме): возвращает массив глаголов в порядке текста
+function _isnadForms(text){
+  let c=stripDiac(String(text||'')).replace(/ـ/g,'').replace(/[أإآ]/g,'ا').replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/ء/g,'');
+  c=c.split(/«|»|قال رسول|عن النبي|قال النبي/)[0]||c;
+  const VERB=/(حدثناه|حدثنا|حدثني|اخبرنا|اخبرني|انبانا|سمعت|سمع|عن|قالا|قالوا|ثنا)\s+/g;
+  const out=[]; let m; while((m=VERB.exec(c))) out.push(m[1]);
+  return out;
+}
+async function verifyNarr(card, place, text){
   try{
     if(card.dataset.verifyOn) return; card.dataset.verifyOn='1';
-    const rows=await _verifyChain(place.bid, place.num); if(!rows||!rows.length) return;   // нет эталона по этому хадису
-    const auth=rows.filter(r=>r[2]);                                  // [sid,имя,mid] с разрешённым id
-    const authMids=[...new Set(auth.map(r=>String(r[2])))];
-    let ourMids=[]; try{ const rec=await codifChain(place.bid,place.num); if(rec&&rec.n) ourMids=[...new Set(rec.n.map(x=>String(x[1])))]; }catch(e){}
-    const ourSet=new Set(ourMids), authSet=new Set(authMids);
-    const missing=authMids.filter(m=>!ourSet.has(m));                 // эталон есть → у нас НЕТ (пропуск)
-    const extra=ourMids.filter(m=>!authSet.has(m));                   // у нас есть → в эталоне НЕТ (лишний)
-    const cntMis=authMids.length!==ourMids.length;
-    const alarm=cntMis||missing.length>0||extra.length>0;
+    // ПРИЛОЖЕНИЕ: что подсветили (codif n)
+    let ourMids=[]; let ourNames=[];
+    try{ const rec=await codifChain(place.bid,place.num); if(rec&&rec.n){ ourMids=[...new Set(rec.n.map(x=>String(x[1])))]; ourNames=rec.n.map(x=>x[0]); } }catch(e){}
+    const rows=await _verifyChain(place.bid, place.num);
+    const forms=_isnadForms(text);
+    let auth, authMids, srcLbl, idMode;
+    if(rows&&rows.length){ auth=rows.filter(r=>r[2]); authMids=[...new Set(auth.map(r=>String(r[2])))]; srcLbl='sunnah.com / Мактаба'; idMode=true; }
+    else {
+      // НЕТ краула — определяю передатчиков САМ из текста хадиса (универсально, любой сборник)
+      let slots=[]; try{ slots=_isnadSlots(text||''); }catch(e){}
+      auth=slots.map(s=>[null,s,null]); authMids=null; srcLbl='автономно по тексту хадиса'; idMode=false;
+    }
+    const ourSet=new Set(ourMids);
+    const authCount = idMode ? authMids.length : auth.length;
+    const missing = idMode ? authMids.filter(m=>!ourSet.has(m)) : [];
+    const extra = idMode ? ourMids.filter(m=>!new Set(authMids).has(m)) : [];
+    const cntMis = authCount!==ourMids.length;
+    const alarm = cntMis || missing.length>0 || extra.length>0;
     const box=document.createElement('div'); box.className='verifyBox';
-    box.style.cssText='margin-top:9px;border-radius:10px;padding:8px 10px;font-size:12px;border:1px solid '+(alarm?'#e0796a':'#3a8a5a')+';background:'+(alarm?'rgba(224,121,106,.10)':'rgba(58,138,90,.08)');
+    box.style.cssText='margin-top:9px;border-radius:10px;padding:9px 11px;font-size:12px;border:1px solid '+(alarm?'#e0796a':'#3a8a5a')+';background:'+(alarm?'rgba(224,121,106,.10)':'rgba(58,138,90,.08)');
     let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b style="color:'+(alarm?'#e0796a':'#7fd3a0')+'">'+(alarm?'🚨 СВЕРКА: РАСХОЖДЕНИЕ':'🛡 Сверка: совпадает')+'</b>'
-      +'<span style="color:var(--hint)">эталон (sunnah/Мактаба): <b>'+authMids.length+'</b> · приложение: <b style="color:'+(cntMis?'#e0796a':'inherit')+'">'+ourMids.length+'</b></span></div>';
-    // схема эталона: чипы с id Мактабы + ссылки
-    h+='<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;direction:rtl">';
-    auth.forEach((r,i)=>{ const sid=r[0],nm=r[1],mid=String(r[2]); const ok=ourSet.has(mid);
-      h+='<span class="vChip" data-mid="'+esc(mid)+'" data-sid="'+esc(sid)+'" style="cursor:pointer;border:1px solid '+(ok?'#3a8a5a':'#e0796a')+';border-radius:8px;padding:2px 7px;background:'+(ok?'rgba(58,138,90,.12)':'rgba(224,121,106,.12)')+'" title="Открыть карточку в Мактабе (shamela.ws/narrator/'+esc(mid)+')"><span style="font-family:\'Traditional Arabic\',serif">'+esc(nm)+'</span> <span style="color:var(--hint);font-size:10px;direction:ltr">'+(ok?'✓':'✗')+' id'+esc(mid)+'</span></span>';
+      +'<span style="color:var(--hint)">эталон ('+srcLbl+'): <b>'+authCount+'</b> · приложение: <b style="color:'+(cntMis?'#e0796a':'inherit')+'">'+ourMids.length+'</b></span></div>';
+    // СХЕМА-ЦЕПЬ передатчиков с подписанными id и формой передачи между ними (наглядно для сверки)
+    h+='<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:8px;direction:rtl;line-height:1.9">';
+    auth.forEach((r,i)=>{ const nm=r[1], mid=r[2]?String(r[2]):null; const ok=idMode?ourSet.has(mid):true;
+      if(i>0 && forms[i-1]) h+='<span style="color:var(--hint);font-size:11px;font-family:\'Traditional Arabic\',serif">←'+esc(forms[i-1])+'←</span>';
+      else if(i>0) h+='<span style="color:var(--hint)">←</span>';
+      h+='<span class="vChip"'+(mid?(' data-mid="'+esc(mid)+'"'):'')+' style="'+(mid?'cursor:pointer;':'')+'border:1px solid '+(idMode?(ok?'#3a8a5a':'#e0796a'):'#6c5ce7')+';border-radius:8px;padding:2px 7px;background:'+(idMode?(ok?'rgba(58,138,90,.12)':'rgba(224,121,106,.12)'):'rgba(108,92,231,.10)')+'"'+(mid?(' title="Карточка в Мактабе: shamela.ws/narrator/'+esc(mid)+'"'):'')+'><span style="font-family:\'Traditional Arabic\',serif">'+esc(nm)+'</span>'+(mid?(' <span style="color:var(--hint);font-size:10px;direction:ltr">'+(ok?'✓':'✗')+' id'+esc(mid)+' ↗</span>'):'')+'</span>';
     });
     h+='</div>';
-    if(alarm){ h+='<div style="margin-top:6px;color:#e0b3a8;font-size:11px">';
-      if(missing.length) h+='пропущено приложением: '+missing.length+' (id '+missing.join(', ')+')<br>';
-      if(extra.length) h+='лишних в приложении: '+extra.length+' (id '+extra.join(', ')+')';
+    if(!idMode) h+='<div style="margin-top:6px;color:var(--hint);font-size:11px">⚠️ Авторитетные id (Мактаба) для этого сборника ещё подгружаются (краул sunnah.com идёт). Сверяю КОЛИЧЕСТВО передатчиков по тексту хадиса; id появятся после докачки.</div>';
+    if(alarm && idMode){ h+='<div class="vDet" style="margin-top:7px;color:#e0b3a8;font-size:11px">';
+      if(missing.length) h+='✗ пропущено приложением: <b>'+missing.length+'</b> (id '+missing.join(', ')+')<br>';
+      if(extra.length) h+='＋ лишних в приложении: <b>'+extra.length+'</b> (id '+extra.join(', ')+')';
       h+='</div>'; }
+    else if(alarm){ h+='<div style="margin-top:7px;color:#e0b3a8;font-size:11px">⚠️ По тексту передатчиков <b>'+authCount+'</b>, а приложение подсветило <b>'+ourMids.length+'</b> — расхождение в количестве.</div>'; }
     box.innerHTML=h;
-    // клики по чипам → карточка равия в Мактабе (id Мактабы = наш id)
-    box.querySelectorAll('.vChip').forEach(ch=>{ ch.onclick=(e)=>{ e.stopPropagation(); try{ openLink('https://shamela.ws/narrator/'+ch.dataset.mid); }catch(_e){} }; });
+    box.querySelectorAll('.vChip').forEach(ch=>{ if(ch.dataset.mid) ch.onclick=(e)=>{ e.stopPropagation(); try{ openLink('https://shamela.ws/narrator/'+ch.dataset.mid); }catch(_e){} }; });
     card.appendChild(box);
-    if(alarm){ try{ _appReport('🚨[ИДЕНТИФ.ПЕРЕДАТЧИКОВ] '+place.bid+':'+place.num+' эталон '+authMids.length+' / приложение '+ourMids.length+(missing.length?(' · пропущ id:'+missing.join(',')):'')+(extra.length?(' · лишн id:'+extra.join(',')):''), 'verifyNarr'); }catch(e){} }
+    if(alarm){ try{ _appReport('🚨[ИДЕНТИФ.ПЕРЕДАТЧИКОВ] '+place.bid+':'+place.num+' эталон('+srcLbl+') '+authCount+' / приложение '+ourMids.length+(missing.length?(' · пропущ:'+missing.join(',')):'')+(extra.length?(' · лишн:'+extra.join(',')):''), 'verifyNarr'); }catch(e){} }
   }catch(e){}
 }
 function _autoHLGuess(text, card, out){
