@@ -173,7 +173,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v461</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v462</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -598,7 +598,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v461';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v462';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8379,11 +8379,35 @@ async function renderTasks(){
         hs+='<div style="font-size:12px;color:var(--hint);margin-top:3px">💸 Топ по ИИ-расходу: '+tu.map(x=>esc(String(x.name||'?'))+' ('+(x.fresh||0)+')').join(' · ')+'</div>'; }
       out.insertAdjacentHTML('beforeend', hs);
     }catch(e){}
+    // #59/#99: ПОЛНОЦЕННЫЙ интерфейс заявок — реальные статусы (requests_status.json: done/progress/wait/open + версия) + статистика + фильтры
     const reqs=(rj&&rj.requests)||[];
-    if(reqs.length){ const openR=reqs.filter(r=>!r.done), doneR=reqs.filter(r=>r.done);
-      let h2='<div style="margin-top:16px;border-top:2px solid var(--btn);padding-top:9px"><b>📨 Мои заявки из бота — открытых '+openR.length+' · выполнено '+doneR.length+':</b> <span style="color:var(--hint);font-size:11px">(синхрон с журналом бота)</span></div>';
-      reqs.slice(0,80).forEach(r=>{ h2+='<div style="margin:5px 0;font-size:13px;border-bottom:1px solid var(--border);padding-bottom:4px">'+(r.done?'✅':'🔴')+' <b>#'+r.id+'</b> <span style="color:var(--hint);font-size:11px">'+esc(r.d||'')+'</span>'+(r.img?' 📷':'')+'<br>'+esc((r.t||'').slice(0,150))+'</div>'; });
-      out.insertAdjacentHTML('beforeend', h2); }
+    let RSTAT={}; try{ RSTAT=await (await fetch('./requests_status.json?v='+APPVER+'&t='+Date.now())).json(); }catch(e){}
+    if(reqs.length){
+      const META={done:{ic:'✅',lbl:'Выполнено',c:'#4eb573'},progress:{ic:'🔧',lbl:'В работе',c:'#e0b34a'},wait:{ic:'⏳',lbl:'Ожидают',c:'#7f9bd6'},open:{ic:'📋',lbl:'Не выполнено',c:'#e0796a'}};
+      const items=reqs.map(r=>{ const s=RSTAT[String(r.id)]||(r.done?{s:'done'}:{s:'open'}); return {id:r.id,d:r.d||'',t:r.t||'',img:!!r.img,s:(META[s.s]?s.s:'open'),v:s.v||'',why:s.why||''}; });
+      const cnt={done:0,progress:0,wait:0,open:0}; items.forEach(i=>{ cnt[i.s]++; });
+      const box=document.createElement('div'); box.style.cssText='margin-top:16px;border-top:2px solid var(--btn);padding-top:10px'; out.appendChild(box);
+      const total=items.length;
+      box.innerHTML='<b>📨 Заявки владельца — всего '+total+'</b> <span style="color:var(--hint);font-size:11px">(синхрон с ботом + статус по версиям приложения)</span>'
+        +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px">'
+        +['done','progress','wait','open'].map(k=>'<span style="background:'+META[k].c+'22;border:1px solid '+META[k].c+';border-radius:20px;padding:4px 11px;font-size:12.5px;font-weight:700;color:'+META[k].c+'">'+META[k].ic+' '+META[k].lbl+': '+cnt[k]+'</span>').join('')
+        +'</div>';
+      const fbar=document.createElement('div'); fbar.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin:8px 0'; box.appendChild(fbar);
+      const list=document.createElement('div'); box.appendChild(list);
+      const FILT=[['open','📋 Не вып.'],['progress','🔧 В работе'],['wait','⏳ Ожидают'],['done','✅ Выполнено'],['all','Все']];
+      const draw=()=>{ const cur=window._reqFilt||'open';
+        [...fbar.children].forEach((ch,idx)=>{ const on=FILT[idx][0]===cur; ch.style.background=on?'var(--btn)':'transparent'; ch.style.color=on?'#fff':'var(--text)'; ch.style.borderColor=on?'var(--btn)':'var(--border)'; ch.style.fontWeight=on?'700':'400'; });
+        list.innerHTML=''; const sub=items.filter(i=>cur==='all'||i.s===cur).sort((a,b)=>b.id-a.id);
+        if(!sub.length){ list.innerHTML='<div style="color:var(--hint);font-size:13px;padding:8px 2px">— в этой категории пусто —</div>'; return; }
+        sub.forEach(i=>{ const m=META[i.s]; const row=document.createElement('div');
+          row.style.cssText='margin:6px 0;font-size:13px;border-bottom:1px solid var(--border);padding-bottom:5px';
+          row.innerHTML='<span style="color:'+m.c+';font-weight:700">'+m.ic+' #'+i.id+'</span> <span style="color:var(--hint);font-size:11px">'+esc(i.d)+'</span>'+(i.img?' 📷':'')+(i.v&&i.v!=='v?'?(' <span style="background:#4eb57322;color:#4eb573;border-radius:6px;padding:0 6px;font-size:11px">'+esc(i.v)+'</span>'):'')+(i.why?(' <span style="color:'+m.c+';font-size:11px">· '+esc(i.why)+'</span>'):'')+'<br><span style="color:var(--text)">'+esc(i.t.slice(0,170))+(i.t.length>170?'…':'')+'</span>';
+          list.appendChild(row); }); };
+      FILT.forEach(([k,lbl])=>{ const ch=document.createElement('span'); ch.textContent=lbl+' '+(k==='all'?total:cnt[k]);
+        ch.style.cssText='cursor:pointer;border:1px solid var(--border);border-radius:18px;padding:4px 11px;font-size:12px';
+        ch.onclick=()=>{ window._reqFilt=k; draw(); }; fbar.appendChild(ch); });
+      draw();
+    }
   }catch(e){}
 }
 var _jt=document.getElementById('jTasks'); if(_jt) _jt.onclick=()=>{ document.querySelectorAll('#devModal .chip').forEach(c=>c.classList.remove('on')); _jt.classList.add('on'); renderTasks(); };
