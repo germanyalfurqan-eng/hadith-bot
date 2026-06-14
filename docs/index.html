@@ -174,7 +174,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v485</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v486</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -603,7 +603,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v485';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v486';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5190,6 +5190,11 @@ async function doTakhrij(text, ref, out, btn, force){
   const k=_tkMkey(text);
   let su=0;
   if(k){ try{ const r=await fetch('./tahrij/mh_'+k.slice(0,2)+'.json?v='+APPVER); if(r.ok){ const mh=await r.json(); su=mh[k]||0; } }catch(e){} }
+  if(aborted()) return;
+  // #140: текстовый матн-ключ не нашёл su (огласовки/издание) → фолбэк по МЕСТУ (bid|num) через выверенные place2su шарды (su детерминирован, 100% согласован с sp). Кейс: Бухари 2711 → su 2319.
+  if(!su && ref && ref.num!=null){ try{ const _pl=_codifPlace(ref);
+    if(_pl){ const ph=(parseInt(_pl.bid,10)+parseInt(_pl.num,10))%100;
+      const r=await fetch('./tahrij/place2su_'+ph+'.json?v='+APPVER); if(r.ok){ const p2s=await r.json(); su=p2s[_pl.bid+'|'+_pl.num]||0; } } }catch(e){} }
   if(aborted()) return;
   if(!su){
     tkSec.innerHTML='<div class="hint" style="font-size:12.5px">🌿 В нашем тахридже версий этого текста не найдено'+(k?'':' (нет маркера марфуʿ — возможно асар/слова сподвижника/тафсир)')+'.<br><span style="opacity:.8">Раздел показывает ТОЛЬКО выверенный тахридж по 64 печатям (M495) — без подмеса текст-поиска.</span></div>';
