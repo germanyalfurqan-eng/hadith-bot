@@ -167,7 +167,7 @@
 <div class="gate" id="gate" style="display:none">
   <img class="logo" src="./logo.png" alt="M" style="width:78px;height:78px;box-shadow:0 0 26px #2f7be6cc">
 
-  <h2>Muslimoon Bot</h2>
+  <h2 id="gateTitle" style="cursor:pointer">Muslimoon Bot</h2>
   <p id="gateMsg">🔒 Доступ пока только для владельца. Скоро откроем больше функций для всех — ин ша Аллах.</p>
 </div>
 
@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v499</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v500</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -608,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v499';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v500';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2029,13 +2029,13 @@ async function runSearch(explicit){
   const rootMode = modes.root && !numMode;
   const rootForms={}; let qSkels=[];
   if(rootMode){ qSkels = groups.flat().filter(t=>!t.neg).flatMap(t=>canon(t.t).split(' ').map(skel)).filter(s=>s.length>=2); }
-  let count=0; const CAP=200; const BATCH=50;  // M38: пагинация по 50 результатов
+  let count=0; let CAP=200; const BATCH=50;  // M38/M56: пагинация по 50 результатов; CAP динамически (200 первых, затем +200 по кнопке)
   const setHead=(done)=>{ const n = count
       ? ('Найдено: '+count+(count>CAP?' (показаны первые '+CAP+')':'')+(done?'':' · ищу…'))
       : (done?(((!numMode && !/[ء-يa-zа-яё]/i.test(q))?'🤔 Похоже на опечатку или случайные символы — введите слово, фразу или № хадиса':('Ничего не найдено 🤷'+(smartNote?' — попробуй иначе':'')))):'Ищу…');   // M199: junk-ввод («&88», «((») → понятная подсказка
-    head.innerHTML = (smartNote?('<div style="color:var(--link);margin-bottom:4px;font-size:13px">'+esc(smartNote)+' <span class="redoAi" style="cursor:pointer;text-decoration:underline;white-space:nowrap">🔄 повторить глубже (ИИ)</span></div>'):'')+n; };
+    head.innerHTML = (smartNote?('<div style="color:var(--link);margin-bottom:4px;font-size:13px">'+esc(smartNote)+' <span class="redoAi" style="cursor:pointer;text-decoration:underline;white-space:nowrap">🔄 повторить глубже (ИИ)</span></div>'):'')+n; if(done && count>CAP) ensureMoreBtn(seq, _lastQueryTerms, q, groups, modes); };
   // M229: первые 40 — сразу (мгновенно видно), остальные до CAP — порциями (не блокирует ввод/исправление)
-  const add=(d)=>{ _results.push(d); count++; if(count<=40) res.appendChild(makeCard(d)); else if(count<=CAP){ _renderQ.push(d); if(!_flushT) _flushT=setTimeout(_flushRender,0); } };
+  const add=(d)=>{ _results.push(d); count++; if(count<=40) res.appendChild(makeCard(d)); else if(count<=CAP){ _renderQ.push(d); if(!_flushT) _flushT=setTimeout(_flushRender,0); } else if(count===CAP+1){ ensureMoreBtn(seq, _lastQueryTerms, q, groups, modes); } };
   // «Искать ещё в большой библиотеке» — 16 изданий + Мукбиль (не грузим по умолчанию ~127МБ; по кнопке, с прогрессом, потом кэш в сессии)
   function addLibMore(){
     if(tab!=='hadith') return; const res=document.getElementById('res');
@@ -4202,6 +4202,7 @@ async function openCatalog(q0){   // q0 (опц.) — начальный зап�
     const cats=[...new Set(cat.map(b=>b.c).filter(Boolean))].sort((a,b)=>{ const ia=(_CAT_IDX[a]?_CAT_IDX[a].ord:999), ib=(_CAT_IDX[b]?_CAT_IDX[b].ord:999); if(ia===ib) return a.localeCompare(b); return ia-ib; });
     m.innerHTML='<div class="panel" style="max-width:640px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 12px;padding:14px 16px 11px;border-bottom:1px solid var(--border)"><b id="catTitle" style="font-size:14px;line-height:1.3">📚 Мактаба аш-Шамиля<br><span style="font-size:11px;color:var(--hint);font-weight:400" dir="rtl">المكتبة الشاملة · <span dir="ltr" style="unicode-bidi:isolate">'+cat.length+' книг</span></span></b><button class="mini" id="catClose" style="flex:none">закрыть ✕</button></div>'
      +'<input id="catSearch" placeholder="🔎 Введите название книги или автора…" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:2px solid var(--btn);border-radius:10px;padding:10px 12px;font-size:15px;margin-bottom:7px">'
+     +'<div style="display:flex;gap:12px;margin-bottom:7px;font-size:13px"><label style="display:flex;gap:5px;align-items:center;cursor:pointer;color:var(--text)"><input type="checkbox" id="catByTitle" checked> 📖 по названию</label><label style="display:flex;gap:5px;align-items:center;cursor:pointer;color:var(--text)"><input type="checkbox" id="catByAuthor" checked> ✍️ по автору</label></div>'
      +'<select id="catCat" style="display:none"><option value="" selected>— все разделы —</option><option value="__first40__">📜 Первоисточники хадисов</option><option value="__rijal__">📚 Наша подборка риджаль (149)</option><option value="__fav__">⭐ Моё избранное</option>'+cats.map(c=>'<option value="'+esc(c)+'">'+esc(catLabel(c))+'</option>').join('')+'</select>'
      +'<div style="display:flex;gap:6px;margin-bottom:6px"><button class="mini" id="catAi" style="flex:1.6;background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:9px 11px;font-size:14px">🧠 Умный поиск книги (ИИ)</button><button class="mini" id="catFavBtn" style="flex:1;border:1px solid #a8862e;color:#ffd75e;background:transparent;padding:9px 11px;font-size:14px">⭐ Избранное</button></div>'
      +'<div class="hint" id="catAiHint" style="font-size:12px;color:var(--hint);margin:-2px 0 8px">📖 <b style="color:var(--text)">Название = читать</b> · <b style="color:#bff5d4">➕ = добавить в поиск</b></div>'
@@ -4316,7 +4317,13 @@ async function openCatalog(q0){   // q0 (опц.) — начальный зап�
             return !!_narrRuMatch(_qsk, b.__sk); }catch(e){ return false; } };
         const _ruHit=(b)=>{ if(!_ruq) return false; const tr=(_catTr&&_catTr.map&&_catTr.map[b.n])||null;
           return !!(tr&&tr.ru&&tr.ru.toLowerCase().indexOf(_ruq)!==-1); };
-        arr=arr.filter(b=>((b.n||'').toLowerCase().indexOf(ql)!==-1)||((b.a||'').toLowerCase().indexOf(ql)!==-1)||canon(b.n||'').indexOf(cq)!==-1||canon(b.a||'').indexOf(cq)!==-1||_ruHit(b)||_skelHit(b));
+        const _byTitle=m.querySelector('#catByTitle')?m.querySelector('#catByTitle').checked:true;
+        const _byAuthor=m.querySelector('#catByAuthor')?m.querySelector('#catByAuthor').checked:true;
+        arr=arr.filter(b=>{
+          const titleMatch=((b.n||'').toLowerCase().indexOf(ql)!==-1)||canon(b.n||'').indexOf(cq)!==-1||(_ruHit(b)||_skelHit(b));
+          const authorMatch=((b.a||'').toLowerCase().indexOf(ql)!==-1)||canon(b.a||'').indexOf(cq)!==-1;
+          return (_byTitle && titleMatch) || (_byAuthor && authorMatch);
+        });
         // РЕЛЕВАНТНОСТЬ: совпадение в названии важнее автора; все слова в названии — выше
         const words=cq.split(' ').filter(w=>w.length>=2);
         const score=b=>{ const nm=canon(b.n||''), au=canon(b.a||''); let s=0;
@@ -9178,6 +9185,7 @@ document.getElementById('favClose').onclick=()=>{ document.getElementById('favMo
 document.getElementById('favByDate').onclick=()=>renderFav('date');
 document.getElementById('favByColl').onclick=()=>renderFav('coll');
 var _yt=document.getElementById('ytLink'); if(_yt) _yt.onclick=()=>openLink('https://www.youtube.com/@MUSLIMOON.TT2024');
+var _gt=document.getElementById('gateTitle'); if(_gt) _gt.onclick=()=>openLink('https://www.youtube.com/@MUSLIMOON.TT2024');
 var _cal=document.getElementById('copyAppLink'); if(_cal) _cal.onclick=()=>copyText('https://germanyalfurqan-eng.github.io/hadith-bot/');
 var _sab=document.getElementById('shareAppBtn'); if(_sab) _sab.onclick=shareApp;
 
