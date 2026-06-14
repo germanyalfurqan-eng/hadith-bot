@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v429</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v430</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -300,6 +300,7 @@
     <div class="row"><span>🔤 Коран без огласовок (تشكيل)</span><div class="sw" id="noDiacSw"></div></div>
     <div class="row"><span>🎨 Выделять иснад (цепочку) серым</span><div class="sw" id="isnadSw"></div></div>
     <div class="row"><span>🙈 Скрывать иснад (показывать только матн)</span><div class="sw" id="hideIsnadSw"></div></div>
+    <div class="row"><span>📖 Кнопка «Страница в Мактабе» на карточках хадиса</span><div class="sw" id="maktabaSw"></div></div>
     <div class="row"><span>🎯 Строгий поиск: только где есть ВСЕ слова <span style="color:var(--hint);font-size:11px">(выкл → покажет и близкие)</span></span><div class="sw" id="strictSw"></div></div>
     <div class="row"><span>🔡 Автоподсказки в Коране (списком при вводе номера)</span><div class="sw" id="acSw"></div></div>
     <div class="row"><span>🌿 Тап по слову аята → корень + все места в Коране</span><div class="sw" id="wtSw"></div></div>
@@ -577,7 +578,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v429';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v430';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4758,6 +4759,15 @@ function addTr(meta,card,text,ayah,fav){
     nb.onclick=()=>{ if(nbout.dataset.loaded==='1'){ const vis=nbout.style.display!=='none'; nbout.style.display=vis?'none':'block'; try{hap('light');}catch(e){} return; } openIsnadTree(text, nbout, refOf(fav)); nbout.dataset.loaded='1'; };   // повторный клик — свернуть/развернуть; ref → Э2.2-карта версий
     meta.appendChild(nb); card.appendChild(nbout);
     try{ autoHighlightNarr(text, card, nbout, refOf(fav)); }catch(e){} }   // A: подсветить передатчиков СРАЗУ (точно по таблице codif; кликабельны без нажатия кнопки)
+  // R-заявка 14.06: ссылка на страницу хадиса в Мактабе (turath/الشاملة) на КАЖДОЙ карточке. Тумблер cfg.maktabaBtn (по умолчанию вкл).
+  if(!ayah && cfg.maktabaBtn!==false){ try{ const _r0=refOf(fav); let _bid=null, _num=null;
+    if(_r0){ _num=_r0.num;
+      _bid = (_r0.bid!=null?String(_r0.bid):null) || (_r0.source!=null ? ((COLL_BIDS[_r0.source]&&COLL_BIDS[_r0.source][0]) || (/^\d+$/.test(String(_r0.source))?String(_r0.source):null)) : null); }
+    if(_bid && _num!=null){ const mb=document.createElement('button'); mb.className='tr-btn'; mb.textContent='📖 Страница в Мактабе';
+      mb.title='Открыть этот хадис на его странице в Мактабе (المكتبة الشاملة)';
+      mb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--link);padding:6px 10px';
+      mb.onclick=()=>{ try{hap('light');}catch(e){} try{ openByCodeNum(_bid, _num); }catch(e){ try{ openBook(_bid, _num); }catch(_e){ toast('Не удалось открыть'); } } };
+      meta.appendChild(mb); } }catch(e){} }
   const fbb=document.createElement('button');fbb.className='tr-btn';fbb.textContent='✍️ Сообщить нам';fbb.title='Написать нам об ошибке/замечании';
   fbb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--link);padding:6px 10px';
   fbb.onclick=()=>openFeedback((fav&&fav.label)||'');
@@ -8200,6 +8210,7 @@ var _rcw=document.getElementById('recentSw'); if(_rcw){ _rcw.classList.toggle('o
 var _tjw=document.getElementById('tafJumpSw'); if(_tjw){ _tjw.classList.toggle('on',cfg.tafJump!==false); _tjw.onclick=()=>{ cfg.tafJump=(cfg.tafJump===false); saveCfg(cfg); _tjw.classList.toggle('on',cfg.tafJump!==false); }; }
 var _str=document.getElementById('strictSw'); if(_str){ _str.classList.toggle('on',cfg.strictSearch!==false); _str.onclick=()=>{ cfg.strictSearch=(cfg.strictSearch===false); saveCfg(cfg); _str.classList.toggle('on',cfg.strictSearch!==false); toast(cfg.strictSearch!==false?'🎯 Строгий поиск ВКЛ — только все слова':'Строгий поиск ВЫКЛ — покажет и близкие'); }; }   // M283-тумблер
 var _hpw=document.getElementById('hapticSw'); if(_hpw){ _hpw.classList.toggle('on',cfg.haptic!==false); _hpw.onclick=()=>{ cfg.haptic=(cfg.haptic===false); saveCfg(cfg); _hpw.classList.toggle('on',cfg.haptic!==false); if(cfg.haptic!==false){ _hapErr=0; hap('light'); } }; }
+var _mkw=document.getElementById('maktabaSw'); if(_mkw){ _mkw.classList.toggle('on',cfg.maktabaBtn!==false); _mkw.onclick=()=>{ cfg.maktabaBtn=(cfg.maktabaBtn===false); saveCfg(cfg); _mkw.classList.toggle('on',cfg.maktabaBtn!==false); }; }
 var _psw=document.getElementById('popSw'); if(_psw){ _psw.classList.toggle('on',cfg.popular!==false); _psw.onclick=()=>{ cfg.popular=(cfg.popular===false); saveCfg(cfg); _psw.classList.toggle('on',cfg.popular!==false); var pb=document.getElementById('popularBox'); if(cfg.popular===false&&pb){pb.style.display='none';} else { try{renderPopular();}catch(e){} } }; }
 applyTheme();
 /* Подсказка при попытке увеличить экран пальцами, когда зум выключен (ненавязчиво, с «не показывать» и эскалацией) */
