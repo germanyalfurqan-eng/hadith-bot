@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v433</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v434</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -579,7 +579,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v433';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v434';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1888,7 +1888,7 @@ async function runSearch(explicit){
   let count=0; const CAP=200;
   const setHead=(done)=>{ const n = count
       ? ('Найдено: '+count+(count>CAP?' (показаны первые '+CAP+')':'')+(done?'':' · ищу…'))
-      : (done?('Ничего не найдено 🤷'+(smartNote?' — попробуй иначе':'')):'Ищу…');
+      : (done?(((!numMode && !/[ء-يa-zа-яё]/i.test(q))?'🤔 Похоже на опечатку или случайные символы — введите слово, фразу или № хадиса':('Ничего не найдено 🤷'+(smartNote?' — попробуй иначе':'')))):'Ищу…');   // M199: junk-ввод («&88», «((») → понятная подсказка
     head.innerHTML = (smartNote?('<div style="color:var(--link);margin-bottom:4px;font-size:13px">'+esc(smartNote)+' <span class="redoAi" style="cursor:pointer;text-decoration:underline;white-space:nowrap">🔄 повторить глубже (ИИ)</span></div>'):'')+n; };
   // M229: первые 40 — сразу (мгновенно видно), остальные до CAP — порциями (не блокирует ввод/исправление)
   const add=(d)=>{ _results.push(d); count++; if(count<=40) res.appendChild(makeCard(d)); else if(count<=CAP){ _renderQ.push(d); if(!_flushT) _flushT=setTimeout(_flushRender,0); } };
@@ -4920,8 +4920,9 @@ async function doTakhrij(text, ref, out, btn, force){
   if(_self) pl=pl.filter(p=>!(String(p[0])===_self.bid&&String(p[1])===_self.num));
   tkSec.innerHTML='';
   const head=document.createElement('div'); head.style.cssText='font-size:12px;color:#9fd3a8;margin:2px 0 4px';
-  head.innerHTML='🌿 Наш тахридж: уникальный хадис <b>№'+su+'</b>'+(pl.length>1?(' · <b>'+_ruVers(pl.length)+'</b> по сборникам (клик по № — читалка):'):' — других версий среди 64 печатей не найдено.');
+  head.innerHTML='🌿 Наш тахридж: уникальный хадис <b class="thSuJump" style="cursor:pointer;text-decoration:underline dotted" title="Открыть таблицу всех хадисов на этом уникальном № (тахридж)">№'+su+' 📒</b>'+(pl.length>1?(' · <b>'+_ruVers(pl.length)+'</b> по сборникам (клик по № — читалка):'):' — других версий среди 64 печатей не найдено.');
   tkSec.appendChild(head);
+  try{ const _sj=head.querySelector('.thSuJump'); if(_sj) _sj.onclick=()=>{ try{ openHadithTable(); }catch(e){} setTimeout(()=>{ const q=document.getElementById('htQ'); if(q){ q.value='s'+su; q.dispatchEvent(new Event('input')); } }, 180); }; }catch(e){}   // M492: №su → таблица хадисов с фильтром тахриджа
   const byb={}; pl.forEach(([bb,nn])=>{ (byb[bb]=byb[bb]||[]).push(nn); });
   // R55: СВОЙ сборник первым, затем по АВТОРИТЕТУ (Бухари>Муслим>الكتب التسعة>Хузайма/Хиббан/Хаким>…), не наоборот
   const _RANK={'1681':1,'1727':2,'654':3,'1726':3,'117359':3,'7895':4,'1435':4,'829':5,'8361':5,'1198':6,'28107':7,'25794':8,'98139':8,'21795':9,'1456':10,'9647':11,'13037':12,'537':20,'1446':21,'1424':22,'18144':23,'8493':24,'12520':30,'12981':31,'1733':32,'748':33,'13159':34,'10631':35,'9615':36,'13122':37,'13136':38,'4407':39,'278':40,'1613':41,'8218':42,'13027':43,'21545':44,'13028':45,'3610':46,'5562':47,'13155':48};
@@ -5827,7 +5828,7 @@ async function openHadithTable(){
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='hadTblModal';
     m.innerHTML='<div class="panel" style="max-width:720px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 8px;padding:13px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:14.5px">📒 Таблица всех хадисов — идентификация</b><button class="mini" id="htClose" style="flex:none">закрыть ✕</button></div>'
       +'<div class="hint" style="font-size:11.5px;margin-bottom:6px">Каждый хадис 64 первоисточников: <b>общий №</b> (точные копии своего не получают) · <b>код цепи</b> (передатчики+формы) · <b>id передатчиков</b> · <b>№ версии</b> (точь-в-точь иснад+матн) · <b>№ уникального хадиса</b> (по матну — ветки вместе) · <b style="color:#9fd3a8">🌿 хадис тахриджа</b> (ОДИН случай Пророка ﷺ — версии объединены, Ф-17; тап по 🌿 — все версии по сборникам). Тап по строке — открыть хадис.</div>'
-      +'<input id="htQ" placeholder="фильтр: общий № / №версии (v123) / №хадиса (u45) / тахридж (s12) / код цепи" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;margin-bottom:6px">'
+      +'<input id="htQ" placeholder="фильтр: № / версия (v123) / хадис (u45) / тахридж (s12) / код цепи / сборник (бухари)" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;margin-bottom:6px">'
       +'<div id="htInfo" class="hint" style="font-size:11px;margin-bottom:6px"></div>'
       +'<div id="htList" style="max-height:62vh;overflow:auto"></div></div>';
     document.body.appendChild(m); m.querySelector('#htClose').onclick=()=>m.style.display='none';
@@ -5881,8 +5882,10 @@ async function openHadithTable(){
   const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:10px;width:100%;padding:9px;border:1px solid var(--border);border-radius:9px';
   const matchF=(r)=>{ if(!filt) return true; const f=filt.toLowerCase();
     if(f[0]==='v') return ('v'+r[4])===f; if(f[0]==='u') return ('u'+r[5])===f; if(f[0]==='s'&&!isNaN(+f.slice(1))) return ('s'+(r[7]||0))===f;
+    if(f[0]==='b'&&/^\d+$/.test(f.slice(1))) return String(r[1])===f.slice(1);   // M491: b<bid> — фильтр по сборнику (книге)
     if(f[0]==='c'||f.startsWith('c')){ if((r[3]||'').toLowerCase().indexOf(f)>=0) return true; }
     const num=f.replace(/[^0-9]/g,''); if(num) return String(Math.abs(r[0]))===num||String(r[4])===num||String(r[5])===num;
+    try{ const bn=(typeof bookName==='function')?String(bookName(String(r[1]))||'').toLowerCase():''; if(bn && bn.indexOf(f)>=0) return true; }catch(e){}   // M491: по НАЗВАНИЮ сборника («бухари»)
     return (r[3]||'').toLowerCase().indexOf(f)>=0; };
   const draw=async()=>{ more.textContent='⏳…'; more.disabled=true;
     if(filt){ // фильтр — грузим все страницы (один раз) и фильтруем
