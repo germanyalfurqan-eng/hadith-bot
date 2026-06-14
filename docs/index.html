@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v435</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v436</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -579,7 +579,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v435';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v436';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5405,26 +5405,30 @@ async function chainRun(){
   const anchor=parts[ai];
   const warn='';   // кэп участия снят v398 (слово владельца) — выдача полная
   const adj=!!window._chainAdj;
-  const hits=[];
+  try{ await Promise.all([loadBooksMap(), loadBookTr(), loadWikiTitles()]); }catch(e){}   // #29/#34: данные ДО цикла — рендерим хиты ПО МЕРЕ нахождения, не в конце
+  out.innerHTML='';
+  const hd=document.createElement('div'); hd.style.cssText='font-size:13.5px;font-weight:700;color:#c9b8ff;margin:4px 0 6px';
+  const prog=document.createElement('div'); prog.className='hint'; prog.style.cssText='font-size:11.5px;margin:2px 0 6px';
+  const resBox=document.createElement('div');
+  out.appendChild(hd); out.appendChild(prog); out.appendChild(resBox);
+  const namesLbl='⛓ '+_chainSel.map(c=>c.nm.split(' ').slice(0,2).join(' ')).join(' + ')+(adj?' — РЯДОМ в иснаде':' — вместе в иснаде');
+  let found=0;
   for(let k=0;k<anchor.length;k++){
-    if(k%20===0){ out.innerHTML='<div class="hint">⏳ Проверяю цепочки '+k+'/'+anchor.length+' ('+Math.round(k*100/Math.max(1,anchor.length))+'%)…</div>'; await new Promise(r=>setTimeout(r,0)); }
+    if(k%20===0){ prog.textContent='🔎 Сканирую размеченные иснады 64 печатей: '+k+'/'+anchor.length+' ('+Math.round(k*100/Math.max(1,anchor.length))+'%) · найдено '+found+'…'; await new Promise(r=>setTimeout(r,0)); }
     const bid=anchor[k][0], num=anchor[k][1], leaf=anchor[k][2];
     let ch=null; try{ ch=await dzChain(bid,num); }catch(e){}
     if(!ch) continue;
-    const idxs=groups.map(g=>{ for(const id of g){ const k=ch.indexOf(id); if(k>=0) return k; } return -1; });   // M454: любой эквивалент
+    const idxs=groups.map(g=>{ for(const id of g){ const kk=ch.indexOf(id); if(kk>=0) return kk; } return -1; });   // M454: любой эквивалент
     if(idxs.some(x=>x<0)) continue;
     if(adj){ const s=[...idxs].sort((a,b)=>a-b); let ok=true; for(let t=1;t<s.length;t++) if(s[t]-s[t-1]!==1){ ok=false; break; } if(!ok) continue; }
-    hits.push([bid,num,leaf]);
+    found++;
+    if(found<=200) resBox.appendChild(_dzPlaceRow(bid,num,leaf));   // показываем СРАЗУ (#29/#34)
+    hd.textContent=namesLbl+': хадисов '+found;
   }
-  try{ await Promise.all([loadBooksMap(), loadBookTr(), loadWikiTitles()]); }catch(e){}   // M403-урок + M449: название/огласовки/рус/вики ДО рендера
-  out.innerHTML='';
-  const hd=document.createElement('div'); hd.style.cssText='font-size:13.5px;font-weight:700;color:#c9b8ff;margin:4px 0 6px';
-  hd.textContent='⛓ '+_chainSel.map(c=>c.nm.split(' ').slice(0,2).join(' ')).join(' + ')+(adj?' — РЯДОМ в иснаде':' — вместе в иснаде')+': хадисов '+hits.length;
-  out.appendChild(hd); if(warn) out.insertAdjacentHTML('beforeend',warn);
-  if(!hits.length){ out.insertAdjacentHTML('beforeend','<div class="hint">В размеченных иснадах 64 печатей такого сочетания нет. Сними «рядом в цепи» или возьми другие формы имён.</div>'); return; }
-  hits.slice(0,200).forEach(h=>out.appendChild(_dzPlaceRow(h[0],h[1],h[2])));
-  if(hits.length>200) out.insertAdjacentHTML('beforeend','<div class="hint">показаны первые 200</div>');
-  out.insertAdjacentHTML('beforeend','<div class="hint" style="font-size:11px;margin-top:4px">🧬 источник: штудированные иснады Э1.1 (64 печати первоисточников). Условия форм передачи — этап Э-Ц2.</div>');
+  hd.textContent=namesLbl+': хадисов '+found; prog.textContent='';
+  if(!found){ resBox.innerHTML='<div class="hint">В размеченных иснадах 64 печатей такого сочетания нет. Сними «рядом в цепи» или возьми другие формы имён.</div>'; return; }
+  if(found>200) resBox.insertAdjacentHTML('beforeend','<div class="hint">показаны первые 200</div>');
+  resBox.insertAdjacentHTML('beforeend','<div class="hint" style="font-size:11px;margin-top:4px">🧬 источник: штудированные иснады Э1.1 (64 печати первоисточников). Условия форм передачи — этап Э-Ц2.</div>');
 }
 // M483: «строго по порядку» = КОНСТРУКЦИЯ иснада — мгновенный поиск по индексу смежных пар pchain
 // (порядок ВЫБОРА = порядок цепи: 1-й передаёт от 2-го). Алиасы M454 учитываются объединением пар.
@@ -8169,6 +8173,14 @@ async function renderTasks(){
   if(_tasksShowDone){ html+='<br><b>✅ Сделано ('+done.length+'):</b>'; done.forEach(t=>{ html+='<div style="margin:3px 0;color:var(--hint)">✅ '+esc(t.id)+' — '+esc(t.t)+'</div>'; }); }
   out.innerHTML=html;
   var tt=document.getElementById('tToggle'); if(tt) tt.onclick=()=>{ _tasksShowDone=!_tasksShowDone; renderTasks(); };
+  // #8: РЕАЛЬНЫЕ заявки владельца из бота (публичная data-ветка) — синхронизация в аппе (раньше показывался только статичный tasks.json)
+  try{ const rj=await (await fetch('https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/data/journal.json?'+Date.now())).json();
+    const reqs=(rj&&rj.requests)||[];
+    if(reqs.length){ const openR=reqs.filter(r=>!r.done), doneR=reqs.filter(r=>r.done);
+      let h2='<div style="margin-top:16px;border-top:2px solid var(--btn);padding-top:9px"><b>📨 Мои заявки из бота — открытых '+openR.length+' · выполнено '+doneR.length+':</b> <span style="color:var(--hint);font-size:11px">(синхрон с журналом бота)</span></div>';
+      reqs.slice(0,80).forEach(r=>{ h2+='<div style="margin:5px 0;font-size:13px;border-bottom:1px solid var(--border);padding-bottom:4px">'+(r.done?'✅':'🔴')+' <b>#'+r.id+'</b> <span style="color:var(--hint);font-size:11px">'+esc(r.d||'')+'</span>'+(r.img?' 📷':'')+'<br>'+esc((r.t||'').slice(0,150))+'</div>'; });
+      out.insertAdjacentHTML('beforeend', h2); }
+  }catch(e){}
 }
 var _jt=document.getElementById('jTasks'); if(_jt) _jt.onclick=()=>{ document.querySelectorAll('#devModal .chip').forEach(c=>c.classList.remove('on')); _jt.classList.add('on'); renderTasks(); };
 var _at=document.getElementById('advToggle'); if(_at) _at.onclick=()=>{ const a=document.getElementById('advLinks'); a.style.display=(a.style.display==='none'?'block':'none'); };
