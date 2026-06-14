@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v430</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v431</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -578,7 +578,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v430';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v431';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1074,6 +1074,39 @@ const selExtra=new Set(); // M44: выбранные «другие сборни
 const COLL_BIDS={bukhari:['1681','735','907','1284','1376'], muslim:['1727','711'], abudawud:['1726','654','117359'],
  tirmidhi:['1435','1363','7895'], ibnmajah:['1198','1194','98138'], nasai:['829','1339'],
  malik:['1699','8140','16050','28107'], ahmad:['25794','98139']};
+// ── R-заявка 14.06 (#39/#43): открыть хадис №num в книге bid НА ЕГО СТРАНИЦЕ В МАКТАБЕ (الشاملة).
+// Раньше openByCodeNum НЕ был определён → все вызовы падали в openBook(bid,num), где num трактовался как
+// номер СТРАНИЦЫ → открывалась не та страница. Теперь: ищем точную страницу по маркеру «<№> -» (механизм M314),
+// фолбэк — наш локальный ридер для основного сборника (точный хадис), иначе книга turath с начала.
+const _BID2CODE=(function(){ const m={}; for(const c in COLL_BIDS){ (COLL_BIDS[c]||[]).forEach(b=>{ m[String(b)]=c; }); } return m; })();
+async function openByCodeNum(bid, num){
+  const b=String(bid==null?'':bid).replace(/[^0-9]/g,''); const n=String(num==null?'':num).replace(/[^0-9]/g,'');
+  if(!b) return;
+  if(n && typeof BACKEND_URL!=='undefined' && BACKEND_URL){
+    try{ toast('📖 Ищу №'+n+' в Мактабе…');
+      const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(n+' -')+'&book='+b+'&page=1&initData='+encodeURIComponent(INITDATA));
+      const j=await r.json().catch(()=>({})); const d=(j&&j.data)||[];
+      const hit=d.find(x=>String(x.book_id)===b)||d[0];
+      if(hit){ openBook(b, hit.page_id||hit.page||1); return; }
+    }catch(e){}
+  }
+  const code=_BID2CODE[b];
+  if(code && isReadable(code)){ openReader(code, n); return; }   // основной сборник → наш ридер на точном хадисе
+  openBook(b);
+}
+// short_ref Мухаймина («البخاري ١٣٢» / «أحمد ٩٧٤٩») → {bid,num} страницы Мактабы (только 8 основных, без под-работ «الصغرى»/«في …»).
+// Цифры бывают и арабские (U+0660-9), и расширенные (U+06F0-9) — учитываем оба диапазона.
+const _AR_DG=/[٠-٩۰-۹]/g, _AR_DM={'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9','۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9'};
+function _ar2num(s){ return String(s||'').replace(_AR_DG,d=>_AR_DM[d]); }
+function _normColl(s){ return String(s||'').replace(/[ً-ْٰـ]/g,'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه'); }
+function _srefToMaktaba(sref){ if(!sref) return null; const raw=String(sref).trim();
+  if(/في\s|["«»“”]|الأدب المفرد|الكبر[ىي]|الصغر[ىي]|الصحيحة|الضعيفة|عمل اليوم/.test(raw)) return null;   // под-работа/сноска — не угадываем страницу
+  const s=_normColl(raw);
+  for(const c of COLLECTIONS){ const ar=_normColl(c.ar); if(s.indexOf(ar)===0){
+    if(!(COLL_BIDS[c.code]&&COLL_BIDS[c.code].length)) return null;
+    const rest=_ar2num(s.slice(ar.length)); const m=rest.match(/\d+/); if(!m) return null;
+    return {bid:COLL_BIDS[c.code][0], num:m[0], code:c.code}; } }
+  return null; }
 function _collScopeToggle(code){   // клик по чипу при активной рамке: добавить/убрать сборник ИЗ РАМКИ (логичная связка двух систем)
   const ids=COLL_BIDS[code]||[]; if(!ids.length){ toast('Этот сборник пока не связан с Мактабой'); return; }
   const s=new Set(_scopeIds||[]); const has=ids.some(b=>s.has(b));
@@ -3174,7 +3207,8 @@ function cardMuh(d,groups){
   meta.innerHTML='<span class="badge muh">المهيمن №'+h.n+' · مرشد بن يوسف</span>'+
     '<span class="src" style="direction:rtl">'+esc(h.b||'')+' › '+esc(h.c||'')+'</span>';
   if(rv.length>1) meta.innerHTML+='<span class="grade">риваятов: '+rv.length+'</span>';
-  addTr(meta,card,h.text,null,{k:'m|'+h.n,type:'m',coll:'المهيمن',label:'المهيمن №'+h.n,text:((rv[0]&&rv[0].t)||'').slice(0,200)}); card.appendChild(meta); return card;
+  let _mk=null; try{ for(const r of rv){ const s=(typeof r==='object'&&r.s)?r.s:''; const k=_srefToMaktaba(s); if(k){ _mk=k; break; } } }catch(e){}   // #39/#43: страница Мактабы из short_ref (первый резолвимый риваят)
+  addTr(meta,card,h.text,null,{k:'m|'+h.n,type:'m',coll:'المهيمن',label:'المهيمن №'+h.n,text:((rv[0]&&rv[0].t)||'').slice(0,200),_mk:_mk}); card.appendChild(meta); return card;
 }
 /* ===== 🌿 СЛОВО → КОРЕНЬ → все места в Коране (M18/M28/M20) — настоящие корни Quranic Arabic Corpus ===== */
 let _roots=null, _rootsP=null;
@@ -4763,6 +4797,7 @@ function addTr(meta,card,text,ayah,fav){
   if(!ayah && cfg.maktabaBtn!==false){ try{ const _r0=refOf(fav); let _bid=null, _num=null;
     if(_r0){ _num=_r0.num;
       _bid = (_r0.bid!=null?String(_r0.bid):null) || (_r0.source!=null ? ((COLL_BIDS[_r0.source]&&COLL_BIDS[_r0.source][0]) || (/^\d+$/.test(String(_r0.source))?String(_r0.source):null)) : null); }
+    if((!_bid || _num==null) && fav && fav._mk){ _bid=fav._mk.bid; _num=fav._mk.num; }   // #39/#43: muhaymin — страница первоисточника из short_ref
     if(_bid && _num!=null){ const mb=document.createElement('button'); mb.className='tr-btn'; mb.textContent='📖 Страница в Мактабе';
       mb.title='Открыть этот хадис на его странице в Мактабе (المكتبة الشاملة)';
       mb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--link);padding:6px 10px';
