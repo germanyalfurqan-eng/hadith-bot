@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v456</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v457</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -595,7 +595,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v456';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v457';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -612,7 +612,7 @@ async function _checkUpdate(){ try{
   _updShownFor=latest;
   const b=document.createElement('div'); b.id='updBanner';
   b.style.cssText='position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:9999;background:#11306b;color:#fff;border:1px solid #2f7be6;border-radius:12px;padding:10px 14px;font-size:13px;box-shadow:0 6px 20px #000b;max-width:92%;display:flex;gap:10px;align-items:center';
-  const txt=document.createElement('span'); txt.innerHTML='🔄 Вышло обновление <b>'+latest+'</b>';
+  const txt=document.createElement('span'); txt.innerHTML='🔄 Вышло обновление <b>'+latest+'</b><br><span style="opacity:.82;font-size:11px">во время обновления загрузка может подтормаживать</span>';   // #72: честный маркер деплоя
   const go=document.createElement('button'); go.textContent='Обновить';
   go.style.cssText='background:#2f7be6;color:#fff;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:14px;font-weight:700';
   go.addEventListener('click',e=>{ e.preventDefault(); e.stopPropagation(); go.disabled=true; go.textContent='⏳ обновляю…'; doReload(); });   // M430: видимая загрузка
@@ -8534,7 +8534,13 @@ document.addEventListener('gesturestart', e=>{ if(cfg.noZoom){ try{ e.preventDef
 document.addEventListener('wheel', e=>{ if(cfg.noZoom && e.ctrlKey){ pinchAttempt(); } }, {passive:true});
 
 /* ===================== УТИЛИТЫ ===================== */
-function setStatus(t){document.getElementById('status').textContent=t;}
+let _stSlowT=null;
+function setStatus(t){ const el=document.getElementById('status'); if(!el) return; el.textContent=t;
+  clearTimeout(_stSlowT); _stSlowT=null;
+  // #72: если загрузка длится дольше обычного — честно сообщаем (медленная сеть или идёт обновление/деплой)
+  if(t && /загруж|ищу|подбираю|подключ|готовлю/i.test(t)){
+    _stSlowT=setTimeout(()=>{ try{ if(el.textContent===t) el.textContent=t+'  ⏳ дольше обычного (медленная сеть или идёт обновление)'; }catch(e){} }, 4500); }
+}
 let toastT; function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('show');
   clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2800);}
 
