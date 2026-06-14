@@ -176,7 +176,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v491</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v492</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -606,7 +606,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v491';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v492';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5005,6 +5005,22 @@ function addTr(meta,card,text,ayah,fav){
     if(out && out.style.display!=='none'){ const trv=(out.dataset.tr||'').trim()||(out.textContent||'').trim(); if(trv) s+='\n\n'+trv; }
     copyWithSig(s); };
   meta.appendChild(cp);
+  // M32: озвучка хадиса (матн) синтезом речи устройства — клиентский TTS, без внешнего источника. Аяты не трогаем (у них аудио чтецов).
+  if(!ayah && typeof window!=='undefined' && 'speechSynthesis' in window){
+    const sp=document.createElement('button'); sp.className='tr-btn'; sp.textContent='🔊';
+    sp.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
+    sp.title='Озвучить хадис (синтез речи устройства; нужен арабский голос в системе)';
+    sp.onclick=()=>{ try{
+      if(speechSynthesis.speaking){ speechSynthesis.cancel(); sp.textContent='🔊'; return; }
+      let mt=''; try{ mt=(splitIsnad(text)[1]||text); }catch(e){ mt=text; }
+      mt=String(mt||'').replace(/[«»]/g,'').replace(/\([^)]*\)/g,' ').trim(); if(!mt) return;
+      const u=new SpeechSynthesisUtterance(mt); u.lang='ar-SA'; u.rate=0.88;
+      try{ const vs=speechSynthesis.getVoices(); const av=vs.find(v=>/^ar/i.test(v.lang)); if(av) u.voice=av; }catch(e){}
+      u.onend=()=>{ sp.textContent='🔊'; }; u.onerror=()=>{ sp.textContent='🔊'; toast('Озвучка: нет арабского голоса в системе'); };
+      sp.textContent='⏹'; speechSynthesis.speak(u);
+    }catch(e){ toast('Озвучка недоступна на этом устройстве'); } };
+    meta.appendChild(sp);
+  }
   const tr=document.createElement('button');tr.className='tr-btn';
   const _ref0=ayah?null:refOf(fav); const _ready=_ref0&&READY_RU.indexOf(_ref0.source)!==-1;
   if(ayah){ setTrReady(tr); tr.title='Перевод аята (Кулиев/Абу Адель) — бесплатно'; }
