@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v444</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v445</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -587,7 +587,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v444';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v445';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4407,31 +4407,39 @@ var _qrThumbSync=function(){};
 function _qrFastScrollSetup(){
   const body=document.getElementById('qrBody'); if(!body) return;
   if(!window._qrThumbEl){
+    // #65: ТРЕК — прозрачная полоса по всей левой стороне (тап/перетаскивание в ЛЮБОМ месте) + бегунок, который АВТО-СКРЫВАЕТСЯ при простое
+    const track=document.createElement('div'); track.id='qrTrack';
+    track.style.cssText='position:fixed;width:24px;display:none;z-index:10049;touch-action:none;cursor:pointer';
     const thumb=document.createElement('div'); thumb.id='qrThumb';
-    thumb.style.cssText='position:fixed;width:34px;height:56px;border-radius:9px;background:rgba(108,92,231,.62);border:1px solid #8a7be8;display:none;align-items:center;justify-content:center;cursor:grab;z-index:10050;touch-action:none;color:#fff;font-size:15px;box-shadow:0 2px 10px rgba(0,0,0,.5)'; thumb.textContent='⇕';
+    thumb.style.cssText='position:fixed;width:30px;height:54px;border-radius:9px;background:rgba(108,92,231,.74);border:1px solid #8a7be8;display:none;align-items:center;justify-content:center;cursor:grab;z-index:10050;touch-action:none;color:#fff;font-size:15px;box-shadow:0 2px 10px rgba(0,0,0,.5);opacity:0;transition:opacity .4s'; thumb.textContent='⇕';
     const bub=document.createElement('div'); bub.id='qrThumbBub'; bub.style.cssText='position:fixed;background:#2a2150;border:1px solid #8a7be8;color:#fff;font-size:15px;font-weight:700;padding:6px 12px;border-radius:10px;white-space:nowrap;display:none;z-index:10051;box-shadow:0 3px 12px rgba(0,0,0,.6)';
-    document.body.appendChild(thumb); document.body.appendChild(bub);
-    window._qrThumbEl=thumb; window._qrThumbBub=bub;
-    const TH=56;
-    const sync=()=>{ const m=document.getElementById('qrModal'); if(cfg.qrThumb===false||!m||m.style.display==='none'){ thumb.style.display='none'; bub.style.display='none'; return; }
-      const b=document.getElementById('qrBody'); if(!b){ thumb.style.display='none'; return; }
-      const r=b.getBoundingClientRect(); const max=b.scrollHeight-b.clientHeight;
-      if(max<60){ thumb.style.display='none'; return; }
-      const frac=b.scrollTop/max; thumb.style.display='flex'; thumb.style.left=(r.left+2)+'px'; thumb.style.top=(r.top+frac*(r.height-TH))+'px'; };
+    document.body.appendChild(track); document.body.appendChild(thumb); document.body.appendChild(bub);
+    window._qrThumbEl=thumb; window._qrThumbBub=bub; window._qrTrackEl=track;
+    const TH=54; let dragging=false, hideT=null;
+    const visible=()=>{ const m=document.getElementById('qrModal'); const b=document.getElementById('qrBody');
+      if(cfg.qrThumb===false||!m||m.style.display==='none'||!b) return null;
+      if((b.scrollHeight-b.clientHeight)<60) return null; return b; };
+    const place=()=>{ const b=visible(); if(!b){ track.style.display='none'; thumb.style.display='none'; bub.style.display='none'; return; }
+      const r=b.getBoundingClientRect(); const max=b.scrollHeight-b.clientHeight; const frac=b.scrollTop/max;
+      track.style.display='block'; track.style.left=r.left+'px'; track.style.top=r.top+'px'; track.style.height=r.height+'px';
+      thumb.style.display='flex'; thumb.style.left=(r.left+1)+'px'; thumb.style.top=(r.top+frac*(r.height-TH))+'px'; };
+    const show=()=>{ place(); if(thumb.style.display!=='none') thumb.style.opacity='1'; clearTimeout(hideT); hideT=setTimeout(()=>{ if(!dragging){ thumb.style.opacity='0'; bub.style.display='none'; } }, 1600); };   // #65: исчезает без нажатий
     const ayahAt=()=>{ const b=document.getElementById('qrBody'); if(!b) return ''; const r=b.getBoundingClientRect();
       const els=b.querySelectorAll('[id^="qr-"]'); let cur=els.length?els[0].id.replace('qr-',''):'';
       for(const el of els){ const er=el.getBoundingClientRect(); if(er.top>=r.top-4){ cur=el.id.replace('qr-',''); break; } cur=el.id.replace('qr-',''); }
       return cur; };
-    let dragging=false;
     const setFromY=(clientY)=>{ const b=document.getElementById('qrBody'); if(!b) return; const r=b.getBoundingClientRect(); const max=b.scrollHeight-b.clientHeight;
-      let frac=(clientY-r.top-TH/2)/Math.max(1,(r.height-TH)); frac=Math.max(0,Math.min(1,frac)); b.scrollTop=frac*max; sync();
+      let frac=(clientY-r.top-TH/2)/Math.max(1,(r.height-TH)); frac=Math.max(0,Math.min(1,frac)); b.scrollTop=frac*max; place(); thumb.style.opacity='1';
       const a=ayahAt(); bub.textContent='аят '+(a||'?'); bub.style.display='block'; const tr=thumb.getBoundingClientRect(); bub.style.left=(tr.left+40)+'px'; bub.style.top=tr.top+'px'; };
-    thumb.addEventListener('pointerdown',e=>{ dragging=true; try{thumb.setPointerCapture(e.pointerId);}catch(_e){} thumb.style.cursor='grabbing'; setFromY(e.clientY); e.preventDefault(); });
-    thumb.addEventListener('pointermove',e=>{ if(dragging) setFromY(e.clientY); });
-    const end=()=>{ dragging=false; thumb.style.cursor='grab'; bub.style.display='none'; };
-    thumb.addEventListener('pointerup',end); thumb.addEventListener('pointercancel',end);
-    window.addEventListener('resize',sync);
-    _qrThumbSync=sync;
+    const down=(e)=>{ if(!visible()) return; dragging=true; thumb.style.cursor='grabbing'; clearTimeout(hideT); setFromY(e.clientY); e.preventDefault(); };
+    const move=(e)=>{ if(dragging) setFromY(e.clientY); };
+    const up=()=>{ dragging=false; thumb.style.cursor='grab'; bub.style.display='none'; show(); };
+    track.addEventListener('pointerdown',e=>{ try{track.setPointerCapture(e.pointerId);}catch(_e){} down(e); });   // #65: тап/перетаскивание ПО ВСЕЙ ЛИНИИ
+    track.addEventListener('pointermove',move); track.addEventListener('pointerup',up); track.addEventListener('pointercancel',up);
+    thumb.addEventListener('pointerdown',e=>{ try{thumb.setPointerCapture(e.pointerId);}catch(_e){} down(e); });
+    thumb.addEventListener('pointermove',move); thumb.addEventListener('pointerup',up); thumb.addEventListener('pointercancel',up);
+    window.addEventListener('resize',place);
+    _qrThumbSync=show;
   }
   const b=document.getElementById('qrBody'); if(b && !b._fsScrollWired){ b._fsScrollWired=true; b.addEventListener('scroll',()=>{ try{_qrThumbSync();}catch(e){} }); }
   setTimeout(()=>{ try{_qrThumbSync();}catch(e){} }, 80);
