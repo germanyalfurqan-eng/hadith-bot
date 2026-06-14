@@ -173,7 +173,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v469</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v470</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -599,7 +599,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v469';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v470';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1125,16 +1125,30 @@ async function openByCodeNum(bid, num){
   openBook(b);   // #66: «Страница в Мактабе» ВСЕГДА открывает turath-страницу Мактабы (даже если точную не нашли — книгу с начала), НЕ наш локальный ридер (жалоба «подвязал читалку в приложении, а не мактаба»)
 }
 // #74: «Страница в Мактабе» = ВНЕШНИЙ сайт المكتبة الشاملة (shamela.ws/book/<bid>/<page>), а НЕ внутренняя читалка приложения (4-я жалоба владельца). turath bid == shamela id, page прямой (как _shamChip).
-async function openMaktabaPage(bid, num){
+// фраза-матн для резолва страницы (ИНВАРИАНТ между изданиями — номера у разных печатей РАЗНЫЕ!)
+function _matnSnippet(text){
+  try{ let t=stripDiac(String(text||'')).replace(/[«»ـ"،,.:؛()\[\]]/g,' ').replace(/\s+/g,' ').trim();
+    const parts=t.split(/قال رسول الله صلي الله عليه وسلم|عن النبي صلي الله عليه وسلم|ان رسول الله صلي الله عليه وسلم|قال النبي صلي الله عليه وسلم|انه قال|يقول /);
+    let body=(parts.length>1?parts.slice(1).join(' '):t);
+    let w=body.split(' ').filter(x=>x.length>1);
+    if(w.length<4){ w=t.split(' ').filter(x=>x.length>1); const st=Math.max(0,Math.floor(w.length/2)-1); return w.slice(st,st+6).join(' '); }
+    return w.slice(0,6).join(' ');
+  }catch(e){ return ''; }
+}
+async function openMaktabaPage(bid, num, text){
   const b=String(bid==null?'':bid).replace(/[^0-9]/g,''); const n=String(num==null?'':num).replace(/[^0-9]/g,'');
   if(!b) return;
   let page=null;
-  if(n && typeof BACKEND_URL!=='undefined' && BACKEND_URL){
-    try{ toast('📖 Открываю №'+n+' на сайте Мактабы аш-Шамиля…');
-      const _an=n.replace(/[0-9]/g,function(d){ return '٠١٢٣٤٥٦٧٨٩'[+d]; });
-      const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(_an+' -')+'&book='+b+'&page=1&initData='+encodeURIComponent(INITDATA));
-      const j=await r.json().catch(()=>({})); const d=(j&&j.data)||[];
-      const hit=d.find(x=>String(x.book_id)===b)||d[0]; if(hit) page=hit.page_id||hit.page;
+  if(typeof BACKEND_URL!=='undefined' && BACKEND_URL){
+    try{ toast('📖 Открываю на сайте Мактабы аш-Шамиля…');
+      // 1) ПО ТЕКСТУ МАТНА — верно при ЛЮБОМ издании (фикс Абу Дауд 777→778: номера у изданий не совпадают)
+      const snip=_matnSnippet(text);
+      if(snip){ const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(snip)+'&book='+b+'&page=1&initData='+encodeURIComponent(INITDATA));
+        const j=await r.json().catch(()=>({})); const d=(j&&j.data)||[]; const hit=d.find(x=>String(x.book_id)===b)||d[0]; if(hit) page=hit.page_id||hit.page; }
+      // 2) фолбэк по номеру-маркеру (для изданий с нашей нумерацией)
+      if(!page && n){ const _an=n.replace(/[0-9]/g,function(d){ return '٠١٢٣٤٥٦٧٨٩'[+d]; });
+        const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(_an+' -')+'&book='+b+'&page=1&initData='+encodeURIComponent(INITDATA));
+        const j=await r.json().catch(()=>({})); const d=(j&&j.data)||[]; const hit=d.find(x=>String(x.book_id)===b)||d[0]; if(hit) page=hit.page_id||hit.page; }
     }catch(e){}
   }
   const u='https://shamela.ws/book/'+b+(page?('/'+page):'');
@@ -4967,7 +4981,7 @@ function addTr(meta,card,text,ayah,fav){
     if(_bid && _num!=null){ const mb=document.createElement('button'); mb.className='tr-btn'; mb.textContent='📖 Страница в Мактабе';
       mb.title='Открыть этот хадис на его странице в Мактабе (المكتبة الشاملة)';
       mb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';   // #44: тот же узнаваемый стиль, что у соседних кнопок (🌳 Передатчики и пр.)
-      mb.onclick=()=>{ try{hap('light');}catch(e){} try{ openMaktabaPage(_bid, _num); }catch(e){ try{ openByCodeNum(_bid, _num); }catch(_e){ toast('Не удалось открыть'); } } };   // #74: внешний сайт Мактабы (shamela.ws), не внутренний ридер
+      mb.onclick=()=>{ try{hap('light');}catch(e){} try{ openMaktabaPage(_bid, _num, text); }catch(e){ try{ openByCodeNum(_bid, _num); }catch(_e){ toast('Не удалось открыть'); } } };   // #74: внешний сайт Мактабы (shamela.ws); text → резолв по матну (фикс сдвига номеров изданий)
       meta.appendChild(mb); } }catch(e){} }
   // #86: кнопка на соответствующий хадис на sunnah.com (https://sunnah.com/<slug>:<num>) — единый стиль с соседями (#84)
   if(!ayah){ try{ const _r1=refOf(fav); let _slug=null, _sn=null;
