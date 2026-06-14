@@ -176,7 +176,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v490</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v491</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -200,6 +200,7 @@
   <div id="colsWrap">
     <div class="lbl" id="colsToggle" style="cursor:pointer;user-select:none;color:var(--link);display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:rgba(108,92,231,.10);border-radius:20px;padding:6px 12px;font-size:13px;font-weight:600">🔎 <span id="colCount"></span> <span id="colsArrow" style="opacity:.8">▾</span></div>
     <div id="colsBody" style="display:none">
+      <div id="colsFav" style="margin-bottom:8px"></div>
       <div class="cols" id="cols"></div>
       <div class="colbar">
         <button class="mini" id="selAll" title="Выбрать все основные сборники">выбрать все</button>
@@ -605,7 +606,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v490';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v491';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -714,7 +715,7 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 /* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:false,wordTap:true,popular:false,arabus:false,qrHl:true,qHl:true,uiFont:'system',verify:true,arFont:'naskh'}, loadCfg());   // #138: Noto Naskh — арабский шрифт ПО УМОЛЧАНИЮ
+let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:false,wordTap:true,popular:false,arabus:false,qrHl:true,qHl:true,uiFont:'system',verify:true,arFont:'naskh',reciter:'Hudhaify_128kbps'}, loadCfg());   // #138: Noto Naskh — арабский шрифт ПО УМОЛЧАНИЮ
 if(!cfg._rpoff){ cfg.recent=false; cfg.popular=false; cfg._rpoff=1; saveCfg(cfg); }   // разовое: выключить Недавнее/Популярное по умолчанию (можно вернуть в Настройках)
 function applyTheme(){ document.body.classList.toggle('light', cfg.theme==='light'); }
 try{ applyTheme(); }catch(e){}
@@ -4625,7 +4626,7 @@ async function openAyahCard(s,a){ s=+s; a=+a; if(!s||!a) return;
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });   // #70: тап ВНЕ карточки = вернуться в читалку
   }
   let v=null; try{ const arr=await loadQuran(); v=arr.find(x=>x.s===s&&x.a===a); }catch(e){}
-  let ru=''; try{ ru=(await loadQuranRu())[s+':'+a]||''; }catch(e){}
+  let ru=''; let ru2=''; try{ ru=(await loadQuranRu())[s+':'+a]||''; }catch(e){} try{ const other=cfg.qtr==='rus-abuadel'?'rus-elmirkuliev':'rus-abuadel'; const alt=await loadQuranTr(other); if(alt) ru2=alt[s+':'+a]||''; }catch(e){}
   const ref='q|'+s+':'+a; const isF=isFav(ref); const isB=_qrBookmarks().indexOf(s+':'+a)>=0;
   const txt=v?((a===1&&s!==1&&s!==9)?_stripBasmala(v.text):v.text):'';
   m.innerHTML='<div class="panel" style="max-width:560px;padding:0;overflow:hidden;border-radius:16px">'
@@ -4634,7 +4635,7 @@ async function openAyahCard(s,a){ s=+s; a=+a; if(!s||!a) return;
       +'<b style="font-size:16px">сура '+s+' · аят '+a+'</b>'
       +'<span id="ahClose" style="cursor:pointer;font-size:20px;font-weight:700" title="Закрыть">✕</span></div>'
     +'<div style="padding:16px 16px 8px"><div class="ar" style="direction:rtl;text-align:right;font-size:24px;line-height:2.1">'+esc(txt)+'</div>'
-      +(ru?('<div style="font-size:14.5px;color:var(--text);margin-top:12px;line-height:1.6">'+esc(ru)+'</div>'):'')
+      +(ru?('<div style="font-size:14.5px;color:var(--text);margin-top:12px;line-height:1.6"><span style="color:var(--hint);font-style:italic">'+(ru2?'[Кулиев] ':'')+'</span>'+esc(ru)+'</div>'):'')+(ru2?('<div style="font-size:14.5px;color:#bcd0ff;margin-top:8px;line-height:1.6"><span style="color:var(--hint);font-style:italic">[Абу Адель] </span>'+esc(ru2)+'</div>'):'')
       +'<div id="ahTafsir" style="margin-top:12px;color:var(--link);cursor:pointer;font-size:14px;font-weight:600;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:10px">📖 Открыть тафсир <span style="font-size:18px">›</span></div></div>'
     +'<div style="display:flex;justify-content:space-around;align-items:center;padding:12px 8px;border-top:1px solid var(--border);background:var(--bg)">'
       +'<button id="ahBk" class="ahBtn" title="Закладка" style="border:1px solid '+(isB?'#4eb573':'transparent')+';background:'+(isB?'rgba(78,181,115,.16)':'transparent')+';width:50px;height:50px;border-radius:14px;font-size:23px;cursor:pointer;color:'+(isB?'#4eb573':'var(--hint)')+';transition:transform .12s,background .2s,border-color .2s">🔖</button>'
