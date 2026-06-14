@@ -96,7 +96,7 @@
        font-size:15px;background:var(--bg);color:var(--text);resize:vertical;min-height:50px}
   .card{background:rgba(20,30,44,.62);backdrop-filter:blur(9px) saturate(1.1);-webkit-backdrop-filter:blur(9px) saturate(1.1);
         border:1px solid rgba(120,150,200,.16);border-radius:14px;padding:12px;margin-bottom:10px;box-shadow:0 4px 18px #0006}
-  .ar{font-size:calc(19px * var(--txtScale,1));line-height:2;direction:rtl;text-align:right;font-family:var(--arFont,"Traditional Arabic","Amiri",serif)}
+  .ar{font-size:calc(19px * var(--txtScale,1));line-height:2;direction:rtl;text-align:right;font-family:var(--arFont,"Traditional Arabic","Amiri",serif);user-select:text}
   /* #77: комментарий составителя (قال أبو عيسى/قال أبو داود) — НЕ часть хадиса: абзац с отступом, приглушённый цвет, отбивка */
   .cnote{display:block;margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);text-indent:1.3em;color:var(--hint);font-size:.9em;line-height:1.75}
   .cnote::before{content:"✎ комментарий составителя";display:block;text-indent:0;font-size:10px;color:var(--link);opacity:.85;margin-bottom:3px;font-family:-apple-system,Segoe UI,sans-serif}
@@ -130,7 +130,7 @@
         padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:.2s;z-index:99;max-width:90%}
   .toast.show{opacity:.95}
   button,.chip,.col,.tab,.tr-btn,.gear,.mini{transition:transform .08s ease,background .15s ease,opacity .15s}
-  button:active,.chip:active,.col:active,.tab:active,.tr-btn:active,.gear:active{transform:scale(.94)}
+  button:active,.chip:active,.col:active,.tab:active,.tr-btn:active,.gear:active,.bleft:active{transform:scale(.94)}
   .card{animation:fadeIn .16s ease}
   /* M334 ОПТИМИЗАЦИЯ: изоляция layout + офф-скрин карточки не рендерятся (длинные списки результатов летают) */
   #res .card{contain:content;content-visibility:auto;contain-intrinsic-size:auto 230px}
@@ -173,7 +173,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v478</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v479</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -601,7 +601,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v478';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v479';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -728,8 +728,22 @@ const INITDATA = (tg && tg.initData) || '';
 // #16 Журнал ошибок: ловим клиентские ошибки → /api/errlog (троттлинг + дедуп); владелец читает «ошибки» в боте
 let _appReport=function(){};
 (function(){ const _sent={}; let _cnt=0;
+  function _simplifyError(msg, where){ try{
+    if(!msg) return 'Неизвестная ошибка';
+    msg=String(msg).toLowerCase();
+    if(msg.includes('таймаут') || msg.includes('timeout')) return 'Загрузка заняла слишком долго — сеть медленная или сервер не отвечает';
+    if(msg.includes('http 404')) return 'Файл не найден на сервере';
+    if(msg.includes('http 403')) return 'Доступ запрещён — нужна авторизация';
+    if(msg.includes('http 500') || msg.includes('http 5')) return 'Ошибка сервера — попробуй позже';
+    if(msg.includes('fetch') || msg.includes('network')) return 'Проблема с интернет-соединением';
+    if(msg.includes('json')) return 'Сервер вернул некорректные данные';
+    if(msg.includes('abort')) return 'Операция была отменена';
+    if(msg.includes('promise rejection')) return 'Асинхронная операция провалилась';
+    return 'Техническая ошибка в приложении';
+  }catch(e){ return 'Ошибка анализа'; } }
   function _report(msg, where, stack){ try{ if(!BACKEND_URL||!msg||_cnt>12) return; const k=(msg+'|'+where).slice(0,160); if(_sent[k]) return; _sent[k]=1; _cnt++;
-    fetch(BACKEND_URL+'/errlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:String(msg).slice(0,300),where:String(where||'').slice(0,120),stack:String(stack||'').slice(0,600),ver:(typeof APPVER!=='undefined'?APPVER:''),initData:INITDATA})}).catch(()=>{}); }catch(e){} }
+    const simple=_simplifyError(msg, where);
+    fetch(BACKEND_URL+'/errlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:String(msg).slice(0,300),where:String(where||'').slice(0,120),stack:String(stack||'').slice(0,600),simple:simple,ver:(typeof APPVER!=='undefined'?APPVER:''),initData:INITDATA})}).catch(()=>{}); }catch(e){} }
   window.addEventListener('error', e=>{ try{ _report(e.message||'error',(e.filename||'').split('/').pop()+':'+(e.lineno||''), e.error&&e.error.stack); }catch(_){} });
   window.addEventListener('unhandledrejection', e=>{ try{ const r=e.reason; _report((r&&r.message)||String(r)||'promise rejection','unhandledrejection', r&&r.stack); }catch(_){} });
   _appReport=_report;   // экспонируем для логгера зависших загрузок
@@ -2096,7 +2110,7 @@ async function runSearch(explicit){
     if(!count && !modes.ai && !numMode && !strict){ relaxA=await relaxArabicHadith(codes, groups, modes, seq, add); if(seq!==_seq) return; }
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
     if(relaxA && relaxA.dropped.length && count) relaxBanner(relaxA.dropped, relaxA.used);
-    if(count){ if(relMode && count>2){ renderResultsView(); } else { ensureGrpToggle(); ensureShareBtn(); ensureUniqToggle(); ensureRelToggle(); } try{ensureStructureBtn();}catch(e){} }
+    if(count){ if(relMode && count>2){ renderResultsView(); } else { ensureGrpToggle(); ensureUniqToggle(); ensureRelToggle(); } try{ensureStructureBtn();}catch(e){} }
     if(!numMode) addLibMore();   // кнопка «искать ещё в большой библиотеке» (16 изданий + Мукбиль)
   } else {
     let relaxQ=null, corrQ=null;
@@ -2122,7 +2136,7 @@ async function runSearch(explicit){
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
     if(corrQ && corrQ.changed.length) autoCorrectBanner(shown, corrQ.corrected.join(' '));   // M173: «показаны результаты для X · искать как ввёл»
     if(relaxQ && relaxQ.dropped.length && count) relaxBanner(relaxQ.dropped, relaxQ.used);   // M172: честно показать что убрали
-    if(count){ if(relMode && count>2){ renderResultsView(); } else { ensureGrpToggle(); ensureShareBtn(); ensureUniqToggle(); ensureRelToggle(); } try{ensureStructureBtn();}catch(e){} }
+    if(count){ if(relMode && count>2){ renderResultsView(); } else { ensureGrpToggle(); ensureUniqToggle(); ensureRelToggle(); } try{ensureStructureBtn();}catch(e){} }
   }
   setStatus('');
   logSearch(shown, tab, count);
@@ -2280,7 +2294,7 @@ function renderResultsView(){
   if(uniqMode){ const dd=dedupResults(list, uniqMode); list=dd.list; hid=dd.hidden; }
   const cnt='найдено: '+_results.length+(relMode?' · по релевантности':'')+(uniqMode?(' · '+(uniqMode==='version'?'уникальных версий':'уникальных хадисов')+' '+list.length+(hid?(' · свёрнуто '+hid):'')+(uniqMode==='hadith'?' · основная версия/متابعات — пометка скоро':'')):'');
   res.appendChild(info((groupSrc?('📚 Сгруппировано по '+(tab==='quran'?'сурам':'сборникам')+' · '):'')+cnt+((!groupSrc&&list.length>400)?' (первые 400)':'')));
-  res.appendChild(grpToggleEl()); res.appendChild(uniqToggleEl()); res.appendChild(relToggleEl()); ensureShareBtn();
+  res.appendChild(grpToggleEl()); res.appendChild(uniqToggleEl()); res.appendChild(relToggleEl());
   if(!groupSrc){ list.slice(0,400).forEach(d=>res.appendChild(makeCard(d))); return; }
   // группируем по ВСЕМ результатам → видны ВСЕ сборники/суры (не только первые 400)
   const groups={}; const order=[];
@@ -2602,8 +2616,9 @@ async function _bookLoad(){
     // ── РЯД ТОГГЛОВ: ⚙️ Инструменты (поиск/копия/ссылка/шрифт/тема) + 🧠 ИИ — панели по требованию, чтение не загромождено
     const tgl=document.createElement('div'); tgl.style.cssText='display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap';
     const r2=document.createElement('div'); r2.style.cssText='display:none;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap';
+    const _press=function(el){ try{ el.style.transform='scale(.82)'; setTimeout(function(){ try{el.style.transform='';}catch(e){} },130); }catch(e){} };
     const gearB=document.createElement('button'); gearB.className='mini'; gearB.textContent='⚙️ Инструменты ▾'; gearB.style.cssText='padding:6px 12px;border-radius:9px;font-size:13px';
-    gearB.onclick=()=>{ const open=r2.style.display!=='none'; r2.style.display=open?'none':'flex'; gearB.textContent='⚙️ Инструменты '+(open?'▾':'▴'); };
+    gearB.onclick=()=>{ _press(gearB); const open=r2.style.display!=='none'; r2.style.display=open?'none':'flex'; gearB.textContent='⚙️ Инструменты '+(open?'▾':'▴'); };
     tgl.appendChild(gearB); navEl.appendChild(tgl);
     // 🔎 поиск по странице (подсветка совпадений в загруженном тексте)
     const fnd=document.createElement('input'); fnd.type='search'; fnd.placeholder='🔎 найти на странице'; fnd.style.cssText='width:168px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:13px;direction:ltr;text-align:right';
@@ -2630,7 +2645,7 @@ async function _bookLoad(){
     // ── ИИ-инструменты — тоггл в одной строке с ⚙️ (чисто, не мешают чтению)
     const aiToggle=document.createElement('button'); aiToggle.className='mini'; aiToggle.textContent='🧠 ИИ ▾'; aiToggle.style.cssText='border:1px solid #6c5ce7;color:#d9ccff;background:#2e1d4a;padding:6px 12px;border-radius:9px;font-size:13px;font-weight:600';
     const aiPanel=document.createElement('div'); aiPanel.style.cssText='display:none;gap:6px;flex-wrap:wrap;justify-content:center';
-    aiToggle.onclick=()=>{ const open=aiPanel.style.display!=='none'; aiPanel.style.display=open?'none':'flex'; aiToggle.textContent='🧠 ИИ '+(open?'▾':'▴'); };
+    aiToggle.onclick=()=>{ _press(aiToggle); const open=aiPanel.style.display!=='none'; aiPanel.style.display=open?'none':'flex'; aiToggle.textContent='🧠 ИИ '+(open?'▾':'▴'); };
     tgl.appendChild(aiToggle); navEl.appendChild(aiPanel);
     // 🔎 ПОИСК ПО ВСЕЙ КНИГЕ — ПАНЕЛЬ ВНУТРИ читалки (замечание: «где тут искать в книге и где номер вводить»)
     const sbk=document.createElement('button'); sbk.className='mini'; sbk.textContent='🔎 По книге ▾'; sbk.title='Слова или № хадиса по всей этой книге — результаты списком прямо здесь';
@@ -2639,7 +2654,7 @@ async function _bookLoad(){
     if(!bkP){ bkP=document.createElement('div'); bkP.id='bookFindPanel'; bkP.style.cssText='display:none;margin:4px 0 6px;border:1px solid #2e9b5b;border-radius:10px;padding:8px';
       bkP.innerHTML='<div style="display:flex;gap:6px;align-items:center"><input id="bkFindQ" type="search" placeholder="слово/фраза или № хадиса…" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:14px"><button class="mini" id="bkFindGo" style="padding:7px 13px">Найти</button></div><div id="bkFindOut" style="max-height:34vh;overflow:auto;margin-top:6px"></div>';
       navEl.parentNode.insertBefore(bkP, tEl); }
-    sbk.onclick=()=>{ const open=bkP.style.display!=='none'; bkP.style.display=open?'none':'block'; sbk.textContent='🔎 По книге '+(open?'▾':'▴'); if(!open){ try{ bkP.querySelector('#bkFindQ').focus(); }catch(e){} } };
+    sbk.onclick=()=>{ _press(sbk); const open=bkP.style.display!=='none'; bkP.style.display=open?'none':'block'; sbk.textContent='🔎 По книге '+(open?'▾':'▴'); if(!open){ try{ bkP.querySelector('#bkFindQ').focus(); }catch(e){} } };
     tgl.appendChild(sbk);
     const _bkFind=async()=>{
       const qv=(bkP.querySelector('#bkFindQ').value||'').trim(); const outB=bkP.querySelector('#bkFindOut');
@@ -5243,6 +5258,7 @@ function highlightNarratorsInDiv(ad, names, onClick){
       span.onclick=(e)=>{ e.stopPropagation();
         try{ onClick(m.nm); }catch(_e){ try{ openNarratorRijal(m.nm); }catch(__e){} }   // M427: клик обязан сработать — фолбэк в модал-карточку
       };
+      (async()=>{ try{ const id=await _narrLookup(m.nm); if(id!=null) span.innerHTML+=' <span style="font-size:10px;color:#9fb4cc;direction:ltr;white-space:nowrap">id'+id+'</span>'; }catch(e){} })();
       frag.appendChild(span); pos=m.i+m.len; });
     if(pos<txt.length) frag.appendChild(document.createTextNode(txt.slice(pos)));
     node.parentNode.replaceChild(frag, node);
@@ -8444,7 +8460,7 @@ function renderJournal(kind){
   else if(kind==='usage'){ const u=DEV_DATA.usage||{}, tot=u.totals||{}, rec=u.recent||[];
     html='<b>Расход:</b> вызовов '+(tot.calls||0)+' · 🆕 свежих '+(tot.fresh||0)+' · ♻️ из базы '+(tot.cached||0)+'<br><b>Последние:</b><br>'+(rec.map(x=>(x.fresh?'🆕':'♻️')+' '+x.d+' '+esc(x.u||'')+' · '+esc(x.f||'')+(x.src?(' '+x.src+' №'+x.num):'')).join('<br>')||'—'); }
   else if(kind==='fb'){ const fb=DEV_DATA.feedback||[];
-    html='<b>📨 Жалобы и предложения пользователей</b> <span class="hint" style="font-size:11px">(скрин → в LOG-канал; Claude разбирает периодически)</span><br>'+(fb.map(x=>'💬 <b>№'+(x.id||'?')+'</b> '+x.d+' '+esc(x.u||'')+(x.img?' 📷':'')+(x.done?' ✅':'')+(x.ctx?(' · '+esc(x.ctx)):'')+'<br>&nbsp;&nbsp;«'+esc(x.t||'')+'»').join('<br>')||'пока пусто'); }
+    html='<b>📨 Жалобы и предложения пользователей</b> <span class="hint" style="font-size:11px">(скрин → в LOG-канал; Claude разбирает периодически)</span><br>'+(fb.map(x=>'💬 <b>№'+(x.id||'?')+'</b> '+x.d+' <a href="#" style="color:var(--link);cursor:pointer;text-decoration:none" onclick="event.preventDefault()" title="'+esc(x.u||'анон')+'">'+esc(x.u||'анон')+'</a>'+(x.img?' 📷':'')+(x.done?' ✅':'')+(x.ctx?(' · '+esc(x.ctx)):'')+'<br>&nbsp;&nbsp;«'+esc(x.t||'')+'»').join('<br>')||'пока пусто'); }
   else if(kind==='search'){ const s=DEV_DATA.searches||{}, top=s.top||[];
     html='<b>Что ищут</b> (всего поисков: '+(s.total||0)+'):<br>'+(top.map(x=>'🔎 '+esc(x[0])+' — '+(x[1].n||0)+'× ('+(x[1].tab||'')+', нашли '+(x[1].cnt||0)+')').join('<br>')||'пусто'); }
   else if(kind==='upd'){ html='Журнал обновлений (release_notes): <a style="color:var(--link);cursor:pointer" id="_updLink">открыть</a>'; }
@@ -8585,7 +8601,7 @@ window.showUpdateNotes=async function(ver){
   }
   m.querySelector('#wnTitle').textContent='🆕 Что нового ('+ver+')';
   const body=m.querySelector('#wnBody'); body.innerHTML='<div class="hint">Загружаю…</div>'; m.style.display='flex';
-  let txt=''; try{ const r=await fetch('update_note.txt?cb='+Date.now(),{cache:'no-store'}); if(r.ok) txt=await r.text(); }catch(e){}
+  let txt=''; try{ const r=await fetch('../update_note.txt?cb='+Date.now(),{cache:'no-store'}); if(r.ok) txt=await r.text(); }catch(e){}
   // строки-пункты: непустые, кроме заголовка «🆕 Обновление…»
   const lines=(txt||'').split('\n').map(s=>s.replace(/\s+$/,'')).filter(s=>s.trim() && !/^🆕\s*Обновление/i.test(s));
   body.innerHTML='';
