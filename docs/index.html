@@ -176,7 +176,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v493</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v494</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -606,7 +606,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v493';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v494';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -6927,6 +6927,10 @@ function ourMaterialBadge(code, num, meta, card){
       try{ box.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} };
     meta.appendChild(b); });
 }
+// M30: рекомендованный НАМИ тафсир на аят (our_tafsir.json: {"сура:аят":{tafk,note,by}}) — заметкой в doTafsir.
+let _ourTaf=null,_ourTafP=null;
+function loadOurTafsir(){ if(_ourTaf) return Promise.resolve(_ourTaf); if(_ourTafP) return _ourTafP;
+  _ourTafP=fetch('./our_tafsir.json').then(r=>r.ok?r.json():{}).then(j=>{ _ourTaf=j||{}; return _ourTaf; }).catch(()=>{ _ourTaf={}; return _ourTaf; }); return _ourTafP; }
 // M333: глоссарий терминов джарх ва тадиль (переводы Claude) — клик по слову-вердикту → перевод+сила
 let _jarhGl=null, _jarhGlP=null;
 function loadJarhGl(){ if(_jarhGl) return Promise.resolve(_jarhGl); if(_jarhGlP) return _jarhGlP;
@@ -8123,6 +8127,11 @@ async function doTafsir(s,a,out,btn,key,lang){
       +'<div style="display:flex;gap:6px;margin-bottom:6px"><input class="tfFind" placeholder="🔎 найти слово в этом толковании…" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:13px"><span class="tfFindInfo hint" style="font-size:11px;align-self:center;white-space:nowrap"></span></div>'
       +'<div class="tafsirText" style="'+(isAr?'direction:rtl;text-align:right;font-size:17px;line-height:1.9':'font-size:14px;line-height:1.65')+';max-height:340px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:10px">'+(txt?esc(txt).replace(/\n+/g,'<br>'):'Для этого аята в этом тафсире нет текста.')+'</div><div class="tftrOut" style="margin-top:8px"></div></div>';
     out.innerHTML=html;
+    // M30: заметка «Muslimoon рекомендует» (если есть наш выбор тафсира на этот аят)
+    try{ loadOurTafsir().then(ot=>{ const rec=ot&&ot[s+':'+a]; if(!rec) return; const tfn=(TAFSIRS.find(t=>t.key===rec.tafk)||{}).nm||rec.tafk||''; const c=out.firstElementChild; if(!c) return;
+      const nb=document.createElement('div'); nb.style.cssText='background:rgba(46,155,107,.1);border:1px solid #2e9b6b;border-radius:9px;padding:7px 10px;margin-bottom:7px;font-size:12.5px;color:#bff5d4';
+      nb.innerHTML='🅼 <b>Muslimoon рекомендует:</b> '+esc(tfn)+(rec.note?(' — '+esc(rec.note)):'')+(rec.by?(' <span style="color:var(--hint)">· '+esc(rec.by)+'</span>'):'');
+      c.insertBefore(nb, c.firstChild); }); }catch(e){}
     out.querySelectorAll('.tfk').forEach(b=>b.onclick=()=>doTafsir(s,a,out,btn,b.dataset.k,lang));
     out.querySelectorAll('.tflang').forEach(b=>b.onclick=()=>doTafsir(s,a,out,btn,key,b.dataset.l));
     { const tb=out.querySelector('.tftr'); if(tb && txt) tb.onclick=()=>translateTafsir(txt, key, s, a, out.querySelector('.tftrOut'), tb); }
