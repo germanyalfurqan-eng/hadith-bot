@@ -2716,6 +2716,38 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_long(update, msg)
             return
 
+    # ============ #124: ТЕМАТИЧЕСКИЙ РУССКИЙ ЗАПРОС (без «хадис о») — ПОСЛЕДНИЙ ФОЛБЭК по смыслу ============
+    # Срабатывает ТОЛЬКО если ничего выше не подошло (Коран/книги/хадис/команды уже обработаны и вернулись).
+    # Гарды: фраза ≥2 слов и ≥12 символов, не числа/двоеточия, не owner-команды → не ловит приветствия/команды.
+    _tl124 = text.lower().strip()
+    if (len(text.split()) >= 2 and len(text) >= 12
+            and not re.match(r'^[\d\s:.,\-]+$', text)
+            and not _tl124.startswith(("/", "ботяра", "запомни", "исправь", "в реестр", "реестр", "результат", "сделано", "удали", "анонс", "заявка", "замечание", "ошибк", "бан", "разбан", "память"))):
+        try:
+            _kw = ask_ai(
+                "Из описания хадиса по смыслу выдай 4-7 КЛЮЧЕВЫХ АРАБСКИХ СЛОВ из его матна. "
+                "Только слова через пробел, без огласовок, без перевода и пояснений.\nОписание: " + text,
+                "Ты знаток хадисов. Отвечай ТОЛЬКО арабскими словами через пробел.",
+                owner=is_owner(update))
+            _kw = re.sub(r"\n*⚡ \*Модель:.*$", "", _kw or "", flags=re.S)
+            _kw = re.sub(r"[^؀-ۿ\s]", " ", _kw).strip()
+            if _kw:
+                _cnt, _res = search_sunnah_one(_kw, limit=4)
+                if _res:
+                    await update.message.reply_text(f"🔎 По смыслу «{text[:45]}» → {_kw}\nالدرر السنية: найдено {_cnt}")
+                    _r0 = _res[0]
+                    _m = f"{hukm_emoji(_r0['hukm'])} <b>الحكم:</b> {_esc_mark(_r0['hukm'] or '—')}\n📜 <b>{_esc_mark(_r0['marked'])}</b>\n"
+                    if is_owner(update):
+                        try:
+                            _ru = translate_matn(_r0["text"], src=_r0.get("takhreej", ""), owner=True)
+                            if _ru: _m += f"🌍 {_esc_mark(_ru)}\n"
+                        except Exception: pass
+                    if _r0.get("takhreej"): _m += f"📋 {takhreej_html(_r0['takhreej'])}\n"
+                    await send_long(update, _m, "HTML")
+                    return
+        except Exception:
+            pass
+
     # ============ ПОМОЩЬ ============
     if text.lower() in ["помощь", "справка", "команды", "хелп", "help", "/start"]:
         await update.message.reply_text(
