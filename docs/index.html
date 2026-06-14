@@ -125,6 +125,8 @@
   mark{background:var(--mark);color:#241c00;border-radius:3px;padding:0 1px}
   .isnad{color:var(--hint)}
   .matn{color:#fff;font-weight:700}
+  .tword{color:#6fa8dc;font-weight:600}   /* #76: слова передатчика (حدثنا/أخبرنا/عن) — акцент, отделены от имён (серых) и матна (белого) */
+  body.light .tword{color:#2f6aa8}
   .chip.off{opacity:.4;text-decoration:line-through}
   .status{text-align:center;color:var(--hint);padding:14px;font-size:14px}
   .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#000;color:#fff;
@@ -174,7 +176,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v487</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v488</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -603,7 +605,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v487';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v488';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -883,6 +885,11 @@ function markMatn(html){
   // матн (слова Пророка/хадиса) обычно в «…» — выделяем ярче; иснад серый, комментарий обычный
   return html.replace(/«([^«»]*)»/g,'<span class="matn">«$1»</span>');
 }
+// #76 (закон владельца): слова передатчика (глаголы передачи حدثنا/أخبرنا/سمعت/عن…) — мягкий акцент, чтобы матн / иснад / связки различались цветом.
+const _TWORDS=['حدثناه','حدثنا','حدثني','اخبرنا','اخبرني','انبانا','انباني','سمعت','ثنا','عن'];
+function _twPat(w){ return [...w].map(ch=>{ const c=(ch==='ا')?'[اأإآ]':ch; return c+'[ً-ْٰـ]*'; }).join(''); }
+const _TW_RE=new RegExp('(^|[\\s،؛>])('+_TWORDS.map(_twPat).join('|')+')(?=[\\s،؛<]|$)','g');
+function markTword(html){ try{ return String(html).replace(_TW_RE,'$1<span class="tword">$2</span>'); }catch(e){ return html; } }
 function _cleanTextArtifacts(text){
   // M500: очистка инлайн-мусора из парсинга PDF перед отображением
   if(!text) return text;
@@ -901,10 +908,10 @@ function _cleanTextArtifacts(text){
 }
 function hl(text,groups){
   const disp=_cleanTextArtifacts(text||'');   // хадисы — всегда как есть; очищаем мусор перед отображением
-  if(cfg.hideIsnad){ const sp=splitIsnad(disp); return markMatn(highlight(sp[1]||disp,groups,modes)); }   // показываем только матн
-  if(!cfg.isnad) return markMatn(highlight(disp,groups,modes));
-  const sp=splitIsnad(disp); if(!sp[0]) return markMatn(highlight(disp,groups,modes));
-  return markMatn('<span class="isnad">'+highlight(sp[0],groups,modes)+'</span> '+highlight(sp[1],groups,modes));
+  if(cfg.hideIsnad){ const sp=splitIsnad(disp); return markTword(markMatn(highlight(sp[1]||disp,groups,modes))); }   // показываем только матн
+  if(!cfg.isnad) return markTword(markMatn(highlight(disp,groups,modes)));
+  const sp=splitIsnad(disp); if(!sp[0]) return markTword(markMatn(highlight(disp,groups,modes)));
+  return markTword(markMatn('<span class="isnad">'+highlight(sp[0],groups,modes)+'</span> '+highlight(sp[1],groups,modes)));
 }
 /* ===== копирование ===== */
 function copyText(t){ try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(()=>toast('Скопировано ✓'),()=>_fbCopy(t)); } else _fbCopy(t); }catch(e){ _fbCopy(t); } }
