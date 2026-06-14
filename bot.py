@@ -1,3 +1,4 @@
+# DEPLOY-TRIGGER С25 15.06.2026 01:44 — пакет #110/#40/#41/#90 (заявки в боте, #NN, анти-дубль)
 import os
 import asyncio
 import re
