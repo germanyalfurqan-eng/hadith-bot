@@ -1444,11 +1444,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
             rid = req_add(body or "(скрин)", img_flag=True, imgkey=str(update.message.photo[-1].file_id))
             try:
-                await context.bot.copy_message(LOG_CHAT_ID, update.effective_chat.id, update.message.message_id)
-                await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца №{rid} ({_now_msk()}): {(body or '(скрин)')[:300]}")
+                if update.effective_chat.id != LOG_CHAT_ID:   # #41/#90: НЕ дублировать эхо в тот же чат (был тройной повтор)
+                    await context.bot.copy_message(LOG_CHAT_ID, update.effective_chat.id, update.message.message_id)
+                    await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid} ({_now_msk()}): {(body or '(скрин)')[:300]}")
             except Exception:
                 pass
-            await update.message.reply_text(f"📥 Заявка №{rid} со скрином записана ✅. Список — «заявки».")
+            await update.message.reply_text(f"📥 Заявка #{rid} со скрином записана ✅ (уникальный № — ищи в журнале командой «заявки»).")
             return
     except Exception:
         pass
@@ -1775,9 +1776,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(f"⚠️ Похоже, ты это уже присылал — *заявка №{dup}*. Не дублирую.\n(Если всё же другое — допиши подробнее и пришли ещё раз.)", parse_mode="Markdown")
                 return
             rid = req_add(body)
-            try: await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца №{rid} ({_now_msk()}):\n{body[:1500]}")
+            try:
+                if update.effective_chat.id != LOG_CHAT_ID:   # #41/#90: НЕ дублировать эхо в тот же чат
+                    await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid} ({_now_msk()}):\n{body[:1500]}")
             except Exception: pass
-            await update.message.reply_text(f"📥 *Заявка №{rid}* записана ✅ ({_now_msk()})\nСписок — команда «заявки».", parse_mode="Markdown")
+            await update.message.reply_text(f"📥 *Заявка #{rid}* записана ✅ ({_now_msk()})\nУникальный № — ищи в журнале командой «заявки».", parse_mode="Markdown")
             return
         # ===== АНОНС в канал приложения вручную ===== «анонс» = текущий update_note.txt; «анонс <текст>» = свой
         if _tl == "анонс" or _tl.startswith("анонс ") or _tl.startswith("анонс\n"):
