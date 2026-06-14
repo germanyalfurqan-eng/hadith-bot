@@ -26,7 +26,7 @@
     --ok:#34c759;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  body{margin:0;font-family:var(--uiFont,"Times New Roman",Georgia,serif);
+  body{margin:0;font-family:var(--uiFont,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif);
        color:var(--text);font-size:16px;line-height:1.5;background:#070a10}
   /* фон закреплён по ВЫСОТЕ экрана (100vh), а не inset:0 — иначе при появлении клавиатуры низ «съезжает» и фон/лого прыгает */
   body::before{content:'';position:fixed;top:0;left:0;right:0;height:100vh;z-index:-2;background:url('./bg.jpg') no-repeat center top;background-size:cover}
@@ -173,7 +173,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v460</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v461</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -335,9 +335,9 @@
       </select></div>
     <div class="row"><span>🔠 Шрифт интерфейса <span style="color:var(--hint);font-size:11px">(русский текст, кнопки)</span></span>
       <select id="uiFontSel" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 8px">
+        <option value="system">Обычный (по умолчанию)</option>
         <option value="times">Times New Roman</option>
         <option value="georgia">Georgia</option>
-        <option value="system">Системный (без засечек)</option>
       </select></div>
     <div class="row"><span>📗 Ссылка на Мактабу Шамилю (shamela.ws) у книг</span>
       <select id="shLinkSel" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 8px">
@@ -598,7 +598,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v460';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v461';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -705,7 +705,7 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 /* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:false,wordTap:true,popular:false,arabus:false,qrHl:true,uiFont:'times'}, loadCfg());
+let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:false,wordTap:true,popular:false,arabus:false,qrHl:true,uiFont:'system'}, loadCfg());
 if(!cfg._rpoff){ cfg.recent=false; cfg.popular=false; cfg._rpoff=1; saveCfg(cfg); }   // разовое: выключить Недавнее/Популярное по умолчанию (можно вернуть в Настройках)
 function applyTheme(){ document.body.classList.toggle('light', cfg.theme==='light'); }
 try{ applyTheme(); }catch(e){}
@@ -713,9 +713,11 @@ try{ applyTheme(); }catch(e){}
 const _AR_FONTS={trad:'"Traditional Arabic","Amiri",serif', amiri:'"Amiri",serif', naskh:'"Noto Naskh Arabic","Amiri",serif', sans:'"Segoe UI","Noto Sans Arabic",system-ui,sans-serif'};
 function applyArFont(){ try{ document.documentElement.style.setProperty('--arFont', _AR_FONTS[cfg.arFont]||_AR_FONTS.trad); }catch(e){} }
 try{ applyArFont(); }catch(e){}
-// #81: шрифт ИНТЕРФЕЙСА/русского текста (арабский — отдельно через --arFont). По умолчанию Times New Roman (просьба владельца), системный без засечек — опция.
-const _UI_FONTS={times:'"Times New Roman",Georgia,serif', system:'-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif', georgia:'Georgia,"Times New Roman",serif'};
-function applyUiFont(){ try{ document.documentElement.style.setProperty('--uiFont', _UI_FONTS[cfg.uiFont]||_UI_FONTS.times); }catch(e){} }
+// #81/#88/#89/#105: шрифт ИНТЕРФЕЙСА/русского текста. По умолчанию — СИСТЕМНЫЙ (как было всегда: владелец просил менять ТОЛЬКО арабский #51); Times/Georgia — опции в настройках.
+const _UI_FONTS={system:'-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif', times:'"Times New Roman",Georgia,serif', georgia:'Georgia,"Times New Roman",serif'};
+function applyUiFont(){ try{ document.documentElement.style.setProperty('--uiFont', _UI_FONTS[cfg.uiFont]||_UI_FONTS.system); }catch(e){} }
+// #88/#105: одноразовый СБРОС неудачного дефолта Times (стоял ~v454–460) обратно на системный. Кто захочет — выберет Times в настройках заново.
+try{ if(!localStorage.getItem('uiFontReset461') && cfg.uiFont==='times'){ cfg.uiFont='system'; saveCfg(cfg); localStorage.setItem('uiFontReset461','1'); } }catch(e){}
 try{ applyUiFont(); }catch(e){}
 
 /* ===================== СЕРВЕРНЫЙ ДОСТУП (G9) ===================== */
@@ -8495,7 +8497,7 @@ if(cfg.fullscreen && _fsSupported()){ applyFullscreen(); }   // восстано
 var _gl=document.getElementById('glowSw'); if(_gl){ _gl.classList.toggle('on',!cfg.noLogoGlow); _gl.onclick=()=>{ cfg.noLogoGlow=!cfg.noLogoGlow; saveCfg(cfg); _gl.classList.toggle('on',!cfg.noLogoGlow); toast(cfg.noLogoGlow?'Свечение выключено':'✨ Свечение включено'); }; }
 var _th=document.getElementById('themeSel'); if(_th){ _th.value=cfg.theme||'dark'; _th.onchange=()=>{ cfg.theme=_th.value; saveCfg(cfg); applyTheme(); toast(cfg.theme==='light'?'Светлая тема ☀️':'Тёмная тема 🌙'); }; }
 var _arf=document.getElementById('arFontSel'); if(_arf){ _arf.value=cfg.arFont||'trad'; _arf.onchange=()=>{ cfg.arFont=_arf.value; saveCfg(cfg); applyArFont(); toast('🔡 Шрифт арабского изменён'); }; }   // #51
-var _uif=document.getElementById('uiFontSel'); if(_uif){ _uif.value=cfg.uiFont||'times'; _uif.onchange=()=>{ cfg.uiFont=_uif.value; saveCfg(cfg); applyUiFont(); toast('🔠 Шрифт интерфейса изменён'); }; }   // #81
+var _uif=document.getElementById('uiFontSel'); if(_uif){ _uif.value=cfg.uiFont||'system'; _uif.onchange=()=>{ cfg.uiFont=_uif.value; saveCfg(cfg); applyUiFont(); toast('🔠 Шрифт интерфейса изменён'); }; }   // #81/#89
 var _rcw=document.getElementById('recentSw'); if(_rcw){ _rcw.classList.toggle('on',cfg.recent!==false); _rcw.onclick=()=>{ cfg.recent=(cfg.recent===false); saveCfg(cfg); _rcw.classList.toggle('on',cfg.recent!==false); if(cfg.recent===false) hideRecent(); }; }
 var _tjw=document.getElementById('tafJumpSw'); if(_tjw){ _tjw.classList.toggle('on',cfg.tafJump!==false); _tjw.onclick=()=>{ cfg.tafJump=(cfg.tafJump===false); saveCfg(cfg); _tjw.classList.toggle('on',cfg.tafJump!==false); }; }
 var _qan=document.getElementById('qrAutoNextSw'); if(_qan){ _qan.classList.toggle('on',cfg.qrAutoNext!==false); _qan.onclick=()=>{ cfg.qrAutoNext=(cfg.qrAutoNext===false); saveCfg(cfg); _qan.classList.toggle('on',cfg.qrAutoNext!==false); }; }   // M275: тумблер авто-перехода чтеца Корана
