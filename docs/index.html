@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v440</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v441</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -312,7 +312,7 @@
     <div class="row"><span>📳 Тактильная отдача (вибро) на действия</span><div class="sw" id="hapticSw"></div></div>
     <div class="row"><span>🔥 Популярное (что чаще ищут, при пустом поле)</span><div class="sw" id="popSw"></div></div>
     <div class="row"><span>🔆 Доп. поиск на Sunnah.one (хукм/тахридж) <span style="color:var(--hint);font-size:11px">(по умолч. выкл — Мактаба ищет норм)</span></span><div class="sw" id="sunnahSw"></div></div>
-    <div class="row"><span>🔗 Ссылки на isnad.link <span style="color:var(--hint);font-size:11px">(рус. перевод + тройная нумерация хадиса; по умолч. выкл)</span></span><div class="sw" id="isnadSw"></div></div>
+    <div class="row"><span>🔗 Ссылки на isnad.link <span style="color:var(--hint);font-size:11px">(рус. перевод + тройная нумерация хадиса; по умолч. выкл)</span></span><div class="sw" id="isnadLinkSw"></div></div>
     <div class="row"><span>🖥 На весь экран <span style="color:var(--hint);font-size:11px">(растянуть приложение, скрыть шапку Telegram)</span></span><div class="sw" id="fsSw"></div></div>
     <div class="row"><span>✨ Свечение при обновлении <span style="color:var(--hint);font-size:11px">(клик на лого = домой, свет из угла)</span></span><div class="sw" id="glowSw"></div></div>
     <div class="row"><span>🎨 Тема оформления</span>
@@ -586,7 +586,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v440';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v441';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2048,7 +2048,8 @@ async function runSearch(explicit){
   try{ maybeNarratorChip(shown); }catch(e){}   // #21: мягкая подсказка «это передатчик?» (не форсим)
   // в ИИ-режиме при малом числе результатов тоже добираем по всей библиотеке (по арабской фразе ИИ)
   if(modes.ai && aiPhrases && aiPhrases.length){ const ap=aiPhrases.find(p=>isArabic(p)); if(ap) wideQ=ap; }
-  const wideWill = (tab==='hadith' && explicit && (isArabic(shown) || numMode || (modes.ai && count<5)));   // по умолчанию ищем и по ВСЕЙ Мактабе (вкл. номер) — догрузка прогрессивная
+  const _selNarrow = (typeof selCols!=='undefined' && selCols.size>0) || (typeof selExtra!=='undefined' && selExtra.size>0);   // #50: выбран конкретный сборник чипом
+  const wideWill = (tab==='hadith' && explicit && !_selNarrow && (isArabic(shown) || numMode || (modes.ai && count<5)));   // #50: при выбранном сборнике НЕ ищем по всей Мактабе («не должно искать ничего кроме выделенного»); по умолчанию (ничего не выбрано) — ищем и по всей Мактабе
   if(!count && seq===_seq){
     if(tab==='quran' && !strict && await tryRootFallback(shown, seq)){ /* M212/M225: показал по корню (в строгом режиме — не подменяем) */ }
     else if(wideWill){ res.innerHTML='<div class="status">🔎 В ПЕРВОИСТОЧНИКАХ хадисов точного совпадения нет, но уже ищу по всей Мактабе (8 589 книг) — секунду… <span class="ldot">⏳</span></div>'; }   // M420: одним предложением, чтобы человек не ушёл
@@ -8270,7 +8271,7 @@ var _shs=document.getElementById('shLinkSel'); if(_shs){ _shs.value=cfg.shLink||
   toast('📗 Ссылка на Шамилю: '+(_shs.value==='wiki'?'возле Википедии':_shs.value==='reader'?'в шапке читалки':'выключена')); }; }   // M451: где показывать ссылку shamela.ws
 var _nd=document.getElementById('noDiacSw'); if(_nd){ _nd.classList.toggle('on',!!cfg.noDiac); _nd.onclick=()=>{ cfg.noDiac=!cfg.noDiac; saveCfg(cfg); _nd.classList.toggle('on',!!cfg.noDiac); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _sun=document.getElementById('sunnahSw'); if(_sun){ _sun.classList.toggle('on',!!cfg.sunnahOne); _sun.onclick=()=>{ cfg.sunnahOne=!cfg.sunnahOne; saveCfg(cfg); _sun.classList.toggle('on',!!cfg.sunnahOne); toast(cfg.sunnahOne?'🔆 Доп. поиск Sunnah.one включён':'Sunnah.one выключен'); }; }
-var _isn=document.getElementById('isnadSw'); if(_isn){ _isn.classList.toggle('on',!!cfg.isnadLink); _isn.onclick=()=>{ cfg.isnadLink=!cfg.isnadLink; saveCfg(cfg); _isn.classList.toggle('on',!!cfg.isnadLink); toast(cfg.isnadLink?'🔗 Ссылки isnad.link включены':'isnad.link выключен'); }; }
+var _isn=document.getElementById('isnadLinkSw'); if(_isn){ _isn.classList.toggle('on',!!cfg.isnadLink); _isn.onclick=()=>{ cfg.isnadLink=!cfg.isnadLink; saveCfg(cfg); _isn.classList.toggle('on',!!cfg.isnadLink); toast(cfg.isnadLink?'🔗 Ссылки isnad.link включены':'isnad.link выключен'); }; }   // #54: был дублирующийся id isnadSw → тумблер не жался
 /* ===== Глубокие ссылки: открыть приложение СРАЗУ на нужном месте. Работает в Telegram (?startapp=TOKEN) и в браузере (?g=TOKEN).
    Токены: q_2_255 (Коран 2:255) · b_16_78 (книга turath id 16, стр.78) · r_muslim_2408 (наш ридер: Муслим №2408) · cat (каталог Мактабы). ===== */
 const APP_WEB_URL='https://germanyalfurqan-eng.github.io/hadith-bot/';
