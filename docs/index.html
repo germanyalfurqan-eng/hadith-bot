@@ -173,7 +173,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v474</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v475</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -445,11 +445,13 @@
         <span class="hint" id="readFindInfo" style="margin:0;white-space:nowrap"></span>
       </div>
       <div id="readBody"></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px">
-        <button class="go" id="readPrev" style="padding:8px 14px">← пред.</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:10px">
+        <button class="go" id="readFirst" style="padding:8px 10px" title="В начало книги">⏮</button>
+        <button class="go" id="readPrev" style="padding:8px 12px">← пред.</button>
         <input type="number" id="readJump" placeholder="перейти к №" min="1"
-               style="width:120px;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:7px 9px;font-size:13px">
-        <button class="go" id="readNext" style="padding:8px 14px">след. →</button>
+               style="width:104px;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:7px 9px;font-size:13px">
+        <button class="go" id="readNext" style="padding:8px 12px">след. →</button>
+        <button class="go" id="readLast" style="padding:8px 10px" title="В конец книги">⏭</button>
       </div>
     </div>
   </div>
@@ -599,7 +601,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v474';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v475';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1062,7 +1064,8 @@ function cardHadithRu(d){ const card=document.createElement('div');card.classNam
   const ru=document.createElement('div');ru.className='ru-out';ru.style.cssText='font-size:16px;line-height:1.7';ru.innerHTML=hlRu(d.ru,d.rq||'');card.appendChild(ru);
   const meta=document.createElement('div');meta.className='meta';
   const canRead = isReadable(d.s);   // M102: клик по источнику → читалка на этом хадисе
-  meta.innerHTML='<span class="src'+(canRead?' srcnav" style="cursor:pointer" title="Открыть в читалке на этом хадисе">📖 ':'">')+arOf(d.s)+' · №'+d.n+'</span>';
+  meta.innerHTML='<span class="src'+(canRead?' srcnav" style="cursor:pointer" title="Открыть в читалке на этом хадисе">📖 ':'">')+vocOf(d.s)+' · №'+d.n+'</span>';   // #37: с огласовками
+  { const _rl=_ruSrcLine(d.s); if(_rl) meta.innerHTML+='<span class="srcru" style="display:block;width:100%;font-size:11.5px;color:var(--hint);margin-top:1px;direction:ltr;text-align:left">'+esc(_rl)+'</span>'; }   // #37: рус. название + автор
   if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp) sp.onclick=()=>openReader(d.s,String(d.n)); }
   const fav={k:'h|'+d.s+'|'+d.n,type:'h',coll:arOf(d.s),label:arOf(d.s)+' №'+d.n,text:(d.ru||'').slice(0,200)};
   card.appendChild(meta);
@@ -1094,6 +1097,28 @@ function nameOf(c){const x=COLLECTIONS.find(k=>k.code===c);if(x)return x.ru;if(E
 function arOf(c){const x=COLLECTIONS.find(k=>k.code===c);if(x)return x.ar;if(EXTRA_MAP[c])return EXTRA_MAP[c].ar;
   if(c==='ibnmaja') return arOf('ibnmajah');   // M379: алиас кода данных → арабское имя, не латиница
   return c;}
+// #37 (заявка 14.06, скрин): на КАЖДОЙ карточке хадиса — название сборника С ОГЛАСОВКАМИ + рус. название + автор.
+// Данные локальны (R37). Показываем ТОЛЬКО в отображении карточки; arOf (без огласовок) остаётся для матча/копий/ключей.
+const COLL_VOC={
+  bukhari:'الْبُخَارِيّ', muslim:'مُسْلِم', abudawud:'أَبُو دَاوُدَ', tirmidhi:'التِّرْمِذِيّ',
+  ibnmajah:'ابْن مَاجَهْ', nasai:'النَّسَائِيّ', malik:'مَالِك', ahmad:'أَحْمَد',
+  muqbil:'الصَّحِيحُ الْمُسْنَد', ibnhibban:'صَحِيحُ ابْنِ حِبَّان', ibnkhuzayma:'صَحِيحُ ابْنِ خُزَيْمَة',
+  darimi:'سُنَنُ الدَّارِمِيّ', adabmufrad:'الْأَدَبُ الْمُفْرَد', abuawana:'مُسْتَخْرَجُ أَبِي عَوَانَة',
+  ibnabishayba:'مُصَنَّفُ ابْنِ أَبِي شَيْبَة', abuyala:'مُسْنَدُ أَبِي يَعْلَى', nasaikubra:'السُّنَنُ الْكُبْرَى',
+  tayalisi:'مُسْنَدُ الطَّيَالِسِيّ', ishaq:'مُسْنَدُ إِسْحَاق', abdbinhumayd:'مُسْنَدُ عَبْدِ بْنِ حُمَيْد',
+  ibnaljad:'مُسْنَدُ ابْنِ الْجَعْد', humaydi:'مُسْنَدُ الْحُمَيْدِيّ', ismail:'أَحَادِيثُ إِسْمَاعِيل',
+  ibnmubarak:'مُسْنَدُ ابْنِ الْمُبَارَك', islamkamil:'الْإِسْلَامُ الْكَامِل', muhaymin:'الْمُهَيْمِن'
+};
+const COLL_RU_FULL={ bukhari:'Сахих аль-Бухари', muslim:'Сахих Муслим', abudawud:'Сунан Абу Дауда',
+  tirmidhi:'Джами‘ ат-Тирмизи', ibnmajah:'Сунан Ибн Маджа', nasai:'Сунан ан-Насаи',
+  malik:'аль-Муватта', ahmad:'Муснад Ахмада' };
+const COLL_AUTH_RU={ bukhari:'аль-Бухари', muslim:'Муслим', abudawud:'Абу Дауд', tirmidhi:'ат-Тирмизи',
+  ibnmajah:'Ибн Маджа', nasai:'ан-Насаи', malik:'Малик ибн Анас', ahmad:'Ахмад ибн Ханбаль' };
+function vocOf(c){ if(c==='ibnmaja') c='ibnmajah'; return COLL_VOC[c]||arOf(c); }
+function bookRuOf(c){ if(c==='ibnmaja') c='ibnmajah'; if(COLL_RU_FULL[c]) return COLL_RU_FULL[c]; if(EXTRA_MAP[c]) return EXTRA_MAP[c].ru||EXTRA_MAP[c].short||''; return ''; }
+function authRuOf(c){ if(c==='ibnmaja') c='ibnmajah'; if(COLL_AUTH_RU[c]) return COLL_AUTH_RU[c]; if(EXTRA_MAP[c]) return EXTRA_MAP[c].author||''; return ''; }
+// единая рус.строка карточки «Название · Автор» (без дублей, если автор уже в названии)
+function _ruSrcLine(c){ const t=bookRuOf(c), a=authRuOf(c); if(!t) return a||''; if(!a||t.indexOf(a)!==-1) return t; return t+' · '+a; }
 function isReadable(c){ return c!=='muhaymin' && (!!COLLECTIONS.find(k=>k.code===c) || (EXTRA_MAP[c] && !EXTRA_MAP[c].soon)); }
 
 /* ===================== UI STATE ===================== */
@@ -2394,6 +2419,20 @@ async function _bkJumpHno(n){
     toast('📖 №'+n+' — на этом листе или соседнем (нумерация по маркерам печати)');
   }catch(e){ toast('🔧 не вышло — попробуй ещё раз'); }
 }
+// #38: «в конец книги» (как ⏭ в Мактабе). turath не знает заранее число листов → разгон hi до пустого листа,
+// затем бинарный поиск последнего НЕпустого. Конец подтверждаем парой пустых (служебный лист ≠ конец).
+async function _bkIsEnd(pg){ const a=await _bkFetchMeta(pg); if(a&&a.has) return false; const b=await _bkFetchMeta(pg+1); return !(b&&b.has); }
+async function _bkJumpLast(){
+  toast('🔎 ищу последнюю страницу книги…');
+  try{
+    let lo=Math.max(1,_bookView.pg||1), hi=Math.max(lo*2,256), cap=0, ended=false;
+    while(cap++<16){ if(await _bkIsEnd(hi)){ ended=true; break; } lo=hi; if(hi>=80000) break; hi=Math.min(80000,hi*2); }
+    if(!ended){ _bookView.pg=hi; _bookView.want=null; _bookView.snaps=0; _bookLoad(); toast('📖 ближе к концу книги (лист '+hi+')'); return; }
+    let it=0;
+    while(lo+1<hi && it++<22){ const mid=(lo+hi)>>1; if(await _bkIsEnd(mid)) hi=mid; else lo=mid; }
+    _bookView.pg=lo; _bookView.want=null; _bookView.snaps=0; _bookLoad(); toast('📖 последняя страница книги (лист '+lo+')');
+  }catch(e){ toast('🔧 не вышло — попробуй ещё раз'); }
+}
 // M439: цитата Шамелы «Название книги» (том/стр): «фраза» → найти книгу в каталоге и открыть НА ТОМ ЖЕ месте
 async function openShamelaCitation(title, vol, page, phrase){
   try{
@@ -2512,7 +2551,7 @@ async function _bookLoad(){
     try{ _bkApplyTheme(tEl); }catch(e){}
     // ── M318/M347: НИЗ-БАР ЛИСТАНИЯ (sticky bottom) — отдельные поля ТОМ / СТРАНИЦА / № ХАДИСА (как в Мактабе)
     const bot=m.querySelector('#bookBotBar'); if(bot){ bot.innerHTML='';
-      bot.appendChild(mk('⏮', ()=>{ if(_bookView.pg!==1){ _bookView.pg=1; _bookLoad(); } }, _bookView.pg<=1));   // M418: ◀▶ переехали крупными кнопками ниже
+      // #38: «в начало/в конец» переехали в ясную пару кнопок ниже (nav3), одиночная ⏮ убрана
       const _fld=(w,val,title)=>{ const i=document.createElement('input'); i.type='tel'; i.value=val; i.title=title;
         i.style.cssText='width:'+w+'px;text-align:center;background:var(--bg);color:var(--text);border:1px solid var(--btn);border-radius:8px;padding:7px 3px;font-size:14px;font-weight:700'; return i; };
       const _lb=t=>{ const s=document.createElement('span'); s.className='hint'; s.style.cssText='font-size:11px;color:var(--mark);white-space:nowrap'; s.textContent=t; return s; };
@@ -2544,6 +2583,15 @@ async function _bookLoad(){
       bPrev.disabled=_bookView.pg<=1; bPrev.onclick=()=>{ if(_bookView.pg>1){ try{hap('light');}catch(e){} _bookView.pg--; _bookLoad(); } };
       nav2.appendChild(bNext); nav2.appendChild(bPrev);
       bot.appendChild(nav2);
+      // #38: пара «в начало книги / в конец книги» (как ⏮/⏭ в Мактабе) — ясные подписи, не зависит от RTL
+      const nav3=document.createElement('div'); nav3.style.cssText='display:flex;gap:7px;width:100%;margin-top:6px';
+      const bFirst=document.createElement('button'); bFirst.className='mini'; bFirst.textContent='⏮ В начало книги';
+      bFirst.style.cssText='flex:1;min-height:40px;font-size:12.5px;font-weight:600;border:1px solid var(--border);border-radius:10px'+(_bookView.pg<=1?';opacity:.4':'');
+      bFirst.disabled=_bookView.pg<=1; bFirst.onclick=()=>{ if(_bookView.pg!==1){ try{hap('light');}catch(e){} _bookView.pg=1; _bookView.want=null; _bookView.snaps=0; _bookLoad(); } };
+      const bLast=document.createElement('button'); bLast.className='mini'; bLast.textContent='В конец книги ⏭';
+      bLast.style.cssText='flex:1;min-height:40px;font-size:12.5px;font-weight:600;border:1px solid var(--border);border-radius:10px';
+      bLast.onclick=()=>{ try{hap('light');}catch(e){} _bkJumpLast(); };
+      nav3.appendChild(bFirst); nav3.appendChild(bLast); bot.appendChild(nav3);
     }
     // ── РЯД ТОГГЛОВ: ⚙️ Инструменты (поиск/копия/ссылка/шрифт/тема) + 🧠 ИИ — панели по требованию, чтение не загромождено
     const tgl=document.createElement('div'); tgl.style.cssText='display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap';
@@ -3250,8 +3298,9 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
   const meta=document.createElement('div');meta.className='meta';
   const canRead = !noNav && isReadable(code);
   const _riwL = riwNo ? (' · <b style="color:#9fd3a8">риваят '+riwNo+'/'+riwTot+'</b>') : '';
-  meta.innerHTML='<span class="src'+(canRead?' srcnav':'')+'"'+(canRead?' title="Открыть в читалке на этом хадисе">📖 ':'>')+arOf(code)+' · №'+h.num+'</span>'+_riwL;
+  meta.innerHTML='<span class="src'+(canRead?' srcnav':'')+'"'+(canRead?' title="Открыть в читалке на этом хадисе">📖 ':'>')+vocOf(code)+' · №'+h.num+'</span>'+_riwL;   // #37: название С ОГЛАСОВКАМИ
   meta.innerHTML+=authBadge(code, h.grade, (h.num||h.n));
+  { const _rl=_ruSrcLine(code); if(_rl) meta.innerHTML+='<span class="srcru" style="display:block;width:100%;font-size:11.5px;color:var(--hint);margin-top:1px;direction:ltr;text-align:left">'+esc(_rl)+'</span>'; }   // #37: рус. название + автор
   try{ ourHukmBadge(code, (h.num||h.n), meta, card); }catch(e){}
   if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp){ sp.style.cursor='pointer'; sp.onclick=()=>openReader(code,String(h.num)); } }
   if(code==='muslim' && !riwNo){ (async()=>{ try{ const nm=await _muslimNums(h.num); if(nm){ const sp=meta.querySelector('.src');
@@ -3278,8 +3327,9 @@ function cardMuh(d,groups){
   warn.textContent='⚠️ Книга в обработке — возможны ошибки распознавания. Автор: مرشد بن يوسف.';
   card.appendChild(warn);
   const meta=document.createElement('div');meta.className='meta';
-  meta.innerHTML='<span class="badge muh">المهيمن №'+h.n+' · مرشد بن يوسف</span>'+
-    '<span class="src" style="direction:rtl">'+esc(h.b||'')+' › '+esc(h.c||'')+'</span>';
+  meta.innerHTML='<span class="badge muh">الْمُهَيْمِن №'+h.n+' · مُرْشِد بن يُوسُف</span>'+
+    '<span class="src" style="direction:rtl">'+esc(h.b||'')+' › '+esc(h.c||'')+'</span>'+
+    '<span class="srcru" style="display:block;width:100%;font-size:11.5px;color:var(--hint);margin-top:1px;direction:ltr;text-align:left">аль-Мухаймин (الموحد المهيمن على الدين) · Муршид ибн Юсуф</span>';   // #37: рус. название + автор
   if(rv.length>1) meta.innerHTML+='<span class="grade">риваятов: '+rv.length+'</span>';
   let _mk=null; try{ for(const r of rv){ const s=(typeof r==='object'&&r.s)?r.s:''; const k=_srefToMaktaba(s); if(k){ _mk=k; break; } } }catch(e){}   // #39/#43: страница Мактабы из short_ref (первый резолвимый риваят)
   addTr(meta,card,h.text,null,{k:'m|'+h.n,type:'m',coll:'المهيمن',label:'المهيمن №'+h.n,text:((rv[0]&&rv[0].t)||'').slice(0,200),_mk:_mk}); card.appendChild(meta); return card;
@@ -9088,6 +9138,9 @@ var _rback=document.getElementById('readBack'); if(_rback) _rback.onclick=_readT
 var _rgo=document.getElementById('readGo'); if(_rgo) _rgo.onclick=()=>{ const c=document.getElementById('readSel').value; const f=document.getElementById('readFrom').value; _readOpen(c,f); };
 var _rprev=document.getElementById('readPrev'); if(_rprev) _rprev.onclick=()=>{ if(_readFindM.length){ _readFindStep(-1); } else { _readIdx--; _readRender(); } try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
 var _rnext=document.getElementById('readNext'); if(_rnext) _rnext.onclick=()=>{ if(_readFindM.length){ _readFindStep(1); } else { _readIdx++; _readRender(); } try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
+// #38: «в начало / в конец книги» (как в Мактабе) — массив _readArr загружен целиком, длина известна
+var _rfirst=document.getElementById('readFirst'); if(_rfirst) _rfirst.onclick=()=>{ _readFindM=[]; _readFindPos=-1; var _fi=document.getElementById('readFindInfo'); if(_fi)_fi.textContent=''; _readIdx=0; _readRender(); try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
+var _rlast=document.getElementById('readLast'); if(_rlast) _rlast.onclick=()=>{ _readFindM=[]; _readFindPos=-1; var _fi=document.getElementById('readFindInfo'); if(_fi)_fi.textContent=''; _readIdx=(_readArr&&_readArr.length?_readArr.length-1:0); _readRender(); try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
 var _rjump=document.getElementById('readJump'); if(_rjump) _rjump.onkeydown=(e)=>{ if(e.key==='Enter'){ const qn=String(parseInt(_rjump.value,10)); const i=_readArr?_readArr.findIndex(x=>String(x.num)===qn):-1; if(i>=0){_readFindM=[];_readFindPos=-1;document.getElementById('readFindInfo').textContent='';_readIdx=i;_readRender();} else toast('№ не найден'); } };
 var _rfind=document.getElementById('readFind'); if(_rfind){ let _rft; _rfind.addEventListener('input',()=>{ clearTimeout(_rft); _rft=setTimeout(_readDoFind,350); }); _rfind.addEventListener('keydown',e=>{ if(e.key==='Enter'){ clearTimeout(_rft); if(_readFindM.length) _readFindStep(1); else _readDoFind(); } }); }
 
