@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v428</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v429</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -577,7 +577,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v428';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v429';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4872,7 +4872,10 @@ async function doTakhrij(text, ref, out, btn, force){
   head.innerHTML='🌿 Наш тахридж: уникальный хадис <b>№'+su+'</b>'+(pl.length>1?(' · <b>'+_ruVers(pl.length)+'</b> по сборникам (клик по № — читалка):'):' — других версий среди 64 печатей не найдено.');
   tkSec.appendChild(head);
   const byb={}; pl.forEach(([bb,nn])=>{ (byb[bb]=byb[bb]||[]).push(nn); });
-  Object.keys(byb).forEach(bb=>{ const row=document.createElement('div'); row.style.cssText='direction:rtl;font-size:14px;margin:2px 0';
+  // R55: СВОЙ сборник первым, затем по АВТОРИТЕТУ (Бухари>Муслим>الكتب التسعة>Хузайма/Хиббан/Хаким>…), не наоборот
+  const _RANK={'1681':1,'1727':2,'654':3,'1726':3,'117359':3,'7895':4,'1435':4,'829':5,'8361':5,'1198':6,'28107':7,'25794':8,'98139':8,'21795':9,'1456':10,'9647':11,'13037':12,'537':20,'1446':21,'1424':22,'18144':23,'8493':24,'12520':30,'12981':31,'1733':32,'748':33,'13159':34,'10631':35,'9615':36,'13122':37,'13136':38,'4407':39,'278':40,'1613':41,'8218':42,'13027':43,'21545':44,'13028':45,'3610':46,'5562':47,'13155':48};
+  const _sb=_self?String(_self.bid):null;
+  Object.keys(byb).sort((x,y)=>{ const sx=(x===_sb)?0:1, sy=(y===_sb)?0:1; if(sx!==sy) return sx-sy; return ((_RANK[x]||90)-(_RANK[y]||90))||(x-y); }).forEach(bb=>{ const row=document.createElement('div'); row.style.cssText='direction:rtl;font-size:14px;margin:2px 0';
     const bn=(typeof bookName==='function'&&bookName(String(bb)))||('книга '+bb);
     row.appendChild(Object.assign(document.createElement('span'),{textContent:bn+': ',style:'color:var(--hint)'}));
     byb[bb].sort((x,y)=>x-y).forEach((nn,i2)=>{ const a=document.createElement('span'); a.textContent='№'+nn; a.style.cssText='color:var(--link);cursor:pointer'; a.title='Открыть в читалке';
@@ -7321,6 +7324,18 @@ async function _codifHighlight(text, card, out, place){
   // ПРАВИЛО синхронности (слово владельца): подсвечиваем РОВНО передатчиков таблицы — ни лишних, ни пропущенных.
   // Основной путь — ПОЗИЦИОННАЯ бижекция: слот иснада i ↔ id цепи таблицы i (без угадывания по имени).
   const rec=await codifChain(place.bid, place.num); if(!rec||!rec.i||!rec.i.length) return false;
+  // Сессия21 (Э1.1): если есть СОХРАНЁННЫЙ разбор (поле n=[[фраза,id]] из резолвера AR-Sanad) — рендерим ЕГО (R52: апп показывает определённое, не угадывает рантайм)
+  if(rec.n && rec.n.length){
+    const f2id={}, names=[];
+    for(const pr of rec.n){ const ph=pr[0], id=String(pr[1]); if(ph && !(ph in f2id)){ f2id[ph]=id; names.push(ph); } }
+    if(names.length){
+      setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
+        highlightNarratorsInDiv(ad, names, async nm=>{ const id=f2id[nm]; out.style.display='block'; let c=null; try{ c=await _narrCard(id); }catch(e){}
+          showNarratorBio((c&&c[1])||nm, out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }); }
+        try{ highlightRelationalInDiv(ad); }catch(e){} }); }catch(e){} }, 0);
+      return true;
+    }
+  }
   let ids=rec.i.slice().reverse(); if(ids.length>1) ids=ids.slice(1);   // порядок текста, без верхнего (автор-собиратель, его имени в матне нет)
   const slots=_isnadSlots(text);
   const f2full={}, names=[];
