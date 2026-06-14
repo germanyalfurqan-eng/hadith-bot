@@ -174,7 +174,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v480</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v481</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -603,7 +603,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v480';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v481';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -6477,10 +6477,14 @@ function _shuhraOf(name, extRow){
 }
 // поколение: صحابي — ТОЛЬКО доказанное рангом (слово владельца: «сахабство должно быть доказано»);
 // по году смерти — СПОРНАЯ отметка с «؟» (разногласие возможно: сахаби/таби'и/маджхуль — смотреть свидетельства, M450)
+// M475: гарантированный список известнейших сахабов (явное упоминание — нет regex-зависимости)
+const _GUARANTEED_SAHABA=new Set(['أبو هريرة','أبو هريرة عبد الرحمن','عبد الرحمن أبي هريرة','ابن عباس','عبد الله بن عباس','عائشة بنت أبي بكر','عائشة','أم المؤمنين عائشة','جابر بن عبد الله','عمر بن الخطاب','علي بن أبي طالب','عثمان بن عفان','أبو بكر الصديق','أبو بكر','عبد الله بن عمر','جابر','أنس بن مالك','أنس','ابن مسعود','عبد الله بن مسعود','سعد بن أبي وقاص','الزبير بن العوام','عبد الرحمن بن عوف','طلحة بن عبيد الله','سعيد بن زيد','خديجة','أم سلمة','حفصة','زينب','أم حبيبة']);
 function _genBadge(rk, death){
-  rk=String(rk||'');
-  if(/صحاب|صحبة|بدري|شهد بدرا|من المهاجرين|من الأنصار|زوج النبي|أم المؤمنين|له رؤية/.test(rk)) return ['صحابي','#e8c35a','сахабство — из ранга (доказано сводом)'];   // ловит и «من صغار الصحابة», бадри, мухаджиров…
-  if(/أمير المؤمنين/.test(rk)&&(+death||0)<=45) return ['صحابي','#e8c35a','амир аль-муминин ранней эпохи (халифы-сахабы); титул БЕЗ года не довод — у Бухари он «في الحديث»'];
+  const rkStr=String(rk||'');
+  // M475: проверка гарантированного списка знаменитых сахабов (явное имя — имеет приоритет)
+  if(rkStr){ for(const g of _GUARANTEED_SAHABA){ if(rkStr.includes(g)) return ['صحابي','#e8c35a','сахабство — гарантированный сахаба (M475)']; } }
+  if(/صحاب|صحبة|بدري|شهد بدرا|من المهاجرين|من الأنصار|زوج النبي|أم المؤمنين|له رؤية/.test(rkStr)) return ['صحابي','#e8c35a','сахабство — из ранга (доказано сводом)'];   // ловит и «من صغار الصحابة», бадри, мухаджиров…
+  if(/أمير المؤمنين/.test(rkStr)&&(+death||0)<=45) return ['صحابي','#e8c35a','амир аль-муминин ранней эпохи (халифы-сахабы); титул БЕЗ года не довод — у Бухари он «في الحديث»'];
   const d=+death||0; if(!d) return null;
   if(d<=110) return ['صحابي؟/تابعي؟','#d8c08a','СПОРНО: по году смерти; сахабство не доказано — нужны свидетельства (база M450)',
     '<span style="color:#e8c35a">صحابي؟</span><span style="color:var(--hint)">/</span><span style="color:#7fc8e8">تابعي؟</span>'];   // пол-пол цветами: золото сахаби / голубой таби'и (слово владельца)
@@ -7778,7 +7782,7 @@ async function verifyNarr(card, place, text){
     if(card.dataset.verifyOn) return; card.dataset.verifyOn='1';
     // ПРИЛОЖЕНИЕ: что подсветили (codif n)
     let ourMids=[]; let ourNames=[];
-    try{ const rec=await codifChain(place.bid,place.num); if(rec&&rec.n){ ourMids=[...new Set(rec.n.map(x=>String(x[1])))]; ourNames=rec.n.map(x=>x[0]); } }catch(e){}
+    try{ const rec=await codifChain(place.bid,place.num); if(rec&&rec.n){ const seen=new Set(); const dedupN=[]; for(const pr of rec.n){ const id=String(pr[1]); if(!seen.has(id)){ seen.add(id); dedupN.push(pr); } } ourMids=[...seen]; ourNames=dedupN.map(x=>x[0]); } }catch(e){}
     const rows=await _verifyChain(place.bid, place.num);
     const forms=_isnadForms(text);
     let auth, authMids, srcLbl, idMode;
@@ -7793,7 +7797,7 @@ async function verifyNarr(card, place, text){
     const missing = idMode ? authMids.filter(m=>!ourSet.has(m)) : [];
     const extra = idMode ? ourMids.filter(m=>!new Set(authMids).has(m)) : [];
     const cntMis = authCount!==ourMids.length;
-    const alarm = cntMis || missing.length>0 || extra.length>0;
+    const alarm = !idMode || (cntMis || missing.length>0 || extra.length>0);
     const box=document.createElement('div'); box.className='verifyBox';
     box.style.cssText='margin-top:9px;border-radius:10px;padding:9px 11px;font-size:12px;border:1px solid '+(alarm?'#e0796a':'#3a8a5a')+';background:'+(alarm?'rgba(224,121,106,.10)':'rgba(58,138,90,.08)');
     let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b style="color:'+(alarm?'#e0796a':'#7fd3a0')+'">'+(alarm?'🚨 СВЕРКА: РАСХОЖДЕНИЕ':'🛡 Сверка: совпадает')+'</b>'
