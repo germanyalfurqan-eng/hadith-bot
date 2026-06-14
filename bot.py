@@ -1365,6 +1365,55 @@ def _ai_loop_guard(update, text):
         return True
     return False
 
+# ===== Видео-пересказ YouTube (З-10): команда «видео» reply-ом в чате @jamaat_ru. БЕЗ новых зависимостей — субтитры через requests. =====
+import re as _re_v
+_VIDEO_LAST = {}
+def _yt_id(t):
+    if not t: return None
+    m = _re_v.search(r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/shorts/|youtube\.com/embed/)([A-Za-z0-9_-]{11})', t)
+    return m.group(1) if m else None
+def _fmt_ts(sec): return f"{sec//60}:{sec%60:02d}"
+def _yt_transcript(vid):
+    try:
+        h = {'User-Agent':'Mozilla/5.0','Accept-Language':'ru,ar,en'}
+        html = requests.get(f'https://www.youtube.com/watch?v={vid}', headers=h, timeout=20).text
+        m = _re_v.search(r'"captionTracks":(\[.*?\])', html)
+        if not m: return None
+        tracks = json.loads(m.group(1))
+        if not tracks: return None
+        pick = None
+        for lang in ('ru','ar','en'):
+            for t in tracks:
+                if t.get('languageCode','').startswith(lang): pick = t; break
+            if pick: break
+        pick = pick or tracks[0]
+        data = requests.get(pick['baseUrl'] + '&fmt=json3', headers=h, timeout=20).json()
+        out = []
+        for ev in data.get('events', []):
+            segs = ev.get('segs')
+            if not segs: continue
+            txt = ''.join(s.get('utf8', '') for s in segs).strip()
+            if txt: out.append((int(ev.get('tStartMs', 0) / 1000), txt))
+        return out or None
+    except Exception:
+        return None
+def _yt_cost_est(tr):
+    chars = sum(len(t) for _, t in tr)
+    return (chars/3 + 200)/1e6*0.27 + 2500/1e6*1.10
+def _yt_summarize(tr, brief):
+    body = "\n".join(f"[{_fmt_ts(s)}] {t}" for s, t in tr)[:45000]
+    if brief:
+        sysp = "Краткий пересказ видео на русском (5-8 предложений), с ключевыми тайм-кодами [мин:сек]."
+        pr = "Краткий русский пересказ этого видео по субтитрам:\n\n" + body
+    else:
+        sysp = "Подробный пересказ+перевод видео на русский: по разделам, с тайм-кодами [мин:сек] в начале каждого блока."
+        pr = "Подробный русский пересказ и перевод этого видео по субтитрам (с тайм-кодами по разделам):\n\n" + body
+    ans = ask_deepseek(pr, sysp, max_tokens=3000)
+    if not ans:
+        try: ans = ask_gemini(pr, sysp)
+        except Exception: ans = None
+    return ans
+
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
@@ -1434,6 +1483,42 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             await update.message.reply_text("Ошибка анонса: " + str(e))
         return
+    # ===== Видео-пересказ YouTube (З-10): reply на пост со ссылкой + «видео»/«видео кратко»; вопросы — тоже reply =====
+    if is_owner(update):
+        _tlv = text.strip().lower()
+        _rep = update.message.reply_to_message
+        _repv = _yt_id(((_rep.text or _rep.caption) if _rep else "") or "")
+        if _tlv in ("видео", "видео кратко", "видео подробно"):
+            if not _repv:
+                await update.message.reply_text("Ответь (reply) на пост со ссылкой YouTube и напиши «видео» или «видео кратко».")
+                return
+            brief = "кратко" in _tlv
+            await update.message.reply_text("📹 Достаю субтитры…")
+            tr = _yt_transcript(_repv)
+            if not tr:
+                await update.message.reply_text("⚠️ У этого видео нет открытых субтитров. Пересказ по аудио (Whisper) добавлю позже.")
+                return
+            usd = _yt_cost_est(tr)
+            await update.message.reply_text(f"⚠️ Через DeepSeek ≈ ${usd:.3f} (~{usd*92:.1f}₽). Делаю {'кратко' if brief else 'подробно'}…")
+            ans = _yt_summarize(tr, brief)
+            if not ans:
+                await update.message.reply_text("⚠️ ИИ не ответил (DeepSeek и Gemini). Попробуй ещё раз позже.")
+                return
+            _VIDEO_LAST[update.effective_user.id] = {"vid": _repv, "tr": tr}
+            await send_long(update, ("📺 *Краткий пересказ*\n\n" if brief else "📺 *Подробный пересказ + перевод*\n\n") + ans + "\n\n💬 Задай вопрос по видео — ответом (reply) на этот же пост.")
+            return
+        if _repv and _tlv not in ("видео", "видео кратко", "видео подробно") and len(text.strip()) > 3:
+            last = _VIDEO_LAST.get(update.effective_user.id)
+            if last and last.get("vid") == _repv:
+                body = "\n".join(f"[{_fmt_ts(s)}] {t}" for s, t in last["tr"])[:45000]
+                pr = f"Вопрос по видео: {text}\n\nОтветь по-русски кратко и ОБЯЗАТЕЛЬНО укажи тайм-код [мин:сек], где это в видео.\n\nСубтитры:\n{body}"
+                a = ask_deepseek(pr, "Отвечай строго по субтитрам видео, всегда указывай тайм-код [мин:сек].", max_tokens=1000)
+                if not a:
+                    try: a = ask_gemini(pr, "Отвечай по субтитрам, указывай тайм-код [мин:сек].")
+                    except Exception: a = None
+                if a:
+                    await send_long(update, "💬 " + a)
+                    return
     # ===== Владельцу: баланс DeepSeek + ресурсы =====
     if is_owner(update) and text.strip().lower() in ("баланс", "баланс дипсик", "дипсик баланс", "deepseek баланс", "баланс ии"):
         b = deepseek_balance()
