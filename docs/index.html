@@ -84,6 +84,7 @@
   input[type=text],textarea#q{flex:1;padding:12px;border-radius:12px;border:1px solid var(--border);
        background:var(--card);color:var(--text);font-size:16px;min-height:48px}   /* M426-фикс: textarea потеряла стили input → «белая полоса» */
   button{font-size:15px;border:none;border-radius:12px;cursor:pointer}
+  button:disabled{opacity:.5;cursor:not-allowed}
   .go{padding:0 16px;background:var(--btn);color:var(--btn-text);font-weight:600;min-height:48px}
   .modes{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
   .chip{padding:7px 11px;border-radius:20px;background:var(--card);border:1px solid var(--border);
@@ -176,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v498</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v499</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -607,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v498';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v499';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2028,7 +2029,7 @@ async function runSearch(explicit){
   const rootMode = modes.root && !numMode;
   const rootForms={}; let qSkels=[];
   if(rootMode){ qSkels = groups.flat().filter(t=>!t.neg).flatMap(t=>canon(t.t).split(' ').map(skel)).filter(s=>s.length>=2); }
-  let count=0; const CAP=200;
+  let count=0; const CAP=200; const BATCH=50;  // M38: пагинация по 50 результатов
   const setHead=(done)=>{ const n = count
       ? ('Найдено: '+count+(count>CAP?' (показаны первые '+CAP+')':'')+(done?'':' · ищу…'))
       : (done?(((!numMode && !/[ء-يa-zа-яё]/i.test(q))?'🤔 Похоже на опечатку или случайные символы — введите слово, фразу или № хадиса':('Ничего не найдено 🤷'+(smartNote?' — попробуй иначе':'')))):'Ищу…');   // M199: junk-ввод («&88», «((») → понятная подсказка
@@ -2349,6 +2350,7 @@ function renderResultsView(){
 }
 async function getOne(code,num){
   if(code==='muslim'){ const a=await loadCollection('muslim'); return a.find(x=>x.num===String(num))||null; }   // Муслим — из Абд аль-Баки (наш файл)
+  if(code==='darimi') return null;   // M16: Дарими на CDN отдаёт 403, локального зеркала нет
   try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-'+code+'/'+num+'.min.json')).json();
     const h=(j.hadiths||[])[0]; if(h){ const raw=(h.text||'').replace(/\s+/g,' ').trim();
       return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),norm:''}; } }catch(e){}
@@ -3505,7 +3507,13 @@ async function onWordTap(word, el, ctx){
   // режим «по словам»: в читалке Корана тап по слову = озвучить ТОЛЬКО это слово (без попапа)
   if(window._qrWordMode && el && el.classList && el.classList.contains('qw') && el.closest && el.closest('#qrBody')){ if(_qrSayWord(el)) return; }
   const R=await loadRoots(); let e=R.f[rootKey(word)];
-  if(!e || !e[0]){ const bare=word.replace(/^(وال|فال|بال|كال|لل|ال|و|ف|ب|ك|ل)/,''); if(bare && bare!==word){ const e2=R.f[rootKey(bare)]; if(e2 && e2[0]) e=e2; } }
+  if(!e || !e[0]){ const base=canon(word).replace(/[^ء-ي]/g,'').replace(/^(وال|بال|كال|فال|لل|ال)/,'');
+    const cands=[]; const add=c=>{ if(c && c.length>=3 && c.length<=5 && cands.indexOf(c)===-1) cands.push(c); };
+    add(base.replace(/[ةه]$/,''));
+    add(skel(base).replace(/[ةه]$/,''));
+    add(base.replace(/[اويىءؤئةه]/g,''));
+    add(skel(base)); add(base);
+    for(const c of cands){ const e2=R.f[c]; if(e2 && e2[0]){ e=e2; break; } } }
   e=e||['','',''];
   showWordPopup(el, word, e[0], e[1], e[2], ctx);
 }
