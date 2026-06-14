@@ -1413,6 +1413,18 @@ def _yt_summarize(tr, brief):
         try: ans = ask_gemini(pr, sysp)
         except Exception: ans = None
     return ans
+def _tts_mp3(text):
+    """Бесплатная озвучка текста в MP3 (gTTS, русский, без ключа). None при сбое."""
+    try:
+        from gtts import gTTS
+        import tempfile
+        text = (text or "").strip()[:8000]
+        if not text: return None
+        fp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False); fp.close()
+        gTTS(text=text, lang="ru").save(fp.name)
+        return fp.name
+    except Exception:
+        return None
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
@@ -1488,26 +1500,40 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _tlv = text.strip().lower()
         _rep = update.message.reply_to_message
         _repv = _yt_id(((_rep.text or _rep.caption) if _rep else "") or "")
-        if _tlv in ("видео", "видео кратко", "видео подробно"):
+        _isvid = _tlv.startswith(("видеоперессказ", "видеопересказ"))
+        if _isvid:
             if not _repv:
-                await update.message.reply_text("Ответь (reply) на пост со ссылкой YouTube и напиши «видео» или «видео кратко».")
+                await update.message.reply_text("Ответь (reply) на пост со ссылкой YouTube и напиши «видеоперессказ» (или «видеоперессказ коротко», добавь «аудио» для mp3).")
                 return
-            brief = "кратко" in _tlv
+            brief = ("коротк" in _tlv) or ("кратк" in _tlv)
+            want_audio = "аудио" in _tlv
             await update.message.reply_text("📹 Достаю субтитры…")
             tr = _yt_transcript(_repv)
             if not tr:
                 await update.message.reply_text("⚠️ У этого видео нет открытых субтитров. Пересказ по аудио (Whisper) добавлю позже.")
                 return
             usd = _yt_cost_est(tr)
-            await update.message.reply_text(f"⚠️ Через DeepSeek ≈ ${usd:.3f} (~{usd*92:.1f}₽). Делаю {'кратко' if brief else 'подробно'}…")
+            await update.message.reply_text(f"⚠️ Через DeepSeek ≈ ${usd:.3f} (~{usd*92:.1f}₽). Делаю {'кратко' if brief else 'подробно'}{' + озвучка' if want_audio else ''}…")
             ans = _yt_summarize(tr, brief)
             if not ans:
                 await update.message.reply_text("⚠️ ИИ не ответил (DeepSeek и Gemini). Попробуй ещё раз позже.")
                 return
             _VIDEO_LAST[update.effective_user.id] = {"vid": _repv, "tr": tr}
             await send_long(update, ("📺 *Краткий пересказ*\n\n" if brief else "📺 *Подробный пересказ + перевод*\n\n") + ans + "\n\n💬 Задай вопрос по видео — ответом (reply) на этот же пост.")
+            if want_audio:
+                try:
+                    mp3 = _tts_mp3(_re_v.sub(r'[\*\_#`\[\]]', '', ans))
+                    if mp3:
+                        with open(mp3, "rb") as f:
+                            await update.message.reply_audio(f, title=("Пересказ кратко" if brief else "Пересказ подробно"), caption="🎧 Озвучка пересказа")
+                        try: os.remove(mp3)
+                        except Exception: pass
+                    else:
+                        await update.message.reply_text("⚠️ Озвучку сделать не вышло (TTS). Текст выше.")
+                except Exception as _e:
+                    await update.message.reply_text("⚠️ Озвучка не удалась: " + str(_e)[:80])
             return
-        if _repv and _tlv not in ("видео", "видео кратко", "видео подробно") and len(text.strip()) > 3:
+        if _repv and not _isvid and len(text.strip()) > 3:
             last = _VIDEO_LAST.get(update.effective_user.id)
             if last and last.get("vid") == _repv:
                 body = "\n".join(f"[{_fmt_ts(s)}] {t}" for s, t in last["tr"])[:45000]
