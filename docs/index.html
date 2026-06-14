@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v432</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v433</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -307,6 +307,7 @@
     <div class="row"><span>✒️ Подпись при копировании (ссылка на приложение)</span><div class="sw" id="sigSw"></div></div>
     <div class="row"><span>🔍 Щипок-зум — увеличение экрана двумя пальцами <span style="color:var(--hint);font-size:11px">(по умолчанию выкл.)</span></span><div class="sw" id="zoomSw"></div></div>
     <div class="row"><span>🕐 Недавние поиски (показывать при пустом поле)</span><div class="sw" id="recentSw"></div></div>
+    <div class="row"><span>▶️ Авто-переход на следующую суру <span style="color:var(--hint);font-size:11px">(в плеере/чтеце Корана)</span></span><div class="sw" id="qrAutoNextSw"></div></div>
     <div class="row"><span>⬇️ Авто-переход к переводу тафсира (когда он ниже)</span><div class="sw" id="tafJumpSw"></div></div>
     <div class="row"><span>📳 Тактильная отдача (вибро) на действия</span><div class="sw" id="hapticSw"></div></div>
     <div class="row"><span>🔥 Популярное (что чаще ищут, при пустом поле)</span><div class="sw" id="popSw"></div></div>
@@ -578,7 +579,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v432';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v433';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3949,10 +3950,15 @@ async function openHadithScience(){
   const ch=document.createElement('div'); ch.innerHTML='<div style="font-weight:700;margin:6px 0 6px">📋 Мутабарун — свидетели надёжности ('+((_hadRule.critics||[]).length)+'):</div>'; body.appendChild(ch);
   (_hadRule.critics||[]).forEach(c=>{ const it=document.createElement('div'); it.style.cssText='border-bottom:1px solid var(--border);padding:8px 2px';
     it.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><div><b>'+c.n+'.</b> '+esc(c.ru)+' <span style="'+_AF+';font-size:17px;color:var(--mark)">'+esc(c.ar||'')+'</span></div><div style="color:var(--hint);font-size:12px;flex:none">'+esc(c.years||'')+'</div></div>';
-    const tools=document.createElement('div'); tools.style.cssText='display:flex;gap:10px;margin-top:4px;font-size:12px';
-    tools.innerHTML='<a href="'+esc(c.wiki||'#')+'" target="_blank" style="color:var(--link)">📖 Википедия</a><span class="hbio" style="color:#c9b8ff;cursor:pointer">📜 Биография (ИИ)</span>';
+    const tools=document.createElement('div'); tools.style.cssText='display:flex;gap:10px;margin-top:4px;font-size:12px;flex-wrap:wrap';
+    const _realWiki = c.wiki && /\/wiki\//.test(c.wiki);   // #26: search-URL вики были битые → показываем ТОЛЬКО настоящую статью
+    tools.innerHTML='<span class="hsham" style="color:#bfe3cf;cursor:pointer;border:1px solid #2e7d5a;border-radius:6px;padding:1px 8px"><b style="font-family:Georgia,serif">ش</b> موسوعة رواة (Шамела) ↗</span>'
+      +(_realWiki?('<a href="'+esc(c.wiki)+'" target="_blank" style="color:var(--link)">📖 Википедия</a>'):'')
+      +'<span class="hbio" style="color:#c9b8ff;cursor:pointer">📜 Биография (ИИ)</span>';
     const bio=document.createElement('div'); bio.style.cssText='display:none;margin-top:5px;font-size:13px;line-height:1.5;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg)';
     tools.querySelector('.hbio').onclick=()=>{ try{ _critBio(c, bio, tools.querySelector('.hbio')); }catch(e){} };
+    tools.querySelector('.hsham').onclick=async()=>{ try{ const id=await _narrLookup(c.ar||c.ru);   // #26: критик → его карточка موсуعة рواة (Шамела) вместо битой вики
+        if(id!=null){ openLink('https://shamela.ws/narrator/'+id); } else { bio.style.display='block'; showNarratorBio(c.ar||c.ru, bio); } }catch(e){ toast('Карточку критика не нашёл в موсуعة'); } };
     it.appendChild(tools); it.appendChild(bio); ch.appendChild(it); });
   // ТРУДЫ РИДЖАЛЬ
   if(_rijal && _rijal.critics){ const rj=document.createElement('div'); rj.style.cssText='margin-top:14px';
@@ -5346,6 +5352,8 @@ function _chainSyncGo(){
 }
 function addChainNarr(c){
   if(!c||c.id==null){ toast('У этой формы нет ID — выбери опознанного равия'); return; }
+  if(c.nm && /(?:^|\s)(?:عن|حدثنا|حدثني|سمعت|أخبرنا|أخبرني|قال|ثنا|أنبأنا)(?:\s|$)/.test(c.nm)){   // #21: битая запись موسوعة склеила двух людей через «عن» — не класть как ОДНО звено
+    toast('⚠️ Это составная запись (два передатчика через «عن») — добавь каждого по отдельности'); return; }
   if(_chainSel.some(x=>x.id===c.id)){ toast('Уже в цепи'); return; }
   if(_chainSel.length>=5){ toast('Пока максимум 5 звеньев'); return; }
   _chainSel.push({id:c.id, nm:c.nm});
@@ -5949,10 +5957,12 @@ async function openNarrTable(opts){
   const cnt=opts.filterIds||null;
   const paint=()=>{ bar.querySelectorAll('.ntS').forEach(s=>{ const on=s.dataset.k===st.sort;
     s.style.background=on?'var(--btn)':''; s.style.color=on?'#fff':'var(--hint)'; s.style.borderColor=on?'var(--btn)':'var(--border)'; }); };
+  let _ruIds=null;   // #18: id-set из narrCandidates для русского запроса
   const rows=()=>{ let v=all;
     if(cnt) v=v.filter(r=>cnt.has(r[0]));
     const q=(st.q||'').trim();
     if(q){ const mId=q.match(/^#?(\d{1,5})$/); if(mId) v=v.filter(r=>String(r[0]).indexOf(mId[1])===0);
+      else if(/[а-яё]/i.test(q)){ v = _ruIds ? v.filter(r=>_ruIds.has(r[0])) : v; }   // #18: русский ввод («Амаш») — фильтр по id из скелет-матча
       else { const cq=_narrCanon(q); v=v.filter(r=>r[1].indexOf(cq)>=0); } }
     const f={id:(a,b)=>a[0]-b[0], alpha:(a,b)=>a[1].localeCompare(b[1],'ar'), death:(a,b)=>((a[2]||9999)-(b[2]||9999)), fame:(a,b)=>(b[3]-a[3]), cnt:(a,b)=>((cnt.get(b[0])||0)-(cnt.get(a[0])||0))}[st.sort];
     return v.slice().sort(f); };
@@ -6000,7 +6010,11 @@ async function openNarrTable(opts){
     info.textContent=(cnt?'🔗 связей: '+cur.length+' · ':'всего: '+cur.length+' · ')+(opts.filterIds?'сорт по совместным звеньям':'тап по строке — карточка равия');
   };
   bar.querySelectorAll('.ntS').forEach(s=>s.onclick=()=>{ st.sort=s.dataset.k; paint(); draw(true); });
-  const qi=bar.querySelector('#ntQ'); let qt; qi.oninput=()=>{ clearTimeout(qt); qt=setTimeout(()=>{ st.q=qi.value; draw(true); }, 250); };
+  const qi=bar.querySelector('#ntQ'); let qt; qi.oninput=()=>{ clearTimeout(qt); qt=setTimeout(async()=>{ st.q=qi.value;
+    const q=(st.q||'').trim();
+    if(/[а-яё]/i.test(q) && q.length>=2){ try{ const cands=await narrCandidates(q); _ruIds=new Set((cands||[]).map(c=>c.id).filter(x=>x!=null)); }catch(e){ _ruIds=null; } }   // #18
+    else { _ruIds=null; }
+    draw(true); }, 280); };
   paint(); draw(true);
 }
 // M425: Esc (с компа) закрывает ВЕРХНЕЕ открытое окно — не надо «лезть в рестарт»; Alt+← = «назад» где есть
@@ -8248,6 +8262,7 @@ var _gl=document.getElementById('glowSw'); if(_gl){ _gl.classList.toggle('on',!c
 var _th=document.getElementById('themeSel'); if(_th){ _th.value=cfg.theme||'dark'; _th.onchange=()=>{ cfg.theme=_th.value; saveCfg(cfg); applyTheme(); toast(cfg.theme==='light'?'Светлая тема ☀️':'Тёмная тема 🌙'); }; }
 var _rcw=document.getElementById('recentSw'); if(_rcw){ _rcw.classList.toggle('on',cfg.recent!==false); _rcw.onclick=()=>{ cfg.recent=(cfg.recent===false); saveCfg(cfg); _rcw.classList.toggle('on',cfg.recent!==false); if(cfg.recent===false) hideRecent(); }; }
 var _tjw=document.getElementById('tafJumpSw'); if(_tjw){ _tjw.classList.toggle('on',cfg.tafJump!==false); _tjw.onclick=()=>{ cfg.tafJump=(cfg.tafJump===false); saveCfg(cfg); _tjw.classList.toggle('on',cfg.tafJump!==false); }; }
+var _qan=document.getElementById('qrAutoNextSw'); if(_qan){ _qan.classList.toggle('on',cfg.qrAutoNext!==false); _qan.onclick=()=>{ cfg.qrAutoNext=(cfg.qrAutoNext===false); saveCfg(cfg); _qan.classList.toggle('on',cfg.qrAutoNext!==false); }; }   // M275: тумблер авто-перехода чтеца Корана
 var _str=document.getElementById('strictSw'); if(_str){ _str.classList.toggle('on',cfg.strictSearch!==false); _str.onclick=()=>{ cfg.strictSearch=(cfg.strictSearch===false); saveCfg(cfg); _str.classList.toggle('on',cfg.strictSearch!==false); toast(cfg.strictSearch!==false?'🎯 Строгий поиск ВКЛ — только все слова':'Строгий поиск ВЫКЛ — покажет и близкие'); }; }   // M283-тумблер
 var _hpw=document.getElementById('hapticSw'); if(_hpw){ _hpw.classList.toggle('on',cfg.haptic!==false); _hpw.onclick=()=>{ cfg.haptic=(cfg.haptic===false); saveCfg(cfg); _hpw.classList.toggle('on',cfg.haptic!==false); if(cfg.haptic!==false){ _hapErr=0; hap('light'); } }; }
 var _mkw=document.getElementById('maktabaSw'); if(_mkw){ _mkw.classList.toggle('on',cfg.maktabaBtn!==false); _mkw.onclick=()=>{ cfg.maktabaBtn=(cfg.maktabaBtn===false); saveCfg(cfg); _mkw.classList.toggle('on',cfg.maktabaBtn!==false); }; }
@@ -8310,6 +8325,18 @@ document.getElementById('goBtn').onclick=()=>{ hap('medium');
   // M426: авторост textarea (до ~5 строк) — большой запрос виден целиком, правится в любом месте
   const _grow=()=>{ try{ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight, 132)+'px'; el.style.overflowY=el.scrollHeight>132?'auto':'hidden'; }catch(e){} };
   el.addEventListener('input', _grow); setTimeout(_grow, 50);
+  // M131: чистка ВСТАВКИ из мессенджеров/Шамелы — убрать ссылки/URL/markdown-оформление, оставив текст (как в sunnah).
+  el.addEventListener('paste',ev=>{ try{ const cd=ev.clipboardData||window.clipboardData; if(!cd) return;
+    const raw=cd.getData('text'); if(!raw) return;
+    const cleaned=raw.replace(/https?:\/\/\S+/gi,'').replace(/\b(?:t\.me|www\.|telegram\.me)\S*/gi,'')
+      .replace(/[*_~`>#|]+/g,'').replace(/[​-‏‪-‮⁦-⁩﻿]/g,'')
+      .replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,' ').trim();
+    if(cleaned===raw.trim()) return;   // чистить нечего → обычная вставка
+    ev.preventDefault();
+    const s=el.selectionStart||0, en=el.selectionEnd||0, val=el.value;
+    el.value=val.slice(0,s)+cleaned+val.slice(en); const cp=s+cleaned.length; try{el.selectionStart=el.selectionEnd=cp;}catch(_e){}
+    el.dispatchEvent(new Event('input')); try{toast('🧹 Из вставки убраны ссылки/оформление');}catch(_e){}
+  }catch(e){} });
   el.addEventListener('keydown',e=>{ if(e.key==='Enter'){ if(e.shiftKey) return;   // Shift+Enter = перенос строки
       e.preventDefault(); clearTimeout(t); try{collapseBookSugg();}catch(e){} runSearch(true); } });   // Enter → поиск
   el.addEventListener('input',()=>{ clearTimeout(t); const v=el.value.trim();
@@ -8450,8 +8477,10 @@ function _miniSync(){ try{
 setInterval(_miniSync, 800);
 // контейнер прокрутки, который сейчас «в фокусе» (открытая читалка или общая выдача)
 function _activeScroller(){ const ids=['qrBody','bookText','catList','res']; for(const id of ids){ const el=document.getElementById(id); if(el){ const m=el.closest('.modal'); if(m){ if(m.style.display&&m.style.display!=='none') return el; } else if(el.children.length) return el; } } return null; }
-function _hasText(){ // A+/A− только в читалках (Коран/книга) — где реально читают, как просил владелец
-  return _visModals().some(m=>['qrModal','bookModal'].includes(m.id)); }
+function _hasText(){ // A+/A− в читалках (Коран/книга) И на экране результатов (#1 «шрифт маленький»: applyFontScale уже зумит #res)
+  if(_visModals().some(m=>['qrModal','bookModal'].includes(m.id))) return true;
+  if(_visModals().length) return false;   // открыт другой модал — не мешаем
+  const r=document.getElementById('res'); return !!(r && r.children && r.children.length); }
 function updateFloatTools(){ try{ const w=document.getElementById('floatTools'); if(!w) return;
   const sizeGrp=document.getElementById('fsGroup'); const up=document.getElementById('floatUp');
   const showSize=_hasText(); if(sizeGrp) sizeGrp.style.display=showSize?'flex':'none';
