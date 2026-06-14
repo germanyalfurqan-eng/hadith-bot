@@ -1816,6 +1816,50 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 lines.append("\nРешить: «ошибка решена A-001» (по номеру) или «ошибка решена <часть текста>».")
                 await update.message.reply_text("\n".join(lines)[:3900])
             return
+        # ===== #110: ЖУРНАЛ ЗАЯВОК в боте (общий: бот+мастер; З-12 штамп времени, З-16 исправленная цитата) =====
+        if _tl in ("заявки", "журнал заявок", "список заявок", "requests"):
+            try:
+                jj = _data_get("journal.json", {}) or {}
+                breqs = jj.get("requests", []) or []
+            except Exception:
+                breqs = []
+            st = {}; corr = {}
+            try:
+                rs = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/miniapp/requests_status.json", timeout=8)
+                if rs.status_code == 200: st = rs.json()
+            except Exception: pass
+            try:
+                rc = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/corrections.json", timeout=8)
+                if rc.status_code == 200: corr = rc.json()
+            except Exception: pass
+            ICON = {"done": "✅", "open": "🔴", "wait": "⏳", "progress": "🟡"}
+            cnt = {"done": 0, "open": 0, "wait": 0, "progress": 0}
+            for k, v in st.items():
+                if k.startswith("_"): continue
+                s = (v or {}).get("s", "open"); cnt[s] = cnt.get(s, 0) + 1
+            head = ("📋 ЖУРНАЛ ЗАЯВОК (общий: бот + мастер)\n"
+                    f"🕐 актуально на {_now_msk()}\n"
+                    f"✅ выполнено {cnt['done']} · 🔴 открыто {cnt['open']} · ⏳ ждут {cnt['wait']} · 🟡 в работе {cnt['progress']}\n"
+                    "——— НЕвыполненные (заявки бота):")
+            lines = [head]
+            for r in breqs:
+                rid = str(r.get("id"))
+                s = (st.get(rid) or {}).get("s", "open")
+                if s == "done": continue
+                quote = corr.get(rid) or r.get("t", "")
+                quote = re.sub(r"\s+", " ", quote).strip()[:95]
+                meta = (st.get(rid) or {})
+                tail = ""
+                if meta.get("v"): tail += " · " + meta["v"]
+                if s != "open" and (meta.get("why") or meta.get("r")):
+                    tail += " · " + (meta.get("why") or meta.get("r"))[:45]
+                lines.append(f"{ICON.get(s, '🔴')} #{rid} ({r.get('d','')[:16]}): {quote}{tail}")
+            lines.append(f"\n📄 Полный дашборд: github.com/{GITHUB_REPO}/blob/main/requests_dashboard.html")
+            lines.append("📒 Мастер-журнал (575 кодов M/TB/Э/R/Ф): ЗАЯВКИ.md в репо.")
+            txt = "\n".join(lines)
+            for i in range(0, len(txt), 3900):
+                await update.message.reply_text(txt[i:i + 3900], disable_web_page_preview=True)
+            return
         _mfix = re.match(r"^ошибка\s+(решена|исправлена)\s+(.+)$", _tl)
         if _mfix:
             frag = _mfix.group(2).strip()

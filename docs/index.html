@@ -174,7 +174,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v484</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v485</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -603,7 +603,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v484';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v485';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -883,8 +883,24 @@ function markMatn(html){
   // матн (слова Пророка/хадиса) обычно в «…» — выделяем ярче; иснад серый, комментарий обычный
   return html.replace(/«([^«»]*)»/g,'<span class="matn">«$1»</span>');
 }
+function _cleanTextArtifacts(text){
+  // M500: очистка инлайн-мусора из парсинга PDF перед отображением
+  if(!text) return text;
+  let t = text;
+  // убираем одиночные номера-маркеры в скобках: (333), (240) — 1-4 цифры
+  t = t.replace(/\s*\([0-9]{1,4}\)\s*/g, ' ');
+  // убираем ссылки на страницы: (ص: 263), (صفحة: NNN)
+  t = t.replace(/\s*\(ص\s*:\s*[0-9]+\)\s*/g, ' ');
+  t = t.replace(/\s*\(صفحة\s*:\s*[0-9]+\)\s*/g, ' ');
+  // убираем повторные диакритические знаки: если два подряд одинаковых
+  const diac = '[ً-ْٰـ]';
+  t = t.replace(new RegExp('('+diac+')\\1+', 'g'), '$1');
+  // нормализуем множественные пробелы
+  t = t.replace(/\s+/g, ' ').trim();
+  return t;
+}
 function hl(text,groups){
-  const disp=text;   // хадисы — всегда как есть; «Коран без огласовок» относится ТОЛЬКО к аятам (своя кнопка на карточке)
+  const disp=_cleanTextArtifacts(text||'');   // хадисы — всегда как есть; очищаем мусор перед отображением
   if(cfg.hideIsnad){ const sp=splitIsnad(disp); return markMatn(highlight(sp[1]||disp,groups,modes)); }   // показываем только матн
   if(!cfg.isnad) return markMatn(highlight(disp,groups,modes));
   const sp=splitIsnad(disp); if(!sp[0]) return markMatn(highlight(disp,groups,modes));
@@ -1188,14 +1204,15 @@ async function openMaktabaPage(bid, num, text){
   let page=null;
   if(typeof BACKEND_URL!=='undefined' && BACKEND_URL){
     try{ toast('📖 Открываю на сайте Мактабы аш-Шамиля…');
-      // 1) ПО ТЕКСТУ МАТНА — верно при ЛЮБОМ издании (фикс Абу Дауд 777→778: номера у изданий не совпадают)
-      const snip=_matnSnippet(text);
-      if(snip){ const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(snip)+'&book='+b+'&page=1&initData='+encodeURIComponent(INITDATA));
-        const j=await r.json().catch(()=>({})); const d=(j&&j.data)||[]; const hit=d.find(x=>String(x.book_id)===b)||d[0]; if(hit) page=hit.page_id||hit.page; }
-      // 2) фолбэк по номеру-маркеру (для изданий с нашей нумерацией)
-      if(!page && n){ const _an=n.replace(/[0-9]/g,function(d){ return '٠١٢٣٤٥٦٧٨٩'[+d]; });
+      // 1) ДЛЯ СТАНДАРТНЫХ СБОРНИКОВ (Бухари 1681, Муслим 1727) → сначала по НОМЕРУ (точная позиция хадиса, инвариант между повторами)
+      const isStdCollection=(['1681','1727'].includes(b));
+      if(isStdCollection && n){ const _an=n.replace(/[0-9]/g,function(d){ return '٠١٢٣٤٥٦٧٨٩'[+d]; });
         const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(_an+' -')+'&book='+b+'&page=1&initData='+encodeURIComponent(INITDATA));
         const j=await r.json().catch(()=>({})); const d=(j&&j.data)||[]; const hit=d.find(x=>String(x.book_id)===b)||d[0]; if(hit) page=hit.page_id||hit.page; }
+      // 2) ФОЛБЭК по тексту матна — верно при ЛЮБОМ издании, для изданий с иной нумерацией, или если номер не помог
+      if(!page){ const snip=_matnSnippet(text);
+        if(snip){ const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(snip)+'&book='+b+'&page=1&initData='+encodeURIComponent(INITDATA));
+          const j=await r.json().catch(()=>({})); const d=(j&&j.data)||[]; const hit=d.find(x=>String(x.book_id)===b)||d[0]; if(hit) page=hit.page_id||hit.page; } }
     }catch(e){}
   }
   const u='https://shamela.ws/book/'+b+(page?('/'+page):'');
@@ -7802,6 +7819,10 @@ async function verifyNarr(card, place, text){
     const cntMis = authCount!==ourCount;
     // #132/В-04: ТРЕВОГА только при авторитетном эталоне (idMode=true — краул Мактабы/sunnah.com). Без краула независимого эталона НЕТ → НЕ бьём ложную тревогу, показываем честный счёт по тексту.
     const alarm = idMode && (cntMis || missing.length>0 || extra.length>0);
+    // #119/#111 (З-09): ДЕТЕКТОР УСЕЧЁННОГО ТЕКСТА. Показанный текст без маркеров иснада (حدثنا/أخبرنا/عن) и начинается с матна (قال رسول/النبي) → иснад отсутствует в показе. Флагуем ТОЛЬКО при авторитетном эталоне, где краул подтверждает наличие иснада ≥2 (иначе риск ложного флага на хадисах, где автор НАМЕРЕННО дал только матн — CLAUDE.md п.4).
+    const _flat=stripDiac(String(text||'')).replace(/ـ/g,'').replace(/[أإآ]/g,'ا');
+    const _hasIsnad=/(?:^|\s)(?:حدثنا|حدثني|حدثناه|اخبرنا|اخبرني|انبانا|انباني|سمعت|ثنا)\s|\sعن\s/.test(_flat);
+    const textWithoutIsnad = !_hasIsnad && /^\s*(?:قال|فقال|وقال)\s+(?:رسول|النبي)/.test(_flat);
     const box=document.createElement('div'); box.className='verifyBox';
     const _bc = !idMode ? '#3a4a66' : (alarm?'#e0796a':'#3a8a5a'); const _bg = !idMode ? 'rgba(90,120,170,.08)' : (alarm?'rgba(224,121,106,.10)':'rgba(58,138,90,.08)');
     box.style.cssText='margin-top:9px;border-radius:10px;padding:9px 11px;font-size:12px;border:1px solid '+_bc+';background:'+_bg+';';
@@ -7809,6 +7830,8 @@ async function verifyNarr(card, place, text){
     const _hcol = !idMode ? '#9fb4cc' : (alarm?'#e0796a':'#7fd3a0');
     let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b style="color:'+_hcol+'">'+_hdr+'</b>'
       +'<span style="color:var(--hint)">'+(idMode?('эталон ('+srcLbl+'): <b>'+authCount+'</b> · '):'')+'приложение: <b style="color:'+(cntMis&&idMode?'#e0796a':'inherit')+'">'+ourCount+'</b></span></div>';
+    // #119/#111: текст-уровневая тревога — показан только матн, а эталон знает иснад (≥2 передатчика)
+    if(idMode && textWithoutIsnad && authCount>=2) h+='<div style="margin-top:7px;color:#e0b3a8;font-size:11.5px;border-top:1px dashed rgba(224,121,106,.35);padding-top:6px">⚠️ <b>ТЕКСТ:</b> показан только матн (начинается с «قال…»), а по эталону у хадиса есть иснад из <b>'+authCount+'</b> передатчиков — иснад в этом показе отсутствует/сокращён (расхождение в самом ТЕКСТЕ, не только в числе).</div>';
     // СХЕМА-ЦЕПЬ передатчиков с подписанными id и формой передачи между ними (наглядно для сверки)
     h+='<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:8px;direction:rtl;line-height:1.9">';
     auth.forEach((r,i)=>{ const nm=r[1], mid=r[2]?String(r[2]):null; const ok=idMode?ourSet.has(mid):true;
