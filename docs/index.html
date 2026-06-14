@@ -176,7 +176,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v492</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v493</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -606,7 +606,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v492';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v493';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3359,6 +3359,7 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
   meta.innerHTML+=authBadge(code, h.grade, (h.num||h.n));
   { const _rl=_ruSrcLine(code); if(_rl) meta.innerHTML+='<span class="srcru" style="display:block;width:100%;font-size:11.5px;color:var(--hint);margin-top:1px;direction:ltr;text-align:left">'+esc(_rl)+'</span>'; }   // #37: рус. название + автор
   try{ ourHukmBadge(code, (h.num||h.n), meta, card); }catch(e){}
+  try{ ourMaterialBadge(code, (h.num||h.n), meta, card); }catch(e){}   // M52: отметка «от Muslimoon»
   if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp){ sp.style.cursor='pointer'; sp.onclick=()=>openReader(code,String(h.num)); } }
   if(code==='muslim' && !riwNo){ (async()=>{ try{ const nm=await _muslimNums(h.num); if(nm){ const sp=meta.querySelector('.src');
     if(sp){ const ex=document.createElement('span'); ex.style.cssText='font-size:10px;color:var(--hint);margin:0 6px 0 8px;white-space:nowrap;opacity:.8';
@@ -6899,6 +6900,30 @@ function ourHukmBadge(code, num, meta, card){
       if(v.links&&v.links.length){ hh+='<div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap">'+v.links.map(l=>'<span class="ohL" data-u="'+esc(l.u)+'" style="cursor:pointer;color:var(--link);font-size:12px;text-decoration:underline">🔗 '+esc(l.t||'разбор')+'</span>').join('')+'</div>'; }
       box.innerHTML=hh; card.appendChild(box);
       box.querySelectorAll('.ohL').forEach(a=>a.onclick=()=>{ try{ openLink(a.dataset.u); }catch(e){} });
+      try{ box.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} };
+    meta.appendChild(b); });
+}
+// M52: ОТМЕТКА «от Muslimoon» — наш урок/видео/разбор/статья на хадис/аят (данные our_material.json, наполняет владелец).
+let _ourMat=null,_ourMatP=null;
+function loadOurMaterial(){ if(_ourMat) return Promise.resolve(_ourMat); if(_ourMatP) return _ourMatP;
+  _ourMatP=fetch('./our_material.json').then(r=>r.ok?r.json():{}).then(j=>{ _ourMat=j||{}; return _ourMat; }).catch(()=>{ _ourMat={}; return _ourMat; }); return _ourMatP; }
+const _MAT_ICON={video:'🎥',lesson:'📚',article:'📝',breakdown:'🔍'};
+const _MAT_WORD={video:'видео',lesson:'урок',article:'статью',breakdown:'разбор'};
+function ourMaterialBadge(code, num, meta, card){
+  loadOurMaterial().then(m=>{ const v=m && m[String(code)+':'+String(num)]; if(!v||!v.link) return;
+    const ic=_MAT_ICON[v.type]||'📌';
+    const b=document.createElement('span'); b.className='src';
+    b.style.cssText='cursor:pointer;background:#16302a;color:#7fe3bf;border:1px solid #2e9b6b;margin-inline-start:6px;white-space:nowrap';
+    b.textContent=ic+' от Muslimoon'; b.title='Наш материал (урок/видео/разбор) — нажми';
+    let box=null;
+    b.onclick=()=>{ if(box){ box.style.display=box.style.display==='none'?'block':'none'; return; }
+      box=document.createElement('div'); box.style.cssText='border:1px solid #2e9b6b;border-radius:10px;padding:9px 11px;margin-top:7px;background:rgba(46,155,107,.08)';
+      let hh='<div style="font-weight:700;color:#7fe3bf;font-size:13px">'+ic+' '+esc(v.title||'Материал от Muslimoon')+'</div>';
+      if(v.by) hh+='<div style="font-size:11.5px;color:var(--hint);margin-top:2px">'+esc(v.by)+(v.date?(' · '+esc(v.date)):'')+'</div>';
+      if(v.desc) hh+='<div style="font-size:13px;margin-top:5px">'+esc(v.desc)+'</div>';
+      hh+='<div style="margin-top:7px"><span class="omL" data-u="'+esc(v.link)+'" style="cursor:pointer;color:var(--link);font-size:12.5px;text-decoration:underline">🔗 Открыть '+esc(_MAT_WORD[v.type]||'материал')+' →</span></div>';
+      box.innerHTML=hh; card.appendChild(box);
+      box.querySelectorAll('.omL').forEach(a=>a.onclick=()=>{ try{ openLink(a.dataset.u); }catch(e){} });
       try{ box.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} };
     meta.appendChild(b); });
 }
