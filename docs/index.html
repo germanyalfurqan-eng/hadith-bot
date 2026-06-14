@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v450</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v451</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -588,7 +588,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v450';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v451';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3192,33 +3192,33 @@ async function appendMaktaba(seq, q, primary){
 }
 
 function cardHadith(d,groups){
-  const {code,h}=d; const card=document.createElement('div');card.className='card';
-  // Муслим (Абд аль-Баки): несколько риваятов одного номера (⚬) → ОТДЕЛЬНЫЕ блоки-посты
+  const {code,h}=d;
+  // #78/R54: Муслим (Абд аль-Баки) — несколько риваятов одного номера (⚬) = СТРОГО ОТДЕЛЬНЫЕ карточки (свой текст/инструменты/перевод/избранное), не блоки в одной
   const riw = (code==='muslim' && (h.text||'').indexOf('⚬')!==-1) ? h.text.split('⚬').map(s=>s.trim()).filter(s=>s.length>5) : null;
   if(riw && riw.length>1){
-    riw.forEach((t,i)=>{
-      const lab=document.createElement('div'); lab.style.cssText='display:flex;justify-content:space-between;align-items:center;color:var(--hint);font-size:12px;margin:'+(i?'12px':'2px')+' 0 2px'+(i?';border-top:1px solid var(--border);padding-top:9px':'');
-      const ls=document.createElement('span'); ls.textContent='📜 риваят '+(i+1)+' из '+riw.length+' · مسلم №'+h.num;
-      const cp=document.createElement('button'); cp.className='mini'; cp.textContent='⧉ копир.'; cp.onclick=()=>copyWithSig(t+'\n— مسلم №'+h.num+' (риваят '+(i+1)+')');
-      lab.appendChild(ls); lab.appendChild(cp); card.appendChild(lab);
-      const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(t,groups);card.appendChild(ar);
-    });
-  } else {
-    const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(h.text,groups);card.appendChild(ar);
+    const wrap=document.createElement('div');
+    riw.forEach((t,i)=>{ wrap.appendChild(_cardHadithOne(code, h, t, i+1, riw.length, groups, d.noNav)); });
+    return wrap;
   }
+  return _cardHadithOne(code, h, h.text, 0, 0, groups, d.noNav);
+}
+function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
+  const card=document.createElement('div');card.className='card';
+  const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(text,groups);card.appendChild(ar);
   const meta=document.createElement('div');meta.className='meta';
-  const canRead = !d.noNav && isReadable(code);   // M102: клик по источнику → читалка на этом хадисе
-  meta.innerHTML='<span class="src'+(canRead?' srcnav':'')+'"'+(canRead?' title="Открыть в читалке на этом хадисе">📖 ':'>')+arOf(code)+' · №'+h.num+'</span>';
-  meta.innerHTML+=authBadge(code, h.grade, (h.num||h.n));   // достоверность: НАША оценка (по номеру) → иначе оценка источника
-  try{ ourHukmBadge(code, (h.num||h.n), meta, card); }catch(e){}   // M341: хукм НАШИХ мухаддисов (hadis_isnad) — ПЕРВЫМ приоритетом, с причинами и ссылками
+  const canRead = !noNav && isReadable(code);
+  const _riwL = riwNo ? (' · <b style="color:#9fd3a8">риваят '+riwNo+'/'+riwTot+'</b>') : '';
+  meta.innerHTML='<span class="src'+(canRead?' srcnav':'')+'"'+(canRead?' title="Открыть в читалке на этом хадисе">📖 ':'>')+arOf(code)+' · №'+h.num+'</span>'+_riwL;
+  meta.innerHTML+=authBadge(code, h.grade, (h.num||h.n));
+  try{ ourHukmBadge(code, (h.num||h.n), meta, card); }catch(e){}
   if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp){ sp.style.cursor='pointer'; sp.onclick=()=>openReader(code,String(h.num)); } }
-  // Муслим: доп. номера (сквозной по всей книге + внутри раздела) — мелко, серым, НЕ путая с основным №
-  if(code==='muslim'){ (async()=>{ try{ const nm=await _muslimNums(h.num); if(nm){ const sp=meta.querySelector('.src');
+  if(code==='muslim' && !riwNo){ (async()=>{ try{ const nm=await _muslimNums(h.num); if(nm){ const sp=meta.querySelector('.src');
     if(sp){ const ex=document.createElement('span'); ex.style.cssText='font-size:10px;color:var(--hint);margin:0 6px 0 8px;white-space:nowrap;opacity:.8';
       ex.title='Основной номер хадиса — №'+h.num+' (нумерация Абд аль-Баки, эталон учёных). Дополнительно для справки: сквозной номер по всей книге и номер хадиса внутри раздела — не путать с основным.';
       ex.textContent='ⓘ сквозной '+nm[0]+' · в разделе '+nm[1]; sp.parentNode.insertBefore(ex, sp.nextSibling); } } }catch(e){} })(); }
-  // «في المهيمن №…» больше НЕ инлайн-бейджем — показывается в «🔗 Где ещё передаётся».
-  addTr(meta,card,h.text,null,{k:'h|'+code+'|'+h.num,type:'h',coll:arOf(code),label:arOf(code)+' №'+h.num,text:(h.text||'').slice(0,200)}); card.appendChild(meta); return card;
+  const _fk = riwNo ? ('h|'+code+'|'+h.num+'#'+riwNo) : ('h|'+code+'|'+h.num);
+  const _lab = arOf(code)+' №'+h.num+(riwNo?(' (риваят '+riwNo+')'):'');
+  addTr(meta,card,text,null,{k:_fk,type:'h',coll:arOf(code),label:_lab,text:(text||'').slice(0,200)}); card.appendChild(meta); return card;
 }
 function cardMuh(d,groups){
   const {h}=d; const card=document.createElement('div');card.className='card';
