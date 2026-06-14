@@ -170,7 +170,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v449</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v450</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -588,7 +588,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v449';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v450';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1106,6 +1106,22 @@ async function openByCodeNum(bid, num){
     }catch(e){}
   }
   openBook(b);   // #66: «Страница в Мактабе» ВСЕГДА открывает turath-страницу Мактабы (даже если точную не нашли — книгу с начала), НЕ наш локальный ридер (жалоба «подвязал читалку в приложении, а не мактаба»)
+}
+// #74: «Страница в Мактабе» = ВНЕШНИЙ сайт المكتبة الشاملة (shamela.ws/book/<bid>/<page>), а НЕ внутренняя читалка приложения (4-я жалоба владельца). turath bid == shamela id, page прямой (как _shamChip).
+async function openMaktabaPage(bid, num){
+  const b=String(bid==null?'':bid).replace(/[^0-9]/g,''); const n=String(num==null?'':num).replace(/[^0-9]/g,'');
+  if(!b) return;
+  let page=null;
+  if(n && typeof BACKEND_URL!=='undefined' && BACKEND_URL){
+    try{ toast('📖 Открываю №'+n+' на сайте Мактабы аш-Шамиля…');
+      const _an=n.replace(/[0-9]/g,function(d){ return '٠١٢٣٤٥٦٧٨٩'[+d]; });
+      const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(_an+' -')+'&book='+b+'&page=1&initData='+encodeURIComponent(INITDATA));
+      const j=await r.json().catch(()=>({})); const d=(j&&j.data)||[];
+      const hit=d.find(x=>String(x.book_id)===b)||d[0]; if(hit) page=hit.page_id||hit.page;
+    }catch(e){}
+  }
+  const u='https://shamela.ws/book/'+b+(page?('/'+page):'');
+  try{ openLink(u); }catch(_e){ try{ window.open(u,'_blank'); }catch(__e){ toast('Не удалось открыть'); } }
 }
 // short_ref Мухаймина («البخاري ١٣٢» / «أحمد ٩٧٤٩») → {bid,num} страницы Мактабы (только 8 основных, без под-работ «الصغرى»/«في …»).
 // Цифры бывают и арабские (U+0660-9), и расширенные (U+06F0-9) — учитываем оба диапазона.
@@ -4921,7 +4937,7 @@ function addTr(meta,card,text,ayah,fav){
     if(_bid && _num!=null){ const mb=document.createElement('button'); mb.className='tr-btn'; mb.textContent='📖 Страница в Мактабе';
       mb.title='Открыть этот хадис на его странице в Мактабе (المكتبة الشاملة)';
       mb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';   // #44: тот же узнаваемый стиль, что у соседних кнопок (🌳 Передатчики и пр.)
-      mb.onclick=()=>{ try{hap('light');}catch(e){} try{ openByCodeNum(_bid, _num); }catch(e){ try{ openBook(_bid, _num); }catch(_e){ toast('Не удалось открыть'); } } };
+      mb.onclick=()=>{ try{hap('light');}catch(e){} try{ openMaktabaPage(_bid, _num); }catch(e){ try{ openByCodeNum(_bid, _num); }catch(_e){ toast('Не удалось открыть'); } } };   // #74: внешний сайт Мактабы (shamela.ws), не внутренний ридер
       meta.appendChild(mb); } }catch(e){} }
   const fbb=document.createElement('button');fbb.className='tr-btn';fbb.textContent='✍️ Сообщить нам';fbb.title='Написать нам об ошибке/замечании';
   fbb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--link);padding:6px 10px';
