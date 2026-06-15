@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v535</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v536</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -611,7 +611,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v535';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v536';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -779,8 +779,10 @@ function saveAllowCache(a){ try{ localStorage.setItem('muslimoon_allow', JSON.st
 async function fetchAccess(){
   if(!BACKEND_URL) return null;
   try{
+    const _ac=(typeof AbortController!=='undefined')?new AbortController():null; const _to=_ac?setTimeout(()=>{try{_ac.abort();}catch(e){}},9000):0;   // #7-фикс: зависание бэкенда не вешает белый экран не-владельцу (40+ юзеров) — abort→catch→null→userAllowed()=true→показать app
     const r=await fetch(BACKEND_URL+'/access',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'get', initData:INITDATA})});
+      body:JSON.stringify({action:'get', initData:INITDATA}), signal:_ac?_ac.signal:undefined});
+    if(_to) clearTimeout(_to);
     const j=await r.json();
     if(j&&j.allow){ ALLOW=j.allow; ME=j.me||null; if(j.config) ACC=j.config; saveAllowCache(ALLOW); }
     return j;
@@ -971,7 +973,7 @@ function renderFav(by){
               const _a=await loadMuhaymin(); const _h=_a.find(x=>String(x.n)===_num); const _res=document.getElementById('res');
               if(_h){ _groups=[]; _res.appendChild(makeCard({type:'m',h:_h})); } else { try{ toast('Хадис аль-Мухаймина №'+_num+' не найден'); }catch(_t){} } }
             else if(p[0]==='h' && p[1] && p[2]){ openReader(p[1], String(p[2]).replace(/#.*/,'')); }
-            else if(p[0]==='mk' && p[1]){ try{ openBook(p[1], p[2]?String(p[2]).replace(/#.*/,''):undefined); }   // #174-фикс: избранное Мактабы/первоисточников (mk|bid|N) → открыть книгу на хадисе
+            else if(p[0]==='mk' && p[1]){ try{ openBook(p[1], p[3]?String(p[3]).replace(/#.*/,''):undefined); }   // #174-фикс: openBook(bid, ЛИСТ=p[3]) — p[2] это № хадиса, НЕ страница (регресс v535); старые ключи без p[3] → книга без листа
               catch(_e){ if(f.label){ const _qi=document.getElementById('q'); if(_qi) _qi.value=f.label; runSearch(true); } } }
             else if(f.label){ const _qi=document.getElementById('q'); if(_qi) _qi.value=f.label; runSearch(true); }
           }catch(_e){} };
@@ -3159,7 +3161,7 @@ async function maktabaByNum(seq, n){
       +((tr&&tr.ru)?('<div style="font-size:12.5px;color:#bcd0ff;margin-top:2px">'+esc(tr.ru)+'</div>'):'');
     const ar=document.createElement('div'); ar.className='ar'; ar.style.cssText='font-size:16px;line-height:2;margin-top:6px'; ar.textContent=it[1]; card.appendChild(ar);
     const meta=document.createElement('div'); meta.className='meta';
-    try{ addTr(meta, card, it[1], null, {k:'mk|'+bid+'|'+n, type:'h', coll:bn, label:bn+' №'+n, text:it[1].slice(0,200)}); }catch(e){}
+    try{ addTr(meta, card, it[1], null, {k:'mk|'+bid+'|'+n+'|'+(it[0]||''), type:'h', coll:bn, label:bn+' №'+n, text:it[1].slice(0,200)}); }catch(e){}   // #174-фикс: 4-е поле = лист (для открытия openBook на нужной странице)
     card.appendChild(meta);
     if(it[0]){ const ob=document.createElement('span'); ob.style.cssText='display:inline-block;margin-top:6px;color:var(--link);cursor:pointer;font-weight:700;font-size:13.5px';   // #48: убрано подчёркивание — было непостоянно (та же книга вверху без подчёркивания); цвет ссылки достаточно
       ob.textContent='📖 '+bn+' №'+n; ob.title='Открыть '+bn+' №'+n+' в книге (лист '+it[0]+')'; ob.onclick=()=>{ try{ openBook(bid, it[0]); }catch(e){} }; card.appendChild(ob); }   // R45: «Книга №» активная ссылка как везде (не «открыть в книге»)
@@ -5725,7 +5727,8 @@ function _actLabel(a){
 }
 async function _replayAct(a){
   try{
-    if(a.t==='q'){ const q=document.getElementById('q'); q.value=a.q||''; runSearch(true); return; }
+    if(a.t==='q'){ if(a.tab && a.tab!==tab){ const _tb=document.querySelector('.tab[data-tab="'+a.tab+'"]'); if(_tb) _tb.click(); }   // #6-фикс: реплей запроса на ПРАВИЛЬНОЙ вкладке (был поиск Корана на вкладке хадисов)
+      const q=document.getElementById('q'); q.value=a.q||''; runSearch(true); return; }
     if(a.t==='narr'){ narrOpen(a.nm); return; }
     if(a.t==='book'){ openBook(String(a.bid), a.pg); return; }
     if(a.t==='quran'){ openQuranReader(a.s, a.a||1); return; }
@@ -9277,7 +9280,7 @@ function _miniSync(){ try{
   const now=window._qrNow; const s=now.s, a=now.a;
   const lbl=bar.querySelector('#miniLbl'); const newt=s?('Коран '+s+':'+a+' · '+(SURA_NAMES[s-1]||'')):'Коран';
   if(lbl.textContent!==newt) lbl.textContent=newt;   // меняется только текст (плавно), сам плеер не дёргается
-  const aud=(now.mode==='word')?window._qrWordAudio:window._qrAudio;
+  const aud=(now.mode==='word'||now.mode==='wbw')?window._qrWordAudio:window._qrAudio;   // #4-фикс: режим «по словам подряд» (wbw) тоже живёт в _qrWordAudio — иначе иконка залипала
   // во время загрузки следующего аята (paused & в начале) считаем «играет» → иконка не мигает
   const playing = aud ? (!aud.paused || (aud.currentTime||0)<0.15) : true;
   const pp=bar.querySelector('#miniPP'); const newpp=playing?'⏸':'▶️'; if(pp.textContent!==newpp) pp.textContent=newpp;

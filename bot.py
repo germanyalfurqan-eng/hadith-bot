@@ -1763,7 +1763,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for x in fb[:8]:
                     lines.append(f"№{x.get('id','?')} {x.get('u','')}: {(x.get('t') or '')[:140]}")
             lines.append("\nℹ️ Добавить: «заявка <текст>». Закрыть: «заявка done <№>».")
-            await update.message.reply_text("\n".join(lines)[:4000], parse_mode="Markdown")
+            _digest = "\n".join(lines)[:4000]
+            try:
+                await update.message.reply_text(_digest, parse_mode="Markdown")
+            except Exception:   # #165-фикс: Markdown-символ в тексте юзера ломал «заявки» (Telegram 400) → фолбэк без разметки
+                await update.message.reply_text(_digest)
             return
         # ===== #165: тумблер рабочего журнала (уведомления о работе Claude над заявками) =====
         if (_tl == "журнал" or _tl == "worklog") and is_owner(update):
@@ -2159,7 +2163,18 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _fobj = _rep.audio or _rep.voice or _rep.video or _rep.document
             try:
                 _f = await _fobj.get_file()
-                _src = f"/tmp/{_f.file_id}.audio"
+                _ext = ".ogg"   # #163-фикс: Whisper отвергает .audio — вывести реальное расширение из источника (иначе транскрипция падала с 400)
+                try:
+                    _ok = (".flac",".m4a",".mp3",".mp4",".mpeg",".mpga",".oga",".ogg",".wav",".webm")
+                    if _rep.voice: _ext = ".ogg"
+                    elif _rep.video: _ext = ".mp4"
+                    elif _rep.audio:
+                        _ext = os.path.splitext(getattr(_rep.audio, "file_name", "") or "")[1] or ("." + (getattr(_rep.audio, "mime_type", "") or "").split("/")[-1])
+                    elif _rep.document:
+                        _ext = os.path.splitext(getattr(_rep.document, "file_name", "") or "")[1] or ".ogg"
+                    if (_ext or "").lower() not in _ok: _ext = ".ogg"
+                except Exception: _ext = ".ogg"
+                _src = f"/tmp/{_f.file_id}{_ext}"
                 await _f.download_to_drive(_src)
                 _txt = await asyncio.get_event_loop().run_in_executor(None, transcribe_audio, _src)
                 if _txt:
@@ -3893,7 +3908,7 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'error': 'invalid_action'}, status=400))
         try: req_id = int(d.get('req_id'))
         except Exception: return _cors(web.json_response({'error': 'invalid_req_id'}, status=400))
-        if not rate_ok(f'worklog:{req_id}', limit=10, window=3600):
+        if not rate_ok('worklog:global', limit=20, window=3600):   # #165-фикс: глобальный бакет — раньше ключ включал req_id, спам обходился перебором req_id
             return _ratelimited()
         text = (d.get('text') or '').strip()[:500]
         try: await notify_worklog(action, req_id, text)
