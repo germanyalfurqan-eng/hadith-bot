@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v524</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v525</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -196,6 +196,7 @@
   <div class="tabs">
     <div class="tab active" data-tab="hadith" title="Поиск по хадисам (сборники)">📚 Хадисы</div>
     <div class="tab" data-tab="quran" title="Поиск по аятам Корана (текст, номер 2:255, русский перевод)">📖 Аяты</div>
+    <div class="tab" data-tab="trending" title="Лента: что чаще всего ищут — популярные запросы (#167)">🔥 Лента</div>
   </div>
 
   <div id="colsWrap">
@@ -608,7 +609,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v524';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v525';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1286,6 +1287,24 @@ function updateReadBtn(){
     rb.title='Открыть «'+nameOf(sel[0])+'» и листать подряд';
   } else { rb.dataset.one=''; rb.textContent='📖 Читать сборник'; rb.title='Открыть сборник и листать хадисы подряд (с любого номера)'; }
 }
+// #167: Лента — глобальный тренд (что чаще всего ищут все пользователи; /api/popular). Клик по строке → открыть тот поиск.
+async function renderTrending(){
+  const res=document.getElementById('res'); if(!res) return;
+  res.innerHTML='<div class="status">🔥 Загружаю ленту…</div>';
+  let items=[];
+  try{ if(BACKEND_URL){ const r=await fetch(BACKEND_URL+'/popular'); const j=await r.json(); items=(j&&j.items)||[]; } }catch(e){}
+  res.innerHTML='';
+  const hd=document.createElement('div'); hd.className='hint'; hd.style.cssText='font-size:13px;color:#9fd3a8;margin:4px 0 8px';
+  hd.textContent='🔥 Что чаще всего ищут (нажми — открою):';
+  res.appendChild(hd);
+  if(!items.length){ const s=document.createElement('div'); s.className='status'; s.textContent='Лента пока пуста — наполнится по мере поисков.'; res.appendChild(s); return; }
+  items.forEach(it=>{ if(!it||!it.q) return; const row=document.createElement('div');
+    row.style.cssText='cursor:pointer;border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin:6px 0;display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--card)';
+    const ic=(it.tab==='quran')?'📖':'📚';
+    row.innerHTML='<span style="font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+ic+' '+esc(it.q)+'</span><span style="font-size:12px;color:var(--hint);white-space:nowrap">🔎 '+(it.n||0)+'</span>';
+    row.onclick=()=>{ try{ const want=(it.tab==='quran')?'quran':'hadith'; const tb=document.querySelector('.tab[data-tab="'+want+'"]'); if(tb) tb.click(); const qi=document.getElementById('q'); if(qi) qi.value=it.q; runSearch(true); }catch(e){} };
+    res.appendChild(row); });
+}
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); t.classList.add('active');
   tab=t.dataset.tab; renderCols();
@@ -1297,6 +1316,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.getElementById('q').placeholder = tab==='hadith'?'Слово, фраза или № хадиса…':'Слово, № суры или 2:255…';
   document.getElementById('res').innerHTML=''; setStatus(''); updateQuranHelper();
   try{ hideRecent(); }catch(e){}   // M256: недавние не авто-показ — только по 🕐
+  if(tab==='trending'){ try{ renderTrending(); }catch(e){} }   // #167: Лента — глобальный тренд (что чаще ищут)
 });
 // M96: помощник по Корану — при вводе числа в «Аяты» подсказываем суру и число аятов
 const SURA_AYAHS=[7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,72,135,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
