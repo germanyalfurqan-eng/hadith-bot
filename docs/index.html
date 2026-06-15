@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v518</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v519</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -608,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v518';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v519';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2057,7 +2057,7 @@ async function runSearch(explicit){
       for(const it of loaded){ if(!it.arr){ _skip++; continue; }
         for(const h of it.arr){ if(docMatch(h,groups,modes)){ _results.push(it.code==='muhaymin'?{type:'m',h}:{type:'h',code:it.code,h}); count++; } } }
       if(seq!==_seq) return;
-      b.remove(); if(count>n0){ groupSrc=true; renderResultsView(); }
+      b.remove(); if(count>n0){ renderResultsView(); }   // #166: группировка НЕ по умолчанию — флэт-список (первоисточники+издания), группировка остаётся ОПЦИЕЙ (тоггл «📚 Сгруппировать»). Дальше appendMaktaba добавит «вся Мактаба» со счётчиком
       if(_skip>0){ try{ toast('⚠️ '+_skip+' книг(и) не загрузились (медленные) — записал в журнал'); }catch(_){ } }
       // M284: вторую ступень (вся Мактаба turath) НЕ показываем отдельной кнопкой — она ищется АВТОМАТОМ
       // (appendMaktaba в конце runSearch) с фоновой ленивой догрузкой по скроллу (IntersectionObserver в maktabaMoreBtn).
@@ -2184,7 +2184,7 @@ async function runSearch(explicit){
   // в ИИ-режиме при малом числе результатов тоже добираем по всей библиотеке (по арабской фразе ИИ)
   if(modes.ai && aiPhrases && aiPhrases.length){ const ap=aiPhrases.find(p=>isArabic(p)); if(ap) wideQ=ap; }
   const _selNarrow = (typeof selCols!=='undefined' && selCols.size>0) || (typeof selExtra!=='undefined' && selExtra.size>0);   // #50: выбран конкретный сборник чипом
-  const wideWill = (tab==='hadith' && explicit && !_selNarrow && (isArabic(shown) || numMode || (modes.ai && count<5)));   // #50: при выбранном сборнике НЕ ищем по всей Мактабе («не должно искать ничего кроме выделенного»); по умолчанию (ничего не выбрано) — ищем и по всей Мактабе
+  const wideWill = (tab==='hadith' && explicit && !_selNarrow);   // #162/M284/M420: по умолчанию (ничего не выбрано) ВСЕГДА ищем по всей Мактабе; при выбранном сборнике (#50) НЕ ищем по Мактабе (это ловит первая проверка _scopeIds выше). Условие isArabic||numMode||ai УБРАНО — оно ошибочно сужало поиск до первоисточников при русском/смысловом запросе
   if(!count && seq===_seq){
     if(tab==='quran' && !strict && await tryRootFallback(shown, seq)){ /* M212/M225: показал по корню (в строгом режиме — не подменяем) */ }
     else if(wideWill){ res.innerHTML='<div class="status">🔎 В ПЕРВОИСТОЧНИКАХ хадисов точного совпадения нет, но уже ищу по всей Мактабе (8 589 книг) — секунду… <span class="ldot">⏳</span></div>'; }   // M420: одним предложением, чтобы человек не ушёл
@@ -2372,6 +2372,8 @@ function loadDarimi(){ if(_darimiCache) return Promise.resolve(_darimiCache); if
 async function getOne(code,num){
   if(code==='muslim'){ const a=await loadCollection('muslim'); return a.find(x=>x.num===String(num))||null; }   // Муслим — из Абд аль-Баки (наш файл)
   if(code==='darimi'){ const a=await loadDarimi(); const x=a.find(y=>String(y.num)===String(num)); return x?{num:String(x.num),text:(x.ar||'').replace(/\s+/g,' ').trim(),grade:'',norm:''}:null; }   // #151: Дарими — первоисточник, грузим из локального darimi.json (CDN 403)
+  if(code==='ahmad'){ const a=await loadAhmad(); const x=a.find(y=>String(y.num)===String(num)); return x?{num:String(x.num),text:(x.text||'').replace(/\s+/g,' ').trim(),grade:x.grade||'',norm:''}:null; }   // #171: Ахмад — локальный (CDN ara-ahmad даёт иную нумерацию → клик не открывал)
+  try{ const _X=EXTRA_MAP[code]; if(_X && (_X.file || (!_X.soon && !_X.muhaymin))){ const a=await loadByCode(code); const x=a.find(y=>String(y.num)===String(num)); if(x) return {num:String(x.num),text:(x.text||x.ar||'').replace(/\s+/g,' ').trim(),grade:x.grade||'',norm:''}; } }catch(e){}   // #171: прочие локальные первоисточники/издания (Ибн Хиббан, Насаи-Кубра, Абу Я‘ля…) — из наших editions, не с CDN
   try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-'+code+'/'+num+'.min.json')).json();
     const h=(j.hadiths||[])[0]; if(h){ const raw=(h.text||'').replace(/\s+/g,' ').trim();
       return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),norm:''}; } }catch(e){}
@@ -3331,7 +3333,7 @@ async function appendMaktaba(seq, q, primary){
   const res=document.getElementById('res'); if(primary) res.innerHTML='';
   const sec=document.createElement('div'); sec.className='hint';
   sec.style.cssText=primary?'color:#4ade80;font-size:13px;margin:0 0 8px':'color:#4ade80;font-size:13px;margin:14px 0 6px;border-top:1px solid var(--border);padding-top:10px';
-  sec.textContent=(_scopeIds?('🎯 Ищу в: '+_scopeName+'…'):'🔎 Ищу по всей Мактабе…'); res.appendChild(sec);
+  sec.textContent=(_scopeIds?('🎯 Ищу в: '+_scopeName+'…'):'🔎 Ищу по всей Мактабе…');   // #161: индикатор НЕ вверху — добавляем ВНИЗУ, где реально появляются результаты
   try{
     const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(q)+'&initData='+encodeURIComponent(INITDATA));
     if(seq!==_seq) return;
@@ -3356,6 +3358,7 @@ async function appendMaktaba(seq, q, primary){
     if(fsrc.length){ const h=document.createElement('div'); h.className='hint'; h.style.cssText='color:#d6b25a;font-size:12.5px;font-weight:700;margin:4px 0 7px'; h.textContent='📜 Первоисточники'; res.appendChild(h); fsrc.forEach(x=>res.appendChild(maktabaCard(x))); }
     if(rest.length){ const h=document.createElement('div'); h.className='hint'; h.style.cssText='color:#7fb3ff;font-size:12.5px;font-weight:700;margin:14px 0 7px;border-top:1px solid var(--border);padding-top:9px'; h.textContent='📚 Остальная Мактаба'; res.appendChild(h); rest.forEach(x=>res.appendChild(maktabaCard(x))); }
     if(strictWords && !view.length){ const note=document.createElement('div'); note.className='hint'; note.style.cssText='font-size:12.5px;margin:6px 0'; note.textContent='🎯 На этой странице нет совпадений со ВСЕМИ словами. Листай вниз — подгружаю дальше.'; res.appendChild(note); }
+    res.appendChild(sec);   // #161: статус-индикатор «ищу по Мактабе» — ВНИЗУ результатов (а не над карточкой Бухари)
     res.appendChild(maktabaMoreBtn(seq,q,{page:(j.page||1)}, strictWords));
     try{ maktabaSunnahBtn(res,seq,q); }catch(e){}
   }catch(e){ sec.textContent='🌐 Мактаба сейчас недоступна — попробуй позже.'; }
@@ -5975,7 +5978,13 @@ async function _sahGet(id){
   const b=((id%100)+100)%100;
   let m=_sahCache[b];
   if(m===undefined){ try{ const r=await fetch('./sahihayn/'+b+'.json'); m=r.ok?await r.json():{}; }catch(e){ m={}; } _sahCache[b]=m; }
-  return m[String(id)]||null;
+  const rec=m[String(id)];   // #169/#170: запись = {b:[...], m:[...]}; sahW ждёт строку 'bm'/'b'/'m'/null (иначе объект всегда truthy → 'bm' не отличался от 'b' → тай-брейк не работал, тест провалился)
+  if(!rec) return null;
+  const hasB=Array.isArray(rec.b)&&rec.b.length>0, hasM=Array.isArray(rec.m)&&rec.m.length>0;
+  if(hasB&&hasM) return 'bm';
+  if(hasB) return 'b';
+  if(hasM) return 'm';
+  return null;
 }
 // teacher — учитель student по Тахзибу? → рамз сборника ('' если без рамза) или null
 async function _tlinkTeacher(student, teacher){
@@ -9380,6 +9389,11 @@ function _readRender(){
   try{ body.appendChild(cardHadith({code:_readCode,h,noNav:true},[])); }catch(e){ const d=document.createElement('div');d.className='ar';d.innerHTML=esc(h.text||'');body.appendChild(d); }
   _groups=sg;
 }
+async function _prefetchTranslate(){   // #159: фоном прогреть перевод открытого хадиса (серверный кэш) — нажатие «перевод» будет мгновенным. Только при открытии (не на перелистывании — бережём баланс)
+  if(!_readArr||!_readArr.length) return; const h=_readArr[_readIdx]; if(!h||!h.text) return;
+  const out=document.createElement('div'); out.style.display='none'; const btn=document.createElement('button');
+  try{ await doTranslate(h.text, out, btn, {source:_readCode, num:h.num}); }catch(e){}
+}
 async function _readOpen(code,fromNum){
   _readCode=code; _readFindM=[]; _readFindPos=-1;
   var _rf=document.getElementById('readFind'); if(_rf) _rf.value=''; var _rfi=document.getElementById('readFindInfo'); if(_rfi) _rfi.textContent='';
@@ -9392,6 +9406,7 @@ async function _readOpen(code,fromNum){
   _readIdx=0;
   if(fromNum){ const qn=String(parseInt(fromNum,10)); const i=_readArr.findIndex(x=>String(x.num)===qn); if(i>=0)_readIdx=i; }
   _readRender();
+  _prefetchTranslate();   // #159: фон-прогрев перевода открытого хадиса
 }
 function _readToPick(){ document.getElementById('readView').style.display='none'; document.getElementById('readPick').style.display='block'; }
 function openReader(code,fromNum){
