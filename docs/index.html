@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v525</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v526</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -196,7 +196,7 @@
   <div class="tabs">
     <div class="tab active" data-tab="hadith" title="Поиск по хадисам (сборники)">📚 Хадисы</div>
     <div class="tab" data-tab="quran" title="Поиск по аятам Корана (текст, номер 2:255, русский перевод)">📖 Аяты</div>
-    <div class="tab" data-tab="trending" title="Лента: что чаще всего ищут — популярные запросы (#167)">🔥 Лента</div>
+    <div class="tab" id="tabLenta" data-tab="trending" title="Лента: что чаще всего ищут — популярные запросы (#167/#180)" style="display:none">🔥 Лента</div>
   </div>
 
   <div id="colsWrap">
@@ -312,6 +312,7 @@
     <div class="row"><span>🙈 Скрывать иснад (показывать только матн)</span><div class="sw" id="hideIsnadSw"></div></div>
     <div class="row"><span>📖 Кнопка «Страница в Мактабе» на карточках хадиса</span><div class="sw" id="maktabaSw"></div></div>
     <div class="row"><span>🔊 Озвучка хадиса <span style="color:var(--hint);font-size:11px">(кнопка на карточке, синтез речи)</span></span><div class="sw" id="ttsSw"></div></div>
+    <div class="row"><span>🔥 Лента (рекомендации) <span style="color:var(--hint);font-size:11px">(вкладка «что чаще ищут»)</span></span><div class="sw" id="lentaSw"></div></div>
     <div class="row"><span>🎯 Строгий поиск: только где есть ВСЕ слова <span style="color:var(--hint);font-size:11px">(выкл → покажет и близкие)</span></span><div class="sw" id="strictSw"></div></div>
     <div class="row"><span>🔡 Автоподсказки в Коране (списком при вводе номера)</span><div class="sw" id="acSw"></div></div>
     <div class="row"><span>🌿 Тап по слову аята → корень + все места в Коране</span><div class="sw" id="wtSw"></div></div>
@@ -609,7 +610,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v525';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v526';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -718,7 +719,7 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 /* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
 function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
-let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:false,wordTap:true,popular:false,arabus:false,qrHl:true,qHl:true,uiFont:'system',verify:true,arFont:'naskh',reciter:'Hudhaify_128kbps'}, loadCfg());   // #138: Noto Naskh — арабский шрифт ПО УМОЛЧАНИЮ
+let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:false,wordTap:true,popular:false,arabus:false,qrHl:true,qHl:true,uiFont:'system',verify:true,arFont:'naskh',reciter:'Hudhaify_128kbps',lenta:false}, loadCfg());   // #138: Noto Naskh — арабский шрифт ПО УМОЛЧАНИЮ
 if(!cfg._rpoff){ cfg.recent=false; cfg.popular=false; cfg._rpoff=1; saveCfg(cfg); }   // разовое: выключить Недавнее/Популярное по умолчанию (можно вернуть в Настройках)
 function applyTheme(){ document.body.classList.toggle('light', cfg.theme==='light'); }
 try{ applyTheme(); }catch(e){}
@@ -8990,6 +8991,10 @@ var _str=document.getElementById('strictSw'); if(_str){ _str.classList.toggle('o
 var _hpw=document.getElementById('hapticSw'); if(_hpw){ _hpw.classList.toggle('on',cfg.haptic!==false); _hpw.onclick=()=>{ cfg.haptic=(cfg.haptic===false); saveCfg(cfg); _hpw.classList.toggle('on',cfg.haptic!==false); if(cfg.haptic!==false){ _hapErr=0; hap('light'); } }; }
 var _mkw=document.getElementById('maktabaSw'); if(_mkw){ _mkw.classList.toggle('on',cfg.maktabaBtn!==false); _mkw.onclick=()=>{ cfg.maktabaBtn=(cfg.maktabaBtn===false); saveCfg(cfg); _mkw.classList.toggle('on',cfg.maktabaBtn!==false); }; }
 var _ttsw=document.getElementById('ttsSw'); if(_ttsw){ _ttsw.classList.toggle('on',!cfg.noTts); _ttsw.onclick=()=>{ cfg.noTts=!cfg.noTts; saveCfg(cfg); _ttsw.classList.toggle('on',!cfg.noTts); toast(cfg.noTts?'🔇 Озвучка хадисов выкл':'🔊 Озвучка хадисов вкл'); }; }   // #145
+// #180: тумблер «Лента» (рекомендации) — по умолчанию ВЫКЛ (владелец: «пока отключи по умолчанию»). Вкладка показывается только при включении.
+(function(){ var _lsw=document.getElementById('lentaSw'); var _setL=function(){ var _lt=document.getElementById('tabLenta'); if(_lt) _lt.style.display=cfg.lenta?'':'none'; if(_lsw) _lsw.classList.toggle('on',!!cfg.lenta); };
+  if(_lsw){ _lsw.onclick=function(){ cfg.lenta=!cfg.lenta; saveCfg(cfg); _setL(); toast(cfg.lenta?'🔥 Лента включена (вкладка вверху)':'Лента скрыта'); if(!cfg.lenta && typeof tab!=='undefined' && tab==='trending'){ var _h=document.querySelector('.tab[data-tab="hadith"]'); if(_h) _h.click(); } }; }
+  try{ _setL(); }catch(e){} })();
 var _vfw=document.getElementById('verifySw'); if(_vfw){ _vfw.classList.toggle('on',cfg.verify!==false); _vfw.onclick=()=>{ cfg.verify=!(cfg.verify!==false); saveCfg(cfg); _vfw.classList.toggle('on',cfg.verify!==false); toast(cfg.verify?'🛡 Независимая сверка ВКЛ':'Сверка выкл'); }; }   // независимая сверка передатчиков
 // #79: вся строка настроек нажимаемая — клик по строке с тумблером переключает его (не только по самому тумблеру)
 (function(){ var sm=document.getElementById('settingsModal'); if(!sm||sm._rowClick) return; sm._rowClick=true;
