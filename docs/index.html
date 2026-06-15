@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v533</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v534</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -611,7 +611,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v533';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v534';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1978,7 +1978,7 @@ async function runSearch(explicit){
   if(!q){ toast('Введите запрос'); return; }
   q=q.replace(/[​-‏‪-‮﻿⁦-⁩]/g,'');   // M438: НЕВИДИМКИ из копипасты Шамелы (ZWNJ и пр.) ломали матч — «в Мактабе находится, у нас нет»
   q=q.replace(/[،؛؟,;!]+/g,' ').replace(/\s+/g,' ').trim();   // M283: убрать пунктуацию (запятая прилипала к слову и ломала строгий матч)
-  { const _qLF=_layoutFix(q); if(_qLF!==q){ try{ toast('🌐 Похоже, раскладка — ищу «'+_qLF+'»'); }catch(e){} q=_qLF; } }   // #181: ввод чужой раскладкой (rfnflf→катада) → конверт qwerty→кириллица
+  window._layoutFixInfo=null; if(!window._noLayoutFix){ const _qLF=_layoutFix(q); if(_qLF!==q){ window._layoutFixInfo={orig:q, fixed:_qLF}; q=_qLF; } } window._noLayoutFix=false;   // #181: чужая раскладка (rfnflf→катада) → конверт + Яндекс-баннер «искать оригинал» при рендере (R45)
   // M439: ЦИТАТНЫЙ ФОРМАТ ШАМЕЛЫ — «Название книги» (том/стр): «фраза» → найти книгу и ОТКРЫТЬ на этой странице
   try{
     const cm=q.match(/^[«"”]([^«»""]{6,90})[»"“]\s*[\(（]?\s*(\d{1,2})\s*\/\s*(\d{1,4})\s*[\)）]?\s*[:：]?\s*[«"”]?([\s\S]{0,300})/);
@@ -2138,6 +2138,7 @@ async function runSearch(explicit){
       }catch(e){}
       if(seq!==_seq) return; setHead(true);
       if(corr && corr.changed.length) autoCorrectBanner(shown, corr.corrected.join(' '));   // M173: «показаны результаты для X · искать как ввёл»
+      if(window._layoutFixInfo){ try{ _layoutFixBanner(window._layoutFixInfo.orig, window._layoutFixInfo.fixed); }catch(e){} window._layoutFixInfo=null; }   // #181: баннер раскладки
       if(relax && relax.dropped.length && count) relaxBanner(relax.dropped, relax.used);   // честно: что убрали + «строго»
       setStatus(''); logSearch(shown,tab,count);
       if(!count){ const s=document.createElement('div'); s.className='status';   // append, чтобы не стереть баннер исправления (M173)
@@ -2206,6 +2207,7 @@ async function runSearch(explicit){
     }catch(e){}
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
     if(corrQ && corrQ.changed.length) autoCorrectBanner(shown, corrQ.corrected.join(' '));   // M173: «показаны результаты для X · искать как ввёл»
+    if(window._layoutFixInfo){ try{ _layoutFixBanner(window._layoutFixInfo.orig, window._layoutFixInfo.fixed); }catch(e){} window._layoutFixInfo=null; }   // #181: баннер раскладки
     if(relaxQ && relaxQ.dropped.length && count) relaxBanner(relaxQ.dropped, relaxQ.used);   // M172: честно показать что убрали
     if(count){ if(relMode && count>2){ renderResultsView(); } else { ensureGrpToggle(); ensureUniqToggle(); ensureRelToggle(); } try{ensureStructureBtn();}catch(e){} }
   }
@@ -8521,7 +8523,7 @@ function _layoutFixBanner(orig, fixed){ try{ const res=document.getElementById('
   const b=document.createElement('div'); b.className='hint'; b.style.cssText='color:var(--link);font-size:13px;margin:2px 0 8px';
   b.innerHTML='🌐 Похоже, раскладка переключена — показаны результаты для <b>'+esc(fixed)+'</b> · <span class="lfGo" style="cursor:pointer;text-decoration:underline;white-space:nowrap">искать «'+esc(orig)+'»</span>';
   res.insertBefore(b, res.children[1]||res.firstChild);
-  const g=b.querySelector('.lfGo'); if(g) g.onclick=()=>{ _strictSearch=true; document.getElementById('q').value=orig; runSearch(true); }; }catch(e){} }
+  const g=b.querySelector('.lfGo'); if(g) g.onclick=()=>{ window._noLayoutFix=true; document.getElementById('q').value=orig; runSearch(true); }; }catch(e){} }
 async function translitSuggest(query, live){
   if(_hasRuStop(query)) return [];   // русская фраза → не транскрипция
   const v=await buildArVocab();
