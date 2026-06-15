@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v501</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v502</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -608,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v501';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v502';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2595,7 +2595,17 @@ async function _bookLoad(){
       let _body=clean, _colo='';
       const _cm=clean.match(/([^\n]*?[-–—]\s*ط\s+\S[^\n]*?\(ص\s*[:：]\s*[\d٠-٩\/]+\)[^\n]*|[^\n]*?جـ?\s*[\d٠-٩]+\s*\(ص\s*[:：]\s*[\d٠-٩\/]+\)[^\n]*)\s*$/);
       if(_cm){ _colo=_cm[1].trim(); _body=clean.slice(0,_cm.index).trim(); }
-      mainEl.innerHTML=esc(_body).replace(/\n+/g,'<br>');
+      // M110: структурирование страницы — разделители и нумерация хадисов
+      const _hadithBlocks=_body.split(/(?=(?:^|[\n\s])[٠-٩]{1,5}\s*[-–—]\s)/);
+      let _html='';
+      for(const block of _hadithBlocks){
+        if(!block.trim()) continue;
+        const hm=block.match(/^([٠-٩]{1,5}\s*[-–—]\s)/);
+        const hnum=hm?hm[1].trim():'';
+        const txt=block.replace(/^[٠-٩]{1,5}\s*[-–—]\s/,'').trim();
+        _html+=(hnum?'<div style="color:var(--mark);font-weight:700;margin-bottom:3px">'+esc(hnum)+'</div>':'')+'<div>'+esc(txt)+'</div><div style="height:6px"></div>';
+      }
+      mainEl.innerHTML=_html.replace(/\n+/g,'<br>');
       // TB: ВЫДЕЛИТЬ передатчиков в тексте читалки (как в карточках хадиса) — тап → карточка равия
       try{ const _nms=isnadNarrators(_body).filter(_keepNarr); if(_nms.length) highlightNarratorsInDiv(mainEl, _nms, nm=>{ try{ openNarratorRijal(nm); }catch(e){} }); }catch(e){}
       if(_colo){ const _cf=document.createElement('div'); _cf.style.cssText='direction:rtl;text-align:left;font-size:11px;color:var(--hint);margin-top:9px;padding-top:6px;border-top:1px dashed var(--border)'; _cf.textContent='📄 '+_colo; mainEl.appendChild(_cf); }
