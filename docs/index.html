@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v503</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v504</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -608,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v503';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v504';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2350,9 +2350,12 @@ function renderResultsView(){
       body.style.display=willOpen?'block':'none'; h.innerHTML=lbl(); };
     res.appendChild(h); res.appendChild(body); });
 }
+let _darimiCache=null,_darimiP=null;
+function loadDarimi(){ if(_darimiCache) return Promise.resolve(_darimiCache); if(_darimiP) return _darimiP;
+  _darimiP=fetch('./editions/darimi.json?v='+APPVER).then(r=>r.ok?r.json():[]).then(j=>{ _darimiCache=Array.isArray(j)?j:[]; return _darimiCache; }).catch(()=>{ _darimiCache=[]; return _darimiCache; }); return _darimiP; }
 async function getOne(code,num){
   if(code==='muslim'){ const a=await loadCollection('muslim'); return a.find(x=>x.num===String(num))||null; }   // Муслим — из Абд аль-Баки (наш файл)
-  if(code==='darimi') return null;   // M16: Дарими на CDN отдаёт 403, локального зеркала нет
+  if(code==='darimi'){ const a=await loadDarimi(); const x=a.find(y=>String(y.num)===String(num)); return x?{num:String(x.num),text:(x.ar||'').replace(/\s+/g,' ').trim(),grade:'',norm:''}:null; }   // #151: Дарими — первоисточник, грузим из локального darimi.json (CDN 403)
   try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-'+code+'/'+num+'.min.json')).json();
     const h=(j.hadiths||[])[0]; if(h){ const raw=(h.text||'').replace(/\s+/g,' ').trim();
       return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),norm:''}; } }catch(e){}
