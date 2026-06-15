@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v540</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v541</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -611,7 +611,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v540';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v541';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1331,7 +1331,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   var _nc=document.querySelector('.chip[data-mode="narr"]'); if(_nc){ _nc.style.display = tab==='hadith'?'':'none';   // 👤 «Передатчик» — в Аятах не к месту (замечание владельца)
     if(tab!=='hadith' && modes.narr){ modes.narr=false; _nc.classList.remove('on'); try{ hideNarrSugg(); }catch(e){} } }
   ['chain','any'].forEach(function(md){ var _c=document.querySelector('.chip[data-mode="'+md+'"]'); if(_c){ _c.style.display = tab==='hadith'?'':'none';   // #60/#67: ⛓Цепь / 🌐Любой текст — иснад/Мактаба-режимы, в Аятах не нужны (но 🔬Расширенный ВЕРНУЛ — полезен для подбора фраз и в Коране, заявка #67)
-    if(tab!=='hadith' && modes[md]){ modes[md]=false; _c.classList.remove('on'); if(md==='chain'){ try{ _chainSel.length=0; var _co=document.getElementById('chainOut'); if(_co) _co.innerHTML=''; }catch(e){} } } } });
+    if(tab!=='hadith' && modes[md]){ modes[md]=false; _c.classList.remove('on'); if(md==='chain'){ try{ _chainSel.length=0; var _co=document.getElementById('chainOut'); if(_co) _co.innerHTML=''; chainRender(); }catch(e){} } } } });   // QA-low: chainRender скрывает бокс Цепи при уходе с вкладки (оставался со старыми чипами)
   document.getElementById('q').placeholder = tab==='hadith'?'Слово, фраза или № хадиса…':'Слово, № суры или 2:255…';
   document.getElementById('res').innerHTML=''; setStatus(''); updateQuranHelper();
   try{ hideRecent(); }catch(e){}   // M256: недавние не авто-показ — только по 🕐
@@ -2347,7 +2347,7 @@ function dedupResults(arr, mode){ const seen=new Set(), out=[]; let hid=0;
 function uniqToggleEl(){ const wrap=document.createElement('span'); wrap.id='uniqToggle';
   const mk=(mode,label,col,tip)=>{ const on=uniqMode===mode; const t=document.createElement('span');
     t.style.cssText='display:inline-block;margin:2px 0 8px 8px;font-size:13px;color:var(--link);cursor:pointer;user-select:none;border:1px solid '+(on?col:'var(--border)')+';border-radius:12px;padding:3px 10px'+(on?(';background:'+col+'22;color:var(--text)'):'');
-    t.textContent=(on?'✓ ':'')+label; t.title=tip; t.onclick=async()=>{ const nm=(uniqMode===mode?'':mode); if(nm==='hadith'){ t.textContent='⏳ тахридж…'; try{ await _annotateSu(_results); }catch(e){} } uniqMode=nm; renderResultsView(); }; return t; };   // #168: при «уникальные хадисы» сперва аннотируем тахридж-кластеры su
+    t.textContent=(on?'✓ ':'')+label; t.title=tip; t.onclick=async()=>{ const nm=(uniqMode===mode?'':mode); if(nm==='hadith'){ t.textContent='⏳ тахридж…'; const _sq=_seq; try{ await _annotateSu(_results); }catch(e){} if(_sq!==_seq) return; } uniqMode=nm; renderResultsView(); }; return t; };   // #168: при «уникальные хадисы» сперва аннотируем тахридж-кластеры su (QA-low: захват _seq — иначе гонка с новым поиском)
   wrap.appendChild(mk('hadith','✨ Уникальные хадисы','#2e9b5b','Один хадис — один раз (разные иснады одного матна сворачиваются). Основная версия / متابعات — пометка скоро.'));
   wrap.appendChild(mk('version','🔀 Уникальные версии','#6c5ce7','Все версии, но без дублей версий: одна и та же цепь из разных книг (Абу Дауд+Ахмад) — один раз.'));
   return wrap; }
@@ -3693,7 +3693,7 @@ document.addEventListener('click',e=>{ if(!(e.target.closest&&(e.target.closest(
 document.addEventListener('click',e=>{ const t=e.target; if(t&&t.closest&&(t.closest('#recentBox')||t.closest('#recentBtn')||t.closest('.searchbar'))) return; var b=document.getElementById('recentBox'); if(b&&b.style.display==='block') b.style.display='none'; }, true);
 let _rootView={root:'',sort:'order',form:''};
 async function showRootPlaces(root, opts){
-  if(!root) return; const R=await loadRoots(); const arr=await loadQuran();
+  if(!root) return; const R=await loadRoots(); let arr=[]; try{ arr=await loadQuran(); }catch(e){ arr=quran||[]; }   // QA-low: try/catch — loadQuran мог reject (офлайн до загрузки Корана) → тихий no-op
   _rootView={root:root, sort:(opts&&opts.sort)||'order', form:(opts&&opts.form)||''};
   const places=R.r[root]||[]; const rf=(R.rf&&R.rf[root])||[]; const occ=(R.ro&&R.ro[root])||places.length;
   const set=new Set(places);
@@ -5363,7 +5363,7 @@ async function doTakhrij(text, ref, out, btn, force){
   const head=document.createElement('div'); head.style.cssText='font-size:12px;color:#9fd3a8;margin:2px 0 4px';
   head.innerHTML='🌿 Наш тахридж: уникальный хадис <b class="thSuJump" style="cursor:pointer;text-decoration:underline dotted" title="Открыть таблицу всех хадисов на этом уникальном № (тахридж)">№'+su+' 📒</b>'+(pl.length>1?(' · <b>'+_ruVers(pl.length)+'</b> по сборникам (клик по № — читалка):'):' — других версий среди 64 печатей не найдено.');
   tkSec.appendChild(head);
-  try{ const _sj=head.querySelector('.thSuJump'); if(_sj) _sj.onclick=()=>{ try{ openHadithTable(); }catch(e){} setTimeout(()=>{ const q=document.getElementById('htQ'); if(q){ q.value='s'+su; q.dispatchEvent(new Event('input')); } }, 180); }; }catch(e){}   // M492: №su → таблица хадисов с фильтром тахриджа
+  try{ const _sj=head.querySelector('.thSuJump'); if(_sj) _sj.onclick=async()=>{ try{ await openHadithTable(); }catch(e){} const q=document.getElementById('htQ'); if(q){ q.value='s'+su; q.dispatchEvent(new Event('input')); } }; }catch(e){}   // M492: №su → таблица хадисов с фильтром тахриджа (QA-low: await — q.oninput гарантированно привязан, без гонки 180мс)
   const byb={}; pl.forEach(([bb,nn])=>{ (byb[bb]=byb[bb]||[]).push(nn); });
   // R55: СВОЙ сборник первым, затем по АВТОРИТЕТУ (Бухари>Муслим>الكتب التسعة>Хузайма/Хиббан/Хаким>…), не наоборот
   const _RANK={'1681':1,'1727':2,'654':3,'1726':3,'117359':3,'7895':4,'1435':4,'829':5,'8361':5,'1198':6,'28107':7,'25794':8,'98139':8,'21795':9,'1456':10,'9647':11,'13037':12,'537':20,'1446':21,'1424':22,'18144':23,'8493':24,'12520':30,'12981':31,'1733':32,'748':33,'13159':34,'10631':35,'9615':36,'13122':37,'13136':38,'4407':39,'278':40,'1613':41,'8218':42,'13027':43,'21545':44,'13028':45,'3610':46,'5562':47,'13155':48};
