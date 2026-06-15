@@ -1718,7 +1718,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if _tl in ("статус заявок", "заявки полные", "полный журнал", "журнал заявок"):
             try:
                 rs = requests.get("https://germanyalfurqan-eng.github.io/hadith-bot/req_status.json", timeout=15).json()
-                lines = [f"📋 *ЕДИНЫЙ журнал заявок* (обновлён {rs.get('updated','')})",
+                lines = [f"📋 *ЕДИНЫЙ журнал заявок* · 🕐 сейчас {_now_msk()}",
+                         f"_данные собраны: {rs.get('updated','')}_",
                          f"Современных: {rs.get('modern_total')} = ✅{rs.get('modern_done')} + 🔴{rs.get('modern_open')}",
                          f"_{rs.get('legacy_note','')}_", "", "🔴 *Открытые:*"]
                 for it in (rs.get("items") or []):
