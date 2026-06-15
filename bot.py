@@ -1954,6 +1954,16 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 await update.message.reply_text(f"Не удалось выйти из {gid}: {e}")
             return
+        # #153: быстрый тумблер «молчи»/«говори» в ТЕКУЩЕМ чате (резко отключить бота, если тупит)
+        if _tl in ("молчи", "тихо", "замолчи"):
+            _cid = str(update.effective_chat.id); a = load_access(); mt = [str(x) for x in (a.get("muted") or [])]
+            if _cid not in mt: mt.append(_cid)
+            save_access({"muted": mt}); await update.message.reply_text("🤫 Молчу в этом чате (отвечаю только тебе). Включить обратно: «говори».")
+            return
+        if _tl in ("говори", "включись", "не молчи"):
+            _cid = str(update.effective_chat.id); a = load_access(); mt = [x for x in (a.get("muted") or []) if str(x) != _cid]
+            save_access({"muted": mt}); await update.message.reply_text("🔊 Снова отвечаю в этом чате.")
+            return
 
     user_id = update.effective_user.id if update.effective_user else 0
     chat_type = update.effective_chat.type
@@ -1968,7 +1978,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Режим «только свои группы»: в неразрешённой группе бот полностью молчит
         if chat_type in ("group", "supergroup"):
             acc = _access_cache or {}
-            if not acc.get("group_open", True) and str(chat_id) not in (acc.get("group_wl") or []):
+            # #153: «молчи» в чате (muted) → бот не отвечает никому в нём (кроме владельца)
+            if (str(chat_id) in (acc.get("muted") or [])) or (not acc.get("group_open", True) and str(chat_id) not in (acc.get("group_wl") or [])):
                 return
 
     # Проверка: ответ на сообщение бота
