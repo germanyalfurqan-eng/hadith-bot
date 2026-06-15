@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v526</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v527</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -610,7 +610,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v526';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v527';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -959,8 +959,16 @@ function renderFav(by){
           (f.text?('<div style="font-size:13px;color:var(--hint);direction:rtl;text-align:right">'+esc(f.text)+'</div>'):'');
         d.onclick=(e)=>{ if(e.target.tagName==='BUTTON') return; document.getElementById('favModal').style.display='none'; try{ openBook(f.bid); }catch(_e){} };
       } else {
+        d.style.cursor='pointer'; d.title='Открыть';   // #174: избранное хадиса/аята — КЛИК открывает (раньше клик ничего не делал)
         d.innerHTML='<div class="meta" style="margin:0 0 4px"><span class="src">'+esc(f.label)+'</span></div>'+
           '<div class="ar" style="font-size:15px;line-height:1.7">'+esc((f.text||'').slice(0,110))+'…</div>';
+        d.onclick=(e)=>{ if(e.target.tagName==='BUTTON') return; document.getElementById('favModal').style.display='none';
+          try{ const p=String(f.k||'').split('|');
+            if(p[0]==='q' && p[1]){ const _tq=document.querySelector('.tab[data-tab="quran"]'); if(_tq) _tq.click(); const _qi=document.getElementById('q'); if(_qi) _qi.value=p[1]; runSearch(true); }
+            else if(p[0]==='m' && p[1]){ openReader('muhaymin', String(p[1]).replace(/#.*/,'')); }
+            else if(p[0]==='h' && p[1] && p[2]){ openReader(p[1], String(p[2]).replace(/#.*/,'')); }
+            else if(f.label){ const _qi=document.getElementById('q'); if(_qi) _qi.value=f.label; runSearch(true); }
+          }catch(_e){} };
       }
       const rm=document.createElement('button'); rm.className='mini'; rm.textContent='убрать ✕';
       rm.onclick=(e)=>{ try{e.stopPropagation();}catch(_e){} let arr=loadFav(); const i=arr.findIndex(x=>x.k===f.k); if(i>=0){arr.splice(i,1);saveFav(arr);} if(f.type==='book'){ try{ _catFavSave(_catFavs().filter(x=>x!==String(f.bid))); }catch(_e){} } renderFav(by); };
