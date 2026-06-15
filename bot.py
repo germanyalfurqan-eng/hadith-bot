@@ -1820,7 +1820,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not note:
                 await update.message.reply_text("Пусто. Напиши: анонс <текст обновления>")
                 return
-            body = note + "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot/app\n🤖 Бот: https://t.me/muslimoontt_bot"
+            body = note + "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot?startapp\n🤖 Бот: https://t.me/muslimoontt_bot"
             try:
                 await context.bot.send_message(APP_CHANNEL_ID, body, disable_web_page_preview=True)
                 j = _journal_load(); j["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
@@ -5005,7 +5005,7 @@ async def _setup(application):
             last = (j.get("app_post") or {}).get("note", "")
             if note != last:
                 try:
-                    body = (note + "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot/app\n🤖 Бот: https://t.me/muslimoontt_bot")
+                    body = (note + "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot?startapp\n🤖 Бот: https://t.me/muslimoontt_bot")
                     await application.bot.send_message(APP_CHANNEL_ID, body, disable_web_page_preview=True)
                     j["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
                     _journal_save("app_post → канал приложения")
@@ -5059,7 +5059,7 @@ async def _app_channel_watcher(application):
             j = _journal_load()
             last = (j.get("app_post") or {}).get("note", "")
             if note != last:
-                body = (note + "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot/app\n🤖 Бот: https://t.me/muslimoontt_bot")
+                body = (note + "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot?startapp\n🤖 Бот: https://t.me/muslimoontt_bot")
                 await application.bot.send_message(APP_CHANNEL_ID, body, disable_web_page_preview=True)
                 j["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
                 _journal_save("app_post → канал приложения (авто-вотчер, 5 мин)")
