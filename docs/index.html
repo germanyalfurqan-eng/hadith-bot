@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v531</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v532</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -611,7 +611,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v531';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v532';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1978,6 +1978,7 @@ async function runSearch(explicit){
   if(!q){ toast('Введите запрос'); return; }
   q=q.replace(/[​-‏‪-‮﻿⁦-⁩]/g,'');   // M438: НЕВИДИМКИ из копипасты Шамелы (ZWNJ и пр.) ломали матч — «в Мактабе находится, у нас нет»
   q=q.replace(/[،؛؟,;!]+/g,' ').replace(/\s+/g,' ').trim();   // M283: убрать пунктуацию (запятая прилипала к слову и ломала строгий матч)
+  { const _qLF=_layoutFix(q); if(_qLF!==q){ try{ toast('🌐 Похоже, раскладка — ищу «'+_qLF+'»'); }catch(e){} q=_qLF; } }   // #181: ввод чужой раскладкой (rfnflf→катада) → конверт qwerty→кириллица
   // M439: ЦИТАТНЫЙ ФОРМАТ ШАМЕЛЫ — «Название книги» (том/стр): «фраза» → найти книгу и ОТКРЫТЬ на этой странице
   try{
     const cm=q.match(/^[«"”]([^«»""]{6,90})[»"“]\s*[\(（]?\s*(\d{1,2})\s*\/\s*(\d{1,4})\s*[\)）]?\s*[:：]?\s*[«"”]?([\s\S]{0,300})/);
@@ -4738,7 +4739,7 @@ async function openAyahCard(s,a){ s=+s; a=+a; if(!s||!a) return;
       +'<span id="ahShare" style="cursor:pointer;font-size:18px" title="Поделиться">⤴</span>'
       +'<b style="font-size:16px">сура '+s+' · аят '+a+'</b>'
       +'<span id="ahClose" style="cursor:pointer;font-size:20px;font-weight:700" title="Закрыть">✕</span></div>'
-    +'<div style="padding:16px 16px 8px"><div class="ar" style="direction:rtl;text-align:right;font-size:24px;line-height:2.1">'+esc(txt)+'</div>'
+    +'<div style="padding:16px 16px 8px"><div class="ar" style="direction:rtl;text-align:right;font-size:24px;line-height:2.1" id="ahArabic">'+qWordsHTML(txt,[],null)+'</div>'
       +(ru?('<div style="font-size:14.5px;color:var(--text);margin-top:12px;line-height:1.6"><span style="color:var(--hint);font-style:italic">'+(ru2?'[Кулиев] ':'')+'</span>'+esc(ru)+'</div>'):'')+(ru2?('<div style="font-size:14.5px;color:#bcd0ff;margin-top:8px;line-height:1.6"><span style="color:var(--hint);font-style:italic">[Абу Адель] </span>'+esc(ru2)+'</div>'):'')
       +'<div id="ahTafsir" style="margin-top:12px;color:var(--link);cursor:pointer;font-size:14px;font-weight:600;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:10px">📖 Открыть тафсир <span style="font-size:18px">›</span></div></div>'
     +'<div style="display:flex;justify-content:space-around;align-items:center;padding:12px 8px;border-top:1px solid var(--border);background:var(--bg)">'
@@ -4748,6 +4749,10 @@ async function openAyahCard(s,a){ s=+s; a=+a; if(!s||!a) return;
     +'</div></div>';
   const _press=function(el){ try{ el.style.transform='scale(.82)'; setTimeout(function(){ try{el.style.transform='';}catch(e){} },130); }catch(e){} };   // #80: видимый отклик нажатия
   m.style.display='flex';
+  // #183: word-tap в попапе аята (как в читалке) — тап по слову → корень/Arabus/перевод
+  const _ahAr=m.querySelector('#ahArabic'); if(_ahAr){ try{ loadRoots(); }catch(e){}
+    _ahAr.addEventListener('click',e=>{ const sp=e.target.closest&&e.target.closest('.qw'); if(sp){ e.stopPropagation(); onWordTap(sp.textContent, sp, (_ahAr.textContent||'').replace(/\s+/g,' ').trim().slice(0,200)); } });
+    try{ enableArabusTap(_ahAr); if(_arabusOn) _ahAr.style.cursor='pointer'; }catch(e){} }
   m.querySelector('#ahClose').onclick=()=>{ m.style.display='none'; };
   m.querySelector('#ahTafsir').onclick=()=>{ try{ openTafsir(s,a); }catch(e){} };
   m.querySelector('#ahShare').onclick=()=>{ try{ copyWithSig((txt||'')+'\n— Коран '+s+':'+a+(ru?('\n'+ru):'')); }catch(e){} };
@@ -8087,6 +8092,15 @@ async function verifyNarr(card, place, text){
       h+='<span class="vChip"'+(mid?(' data-mid="'+esc(mid)+'"'):'')+' style="'+(mid?'cursor:pointer;':'')+'border:1px solid '+(idMode?(ok?'#3a8a5a':'#e0796a'):'#6c5ce7')+';border-radius:8px;padding:2px 7px;background:'+(idMode?(ok?'rgba(58,138,90,.12)':'rgba(224,121,106,.12)'):'rgba(108,92,231,.10)')+'"'+(mid?(' title="Карточка в Мактабе: shamela.ws/narrator/'+esc(mid)+'"'):'')+'><span style="font-family:\'Traditional Arabic\',serif">'+esc(nm)+'</span>'+(mid?(' <span style="color:var(--hint);font-size:10px;direction:ltr">'+(idMode?(ok?'✓':'✗'):'👤')+' id'+esc(mid)+' ↗</span>'):(idMode?' <span style="color:#e0796a;font-size:10px;direction:ltr" title="sunnah.com опознал, наш мост — ещё нет">؟ не опознан</span>':''))+'</span>';
     });
     h+='</div>';
+    // #182: ЯВНЫЙ компактный СПИСОК передатчиков с id ВНИЗУ (повтор Бухари 415) — клик по id → карточка Мактабы
+    if(idMode){
+      const okList=auth.filter(r=>{ const mid=r[2]?String(r[2]):null; return mid && ourSet.has(mid); });
+      if(okList.length){
+        let lh='<div style="margin-top:8px;color:var(--hint);font-size:11px;direction:rtl;text-align:right;line-height:1.6"><b>Передатчики ('+okList.length+'):</b> <span style="direction:rtl">';
+        okList.forEach((r,i)=>{ const nm=r[1], mid=String(r[2]); lh+=(i>0?' · ':'')+'<span style="font-family:\'Traditional Arabic\',serif">'+esc(nm)+'</span> <span style="cursor:pointer;color:#5b87b5;text-decoration:underline;direction:ltr;display:inline-block" onclick="try{openLink(\'https://shamela.ws/narrator/'+esc(mid)+'\');}catch(_e){}">id'+esc(mid)+'</span>'; });
+        lh+='</span></div>'; h+=lh;
+      }
+    }
     if(!idMode) h+='<div style="margin-top:6px;color:var(--hint);font-size:11px">👤 id передатчиков — по нашей базе равиев Мактабы (клик откроет карточку). Авторитетная сверка с sunnah.com для этого сборника ещё готовится (краул идёт) — пока сверяю по тексту хадиса.</div>';
     if(alarm && idMode){ h+='<div class="vDet" style="margin-top:7px;color:#e0b3a8;font-size:11px">';
       if(missing.length){ const gn=(recNa?gapList:[]).map(g=>esc(g[0])+(g[1]==null?' (мост не опознал)':'')).join('، ');
@@ -8484,6 +8498,25 @@ function _tokTop(v, token, n, live){
   } else ranked=[];
   return ranked.slice(0,n).map(e=>e[0]);
 }
+// #181: РАСКЛАДКА — ввод чужой раскладкой (rfnflf на англ. = катада) → понять как Яндекс. Карта QWERTY→ЙЦУКЕН (r=к!).
+const _QW2CYR={q:'й',w:'ц',e:'у',r:'к',t:'е',y:'н',u:'г',i:'ш',o:'щ',p:'з','[':'х',']':'ъ',a:'ф',s:'ы',d:'в',f:'а',g:'п',h:'р',j:'о',k:'л',l:'д',';':'ж',"'":'э',z:'я',x:'ч',c:'с',v:'м',b:'и',n:'т',m:'ь',',':'б','.':'ю','/':'.','`':'ё'};
+const _EN_STOP=new Set(['the','and','for','you','that','this','with','search','find','hadith','quran','allah','god','name','book','text','word']);
+function _isQwertyLayout(s){ s=String(s||'').toLowerCase();
+  if(!/^[a-z\s'`\[\];,.\/-]+$/.test(s)) return false;                  // только латиница+пункт раскладки
+  const w=s.trim().replace(/\s+/g,' '); if(w.replace(/[^a-z]/g,'').length<3) return false;
+  if(w.split(' ').some(x=>_EN_STOP.has(x))) return false;              // явное англ. слово → не раскладка
+  return !/[aeiouy]/.test(w.replace(/[^a-z]/g,''));                    // нет латинских гласных → консонантная кириллица (катада=rfnflf)
+}
+function _layoutFix(q){ q=String(q||''); if(!_isQwertyLayout(q)) return q;
+  let out=''; for(const ch of q.toLowerCase()){ out += (ch in _QW2CYR)?_QW2CYR[ch]:ch; }
+  const cyr=(out.match(/[а-яё]/gi)||[]).length;
+  return (cyr>=2 && out!==q.toLowerCase())?out:q;
+}
+function _layoutFixBanner(orig, fixed){ try{ const res=document.getElementById('res');
+  const b=document.createElement('div'); b.className='hint'; b.style.cssText='color:var(--link);font-size:13px;margin:2px 0 8px';
+  b.innerHTML='🌐 Похоже, раскладка переключена — показаны результаты для <b>'+esc(fixed)+'</b> · <span class="lfGo" style="cursor:pointer;text-decoration:underline;white-space:nowrap">искать «'+esc(orig)+'»</span>';
+  res.insertBefore(b, res.children[1]||res.firstChild);
+  const g=b.querySelector('.lfGo'); if(g) g.onclick=()=>{ _strictSearch=true; document.getElementById('q').value=orig; runSearch(true); }; }catch(e){} }
 async function translitSuggest(query, live){
   if(_hasRuStop(query)) return [];   // русская фраза → не транскрипция
   const v=await buildArVocab();
