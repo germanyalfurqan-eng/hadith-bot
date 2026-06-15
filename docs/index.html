@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v513</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v514</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -608,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v513';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v514';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7944,11 +7944,12 @@ async function verifyNarr(card, place, text){
     // #132: codif пуст → приложение подсвечивает по ТЕКСТУ (_autoHLGuess: isnadNarrators+_keepNarr). Считаем подсветку ПО ФАКТУ — иначе показывали ложный «приложение: 0» при 5 выделенных именах.
     if(!ourNames.length){ try{ ourNames=[...new Set(isnadNarrators(text).filter(_keepNarr))]; }catch(e){} }
     const forms=_isnadForms(text);
-    let auth, authMids, srcLbl, idMode;
+    let auth, authMids, srcLbl, idMode, gapList=null;
     if(recNa){
-      // R52/В-01/#142: эталон = ПОЛНАЯ авторитетная цепь = na (подсвечено ✓) + gap (эталон знает, в нашем тексте НЕТ ✗). Любой gap → тревога.
-      auth = recNa.map(p=>[null,p[0],String(p[1])]).concat((recGap||[]).map(g=>[null,g[0],String(g[1])]));
-      authMids=[...new Set(auth.map(r=>String(r[2])))]; srcLbl='sunnah.com / Мактаба'; idMode=true;
+      // #158 СТРОГО: эталон = ПОЛНАЯ цепь sunnah.com = na (опознано ✓) + gap (sunnah знает, мы НЕТ — ✗: либо нет в тексте, либо мост не опознал mid=null). Любой gap → НЕ зелёный.
+      gapList = recGap||[];
+      auth = recNa.map(p=>[null,p[0],String(p[1])]).concat(gapList.map(g=>[null,g[0], (g[1]!=null?String(g[1]):null)]));
+      authMids=recNa.map(p=>String(p[1])); srcLbl='sunnah.com / Мактаба'; idMode=true;
     } else {
       const rows=await _verifyChain(place.bid, place.num);
       if(rows&&rows.length){ auth=rows.filter(r=>r[2]); authMids=[...new Set(auth.map(r=>String(r[2])))]; srcLbl='sunnah.com / Мактаба'; idMode=true; }
@@ -7956,19 +7957,20 @@ async function verifyNarr(card, place, text){
         // НЕТ краула — определяю передатчиков САМ из текста хадиса (универсально, любой сборник)
         let slots=[]; try{ slots=_isnadSlots(text||''); }catch(e){}
         // #157 (З-09): даже БЕЗ краула резолвим имя в нашу базу равиев (_narrLookup) → карточка кликабельна сразу.
-        // Раньше передатчик показывался ПУСТЫМ (без id) на нескрауленных книгах (Абу Дауд/Тирмизи/Насаи) — владелец: «Абу аз-Зинад у тебя пустой».
         auth=[]; for(const s of slots){ let mid=null; try{ mid=await _narrLookup(s); }catch(e){} auth.push([null,s,(mid!=null?String(mid):null)]); }
         authMids=null; srcLbl='по тексту + база равиев Мактабы'; idMode=false;
       }
     }
     const ourSet=new Set(ourMids);
     const ourCount = ourMids.length || ourNames.length;   // #132: фактически подсвечено (codif ИЛИ текст), не ложный 0
-    const authCount = idMode ? authMids.length : auth.length;
-    const missing = idMode ? authMids.filter(m=>!ourSet.has(m)) : [];
-    const extra = idMode ? ourMids.filter(m=>!new Set(authMids).has(m)) : [];
+    const authCount = recNa ? (recNa.length + gapList.length) : (idMode ? authMids.length : auth.length);
+    const missing = recNa ? gapList.map(g=> g[1]!=null?String(g[1]):('؟'+g[0]))
+                          : (idMode ? authMids.filter(m=>!ourSet.has(m)) : []);
+    const missResolved = recNa ? gapList.filter(g=>g[1]!=null).length : missing.length;   // resolved-missing → можно в бот; чистый unres → НЕ спамим
+    const extra = (idMode && !recNa) ? ourMids.filter(m=>!new Set(authMids).has(m)) : [];
     const cntMis = authCount!==ourCount;
-    // #132/В-04: ТРЕВОГА только при авторитетном эталоне (idMode=true — краул Мактабы/sunnah.com). Без краула независимого эталона НЕТ → НЕ бьём ложную тревогу, показываем честный счёт по тексту.
-    const alarm = idMode && (cntMis || missing.length>0 || extra.length>0);
+    // #158: СТРОГО — любой gap (включая неопознанных мостом) → тревога, НЕ зелёный. Иначе (без na) старая логика.
+    const alarm = recNa ? (gapList.length>0) : (idMode && (cntMis || missing.length>0 || extra.length>0));
     // #119/#111 (З-09): ДЕТЕКТОР УСЕЧЁННОГО ТЕКСТА. Показанный текст без маркеров иснада (حدثنا/أخبرنا/عن) и начинается с матна (قال رسول/النبي) → иснад отсутствует в показе. Флагуем ТОЛЬКО при авторитетном эталоне, где краул подтверждает наличие иснада ≥2 (иначе риск ложного флага на хадисах, где автор НАМЕРЕННО дал только матн — CLAUDE.md п.4).
     const _flat=stripDiac(String(text||'')).replace(/ـ/g,'').replace(/[أإآ]/g,'ا');
     const _hasIsnad=/(?:^|\s)(?:حدثنا|حدثني|حدثناه|اخبرنا|اخبرني|انبانا|انباني|سمعت|ثنا)\s|\sعن\s/.test(_flat);
@@ -7987,13 +7989,13 @@ async function verifyNarr(card, place, text){
     auth.forEach((r,i)=>{ const nm=r[1], mid=r[2]?String(r[2]):null; const ok=idMode?ourSet.has(mid):true;
       if(i>0 && forms[i-1]) h+='<span style="color:var(--hint);font-size:11px;font-family:\'Traditional Arabic\',serif">←'+esc(forms[i-1])+'←</span>';
       else if(i>0) h+='<span style="color:var(--hint)">←</span>';
-      h+='<span class="vChip"'+(mid?(' data-mid="'+esc(mid)+'"'):'')+' style="'+(mid?'cursor:pointer;':'')+'border:1px solid '+(idMode?(ok?'#3a8a5a':'#e0796a'):'#6c5ce7')+';border-radius:8px;padding:2px 7px;background:'+(idMode?(ok?'rgba(58,138,90,.12)':'rgba(224,121,106,.12)'):'rgba(108,92,231,.10)')+'"'+(mid?(' title="Карточка в Мактабе: shamela.ws/narrator/'+esc(mid)+'"'):'')+'><span style="font-family:\'Traditional Arabic\',serif">'+esc(nm)+'</span>'+(mid?(' <span style="color:var(--hint);font-size:10px;direction:ltr">'+(idMode?(ok?'✓':'✗'):'👤')+' id'+esc(mid)+' ↗</span>'):'')+'</span>';
+      h+='<span class="vChip"'+(mid?(' data-mid="'+esc(mid)+'"'):'')+' style="'+(mid?'cursor:pointer;':'')+'border:1px solid '+(idMode?(ok?'#3a8a5a':'#e0796a'):'#6c5ce7')+';border-radius:8px;padding:2px 7px;background:'+(idMode?(ok?'rgba(58,138,90,.12)':'rgba(224,121,106,.12)'):'rgba(108,92,231,.10)')+'"'+(mid?(' title="Карточка в Мактабе: shamela.ws/narrator/'+esc(mid)+'"'):'')+'><span style="font-family:\'Traditional Arabic\',serif">'+esc(nm)+'</span>'+(mid?(' <span style="color:var(--hint);font-size:10px;direction:ltr">'+(idMode?(ok?'✓':'✗'):'👤')+' id'+esc(mid)+' ↗</span>'):(idMode?' <span style="color:#e0796a;font-size:10px;direction:ltr" title="sunnah.com опознал, наш мост — ещё нет">؟ не опознан</span>':''))+'</span>';
     });
     h+='</div>';
     if(!idMode) h+='<div style="margin-top:6px;color:var(--hint);font-size:11px">👤 id передатчиков — по нашей базе равиев Мактабы (клик откроет карточку). Авторитетная сверка с sunnah.com для этого сборника ещё готовится (краул идёт) — пока сверяю по тексту хадиса.</div>';
     if(alarm && idMode){ h+='<div class="vDet" style="margin-top:7px;color:#e0b3a8;font-size:11px">';
-      if(missing.length){ const gn=(recGap||[]).map(g=>esc(g[0])).join('، ');
-        h+='🚨 Эталон (sunnah.com/Мактаба): <b>'+authCount+'</b> передатчиков, в нашем тексте опознано <b>'+ourMids.length+'</b>. НЕ хватает <b>'+missing.length+'</b>'+(gn?(': '+gn):'')+' (id '+missing.join(', ')+'). Расхождение в ТЕКСТЕ хадиса (наш короче/иной) ИЛИ передатчик не опознан — #119/#112.<br>'; }
+      if(missing.length){ const gn=(recNa?gapList:[]).map(g=>esc(g[0])+(g[1]==null?' (мост не опознал)':'')).join('، ');
+        h+='🚨 Эталон (sunnah.com/Мактаба): <b>'+authCount+'</b> передатчиков, опознано приложением <b>'+ourCount+'</b>. НЕ опознано <b>'+missing.length+'</b>'+(gn?(': '+gn):'')+'. Строгий стандарт (#158): зелёным — только когда опознаны ВСЕ как в sunnah.com.<br>'; }
       if(extra.length) h+='🚨 id ПРИСВОЕН, но в эталоне Мактабы его НЕТ: <b>'+extra.length+'</b> (id '+extra.join(', ')+') — возможно НЕВЕРНАЯ карточка (клик откроет не того передатчика). #142';
       h+='</div>'; }
     else if(alarm){ h+='<div style="margin-top:7px;color:#e0b3a8;font-size:11px">⚠️ По тексту передатчиков <b>'+authCount+'</b>, а приложение подсветило <b>'+ourMids.length+'</b> — расхождение в количестве.</div>'; }
@@ -8006,7 +8008,7 @@ async function verifyNarr(card, place, text){
       const sendNow = !prev || !prev.r || (now - prev.r > RPT);
       j[kk]={a:authCount,o:ourMids.length,m:missing,e:extra,t:now,r:(sendNow?now:(prev?prev.r:now))}; localStorage.setItem(K,JSON.stringify(j));
       // В-04 анти-спам: НЕ шлём в бот «приложение 0» (чистый пробел покрытия книги — не пер-хадисная ошибка; видно в карточке, копится локально). Шлём только реальное расхождение при ЕСТЬ подсветка.
-      if(sendNow && ourCount>0){ _appReport('🚨[ИДЕНТИФ.ПЕРЕДАТЧИКОВ] '+place.bid+':'+place.num+' эталон('+srcLbl+') '+authCount+' / приложение '+ourMids.length+(missing.length?(' · пропущ:'+missing.join(',')):'')+(extra.length?(' · лишн:'+extra.join(',')):''), 'verifyNarr'); }
+      if(sendNow && ourCount>0 && missResolved>0){ _appReport('🚨[ИДЕНТИФ.ПЕРЕДАТЧИКОВ] '+place.bid+':'+place.num+' эталон('+srcLbl+') '+authCount+' / приложение '+ourCount+' · resolved-missing:'+missResolved+(extra.length?(' · лишн:'+extra.join(',')):''), 'verifyNarr'); }
     }catch(e){} }
   }catch(e){}
 }
@@ -8503,8 +8505,9 @@ async function doTranslate(text,out,btn,ref,force){
       else restore();
       return;
     }
+    try{ out.innerHTML='<span class="hint">⚠️ Не удалось перевести — попробуй ещё раз</span>'; out.style.display='block'; }catch(_e){}   // не оставлять «⏳ Перевожу…»
     toast('Не удалось перевести'); restore();
-  }catch(e){ toast('🔧 Сервис недоступен — возможно, идёт обновление. Попробуй через минуту.'); restore(); }
+  }catch(e){ try{ out.innerHTML='<span class="hint">⚠️ Сервис недоступен — возможно, идёт обновление. Попробуй через минуту.</span>'; out.style.display='block'; }catch(_e){} toast('🔧 Сервис недоступен — возможно, идёт обновление. Попробуй через минуту.'); restore(); }
 }
 
 /* ===================== УПРАВЛЕНИЕ ДОСТУПОМ (G9, серверное) ===================== */
