@@ -1647,7 +1647,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "• `заявка <текст>` — записать заявку с номером (предупрежу, если точный дубль)\n"
                 "• *фото с подписью* `заявка <текст>` — скрин-заявка (скрин уходит в рабочий журнал, с МСК-временем)\n"
                 "• `заявки` — список (невыполненные первыми + от пользователей)\n"
-                "• `заявка done <№>` — пометить выполненной\n\n"
+                "• `заявка done <№>` — пометить выполненной\n"
+                "• `журнал` — вкл/выкл уведомления о работе Claude над заявками\n\n"
                 "🤖 *ИИ (внутренняя кухня, только тебе):*\n"
                 "• `гпт <вопрос>` — спросить GPT/Gemini\n\n"
                 "💬 *Связь с пользователем:*\n"
@@ -1763,6 +1764,13 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     lines.append(f"№{x.get('id','?')} {x.get('u','')}: {(x.get('t') or '')[:140]}")
             lines.append("\nℹ️ Добавить: «заявка <текст>». Закрыть: «заявка done <№>».")
             await update.message.reply_text("\n".join(lines)[:4000], parse_mode="Markdown")
+            return
+        # ===== #165: тумблер рабочего журнала (уведомления о работе Claude над заявками) =====
+        if (_tl == "журнал" or _tl == "worklog") and is_owner(update):
+            j = _journal_load()
+            j["worklog_enabled"] = not j.get("worklog_enabled", False)
+            _journal_save("toggle worklog")
+            await update.message.reply_text(("✅ Рабочий журнал ВКЛЮЧЕН — буду слать уведомления о старте/финише заявок." if j["worklog_enabled"] else "🔇 Рабочий журнал ОТКЛЮЧЕН."))
             return
         # ===== Закрыть заявку: «заявка done <№>» / «заявка готово <№>» =====
         if _tl.startswith("заявка done ") or _tl.startswith("заявка готово "):
@@ -2201,6 +2209,26 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("❌ Ошибка обработки аудио: " + str(e)[:200])
             return
 
+    # ============ #163: ГОЛОСОВЫЕ ЗАЯВКИ ВЛАДЕЛЬЦА (voice → распознавание → ПОДТВЕРЖДЕНИЕ → регистрация) ============
+    if is_owner(update) and update.message.voice and getattr(update.effective_chat, "type", "") == "private" and not update.message.reply_to_message:
+        await update.message.reply_text("📝 Распознаю голос…")
+        try:
+            _f = await update.message.voice.get_file()
+            _src = f"/tmp/{_f.file_id}.ogg"
+            await _f.download_to_drive(_src)
+            _txt = await asyncio.get_event_loop().run_in_executor(None, transcribe_audio, _src)
+            if _txt and _txt.strip():
+                _txt = _txt.strip()
+                pending_edits[chat_id] = {"action": "voice_request_confirm", "transcribed_text": _txt}
+                await update.message.reply_text(f"🎙️ Правильно ли я понял заявку:\n\n«{_txt}»\n\nОтветь: да / нет / или пришли исправленный текст")
+            else:
+                await update.message.reply_text("❌ Не удалось распознать (нужен OPENAI_API_KEY / Whisper).")
+            try: os.remove(_src)
+            except Exception: pass
+        except Exception as e:
+            await update.message.reply_text("❌ Ошибка голоса: " + str(e)[:200])
+        return
+
     # ============ ВЛАДЕЛЕЦ: ПАМЯТЬ ============
     # M393: память/реестры — ТОЛЬКО из ЛИЧКИ владельца (в группе «запомни…» сохранял шутки в memory.json)
     if is_owner(update) and text and getattr(update.effective_chat, "type", "") == "private":
@@ -2256,6 +2284,31 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     pending_edits.pop(chat_id)
                     await update.message.reply_text("❌ Отмена.")
+                return
+            if pending.get("action") == "voice_request_confirm":
+                if t_lower in ["да", "ок", "ok", "yes", "верно"]:
+                    txt = pending["transcribed_text"]; pending_edits.pop(chat_id)
+                    dup = req_dup(txt)
+                    if dup:
+                        await update.message.reply_text(f"⚠️ Похоже, это уже есть — *заявка №{dup}*. Не дублирую.", parse_mode="Markdown")
+                    else:
+                        rid = req_add(txt)
+                        try:
+                            if update.effective_chat.id != LOG_CHAT_ID:
+                                await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца (голосом) #{rid} ({_now_msk()}):\n{txt[:1500]}")
+                        except Exception: pass
+                        await update.message.reply_text(f"📥 *Заявка #{rid}* записана ✅ ({_now_msk()})", parse_mode="Markdown")
+                elif t_lower in ["нет", "не надо", "отмена", "no"]:
+                    pending_edits.pop(chat_id)
+                    await update.message.reply_text("❌ Отмена. Пришли голос снова или напиши текстом.")
+                else:
+                    new_text = (text or "").strip()
+                    if new_text:
+                        pending_edits[chat_id] = {"action": "voice_request_confirm", "transcribed_text": new_text}
+                        await update.message.reply_text(f"✏️ Исправил на:\n\n«{new_text}»\n\nВерно? (да / нет)")
+                    else:
+                        pending_edits.pop(chat_id)
+                        await update.message.reply_text("❌ Пусто. Пришли голос снова.")
                 return
             if "new_text" in pending:
                 if t_lower in ["да", "сохранить", "ок", "ok", "yes"]:
@@ -3038,6 +3091,7 @@ def _journal_load():
         j.setdefault("fb_seq", 0)
         j.setdefault("searches", {"total": 0, "top": {}})
         j.setdefault("app", {"opens": 0, "by_user": {}, "by_day": {}})
+        j.setdefault("worklog_enabled", False)
         _journal_cache = j
     return _journal_cache
 _app_dirty = 0
@@ -3769,6 +3823,21 @@ async def _api_serve(application=None):
                 await application.bot.send_message(LOG_CHAT_ID, text)
             except Exception:
                 pass
+
+    async def notify_worklog(action, req_id, text):
+        """#165: уведомление в рабочий журнал о начале/конце работы Claude над заявкой."""
+        if not application:
+            return
+        j = _journal_load()
+        if not j.get("worklog_enabled"):
+            return
+        icon = "🚀" if action == "start" else "✅"
+        verb = "начал" if action == "start" else "закончил"
+        msg = f"{icon} CLAUDE {verb} заявку #{req_id} ({_now_msk()})\n{(text or '')[:400]}"
+        try:
+            await application.bot.send_message(LOG_CHAT_ID, msg)
+        except Exception:
+            pass
     def _cors(resp):
         resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
@@ -3816,6 +3885,20 @@ async def _api_serve(application=None):
 
     async def health(r): return _cors(web.json_response({'ok': True}))
     async def opt(r): return _cors(web.Response(text=''))
+    async def worklog(r):
+        # #165: триггер уведомления о начале/конце работы Claude над заявкой (Claude дёргает curl).
+        d = await _body(r)
+        action = (d.get('action') or '').lower()
+        if action not in ('start', 'finish'):
+            return _cors(web.json_response({'error': 'invalid_action'}, status=400))
+        try: req_id = int(d.get('req_id'))
+        except Exception: return _cors(web.json_response({'error': 'invalid_req_id'}, status=400))
+        if not rate_ok(f'worklog:{req_id}', limit=10, window=3600):
+            return _ratelimited()
+        text = (d.get('text') or '').strip()[:500]
+        try: await notify_worklog(action, req_id, text)
+        except Exception as e: return _cors(web.json_response({'error': str(e)[:120]}, status=500))
+        return _cors(web.json_response({'ok': True}))
 
     async def access(r):
         # POST {initData, action:'get'|'set', config?}
@@ -4702,6 +4785,22 @@ async def _api_serve(application=None):
         d = _picks_load().get(kind + '|' + q, {})
         top = sorted(d.items(), key=lambda kv: -kv[1])[:10]
         return _cors(web.json_response({'top': top}))
+    async def trending(r):
+        # #167 (Лента): глобальный тренд — топ из агрегата picks.json (СУММА выборов по всем запросам). Read-only.
+        kind = (r.query.get('kind') or 'all')[:20]
+        agg = {}
+        try:
+            for query_bucket, keys_dict in (_picks_load() or {}).items():
+                parts = str(query_bucket).split('|', 1)
+                if len(parts) < 2: continue
+                if kind != 'all' and parts[0][:10] != kind: continue
+                if not isinstance(keys_dict, dict): continue
+                for key, count in keys_dict.items():
+                    try: agg[key] = agg.get(key, 0) + int(count)
+                    except Exception: pass
+        except Exception: pass
+        top = sorted(agg.items(), key=lambda kv: -kv[1])[:30]
+        return _cors(web.json_response({'trending': [{'key': k, 'count': int(v)} for k, v in top]}))
 
     async def takhrij_read(r):
         # M67h: отдать накопленный تخريج (взаимосвязь) по source+num; гейт = вход в приложение
@@ -4810,7 +4909,7 @@ async def _api_serve(application=None):
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
                   web.post('/api/feedback', feedback), web.post('/api/searchlog', searchlog),
-                  web.post('/api/pick', picklog), web.get('/api/topclicks', topclicks),
+                  web.post('/api/pick', picklog), web.get('/api/topclicks', topclicks), web.get('/api/trending', trending),
                   web.post('/api/tashkeel', tashkeel),
                   web.get('/api/takhrij', takhrij_read), web.post('/api/takhrij', takhrij_save),
                   web.get('/api/narrator', narrator), web.post('/api/narrator_ai', narrator_ai), web.post('/api/hit', hit),
@@ -4822,7 +4921,7 @@ async def _api_serve(application=None):
                   web.post('/api/errlog', errlog), web.post('/api/narrator_rijal', narrator_rijal),
                   web.post('/api/structure', structure_results),
                   web.get('/api/book_page', book_page), web.post('/api/isnad_ai', isnad_ai_h),
-                  web.post('/api/devfeedback', devfeedback),
+                  web.post('/api/devfeedback', devfeedback), web.post('/api/worklog', worklog),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))
