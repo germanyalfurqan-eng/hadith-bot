@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v536</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v537</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -611,7 +611,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v536';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v537';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4736,6 +4736,7 @@ function _qrFastScrollSetup(){
 // #70: всплывающая КАРТОЧКА АЯТА (тап по территории аята) — как эталон: ✕/шара/№, текст, перевод, тафсир, низ-бар (закладка/play/избранное), тап вне = закрыть.
 function _qrBookmarks(){ try{ return JSON.parse(localStorage.getItem('qr_bookmarks')||'[]'); }catch(e){ return []; } }
 async function openAyahCard(s,a,_isFollow){ s=+s; a=+a; if(!s||!a) return;
+  const _ahMy=window._ahSeq=(window._ahSeq||0)+1;   // QA-low: монотонный токен против гонки наложившихся открытий (ручной тап + авто-follow)
   try{ window._ahCur={s:s,a:a}; if(!_isFollow) window._ahFollow=false; }catch(e){}   // #184: следование попапа за аудио (ручное открытие аята сбрасывает follow)
   let m=document.getElementById('ayahCardModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='ayahCardModal'; m.style.zIndex='10020';
@@ -4744,6 +4745,7 @@ async function openAyahCard(s,a,_isFollow){ s=+s; a=+a; if(!s||!a) return;
   }
   let v=null; try{ const arr=await loadQuran(); v=arr.find(x=>x.s===s&&x.a===a); }catch(e){}
   let ru=''; let ru2=''; try{ ru=(await loadQuranRu())[s+':'+a]||''; }catch(e){} try{ const other=cfg.qtr==='rus-abuadel'?'rus-elmirkuliev':'rus-abuadel'; const alt=await loadQuranTr(other); if(alt) ru2=alt[s+':'+a]||''; }catch(e){}
+  if(window._ahSeq!==_ahMy) return;   // QA-low: новый вызов обогнал этот (await загрузки) — не рендерим устаревший аят
   const ref='q|'+s+':'+a; const isF=isFav(ref); const isB=_qrBookmarks().indexOf(s+':'+a)>=0;
   const txt=v?((a===1&&s!==1&&s!==9)?_stripBasmala(v.text):v.text):'';
   m.innerHTML='<div class="panel" style="max-width:560px;padding:0;overflow:hidden;border-radius:16px">'
@@ -8723,7 +8725,7 @@ function renderAccess(){
     wl.appendChild(inp); wl.appendChild(add); card.appendChild(wl);
     const tags=document.createElement('div'); tags.style.marginTop='6px';
     (f.whitelist||[]).forEach((w,i)=>{ const t=document.createElement('span'); t.className='tag'; t.style.cursor='pointer';
-      t.textContent=w+' ✕'; t.onclick=()=>{ f.whitelist.splice(i,1); saveAccess(); };
+      t.textContent=w+' ✕'; t.onclick=()=>{ f.whitelist=(f.whitelist||[]).filter(x=>x!==w); saveAccess(); };   // QA-low: удаление по значению (захваченный индекс i мог удалить не тот при быстрых кликах до перерисовки)
       tags.appendChild(t); });
     if(!f.whitelist.length){ const e=document.createElement('span'); e.className='hint'; e.textContent='список пуст'; tags.appendChild(e); }
     card.appendChild(tags);
@@ -9567,7 +9569,7 @@ async function boot(){
     document.getElementById('app').style.display='block';
     if(isOwner){ var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца'; }
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
-      if(st){ if(st.tab==='quran') document.querySelector('.tab[data-tab="quran"]').click();
+      if(st){ if(st.tab && st.tab!=='hadith'){ var _bt=document.querySelector('.tab[data-tab="'+st.tab+'"]'); if(_bt && _bt.offsetParent!==null) _bt.click(); }   // QA-low: восстановить любую видимую вкладку (была только quran; hadith=дефолт; trending только если виден)
         (st.cols||[]).forEach(c=>selCols.add(c));
         if(st.q) document.getElementById('q').value=st.q; }
     }catch(e){}
