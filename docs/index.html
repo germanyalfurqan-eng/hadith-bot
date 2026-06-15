@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v504</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v505</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -608,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v504';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v505';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7833,6 +7833,21 @@ async function _codifHighlight(text, card, out, place){
   // ПРАВИЛО синхронности (слово владельца): подсвечиваем РОВНО передатчиков таблицы — ни лишних, ни пропущенных.
   // Основной путь — ПОЗИЦИОННАЯ бижекция: слот иснада i ↔ id цепи таблицы i (без угадывания по имени).
   const rec=await codifChain(place.bid, place.num); if(!rec||!rec.i||!rec.i.length) return false;
+  // R52/В-01/#142 (Сессия26): АВТОРИТЕТНАЯ цепь na = передатчики sunnah.com/Мактабы, локализованные в НАШЕМ тексте, с ВЕРНЫМИ id.
+  // Подсветка ИЗ НЕЁ = полнота как у sunnah.com: параллельные иснады (ح/و), финальный сахаби, верные карточки (build_authhl.py). Приоритет над эвристическим n.
+  if(rec.na && rec.na.length){
+    const f2id={}, names=[]; const naMids=new Set();
+    for(const pr of rec.na){ const ph=pr[0], id=String(pr[1]); if(ph && !(ph in f2id)){ f2id[ph]=id; names.push(ph); naMids.add(id); } }
+    // БЕЗ РЕГРЕССА: добавляем из эвристического n то, чьего mid нет в na (заполнение, не теряем прежнюю подсветку)
+    for(const pr of (rec.n||[])){ const ph=pr[0], id=String(pr[1]); if(ph && !(ph in f2id) && !naMids.has(id)){ f2id[ph]=id; names.push(ph); naMids.add(id); } }
+    if(names.length){
+      setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
+        highlightNarratorsInDiv(ad, names, async nm=>{ const id=f2id[nm]; out.style.display='block'; let c=null; try{ c=await _narrCard(id); }catch(e){}
+          showNarratorBio((c&&c[1])||nm, out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }); }
+        try{ highlightRelationalInDiv(ad); }catch(e){} }); }catch(e){} }, 0);
+      return true;
+    }
+  }
   // Сессия21 (Э1.1): если есть СОХРАНЁННЫЙ разбор (поле n=[[фраза,id]] из резолвера AR-Sanad) — рендерим ЕГО (R52: апп показывает определённое, не угадывает рантайм)
   if(rec.n && rec.n.length){
     const f2id={}, names=[];
@@ -7898,18 +7913,27 @@ async function verifyNarr(card, place, text){
   try{
     if(card.dataset.verifyOn) return; card.dataset.verifyOn='1';
     // ПРИЛОЖЕНИЕ: что подсветили (codif n)
-    let ourMids=[]; let ourNames=[];
-    try{ const rec=await codifChain(place.bid,place.num); if(rec&&rec.n){ const seen=new Set(); const dedupN=[]; for(const pr of rec.n){ const id=String(pr[1]); if(!seen.has(id)){ seen.add(id); dedupN.push(pr); } } ourMids=[...seen]; ourNames=dedupN.map(x=>x[0]); } }catch(e){}
+    let ourMids=[]; let ourNames=[]; let recNa=null, recGap=null;
+    try{ const rec=await codifChain(place.bid,place.num);
+      if(rec){ recNa=(rec.na&&rec.na.length)?rec.na:null; recGap=(rec.gap&&rec.gap.length)?rec.gap:null;
+        const src = recNa || rec.n;   // R52/В-01: подсвечивает na (авторитет), иначе n
+        if(src){ const seen=new Set(); const dedupN=[]; for(const pr of src){ const id=String(pr[1]); if(!seen.has(id)){ seen.add(id); dedupN.push(pr); } } ourMids=[...seen]; ourNames=dedupN.map(x=>x[0]); } } }catch(e){}
     // #132: codif пуст → приложение подсвечивает по ТЕКСТУ (_autoHLGuess: isnadNarrators+_keepNarr). Считаем подсветку ПО ФАКТУ — иначе показывали ложный «приложение: 0» при 5 выделенных именах.
     if(!ourNames.length){ try{ ourNames=[...new Set(isnadNarrators(text).filter(_keepNarr))]; }catch(e){} }
-    const rows=await _verifyChain(place.bid, place.num);
     const forms=_isnadForms(text);
     let auth, authMids, srcLbl, idMode;
-    if(rows&&rows.length){ auth=rows.filter(r=>r[2]); authMids=[...new Set(auth.map(r=>String(r[2])))]; srcLbl='sunnah.com / Мактаба'; idMode=true; }
-    else {
-      // НЕТ краула — определяю передатчиков САМ из текста хадиса (универсально, любой сборник)
-      let slots=[]; try{ slots=_isnadSlots(text||''); }catch(e){}
-      auth=slots.map(s=>[null,s,null]); authMids=null; srcLbl='автономно по тексту хадиса'; idMode=false;
+    if(recNa){
+      // R52/В-01/#142: эталон = ПОЛНАЯ авторитетная цепь = na (подсвечено ✓) + gap (эталон знает, в нашем тексте НЕТ ✗). Любой gap → тревога.
+      auth = recNa.map(p=>[null,p[0],String(p[1])]).concat((recGap||[]).map(g=>[null,g[0],String(g[1])]));
+      authMids=[...new Set(auth.map(r=>String(r[2])))]; srcLbl='sunnah.com / Мактаба'; idMode=true;
+    } else {
+      const rows=await _verifyChain(place.bid, place.num);
+      if(rows&&rows.length){ auth=rows.filter(r=>r[2]); authMids=[...new Set(auth.map(r=>String(r[2])))]; srcLbl='sunnah.com / Мактаба'; idMode=true; }
+      else {
+        // НЕТ краула — определяю передатчиков САМ из текста хадиса (универсально, любой сборник)
+        let slots=[]; try{ slots=_isnadSlots(text||''); }catch(e){}
+        auth=slots.map(s=>[null,s,null]); authMids=null; srcLbl='автономно по тексту хадиса'; idMode=false;
+      }
     }
     const ourSet=new Set(ourMids);
     const ourCount = ourMids.length || ourNames.length;   // #132: фактически подсвечено (codif ИЛИ текст), не ложный 0
@@ -7942,7 +7966,8 @@ async function verifyNarr(card, place, text){
     h+='</div>';
     if(!idMode) h+='<div style="margin-top:6px;color:var(--hint);font-size:11px">⚠️ Авторитетные id (Мактаба) для этого сборника ещё подгружаются (краул sunnah.com идёт). Сверяю КОЛИЧЕСТВО передатчиков по тексту хадиса; id появятся после докачки.</div>';
     if(alarm && idMode){ h+='<div class="vDet" style="margin-top:7px;color:#e0b3a8;font-size:11px">';
-      if(missing.length) h+='🚨 МАКТАБА ЗНАЕТ <b>'+authCount+'</b>, МЫ <b>'+ourMids.length+'</b> — НЕ придали карточку: <b>'+missing.length+'</b> передатчик. (эталонные id '+missing.join(', ')+') — клик не откроет верную карточку.<br>';
+      if(missing.length){ const gn=(recGap||[]).map(g=>esc(g[0])).join('، ');
+        h+='🚨 Эталон (sunnah.com/Мактаба): <b>'+authCount+'</b> передатчиков, в нашем тексте опознано <b>'+ourMids.length+'</b>. НЕ хватает <b>'+missing.length+'</b>'+(gn?(': '+gn):'')+' (id '+missing.join(', ')+'). Расхождение в ТЕКСТЕ хадиса (наш короче/иной) ИЛИ передатчик не опознан — #119/#112.<br>'; }
       if(extra.length) h+='🚨 id ПРИСВОЕН, но в эталоне Мактабы его НЕТ: <b>'+extra.length+'</b> (id '+extra.join(', ')+') — возможно НЕВЕРНАЯ карточка (клик откроет не того передатчика). #142';
       h+='</div>'; }
     else if(alarm){ h+='<div style="margin-top:7px;color:#e0b3a8;font-size:11px">⚠️ По тексту передатчиков <b>'+authCount+'</b>, а приложение подсветило <b>'+ourMids.length+'</b> — расхождение в количестве.</div>'; }
