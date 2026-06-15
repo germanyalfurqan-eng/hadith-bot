@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v505</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v506</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -608,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v505';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v506';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5338,7 +5338,7 @@ function highlightNarratorsInDiv(ad, names, onClick){
     for(const m of ms){ if(m.i>=lastEnd){
       // M416: НЕ подсвечивать форму сразу после بن/ابن — это ОТЕЦ внутри полного имени сына (المطلب بن عبد الله…)
       const pre=txt.slice(Math.max(0,m.i-5), m.i);
-      if(/(?:^|[\s،])(?:بن|ابن)\s$/.test(pre)) continue;
+      if(/(?:^|[\s،])(?:ب[ً-ٟ]*ن|ا[ً-ٟ]*ب[ً-ٟ]*ن)[ً-ٟ]*\s$/.test(pre)) continue;
       picked.push(m); lastEnd=m.i+m.len; } }   // без перекрытий
     const frag=document.createDocumentFragment(); let pos=0;
     picked.forEach(m=>{ if(m.i>pos) frag.appendChild(document.createTextNode(txt.slice(pos,m.i)));
@@ -5437,7 +5437,11 @@ function loadNarrNames(){ if(_narrNames) return Promise.resolve(_narrNames); if(
     try{ const S=new Set(), F=new Set(); _narrNames.forEach(p=>{ const nm=p[0]||''; if(!nm) return; F.add(nm); const f=nm.split(' ')[0]; if(f&&f.length>1){ S.add(f); S.add(f.replace(/^ال/,'')); } }); window._narrKnownW=S; window._narrKnownF=F; }catch(e){}
     return _narrNames; }).catch(()=>{_narrNames=[];return _narrNames;}); return _narrNamesP; }
 function _narrCanon(s){ s=(s||'').replace(/[ً-ْـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه'); return s.replace(/\s+/g,' ').trim(); }
+let _shuhraMap=null;
+async function _loadShuhra(){ if(_shuhraMap===null){ try{ _shuhraMap=await (await fetch('./narr_shuhra.json?v='+APPVER)).json(); }catch(e){ _shuhraMap={}; } } return _shuhraMap; }
 async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.length) return null; const cn=_narrCanon(name); if(cn.length<4) return null;
+  // #157/M382: фолбэк по ШУХРЕ/КУНЬЕ (أبو الزناد, и др.) — namesake-safe индекс narr_shuhra.json (только однозначные формы)
+  { try{ const sh=await _loadShuhra(); if(sh && sh[cn]!=null) return sh[cn]; }catch(e){} }
   // Ф-04б (M377): ДВУСТОРОННИЙ префикс — иснад бывает и КОРОЧЕ базы (سفيان → سفيان بن سعيد…), и ДЛИННЕЕ
   // (с нисбой: عبد الرحمن بن غنم الأشعري при базе عبد الرحمن بن غنم) → cover-матч (имя базы = префикс запроса, ≥2 слов, длиннейшее)
   let exact=null, pref=null, prefLen=1e9, cover=null, coverLen=0;
@@ -7932,7 +7936,10 @@ async function verifyNarr(card, place, text){
       else {
         // НЕТ краула — определяю передатчиков САМ из текста хадиса (универсально, любой сборник)
         let slots=[]; try{ slots=_isnadSlots(text||''); }catch(e){}
-        auth=slots.map(s=>[null,s,null]); authMids=null; srcLbl='автономно по тексту хадиса'; idMode=false;
+        // #157 (З-09): даже БЕЗ краула резолвим имя в нашу базу равиев (_narrLookup) → карточка кликабельна сразу.
+        // Раньше передатчик показывался ПУСТЫМ (без id) на нескрауленных книгах (Абу Дауд/Тирмизи/Насаи) — владелец: «Абу аз-Зинад у тебя пустой».
+        auth=[]; for(const s of slots){ let mid=null; try{ mid=await _narrLookup(s); }catch(e){} auth.push([null,s,(mid!=null?String(mid):null)]); }
+        authMids=null; srcLbl='по тексту + база равиев Мактабы'; idMode=false;
       }
     }
     const ourSet=new Set(ourMids);
@@ -7961,10 +7968,10 @@ async function verifyNarr(card, place, text){
     auth.forEach((r,i)=>{ const nm=r[1], mid=r[2]?String(r[2]):null; const ok=idMode?ourSet.has(mid):true;
       if(i>0 && forms[i-1]) h+='<span style="color:var(--hint);font-size:11px;font-family:\'Traditional Arabic\',serif">←'+esc(forms[i-1])+'←</span>';
       else if(i>0) h+='<span style="color:var(--hint)">←</span>';
-      h+='<span class="vChip"'+(mid?(' data-mid="'+esc(mid)+'"'):'')+' style="'+(mid?'cursor:pointer;':'')+'border:1px solid '+(idMode?(ok?'#3a8a5a':'#e0796a'):'#6c5ce7')+';border-radius:8px;padding:2px 7px;background:'+(idMode?(ok?'rgba(58,138,90,.12)':'rgba(224,121,106,.12)'):'rgba(108,92,231,.10)')+'"'+(mid?(' title="Карточка в Мактабе: shamela.ws/narrator/'+esc(mid)+'"'):'')+'><span style="font-family:\'Traditional Arabic\',serif">'+esc(nm)+'</span>'+(mid?(' <span style="color:var(--hint);font-size:10px;direction:ltr">'+(ok?'✓':'✗')+' id'+esc(mid)+' ↗</span>'):'')+'</span>';
+      h+='<span class="vChip"'+(mid?(' data-mid="'+esc(mid)+'"'):'')+' style="'+(mid?'cursor:pointer;':'')+'border:1px solid '+(idMode?(ok?'#3a8a5a':'#e0796a'):'#6c5ce7')+';border-radius:8px;padding:2px 7px;background:'+(idMode?(ok?'rgba(58,138,90,.12)':'rgba(224,121,106,.12)'):'rgba(108,92,231,.10)')+'"'+(mid?(' title="Карточка в Мактабе: shamela.ws/narrator/'+esc(mid)+'"'):'')+'><span style="font-family:\'Traditional Arabic\',serif">'+esc(nm)+'</span>'+(mid?(' <span style="color:var(--hint);font-size:10px;direction:ltr">'+(idMode?(ok?'✓':'✗'):'👤')+' id'+esc(mid)+' ↗</span>'):'')+'</span>';
     });
     h+='</div>';
-    if(!idMode) h+='<div style="margin-top:6px;color:var(--hint);font-size:11px">⚠️ Авторитетные id (Мактаба) для этого сборника ещё подгружаются (краул sunnah.com идёт). Сверяю КОЛИЧЕСТВО передатчиков по тексту хадиса; id появятся после докачки.</div>';
+    if(!idMode) h+='<div style="margin-top:6px;color:var(--hint);font-size:11px">👤 id передатчиков — по нашей базе равиев Мактабы (клик откроет карточку). Авторитетная сверка с sunnah.com для этого сборника ещё готовится (краул идёт) — пока сверяю по тексту хадиса.</div>';
     if(alarm && idMode){ h+='<div class="vDet" style="margin-top:7px;color:#e0b3a8;font-size:11px">';
       if(missing.length){ const gn=(recGap||[]).map(g=>esc(g[0])).join('، ');
         h+='🚨 Эталон (sunnah.com/Мактаба): <b>'+authCount+'</b> передатчиков, в нашем тексте опознано <b>'+ourMids.length+'</b>. НЕ хватает <b>'+missing.length+'</b>'+(gn?(': '+gn):'')+' (id '+missing.join(', ')+'). Расхождение в ТЕКСТЕ хадиса (наш короче/иной) ИЛИ передатчик не опознан — #119/#112.<br>'; }
@@ -8013,7 +8020,7 @@ async function doNarrators(text, out, btn){
   if(!btn.dataset.on){
     // 1-й клик — подсветить имена ПРЯМО в тексте иснада (клик по имени → биография)
     btn.dataset.on='1'; btn.style.background='rgba(108,92,231,.20)'; btn.textContent='👤 Список передатчиков';
-    arDivs.forEach(ad=>{ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML; highlightNarratorsInDiv(ad, names, nm=>showNarratorBio(nm,out)); });
+    arDivs.forEach(ad=>{ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML; highlightNarratorsInDiv(ad, names, nm=>showNarratorBio(nm,out)); try{ highlightRelationalInDiv(ad); }catch(e){} });
     out.style.display='block'; out.innerHTML='<div class="hint" style="font-size:12px">👆 Передатчики в тексте <b style="color:#ffd479">подсвечены</b> — нажми на имя: кто это + слова учёных. Кнопка ещё раз — список именами.</div>';
     const vb=document.createElement('button'); vb.className='tr-btn'; vb.textContent='🧠 Проверить полноту цепочки (ИИ)';
     vb.style.cssText='background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:6px 10px;margin-top:7px;font-size:13px';
@@ -8695,6 +8702,10 @@ var _dfS=document.getElementById('dfSend'); if(_dfS) _dfS.onclick=async()=>{
 let _tasksData=null, _tasksShowDone=false;
 async function renderTasks(){
   const out=document.getElementById('jOut'); out.textContent='загружаю заявки…';
+  // З-18: «В РАБОТЕ СЕЙЧАС» + штамп актуальности — грузим заранее, покажем наверху панели
+  let _liveNow=null, _asof='';
+  try{ _liveNow=await (await fetch('./live_now.json?t='+Date.now(),{cache:'no-store'})).json(); }catch(e){}
+  try{ _asof=(await (await fetch('./requests_asof.txt?t='+Date.now(),{cache:'no-store'})).text()).trim(); }catch(e){}
   try{ _tasksData=await (await fetch('./tasks.json?'+Date.now())).json(); }catch(e){ if(!_tasksData){ out.textContent='не удалось загрузить заявки'; return; } }
   const tasks=(_tasksData&&_tasksData.tasks)||[];
   const open=tasks.filter(t=>t.s!=='done'), done=tasks.filter(t=>t.s==='done');
@@ -8704,6 +8715,18 @@ async function renderTasks(){
     html+='<div style="margin:7px 0;padding-bottom:6px;border-bottom:1px solid var(--border)">'+ic+' <b>'+esc(t.id)+'</b> — '+esc(t.t)+(t.why?('<br><span style="color:var(--hint)">↳ '+esc(t.why)+'</span>'):'')+'</div>'; });
   if(_tasksShowDone){ html+='<br><b>✅ Сделано ('+done.length+'):</b>'; done.forEach(t=>{ html+='<div style="margin:3px 0;color:var(--hint)">✅ '+esc(t.id)+' — '+esc(t.t)+'</div>'; }); }
   out.innerHTML=html;
+  // З-18: секция «🔵 В РАБОТЕ СЕЙЧАС» + штамп — НАВЕРХУ панели (что делаю/жду прямо сейчас)
+  try{ let lb='';
+    if(_asof) lb+='<div style="font-size:11.5px;color:var(--hint);margin-bottom:6px">🕐 статусы актуальны на '+esc(_asof)+'</div>';
+    if(_liveNow){ lb+='<div style="border:1px solid #2e9b5b;background:rgba(46,155,91,.09);border-radius:11px;padding:10px 12px;margin-bottom:11px">'
+      +'<b style="color:#7fd3a0">🔵 В РАБОТЕ СЕЙЧАС</b>'+(_liveNow.asof?(' <span style="color:var(--hint);font-size:11px">('+esc(_liveNow.asof)+')</span>'):'');
+      (_liveNow.fronts||[]).forEach(f=>{ const p=(typeof f.pct==='number')?(' <span style="color:#7fd3a0;font-weight:700">'+f.pct+'%</span>'):'';
+        lb+='<div style="font-size:12.5px;margin-top:6px;line-height:1.45">▸ <b>'+esc(f.t||'')+'</b> '+p+(f.s?('<br><span style="color:var(--hint)">'+esc(f.s)+'</span>'):'')+'</div>'; });
+      if((_liveNow.done_recent||[]).length){ lb+='<div style="font-size:11.5px;color:#7fd3a0;margin-top:8px;border-top:1px solid rgba(46,155,91,.25);padding-top:6px">✅ закрыто недавно:<br>'+_liveNow.done_recent.map(x=>'• '+esc(x)).join('<br>')+'</div>'; }
+      if(_liveNow.note) lb+='<div style="font-size:11.5px;color:var(--hint);margin-top:7px">'+esc(_liveNow.note)+'</div>';
+      lb+='</div>'; }
+    if(lb) out.insertAdjacentHTML('afterbegin', lb);
+  }catch(e){}
   var tt=document.getElementById('tToggle'); if(tt) tt.onclick=()=>{ _tasksShowDone=!_tasksShowDone; renderTasks(); };
   // #8: РЕАЛЬНЫЕ заявки владельца из бота (публичная data-ветка) — синхронизация в аппе (раньше показывался только статичный tasks.json)
   try{ const rj=await (await fetch('https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/data/journal.json?'+Date.now())).json();

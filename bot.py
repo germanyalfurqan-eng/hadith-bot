@@ -1738,6 +1738,18 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             j = _journal_load(); reqs = j.get("requests", []); fb = j.get("feedback", [])
             open_r = [r for r in reqs if not r.get("done")]; done_r = [r for r in reqs if r.get("done")]
             lines = [f"📋 *Заявки владельца* — открытых {len(open_r)} · выполнено {len(done_r)}\n"]
+            # З-18: «В РАБОТЕ СЕЙЧАС» (live_now.json) — что делаю/жду прямо сейчас, со штампом времени
+            try:
+                _ln = requests.get("https://germanyalfurqan-eng.github.io/hadith-bot/live_now.json", timeout=8).json()
+                _lw = [f"🔵 *В РАБОТЕ СЕЙЧАС* ({_ln.get('asof','')})"]
+                for _f in (_ln.get("fronts") or [])[:6]:
+                    _p = f" — {_f['pct']}%" if isinstance(_f.get("pct"), int) else ""
+                    _lw.append(f"▸ {_f.get('t','')}{_p}" + (f"\n   {_f.get('s','')}" if _f.get("s") else ""))
+                if _ln.get("note"):
+                    _lw.append(f"_{_ln['note']}_")
+                lines = _lw + [""] + lines
+            except Exception:
+                pass
             if open_r:
                 lines.append("🔴 *Не сделано:*")
                 for r in open_r[:30]:
