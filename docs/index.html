@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v520</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v521</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -608,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v520';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v521';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2394,8 +2394,12 @@ function openBook(bookId, startPg){
   // «Муслим в Мактабе = в Избранном»: издания Сахих Муслим (тур. печать 711 / ت عبد الباقي 1727) открываем
   // НАШИМ ридером (muslim_baqi, нумерация Абд аль-Баки) — тот же текст и номера, что в избранном/поиске/у учёных.
   // Наш ридер локальный (muslim_baqi.json), поэтому работает даже без бэкенда — ставим ДО проверки BACKEND_URL.
-  const OUR_COLL_BOOK={'711':'muslim','1727':'muslim'};
-  if(OUR_COLL_BOOK[id] && isReadable(OUR_COLL_BOOK[id])){ try{ openReader(OUR_COLL_BOOK[id]); toast('Сахих Муслим — издание Абд аль-Баки (как в избранном)'); }catch(e){} return; }
+  // #171: первоисточник/издание, у которого ЕСТЬ наше ЛОКАЛЬНОЕ издание → открываем НАШ ридер (свои номера/перевод/инструменты), не turath.
+  // Карта turath-bid → наш код: COLL_BIDS (8 основных, ВКЛ. Ахмад 25794/98139) + EXTRA_BIDS (16 изданий: Дарими, Ибн Хиббан…). Раньше открывался только Муслим (711/1727) → Ахмад и др. первоисточники «не нажимались» как наши (#171, «искать в других сборниках»).
+  let _ourCode=null;
+  try{ for(const cd in COLL_BIDS){ if((COLL_BIDS[cd]||[]).map(String).indexOf(id)>=0){ _ourCode=cd; break; } }
+       if(!_ourCode){ for(const cd in EXTRA_BIDS){ if(String(EXTRA_BIDS[cd])===id){ _ourCode=cd; break; } } } }catch(e){}
+  if(_ourCode && isReadable(_ourCode)){ try{ openReader(_ourCode); toast('📖 Открываю наше издание: '+nameOf(_ourCode)); }catch(e){} return; }
   if(!BACKEND_URL){ toast('Читалка книги работает на сервере'); return; }
   let sp=parseInt(String(startPg||'').replace(/[^0-9]/g,''))||1; if(sp<1) sp=1;
   // M318: ПРОДОЛЖИТЬ ЧТЕНИЕ — если страница не указана, возвращаемся туда, где остановились
