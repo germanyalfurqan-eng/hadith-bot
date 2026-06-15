@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v538</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v539</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -611,7 +611,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v538';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v539';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1310,6 +1310,7 @@ async function renderTrending(){
   res.innerHTML='<div class="status">🔥 Загружаю ленту…</div>';
   let items=[];
   try{ if(BACKEND_URL){ const r=await fetch(BACKEND_URL+'/popular'); const j=await r.json(); items=(j&&j.items)||[]; } }catch(e){}
+  if(typeof tab!=='undefined' && tab!=='trending') return;   // #5-фикс: пока грузили ленту, юзер ушёл на др.вкладку — не подменять её содержимое
   res.innerHTML='';
   const hd=document.createElement('div'); hd.className='hint'; hd.style.cssText='font-size:13px;color:#9fd3a8;margin:4px 0 8px';
   hd.textContent='🔥 Что чаще всего ищут (нажми — открою):';
@@ -1318,7 +1319,7 @@ async function renderTrending(){
   items.forEach(it=>{ if(!it||!it.q) return; const row=document.createElement('div');
     row.style.cssText='cursor:pointer;border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin:6px 0;display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--card)';
     const ic=(it.tab==='quran')?'📖':'📚';
-    row.innerHTML='<span style="font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+ic+' '+esc(it.q)+'</span><span style="font-size:12px;color:var(--hint);white-space:nowrap">🔎 '+(it.n||0)+'</span>';
+    row.innerHTML='<span style="font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+ic+' '+esc(it.q)+'</span><span style="font-size:12px;color:var(--hint);white-space:nowrap">🔎 '+esc(String(it.n||0))+'</span>';   // QA-low: esc числового поля из сети (defense-in-depth)
     row.onclick=()=>{ try{ const want=(it.tab==='quran')?'quran':'hadith'; const tb=document.querySelector('.tab[data-tab="'+want+'"]'); if(tb) tb.click(); const qi=document.getElementById('q'); if(qi) qi.value=it.q; runSearch(true); }catch(e){} };
     res.appendChild(row); });
 }
@@ -5604,7 +5605,7 @@ function chainRender(){
   const _sh2=nm=>esc(String(nm||'').split(' ').slice(0,2).join(' '));
   const chipParts=[];
   _chainSel.forEach((c,i)=>{
-    chipParts.push('<span style="display:inline-flex;align-items:center;gap:6px;background:#2e1d4a;border:1px solid #6c5ce7;border-radius:9px;padding:5px 9px;margin:2px;direction:rtl"><b style="font-size:13.5px">'+esc(c.nm)+'</b><span style="font-size:10px;color:#9b8bd0">#'+c.id+'</span><span class="chDel" data-i="'+i+'" style="cursor:pointer;color:#e07f7f;font-weight:700;padding:0 3px">✕</span></span>');
+    chipParts.push('<span style="display:inline-flex;align-items:center;gap:6px;background:#2e1d4a;border:1px solid #6c5ce7;border-radius:9px;padding:5px 9px;margin:2px;direction:rtl"><b style="font-size:13.5px">'+esc(c.nm)+'</b><span style="font-size:10px;color:#9b8bd0">#'+esc(String(c.id))+'</span><span class="chDel" data-i="'+i+'" style="cursor:pointer;color:#e07f7f;font-weight:700;padding:0 3px">✕</span></span>');   // QA-HIGH: esc(c.id) — защита от XSS через подделанную share-ссылку #go= (c.id из ctx)
     if(i<_chainSel.length-1 && md==='seq'){ const fv=window._chainForms[i]||'';
       chipParts.push('<select class="chForm" data-e="'+i+'" title="Форма передачи на этом звене: как '+_sh2(_chainSel[i].nm)+' получил от '+_sh2(_chainSel[i+1].nm)+'" style="margin:2px;font-size:11px;background:'+(fv?'#173d30':'var(--bg)')+';color:'+(fv?'#bff5d4':'var(--hint)')+';border:1px solid '+(fv?'#2e9b5b':'var(--border)')+';border-radius:7px;padding:3px 5px;direction:rtl">'+_formFilterOpts(fv)+'</select>'); }
   });
@@ -5633,8 +5634,8 @@ function chainRender(){
     const kd=b.querySelector('#chainKnown')||(()=>{ const d=document.createElement('div'); d.id='chainKnown'; d.style.cssText='font-size:11.5px;color:#9fd3a8;margin-top:5px;line-height:1.6'; b.querySelector('#chainOut').parentNode.insertBefore(d, b.querySelector('#chainOut')); return d; })();
     kd.innerHTML=known.length?known.join('<br>')+'<span style="color:var(--hint)"> · это подсказка из наших иснадов, НЕ ограничение поиска</span>':'';
   }catch(e){} })(); }
-  b.querySelectorAll('.chDel').forEach(x=>x.onclick=()=>{ const c=_chainSel[+x.dataset.i]; _chainSel.splice(+x.dataset.i,1); chainRender();
-    try{ _undoPush('удаление звена '+c.nm.split(' ').slice(0,2).join(' '), ()=>{ _chainSel.push(c); chainRender(); }); }catch(e){} });
+  b.querySelectorAll('.chDel').forEach(x=>x.onclick=()=>{ const _ix=+x.dataset.i; const c=_chainSel[_ix]; _chainSel.splice(_ix,1); chainRender();
+    try{ _undoPush('удаление звена '+c.nm.split(' ').slice(0,2).join(' '), ()=>{ _chainSel.splice(Math.min(_ix,_chainSel.length),0,c); chainRender(); }); }catch(e){} });   // QA-low: undo вставляет звено на ИСХОДНУЮ позицию (был push в конец → ломал порядок seq-цепи)
   const _cbl=b.querySelector('#chainBaseLink'); if(_cbl) _cbl.onclick=()=>{ try{ openIsnadBase(); }catch(e){} };
   b.querySelectorAll('input[name="chOrd"]').forEach(r=>r.onchange=()=>{ window._chainMode=r.value; window._chainAdj=(r.value==='adj'); chainRender(); });
   b.querySelectorAll('.chForm').forEach(s=>s.onchange=()=>{ window._chainForms=window._chainForms||[]; window._chainForms[+s.dataset.e]=s.value;
@@ -5735,7 +5736,8 @@ async function _replayAct(a){
     if(a.t==='book'){ openBook(String(a.bid), a.pg); return; }
     if(a.t==='quran'){ openQuranReader(a.s, a.a||1); return; }
     if(a.t==='chain'){ if(typeof modes!=='undefined'&&!modes.chain){ const c=document.querySelector('.chip[data-mode="chain"]'); if(c) c.click(); }
-      window._chainSel.length=0; (a.sel||[]).forEach(x=>_chainSel.push(x)); window._chainAdj=!!a.adj; chainRender(); if(_chainSel.length>=2) chainRun(); return; }
+      window._chainSel.length=0; (a.sel||[]).forEach(x=>{ if(!x) return; const _id=Number(x.id); if(!isFinite(_id)) return; _chainSel.push({id:_id, nm:String(x.nm||'')}); });   // QA-HIGH: санитизация ctx из #go= (id только число, nm строка) — 2-й слой против XSS share-ссылкой
+      window._chainMode=(a.mode==='seq'||a.mode==='adj'||a.mode==='any')?a.mode:'any'; window._chainAdj=(window._chainMode==='adj')||!!a.adj; chainRender(); if(_chainSel.length>=2) chainRun(); return; }   // #2: восстановить под-режим цепи (был потерян → seq-цепь игралась в чужом режиме)
   }catch(e){ toast('Не удалось вернуться на этот этап'); }
 }
 function openHistory(){
@@ -5766,7 +5768,7 @@ function _curContext(){
   try{ const vt=document.querySelector('#res .vTgl');   // M463-хвост: открыт блок Версий/дерева → шарим ссылку на ЭТОТ хадис
     if(vt&&vt.offsetParent&&window._lastVerRef&&(_lastVerRef.coll||_lastVerRef.num)) return {t:'q', q:String(_lastVerRef.coll||'')+' '+String(_lastVerRef.num||''), tab:'hadith'}; }catch(e){}
   try{ const res=document.getElementById('res'); if(res&&res.dataset.narrCard&&window._lastNarrNm) return {t:'narr', nm:_lastNarrNm}; }catch(e){}
-  try{ if(typeof modes!=='undefined'&&modes.chain&&_chainSel.length>=2) return {t:'chain', sel:_chainSel.slice(), adj:!!window._chainAdj, names:_chainSel.map(c=>c.nm.split(' ').slice(0,2).join(' '))}; }catch(e){}
+  try{ if(typeof modes!=='undefined'&&modes.chain&&_chainSel.length>=2) return {t:'chain', sel:_chainSel.slice(), adj:!!window._chainAdj, mode:window._chainMode||'any', names:_chainSel.map(c=>c.nm.split(' ').slice(0,2).join(' '))}; }catch(e){}   // #2: mode в share — иначе seq-цепь у получателя в чужом режиме
   const q=(document.getElementById('q')||{}).value||'';
   return {t:'q', q:q, tab:(typeof tab!=='undefined'?tab:'hadith')};
 }
