@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v516</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v517</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -608,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v516';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v517';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2261,6 +2261,22 @@ function relToggleEl(){ const t=document.createElement('div'); t.id='relToggle';
   t.textContent=relMode?'🎯 По релевантности (вкл)':'🎯 По релевантности';
   t.title='Сортировать: сначала самые подходящие (где больше слов запроса)';
   t.onclick=()=>{ relMode=!relMode; renderResultsView(); }; return t; }
+// A-100: кнопка «Показать ещё» при >CAP результатов (была вызвана, но не определена → краш ensureMoreBtn). Рендерит следующие 200 из _results.
+function ensureMoreBtn(seq){
+  try{
+    const res=document.getElementById('res'); if(!res) return;
+    if(seq!==undefined && seq!==_seq) return;
+    if(document.getElementById('moreResBtn')) return;
+    const total=_results.length; let shown=Math.min(200, total);
+    const b=document.createElement('button'); b.id='moreResBtn'; b.className='mini';
+    b.style.cssText='display:block;width:100%;margin:12px 0;padding:11px;border:1px solid var(--btn);border-radius:12px;background:transparent;color:var(--link);font-weight:700;font-size:14px;cursor:pointer';
+    const upd=()=>{ if(shown>=total){ b.remove(); return; } b.textContent='📃 Показать ещё ('+(total-shown)+' из '+total+')'; };
+    b.onclick=()=>{ const frag=document.createDocumentFragment(); const to=Math.min(shown+200,total);
+      for(let i=shown;i<to;i++){ try{ frag.appendChild(makeCard(_results[i])); }catch(e){} }
+      if(b.parentNode) b.parentNode.insertBefore(frag,b); shown=to; upd(); };
+    res.appendChild(b); upd();
+  }catch(e){}
+}
 function ensureRelToggle(){ const res=document.getElementById('res'); if(!res.firstChild||document.getElementById('relToggle')||!_results.length||!_lastQueryTerms.length) return;
   const anchor=document.getElementById('uniqToggle')||document.getElementById('shareBtn')||document.getElementById('grpToggle');
   if(anchor&&anchor.parentNode) anchor.parentNode.insertBefore(relToggleEl(), anchor.nextSibling); else res.insertBefore(relToggleEl(), res.children[1]||null); }
@@ -3241,7 +3257,7 @@ function maktabaMoreBtn(seq,q,st,strictWords){
   const wrap=document.createElement('div'); wrap.style.cssText='text-align:center;margin:10px 0';
   const b=document.createElement('button'); b.className='mini'; b.textContent='⬇️ Ещё из Мактабы'+(strictWords?' (строго: все слова)':''); b.style.cssText='border:1px solid var(--border);padding:8px 16px;border-radius:10px';
   let io; const observe=()=>{ try{ io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){io.disconnect();load();}});},{rootMargin:'220px'}); io.observe(b);}catch(e){} };
-  const load=async()=>{ if(b.disabled) return; b.disabled=true; b.textContent='…';
+  const load=async()=>{ if(b.disabled) return; b.disabled=true; b.textContent='⏳ ищу дальше…';
     try{ const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(q)+'&page='+((st.page||1)+1)+'&initData='+encodeURIComponent(INITDATA));
       if(seq!==_seq) return; const j=await r.json().catch(()=>({})); const data=j.data||[];
       if(!data.length){ b.textContent='Больше нет'; b.disabled=true; return; }
@@ -3335,7 +3351,7 @@ async function appendMaktaba(seq, q, primary){
     if(strictWords){ fsrc=fsrc.filter(x=>_snipHasAll(x.snip,strictWords)); rest=rest.filter(x=>_snipHasAll(x.snip,strictWords)); }
     const view=fsrc.concat(rest); const hid=data.length-view.length;
     const strictNote = strictWords ? (' · 🎯 строго: все слова'+(hid>0?(' (частичных скрыто '+hid+')'):'')) : '';
-    sec.textContent=(_scopeIds?('🎯 '+_scopeName+' · найдено на странице: '+view.length+' (листай — добираю ещё)'):('📚 Поиск по всей Мактабе · показано '+view.length+(j.count>view.length?(' из ~'+(j.count||0).toLocaleString('ru')):'')+(fsrc.length?' · ⭐ первоисточники сверху':'')))+strictNote;
+    sec.textContent=(_scopeIds?('🎯 '+_scopeName+' · найдено на странице: '+view.length+(j.count?(' (~'+(j.count||0).toLocaleString('ru')+' во всей Мактабе)'):'')+' (листай — добираю ещё)'):('📚 Поиск по всей Мактабе · показано '+view.length+(j.count>view.length?(' из ~'+(j.count||0).toLocaleString('ru')):'')+(fsrc.length?' · ⭐ первоисточники сверху':'')))+strictNote;   // M166c: общий счёт в Мактабе
     try{ const _fb=_maktFilterBar(res,view); if(_fb) res.appendChild(_fb); }catch(e){}
     if(fsrc.length){ const h=document.createElement('div'); h.className='hint'; h.style.cssText='color:#d6b25a;font-size:12.5px;font-weight:700;margin:4px 0 7px'; h.textContent='📜 Первоисточники'; res.appendChild(h); fsrc.forEach(x=>res.appendChild(maktabaCard(x))); }
     if(rest.length){ const h=document.createElement('div'); h.className='hint'; h.style.cssText='color:#7fb3ff;font-size:12.5px;font-weight:700;margin:14px 0 7px;border-top:1px solid var(--border);padding-top:9px'; h.textContent='📚 Остальная Мактаба'; res.appendChild(h); rest.forEach(x=>res.appendChild(maktabaCard(x))); }
