@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v534</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v535</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -611,7 +611,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v534';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v535';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -963,11 +963,16 @@ function renderFav(by){
         d.style.cursor='pointer'; d.title='Открыть';   // #174: избранное хадиса/аята — КЛИК открывает (раньше клик ничего не делал)
         d.innerHTML='<div class="meta" style="margin:0 0 4px"><span class="src">'+esc(f.label)+'</span></div>'+
           '<div class="ar" style="font-size:15px;line-height:1.7">'+esc((f.text||'').slice(0,110))+'…</div>';
-        d.onclick=(e)=>{ if(e.target.tagName==='BUTTON') return; document.getElementById('favModal').style.display='none';
+        d.onclick=async (e)=>{ if(e.target.tagName==='BUTTON') return; document.getElementById('favModal').style.display='none';
           try{ const p=String(f.k||'').split('|');
             if(p[0]==='q' && p[1]){ const _tq=document.querySelector('.tab[data-tab="quran"]'); if(_tq) _tq.click(); const _qi=document.getElementById('q'); if(_qi) _qi.value=p[1]; runSearch(true); }
-            else if(p[0]==='m' && p[1]){ openReader('muhaymin', String(p[1]).replace(/#.*/,'')); }
+            else if(p[0]==='m' && p[1]){   // #174-фикс: аль-Мухаймин НЕ через openReader (он исключён из читалки) — рендерим карточку как в поиске
+              const _num=String(p[1]).replace(/#.*/,''); const _th=document.querySelector('.tab[data-tab="hadith"]'); if(_th) _th.click();
+              const _a=await loadMuhaymin(); const _h=_a.find(x=>String(x.n)===_num); const _res=document.getElementById('res');
+              if(_h){ _groups=[]; _res.appendChild(makeCard({type:'m',h:_h})); } else { try{ toast('Хадис аль-Мухаймина №'+_num+' не найден'); }catch(_t){} } }
             else if(p[0]==='h' && p[1] && p[2]){ openReader(p[1], String(p[2]).replace(/#.*/,'')); }
+            else if(p[0]==='mk' && p[1]){ try{ openBook(p[1], p[2]?String(p[2]).replace(/#.*/,''):undefined); }   // #174-фикс: избранное Мактабы/первоисточников (mk|bid|N) → открыть книгу на хадисе
+              catch(_e){ if(f.label){ const _qi=document.getElementById('q'); if(_qi) _qi.value=f.label; runSearch(true); } } }
             else if(f.label){ const _qi=document.getElementById('q'); if(_qi) _qi.value=f.label; runSearch(true); }
           }catch(_e){} };
       }
@@ -2125,10 +2130,10 @@ async function runSearch(explicit){
         return; }
     }
     // РУССКИЙ поиск по хадисам (готовые переводы Бухари/Муслим/Абу Дауд). ИИ выкл + кириллица + не число.
-    if(!numMode && !modes.ai && /[а-яё]/i.test(shown) && !isArabic(shown)){
+    if(!numMode && !modes.ai && /[а-яё]/i.test(q) && !isArabic(q)){   // #181-фикс: гейт по q (не shown) — раскладочная кириллица (rfnflf→катада) теперь входит в ветку → баннер достижим
       let relax=null, corr=null;
       try{ const ru=await loadHadithRu(); if(seq!==_seq) return;
-        const qw=_ruNumExpand(shown).toLowerCase().split(/\s+/).filter(w=>w.length>1);
+        const qw=_ruNumExpand(q).toLowerCase().split(/\s+/).filter(w=>w.length>1);   // #181-фикс: искать конвертированный q (катада), не сырой shown (rfnflf)
         const allow = (selCols.size||selExtra.size) ? new Set([...selCols,...selExtra]) : null;
         const pool = allow ? ru.filter(x=>allow.has(x.s)) : ru;
         if(qw.length){ let useWords=qw;
@@ -5533,7 +5538,7 @@ async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.lengt
   // Ф-04б (M377): ДВУСТОРОННИЙ префикс — иснад бывает и КОРОЧЕ базы (سفيان → سفيان بن سعيد…), и ДЛИННЕЕ
   // (с нисбой: عبد الرحمن بن غنم الأشعري при базе عبد الرحمن بن غنم) → cover-матч (имя базы = префикс запроса, ≥2 слов, длиннейшее)
   let exact=null, pref=null, prefLen=1e9, cover=null, coverLen=0;
-  for(const it of idx){ const nm=it[0];
+  for(const it of idx){ const nm=it&&it[0]; if(typeof nm!=='string'||!nm) continue;   // #142-фикс: битая запись индекса не валит весь резолв (TypeError на nm.indexOf)
     if(nm===cn){ exact=it[1]; break; }
     if(nm.indexOf(cn+' ')===0 && nm.length<prefLen){ pref=it[1]; prefLen=nm.length; }
     if(cn.indexOf(nm+' ')===0 && nm.length>coverLen && nm.indexOf(' ')>0){ cover=it[1]; coverLen=nm.length; } }
@@ -6501,7 +6506,9 @@ async function openNarrTable(opts){
 // M425: Esc (с компа) закрывает ВЕРХНЕЕ открытое окно — не надо «лезть в рестарт»; Alt+← = «назад» где есть
 document.addEventListener('keydown', e=>{
   if(e.key==='Escape'){ const open=[...document.querySelectorAll('.modal')].filter(m=>m.style.display==='flex'||m.style.display==='block');
-    if(open.length){ const top=open.reduce((a,b)=>((+getComputedStyle(a).zIndex||0)>=(+getComputedStyle(b).zIndex||0)?a:b)); top.style.display='none'; e.preventDefault(); return; }
+    if(open.length){ const top=open.reduce((a,b)=>((+getComputedStyle(a).zIndex||0)>=(+getComputedStyle(b).zIndex||0)?a:b)); top.style.display='none';
+      try{ if(top.id==='ayahCardModal'){ if(window._ahPlayTimer){ clearInterval(window._ahPlayTimer); window._ahPlayTimer=null; } window._ahFollow=false; } }catch(_e){}   // #184-фикс: Escape прятал карточку аята мимо #ahClose → интервал _ahSync утекал
+      e.preventDefault(); return; }
     const wp=document.getElementById('wordPop'); if(wp){ try{ closeWordPopup(); }catch(_e){ wp.remove(); } e.preventDefault(); } }
   if(e.altKey && e.key==='ArrowLeft'){ const bk=[...document.querySelectorAll('button')].find(b=>b.offsetParent && (b.textContent.indexOf('← Назад к результатам')===0||b.textContent==='← назад'));
     if(bk){ bk.click(); e.preventDefault(); } }
@@ -8606,6 +8613,7 @@ const RU_TITLE={bukhari:'Сахих аль-Бухари',muslim:'Сахих Му
 function ruTitle(code){ return RU_TITLE[code]||((COLLECTIONS.find(c=>c.code===code)||{}).ru)||((EXTRA_MAP[code]||{}).ru)||code; }
 function trHead(ref){ return (ref&&ref.source)?('<div style="color:var(--link);font-size:12px;margin-bottom:3px">📖 '+esc(ruTitle(ref.source))+(ref.num?(' №'+ref.num):'')+'</div>'):''; }
 async function doTranslate(text,out,btn,ref,force){
+  const _silent=ref&&ref.silent;   // #159-фикс: префетч-режим — подавить пользовательские тосты на путях ошибки
   const orig=btn.textContent, origStyle=btn.style.cssText; btn.disabled=true; btn.textContent='⏳…';
   if(out){ out.style.display='block'; out.innerHTML='<span class="hint">⏳ Перевожу… (несколько секунд)</span>'; }   // сразу видно, что идёт загрузка
   const lbl=(tag)=>'<span style="color:var(--hint);font-style:italic">'+tag+'</span> ';
@@ -8619,12 +8627,12 @@ async function doTranslate(text,out,btn,ref,force){
       if(h && h.text){ const rt=cleanRu(h.text); out.innerHTML=trHead(ref)+lbl('📘 Перевод (готовый, профессиональный):')+esc(rt); out.dataset.tr=rt; out.style.display='block'; restore(); return; }
     }catch(e){} }
   }
-  if(!BACKEND_URL){ toast('Перевод заработает после подключения сервера (DeepSeek)'); restore(); return; }
+  if(!BACKEND_URL){ if(!_silent) toast('Перевод заработает после подключения сервера (DeepSeek)'); restore(); return; }
   if(force) btn.textContent='🔄…';
   try{ const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({text, source:ref&&ref.source, num:ref&&ref.num, force:!!force, initData:INITDATA})});
     const j=await r.json().catch(()=>({}));
-    if(r.status===403){ toast(j.message||'Перевод тебе пока не открыт.'); restore(); return; }
+    if(r.status===403){ if(!_silent) toast(j.message||'Перевод тебе пока не открыт.'); restore(); return; }
     if(r.ok && j.translation){
       const src=ref&&ref.source, num=ref&&ref.num;
       if((!j.cached||force) && src && (num||num===0)) trMark(src,num,j.translation);   // свежий/обновлённый ИИ → теперь в базе
@@ -8640,8 +8648,8 @@ async function doTranslate(text,out,btn,ref,force){
       return;
     }
     try{ out.innerHTML='<span class="hint">⚠️ Не удалось перевести — попробуй ещё раз</span>'; out.style.display='block'; }catch(_e){}   // не оставлять «⏳ Перевожу…»
-    toast('Не удалось перевести'); restore();
-  }catch(e){ try{ out.innerHTML='<span class="hint">⚠️ Сервис недоступен — возможно, идёт обновление. Попробуй через минуту.</span>'; out.style.display='block'; }catch(_e){} toast('🔧 Сервис недоступен — возможно, идёт обновление. Попробуй через минуту.'); restore(); }
+    if(!_silent) toast('Не удалось перевести'); restore();
+  }catch(e){ try{ out.innerHTML='<span class="hint">⚠️ Сервис недоступен — возможно, идёт обновление. Попробуй через минуту.</span>'; out.style.display='block'; }catch(_e){} if(!_silent) toast('🔧 Сервис недоступен — возможно, идёт обновление. Попробуй через минуту.'); restore(); }
 }
 
 /* ===================== УПРАВЛЕНИЕ ДОСТУПОМ (G9, серверное) ===================== */
@@ -9504,10 +9512,10 @@ function _readRender(){
 async function _prefetchTranslate(){   // #159: фоном прогреть перевод открытого хадиса (серверный кэш) — нажатие «перевод» будет мгновенным. Только при открытии (не на перелистывании — бережём баланс)
   if(!_readArr||!_readArr.length) return; const h=_readArr[_readIdx]; if(!h||!h.text) return;
   const out=document.createElement('div'); out.style.display='none'; const btn=document.createElement('button');
-  try{ await doTranslate(h.text, out, btn, {source:_readCode, num:h.num}); }catch(e){}
+  try{ await doTranslate(h.text, out, btn, {source:_readCode, num:h.num, silent:true}); }catch(e){}   // #159-фикс: тихий префетч — без всплывающих тостов ошибок при простом открытии хадиса
 }
 async function _readOpen(code,fromNum){
-  _readCode=code; _readFindM=[]; _readFindPos=-1;
+  _readCode=code; _readArr=[]; _readFindM=[]; _readFindPos=-1;   // #179-фикс: сброс — иначе при провале загрузки навигация листала бы СТАРЫЙ сборник под меткой нового
   var _rf=document.getElementById('readFind'); if(_rf) _rf.value=''; var _rfi=document.getElementById('readFindInfo'); if(_rfi) _rfi.textContent='';
   document.getElementById('readPick').style.display='none';
   document.getElementById('readView').style.display='block';
@@ -9520,7 +9528,7 @@ async function _readOpen(code,fromNum){
     catch(e2){
       let _tb=null; try{ _tb=(typeof COLL_BIDS!=='undefined'&&COLL_BIDS[code]&&COLL_BIDS[code][0])||(typeof EXTRA_BIDS!=='undefined'&&EXTRA_BIDS[code])||null; }catch(_e){}
       if(_tb && BACKEND_URL){ try{ document.getElementById('readModal').style.display='none'; }catch(_e){} try{ openBook(_tb, fromNum, true); }catch(_e){} return; }
-      body.innerHTML='<div class="status">Не удалось загрузить сборник (проблема сети). Попробуй ещё раз через секунду или обнови приложение.</div>'; return;
+      _readArr=[]; body.innerHTML='<div class="status">Не удалось загрузить сборник (проблема сети). Попробуй ещё раз через секунду или обнови приложение.</div>'; return;
     }
   }
   _readIdx=0;
