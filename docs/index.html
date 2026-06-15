@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v521</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v522</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -608,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v521';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v522';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5463,9 +5463,13 @@ function loadNarrNames(){ if(_narrNames) return Promise.resolve(_narrNames); if(
     try{ const S=new Set(), F=new Set(); _narrNames.forEach(p=>{ const nm=p[0]||''; if(!nm) return; F.add(nm); const f=nm.split(' ')[0]; if(f&&f.length>1){ S.add(f); S.add(f.replace(/^ال/,'')); } }); window._narrKnownW=S; window._narrKnownF=F; }catch(e){}
     return _narrNames; }).catch(()=>{_narrNames=[];return _narrNames;}); return _narrNamesP; }
 function _narrCanon(s){ s=(s||'').replace(/[ً-ْـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه'); return s.replace(/\s+/g,' ').trim(); }
-let _shuhraMap=null;
+let _shuhraMap=null, _guarMap=null;
 async function _loadShuhra(){ if(_shuhraMap===null){ try{ _shuhraMap=await (await fetch('./narr_shuhra.json?v='+APPVER)).json(); }catch(e){ _shuhraMap={}; } } return _shuhraMap; }
+// #169/#170: ГАРАНТ-КАРТА канонических id (build_narr_guar.py из авторитетной na, доминирующий id на форму — namesake-safe).
+async function _loadGuar(){ if(_guarMap===null){ try{ _guarMap=await (await fetch('./narr_guar.json?v='+APPVER)).json(); }catch(e){ _guarMap={}; } } return _guarMap; }
 async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.length) return null; const cn=_narrCanon(name); if(cn.length<4) return null;
+  // #169/#170 (тёзка-резолвер): ГАРАНТ знаменитых ПЕРВЫМ — лечит «مالك→ат-Таии вместо б.Анаса», «قتادة→ар-Рахави вместо ас-Садуси». Неоднозначные (2 Суфьяна) в карту НЕ попали → их решает контекст цепи.
+  { try{ const g=await _loadGuar(); if(g && g[cn]!=null) return g[cn]; }catch(e){} }
   // #157/M382: фолбэк по ШУХРЕ/КУНЬЕ (أبو الزناد, и др.) — namesake-safe индекс narr_shuhra.json (только однозначные формы)
   { try{ const sh=await _loadShuhra(); if(sh && sh[cn]!=null) return sh[cn]; }catch(e){} }
   // Ф-04б (M377): ДВУСТОРОННИЙ префикс — иснад бывает и КОРОЧЕ базы (سفيان → سفيان بن سعيد…), и ДЛИННЕЕ
