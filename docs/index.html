@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v508</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v509</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -608,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v508';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v509';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7841,7 +7841,7 @@ function _isnadSlots(text){
 async function _codifHighlight(text, card, out, place){
   // ПРАВИЛО синхронности (слово владельца): подсвечиваем РОВНО передатчиков таблицы — ни лишних, ни пропущенных.
   // Основной путь — ПОЗИЦИОННАЯ бижекция: слот иснада i ↔ id цепи таблицы i (без угадывания по имени).
-  const rec=await codifChain(place.bid, place.num); if(!rec||!rec.i||!rec.i.length) return false;
+  const rec=await codifChain(place.bid, place.num); if(!rec || (!(rec.na&&rec.na.length) && !(rec.i&&rec.i.length))) return false;   // na-only рек (хадис с цепью без codif) тоже подсвечиваем
   // R52/В-01/#142 (Сессия26): АВТОРИТЕТНАЯ цепь na = передатчики sunnah.com/Мактабы, локализованные в НАШЕМ тексте, с ВЕРНЫМИ id.
   // Подсветка ИЗ НЕЁ = полнота как у sunnah.com: параллельные иснады (ح/و), финальный сахаби, верные карточки (build_authhl.py). Приоритет над эвристическим n.
   if(rec.na && rec.na.length){
@@ -7991,7 +7991,8 @@ async function verifyNarr(card, place, text){
       const prev=j[kk]; const now=Date.now(); const RPT=12*3600*1000;
       const sendNow = !prev || !prev.r || (now - prev.r > RPT);
       j[kk]={a:authCount,o:ourMids.length,m:missing,e:extra,t:now,r:(sendNow?now:(prev?prev.r:now))}; localStorage.setItem(K,JSON.stringify(j));
-      if(sendNow){ _appReport('🚨[ИДЕНТИФ.ПЕРЕДАТЧИКОВ] '+place.bid+':'+place.num+' эталон('+srcLbl+') '+authCount+' / приложение '+ourMids.length+(missing.length?(' · пропущ:'+missing.join(',')):'')+(extra.length?(' · лишн:'+extra.join(',')):''), 'verifyNarr'); }
+      // В-04 анти-спам: НЕ шлём в бот «приложение 0» (чистый пробел покрытия книги — не пер-хадисная ошибка; видно в карточке, копится локально). Шлём только реальное расхождение при ЕСТЬ подсветка.
+      if(sendNow && ourCount>0){ _appReport('🚨[ИДЕНТИФ.ПЕРЕДАТЧИКОВ] '+place.bid+':'+place.num+' эталон('+srcLbl+') '+authCount+' / приложение '+ourMids.length+(missing.length?(' · пропущ:'+missing.join(',')):'')+(extra.length?(' · лишн:'+extra.join(',')):''), 'verifyNarr'); }
     }catch(e){} }
   }catch(e){}
 }
