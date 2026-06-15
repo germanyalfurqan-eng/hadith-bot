@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v519</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v520</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -608,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v519';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v520';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7149,8 +7149,14 @@ async function renderMutabarunSummary(id, box, out){
 async function showNarratorCardLocal(name, host){
   let id=null; try{ id=await _narrLookup(name); }catch(e){} if(id==null) return null;
   const c=await _narrCard(id); if(!c) return null;   // [id,name,kunya,nisba,death,rankHajar,rankDhahabi,tabaqa,jarh]
+  try{ await loadJarhGl(); }catch(e){}   // #164: глоссарий джарха — для рус.перевода положений (ранги по-русски)
+  // #164: положение (ранг) по-русски — каждое слово ранга через глоссарий джарха (соответствие на русском)
+  const _rankRu=(v)=>{ if(!v) return ''; const seen=new Set(); const out=[];
+    String(v).split(/[\s،,]+/).filter(Boolean).forEach(w=>{ try{ const ex=jarhExplain(w); if(ex){ const ru=(ex.split(' — ')[1]||'').split(' · ')[0].trim(); if(ru && !seen.has(ru)){ seen.add(ru); out.push(ru); } } }catch(e){} });
+    return out.join(', '); };
   const row=(lbl,v)=>v?('<div style="margin:2px 0"><span style="color:var(--hint)">'+lbl+':</span> <b>'+esc(v)+'</b></div>'):'';
-  const rank=(lbl,v)=>v?('<div style="margin:4px 0;padding:5px 9px;background:rgba(46,155,91,.13);border-radius:8px"><span style="color:var(--hint)">'+lbl+':</span> <b style="color:#bff5d4">'+esc(v)+'</b></div>'):'';
+  const rank=(lbl,v)=>{ if(!v) return ''; const ru=_rankRu(v);
+    return '<div style="margin:4px 0;padding:5px 9px;background:rgba(46,155,91,.13);border-radius:8px"><span style="color:var(--hint)">'+lbl+':</span> <b style="color:#bff5d4">'+esc(v)+'</b>'+(ru?('<span style="display:block;direction:ltr;text-align:left;font-size:11.5px;color:#9fd3a8;margin-top:1px">≈ '+esc(ru)+'</span>'):'')+'</div>'; };
   // M385: ① привычное имя крупно → ② полное → ③ рус привычное → ④ перевод полного → ⑤ Википедия (ru→en→ar)
   let _ext=null; try{ _ext=(await loadNarrExt()).get(id); }catch(e){}
   const _sh=_shuhraOf(c[1], _ext);
@@ -7887,8 +7893,8 @@ async function _codifHighlight(text, card, out, place){
   if(rec.na && rec.na.length){
     const f2id={}, names=[]; const naMids=new Set();
     for(const pr of rec.na){ const ph=pr[0], id=String(pr[1]); if(ph && !(ph in f2id)){ f2id[ph]=id; names.push(ph); naMids.add(id); } }
-    // БЕЗ РЕГРЕССА: добавляем из эвристического n то, чьего mid нет в na (заполнение, не теряем прежнюю подсветку)
-    for(const pr of (rec.n||[])){ const ph=pr[0], id=String(pr[1]); if(ph && !(ph in f2id) && !naMids.has(id)){ f2id[ph]=id; names.push(ph); naMids.add(id); } }
+    // #160/#158: при наличии авторитетной na подсвечиваем ТОЛЬКО её (= строгий стандарт sunnah.com). Эвристический n НЕ добавляем —
+    // он тащил мусор-матн (напр. «الله ما كذبني #484» в Бухари 5590) и тёзка-дубли с неверными id. na — полная цепь, добивка не нужна.
     if(names.length){
       setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
         highlightNarratorsInDiv(ad, names, async nm=>{ const id=f2id[nm]; out.style.display='block'; let c=null; try{ c=await _narrCard(id); }catch(e){}
