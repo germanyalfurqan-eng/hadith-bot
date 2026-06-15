@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v512</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v513</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -608,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v512';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v513';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3584,7 +3584,7 @@ function showWordPopup(el, word, root, lemma, gram, ctx){
       +'<div style="display:flex;flex-wrap:wrap;gap:5px;direction:rtl;justify-content:flex-end">'+bs+'</div>';
     if(!hh){ host.style.display='none'; return; }
     host.innerHTML=hh;
-    host.querySelectorAll('.wpDict').forEach(b=>b.onclick=()=>{ const t=b.title; closeWordPopup();
+    host.querySelectorAll('.wpDict').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); const t=b.title; closeWordPopup();
       toast('📖 '+(t||'Открываю словарь')+' — статья корня '+root); openBook(b.dataset.b, b.dataset.l); });
   }catch(e){} })();
 }
@@ -4337,6 +4337,7 @@ async function openCatalog(q0){   // q0 (опц.) — начальный зап�
         arr=arr.filter(b=>{
           const titleMatch=((b.n||'').toLowerCase().indexOf(ql)!==-1)||canon(b.n||'').indexOf(cq)!==-1||(_ruHit(b)||_skelHit(b));
           const authorMatch=((b.a||'').toLowerCase().indexOf(ql)!==-1)||canon(b.a||'').indexOf(cq)!==-1;
+          if(!_byTitle && !_byAuthor) return titleMatch || authorMatch;   // обе галочки сняты → искать везде (а не пусто)
           return (_byTitle && titleMatch) || (_byAuthor && authorMatch);
         });
         // РЕЛЕВАНТНОСТЬ: совпадение в названии важнее автора; все слова в названии — выше
@@ -4360,6 +4361,8 @@ async function openCatalog(q0){   // q0 (опц.) — начальный зап�
     function _onCatInput(){ render(); }   // рус-запросы теперь ищет САМ render (book_titles_ru + скелет Ф-10); ИИ — кнопкой
     let _ct; m.querySelector('#catSearch').addEventListener('input',()=>{ clearTimeout(_ct); _ct=setTimeout(_onCatInput,250); });
     m.querySelector('#catCat').addEventListener('change',render);
+    // галочки «по названию»/«по автору» — перефильтровать сразу при переключении
+    ['#catByTitle','#catByAuthor'].forEach(s=>{ const el=m.querySelector(s); if(el) el.addEventListener('change',render); });
     // #3 бесконечная подгрузка: у дна списка дорисовываем следующую порцию (оптимально — только когда близко к концу)
     m.querySelector('#catList').addEventListener('scroll',()=>{ const el=m.querySelector('#catList'); if(_lastArr && _catShown<_lastArr.length && el.scrollTop+el.clientHeight>=el.scrollHeight-140){ _catAppendRows(); } });
     const _cfb=m.querySelector('#catFavBtn'); if(_cfb) _cfb.onclick=()=>{ m.querySelector('#catSearch').value=''; m.querySelector('#catCat').value='__fav__'; render(); };
@@ -7676,11 +7679,11 @@ async function _renderIsnadTree(vs, box, st, out){
       else { const s=document.createElement('span'); s.style.cssText='font-size:10px;color:#5b87b5;margin:0 4px;user-select:none'; s.textContent='#'+nd.id; el.appendChild(s); }
     }catch(e){} }); }
     if(mode==='shajara'){ const wrap=box.querySelector('.shjWrap');
-      if(wrap){ _wirePinch(wrap, st);
+      if(wrap){ if(!wrap.__pinchWired){ _wirePinch(wrap, st); wrap.__pinchWired=1; }   // M398/M359: не вешать слушатели повторно при ре-рендере (зум множился ×N)
         box.querySelectorAll('.vZm').forEach(b=>b.onclick=()=>{ st.shjSc=Math.min(3, Math.max(0.5, (st.shjSc||1)*(b.dataset.z==='+'?1.25:0.8))); _applyShjScale(wrap, st.shjSc); });
         // M398: зум КОЛЕСОМ МЫШИ на ПК (щипок — телефонам; колесо без модификаторов = зум прямо над схемой)
-        wrap.addEventListener('wheel', ev=>{ ev.preventDefault();
-          st.shjSc=Math.min(3, Math.max(0.5, (st.shjSc||1)*(ev.deltaY<0?1.12:0.89))); _applyShjScale(wrap, st.shjSc); }, {passive:false}); } }
+        if(!wrap.__wheelWired){ wrap.addEventListener('wheel', ev=>{ ev.preventDefault();
+          st.shjSc=Math.min(3, Math.max(0.5, (st.shjSc||1)*(ev.deltaY<0?1.12:0.89))); _applyShjScale(wrap, st.shjSc); }, {passive:false}); wrap.__wheelWired=1; } } }
     box.querySelectorAll('.accTg').forEach(b=>b.onclick=()=>{ const kk=b.parentNode.parentNode.querySelector('.accKids'); if(kk){ const vis=kk.style.display!=='none'; kk.style.display=vis?'none':'block'; b.textContent=vis?'◂':'▾'; } });
     const bio=box.querySelector('.tnBio');
     box.querySelectorAll('.tnN').forEach(el=>{ el.onclick=()=>{ const nd=d.flat[+el.dataset.i]; if(!nd) return; _narrMini(nd, bio, out); try{ bio.scrollIntoView({block:'nearest'}); }catch(e){} }; });
