@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v523</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v524</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -608,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v523';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v524';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2285,11 +2285,27 @@ function _matnText(d){ return d.type==='hr'?(d.ru||''):((d.h&&d.h.text)||(d.v&&d
 function _hadKey(d){ const w=canon(_matnText(d)).replace(/\s+/g,' ').trim().split(' ').filter(Boolean); return (w.length>14?w.slice(-14):w).join(' '); }
 // ВЕРСИЯ = начало (иснад+старт матна): одна и та же цепь из разных книг (Абу Дауд+Ахмад) = одна версия
 function _verKey(d){ const w=canon(_matnText(d)).replace(/\s+/g,' ').trim().split(' ').filter(Boolean); return w.slice(0,16).join(' '); }
-function dedupResults(arr, mode){ const seen=new Set(), out=[]; let hid=0; const kf=(mode==='version'?_verKey:_hadKey); arr.forEach(d=>{ const k=kf(d); if(k && seen.has(k)){ hid++; return; } if(k) seen.add(k); out.push(d); }); return {list:out, hidden:hid}; }
+// #168: аннотировать результаты тахридж-кластером su (матн-ключ → mh-шарды; фолбэк place2su по месту). Версии ОДНОГО хадиса (тахридж) получают общий su → схлопываются в «уникальные хадисы» (владелец: «143 из 147 — бред»).
+async function _annotateSu(arr){
+  try{
+    const byShard={};
+    arr.forEach(d=>{ if(d._su!==undefined) return; let t=''; try{ t=_matnText(d); }catch(e){} let k=''; try{ k=t?_tkMkey(t):''; }catch(e){} d._mk=k||''; d._su=0; if(k){ const sh=k.slice(0,2); (byShard[sh]=byShard[sh]||[]).push(d); } });
+    for(const sh in byShard){ let mh={}; try{ const r=await fetch('./tahrij/mh_'+sh+'.json?v='+APPVER); if(r.ok) mh=await r.json(); }catch(e){} byShard[sh].forEach(d=>{ d._su=mh[d._mk]||0; }); }
+    const byPh={};
+    arr.forEach(d=>{ if(d._su) return; let pl=null; try{ pl=_codifPlace({source:(d.code||(d.type==='m'?'muhaymin':'')), num:(d.h&&(d.h.num||d.h.n))}); }catch(e){} if(pl){ d._pl=pl; const ph=(parseInt(pl.bid,10)+parseInt(pl.num,10))%100; (byPh[ph]=byPh[ph]||[]).push(d); } });
+    for(const ph in byPh){ let p2s={}; try{ const r=await fetch('./tahrij/place2su_'+ph+'.json?v='+APPVER); if(r.ok) p2s=await r.json(); }catch(e){} byPh[ph].forEach(d=>{ if(!d._su) d._su=p2s[d._pl.bid+'|'+d._pl.num]||0; }); }
+  }catch(e){}
+}
+function dedupResults(arr, mode){ const seen=new Set(), out=[]; let hid=0;
+  arr.forEach(d=>{ let k;
+    if(mode==='hadith'){ k=(d._su?('su'+d._su):_hadKey(d)); }   // #168: тахридж-кластер su = ОДИН хадис (фолбэк матн-ключ хвоста)
+    else { k=_verKey(d); }
+    if(k && seen.has(k)){ hid++; return; } if(k) seen.add(k); out.push(d); });
+  return {list:out, hidden:hid}; }
 function uniqToggleEl(){ const wrap=document.createElement('span'); wrap.id='uniqToggle';
   const mk=(mode,label,col,tip)=>{ const on=uniqMode===mode; const t=document.createElement('span');
     t.style.cssText='display:inline-block;margin:2px 0 8px 8px;font-size:13px;color:var(--link);cursor:pointer;user-select:none;border:1px solid '+(on?col:'var(--border)')+';border-radius:12px;padding:3px 10px'+(on?(';background:'+col+'22;color:var(--text)'):'');
-    t.textContent=(on?'✓ ':'')+label; t.title=tip; t.onclick=()=>{ uniqMode=(uniqMode===mode?'':mode); renderResultsView(); }; return t; };
+    t.textContent=(on?'✓ ':'')+label; t.title=tip; t.onclick=async()=>{ const nm=(uniqMode===mode?'':mode); if(nm==='hadith'){ t.textContent='⏳ тахридж…'; try{ await _annotateSu(_results); }catch(e){} } uniqMode=nm; renderResultsView(); }; return t; };   // #168: при «уникальные хадисы» сперва аннотируем тахридж-кластеры su
   wrap.appendChild(mk('hadith','✨ Уникальные хадисы','#2e9b5b','Один хадис — один раз (разные иснады одного матна сворачиваются). Основная версия / متابعات — пометка скоро.'));
   wrap.appendChild(mk('version','🔀 Уникальные версии','#6c5ce7','Все версии, но без дублей версий: одна и та же цепь из разных книг (Абу Дауд+Ахмад) — один раз.'));
   return wrap; }
