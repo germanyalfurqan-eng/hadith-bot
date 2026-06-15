@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v528</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v529</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -610,7 +610,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v528';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v529';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2434,7 +2434,7 @@ function bookName(id){ id=String(id||''); return (_booksMap&&_booksMap[id])||'';
 function bookAuthorOf(id){ id=String(id||''); try{ if(_catalog){ const b=_catalog.find(x=>String(x.i)===id); return b?(b.a||''):''; } }catch(e){} return ''; }
 // M216: читалка любой книги Мактабы (через turath /api/book_page) — листание + Arabus
 let _bookView={id:null,pg:1};
-function openBook(bookId, startPg){
+function openBook(bookId, startPg, _forceTurath){
   const id=String(bookId||'').replace(/[^0-9]/g,''); if(!id) return;
   // «Муслим в Мактабе = в Избранном»: издания Сахих Муслим (тур. печать 711 / ت عبد الباقي 1727) открываем
   // НАШИМ ридером (muslim_baqi, нумерация Абд аль-Баки) — тот же текст и номера, что в избранном/поиске/у учёных.
@@ -2444,7 +2444,7 @@ function openBook(bookId, startPg){
   let _ourCode=null;
   try{ for(const cd in COLL_BIDS){ if((COLL_BIDS[cd]||[]).map(String).indexOf(id)>=0){ _ourCode=cd; break; } }
        if(!_ourCode){ for(const cd in EXTRA_BIDS){ if(String(EXTRA_BIDS[cd])===id){ _ourCode=cd; break; } } } }catch(e){}
-  if(_ourCode && isReadable(_ourCode)){ try{ openReader(_ourCode); toast('📖 Открываю наше издание: '+nameOf(_ourCode)); }catch(e){} return; }
+  if(!_forceTurath && _ourCode && isReadable(_ourCode)){ try{ openReader(_ourCode); toast('📖 Открываю наше издание: '+nameOf(_ourCode)); }catch(e){} return; }   // #179: _forceTurath — фолбэк из ридера при сбое загрузки (без петли)
   if(!BACKEND_URL){ toast('Читалка книги работает на сервере'); return; }
   let sp=parseInt(String(startPg||'').replace(/[^0-9]/g,''))||1; if(sp<1) sp=1;
   // M318: ПРОДОЛЖИТЬ ЧТЕНИЕ — если страница не указана, возвращаемся туда, где остановились
@@ -9465,7 +9465,15 @@ async function _readOpen(code,fromNum){
   document.getElementById('readTitle').textContent='📖 '+(ruTitle(code)||code);
   const body=document.getElementById('readBody'); body.innerHTML='<div class="hint" style="text-align:center;padding:14px">Загружаю сборник…</div>';
   try{ await loadReverse(); }catch(e){}
-  try{ _readArr=await _readLoad(code); }catch(e){ body.innerHTML='<div class="status">Не удалось загрузить сборник.</div>'; return; }
+  try{ _readArr=await _readLoad(code); }
+  catch(e){   // #179/A-104: транзиентный сбой загрузки → ретрай 1 раз, затем фолбэк на турат-ридер (если есть bid), иначе понятная ошибка
+    try{ await new Promise(r=>setTimeout(r,700)); _readArr=await _readLoad(code); }
+    catch(e2){
+      let _tb=null; try{ _tb=(typeof COLL_BIDS!=='undefined'&&COLL_BIDS[code]&&COLL_BIDS[code][0])||(typeof EXTRA_BIDS!=='undefined'&&EXTRA_BIDS[code])||null; }catch(_e){}
+      if(_tb && BACKEND_URL){ try{ document.getElementById('readModal').style.display='none'; }catch(_e){} try{ openBook(_tb, fromNum, true); }catch(_e){} return; }
+      body.innerHTML='<div class="status">Не удалось загрузить сборник (проблема сети). Попробуй ещё раз через секунду или обнови приложение.</div>'; return;
+    }
+  }
   _readIdx=0;
   if(fromNum){ const qn=String(parseInt(fromNum,10)); const i=_readArr.findIndex(x=>String(x.num)===qn); if(i>=0)_readIdx=i; }
   _readRender();
