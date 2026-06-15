@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v532</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v533</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -611,7 +611,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v532';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v533';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4628,7 +4628,9 @@ function _qrPlay(s, a){ _qrWordStop();
     // если юзер ушёл листать ДРУГУЮ суру — не трогаем его _qrView и не перезагружаем читалку (звук идёт фоном, мини-плеер показывает)
     if(a < tot){ if(onThisSura||!open) _qrView={s:s,a:a+1}; _qrPlay(s, a+1); }
     else if(cfg.qrAutoNext!==false && s<114){ if(onThisSura||!open) _qrView={s:s+1,a:0}; if(open && onThisSura){ _qrLoad().then(()=>_qrPlay(s+1,1)); } else { _qrPlay(s+1,1); } }
-    else { window._qrStopped=true; try{_miniSync();}catch(e){} if(blk){ blk.style.outline=''; blk.style.background=''; blk.removeAttribute('data-qrhl'); } } };
+    else { window._qrStopped=true; try{_miniSync();}catch(e){} if(blk){ blk.style.outline=''; blk.style.background=''; blk.removeAttribute('data-qrhl'); } }
+    try{ const _am=document.getElementById('ayahCardModal'); if(_am&&_am.style.display!=='none'&&window._ahFollow&&window._ahCur&&window._ahCur.s===s&&window._ahCur.a===a){ const nx=window._qrCur; if(nx&&(nx.s!==s||nx.a!==a)) openAyahCard(nx.s,nx.a,true); } }catch(e){}   // #184: попап следует за аудио (открыт на играющем аяте + follow не сброшен)
+  };
   au.ontimeupdate=()=>{ if(window._qrAudio!==au) return; const t=au.currentTime;
     if(au.__off && t>=au.__off && !au.__adv){ au.__adv=1; au.onended=null; try{au.pause();}catch(e){} _advance(); return; }   // обрезать хвост-тишину → сразу следующий аят
     if(!_qw.length) return; let i=_ends.findIndex(e=>t<e); if(i<0) i=_qw.length-1;
@@ -4724,11 +4726,12 @@ function _qrFastScrollSetup(){
 }
 // #70: всплывающая КАРТОЧКА АЯТА (тап по территории аята) — как эталон: ✕/шара/№, текст, перевод, тафсир, низ-бар (закладка/play/избранное), тап вне = закрыть.
 function _qrBookmarks(){ try{ return JSON.parse(localStorage.getItem('qr_bookmarks')||'[]'); }catch(e){ return []; } }
-async function openAyahCard(s,a){ s=+s; a=+a; if(!s||!a) return;
+async function openAyahCard(s,a,_isFollow){ s=+s; a=+a; if(!s||!a) return;
+  try{ window._ahCur={s:s,a:a}; if(!_isFollow) window._ahFollow=false; }catch(e){}   // #184: следование попапа за аудио (ручное открытие аята сбрасывает follow)
   let m=document.getElementById('ayahCardModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='ayahCardModal'; m.style.zIndex='10020';
     document.body.appendChild(m);
-    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });   // #70: тап ВНЕ карточки = вернуться в читалку
+    m.addEventListener('click',e=>{ if(e.target===m){ m.style.display='none'; try{ if(window._ahPlayTimer){ clearInterval(window._ahPlayTimer); window._ahPlayTimer=null; } window._ahFollow=false; }catch(err){} } });   // #70: тап ВНЕ карточки = вернуться в читалку (#184: гасим синхрон/следование)
   }
   let v=null; try{ const arr=await loadQuran(); v=arr.find(x=>x.s===s&&x.a===a); }catch(e){}
   let ru=''; let ru2=''; try{ ru=(await loadQuranRu())[s+':'+a]||''; }catch(e){} try{ const other=cfg.qtr==='rus-abuadel'?'rus-elmirkuliev':'rus-abuadel'; const alt=await loadQuranTr(other); if(alt) ru2=alt[s+':'+a]||''; }catch(e){}
@@ -4753,10 +4756,12 @@ async function openAyahCard(s,a){ s=+s; a=+a; if(!s||!a) return;
   const _ahAr=m.querySelector('#ahArabic'); if(_ahAr){ try{ loadRoots(); }catch(e){}
     _ahAr.addEventListener('click',e=>{ const sp=e.target.closest&&e.target.closest('.qw'); if(sp){ e.stopPropagation(); onWordTap(sp.textContent, sp, (_ahAr.textContent||'').replace(/\s+/g,' ').trim().slice(0,200)); } });
     try{ enableArabusTap(_ahAr); if(_arabusOn) _ahAr.style.cursor='pointer'; }catch(e){} }
-  m.querySelector('#ahClose').onclick=()=>{ m.style.display='none'; };
+  m.querySelector('#ahClose').onclick=()=>{ m.style.display='none'; try{ if(window._ahPlayTimer){ clearInterval(window._ahPlayTimer); window._ahPlayTimer=null; } window._ahFollow=false; }catch(e){} };   // #184: закрытие — стоп синхрона/следования
   m.querySelector('#ahTafsir').onclick=()=>{ try{ openTafsir(s,a); }catch(e){} };
   m.querySelector('#ahShare').onclick=()=>{ try{ copyWithSig((txt||'')+'\n— Коран '+s+':'+a+(ru?('\n'+ru):'')); }catch(e){} };
-  m.querySelector('#ahPlay').onclick=function(){ _press(this); try{ _qrToggle(s,a); }catch(e){} };
+  const _ahSync=()=>{ try{ const b=document.getElementById('ahPlay'); if(!b) return; const au=window._qrAudio, cur=window._qrCur; b.textContent=(au&&!au.paused&&!au.ended&&cur&&cur.s===s&&cur.a===a)?'⏸':'▶'; }catch(e){} };   // #184: иконка play↔pause синхронно с реальным аудио
+  m.querySelector('#ahPlay').onclick=function(){ _press(this); window._ahFollow=true; try{ _qrToggle(s,a); }catch(e){} setTimeout(_ahSync,200); };   // #184: запуск из попапа = следовать за аудио
+  try{ if(window._ahPlayTimer) clearInterval(window._ahPlayTimer); window._ahPlayTimer=setInterval(_ahSync,500); }catch(e){} _ahSync();
   m.querySelector('#ahBk').onclick=function(){ _press(this); let bk=_qrBookmarks(); const k=s+':'+a; const i=bk.indexOf(k);
     if(i>=0){ bk.splice(i,1); this.style.color='var(--hint)'; this.style.background='transparent'; this.style.borderColor='transparent'; toast('Закладка убрана'); }
     else { bk.push(k); this.style.color='#4eb573'; this.style.background='rgba(78,181,115,.16)'; this.style.borderColor='#4eb573'; toast('🔖 Закладка добавлена'); }
