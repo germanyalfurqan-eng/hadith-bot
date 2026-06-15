@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v541</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v542</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -611,7 +611,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v541';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v542';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -719,7 +719,7 @@ const isOwner = DEV || (USER && USER.id===OWNER_ID);
 
 /* cfg = настройки УСТРОЙСТВА (перевод Корана, огласовки, иснад) — не про доступ */
 function loadCfg(){ try{ return JSON.parse(localStorage.getItem('muslimoon_cfg'))||{}; }catch(e){ return {}; } }
-function saveCfg(c){ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }
+function saveCfg(c){ try{ localStorage.setItem('muslimoon_cfg', JSON.stringify(c)); }catch(e){} }   // QA-HIGH: try/catch — переполнение/блокировка localStorage (iOS/приватный) не должны вешать белый экран (top-level вызов стр.724, 40+ юзеров)
 let cfg = Object.assign({qtr:'rus-elmirkuliev',noDiac:false,isnad:true,ac:true,sig:true,noZoom:true,theme:'dark',recent:false,wordTap:true,popular:false,arabus:false,qrHl:true,qHl:true,uiFont:'system',verify:true,arFont:'naskh',reciter:'Hudhaify_128kbps',lenta:false}, loadCfg());   // #138: Noto Naskh — арабский шрифт ПО УМОЛЧАНИЮ
 if(!cfg._rpoff){ cfg.recent=false; cfg.popular=false; cfg._rpoff=1; saveCfg(cfg); }   // разовое: выключить Недавнее/Популярное по умолчанию (можно вернуть в Настройках)
 function applyTheme(){ document.body.classList.toggle('light', cfg.theme==='light'); }
@@ -4504,15 +4504,17 @@ let _qrView={s:1,a:0};
 // #13: интерактивное чтение с ПОСЛОВНОЙ подсветкой (quran.com тайминги). Доступно для части чтецов.
 let _qcTimings={};   // кэш: recId_s → {audio_url, byA}
 const _QC_REC={Alafasy_128kbps:7,Husary_128kbps:6,Abdul_Basit_Murattal_192kbps:1,Minshawi_Murattal_128kbps:9,'Saood_ash-Shuraym_128kbps':10};
-function _qrWordStop(){ try{ if(window._qrWordAudio){ window._qrWordAudio.pause(); window._qrWordAudio.ontimeupdate=null; window._qrWordAudio.onended=null; window._qrWordAudio=null; window._qrStopped=true; } document.querySelectorAll('.qwnow').forEach(x=>x.classList.remove('qwnow')); document.querySelectorAll('#qrBody [data-qrhl]').forEach(b=>{b.style.outline='';b.style.background='';b.removeAttribute('data-qrhl');}); }catch(e){} }
+function _qrWordStop(){ try{ window._wpSeq=(window._wpSeq||0)+1;   // QA-low: бамп токена — отменяет ещё-грузящийся _qrWordPlay
+  if(window._qrWordAudio){ window._qrWordAudio.pause(); window._qrWordAudio.ontimeupdate=null; window._qrWordAudio.onended=null; window._qrWordAudio=null; window._qrStopped=true; } document.querySelectorAll('.qwnow').forEach(x=>x.classList.remove('qwnow')); document.querySelectorAll('#qrBody [data-qrhl]').forEach(b=>{b.style.outline='';b.style.background='';b.removeAttribute('data-qrhl');}); }catch(e){} }
 let _wtData={};   // кэш скачанной разметки по словам (Хусари): s → {audio, v:{ayah:{f,t,s}}}
 async function _qrWordPlay(s, a){
   try{ if(window._qrAudio){window._qrAudio.onended=null;window._qrAudio.pause();window._qrAudio=null;} }catch(e){}
   _qrWordStop();
   toast('✨ Чтение по словам (Хусари)…');
-  let data=_wtData[s];
+  const _wpTok=window._wpSeq; let data=_wtData[s];
   if(!data){ try{ const r=await fetch('./wordtimings/'+s+'.json'); const j=await r.json(); if(!j.audio||!j.v){ toast('Разметка недоступна'); return; } data=j; _wtData[s]=j; }
     catch(e){ toast('🔧 разметка не загрузилась'); return; } }
+  if(_wpTok!==window._wpSeq) return;   // QA-low: пока грузилась разметка — нажали стоп / запустили другое → не стартуем устаревшее аудио
   const V=data.v; const t0=V[a]||V['1']; if(!t0){ toast('Нет тайминга'); return; }
   let curA=(V[a]?a:1), curWord=-1; window._qrNow={s:s,a:curA,mode:'word'};
   const hiAyah=(aa)=>{ document.querySelectorAll('#qrBody [data-qrhl]').forEach(b=>{b.style.outline='';b.style.background='';b.removeAttribute('data-qrhl');});
@@ -4555,15 +4557,16 @@ function _qrWordByWord(s, a){
   const pad=(n,l)=>String(n).padStart(l,'0');
   const hiAyah=(aa)=>{ document.querySelectorAll('#qrBody [data-qrhl]').forEach(b=>{b.style.outline='';b.style.background='';b.removeAttribute('data-qrhl');}); document.querySelectorAll('.qwnow').forEach(x=>x.classList.remove('qwnow'));
     const blk=document.getElementById('qr-'+aa); if(blk){ blk.style.background='rgba(108,92,231,.14)'; blk.style.outline='2px solid #6c5ce7'; blk.style.borderRadius='8px'; blk.setAttribute('data-qrhl','1'); try{ blk.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){} } };
+  let _cs=s;   // QA-fix: текущая сура (изменяемая) — параметр s захвачен в замыкании и не менялся при авто-переходе → играла аудио СТАРОЙ суры
   const play=(aa,wi)=>{ if(!window._qrNow||window._qrNow.mode!=='wbw'||window._qrStopped) return;
     const blk=document.getElementById('qr-'+aa); const qws=blk?blk.querySelectorAll('.qw'):[];
     if(wi>qws.length){ // аят закончен → следующий
-      const tot=(SURA_AYAHS[s-1]||0);
-      if(aa<tot){ hiAyah(aa+1); window._qrNow={s:s,a:aa+1,mode:'wbw'}; try{_miniSync();}catch(e){} play(aa+1,1); }
-      else if(cfg.qrAutoNext!==false && s<114){ _qrView={s:s+1,a:0}; _qrLoad().then(()=>{ window._qrNow={s:s+1,a:1,mode:'wbw'}; hiAyah(1); play(1,1); }); }
+      const tot=(SURA_AYAHS[_cs-1]||0);
+      if(aa<tot){ hiAyah(aa+1); window._qrNow={s:_cs,a:aa+1,mode:'wbw'}; try{_miniSync();}catch(e){} play(aa+1,1); }
+      else if(cfg.qrAutoNext!==false && _cs<114){ _cs++; _qrView={s:_cs,a:0}; _qrLoad().then(()=>{ window._qrNow={s:_cs,a:1,mode:'wbw'}; hiAyah(1); play(1,1); }); }
       else { _qrWordStop(); } return; }
     qws.forEach(x=>x.classList.remove('qwnow')); if(qws[wi-1]){ qws[wi-1].classList.add('qwnow'); try{qws[wi-1].scrollIntoView({block:'center',behavior:'smooth'});}catch(e){} }
-    const url='https://audio.qurancdn.com/wbw/'+pad(s,3)+'_'+pad(aa,3)+'_'+pad(wi,3)+'.mp3';
+    const url='https://audio.qurancdn.com/wbw/'+pad(_cs,3)+'_'+pad(aa,3)+'_'+pad(wi,3)+'.mp3';
     const au=new Audio(url); try{au.setAttribute('playsinline','');}catch(e){} window._qrWordAudio=au;
     au.onended=()=>{ if(window._qrNow&&window._qrNow.mode==='wbw'&&window._qrWordAudio===au) play(aa,wi+1); };
     au.onerror=()=>{ if(window._qrNow&&window._qrNow.mode==='wbw'&&window._qrWordAudio===au) play(aa,wi+1); };  // нет записи слова → пропустить
