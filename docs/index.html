@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v510</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v511</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -608,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v510';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v511';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5977,13 +5977,14 @@ async function _dzLinkSummary(codes){
 }
 // чипы звеньев цепи (опознан #id зелёным → карточка равия · U-код жёлтым «форма ؟» → карточка формы) — единый рендер (R45)
 // между двумя опознанными соседями — коннектор: ✓ если их связь учитель→ученик подтверждена تهذيب الكمال (M475)
-function _dzChips(codes, row, forms, uResolved){
-  uResolved=uResolved||{};
+function _dzChips(codes, row, forms, uResolved, numOverride){
+  uResolved=uResolved||{}; numOverride=numOverride||{};
   const arr=codes.slice(0,16);
   arr.forEach((c,i)=>{
     const b=document.createElement('span');
     b.style.cssText='cursor:pointer;font-size:12.5px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.03)';
-    const rid=(typeof c==='number')?c:(uResolved[c]!=null?Number(uResolved[c]):null);   // #1/#4/#6: U-код опознан через na/сверку (همام→6739, قتيبة→5187)
+    const ovr=(numOverride[i]!=null);   // числовой id перекрыт авторитетным (по сверке)
+    const rid=ovr?Number(numOverride[i]):((typeof c==='number')?c:(uResolved[c]!=null?Number(uResolved[c]):null));   // #1/#4/#6: U-код/чужой id опознан через na/сверку (همام→6739, خالد 16274→1768)
     if(rid!=null){ b.textContent='#'+rid+' ✓'; b.style.color='#9fd3a8'; b.title='опознан — id базы '+rid+(typeof c==='number'?'':' (по сверке sunnah.com)');
       _narrCard(rid).then(v=>{ if(v&&v[1]) b.textContent=v[1].split(' ').slice(0,3).join(' ')+' ·#'+rid; }).catch(()=>{});
       b.onclick=()=>{ _narrCard(rid).then(v=>{ if(v&&v[1]) openNarratorRijal(v[1]); else toast('карточка не нашлась'); }).catch(()=>{}); };
@@ -6012,12 +6013,21 @@ async function dzChainInto(host, bid, num){
   try{
     const full=await dzChainFull(bid, num); if(!full||!full.seq||!full.seq.length) return;
     const codes=full.seq, forms=full.forms;
-    // #1/#4/#5/#6: опознать U-коды цепи через АВТОРИТЕТНУЮ сверку (na): همام/قتيبة, опознанные внизу, должны быть опознаны и здесь.
-    let uResolved={};
+    // #1/#4/#5/#6: согласовать цепь Э1.1 с АВТОРИТЕТНОЙ сверкой (na). U-коды → id по форме; «чужой» числовой id → авторитетный (по позиции, при выровненной цепи).
+    let uResolved={}, numOverride={};
     try{ const _rec=await codifChain(bid,num);
-      if(_rec&&_rec.na&&_rec.na.length){ const naMap={}; for(const p of _rec.na){ const k=canon(p[0]); if(k&&!(k in naMap)) naMap[k]=String(p[1]); }
+      if(_rec&&_rec.na&&_rec.na.length){
+        const naArr=_rec.na.map(p=>String(p[1]));   // mids в порядке цепи
+        const naSet=new Set(naArr);
+        const naMap={}; for(const p of _rec.na){ const k=canon(p[0]); if(k&&!(k in naMap)) naMap[k]=String(p[1]); }
         await Promise.all(codes.filter(c=>typeof c!=='number').map(async c=>{
           try{ const u=await dzUReg(c); const fm=u&&u[0]?canon(u[0]):''; if(fm && naMap[fm]) uResolved[c]=naMap[fm]; }catch(e){} }));
+        // числовые: ВЫРОВНЕНА ли цепь (анкеры — числовые id, что есть в na, стоят на своих позициях)?
+        let aligned = codes.length<=naArr.length+1;
+        if(aligned){ for(let i=0;i<codes.length;i++){ const c=codes[i];
+          if(typeof c==='number' && naSet.has(String(c)) && naArr[i]!==String(c)){ aligned=false; break; } } }
+        if(aligned){ for(let i=0;i<codes.length;i++){ const c=codes[i];   // «чужой» числовой (нет в na) → авторитетный na[i] (قتادة 15293→5183, خالد 16274→1768)
+          if(typeof c==='number' && !naSet.has(String(c)) && i<naArr.length && naSet.has(naArr[i])) numOverride[i]=naArr[i]; } }
       }
     }catch(e){}
     const box=document.createElement('div'); box.style.cssText='margin-top:8px;padding-top:7px;border-top:1px dashed var(--border)';
@@ -6025,7 +6035,7 @@ async function dzChainInto(host, bid, num){
     lbl.textContent='🧬 Цепочка по кодам Э1.1 (форма передачи между именами · тап — карточка):';
     box.appendChild(lbl);
     const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl;align-items:flex-start'; box.appendChild(row);
-    _dzChips(codes, row, forms, uResolved);
+    _dzChips(codes, row, forms, uResolved, numOverride);
     // M449: вечный КОД ЦЕПИ этого хадиса + «та же цепь ещё в N хадисах» (ткни пальцем → код цепи)
     try{
       const info=await _isnadInfo(codes, forms);
