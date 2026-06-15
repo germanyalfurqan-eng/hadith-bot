@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v537</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v538</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -611,7 +611,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v537';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v538';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8679,16 +8679,17 @@ function defaultAcc(){ const o={}; ['all','app','translate','neuro','bot'].forEa
 function setAccStatus(t,err){ const e=document.getElementById('accStatus'); if(e){ e.textContent=t; e.style.color=err?'#ff6b6b':'var(--hint)'; } }
 function normFeat(k){ ACC[k]=ACC[k]||{public:false,whitelist:[]}; ACC[k].whitelist=ACC[k].whitelist||[]; return ACC[k]; }
 async function saveAccess(){
-  if(!BACKEND_URL){ setAccStatus('Нет адреса сервера.',true); return; }
+  if(!BACKEND_URL){ setAccStatus('Нет адреса сервера.',true); return false; }
   setAccStatus('Сохраняю…');
   try{
     const r=await fetch(BACKEND_URL+'/access',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'set', config:ACC, initData:INITDATA})});
     const j=await r.json().catch(()=>({}));
-    if(r.ok && j.ok){ ACC=j.config||ACC; setAccStatus('✅ Сохранено и применено для всех.'); renderAccess(); }
+    if(r.ok && j.ok){ ACC=j.config||ACC; setAccStatus('✅ Сохранено и применено для всех.'); renderAccess(); return true; }
     else if(r.status===403){ setAccStatus('⛔ Менять может только владелец (открой через Telegram).',true); }
     else setAccStatus('Ошибка сохранения ('+(r.status||'сеть')+').',true);
-  }catch(e){ setAccStatus('Сеть недоступна — не сохранено.',true); }
+    return false;
+  }catch(e){ setAccStatus('Сеть недоступна — не сохранено.',true); return false; }
 }
 function renderAccess(){
   const box=document.getElementById('accBody'); if(!box) return; box.innerHTML='';
@@ -8705,7 +8706,7 @@ function renderAccess(){
     head.appendChild(left);
     if(!sp.noPublic){
       const sw=document.createElement('div'); sw.className='sw'+(f.public?' on':''); sw.title='Открыть всем';
-      sw.onclick=()=>{ f.public=!f.public; sw.classList.toggle('on',f.public); saveAccess(); };
+      sw.onclick=async ()=>{ const _prev=f.public; f.public=!f.public; sw.classList.toggle('on',f.public); const _ok=await saveAccess(); if(!_ok){ f.public=_prev; sw.classList.toggle('on',f.public); } };   // QA-low: откат тумблера при отказе сервера (был UI-рассинхрон)
       head.appendChild(sw);
     }
     card.appendChild(head);
@@ -9478,7 +9479,7 @@ const READABLE=[
   {code:'tirmidhi',ru:'Джами ат-Тирмизи'},{code:'ibnmajah',ru:'Сунан Ибн Маджа'},{code:'nasai',ru:'Сунан ан-Насаи'},
   {code:'malik',ru:'аль-Муватта (Малик)'},{code:'ahmad',ru:'Муснад Ахмада'},
 ].concat(EXTRA.filter(e=>e.code!=='muhaymin' && !e.soon).map(e=>({code:e.code,ru:e.ru})));   // муфхаймин — особая структура (рв); «скоро» — ещё нет данных
-let _readArr=null,_readCode='',_readIdx=0,_readFindM=[],_readFindPos=-1;
+let _readArr=null,_readCode='',_readIdx=0,_readFindM=[],_readFindPos=-1,_readSeq=0;
 /* Поиск ВНУТРИ книги (локально, бесплатно): собираем индексы совпадений, листаем по ним */
 function _readDoFind(){
   const inp=document.getElementById('readFind'); const info=document.getElementById('readFindInfo');
@@ -9521,21 +9522,23 @@ async function _prefetchTranslate(){   // #159: фоном прогреть пе
 }
 async function _readOpen(code,fromNum){
   _readCode=code; _readArr=[]; _readFindM=[]; _readFindPos=-1;   // #179-фикс: сброс — иначе при провале загрузки навигация листала бы СТАРЫЙ сборник под меткой нового
+  const _my=++_readSeq;   // QA-low: секвенс-гард против гонки параллельных _readOpen (старая загрузка не перезаписывает новую)
   var _rf=document.getElementById('readFind'); if(_rf) _rf.value=''; var _rfi=document.getElementById('readFindInfo'); if(_rfi) _rfi.textContent='';
   document.getElementById('readPick').style.display='none';
   document.getElementById('readView').style.display='block';
   document.getElementById('readTitle').textContent='📖 '+(ruTitle(code)||code);
   const body=document.getElementById('readBody'); body.innerHTML='<div class="hint" style="text-align:center;padding:14px">Загружаю сборник…</div>';
   try{ await loadReverse(); }catch(e){}
-  try{ _readArr=await _readLoad(code); }
+  try{ const _a0=await _readLoad(code); if(_my!==_readSeq) return; _readArr=_a0; }
   catch(e){   // #179/A-104: транзиентный сбой загрузки → ретрай 1 раз, затем фолбэк на турат-ридер (если есть bid), иначе понятная ошибка
-    try{ await new Promise(r=>setTimeout(r,700)); _readArr=await _readLoad(code); }
+    try{ await new Promise(r=>setTimeout(r,700)); const _a1=await _readLoad(code); if(_my!==_readSeq) return; _readArr=_a1; }
     catch(e2){
       let _tb=null; try{ _tb=(typeof COLL_BIDS!=='undefined'&&COLL_BIDS[code]&&COLL_BIDS[code][0])||(typeof EXTRA_BIDS!=='undefined'&&EXTRA_BIDS[code])||null; }catch(_e){}
       if(_tb && BACKEND_URL){ try{ document.getElementById('readModal').style.display='none'; }catch(_e){} try{ openBook(_tb, fromNum, true); }catch(_e){} return; }
       _readArr=[]; body.innerHTML='<div class="status">Не удалось загрузить сборник (проблема сети). Попробуй ещё раз через секунду или обнови приложение.</div>'; return;
     }
   }
+  if(_my!==_readSeq) return;   // QA-low: пока грузили, юзер открыл другой сборник — не рендерим устаревший
   _readIdx=0;
   if(fromNum){ const qn=String(parseInt(fromNum,10)); const i=_readArr.findIndex(x=>String(x.num)===qn); if(i>=0)_readIdx=i; }
   _readRender();
