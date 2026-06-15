@@ -177,7 +177,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v507</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v508</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -608,7 +608,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v507';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v508';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -6539,11 +6539,16 @@ async function narrCandidates(qRaw){
   out.sort((a,b)=>b.sc-a.sc);
   // M424: однословный запрос («хишам») = десятки тёзок, а датасет «известности» у тёзок шумный →
   // топ-40 пересортировываем по РЕАЛЬНОМУ участию в штудированных иснадах (dz, число мест) — Ибн Аммар с сотнями мест выше тёзок с нулём
-  if(/[а-яё]/i.test(qRaw) && qRaw.trim().split(/\s+/).length===1 && out.length>3){
-    const top=out.slice(0,80);
+  // #4 (приоритет «лучше всего подходящих»): пересортировка top по РЕАЛЬНОМУ участию в иснадах (dzPart).
+  // ОДНОсловный («хишам») — участие РЕШАЕТ (десятки тёзок); МНОГОсловный/кунья («абу муавия») — участие БУСТИТ
+  // (чтобы самый связанный/практикуемый أبو معاوية الضرير был выше тёзок), но матч имени остаётся главным.
+  if(/[а-яё]/i.test(qRaw) && out.length>3){
+    const single = qRaw.trim().split(/\s+/).length===1;
+    const top=out.slice(0, single?80:36);
     try{ await Promise.all(top.map(async c=>{ if(c.id==null){ c.pp=0; return; }
       try{ const p=await dzPart(c.id); c.pp=p?p.length:0; }catch(e){ c.pp=0; } }));
-      top.sort((a,b)=>((b.sc===999)-(a.sc===999))||((b.pp||0)-(a.pp||0))||(b.sc-a.sc));   // гарант не перебивается участием
+      if(single) top.sort((a,b)=>((b.sc===999)-(a.sc===999))||((b.pp||0)-(a.pp||0))||(b.sc-a.sc));   // гарант не перебивается участием
+      else top.sort((a,b)=>((b.sc===999)-(a.sc===999))||((b.sc+Math.min(b.pp||0,600)*0.03)-(a.sc+Math.min(a.pp||0,600)*0.03)));   // score-primary + буст участия
     }catch(e){}
     return top.slice(0,20);
   }
