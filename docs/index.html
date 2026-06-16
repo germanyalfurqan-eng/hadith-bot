@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v549</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v550</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -638,7 +638,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v549';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v550';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1798,7 +1798,10 @@ function nearestWord(word, vocab){ if(word.length<3 || vocab.has(word)) return n
     const d=levLE(word,w,max); if(d<=max && (d<bestD || (d===bestD && f>bestF))){ bestW=w; bestD=d; bestF=f; } }
   return bestW; }
 // По словам запроса вернуть исправления: {changed:[{from,to}], corrected:[слова]}.
-function correctQuery(words, vocab){ const changed=[]; const corrected=words.map(w=>{ const c=nearestWord(w,vocab); if(c){ changed.push({from:w,to:c}); return c; } return w; }); return {changed, corrected}; }
+function correctQuery(words, vocab){ const changed=[]; const corrected=words.map(w=>{ const c=nearestWord(w,vocab);
+  // баг «бида»→«ида»: не принимать «исправление», которое просто ДРОПАЕТ первую/последнюю букву (c — подстрока w в начале/конце). Это почти всегда не опечатка, а транслит арабского.
+  if(c && c!==w && c.length<w.length && (w.endsWith(c)||w.startsWith(c))) return w;
+  if(c){ changed.push({from:w,to:c}); return c; } return w; }); return {changed, corrected}; }
 // Баннер автоисправления (Яндекс-стиль): УЖЕ показаны результаты для исправленного +
 // «искать именно как ввёл» (настоять на своём запросе, даже с опечаткой → строгий режим).
 function autoCorrectBanner(orig, corrected){
@@ -2172,6 +2175,16 @@ async function runSearch(explicit){
     }
     // РУССКИЙ поиск по хадисам (готовые переводы Бухари/Муслим/Абу Дауд). ИИ выкл + кириллица + не число.
     if(!numMode && !modes.ai && /[а-яё]/i.test(q) && !isArabic(q)){   // #181-фикс: гейт по q (не shown) — раскладочная кириллица (rfnflf→катада) теперь входит в ветку → баннер достижим
+      // «бида»/«закят»/«салят» — кириллица = ТРАНСЛИТ арабского термина (translitSuggest даёт بدعة). Не угадываю молча (бида = بدعة или العبادة?), а предлагаю ЧИПЫ — владелец тапает нужный → поиск по-арабски. Реальные русские слова (вера/молитва) транслит не дают → чипов нет.
+      if(!strict && shown.trim().split(/\s+/).length<=2 && shown.trim().length<=12){
+        try{ const _tw=await translitSuggest(shown.trim()); const _ar=[...new Set((_tw||[]).filter(x=>isArabic(x)&&canon(x).replace(/\s/g,'').length>=3))].slice(0,3);
+          if(_ar.length){ const cb=document.createElement('div'); cb.className='hint'; cb.style.cssText='margin:6px 0 4px;display:flex;gap:7px;flex-wrap:wrap;align-items:center';
+            cb.innerHTML='<span style="font-size:12.5px;color:var(--hint)">🔎 «'+esc(shown.trim())+'» похоже на арабское слово — искать по-арабски:</span>';
+            _ar.forEach(a=>{ const ch=document.createElement('button'); ch.className='mini'; ch.textContent=a; ch.style.cssText='border:1px solid #2e9b5b;color:#bff5d4;background:#10331f;padding:5px 12px;border-radius:9px;font-size:15px;cursor:pointer;direction:rtl';
+              ch.onclick=()=>{ const _qi=document.getElementById('q'); if(_qi){ _qi.value=a; } window._noLayoutFix=true; runSearch(true); }; cb.appendChild(ch); });
+            res.appendChild(cb); }
+        }catch(e){}
+      }
       let relax=null, corr=null;
       try{ const ru=await loadHadithRu(); if(seq!==_seq) return;
         const qw=_ruNumExpand(q).toLowerCase().split(/\s+/).filter(w=>w.length>1);   // #181-фикс: искать конвертированный q (катада), не сырой shown (rfnflf)
@@ -4284,7 +4297,7 @@ function ensureStructureBtn(){ const res=document.getElementById('res'); if(!res
   res.insertBefore(out, res.firstChild); res.insertBefore(hint, out); res.insertBefore(b, hint);
 }
 // === 📜 Наука хадиса (мусталях): правила достоверности + 48 мутабарун + труды риджаль ===
-let _hadRule=null, _rijal=null;
+let _hadRule=null, _hadRule2=null, _rijal=null;
 async function openHadithScience(){
   let m=document.getElementById('hadModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='hadModal';
@@ -4301,6 +4314,14 @@ async function openHadithScience(){
   const rb=document.createElement('div'); rb.style.cssText='border:1px solid #2e9b5b;border-radius:12px;padding:11px;background:rgba(46,155,91,.08);margin-bottom:12px';
   rb.innerHTML='<div style="font-weight:700;color:#bff5d4;margin-bottom:5px">Правило 1. '+esc(_hadRule.title||'')+'</div><div style="font-size:14px;line-height:1.6">'+esc(_hadRule.rule||'')+'</div>';
   body.appendChild(rb);
+  // ПРАВИЛО 2 — тадлис/мудаллис (#147: правило из разборов канала «Аъмаш мудаллис, от мудалиса через عن нельзя»)
+  try{ if(!_hadRule2) _hadRule2=await (await fetch('./hadith/rule_02_tadlis.json?'+Date.now())).json(); }catch(e){ _hadRule2=null; }
+  if(_hadRule2){ const rb2=document.createElement('div'); rb2.style.cssText='border:1px solid #b3852e;border-radius:12px;padding:11px;background:rgba(179,133,46,.08);margin-bottom:12px';
+    let h2='<div style="font-weight:700;color:#ffd479;margin-bottom:5px">Правило 2. '+esc(_hadRule2.title||'')+'</div><div style="font-size:14px;line-height:1.6">'+esc(_hadRule2.rule||'')+'</div>';
+    if((_hadRule2.mudallisin||[]).length){ h2+='<div style="font-weight:700;margin:9px 0 4px;font-size:13px">📋 Известные мудаллисы (их «عن» требует سماع):</div>';
+      _hadRule2.mudallisin.forEach(d=>{ h2+='<div style="border-bottom:1px solid var(--border);padding:6px 2px;font-size:13px"><span style="'+_AF+';font-size:16px;color:var(--mark)">'+esc(d.ar||'')+'</span> — <b>'+esc(d.ru||'')+'</b><div style="color:var(--hint);font-size:12px;margin-top:2px">'+esc(d.note||'')+'</div></div>'; }); }
+    if(_hadRule2.note) h2+='<div style="color:var(--hint);font-size:11.5px;margin-top:8px;border-top:1px solid var(--border);padding-top:6px">'+esc(_hadRule2.note)+'</div>';
+    rb2.innerHTML=h2; body.appendChild(rb2); }
   // 48 МУТАБАРУН (кликабельны → Википедия + биография ИИ)
   const ch=document.createElement('div'); ch.innerHTML='<div style="font-weight:700;margin:6px 0 6px">📋 Мутабарун — свидетели надёжности ('+((_hadRule.critics||[]).length)+'):</div>'; body.appendChild(ch);
   (_hadRule.critics||[]).forEach(c=>{ const it=document.createElement('div'); it.style.cssText='border-bottom:1px solid var(--border);padding:8px 2px';
