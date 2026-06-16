@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v559</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v560</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -640,7 +640,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v559';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v560';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4371,7 +4371,7 @@ function loadOurRazbory(){ if(_ourRaz) return Promise.resolve(_ourRaz); if(_ourR
 let _razCards=null,_razCardsP=null;
 function loadRazCards(){ if(_razCards) return Promise.resolve(_razCards); if(_razCardsP) return _razCardsP;
   _razCardsP=fetch('./razbory_cards.json?'+APPVER).then(r=>r.ok?r.json():{cards:[]}).then(j=>{_razCards=j||{cards:[]};return _razCards;}).catch(()=>{_razCards={cards:[]};return _razCards;}); return _razCardsP; }
-const _RAZ_AUTHORS=[{key:'all',label:'Все'},{key:'майдани',label:'Абу Шуэйб аль-Майдани'},{key:'сафия',label:'Абу Сафия'},{key:'шабаб',label:'Шабаб'}];
+const _RAZ_AUTHORS=[{key:'all',label:'Все'},{key:'майдани',label:'Абу Шуэйб аль-Майдани · أبو شعيب الميداني'},{key:'сафия',label:'Абу Сафия · أبو سفية'},{key:'шабаб',label:'Шабаб · الشباب'},{key:'__none__',label:'⚠️ Автор не указан'}];   // #194 арабские имена + #200 фильтр неклассифицированных
 async function openOurRazbory(){
   let m=document.getElementById('ourRazModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='ourRazModal';
@@ -4388,7 +4388,9 @@ async function openOurRazbory(){
     html+='<input id="ourRazSearch" placeholder="🔎 поиск по разборам (тема/текст)…" value="'+esc(_q)+'" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:8px 11px;border-radius:9px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px">';
     html+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'+_RAZ_AUTHORS.map(a=>'<button class="razFlt mini" data-k="'+a.key+'" style="border:1px solid '+(_filter===a.key?'#6c5ce7':'var(--border)')+';background:'+(_filter===a.key?'#2a1f3e':'transparent')+';color:'+(_filter===a.key?'#d8cdff':'var(--text)')+';padding:5px 11px;border-radius:9px;cursor:pointer;font-size:12.5px">'+esc(a.label)+'</button>').join('')+'</div>';
     const qq=_q.toLowerCase().trim();
-    const flt=cards.filter(c=>{ if(_filter!=='all' && (c.by||'').toLowerCase().indexOf(_filter)<0) return false;
+    const flt=cards.filter(c=>{
+      if(_filter==='__none__'){ if((c.by||'').trim()) return false; }   // #200: только без автора
+      else if(_filter!=='all' && (c.by||'').toLowerCase().indexOf(_filter)<0) return false;
       if(qq && (((c.title||'')+' '+(c.text||'')).toLowerCase().indexOf(qq)<0)) return false; return true; });
     if(!flt.length){ html+='<div class="hint" style="padding:14px;text-align:center">'+(cards.length?'Ничего не найдено.':'Разборы наполняются из канала @hadis_isnad — скоро.')+'</div>'; }
     flt.forEach(c=>{ const cid='raz_'+c.mid;
@@ -4401,7 +4403,7 @@ async function openOurRazbory(){
       html+='<div id="'+cid+'" style="display:none;padding:0 12px 11px;border-top:1px solid var(--border)">';
       html+='<div style="white-space:pre-wrap;word-break:break-word;font-size:calc(15px * var(--txtScale,1));line-height:1.7;margin:8px 0;font-family:var(--arFont,\'Noto Naskh Arabic\',serif)">'+esc(c.text||'')+'</div>';
       html+='<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:12.5px">';
-      html+='<span style="color:#c9b8ff">✍️ '+esc(c.by||'канал @hadis_isnad')+'</span>';
+      html+=(c.by?('<span style="color:#c9b8ff">✍️ '+esc(c.by)+'</span>'):'<span style="color:#e0b34a">⚠️ автор требует уточнения</span>');   // #200
       html+='<span class="ourRazL" data-u="'+esc(c.url)+'" style="color:var(--link);cursor:pointer;text-decoration:underline">🔗 разбор '+(c.kind==='audio'?'(аудио ▶)':'(пост)')+' в канале</span>';
       html+='</div></div></div>';
     });
