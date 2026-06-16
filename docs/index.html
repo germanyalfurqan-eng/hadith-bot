@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v561</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v562</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -640,7 +640,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v561';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v562';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4398,8 +4398,9 @@ async function openOurRazbory(){
       // КОРОТКО: № разбора + тема, клик раскрывает
       var _ti=(c.typ==='комментарий')?'📍':((c.typ==='аудио')?'🎧':((c.typ==='заметка')?'📝':'📜'));
       var _lbl = c.rn ? ('<b style="color:#ffd479">'+_ti+' №'+esc(c.rn)+'</b> ') : ('<b style="color:#ffd479">'+_ti+' '+esc((c.typ||'разбор').charAt(0).toUpperCase()+(c.typ||'разбор').slice(1))+'</b> ');   // нумерованный разбор № / иначе тип (комментарий/аудио/заметка)
+      var _vb = c.verd==='недостоверный' ? ' <span style="font-size:10.5px;color:#ff9b7a;border:1px solid #b3502e;border-radius:6px;padding:0 6px">🚫 недостоверный</span>' : (c.verd==='достоверный'?' <span style="font-size:10.5px;color:#7fe0a0;border:1px solid #2e9b5b;border-radius:6px;padding:0 6px">✓ достоверный</span>':'');
       html+='<div class="razHead" data-id="'+cid+'" style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:11px 12px;cursor:pointer">'
-        +'<span style="min-width:0">'+_lbl+'<b style="color:#ff9b7a">'+esc(c.title||'')+'</b>'+(c.sup?(' <span style="font-size:10.5px;color:#c9b8ff;border:1px solid #6c5ce7;border-radius:6px;padding:0 6px">↩ дополнение к №'+esc(c.sup)+'</span>'):'')+'</span>'
+        +'<span style="min-width:0">'+_lbl+'<b style="color:#ff9b7a">'+esc(c.title||'')+'</b>'+_vb+(c.sup?(' <span style="font-size:10.5px;color:#c9b8ff;border:1px solid #6c5ce7;border-radius:6px;padding:0 6px">↩ дополнение к №'+esc(c.sup)+'</span>'):'')+'</span>'
         +'<span class="razArrow" data-a="'+cid+'" style="flex:none;color:var(--hint)">▼</span></div>';
       // ПОЛНЫЙ разбор (скрыт)
       html+='<div id="'+cid+'" style="display:none;padding:0 12px 11px;border-top:1px solid var(--border)">';
@@ -4407,6 +4408,7 @@ async function openOurRazbory(){
       html+='<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:12.5px">';
       html+=(c.by?('<span style="color:#c9b8ff">✍️ '+esc(c.by)+'</span>'):'<span style="color:#e0b34a">⚠️ автор требует уточнения</span>');   // #200
       html+='<span class="ourRazL" data-u="'+esc(c.url)+'" style="color:var(--link);cursor:pointer;text-decoration:underline">🔗 разбор '+(c.kind==='audio'?'(аудио ▶)':'(пост)')+' в канале</span>';
+      html+='<span class="ourRazShare" data-mid="'+c.mid+'" style="color:#7fe0a0;cursor:pointer;text-decoration:underline">📤 поделиться разбором</span>';   // З-30: поделиться этим разбором
       html+='</div></div></div>';
     });
     body.innerHTML=html;
@@ -4414,6 +4416,7 @@ async function openOurRazbory(){
     body.querySelectorAll('.razFlt').forEach(b=>b.onclick=()=>{ _filter=b.dataset.k; render(); });
     body.querySelectorAll('.ourRazL,.ourRazCh').forEach(a=>a.onclick=()=>{ try{ openLink(a.dataset.u||'https://t.me/hadis_isnad'); }catch(e){} });
     body.querySelectorAll('.razHead').forEach(hd=>hd.onclick=()=>{ const el=document.getElementById(hd.dataset.id); const ar=hd.querySelector('.razArrow'); if(el){ const vis=el.style.display!=='none'; el.style.display=vis?'none':'block'; if(ar) ar.textContent=vis?'▼':'▲'; } });
+    body.querySelectorAll('.ourRazShare').forEach(a=>a.onclick=(e)=>{ e.stopPropagation(); try{ const u=deepLinkUrls('raz_'+a.dataset.mid).tg; copyText(u); toast('📤 Ссылка на разбор скопирована'); try{hap('light');}catch(_e){} }catch(_e){} });   // З-30
   };
   render();
 }
@@ -9214,6 +9217,7 @@ function runDeepLink(){ const g=_deepLinkToken(); if(!g) return; const p=g.split
     else if(t==='m' && p[1]){ (async()=>{ try{ const _th=document.querySelector('.tab[data-tab="hadith"]'); if(_th) _th.click();   // 📍 share-place: аль-Мухаймин №p[1] карточкой (он вне читалки)
       const _a=await loadMuhaymin(); const _h=_a.find(x=>String(x.n)===String(p[1])); const _res=document.getElementById('res');
       if(_h&&_res){ _res.innerHTML=''; _groups=[]; _res.appendChild(makeCard({type:'m',h:_h})); } }catch(e){} })(); }
+    else if(t==='raz' && p[1]){ try{ openOurRazbory(); setTimeout(()=>{ try{ const el=document.getElementById('raz_'+p[1]); if(el){ el.style.display='block'; const hd=el.previousElementSibling; if(hd){ const ar=hd.querySelector('.razArrow'); if(ar) ar.textContent='▲'; } el.scrollIntoView({block:'center'}); } }catch(e){} }, 900); }catch(e){} }   // З-30: ссылка на разбор
     else if(t==='cat') openCatalog();
   }catch(e){} }, 650); }
 try{ runDeepLink(); }catch(e){}
