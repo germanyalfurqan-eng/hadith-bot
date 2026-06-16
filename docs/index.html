@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v572</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v573</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -640,7 +640,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v572';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v573';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1485,7 +1485,8 @@ function updateTranslitSugg(){
     if(((document.getElementById('q').value||'').trim())!==v) return;   // успел поменяться
     let ws=[], phrase=''; try{ ws=await translitSuggest(v,true); phrase=await translitPhrase(v,true); }catch(e){}   // true=строгий (без мусора на рус.словах)
     if(((document.getElementById('q').value||'').trim())!==v) return;
-    if(!ws.length && !phrase){ box.style.display='none'; box.innerHTML=''; return; }
+    const ruAr=(!ws.length && !phrase) ? _ruToAr(v) : '';   // УКАЗ-2: правило-транслит, когда словарь молчит (джильбаб→جلباب)
+    if(!ws.length && !phrase && !ruAr){ box.style.display='none'; box.innerHTML=''; return; }
     const pick=(val)=>{ const q=document.getElementById('q'); q.value=val; box.style.display='none'; box.innerHTML='';
       try{hideRecent();}catch(e){} updateQuranHelper(); runSearch(true); };
     box.innerHTML='';
@@ -1504,6 +1505,11 @@ function updateTranslitSugg(){
         ch.style.cssText="font-family:'Traditional Arabic','Amiri',serif;font-size:18px;cursor:pointer;margin:0 4px 4px 0";
         ch.textContent=w; ch.onclick=()=>pick(w); box.appendChild(ch); });
     }
+    // УКАЗ-2: правило-транслит (по буквам) — когда словарь молчит. Не подменяет дословный поиск, лишь предлагает арабскую форму.
+    if(ruAr){ const cap=document.createElement('span'); cap.textContent='🔤 по буквам:'; cap.style.cssText='font-size:12px;color:var(--hint);margin-inline-end:6px;vertical-align:middle'; box.appendChild(cap);
+      const ch=document.createElement('span'); ch.className='chip'; ch.title='Предложение: арабское написание по буквам (поиск дословно не меняется)';
+      ch.style.cssText="font-family:'Traditional Arabic','Amiri',serif;font-size:18px;cursor:pointer;margin:0 4px 4px 0;border-color:var(--link)";
+      ch.textContent=ruAr; ch.onclick=()=>pick(ruAr); box.appendChild(ch); }
     // словосочетание (2+ слова) → кнопка распознать целиком через ИИ (когда локально не угадало)
     if(v.indexOf(' ')!==-1){ box.appendChild(document.createElement('br'));
       const aib=document.createElement('span'); aib.className='chip';
@@ -2202,10 +2208,12 @@ async function runSearch(explicit){
     if(!numMode && !modes.ai && /[а-яё]/i.test(q) && !isArabic(q)){   // #181-фикс: гейт по q (не shown) — раскладочная кириллица (rfnflf→катада) теперь входит в ветку → баннер достижим
       // «бида»/«закят»/«салят» — кириллица = ТРАНСЛИТ арабского термина (translitSuggest даёт بدعة). Не угадываю молча (бида = بدعة или العبادة?), а предлагаю ЧИПЫ — владелец тапает нужный → поиск по-арабски. Реальные русские слова (вера/молитва) транслит не дают → чипов нет.
       if(!strict && shown.trim().split(/\s+/).length<=2 && shown.trim().length<=12){
-        try{ const _tw=await translitSuggest(shown.trim()); const _ar=[...new Set((_tw||[]).filter(x=>isArabic(x)&&canon(x).replace(/\s/g,'').length>=3))].slice(0,3);
-          if(_ar.length){ const cb=document.createElement('div'); cb.className='hint'; cb.style.cssText='margin:6px 0 4px;display:flex;gap:7px;flex-wrap:wrap;align-items:center';
-            cb.innerHTML='<span style="font-size:12.5px;color:var(--hint)">🔎 «'+esc(shown.trim())+'» похоже на арабское слово — искать по-арабски:</span>';
-            _ar.forEach(a=>{ const ch=document.createElement('button'); ch.className='mini'; ch.textContent=a; ch.style.cssText='border:1px solid #2e9b5b;color:#bff5d4;background:#10331f;padding:5px 12px;border-radius:9px;font-size:15px;cursor:pointer;direction:rtl';
+        try{ const _tw=await translitSuggest(shown.trim()); let _ar=[...new Set((_tw||[]).filter(x=>isArabic(x)&&canon(x).replace(/\s/g,'').length>=3))].slice(0,3);
+          let _ruleAr='';   // УКАЗ-2: правило-транслит-фолбэк (джильбаб→جلباب), когда словарь молчит
+          if(!_ar.length){ try{ _ruleAr=_ruToAr(shown.trim()); }catch(e){} }
+          if(_ar.length || _ruleAr){ const cb=document.createElement('div'); cb.className='hint'; cb.style.cssText='margin:6px 0 4px;display:flex;gap:7px;flex-wrap:wrap;align-items:center';
+            cb.innerHTML='<span style="font-size:12.5px;color:var(--hint)">🔎 «'+esc(shown.trim())+'» похоже на арабское слово — искать по-арабски'+(_ruleAr&&!_ar.length?' (по буквам)':'')+':</span>';
+            (_ar.length?_ar:[_ruleAr]).forEach(a=>{ const ch=document.createElement('button'); ch.className='mini'; ch.textContent=a; ch.style.cssText='border:1px solid #2e9b5b;color:#bff5d4;background:#10331f;padding:5px 12px;border-radius:9px;font-size:15px;cursor:pointer;direction:rtl';
               ch.onclick=()=>{ const _qi=document.getElementById('q'); if(_qi){ _qi.value=a; } window._noLayoutFix=true; runSearch(true); }; cb.appendChild(ch); });
             res.appendChild(cb); }
         }catch(e){}
@@ -8797,6 +8805,32 @@ async function translitPhrase(query, live){
   const v=await buildArVocab(); const parts=[];
   for(const t of toks){ const top=_tokTop(v,t,1,live); if(!top.length) return ''; parts.push(top[0]); }
   return parts.join(' ');
+}
+// УКАЗ-2 (#190, слово владельца 16.06): ИСЧЕРПЫВАЮЩИЙ правило-транслит кириллица→арабские БУКВЫ для ЛЮБОГО слова (джильбаб→جلباب).
+// Фолбэк, когда словарь-подсказка (translitSuggest) пуста (слова нет в Коране/сиде). Дословный поиск при этом НЕ меняется
+// (конституция поиска) — это лишь ПРЕДЛОЖЕНИЕ-чип. Короткие гласные и/ы/е в письме опускаем; долгие а/я→ا, о/у/ю→و, э→ا; й→ي.
+// Диграфы: дж/дз/ж/ч→ج, ш/щ→ش, х→خ, ц→س. Мягкий/твёрдый знак — опускаем. Начальная краткая гласная → алиф (ислам→اسلام).
+function _ruToArWord(word){
+  let s=String(word||'').toLowerCase().trim().replace(/ё/g,'е'); if(!/[а-я]/.test(s)) return '';
+  s=s.replace(/дж|дз/g,'ج').replace(/[жч]/g,'ج').replace(/[шщ]/g,'ش').replace(/х/g,'خ').replace(/ц/g,'س');
+  const M={'а':'ا','я':'ا','о':'و','у':'و','ю':'و','э':'ا','й':'ي',
+    'б':'ب','п':'ب','в':'و','ф':'ف','м':'م','н':'ن','л':'ل','р':'ر',
+    'к':'ك','г':'غ','д':'د','т':'ت','с':'س','з':'ز'};
+  const SHORT=new Set(['и','ы','е']); let out='';
+  for(const ch of s){
+    if(ch>='؀'&&ch<='ۿ'){ out+=ch; continue; }        // арабская из диграфа
+    if(ch==='ь'||ch==='ъ') continue;                  // ь/ъ — опускаем
+    if(SHORT.has(ch)){ if(out==='') out+='ا'; continue; }   // начальная краткая → алиф, иначе опускаем
+    if(M[ch]) out+=M[ch];
+  }
+  return out;
+}
+function _ruToAr(query){
+  if(_hasRuStop(query)) return '';
+  const toks=String(query||'').toLowerCase().split(/[\s,.;:!?()"'«»\/+|]+/).filter(t=>t.length>=2 && /[а-яё]/.test(t) && !_ruThemeWord(t));
+  if(!toks.length) return '';
+  const parts=toks.map(_ruToArWord).filter(x=>x.length>=2);
+  return parts.length?parts.join(' '):'';
 }
 function neuroLocal(meaning){
   const toks=meaning.toLowerCase().split(/[\s.,;:!?()"'«»\/\-]+/).filter(t=>t.length>=3);
