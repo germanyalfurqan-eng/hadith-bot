@@ -1776,6 +1776,52 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _journal_save("toggle worklog")
             await update.message.reply_text(("✅ Рабочий журнал ВКЛЮЧЕН — буду слать тебе В ЛИЧКУ: что начал/закончил/на чём остановился по каждой заявке, суть с логикой, сколько заявок осталось невыполнено и в работе, и сколько токенов потрачено. Выключить — снова напиши «журнал»." if j["worklog_enabled"] else "🔇 Рабочий журнал ОТКЛЮЧЕН — уведомления о заявках слать не буду."))
             return
+        # ===== #147: фетч разборов достоверности с канала @hadis_isnad (бот — участник; форвард по message_id → текст/Whisper → data/razbory.json) =====
+        if (_tl.startswith("разбор") or _tl.startswith("разборы")) and is_owner(update):
+            RAZBOR_CHANNEL = "@hadis_isnad"
+            _nums = [int(x) for x in re.findall(r'\d+', _tl)]
+            if not _nums:
+                await update.message.reply_text("📜 #147 разборы достоверности.\nФормат: «разбор 11» (один пост) или «разборы 11 50» (диапазон).\nЯ форварну посты из @hadis_isnad, аудио расшифрую (Whisper), сохраню в data/razbory.json — потом внесу вердикты в карточки (⛔ наш разбор). Аудио = расход Whisper, поэтому до 40 за раз.")
+                return
+            _a = _nums[0]; _b = _nums[1] if len(_nums) > 1 else _nums[0]
+            if _b < _a:
+                _a, _b = _b, _a
+            if _b - _a > 40:
+                _b = _a + 40
+                await update.message.reply_text(f"⚠️ За раз беру до 40 постов (аудио = расход Whisper): {_a}–{_b}. Дальше продолжишь «разборы {_b+1} 173».")
+            store = _data_get("razbory.json", {}) or {}
+            await update.message.reply_text(f"📥 Тяну разборы {_a}–{_b} из {RAZBOR_CHANNEL}…")
+            _done = 0; _fail = 0; _aud = 0
+            for _mid in range(_a, _b + 1):
+                try:
+                    _m = await context.bot.forward_message(LOG_CHAT_ID, RAZBOR_CHANNEL, _mid)
+                    _txt = (_m.text or _m.caption or "").strip()
+                    _kind = "text"
+                    if (_m.voice or _m.audio) and len(_txt) < 40:
+                        _kind = "audio"
+                        _media = _m.voice or _m.audio
+                        _f = await _media.get_file()
+                        _ext = ".ogg" if _m.voice else ".mp3"
+                        _p = f"/tmp/razbor_{_mid}{_ext}"
+                        await _f.download_to_drive(_p)
+                        _tr = transcribe_audio(_p)
+                        if _tr:
+                            _txt = (_txt + "\n" + _tr).strip()
+                            _aud += 1
+                        try: os.remove(_p)
+                        except Exception: pass
+                    try: await context.bot.delete_message(LOG_CHAT_ID, _m.message_id)
+                    except Exception: pass
+                    if _txt:
+                        store[str(_mid)] = {"text": _txt[:9000], "kind": _kind, "url": f"https://t.me/hadis_isnad/{_mid}"}
+                        _done += 1
+                    else:
+                        _fail += 1
+                except Exception:
+                    _fail += 1
+            _data_put("razbory.json", store, f"razbory {_a}-{_b} (#147)")
+            await update.message.reply_text(f"✅ Разборы {_a}–{_b}: сохранено {_done} (аудио расшифровано {_aud}), пропущено/ошибок {_fail}. Всего в базе: {len(store)}. → data/razbory.json. Claude внесёт вердикты в our_hukm.json.")
+            return
         # ===== Закрыть заявку: «заявка done <№>» / «заявка готово <№>» =====
         if _tl.startswith("заявка done ") or _tl.startswith("заявка готово "):
             try:

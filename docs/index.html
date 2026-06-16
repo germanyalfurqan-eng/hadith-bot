@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v550</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v551</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -638,7 +638,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v550';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v551';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5236,7 +5236,8 @@ function addTr(meta,card,text,ayah,fav){
   // 📍 «Поделиться местом» (заявка владельца): ссылка откроет приложение на ЭТОМ ЖЕ хадисе/аяте — «в том же месте, смотря на то же место».
   try{ const _ref=ayah?null:refOf(fav); let _tok=null;
     if(ayah && ayah.s && ayah.a) _tok='q_'+ayah.s+'_'+ayah.a;
-    else if(_ref && _ref.source && _ref.num!=null) _tok=(_ref.source==='muhaymin')?('m_'+_ref.num):('r_'+_ref.source+'_'+_ref.num);
+    else if(_ref && _ref.source && _ref.num!=null){ let _n=String(_ref.num); const _ri=_n.match(/#(\d+)/); _n=_n.replace(/#.*/,'');   // START_PARAM_INVALID: Telegram startapp принимает только [A-Za-z0-9_-] — «#1» риваята ломал ссылку. Кодируем риваят как «-N».
+      _tok=(_ref.source==='muhaymin')?('m_'+_n):('r_'+_ref.source+'_'+_n+(_ri?('-'+_ri[1]):'')); }
     if(_tok){ const sp=document.createElement('button'); sp.className='tr-btn'; sp.textContent='📍';
       sp.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
       sp.title='Поделиться местом — ссылка откроет приложение на этом же хадисе/аяте';
@@ -9141,7 +9142,7 @@ function runDeepLink(){ const g=_deepLinkToken(); if(!g) return; const p=g.split
     if(!userAllowed()) return;   // QA-low: не открывать deep-link модал поверх gate-экрана у заблокированного юзера
     if(t==='q') openQuranReader(+p[1]||1,+p[2]||0);
     else if(t==='b') openBook(p[1],p[2]);
-    else if(t==='r') openReader(p[1],p[2]);
+    else if(t==='r') openReader(p[1],String(p[2]||'').replace(/-\d+$/,''));   // share-place: «247-1» риваят → открываем хадис №247
     else if(t==='m' && p[1]){ (async()=>{ try{ const _th=document.querySelector('.tab[data-tab="hadith"]'); if(_th) _th.click();   // 📍 share-place: аль-Мухаймин №p[1] карточкой (он вне читалки)
       const _a=await loadMuhaymin(); const _h=_a.find(x=>String(x.n)===String(p[1])); const _res=document.getElementById('res');
       if(_h&&_res){ _res.innerHTML=''; _groups=[]; _res.appendChild(makeCard({type:'m',h:_h})); } }catch(e){} })(); }
