@@ -5115,6 +5115,63 @@ async def _setup(application):
         asyncio.create_task(_app_channel_watcher(application))
     except Exception as e:
         print("app channel watcher start failed:", e)
+    # #147: разовая авто-обработка разборов достоверности /11..173 из @hadis_isnad (бот — участник)
+    try:
+        asyncio.create_task(_razbory_fetch_bg(application))
+    except Exception as e:
+        print("razbory fetch start failed:", e)
+
+async def _razbory_fetch_bg(application):
+    """#147: разово тянет разборы /11..173 из @hadis_isnad (бот — участник): текст/аудио→Whisper→data/razbory.json.
+    Идемпотентно (пропускает готовые), по одному с паузой (щадим Whisper/баланс), сохраняет инкрементально."""
+    CH = "@hadis_isnad"; LO, HI = 11, 173
+    await asyncio.sleep(40)   # дать боту прогрузиться
+    try:
+        store = _data_get("razbory.json", {}) or {}
+    except Exception:
+        store = {}
+    missing = [n for n in range(LO, HI + 1) if str(n) not in store]
+    if not missing:
+        return
+    try:
+        await application.bot.send_message(OWNER_ID, f"📥 Авто-обработка разборов {CH}: тяну {len(missing)} постов (из {HI-LO+1}). Аудио → Whisper → сохраняю по мере готовности.")
+    except Exception:
+        pass
+    done = 0
+    for mid in missing:
+        try:
+            m = await application.bot.forward_message(LOG_CHAT_ID, CH, mid)
+            txt = (m.text or m.caption or "").strip()
+            kind = "text"
+            if (m.voice or m.audio) and len(txt) < 60:
+                kind = "audio"
+                media = m.voice or m.audio
+                f = await media.get_file()
+                ext = ".ogg" if m.voice else ".mp3"
+                p = f"/tmp/raz_{mid}{ext}"
+                await f.download_to_drive(p)
+                tr = transcribe_audio(p)
+                if tr:
+                    txt = (txt + "\n" + tr).strip()
+                try: os.remove(p)
+                except Exception: pass
+            try: await application.bot.delete_message(LOG_CHAT_ID, m.message_id)
+            except Exception: pass
+            if txt:
+                store[str(mid)] = {"text": txt[:9000], "kind": kind, "url": f"https://t.me/hadis_isnad/{mid}", "n": mid}
+                done += 1
+                if done % 5 == 0:
+                    try: _data_put("razbory.json", store, f"razbory bg → {mid} (#147)")
+                    except Exception: pass
+        except Exception:
+            pass
+        await asyncio.sleep(4)   # щадим лимиты/баланс
+    try: _data_put("razbory.json", store, f"razbory bg done: {len(store)} (#147)")
+    except Exception: pass
+    try:
+        await application.bot.send_message(OWNER_ID, f"✅ Разборы: в базе {len(store)} из {HI-LO+1} (data/razbory.json). Claude оформит карточки: текст разбора + иснад + ошибки + аудио + автор + уник.№.")
+    except Exception:
+        pass
 
 async def _app_channel_watcher(application):
     """Фон: раз в 5 мин публикует новую update_note.txt в @muslimoonapp (см. _setup)."""
