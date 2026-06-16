@@ -140,6 +140,11 @@
   /* M334 ОПТИМИЗАЦИЯ: изоляция layout + офф-скрин карточки не рендерятся (длинные списки результатов летают) */
   #res .card{contain:content;content-visibility:auto;contain-intrinsic-size:auto 230px}
   @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  @keyframes rdHit{0%{box-shadow:0 0 0 rgba(74,222,128,0);transform:scale(1)}45%{box-shadow:0 0 14px #4ade80;transform:scale(1.18)}100%{box-shadow:0 0 0 rgba(74,222,128,0);transform:scale(1)}}
+  @keyframes rdPop{0%{transform:scale(1)}40%{transform:scale(1.32)}100%{transform:scale(1)}}
+  .rdHit{animation:rdHit .3s ease both;will-change:transform,box-shadow}
+  .rdPop{animation:rdPop .3s ease both;will-change:transform}
+  @media (prefers-reduced-motion:reduce){.rdHit,.rdPop{animation:none!important}}
   /* gate */
   .gate{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;
         justify-content:center;text-align:center;padding:30px;z-index:50}
@@ -178,7 +183,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v575</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v576</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -634,7 +639,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v575';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v576';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1966,17 +1971,19 @@ async function openRootBrowser(){
     const fin=()=>{ fp.style.opacity='0'; window._rootDemoOn=false; if(db) db.textContent=dbTxt||'▶ пример (نصر)'; };
     try{ toast('Пример: набираю корень نصر — следи за пальцем 👆 (повторный тап ▶ = стоп)'); }catch(e){}
     // старт: палец появляется НАД клавиатурой и даёт ей 2с «осмотреться» (было: мгновенный скачок)
-    try{ const kb=lettersEl.getBoundingClientRect(); fp.style.left=(kb.left+kb.width/2)+'px'; fp.style.top=(kb.top-6)+'px'; fp.style.opacity='1'; }catch(e){ fp.style.opacity='1'; }
-    await new Promise(r=>setTimeout(r,2000)); if(window._rootDemoStop) return fin();
+    try{ fp.style.display='none'; }catch(e){}
+    let _rdReduce=false; try{ _rdReduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches; }catch(e){}
+    if(_rdReduce){ for(const _L of seq){ cur+=_L; } refresh(); return fin(); }
+    await new Promise(r=>setTimeout(r,160)); if(window._rootDemoStop) return fin();
     for(const L of seq){
       const lb=[...lettersEl.children].find(x=>x.dataset.l===L);
-      if(lb){ const rc=lb.getBoundingClientRect(); fp.style.left=(rc.left+rc.width/2-8)+'px'; fp.style.top=(rc.bottom-8)+'px'; }
-      await new Promise(r=>setTimeout(r,1200)); if(window._rootDemoStop) return fin();   // палец «долетает»
+      if(lb){ lb.classList.remove('rdHit'); void lb.offsetWidth; lb.classList.add('rdHit'); }
+      await new Promise(r=>setTimeout(r,150)); if(window._rootDemoStop) return fin();   // палец «долетает»
       if(lb){ lb.style.transition='all .2s'; lb.style.boxShadow='0 0 16px #4ade80'; lb.style.background='#173d30'; lb.style.transform='scale(1.2)'; }
       fp.style.transform='translateY(5px) scale(.88)';   // нажатие
       await new Promise(r=>setTimeout(r,260)); fp.style.transform='';
-      cur+=L; refresh(); curEl.style.transform='scale(1.4)'; curEl.style.color='#7fe3bf';
-      await new Promise(r=>setTimeout(r,1100)); if(window._rootDemoStop) return fin();
+      cur+=L; refresh(); curEl.classList.remove('rdPop'); void curEl.offsetWidth; curEl.classList.add('rdPop');
+      await new Promise(r=>setTimeout(r,180)); if(window._rootDemoStop) return fin();
       if(lb){ lb.style.boxShadow=''; lb.style.background=''; lb.style.transform=''; }
       curEl.style.transform=''; curEl.style.color='var(--mark)';
       await new Promise(r=>setTimeout(r,350));
@@ -5334,15 +5341,29 @@ function addTr(meta,card,text,ayah,fav){
       meta.appendChild(sp); } }catch(e){}
   // M32: озвучка хадиса синтезом речи устройства — клиентский TTS. Аяты не трогаем (у них аудио чтецов). #145: можно отключить в Настройках (cfg.noTts).
   if(!ayah && !cfg.noTts && typeof window!=='undefined' && 'speechSynthesis' in window){
+    // #192: кэшируем арабский голос ОДИН раз через voiceschanged — getVoices() в Telegram WebView при повторных вызовах часто возвращает [].
+    if(typeof window._arVoiceInit==='undefined'){
+      window._arVoiceInit=true; window._arVoice=null; window._arVoiceTried=false;
+      const _pickArVoice=()=>{ try{ const vs=speechSynthesis.getVoices()||[]; if(vs.length) window._arVoiceTried=true; const av=vs.find(v=>/^ar/i.test(v.lang)); if(av) window._arVoice=av; }catch(e){} };
+      _pickArVoice();
+      try{ speechSynthesis.addEventListener('voiceschanged', _pickArVoice); }catch(e){ try{ speechSynthesis.onvoiceschanged=_pickArVoice; }catch(_){} }
+    }
     const sp=document.createElement('button'); sp.className='tr-btn'; sp.textContent='🔊';
     sp.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
     sp.title='Озвучить хадис (синтез речи устройства; нужен арабский голос в системе)';
     sp.onclick=()=>{ try{
-      if(speechSynthesis.speaking){ speechSynthesis.cancel(); sp.textContent='🔊'; return; }
+      // #192: повторный клик по этой же кнопке (⏹) или когда что-то ещё играет — всегда сначала отменяем очередь, потом решаем.
+      const wasActive=(sp.textContent==='⏹')||speechSynthesis.speaking||speechSynthesis.pending;
+      try{ speechSynthesis.cancel(); }catch(e){}
+      if(wasActive){ sp.textContent='🔊'; return; }
       let mt=String(text||'').replace(/[«»]/g,'').replace(/\([^)]*\)/g,' ').trim(); if(!mt) return;   // #146: читаем ВЕСЬ хадис (иснад+матн), не только матн
       const u=new SpeechSynthesisUtterance(mt); u.lang='ar-SA'; u.rate=0.88;
-      try{ const vs=speechSynthesis.getVoices(); const av=vs.find(v=>/^ar/i.test(v.lang)); if(av) u.voice=av; }catch(e){}
-      u.onend=()=>{ sp.textContent='🔊'; }; u.onerror=()=>{ sp.textContent='🔊'; toast('Озвучка: нет арабского голоса в системе'); };
+      // #192: берём голос из кэша; getVoices() пробуем как фолбэк, но при пустом ответе НЕ затираем ранее найденный кэш.
+      let av=window._arVoice; if(!av){ try{ const vs=speechSynthesis.getVoices()||[]; const f=vs.find(v=>/^ar/i.test(v.lang)); if(f){ av=f; window._arVoice=f; } }catch(e){} }
+      if(av) u.voice=av;
+      u.onend=()=>{ sp.textContent='🔊'; };
+      // #192: показываем «нет голоса» ТОЛЬКО если голоса реально загрузились и арабского среди них не было; на повторном клике (кэш есть / список ещё пуст) — не пугаем.
+      u.onerror=()=>{ sp.textContent='🔊'; if(!window._arVoice && window._arVoiceTried) toast('Озвучка: нет арабского голоса в системе'); };
       sp.textContent='⏹'; speechSynthesis.speak(u);
     }catch(e){ toast('Озвучка недоступна на этом устройстве'); } };
     meta.appendChild(sp);
