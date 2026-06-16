@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v552</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v553</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -638,7 +638,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v552';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v553';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1299,12 +1299,21 @@ function _collScopeToggle(code){   // клик по чипу при активн
   setSearchScope(s, 'Выбранные книги ('+s.size+')'); renderCols();
   try{ var bb=document.getElementById('scopeListBox'); if(bb&&bb.style.display!=='none') _renderScopeList(); }catch(e){}
 }
+// 🎲 #4: «Случайный достоверный хадис» видна ТОЛЬКО когда юзер ещё не начал работать (вкладка Хадисы, не выбран режим Цепь/Любой текст/Передатчик, поле поиска пустое, нет результатов). Как только начал — исчезает (слово владельца).
+function _updRandBtn(){ var r=document.getElementById('randHadithRow'); if(!r) return;
+  var q=''; try{ q=(document.getElementById('q')||{}).value||''; }catch(e){}
+  var res=document.getElementById('res'); var hasRes = res && res.children && res.children.length>0;
+  var engaged = (typeof tab!=='undefined' && tab!=='hadith')
+    || (typeof modes!=='undefined' && (modes.chain||modes.any||modes.narr))
+    || (q.trim().length>0) || hasRes;
+  r.style.display = engaged ? 'none' : 'flex';
+}
 function renderCols(){
   const box=document.getElementById('cols');
   document.getElementById('colsWrap').style.display = tab==='hadith'?'block':'none';
   var _qrr=document.getElementById('quranReadRow'); if(_qrr) _qrr.style.display = tab==='quran'?'flex':'none';   // M262: «Читать Коран» + 🔀 в Аятах
   var _hrr=document.getElementById('hadithReadRow'); if(_hrr) _hrr.style.display='none';   // компактная кнопка Мактабы теперь в шапке (📚), большую зелёную убрали
-  var _rhr=document.getElementById('randHadithRow'); if(_rhr) _rhr.style.display = tab==='hadith'?'flex':'none';   // 🎲 #4: случайный хадис — только на вкладке Хадисы
+  try{ _updRandBtn(); }catch(e){}   // 🎲 #4: случайный хадис — видимость пересчитываем (исчезает когда юзер занят)
   box.innerHTML='';
   COLLECTIONS.forEach(c=>{ const d=document.createElement('div');
     const inScope=!!(_scopeIds && (COLL_BIDS[c.code]||[]).some(b=>_scopeIds.has(b)));   // 🎯 сборник выбран в рамке Мактабы → чип «светится»
@@ -1435,6 +1444,7 @@ function _qFocusHl(){ if(cfg.qHl){ const res=document.getElementById('res'); if(
 function _qBlurHl(){ if(cfg.qHl){ const res=document.getElementById('res'); if(res) res.classList.add('no-q-highlight'); } }
 const _q=document.getElementById('q'); if(_q){ _q.addEventListener('focus', _qFocusHl); _q.addEventListener('blur', _qBlurHl); }
 document.getElementById('q').addEventListener('input', updateQuranHelper);
+document.getElementById('q').addEventListener('input', function(){ try{ _updRandBtn(); }catch(e){} });   // 🎲 исчезает когда начал печатать
 /* 🔤 Живые подсказки транскрипции под полем: рус/лат → арабское слово (локально, без ключа) */
 let _tlT;
 // M200/M142: распознать словосочетание через ИИ (когда локальная транскрипция не угадала фразу)
@@ -1603,6 +1613,7 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.datas
   if(m==='neuro'){ modes.neuro=!modes.neuro; ch.classList.toggle('on',modes.neuro);
     document.getElementById('neuroBox').style.display=modes.neuro?'block':'none'; return; }
   modes[m]=!modes[m]; ch.classList.toggle('on',modes[m]);
+  try{ _updRandBtn(); }catch(e){}   // 🎲 исчезает когда выбрал режим (Цепь/Любой/Передатчик)
   if(m==='ai'){ const inp=document.getElementById('q');
     inp.placeholder = modes.ai ? 'Опиши смысл точнее, напр.: хадис о запрете нововведений'
                                : (tab==='hadith'?'Слова, фраза или № хадиса…':'Слова, фраза или № (2:255)…');
