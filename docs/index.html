@@ -183,7 +183,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v578</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v579</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -405,6 +405,8 @@
     background:radial-gradient(120% 90% at 11% 5%, rgba(160,215,255,.34), rgba(120,190,255,.14) 34%, rgba(120,190,255,0) 62%); }
   @keyframes appShine{ 0%{opacity:0;transform:scale(.92)} 22%{opacity:calc(.6*var(--gk,1))} 100%{opacity:0;transform:scale(1.04)} }
   #appShine.on{ animation:appShine 1.05s cubic-bezier(.25,.6,.2,1); transform-origin:11% 5%; }
+  /* M311: уважаем системную настройку «меньше движения» — гасим разгорание лого и проход света (переход «домой» при этом работает как обычно) */
+  @media (prefers-reduced-motion:reduce){ #brandLogo.refreshing{ animation:none!important } #appShine.on{ animation:none!important; opacity:0!important } }
   /* «Ещё» — строки-карточки: вся строка кликабельна, кнопки «Открыть» скрыты, ▸ справа */
   #menuModal .row{ background:var(--card); border:1px solid var(--border); border-radius:12px; padding:13px 14px; margin-bottom:9px; box-shadow:0 1px 5px rgba(0,0,0,.22); transition:transform .12s, background .12s, border-color .12s; gap:8px }
   #menuModal .row > span:first-child{ flex:1; min-width:0 }
@@ -647,7 +649,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v578';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v579';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1078,9 +1080,9 @@ function authBadge(code, grade, num){
 // (تحقيق/شرح: «قال النووي», «قوله:», ссылки тома/стр (N/N), هامش/طبعة, footnote-маркеры P\x01 и (¬N)). Убираем управляющие байты +
 // footnote-ссылки + обрезаем хвост-аппарат по ПЕРВОМУ editor-voice маркеру (только если он дальше 40 симв — не трогаем сам матн).
 // Проверено на 2842: 57 хадисов чистятся (#3/#7 57k→1k и др.), 0 обрезов реального матна (обычные #1/#145/#987/#2408 не тронуты).
-const _MUS_CUT=/قَوْلُهُ:|قوله:|قوله :|قال النووي|قال الإمام|قال القاضي|قال أبو العباس|قال الحافظ|في المفهم|المفهم |الإكمال للقاضي|شرح مسلم للنووي|شرح الأبي|هامش |طبعة |\(\s*[\d٠-٩]+\s*\/\s*[\d٠-٩]+\s*\)/;
+const _MUS_CUT=/قَوْلُهُ:|قوله:|قوله :|قال النووي|قال الإمام|قال القاضي|قال أبو العباس|قال الحافظ|قال أحمد بسيوني|وقال أحمد بسيوني|في المفهم|المفهم |الإكمال للقاضي|شرح مسلم للنووي|شرح الأبي|هامش |طبعة |\(\s*[\d٠-٩]+\s*\/\s*[\d٠-٩]+\s*\)/;
 function _muslimStripApparatus(t){ if(!t) return t;
-  t=t.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').replace(/[Pp]\s*\(?¬[\d٠-٩]+\)?/g,'').replace(/\(?¬[\d٠-٩]+\)?/g,'');
+  t=t.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').replace(/[Pp]\s*\(?¬[\d٠-٩]+\)?/g,'').replace(/\(?¬[\d٠-٩]+\)?/g,'').replace(/([»؀-ۿ])[Pp](?=[؀-ۿ])/g,'$1');   // #215: + стрип приклеенного page-маркера P между арабским
   const m=_MUS_CUT.exec(t); if(m && m.index>40) t=t.slice(0,m.index);
   return t.replace(/\s+/g,' ').trim(); }
 async function loadCollection(code){
@@ -1575,7 +1577,7 @@ function updateBookSugg(){
       try{ await loadBookTr(); await loadWikiTitles(); }catch(e){}
       const lv=v.toLowerCase().replace(/ё/g,'е');
       hits=cat.filter(b=>{ const tr=((window._catTr&&_catTr.map&&_catTr.map[b.n])||{}).ru||'';
-        const wk=(window._wikiT||{})[String(b.i)]; const wn=(wk&&wk.name)||'';
+        const wk=(window._wikiT||{})[String(b.i)]; const wn=(wk&&_wkCommon(wk.name))||'';
         return (tr&&tr.toLowerCase().replace(/ё/g,'е').indexOf(lv)!==-1)||(wn&&wn.toLowerCase().replace(/ё/g,'е').indexOf(lv)!==-1); });
       if(!hits.length && v.length>=4 && typeof _skelRu==='function'){   // скелет-фолбэк: «табарани» → الطبراني
         if(!window._catSkel){ window._catSkel=cat.map(b=>{ let s=''; ((b.n||'')+' '+(b.a||'')).split(/\s+/).forEach(w=>{ try{ s+=(_skelAr(stripDiac(w))[1]||'')+' '; }catch(e){} }); return s; }); }
@@ -4495,6 +4497,11 @@ document.addEventListener('click',e=>{ const s=e.target&&e.target.closest&&e.tar
     if(!l && s.closest('#bookModal') && window._bookView && _bookView.pg) l=_bookView.pg;   // шапка читалки → ТЕКУЩАЯ страница
     const u='https://shamela.ws/book/'+s.dataset.b+(l?('/'+l):'');
     try{ openLink(u); }catch(_e){ window.open(u,'_blank'); } } }, true);
+// #207 (ЗАКОН): у книги/равия берём ОБЩЕИЗВЕСТНОЕ рус.имя. Вики-статья иногда названа менее распространённым
+// синонимом («Джами ат-Тирмизи»), а в обиходе/isnad.link/ар-вики основа = «Сунан ат-Тирмизи». Оверрайд по
+// нормализованному вики-имени → общеизвестное (расширяемо; срабатывает ТОЛЬКО для перечисленных, верные не трогаем).
+const _WK_COMMON={ 'джами ат-тирмизи':'Сунан ат-Тирмизи', 'джами‘ ат-тирмизи':'Сунан ат-Тирмизи', "джами' ат-тирмизи":'Сунан ат-Тирмизи' };
+function _wkCommon(nm){ if(!nm) return nm; const k=String(nm).toLowerCase().replace(/ё/g,'е').replace(/\s+/g,' ').trim(); return _WK_COMMON[k]||nm; }
 function loadWikiTitles(){ if(_wikiT) return Promise.resolve(_wikiT); if(_wikiTP) return _wikiTP;
   _wikiTP=fetch('./wiki_titles_verified.json').then(r=>r.ok?r.json():{}).then(j=>{ _wikiT=j||{}; window._wikiT=_wikiT; return _wikiT; }).catch(()=>{ _wikiT={}; window._wikiT={}; return _wikiT; }); return _wikiTP; }
 async function openCatalog(q0){   // q0 (опц.) — начальный запрос: открыть каталог сразу с фильтром по нему (без гонки таймингов)
@@ -4525,7 +4532,7 @@ async function openCatalog(q0){   // q0 (опц.) — начальный зап�
       const tr=_catTr.on?(_catTr.map[b.n]||null):null;
       const arName=(tr&&tr.voc)?tr.voc:b.n;
       const wk=(window._wikiT && window._wikiT[String(b.i)])||null;   // канон. имя из Википедии + ссылка (выверено; ru→en→ar)
-      const _wkName=wk?(wk.name||wk.ru||''):''; const _wkLang=wk?(wk.lang||'ru'):'';
+      const _wkName=wk?_wkCommon(wk.name||wk.ru||''):''; const _wkLang=wk?(wk.lang||'ru'):'';
       // Википедия: слово ВСЕГДА по-русски + лёгкая отметка языка (ar/en) в конце ссылки (как принято в ссылках; ru — без отметки). AR-название НЕ дублируем (оно = арабскому имени книги). RU/EN-имя показываем строкой над чипом.
       const _wkSuf=(_wkLang==='ru'||!wk)?'':('<span style="font-size:9px;color:var(--hint);font-weight:600;margin-left:3px;letter-spacing:.4px">'+esc(_wkLang)+'</span>');
       const _wkChip=wk?('<span class="wkLink" data-u="'+esc(wk.url)+'" title="Открыть статью в Википедии" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:2px 8px;background:rgba(255,255,255,.05);white-space:nowrap"><b style="font-family:Georgia,\'Times New Roman\',serif;font-size:13px;line-height:1">W</b> Википедия'+_wkSuf+' ↗</span>'):'';
@@ -7074,7 +7081,11 @@ function _narrRow(c){   // строка-кандидат: ПРИВЫЧНОЕ и�
   loadNarrExt().then(ext=>{ try{ const e=ext.get(c.id); const host=r.children[1]; if(!host||host.dataset.sh) return; host.dataset.sh='1';
     let sh=_shuhraOf(c.nm, e);
     // R48 «меньшее сопротивление»: распространённый лакаб (الأعمش) = ОСНОВНОЕ имя, как в хадисах
-    loadLakab().then(lk=>{ try{ const L=lk[String(c.id)]; if(L&&L[1]){ const tEl=host.querySelector('b'); if(tEl){ tEl.textContent=L[0]; tEl.title='привычное имя в хадисах (R48); полное: '+c.nm; } } }catch(e3){} });
+    loadLakab().then(lk=>{ try{ const L=lk[String(c.id)]; if(L&&L[1]&&L[0]){
+      // M386: лакаб ставим основным ТОЛЬКО если шухра его ещё НЕ содержит. Иначе шухра «Имя+нисба» (سفيان الثوري, عامر الشعبي) полнее и привычнее голого лакаба (الثوري) — её НЕ затираем.
+      const _lc=_narrCanon(stripDiac(L[0])), _sc=_narrCanon(stripDiac(sh));
+      if(_lc && _sc.indexOf(_lc)<0){ const tEl=host.querySelector('b'); if(tEl){ tEl.textContent=L[0]; tEl.title='привычное имя в хадисах (R48); полное: '+c.nm; } }
+    } }catch(e3){} });
     if(!sh||stripDiac(sh)===stripDiac(c.nm)) sh=c.nm;
     let ruS=''; try{ ruS=arNameRu(sh, 4); }catch(e2){}
     host.innerHTML='<b style="display:block;direction:rtl;text-align:right;font-size:14.5px;color:#ffd479">'+esc(sh)+'</b>'
@@ -7938,7 +7949,7 @@ async function _vgMapBlock(ref, box){
       const tr=(typeof _catTr!=='undefined'&&_catTr&&_catTr.map&&_catTr.map[bn])||null;
       html+='<div style="direction:rtl;text-align:right;margin:5px 0"><b style="font-size:13px;color:var(--text)">📖 '+esc(bn)+'</b>'
         +((tr&&tr.ru)?('<span dir="ltr" style="unicode-bidi:isolate;font-size:11px;color:#bcd0ff"> · '+esc(tr.ru)+'</span>'):'')+' '
-        +arr.map(it=>'<span class="vgN" dir="ltr" data-b="'+esc(String(it.b))+'" data-p="'+esc(String(it.p||''))+'" style="cursor:pointer;display:inline-block;unicode-bidi:isolate;margin:2px;padding:2px 8px;border-radius:7px;font-size:12px;background:rgba(46,155,91,.13);border:1px solid #2e9b5b;color:#bff5d4">№'+esc(String(it.h))+'</span>').join('')
+        +arr.map(it=>'<span class="vgN" dir="ltr" data-b="'+esc(String(it.b))+'" data-p="'+esc(String(it.p||''))+'" style="cursor:pointer;display:inline-block;unicode-bidi:isolate;margin:2px;padding:2px 8px;border-radius:7px;font-size:12px;background:rgba(46,155,91,.13);border:1px solid #2e9b5b;color:#bff5d4">№⁦'+esc(String(it.h))+'⁩</span>').join('')
         +'</div>'; });
     html+='</div>';
     box.innerHTML=html;
