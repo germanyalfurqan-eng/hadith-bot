@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v571</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v572</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -640,7 +640,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v571';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v572';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5437,15 +5437,29 @@ function addTr(meta,card,text,ayah,fav){
     if(_r1){ _sn=_r1.num; if(_r1.source && _r1.source!=='muhaymin') _slug=_r1.source; }
     if((!_slug||_sn==null) && fav && fav._mk && fav._mk.code){ _slug=fav._mk.code; _sn=fav._mk.num; }
     const _SUNNAH_SLUGS={bukhari:1,muslim:1,abudawud:1,tirmidhi:1,nasai:1,ibnmajah:1,malik:1,ahmad:1};
-    if(_slug && _SUNNAH_SLUGS[_slug] && _sn!=null){ const sb=document.createElement('button'); sb.className='tr-btn'; sb.textContent='🌐 sunnah.com';
-      sb.title='Открыть этот хадис на sunnah.com ('+_slug+':'+_sn+')';
+    if(_slug && _SUNNAH_SLUGS[_slug] && _sn!=null){
+      const _scn=String(_sn).replace(/#.*/,'').replace(/[^0-9]/g,'');   // голый номер (срезать #риваят: 2408#1 → 2408)
+      const _openSun=(u)=>{ try{hap('light');}catch(e){} try{ if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.openLink) Telegram.WebApp.openLink(u); else window.open(u,'_blank'); }catch(_e){ try{window.open(u,'_blank');}catch(__e){} } };
+      const _sunUrl=(suf)=>'https://sunnah.com/'+_slug+(_slug==='malik'?('/'+_scn):(':'+_scn+(suf||'')));   // malik=/malik/<num>; иначе :<num><буква?>
+      const sb=document.createElement('button'); sb.className='tr-btn'; sb.textContent='🌐 sunnah.com';
+      sb.title='Открыть этот хадис на sunnah.com ('+_slug+':'+_scn+')';
       sb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
-      sb.onclick=()=>{ try{hap('light');}catch(e){} const _scn=String(_sn).replace(/#.*/,'').replace(/[^0-9]/g,'');   // срезать #риваят ДО цифр (иначе 2408#1 → 24081)
-        // слово владельца 16.06: у Муслима риваяты на sunnah.com = номер+буква (muslim:2408a/2408b…). Индекс риваята берём из #N (ключ карточки h|muslim|num#riwNo).
-        let _suf=''; if(_slug==='muslim'){ const _rm=String(_sn).match(/#(\d+)/)||((fav&&fav.k)?String(fav.k).match(/#(\d+)/):null); const _rn=_rm?+_rm[1]:0; if(_rn>=1&&_rn<=26) _suf=String.fromCharCode(96+_rn); }
-        const u='https://sunnah.com/'+_slug+(_slug==='malik'?('/'+_scn):(':'+_scn+_suf));   // malik = /malik/<num>; Муслим-риваят = :num+буква
-        try{ if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.openLink) Telegram.WebApp.openLink(u); else window.open(u,'_blank'); }catch(_e){ try{window.open(u,'_blank');}catch(__e){} } };
-      meta.appendChild(sb); } }catch(e){} }
+      let _primSuf='';   // суффикс-буква для основной кнопки (у Муслима ставится после загрузки карты)
+      sb.onclick=()=>_openSun(_sunUrl(_primSuf));
+      meta.appendChild(sb);
+      // УКАЗ-3 (слово владельца 16.06): у Муслима риваяты sunnah.com = номер+буква (2408a/2408b…). Буквы — АВТОРИТЕТНЫЕ из muslim_riw.json
+      // (краул страниц книг sunnah.com), НЕ наугад по индексу. Основная кнопка → первая буква (обычно «a»); если риваятов >1 — чипы a/b/c… на каждый.
+      if(_slug==='muslim'){ (async()=>{ try{ const rw=await loadMuslimRiw(); const lets=rw&&rw[_scn];
+        if(lets && lets.length){ _primSuf=lets[0]; sb.title='Открыть риваят '+_scn+lets[0]+' на sunnah.com';
+          if(lets.length>1){ sb.textContent='🌐 sunnah.com ('+_scn+lets[0]+')';
+            const wrap=document.createElement('span'); wrap.style.cssText='display:inline-flex;gap:4px;flex-wrap:wrap;align-items:center;margin-inline-start:4px;vertical-align:middle';
+            const lbl=document.createElement('span'); lbl.className='hint'; lbl.style.cssText='font-size:11px'; lbl.textContent='риваяты:'; wrap.appendChild(lbl);
+            lets.forEach(L=>{ const c=document.createElement('span'); c.textContent=_scn+L; c.title='Открыть риваят '+_scn+L+' на sunnah.com';
+              c.style.cssText='cursor:pointer;font-size:11px;border:1px solid var(--border);border-radius:8px;padding:1px 7px;color:var(--link);white-space:nowrap';
+              c.onclick=()=>_openSun(_sunUrl(L)); wrap.appendChild(c); });
+            sb.insertAdjacentElement('afterend', wrap); } }
+      }catch(e){} })(); }
+    } }catch(e){} }
   const fbb=document.createElement('button');fbb.className='tr-btn';fbb.textContent='✍️ Сообщить нам';fbb.title='Написать нам об ошибке/замечании';
   fbb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--link);padding:6px 10px';
   fbb.onclick=()=>openFeedback((fav&&fav.label)||'');
@@ -6726,6 +6740,11 @@ document.addEventListener('keydown', e=>{
 let _mid2sid=null,_mid2sidP=null;
 function loadMid2Sid(){ if(_mid2sid) return Promise.resolve(_mid2sid); if(_mid2sidP) return _mid2sidP;
   _mid2sidP=fetch('./mid2sid.json?v='+APPVER).then(r=>r.ok?r.json():{}).then(j=>{ _mid2sid=j||{}; return _mid2sid; }).catch(()=>{ _mid2sid={}; return _mid2sid; }); return _mid2sidP; }
+// УКАЗ-3 (слово владельца 16.06): авторитетные буквы риваятов Муслима для sunnah.com. Карта {номер Абд аль-Баки → [буквы]}
+// (краул страниц книг sunnah.com, crawl_muslim_riw.py). [] = одиночный риваят (ссылка muslim:N без буквы); ['a','b',…] = muslim:Na/Nb…
+let _muslimRiw=null,_muslimRiwP=null;
+function loadMuslimRiw(){ if(_muslimRiw) return Promise.resolve(_muslimRiw); if(_muslimRiwP) return _muslimRiwP;
+  _muslimRiwP=fetch('./muslim_riw.json?v='+APPVER).then(r=>r.ok?r.json():{}).then(j=>{ _muslimRiw=j||{}; return _muslimRiw; }).catch(()=>{ _muslimRiw={}; return _muslimRiw; }); return _muslimRiwP; }
 // клики: «база Мактабы» → shamela.ws/narrator/<id>; sunnah.com → sunnah.com/narrator/<sid>; «#id» → наша таблица
 document.addEventListener('click', e=>{
   const sh=e.target&&e.target.closest&&e.target.closest('.shamNarr'); if(sh){ e.preventDefault(); e.stopPropagation(); try{ openLink('https://shamela.ws/narrator/'+sh.dataset.id); }catch(_e){ window.open('https://shamela.ws/narrator/'+sh.dataset.id,'_blank'); } return; }
