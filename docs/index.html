@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v546</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v547</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -298,7 +298,7 @@
   </div>
 </div>
 <!-- #152/З-19: легенда значков — что означает каждый маркер на карточке -->
-<div class="modal" id="legendModal">
+<div class="modal" id="legendModal" style="z-index:95">
   <div class="panel" style="max-width:480px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <b>🔖 Легенда — что значат значки</b><button class="mini" id="legendClose">закрыть ✕</button>
@@ -634,7 +634,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v546';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v547';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4215,13 +4215,19 @@ async function openNarratorRijal(name){
       a.onclick=()=>{ const t=String(bk.turath||''); if(/^\d+$/.test(t)){ m.style.display='none'; openBook(t); } else if(t.indexOf('author/')===0){ openLink('https://app.turath.io/'+t); } }; rj.appendChild(a); }); });
     body.appendChild(rj); }
 }
-function maybeNarratorChip(q){ try{
+async function maybeNarratorChip(q){ try{
   if(tab!=='hadith') return; const res=document.getElementById('res'); if(!res) return;
   const v=(q||'').trim(); const wc=v.split(/\s+/).length;
   const looksName = v.length>=3 && wc<=4 && !/^\d/.test(v) && !/["|]/.test(v) && (isArabic(v) || /^[a-zа-яё'`\- ]+$/i.test(v));
   if(!looksName) return; if(document.getElementById('narrChip')) return;
+  // ЗАКОН владельца: подсказку «передатчик?» показывать ТОЛЬКО когда он РЕАЛЬНО есть в базе равиев (сильный матч),
+  // а не на любое арабское слово (بدعة — НЕ равий). Иначе не предлагать.
+  let cand=null; try{ const cs=await narrCandidates(v); cand=(cs&&cs.length)?cs[0]:null; }catch(e){ cand=null; }
+  const strong = cand && cand.id!=null && ((cand.sc>=90) || (cand.sc===999));   // exact/prefix/famous = очевидно равий; substring (sc 25-35) — нет
+  if(!strong) return; if(document.getElementById('narrChip')) return;   // повторная проверка после await
   const c=document.createElement('div'); c.id='narrChip'; c.style.cssText='margin:8px 0;padding:9px 12px;border:1px dashed var(--border);border-radius:12px;font-size:13px;color:var(--text);cursor:pointer';
-  c.innerHTML='👤 Ищете <b>передатчика</b> «'+esc(v.slice(0,40))+'»? Открыть, что говорят о нём учёные (ильм риджаль)';
+  const _disp=cand.nm||v;   // показываем имя из базы (то, что реально нашли)
+  c.innerHTML='👤 Ищете <b>передатчика</b> «'+esc(_disp.slice(0,40))+'»? Открыть, что говорят о нём учёные (ильм риджаль)';
   c.onclick=()=>openNarratorRijal(v);
   res.insertBefore(c, res.firstChild);
 }catch(e){} }
@@ -5175,6 +5181,15 @@ function addTr(meta,card,text,ayah,fav){
     if(out && out.style.display!=='none'){ const trv=(out.dataset.tr||'').trim()||(out.textContent||'').trim(); if(trv) s+='\n\n'+trv; }
     copyWithSig(s); };
   meta.appendChild(cp);
+  // 📍 «Поделиться местом» (заявка владельца): ссылка откроет приложение на ЭТОМ ЖЕ хадисе/аяте — «в том же месте, смотря на то же место».
+  try{ const _ref=ayah?null:refOf(fav); let _tok=null;
+    if(ayah && ayah.s && ayah.a) _tok='q_'+ayah.s+'_'+ayah.a;
+    else if(_ref && _ref.source && _ref.num!=null) _tok=(_ref.source==='muhaymin')?('m_'+_ref.num):('r_'+_ref.source+'_'+_ref.num);
+    if(_tok){ const sp=document.createElement('button'); sp.className='tr-btn'; sp.textContent='📍';
+      sp.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
+      sp.title='Поделиться местом — ссылка откроет приложение на этом же хадисе/аяте';
+      sp.onclick=()=>{ try{ const u=deepLinkUrls(_tok); copyText(u.tg+'\n'+u.web); toast('📍 Ссылка на это место скопирована'); try{hap('light');}catch(e){} }catch(e){} };
+      meta.appendChild(sp); } }catch(e){}
   // M32: озвучка хадиса синтезом речи устройства — клиентский TTS. Аяты не трогаем (у них аудио чтецов). #145: можно отключить в Настройках (cfg.noTts).
   if(!ayah && !cfg.noTts && typeof window!=='undefined' && 'speechSynthesis' in window){
     const sp=document.createElement('button'); sp.className='tr-btn'; sp.textContent='🔊';
@@ -9070,6 +9085,9 @@ function runDeepLink(){ const g=_deepLinkToken(); if(!g) return; const p=g.split
     if(t==='q') openQuranReader(+p[1]||1,+p[2]||0);
     else if(t==='b') openBook(p[1],p[2]);
     else if(t==='r') openReader(p[1],p[2]);
+    else if(t==='m' && p[1]){ (async()=>{ try{ const _th=document.querySelector('.tab[data-tab="hadith"]'); if(_th) _th.click();   // 📍 share-place: аль-Мухаймин №p[1] карточкой (он вне читалки)
+      const _a=await loadMuhaymin(); const _h=_a.find(x=>String(x.n)===String(p[1])); const _res=document.getElementById('res');
+      if(_h&&_res){ _res.innerHTML=''; _groups=[]; _res.appendChild(makeCard({type:'m',h:_h})); } }catch(e){} })(); }
     else if(t==='cat') openCatalog();
   }catch(e){} }, 650); }
 try{ runDeepLink(); }catch(e){}
