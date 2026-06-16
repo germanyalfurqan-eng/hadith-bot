@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v556</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v557</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -341,6 +341,7 @@
     <div class="row"><span>📖 Кнопка «Страница в Мактабе» на карточках хадиса</span><div class="sw" id="maktabaSw"></div></div>
     <div class="row"><span>🔊 Озвучка хадиса <span style="color:var(--hint);font-size:11px">(кнопка на карточке, синтез речи)</span></span><div class="sw" id="ttsSw"></div></div>
     <div class="row"><span>🔥 Лента (рекомендации) <span style="color:var(--hint);font-size:11px">(вкладка «что чаще ищут»)</span></span><div class="sw" id="lentaSw"></div></div>
+    <div class="row"><span>🎲 Кнопка «Случайный достоверный хадис» <span style="color:var(--hint);font-size:11px">(на главной)</span></span><div class="sw" id="randHadSw"></div></div>
     <div class="row"><span>🎯 Строгий поиск: только где есть ВСЕ слова <span style="color:var(--hint);font-size:11px">(выкл → покажет и близкие)</span></span><div class="sw" id="strictSw"></div></div>
     <div class="row"><span>🔡 Автоподсказки в Коране (списком при вводе номера)</span><div class="sw" id="acSw"></div></div>
     <div class="row"><span>🌿 Тап по слову аята → корень + все места в Коране</span><div class="sw" id="wtSw"></div></div>
@@ -639,7 +640,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v556';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v557';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1303,6 +1304,7 @@ function _collScopeToggle(code){   // клик по чипу при активн
 }
 // 🎲 #4: «Случайный достоверный хадис» видна ТОЛЬКО когда юзер ещё не начал работать (вкладка Хадисы, не выбран режим Цепь/Любой текст/Передатчик, поле поиска пустое, нет результатов). Как только начал — исчезает (слово владельца).
 function _updRandBtn(){ var r=document.getElementById('randHadithRow'); if(!r) return;
+  if(!(typeof cfg!=='undefined' && cfg.randHadith)){ r.style.display='none'; return; }   // #193: по умолчанию ВЫКЛ; включается тумблером в Настройках
   var q=''; try{ q=(document.getElementById('q')||{}).value||''; }catch(e){}
   var res=document.getElementById('res'); var hasRes = res && res.children && res.children.length>0;
   var engaged = (typeof tab!=='undefined' && tab!=='hadith')
@@ -4386,8 +4388,10 @@ async function openOurRazbory(){
     if(!flt.length){ html+='<div class="hint" style="padding:14px;text-align:center">Пока нет разборов'+(_filter!=='all'?' этого автора':'')+'. Наполняется из канала @hadis_isnad (расшифровка аудио → текст + автор + ссылка).</div>'; }
     flt.forEach(([k,v])=>{
       html+='<div style="border:1px solid #b3502e;border-radius:11px;padding:10px 12px;margin-bottom:9px;background:rgba(179,80,46,.06)">';
-      html+='<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="color:#ff9b7a">⛔ '+esc(v.ru||'недостоверный')+'</b><span style="color:var(--hint);font-size:12px">'+esc(k)+'</span></div>';
-      if(v.txt) html+='<div style="direction:rtl;text-align:right;font-size:14px;color:var(--mark);margin:5px 0;'+_AF+'">'+esc(v.txt)+'</div>';
+      var _kc=String(k).split(':');   // «tirmidhi:360» → код+номер, ссылка на хадис кликабельна (наш стиль: оригинал+перевод)
+      html+='<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="color:#ff9b7a">⛔ '+esc(v.ru||'недостоверный')+'</b>'
+        +'<span class="ourRazRef" data-code="'+esc(_kc[0]||'')+'" data-num="'+esc(_kc[1]||'')+'" style="color:var(--link);cursor:pointer;text-decoration:underline;font-size:12.5px">📖 '+esc(k)+' — открыть</span></div>';
+      if(v.txt) html+='<div class="ar" style="margin:6px 0">'+esc(v.txt)+'</div>';   // З-28: матн единым читаемым шрифтом .ar (как в карточке), не мелким
       (v.reasons||[]).forEach(r=>{ html+='<div style="font-size:13px;margin-top:4px">• '+esc(r.t||'')+'</div>'; });
       if(v.by) html+='<div style="font-size:12px;color:#c9b8ff;margin-top:5px">✍️ автор разбора: '+esc(v.by)+(v.date?(' · '+esc(v.date)):'')+'</div>';
       if(v.links&&v.links.length) html+='<div style="margin-top:5px">'+v.links.map(l=>'<span class="ourRazL" data-u="'+esc(l.u)+'" style="color:var(--link);cursor:pointer;text-decoration:underline;font-size:12.5px">🔗 '+esc(l.t||'разбор')+'</span>').join(' · ')+'</div>';
@@ -4396,6 +4400,9 @@ async function openOurRazbory(){
     body.innerHTML=html;
     body.querySelectorAll('.razFlt').forEach(b=>b.onclick=()=>{ _filter=b.dataset.k; render(); });
     body.querySelectorAll('.ourRazL,.ourRazCh').forEach(a=>a.onclick=()=>{ try{ openLink(a.dataset.u||'https://t.me/hadis_isnad'); }catch(e){} });
+    body.querySelectorAll('.ourRazRef').forEach(a=>a.onclick=()=>{ const c=a.dataset.code, n=a.dataset.num;   // открыть хадис в нашем стиле (оригинал+перевод)
+      if(!c||!n) return; try{ m.style.display='none'; }catch(e){}
+      try{ if(c==='muhaymin'){ runDeepLink && (location.hash=''); } openReader(c, String(n).replace(/-\d+$/,'')); }catch(e){ try{ const qi=document.getElementById('q'); if(qi){ const th=document.querySelector('.tab[data-tab=\"hadith\"]'); if(th) th.click(); qi.value=c+' '+n; runSearch(true); } }catch(_e){} } });
   };
   render();
 }
@@ -9242,6 +9249,9 @@ var _ttsw=document.getElementById('ttsSw'); if(_ttsw){ _ttsw.classList.toggle('o
 (function(){ var _lsw=document.getElementById('lentaSw'); var _setL=function(){ var _lt=document.getElementById('tabLenta'); if(_lt) _lt.style.display=cfg.lenta?'':'none'; if(_lsw) _lsw.classList.toggle('on',!!cfg.lenta); };
   if(_lsw){ _lsw.onclick=function(){ cfg.lenta=!cfg.lenta; saveCfg(cfg); _setL(); toast(cfg.lenta?'🔥 Лента включена (вкладка вверху)':'Лента скрыта'); if(!cfg.lenta && typeof tab!=='undefined' && tab==='trending'){ var _h=document.querySelector('.tab[data-tab="hadith"]'); if(_h) _h.click(); } }; }
   try{ _setL(); }catch(e){} })();
+// #193: тумблер «Случайный достоверный хадис» — по умолчанию ВЫКЛ, включается тут
+(function(){ var _rsw=document.getElementById('randHadSw'); if(!_rsw) return; _rsw.classList.toggle('on',!!cfg.randHadith);
+  _rsw.onclick=function(){ cfg.randHadith=!cfg.randHadith; saveCfg(cfg); _rsw.classList.toggle('on',!!cfg.randHadith); try{ _updRandBtn(); }catch(e){} toast(cfg.randHadith?'🎲 Кнопка случайного хадиса включена (на главной)':'Кнопка случайного хадиса скрыта'); }; })();
 var _vfw=document.getElementById('verifySw'); if(_vfw){ _vfw.classList.toggle('on',cfg.verify!==false); _vfw.onclick=()=>{ cfg.verify=!(cfg.verify!==false); saveCfg(cfg); _vfw.classList.toggle('on',cfg.verify!==false); toast(cfg.verify?'🛡 Независимая сверка ВКЛ':'Сверка выкл'); }; }   // независимая сверка передатчиков
 // #79: вся строка настроек нажимаемая — клик по строке с тумблером переключает его (не только по самому тумблеру)
 (function(){ var sm=document.getElementById('settingsModal'); if(!sm||sm._rowClick) return; sm._rowClick=true;
