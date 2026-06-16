@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v554</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v555</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -424,6 +424,7 @@
     <div class="row"><span>➕ Добавить сборники в ПОИСК (выбор)</span><button class="go" id="extraBtn2" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>🌿 Корни Корана (выбрать корень → аяты)</span><button class="go" id="rootBrowBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>📜 Наука хадиса (мусталях) — правила достоверности</span><button class="go" id="hadScienceBtn" style="padding:5px 12px">Открыть</button></div>
+    <div class="row"><span>📿 Наши разборы достоверности (наши мухаддисы)</span><button class="go" id="ourRazboryBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="hint" style="margin:8px 0 2px;font-size:12px">🧬 Передатчики и иснады</div>
     <div class="row"><span>📋 Таблица всех передатчиков (18 989 равиев)</span><button class="go" id="narrTblBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>📊 Таблица цепей передачи (база иснадов)</span><button class="go" id="chainTblBtn" style="padding:5px 12px">Открыть</button></div>
@@ -638,7 +639,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v554';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v555';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4359,6 +4360,43 @@ async function openHadithScience(){
         g.appendChild(a); });
       rj.appendChild(g); });
     body.appendChild(_sec('📚 3. Книги — труды по передатчикам (ильм риджаль)', rj, false)); }
+}
+// 📿 #147: раздел «Наши разборы достоверности» — превью авторов + фильтр по автору + вердикты (our_hukm.json). Авторы: Абу Шуэйб аль-Майдани / Абу Сафия / Шабаб.
+let _ourRaz=null,_ourRazP=null;
+function loadOurRazbory(){ if(_ourRaz) return Promise.resolve(_ourRaz); if(_ourRazP) return _ourRazP;
+  _ourRazP=fetch('./our_hukm.json?'+APPVER).then(r=>r.ok?r.json():{}).then(j=>{_ourRaz=j||{};return _ourRaz;}).catch(()=>{_ourRaz={};return _ourRaz;}); return _ourRazP; }
+const _RAZ_AUTHORS=[{key:'all',label:'Все'},{key:'майдани',label:'Абу Шуэйб аль-Майдани'},{key:'сафия',label:'Абу Сафия'},{key:'шабаб',label:'Шабаб'}];
+async function openOurRazbory(){
+  let m=document.getElementById('ourRazModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='ourRazModal';
+    m.innerHTML='<div class="panel" style="max-width:640px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 10px;padding:14px 16px 11px;border-bottom:1px solid var(--border)"><b style="font-size:15px">📿 Наши разборы достоверности</b><button class="mini" id="ourRazClose" style="flex:none">закрыть ✕</button></div><div id="ourRazBody" style="max-height:76vh;overflow:auto"></div></div>';
+    document.body.appendChild(m); m.querySelector('#ourRazClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
+  m.style.zIndex='10002'; m.style.display='flex';
+  const body=m.querySelector('#ourRazBody'); body.innerHTML='<div class="hint">Загружаю…</div>';
+  const h=await loadOurRazbory();
+  const items=Object.entries(h).filter(([k,v])=>k!=='note'&&v&&typeof v==='object');
+  let _filter='all';
+  const render=()=>{
+    let html='<img src="./razbory_authors.jpg?'+APPVER+'" alt="Наши мухаддисы" style="width:100%;border-radius:12px;margin-bottom:10px">';
+    html+='<div style="font-size:12.5px;color:var(--hint);margin-bottom:8px">Разборы достоверности от наших мухаддисов: <b>Dr Абу Шуэйб аль-Майдани</b> · <b>Абу Сафия Али ибн Абдуллах</b> · <b>Шабаб</b> (الشباب). Источник: <span class="ourRazCh" data-u="https://t.me/hadis_isnad" style="color:var(--link);cursor:pointer;text-decoration:underline">канал @hadis_isnad</span>.</div>';
+    html+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'+_RAZ_AUTHORS.map(a=>'<button class="razFlt mini" data-k="'+a.key+'" style="border:1px solid '+(_filter===a.key?'#6c5ce7':'var(--border)')+';background:'+(_filter===a.key?'#2a1f3e':'transparent')+';color:'+(_filter===a.key?'#d8cdff':'var(--text)')+';padding:5px 11px;border-radius:9px;cursor:pointer;font-size:12.5px">'+esc(a.label)+'</button>').join('')+'</div>';
+    const flt=items.filter(([k,v])=>{ if(_filter==='all') return true; return (v.by||'').toLowerCase().indexOf(_filter)>=0; });
+    if(!flt.length){ html+='<div class="hint" style="padding:14px;text-align:center">Пока нет разборов'+(_filter!=='all'?' этого автора':'')+'. Наполняется из канала @hadis_isnad (расшифровка аудио → текст + автор + ссылка).</div>'; }
+    flt.forEach(([k,v])=>{
+      html+='<div style="border:1px solid #b3502e;border-radius:11px;padding:10px 12px;margin-bottom:9px;background:rgba(179,80,46,.06)">';
+      html+='<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="color:#ff9b7a">⛔ '+esc(v.ru||'недостоверный')+'</b><span style="color:var(--hint);font-size:12px">'+esc(k)+'</span></div>';
+      if(v.txt) html+='<div style="direction:rtl;text-align:right;font-size:14px;color:var(--mark);margin:5px 0;'+_AF+'">'+esc(v.txt)+'</div>';
+      (v.reasons||[]).forEach(r=>{ html+='<div style="font-size:13px;margin-top:4px">• '+esc(r.t||'')+'</div>'; });
+      if(v.by) html+='<div style="font-size:12px;color:#c9b8ff;margin-top:5px">✍️ автор разбора: '+esc(v.by)+(v.date?(' · '+esc(v.date)):'')+'</div>';
+      if(v.links&&v.links.length) html+='<div style="margin-top:5px">'+v.links.map(l=>'<span class="ourRazL" data-u="'+esc(l.u)+'" style="color:var(--link);cursor:pointer;text-decoration:underline;font-size:12.5px">🔗 '+esc(l.t||'разбор')+'</span>').join(' · ')+'</div>';
+      html+='</div>';
+    });
+    body.innerHTML=html;
+    body.querySelectorAll('.razFlt').forEach(b=>b.onclick=()=>{ _filter=b.dataset.k; render(); });
+    body.querySelectorAll('.ourRazL,.ourRazCh').forEach(a=>a.onclick=()=>{ try{ openLink(a.dataset.u||'https://t.me/hadis_isnad'); }catch(e){} });
+  };
+  render();
 }
 async function _critBio(c, host, btn){
   if(btn.dataset.shown==='1'){ host.style.display='none'; btn.dataset.shown=''; return; }
@@ -9505,6 +9543,7 @@ var _tfC=document.getElementById('tafsirClose'); if(_tfC) _tfC.onclick=()=>{ doc
 var _rb2=document.getElementById('readBtn2'); if(_rb2) _rb2.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openReader(); };
 var _rbr=document.getElementById('rootBrowBtn'); if(_rbr) _rbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openRootBrowser(); };
 var _hsb=document.getElementById('hadScienceBtn'); if(_hsb) _hsb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openHadithScience(); };
+var _orb=document.getElementById('ourRazboryBtn'); if(_orb) _orb.onclick=()=>{ try{ var s=document.getElementById('settingsModal'); if(s) s.style.display='none'; }catch(e){} try{ openOurRazbory(); }catch(e){} };   // 📿 #147
 var _ntb=document.getElementById('narrTblBtn'); if(_ntb) _ntb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openNarrTable(); }catch(e){} };
 var _ctb=document.getElementById('chainTblBtn'); if(_ctb) _ctb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openIsnadBase(); }catch(e){} };
 var _icb=document.getElementById('isnadCtorBtn'); if(_icb) _icb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openIsnadCtor(); }catch(e){} };   // M483 конструктор иснада
