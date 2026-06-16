@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v544</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v545</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -634,7 +634,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v544';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v545';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1328,6 +1328,9 @@ function updateReadBtn(){
     rb.title='Открыть «'+nameOf(sel[0])+'» и листать подряд';
   } else { rb.dataset.one=''; rb.textContent='📖 Читать сборник'; rb.title='Открыть сборник и листать хадисы подряд (с любого номера)'; }
 }
+// #180: dev-удаление из ленты — локальный список скрытых запросов (владелец-разработчик прячет нерелевантное)
+function _trendHidden(){ try{ return JSON.parse(localStorage.getItem('trend_hidden')||'[]'); }catch(e){ return []; } }
+function _trendHide(q){ try{ const a=_trendHidden(); if(a.indexOf(q)===-1){ a.push(q); localStorage.setItem('trend_hidden', JSON.stringify(a.slice(-500))); } }catch(e){} }
 // #167: Лента — глобальный тренд (что чаще всего ищут все пользователи; /api/popular). Клик по строке → открыть тот поиск.
 async function renderTrending(){
   const res=document.getElementById('res'); if(!res) return;
@@ -1335,15 +1338,21 @@ async function renderTrending(){
   let items=[];
   try{ if(BACKEND_URL){ const r=await fetch(BACKEND_URL+'/popular'); const j=await r.json(); items=(j&&j.items)||[]; } }catch(e){}
   if(typeof tab!=='undefined' && tab!=='trending') return;   // #5-фикс: пока грузили ленту, юзер ушёл на др.вкладку — не подменять её содержимое
+  const _hid=new Set(_trendHidden()); items=items.filter(it=>it&&it.q&&!_hid.has(it.q));   // #180: убрать скрытые
   res.innerHTML='';
   const hd=document.createElement('div'); hd.className='hint'; hd.style.cssText='font-size:13px;color:#9fd3a8;margin:4px 0 8px';
-  hd.textContent='🔥 Что чаще всего ищут (нажми — открою):';
+  hd.innerHTML='🔥 Что чаще всего ищут (нажми — открою): <span style="color:var(--hint);font-size:11px">✕ — убрать из ленты</span>';
   res.appendChild(hd);
   if(!items.length){ const s=document.createElement('div'); s.className='status'; s.textContent='Лента пока пуста — наполнится по мере поисков.'; res.appendChild(s); return; }
   items.forEach(it=>{ if(!it||!it.q) return; const row=document.createElement('div');
     row.style.cssText='cursor:pointer;border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin:6px 0;display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--card)';
     const ic=(it.tab==='quran')?'📖':'📚';
-    row.innerHTML='<span style="font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+ic+' '+esc(it.q)+'</span><span style="font-size:12px;color:var(--hint);white-space:nowrap">🔎 '+esc(String(it.n||0))+'</span>';   // QA-low: esc числового поля из сети (defense-in-depth)
+    row.innerHTML='<span style="font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+ic+' '+esc(it.q)+'</span>';
+    const right=document.createElement('span'); right.style.cssText='display:flex;align-items:center;gap:8px;white-space:nowrap;flex:none';
+    right.innerHTML='<span style="font-size:12px;color:var(--hint)">🔎 '+esc(String(it.n||0))+'</span>';
+    const x=document.createElement('button'); x.textContent='✕'; x.title='Убрать из ленты (#180)'; x.style.cssText='border:1px solid var(--border);background:transparent;color:var(--hint);border-radius:8px;width:26px;height:26px;cursor:pointer;font-size:13px';
+    x.onclick=(e)=>{ e.stopPropagation(); _trendHide(it.q); row.remove(); try{ toast('Убрано из ленты'); }catch(_e){} };
+    right.appendChild(x); row.appendChild(right);
     row.onclick=()=>{ try{ const want=(it.tab==='quran')?'quran':'hadith'; const tb=document.querySelector('.tab[data-tab="'+want+'"]'); if(tb) tb.click(); const qi=document.getElementById('q'); if(qi) qi.value=it.q; runSearch(true); }catch(e){} };
     res.appendChild(row); });
 }
@@ -6687,8 +6696,9 @@ async function narrCandidates(qRaw){
   // #4 (приоритет «лучше всего подходящих»): пересортировка top по РЕАЛЬНОМУ участию в иснадах (dzPart).
   // ОДНОсловный («хишам») — участие РЕШАЕТ (десятки тёзок); МНОГОсловный/кунья («абу муавия») — участие БУСТИТ
   // (чтобы самый связанный/практикуемый أبو معاوية الضرير был выше тёзок), но матч имени остаётся главным.
-  if(/[а-яё]/i.test(qRaw) && out.length>3){
-    const single = qRaw.trim().split(/\s+/).length===1;
+  const _isArQ=isArabic(qRaw);
+  if((/[а-яё]/i.test(qRaw) || _isArQ) && out.length>3){   // #181: Сахихайн-тай-брейк теперь и на АРАБСКИЙ запрос (قتادة), не только русский
+    const single = !_isArQ && qRaw.trim().split(/\s+/).length===1;   // арабский — НЕ participation-first: точный матч имени главнее (иначе тёзка с большим участием перебивал)
     const top=out.slice(0, single?80:36);
     const sahW=c=>(c.sah==='bm'?2:(c.sah?1:0));   // #169: رجال الشيخين выше; обе книги (bm) выше одной
     try{ await Promise.all(top.map(async c=>{ if(c.id==null){ c.pp=0; return; }
