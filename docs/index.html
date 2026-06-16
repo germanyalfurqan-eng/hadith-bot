@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v574</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v575</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -634,7 +634,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v574';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v575';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8183,8 +8183,25 @@ async function findKnownNames(text){
 }
 // Сессия21 (M500-интеграция): точные передатчики хадиса ИЗ таблицы кодификации (codif-шарды) — апп НЕ угадывает, а читает id таблицы.
 let _codifCache={};
+// УКАЗ-3/#181/#178/#229: ТОЧЕЧНАЯ коррекция id передатчиков на рантайме (НЕ массовый автофикс — детектор: safe_to_autofix=false).
+// narr_idfix.json: bad_transmitter_ids (провер. НЕ транзитные: 15293=قتادة الرهاوي — обскурный сподвижник, нет sid, передаётся лишь через сына
+//   → переразрешаем через guar по фразе: قتاده→5183 السدوسي/sid6458/сверено sunnah.com, انس→822) + remap_pairs (222 safe: norm_phrase|wrongid→correct, две системы согласны).
+let _idfix=null,_idfixP=null;
+function _loadIdfix(){ if(_idfix) return Promise.resolve(_idfix); if(_idfixP) return _idfixP;
+  _idfixP=fetch('./narr_idfix.json?v='+APPVER).then(r=>r.ok?r.json():{}).then(j=>{ _idfix={bad:new Set((j.bad_transmitter_ids||[]).map(String)), pairs:(j.remap_pairs||{})}; return _idfix; }).catch(()=>{ _idfix={bad:new Set(),pairs:{}}; return _idfix; }); return _idfixP; }
+async function _applyIdfix(shard){
+  try{ const fx=await _loadIdfix(); if(!fx.bad.size && !Object.keys(fx.pairs).length) return shard;
+    let g=null; try{ g=await _loadGuar(); }catch(e){}
+    for(const num in shard){ const rec=shard[num]; if(!rec) continue;
+      for(const fld of ['na','n']){ const arr=rec[fld]; if(!Array.isArray(arr)) continue;
+        for(const pr of arr){ if(!Array.isArray(pr)||pr.length<2) continue; const ph=String(pr[0]||''), id=String(pr[1]); const cn=_narrCanon(ph);
+          const pk=cn+'|'+id; if(fx.pairs[pk]!=null){ pr[1]=String(fx.pairs[pk]); continue; }
+          if(fx.bad.has(id) && g){ let ng=g[cn];   // bad-id (провер. НЕ транзитный) → переразрешаем через guar; хвосты (قتاده يحدث) режем по словам
+            if(ng==null){ const w=cn.split(' '); for(let L=w.length-1; L>=1 && ng==null; L--){ ng=g[w.slice(0,L).join(' ')]; } }
+            if(ng!=null && String(ng)!==id) pr[1]=String(ng); } } } } }catch(e){}
+  return shard; }
 async function codifChain(bid,num){ const key=bid+'_'+Math.floor(+num/500);
-  if(!(key in _codifCache)){ try{ const r=await fetch('./codif/'+key+'.json?v='+APPVER); _codifCache[key]=r.ok?await r.json():null; }catch(e){ _codifCache[key]=null; } }
+  if(!(key in _codifCache)){ try{ const r=await fetch('./codif/'+key+'.json?v='+APPVER); let m=r.ok?await r.json():null; if(m) m=await _applyIdfix(m); _codifCache[key]=m; }catch(e){ _codifCache[key]=null; } }
   const m=_codifCache[key]; return m?(m[String(num)]||null):null; }
 // слаг сборника (h-карточка) → bid кодификации. Только издания, где № совпадает с нашей таблицей (иначе пропускаем → фолбэк).
 const _SLUG2BID={bukhari:'1681',muslim:'1727',nasai:'829',ibnmajah:'1198',ahmad:'25794',malik:'28107'};
