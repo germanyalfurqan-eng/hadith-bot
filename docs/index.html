@@ -183,7 +183,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v577</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v578</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -647,7 +647,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v577';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v578';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1074,6 +1074,15 @@ function authBadge(code, grade, num){
   if(SAHIHAYN.indexOf(code)!==-1) return '';   // аль-Бухари/Муслим — достоверность общеизвестна, значок не нужен
   if(grade) return gradeBadge(grade);
   return '<span class="srcchk" title="'+NOGRADE_NOTE+'" style="border:1px dashed #6b5a2e;border-radius:8px;padding:1px 6px">⏳ ожидается наша проверка</span>'; }
+// #226 (слово владельца «النووي… что делает это в сахих муслиме»): чистый матн Муслима (изд.711) местами тянет аппарат редактора
+// (تحقيق/شرح: «قال النووي», «قوله:», ссылки тома/стр (N/N), هامش/طبعة, footnote-маркеры P\x01 и (¬N)). Убираем управляющие байты +
+// footnote-ссылки + обрезаем хвост-аппарат по ПЕРВОМУ editor-voice маркеру (только если он дальше 40 симв — не трогаем сам матн).
+// Проверено на 2842: 57 хадисов чистятся (#3/#7 57k→1k и др.), 0 обрезов реального матна (обычные #1/#145/#987/#2408 не тронуты).
+const _MUS_CUT=/قَوْلُهُ:|قوله:|قوله :|قال النووي|قال الإمام|قال القاضي|قال أبو العباس|قال الحافظ|في المفهم|المفهم |الإكمال للقاضي|شرح مسلم للنووي|شرح الأبي|هامش |طبعة |\(\s*[\d٠-٩]+\s*\/\s*[\d٠-٩]+\s*\)/;
+function _muslimStripApparatus(t){ if(!t) return t;
+  t=t.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').replace(/[Pp]\s*\(?¬[\d٠-٩]+\)?/g,'').replace(/\(?¬[\d٠-٩]+\)?/g,'');
+  const m=_MUS_CUT.exec(t); if(m && m.index>40) t=t.slice(0,m.index);
+  return t.replace(/\s+/g,' ').trim(); }
 async function loadCollection(code){
   if(cache[code]) return cache[code];
   if(code==='muslim'){   // Муслим — нумерация Абд аль-Баки (как sunnah.com): 2363=пальмы. fw = номер fawazahmed0 для готового перевода
@@ -1083,7 +1092,7 @@ async function loadCollection(code){
     catch(_e){ j=await fetchJSON('./muslim_baqi.json',60000); }
     // УКАЗ-3 (слово владельца 16.06): отображаем ЧИСТЫЙ матн из турецкого изд. 711 (без شرح/غريب, в отличие от Абд аль-Баки с комментариями). num/fw/подсветка-na остаются на baqi.
     let _mclean={}; try{ const cj=await fetchJSON('./muslim_clean.json?v='+APPVER,60000,{silent:true}); if(cj) _mclean=cj; }catch(_e){}
-    cache[code]=j.map(x=>({num:String(x.num),text:((_mclean[String(x.num)]||x.ar||'')).replace(/\s+/g,' ').trim(),grade:'',fw:x.fw||null,norm:''}));
+    cache[code]=j.map(x=>({num:String(x.num),text:_muslimStripApparatus(_mclean[String(x.num)]||x.ar||''),grade:'',fw:x.fw||null,norm:''}));   // #226: чистим аппарат редактора (شرح/تحقيق) из матна
     return cache[code]; }
   setStatus('Загружаю: '+nameOf(code)+'…');
   const j=await fetchEdition(code);
