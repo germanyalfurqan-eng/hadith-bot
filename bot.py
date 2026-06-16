@@ -5130,8 +5130,13 @@ async def _razbory_fetch_bg(application):
         store = _data_get("razbory.json", {}) or {}
     except Exception:
         store = {}
+    if store.get('_done'):   # #205-фикс: уже прошли весь диапазон → НЕ перезапускать/НЕ слать DM на каждом рестарте (38 несуществующих id всегда «missing» — спамило владельца)
+        return
     missing = [n for n in range(LO, HI + 1) if str(n) not in store]
     if not missing:
+        store['_done'] = True
+        try: _data_put("razbory.json", store, "razbory _done")
+        except Exception: pass
         return
     try:
         await application.bot.send_message(OWNER_ID, f"📥 Авто-обработка разборов {CH}: тяну {len(missing)} постов (из {HI-LO+1}). Аудио → Whisper → сохраняю по мере готовности.")
@@ -5166,10 +5171,11 @@ async def _razbory_fetch_bg(application):
         except Exception:
             pass
         await asyncio.sleep(4)   # щадим лимиты/баланс
+    store['_done'] = True   # #205-фикс: весь диапазон пройден — больше НЕ перезапускать/НЕ слать DM (38 несуществующих id всегда «missing»)
     try: _data_put("razbory.json", store, f"razbory bg done: {len(store)} (#147)")
     except Exception: pass
     try:
-        await application.bot.send_message(OWNER_ID, f"✅ Разборы: в базе {len(store)} из {HI-LO+1} (data/razbory.json). Claude оформит карточки: текст разбора + иснад + ошибки + аудио + автор + уник.№.")
+        await application.bot.send_message(OWNER_ID, f"✅ Разборы: в базе {len(store)} (data/razbory.json). Больше авто-обработка не перезапускается. Claude оформит карточки.")
     except Exception:
         pass
 
