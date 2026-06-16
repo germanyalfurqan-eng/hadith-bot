@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v562</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v563</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -640,7 +640,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v562';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v563';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3523,6 +3523,7 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
   meta.innerHTML+=authBadge(code, h.grade, (h.num||h.n));
   { const _rl=_ruSrcLine(code); if(_rl) meta.innerHTML+='<span class="srcru" style="display:block;width:100%;font-size:11.5px;color:var(--hint);margin-top:1px;direction:ltr;text-align:left">'+esc(_rl)+'</span>'; }   // #37: рус. название + автор
   try{ ourHukmBadge(code, (h.num||h.n), meta, card); }catch(e){}
+  try{ razboryBadge(code, (h.num||h.n), meta, card); }catch(e){}   // обратная связь: «📿 наш разбор» если хадис разбирали на канале
   try{ ourMaterialBadge(code, (h.num||h.n), meta, card); }catch(e){}   // M52: отметка «от Muslimoon»
   if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp){ sp.style.cursor='pointer'; sp.onclick=()=>openReader(code,String(h.num)); } }
   if(code==='muslim' && !riwNo){ (async()=>{ try{ const nm=await _muslimNums(h.num); if(nm){ const sp=meta.querySelector('.src');
@@ -4397,18 +4398,21 @@ async function openOurRazbory(){
       html+='<div style="border:1px solid #b3502e;border-radius:11px;margin-bottom:9px;background:rgba(179,80,46,.06);overflow:hidden">';
       // КОРОТКО: № разбора + тема, клик раскрывает
       var _ti=(c.typ==='комментарий')?'📍':((c.typ==='аудио')?'🎧':((c.typ==='заметка')?'📝':'📜'));
-      var _lbl = c.rn ? ('<b style="color:#ffd479">'+_ti+' №'+esc(c.rn)+'</b> ') : ('<b style="color:#ffd479">'+_ti+' '+esc((c.typ||'разбор').charAt(0).toUpperCase()+(c.typ||'разбор').slice(1))+'</b> ');   // нумерованный разбор № / иначе тип (комментарий/аудио/заметка)
+      var _tn=(c.typ||'разбор'); _tn=_tn.charAt(0).toUpperCase()+_tn.slice(1);
+      var _lbl = c.rn ? ('<b style="color:#ffd479">'+_ti+' Разбор №'+esc(c.rn)+'</b> ') : ('<b style="color:#ffd479">'+_ti+' '+esc(_tn)+' №'+c.mid+'</b> ');   // З-29: ВСЁ пронумеровано — разбор №(автора) или пост №(уникальный mid)
       var _vb = c.verd==='недостоверный' ? ' <span style="font-size:10.5px;color:#ff9b7a;border:1px solid #b3502e;border-radius:6px;padding:0 6px">🚫 недостоверный</span>' : (c.verd==='достоверный'?' <span style="font-size:10.5px;color:#7fe0a0;border:1px solid #2e9b5b;border-radius:6px;padding:0 6px">✓ достоверный</span>':'');
+      var _sup = c.sup_of ? (' <span style="font-size:10.5px;color:#c9b8ff;border:1px solid #6c5ce7;border-radius:6px;padding:0 6px">↩ дополнение к разбору №'+esc(c.sup_of)+'</span>') : (c.has_sup?(' <span style="font-size:10.5px;color:#7fc8e8;border:1px solid #2e7d9b;border-radius:6px;padding:0 6px">↪ есть дополнение</span>'):'');
       html+='<div class="razHead" data-id="'+cid+'" style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:11px 12px;cursor:pointer">'
-        +'<span style="min-width:0">'+_lbl+'<b style="color:#ff9b7a">'+esc(c.title||'')+'</b>'+_vb+(c.sup?(' <span style="font-size:10.5px;color:#c9b8ff;border:1px solid #6c5ce7;border-radius:6px;padding:0 6px">↩ дополнение к №'+esc(c.sup)+'</span>'):'')+'</span>'
+        +'<span style="min-width:0">'+_lbl+'<b style="color:#ff9b7a">'+esc(c.title||'')+'</b>'+_vb+_sup+'</span>'
         +'<span class="razArrow" data-a="'+cid+'" style="flex:none;color:var(--hint)">▼</span></div>';
       // ПОЛНЫЙ разбор (скрыт)
       html+='<div id="'+cid+'" style="display:none;padding:0 12px 11px;border-top:1px solid var(--border)">';
       html+='<div style="white-space:pre-wrap;word-break:break-word;font-size:calc(15px * var(--txtScale,1));line-height:1.7;margin:8px 0;font-family:var(--arFont,\'Noto Naskh Arabic\',serif)">'+esc(c.text||'')+'</div>';
+      if(c.href){ var _hc=String(c.href).split(':'); html+='<div style="margin:6px 0"><span class="ourRazHadith" data-code="'+esc(_hc[0]||'')+'" data-num="'+esc(_hc[1]||'')+'" style="display:inline-block;color:#ffd479;cursor:pointer;border:1px solid #a8862e;border-radius:9px;padding:5px 12px;font-size:13px">📖 Открыть этот хадис в нашей базе ('+esc(c.href)+')</span></div>'; }
       html+='<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:12.5px">';
-      html+=(c.by?('<span style="color:#c9b8ff">✍️ '+esc(c.by)+'</span>'):'<span style="color:#e0b34a">⚠️ автор требует уточнения</span>');   // #200
+      html+=(c.by?('<span class="ourRazL" data-u="'+esc(c.by_url||'https://t.me/hadis_isnad')+'" style="color:#c9b8ff;cursor:pointer;text-decoration:underline">✍️ '+esc(c.by)+' ↗</span>'):'<span style="color:#e0b34a">⚠️ автор требует уточнения</span>');
       html+='<span class="ourRazL" data-u="'+esc(c.url)+'" style="color:var(--link);cursor:pointer;text-decoration:underline">🔗 разбор '+(c.kind==='audio'?'(аудио ▶)':'(пост)')+' в канале</span>';
-      html+='<span class="ourRazShare" data-mid="'+c.mid+'" style="color:#7fe0a0;cursor:pointer;text-decoration:underline">📤 поделиться разбором</span>';   // З-30: поделиться этим разбором
+      html+='<span class="ourRazShare" data-mid="'+c.mid+'" style="color:#7fe0a0;cursor:pointer;text-decoration:underline">📤 поделиться</span>';   // З-30
       html+='</div></div></div>';
     });
     body.innerHTML=html;
@@ -4417,6 +4421,8 @@ async function openOurRazbory(){
     body.querySelectorAll('.ourRazL,.ourRazCh').forEach(a=>a.onclick=()=>{ try{ openLink(a.dataset.u||'https://t.me/hadis_isnad'); }catch(e){} });
     body.querySelectorAll('.razHead').forEach(hd=>hd.onclick=()=>{ const el=document.getElementById(hd.dataset.id); const ar=hd.querySelector('.razArrow'); if(el){ const vis=el.style.display!=='none'; el.style.display=vis?'none':'block'; if(ar) ar.textContent=vis?'▼':'▲'; } });
     body.querySelectorAll('.ourRazShare').forEach(a=>a.onclick=(e)=>{ e.stopPropagation(); try{ const u=deepLinkUrls('raz_'+a.dataset.mid).tg; copyText(u); toast('📤 Ссылка на разбор скопирована'); try{hap('light');}catch(_e){} }catch(_e){} });   // З-30
+    body.querySelectorAll('.ourRazHadith').forEach(a=>a.onclick=(e)=>{ e.stopPropagation(); const c=a.dataset.code,n=a.dataset.num; if(!c||!n) return; try{ m.style.display='none'; }catch(_e){}   // открыть хадис разбора в нашей карточке
+      try{ openReader(c, String(n)); }catch(_e){ try{ const qi=document.getElementById('q'); if(qi){ const th=document.querySelector('.tab[data-tab="hadith"]'); if(th) th.click(); qi.value=c+' '+n; runSearch(true); } }catch(_e2){} } });
   };
   render();
 }
@@ -7247,6 +7253,18 @@ async function _narrBooks(id){ const b=Math.floor(id/100); if(!_narrBkShard[b]){
 let _ourHukm=null,_ourHukmP=null;
 function loadOurHukm(){ if(_ourHukm) return Promise.resolve(_ourHukm); if(_ourHukmP) return _ourHukmP;
   _ourHukmP=fetch('./our_hukm.json').then(r=>r.ok?r.json():{}).then(j=>{ _ourHukm=j||{}; return _ourHukm; }).catch(()=>{ _ourHukm={}; return _ourHukm; }); return _ourHukmP; }
+// обратный индекс «хадис → разборы» (razbory_byhadith.json) → кнопка «📿 наш разбор» в карточке хадиса
+let _razByH=null,_razByHP=null;
+function loadRazByH(){ if(_razByH) return Promise.resolve(_razByH); if(_razByHP) return _razByHP;
+  _razByHP=fetch('./razbory_byhadith.json?'+APPVER).then(r=>r.ok?r.json():{}).then(j=>{_razByH=j||{};return _razByH;}).catch(()=>{_razByH={};return _razByH;}); return _razByHP; }
+function _openRazbor(mids){ try{ openOurRazbory(); setTimeout(()=>{ try{ (mids||[]).forEach(mid=>{ const el=document.getElementById('raz_'+mid); if(el){ el.style.display='block'; const hd=el.previousElementSibling; if(hd){ const ar=hd.querySelector('.razArrow'); if(ar) ar.textContent='▲'; } } }); const f=document.getElementById('raz_'+(mids&&mids[0])); if(f) f.scrollIntoView({block:'center'}); }catch(e){} }, 900); }catch(e){} }
+function razboryBadge(code, num, meta, card){
+  loadRazByH().then(idx=>{ const mids=idx[String(code)+':'+String(num)]; if(!mids||!mids.length) return;
+    const b=document.createElement('span'); b.className='src'; b.style.cssText='cursor:pointer;background:#2a1f3e;color:#d8cdff;border:1px solid #6c5ce7;margin-inline-start:6px;white-space:nowrap';
+    b.textContent='📿 наш разбор'+(mids.length>1?(' ('+mids.length+')'):''); b.title='Разбор достоверности этого хадиса нашими мухаддисами — нажми';
+    b.onclick=(e)=>{ try{e.stopPropagation();}catch(_e){} _openRazbor(mids); };
+    meta.appendChild(b); }).catch(()=>{});
+}
 function ourHukmBadge(code, num, meta, card){
   loadOurHukm().then(h=>{ const v=h && h[String(code)+':'+String(num)]; if(!v) return;
     const b=document.createElement('span'); b.className='src';
