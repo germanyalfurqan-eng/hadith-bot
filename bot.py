@@ -1774,7 +1774,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             j = _journal_load()
             j["worklog_enabled"] = not j.get("worklog_enabled", False)
             _journal_save("toggle worklog")
-            await update.message.reply_text(("✅ Рабочий журнал ВКЛЮЧЕН — буду слать уведомления о старте/финише заявок." if j["worklog_enabled"] else "🔇 Рабочий журнал ОТКЛЮЧЕН."))
+            await update.message.reply_text(("✅ Рабочий журнал ВКЛЮЧЕН — буду слать тебе В ЛИЧКУ: что начал/закончил/на чём остановился по каждой заявке, суть с логикой, сколько заявок осталось невыполнено и в работе, и сколько токенов потрачено. Выключить — снова напиши «журнал»." if j["worklog_enabled"] else "🔇 Рабочий журнал ОТКЛЮЧЕН — уведомления о заявках слать не буду."))
             return
         # ===== Закрыть заявку: «заявка done <№>» / «заявка готово <№>» =====
         if _tl.startswith("заявка done ") or _tl.startswith("заявка готово "):
@@ -3839,20 +3839,42 @@ async def _api_serve(application=None):
             except Exception:
                 pass
 
-    async def notify_worklog(action, req_id, text):
-        """#165: уведомление в рабочий журнал о начале/конце работы Claude над заявкой."""
+    async def notify_worklog(action, req_id, text, summary="", tokens=None, open_count=None, doing_count=None):
+        """#62/#63/#165 (З-13): уведомление владельцу В ЛИЧКУ о работе Claude над заявкой —
+        что сделал + логика/суть + сколько осталось невыполнено/в работе + потрачено токенов."""
         if not application:
             return
         j = _journal_load()
         if not j.get("worklog_enabled"):
             return
-        icon = "🚀" if action == "start" else "✅"
-        verb = "начал" if action == "start" else "закончил"
-        msg = f"{icon} CLAUDE {verb} заявку #{req_id} ({_now_msk()})\n{(text or '')[:400]}"
-        try:
-            await application.bot.send_message(LOG_CHAT_ID, msg)
-        except Exception:
-            pass
+        if action == "start":
+            icon, verb = "🚀", "начал заявку"
+        elif action == "finish":
+            icon, verb = "✅", "закончил заявку"
+        else:  # stop — #62: «слать всякий раз когда остановился»
+            icon, verb = "⏸️", "остановился (заявка"
+        head = f"{icon} CLAUDE {verb} #{req_id}{')' if action=='stop' else ''} · {_now_msk()}"
+        parts = [head]
+        if text:
+            parts.append((text or '')[:400])
+        if summary:  # З-13: логика/суть
+            parts.append(f"💡 Суть/логика: {summary[:350]}")
+        cnt = []   # #62: остаток заявок
+        if open_count is not None:
+            cnt.append(f"🔴 невыполнено: {open_count}")
+        if doing_count is not None:
+            cnt.append(f"🟡 в работе: {doing_count}")
+        if cnt:
+            parts.append(" · ".join(cnt))
+        if tokens:  # #63: потраченные токены
+            parts.append(f"🧮 токенов потрачено: {tokens}")
+        msg = "\n".join(parts)
+        # #62: ВЛАДЕЛЬЦУ В ЛИЧКУ (OWNER_ID) + копия в рабочий журнал (LOG_CHAT_ID)
+        for chat in (OWNER_ID, LOG_CHAT_ID):
+            try:
+                await application.bot.send_message(chat, msg, disable_web_page_preview=True)
+            except Exception:
+                pass
     def _cors(resp):
         resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
@@ -3901,17 +3923,24 @@ async def _api_serve(application=None):
     async def health(r): return _cors(web.json_response({'ok': True}))
     async def opt(r): return _cors(web.Response(text=''))
     async def worklog(r):
-        # #165: триггер уведомления о начале/конце работы Claude над заявкой (Claude дёргает curl).
+        # #62/#63/#165: триггер уведомления владельцу о работе Claude над заявкой (Claude дёргает curl).
         d = await _body(r)
         action = (d.get('action') or '').lower()
-        if action not in ('start', 'finish'):
+        if action not in ('start', 'finish', 'stop'):
             return _cors(web.json_response({'error': 'invalid_action'}, status=400))
         try: req_id = int(d.get('req_id'))
         except Exception: return _cors(web.json_response({'error': 'invalid_req_id'}, status=400))
-        if not rate_ok('worklog:global', limit=20, window=3600):   # #165-фикс: глобальный бакет — раньше ключ включал req_id, спам обходился перебором req_id
+        if not rate_ok('worklog:global', limit=30, window=3600):   # #165-фикс: глобальный бакет — раньше ключ включал req_id, спам обходился перебором req_id
             return _ratelimited()
         text = (d.get('text') or '').strip()[:500]
-        try: await notify_worklog(action, req_id, text)
+        summary = (d.get('summary') or '').strip()[:400]
+        tokens = d.get('tokens')
+        oc = d.get('open_count'); dc = d.get('doing_count')
+        try: oc = int(oc) if oc is not None else None
+        except Exception: oc = None
+        try: dc = int(dc) if dc is not None else None
+        except Exception: dc = None
+        try: await notify_worklog(action, req_id, text, summary, tokens, oc, dc)
         except Exception as e: return _cors(web.json_response({'error': str(e)[:120]}, status=500))
         return _cors(web.json_response({'ok': True}))
 
