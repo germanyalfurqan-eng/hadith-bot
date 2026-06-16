@@ -183,7 +183,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v579</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v580</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -649,7 +649,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v579';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v580';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2309,7 +2309,8 @@ async function runSearch(explicit){
       else if(!modes.ai && /[а-яёa-z]/i.test(shown) && !isArabic(shown)){   // поиск по РУССКОМУ переводу (Кулиев) — НЕ в ИИ-режиме (там ищем по арабским фразам q)
         const ru=await loadQuranRu(); if(seq!==_seq) return;
         const qw=_ruNumExpand(shown).toLowerCase().split(/\s+/).filter(w=>w.length>1);
-        if(qw.length){ const gn=v=>(ru[v.s+':'+v.a]||'').toLowerCase(); let useWords=qw;
+        const _oEd=(cfg&&cfg.qtr==='rus-abuadel')?'rus-elmirkuliev':'rus-abuadel'; let ru2={}; try{ ru2=await loadQuranTr(_oEd)||{}; }catch(e){ ru2={}; } if(seq!==_seq) return; const _has2=Object.keys(ru2).length>0;
+        if(qw.length){ const gn=v=>{ const a=(ru[v.s+':'+v.a]||''); const b=_has2?(ru2[v.s+':'+v.a]||''):''; return (a+' '+b).toLowerCase(); }; let useWords=qw;
           if(!strict){ corrQ=correctQuery(qw, ruVocabFrom('q', Object.values(ru))); if(corrQ.changed.length) useWords=corrQ.corrected; }   // M173: автоисправление (Яндекс)
           relaxQ=relaxSearch(useWords, gn, arr, strict);   // M172: ослабление при нуле по всем словам
           for(const v of relaxQ.hits) add({type:'q',v,ru:ru[v.s+':'+v.a],rq:relaxQ.used.join(' ')}); }
@@ -4363,6 +4364,10 @@ async function openHadithScience(){
   const body=m.querySelector('#hadBody'); body.innerHTML='<div class="hint">Загружаю…</div>';
   try{ if(!_hadRule) _hadRule=await (await fetch('./hadith/rule_01_tawthiq_critics.json?'+Date.now())).json(); }catch(e){ body.innerHTML='<div class="hint">Не удалось загрузить правила.</div>'; return; }
   try{ if(!_rijal) _rijal=await (await fetch('./hadith/rijal_books.json?'+Date.now())).json(); }catch(e){}
+  // M306: труды риджаля показываем как обычные книги каталога — рус.имя + огласовки + чип Википедии.
+  // Данные те же, что у каталога: _catTr.map[имя книги].voc/.ru (по арабскому имени) + window._wikiT[id] (по id turath).
+  let _rjById={}; try{ await Promise.all([loadBookTr(), loadWikiTitles(), loadCatalog()]); }catch(e){}
+  try{ (_catalog||[]).forEach(b=>{ _rjById[String(b.i)]=b; }); }catch(e){}
   body.innerHTML='';
   // владелец: разделы РАСКРЫВАЮЩИЕСЯ (аккордеон) — 1 Правила · 2 Мутабарун · 3 Книги
   const _sec=(title, contentEl, open)=>{ const s=document.createElement('div'); s.style.cssText='border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden';
@@ -4396,10 +4401,24 @@ async function openHadithScience(){
     _rijal.critics.forEach(cr=>{ const g=document.createElement('div'); g.style.cssText='margin:6px 0;border-bottom:1px solid var(--border);padding-bottom:6px';
       let h='<div style="font-weight:600;color:#bff5d4">'+esc(cr.name)+'</div>';
       g.innerHTML=h;
-      (cr.books||[]).forEach(bk=>{ const a=document.createElement('div'); a.style.cssText='font-size:13px;color:var(--link);cursor:pointer;direction:rtl;text-align:right;padding:3px 0';
-        a.textContent='• '+bk.title;
-        a.onclick=()=>{ const t=String(bk.turath||''); if(/^\d+$/.test(t)){ m.style.display='none'; openBook(t); } else if(t.indexOf('author/')===0){ openLink('https://app.turath.io/'+t); } };
-        g.appendChild(a); });
+      (cr.books||[]).forEach(bk=>{ const t=String(bk.turath||'');
+        // M306: тот же механизм, что у обычных книг каталога — огласованное имя + рус.перевод + чип Википедии
+        const cb=_rjById[t]||null;                       // книга в каталоге (по id turath) → её арабское имя
+        const cbName=(cb&&cb.n)||bk.title||'';
+        const tr=(typeof _catTr!=='undefined'&&_catTr&&_catTr.map)?(_catTr.map[cbName]||null):null;
+        const arName=(tr&&tr.voc)?tr.voc:cbName;          // огласовки (book_titles_voc), иначе голое имя
+        const ru=(tr&&tr.ru)?tr.ru:'';                    // рус.перевод названия (book_titles_ru)
+        const wk=(window._wikiT&&window._wikiT[t])||null; // отметка Википедии (по id, как у каталога)
+        const wkName=wk?_wkCommon(wk.name||wk.ru||''):''; const wkLang=wk?(wk.lang||'ru'):'';
+        const wkSuf=(wkLang==='ru'||!wk)?'':('<span style="font-size:9px;color:var(--hint);font-weight:600;margin-left:3px;letter-spacing:.4px">'+esc(wkLang)+'</span>');
+        const a=document.createElement('div'); a.style.cssText='padding:5px 0';
+        const main=document.createElement('div'); main.style.cssText='cursor:pointer;direction:rtl;text-align:right';
+        main.innerHTML='<div style="font-size:14px;color:var(--link)">• '+esc(arName)+'</div>'
+          +(ru?('<div style="direction:ltr;text-align:left;font-size:12.5px;color:#bcd0ff;margin-top:1px">'+esc(ru)+'</div>'):'')
+          +(wk?('<div style="direction:ltr;text-align:left;margin-top:3px"><span class="rjWk" data-u="'+esc(wk.url||'')+'" title="Открыть статью в Википедии" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:2px 8px;background:rgba(255,255,255,.05);white-space:nowrap"><b style="font-family:Georgia,\'Times New Roman\',serif;font-size:13px;line-height:1">W</b> Википедия'+wkSuf+((wkLang==='en')&&wkName?(' · '+esc(wkName)):'')+' ↗</span></div>'):'');
+        main.onclick=()=>{ if(/^\d+$/.test(t)){ m.style.display='none'; openBook(t); } else if(t.indexOf('author/')===0){ openLink('https://app.turath.io/'+t); } };
+        const _w=main.querySelector('.rjWk'); if(_w) _w.onclick=(e)=>{ e.stopPropagation(); try{ openLink(_w.dataset.u); }catch(_e){} };
+        a.appendChild(main); g.appendChild(a); });
       rj.appendChild(g); });
     body.appendChild(_sec('📚 3. Книги — труды по передатчикам (ильм риджаль)', rj, false)); }
 }
@@ -5266,7 +5285,7 @@ function cardAyah(d,groups){
   } else { ar.innerHTML=highlight(cfg.noDiac?stripDiac(v.text):v.text,groups,modes); }
   card.appendChild(ar);
   if(d.ru){ const ru=document.createElement('div'); ru.style.cssText='margin-top:6px;font-size:14px;color:var(--text)';
-    ru.innerHTML='<span style="color:var(--hint);font-style:italic">Кулиев:</span> '+hlRu(d.ru, d.rq||''); card.appendChild(ru); }
+    const _ab=(cfg&&cfg.qtr==='rus-abuadel'),_N=['Кулиев','Абу Адель'],_lp='<span style="color:var(--hint);font-style:italic">'; ru.innerHTML=_lp+_N[_ab?1:0]+':</span> '+hlRu(d.ru,d.rq||''); card.appendChild(ru); const _o2=_qTrC[_ab?'rus-elmirkuliev':'rus-abuadel'],_t2=_o2&&_o2[v.s+':'+v.a]; if(_t2&&_t2!==d.ru){ const r2=document.createElement('div'); r2.style.cssText='margin-top:6px;font-size:14px;color:#bcd0ff'; r2.innerHTML=_lp+_N[_ab?0:1]+':</span> '+hlRu(_t2,d.rq||''); card.appendChild(r2); } }
   const meta=document.createElement('div');meta.className='meta';
   // дубль «📖 Коран · s:a» убран (замечание владельца): шапка над аятом уже даёт суру/аят и открывает читалку
   addTr(meta,card,v.text,{s:v.s,a:v.a},{k:'q|'+v.s+':'+v.a,type:'q',coll:'Коран',label:'Коран '+v.s+':'+v.a,text:(v.text||'').slice(0,200)}); card.appendChild(meta); return card;
