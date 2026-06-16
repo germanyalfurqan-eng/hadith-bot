@@ -178,7 +178,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v547</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v548</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -259,6 +259,7 @@
   </div>
   <div id="hadithReadRow" style="display:none;margin:8px 0;gap:8px;flex-wrap:wrap">
     <button id="hadithReadBtn" title="Вся Мактаба аш-Шамиля (8589 книг) + первоисточники и избранное — поиск по автору/названию, читать любую книгу" style="background:#11261f;border:1px solid #2e7d5a;color:#bff5d4;padding:10px 14px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;flex:1">📖 Читать библиотеку Мактаба аш-Шамиля</button>
+    <button id="randHadithBtn" title="Не знаешь что искать? Открой случайный ДОСТОВЕРНЫЙ хадис (Сахихайн — аль-Бухари/Муслим). Жми ещё для нового." style="background:#2a1f3e;border:1px solid #6c5ce7;color:#d8cdff;padding:10px 14px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;flex:1 0 100%">🎲 Случайный достоверный хадис</button>
   </div>
 
   <div class="neuro-box" id="neuroBox">
@@ -481,8 +482,8 @@
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:10px">
         <button class="go" id="readFirst" style="padding:8px 10px" title="В начало книги">⏮</button>
         <button class="go" id="readPrev" style="padding:8px 12px">← пред.</button>
-        <input type="number" id="readJump" placeholder="перейти к №" min="1"
-               style="width:104px;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:7px 9px;font-size:13px">
+        <input type="number" id="readJump" placeholder="№ хадиса →" min="1" title="Введи НОМЕР хадиса в этой книге и нажми Enter — листалка перейдёт к нему (это номер хадиса, не том/страница)"
+               style="width:118px;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:7px 9px;font-size:13px">
         <button class="go" id="readNext" style="padding:8px 12px">след. →</button>
         <button class="go" id="readLast" style="padding:8px 10px" title="В конец книги">⏭</button>
       </div>
@@ -634,7 +635,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v547';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v548';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4231,6 +4232,32 @@ async function maybeNarratorChip(q){ try{
   c.onclick=()=>openNarratorRijal(v);
   res.insertBefore(c, res.firstChild);
 }catch(e){} }
+// 🎲 #4: случайный ДОСТОВЕРНЫЙ хадис (Сахихайн — Бухари/Муслим, достоверны по консенсусу; исключаем помеченные нами недостоверными). Кнопка на старт-экране — «не знаешь что искать».
+async function randomHadith(){
+  const btn=document.getElementById('randHadithBtn');
+  try{
+    if(btn) btn.disabled=true;
+    const code = Math.random()<0.5?'bukhari':'muslim';
+    const arr = await loadCollection(code);
+    if(!arr||!arr.length){ if(btn) btn.disabled=false; toast('Не загрузилось, попробуй ещё'); return; }
+    let h=null;
+    for(let t=0;t<10;t++){ const c=arr[Math.floor(Math.random()*arr.length)]; if(!c||!(c.text||'')) continue;
+      const cg=(typeof CUSTOM_GRADES!=='undefined')?CUSTOM_GRADES[code+'|'+(c.num||'')]:null;
+      if(cg && /недостовер/.test(cg.txt||'')) continue;   // пропустить помеченные НАМИ недостоверными
+      h=c; break; }
+    if(!h){ if(btn) btn.disabled=false; return; }
+    const th=document.querySelector('.tab[data-tab="hadith"]'); if(th && typeof tab!=='undefined' && tab!=='hadith') th.click();
+    const res=document.getElementById('res'); res.innerHTML=''; _results=[]; _groups=[]; _pick={items:[],sel:new Set(),excl:new Set(),kind:'',meaning:''};
+    const hd=document.createElement('div'); hd.className='hint'; hd.style.cssText='font-size:13px;color:#c9b8ff;margin:4px 0 8px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap';
+    hd.innerHTML='<span>🎲 Случайный достоверный хадис · '+esc(nameOf(code))+' №'+esc(String(h.num||''))+' <span style="opacity:.65">(достоверность по консенсусу — Сахихайн)</span></span>';
+    const more=document.createElement('button'); more.className='mini'; more.textContent='🎲 ещё'; more.style.cssText='border:1px solid #6c5ce7;color:#d8cdff;background:#2a1f3e;padding:5px 12px;border-radius:9px;cursor:pointer;flex:none'; more.onclick=randomHadith;
+    hd.appendChild(more); res.appendChild(hd);
+    res.appendChild(makeCard({type:'h',code,h}));
+    try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(e){}
+    try{ hap('light'); }catch(e){}
+  }catch(e){}
+  finally{ if(btn) btn.disabled=false; }
+}
 function _resultSnippets(){ const out=[]; (_results||[]).slice(0,18).forEach(d=>{ try{
   if(d.type==='q'&&d.v) out.push('Коран '+d.v.s+':'+d.v.a+' — '+(d.v.text||'').replace(/\s+/g,' ').slice(0,60));
   else if(d.type==='m'&&d.h) out.push('аль-Мухаймин №'+(d.h.n||'')+' — '+((d.h.text||d.h.ar||'')).replace(/\s+/g,' ').slice(0,70));
@@ -5188,7 +5215,7 @@ function addTr(meta,card,text,ayah,fav){
     if(_tok){ const sp=document.createElement('button'); sp.className='tr-btn'; sp.textContent='📍';
       sp.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
       sp.title='Поделиться местом — ссылка откроет приложение на этом же хадисе/аяте';
-      sp.onclick=()=>{ try{ const u=deepLinkUrls(_tok); copyText(u.tg+'\n'+u.web); toast('📍 Ссылка на это место скопирована'); try{hap('light');}catch(e){} }catch(e){} };
+      sp.onclick=()=>{ try{ const u=deepLinkUrls(_tok); copyText(u.tg); toast('📍 Ссылка на это место скопирована'); try{hap('light');}catch(e){} }catch(e){} };   // владелец: только t.me-ссылка, без github
       meta.appendChild(sp); } }catch(e){}
   // M32: озвучка хадиса синтезом речи устройства — клиентский TTS. Аяты не трогаем (у них аудио чтецов). #145: можно отключить в Настройках (cfg.noTts).
   if(!ayah && !cfg.noTts && typeof window!=='undefined' && 'speechSynthesis' in window){
@@ -6949,8 +6976,13 @@ async function _chainAugment(cands, q){
     if(_skelSubseq(qWords, skels)){ add.push({id, nm:card[1]||('#'+id), sc:1000+w, y:(e&&e[1])||0, _nb:w, _nbSah:nbSah.get(id)||0}); if(add.length>=8) break; }
   }
   add.sort((a,b)=>b._nb-a._nb);
-  const boosted=cands.filter(c=>c._nb).sort((a,b)=>b._nb-a._nb), rest=cands.filter(c=>!c._nb);
-  return [...add, ...boosted, ...rest].slice(0,16);
+  // #3 (абу муавия): сильный имя-матч (гарант/famous, sc≥999, напр. أبو معاوية الضرير #5577) НЕ хоронить под соседями по цепи — он первым
+  const strongIds=new Set(cands.filter(c=>c.sc>=999).map(c=>c.id));
+  const strong=cands.filter(c=>c.sc>=999);
+  const boosted=cands.filter(c=>c._nb && !strongIds.has(c.id)).sort((a,b)=>b._nb-a._nb);
+  const rest=cands.filter(c=>!c._nb && !strongIds.has(c.id));
+  const addF=add.filter(c=>!strongIds.has(c.id));
+  return [...strong, ...addF, ...boosted, ...rest].slice(0,16);
 }
 async function narrSuggest(q){
   const box=document.getElementById('narrSugg'); if(!box) return; const my=++_narrSugSeq;
@@ -9486,6 +9518,7 @@ var _qrb=document.getElementById('quranReadBtn'); if(_qrb) _qrb.onclick=()=>_qrR
 var _qrn=document.getElementById('quranRandBtn'); if(_qrn) _qrn.onclick=_qrRandom;
 var _qroot=document.getElementById('quranRootBtn'); if(_qroot) _qroot.onclick=()=>openRootBrowser();   // #2: поиск по корню заметной кнопкой в Аятах
 var _hrb=document.getElementById('hadithReadBtn'); if(_hrb) _hrb.onclick=()=>openCatalog();
+var _rhb=document.getElementById('randHadithBtn'); if(_rhb) _rhb.onclick=()=>{ try{ randomHadith(); }catch(e){} };   // 🎲 #4 случайный достоверный хадис
 var _hro=document.getElementById('hadithReadOurBtn'); if(_hro) _hro.onclick=()=>{ try{ openReader(); }catch(e){} };
 var _rcb=document.getElementById('recentBtn'); if(_rcb) _rcb.onclick=()=>{ var b=document.getElementById('recentBox'); if(b&&b.style.display==='block'){ hideRecent(); } else { showRecent(true); } };   // M256: 🕐 переключает недавние
 document.getElementById('favBtn').onclick=()=>{ renderFav('date'); document.getElementById('favModal').style.display='flex'; };
