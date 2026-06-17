@@ -185,7 +185,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v593</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v594</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -358,7 +358,7 @@
     <div class="row"><span>🔍 Щипок-зум — увеличение экрана двумя пальцами <span style="color:var(--hint);font-size:11px">(по умолчанию выкл.)</span></span><div class="sw" id="zoomSw"></div></div>
     <div class="row"><span>🕐 Недавние поиски (показывать при пустом поле)</span><div class="sw" id="recentSw"></div></div>
     <div class="row"><span>▶️ Авто-переход на следующую суру <span style="color:var(--hint);font-size:11px">(в плеере/чтеце Корана)</span></span><div class="sw" id="qrAutoNextSw"></div></div>
-    <div class="row"><span>🎚 Крутилка быстрой прокрутки в Коране <span style="color:var(--hint);font-size:11px">(бар слева — тянуть, листать суру)</span></span><div class="sw" id="qrThumbSw"></div></div>
+    <div class="row"><span>🎚 Крутилка быстрой прокрутки в Коране <span style="color:var(--hint);font-size:11px">(бар справа — тянуть, листать суру)</span></span><div class="sw" id="qrThumbSw"></div></div>
     <div class="row"><span>👆 Свайп влево/вправо — смена суры <span style="color:var(--hint);font-size:11px">(в читалке Корана)</span></span><div class="sw" id="qrSwipeSw"></div></div>
     <div class="row"><span>⬇️ Авто-переход к переводу тафсира (когда он ниже)</span><div class="sw" id="tafJumpSw"></div></div>
     <div class="row"><span>📳 Тактильная отдача (вибро) на действия</span><div class="sw" id="hapticSw"></div></div>
@@ -660,7 +660,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v593';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v594';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -6380,7 +6380,8 @@ async function chainRun(){
   const miss=_chainSel.filter((c,i)=>!parts[i]||!parts[i].length);
   if(miss.length){ out.innerHTML='<div class="hint" style="color:#e0b34a">⚠️ Нет размеченного участия (Э1.1) у: '+miss.map(c=>esc(c.nm.split(' ').slice(0,3).join(' '))).join('، ')+'. Короткие формы опознаются итерациями дизамбигуации — попробуй более полную форму имени.</div>'; return; }
   let ai=0; parts.forEach((p,i)=>{ if(p.length<parts[ai].length) ai=i; });
-  const anchor=parts[ai];
+  // #241: результаты в порядке ПРИОРИТЕТА сборников (Бухари→Муслим→…первоисточники сначала), затем по номеру — а не как нашлось
+  const anchor=parts[ai].slice().sort((a,b)=>{ const pa=_srcPrio(a[0]),pb=_srcPrio(b[0]); if(pa!==pb) return pa-pb; return (parseInt(a[1],10)||0)-(parseInt(b[1],10)||0); });
   const warn='';   // кэп участия снят v398 (слово владельца) — выдача полная
   const adj=!!window._chainAdj;
   try{ await Promise.all([loadBooksMap(), loadBookTr(), loadWikiTitles()]); }catch(e){}   // #29/#34: данные ДО цикла — рендерим хиты ПО МЕРЕ нахождения, не в конце
@@ -6472,6 +6473,10 @@ async function chainRunSeq(out){
     more.disabled=shown>=recs.length; };
   out.appendChild(more); more.onclick=draw; draw();
 }
+// #241: приоритет сборников для сортировки результатов поиска по цепи (первоисточники сначала: Бухари→Муслим→Абу Дауд→Тирмизи→Насаи→Ибн Маджа→Малик→Ахмад, затем остальные)
+const _BID2SLUG={'1681':'bukhari','1727':'muslim','711':'muslim','1726':'abudawud','829':'nasai','1198':'ibnmajah','28107':'malik','25794':'ahmad'};
+const _SRC_PRIO_BIDS=['1681','1727','711','1726','829','1198','28107','25794'];
+function _srcPrio(bid){ const i=_SRC_PRIO_BIDS.indexOf(String(bid)); return i>=0?i:500; }
 function _dzPlaceRow(bid,num,leaf){
   // M449-замечание владельца: «ид книги недостаточно» — название (с огласовками, если выверено) + рус + Википедия
   const id=String(bid);
@@ -6486,7 +6491,10 @@ function _dzPlaceRow(bid,num,leaf){
     +((wiki&&wiki.url)?('<span class="dzW" title="Википедия о книге" style="flex:none;cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px;white-space:nowrap"><b style="font-family:Georgia,serif">W</b> Википедия ↗</span>'):'')
     +_shamChip(id, leaf)
     +'<span style="flex:none;font-size:12px;color:#7fb3ff;text-align:left">№'+esc(String(num))+(leaf?('<span style="display:block;font-size:11px">📖 лист '+esc(String(leaf))+'</span>'):'')+'</span>';
-  d.onclick=()=>{ try{ hap('light'); }catch(e){} if(leaf){ try{ openBook(id, leaf); }catch(e){} } else { const q=document.getElementById('q'); if(q){ q.value=String(num); runSearch(true); } } };
+  d.onclick=()=>{ try{ hap('light'); }catch(e){}
+    const slug=_BID2SLUG[id];   // #241: основной первоисточник → открыть КАРТОЧКУ хадиса (openReader), а не просто книгу/номер
+    if(slug && num!=null && String(num)!==''){ try{ openReader(slug, String(num)); return; }catch(e){} }
+    if(leaf){ try{ openBook(id, leaf); }catch(e){} } else { const q=document.getElementById('q'); if(q){ q.value=String(num); runSearch(true); } } };
   const w=d.querySelector('.dzW'); if(w) w.onclick=(e)=>{ e.stopPropagation(); try{ openLink(wiki.url); }catch(_e){ window.open(wiki.url,'_blank'); } };
   if(!ar){ try{ loadBooksMap().then(()=>{ const el=d.querySelector('.dzBn'); const nm=bookName(id); if(el&&nm) el.textContent=nm; }); }catch(e){} }   // страховка: карта догрузилась — имя дописать (не оставлять «книга №»)
   return d;
