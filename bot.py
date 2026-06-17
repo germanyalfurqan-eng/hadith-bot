@@ -4544,8 +4544,13 @@ async def _api_serve(application=None):
                 cur.append({'key': key, 'msg': msg, 'where': where, 'ver': ver, 'stack': stack,
                             'uid': str(uid)[:24], 'count': 1, 'fixed': False, 'seq': _seq, 'eid': _eid})
                 cur = cur[-400:]
+                _enote = f"🐞 НОВАЯ ОШИБКА {_eid} (app {ver})\n{where}: {msg}\n(открыта; всего в журнале: {len(cur)} · решить: «ошибка решена {_eid}»)"
                 try:
-                    await _notify(f"🐞 НОВАЯ ОШИБКА {_eid} (app {ver})\n{where}: {msg}\n(открыта; всего в журнале: {len(cur)} · решить: «ошибка решена {_eid}»)")
+                    await _notify(_enote)
+                except Exception: pass
+                # #250 (владелец: «восстанови уведомления об ошибках — открыл, там ошибка, не пришло»): шлём НАПРЯМУЮ владельцу в ЛС (LOG_CHAT он не смотрит). Дедуп по key + rate-limit → не спам.
+                try:
+                    if application: await application.bot.send_message(OWNER_ID, _enote)
                 except Exception: pass
             await loop.run_in_executor(None, _data_put, "errors.json", cur, f"errlog: {msg[:40]}")
             return _cors(web.json_response({'ok': True}))
