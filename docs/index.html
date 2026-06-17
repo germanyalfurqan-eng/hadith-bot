@@ -185,7 +185,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v595</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v596</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -660,7 +660,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v595';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v596';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -710,14 +710,19 @@ const COLLECTIONS = [
   {code:'malik',ru:'Малик',ar:'مالك'},
   {code:'ahmad',ru:'Ахмад',ar:'أحمد'},
 ];
-// #204: детектор ссылок на обсуждаемый хадис в тексте разбора («Бухари 5590» / «البخاري ٥٥٩٠») → кликабельные ссылки в нашу базу
+// #243: английские названия сборников (разборы иногда пишут «Muslim 2026») → код + русское имя
+const _COLL_EN={bukhari:['Bukhari','al-Bukhari','Sahih al-Bukhari'],muslim:['Muslim','Sahih Muslim'],abudawud:['Abu Dawud','Abu Dawood','Sunan Abu Dawud'],tirmidhi:['Tirmidhi','al-Tirmidhi','Tirmidthi'],nasai:["Nasa'i",'Nasai','al-Nasai','an-Nasai'],ibnmajah:['Ibn Majah','Ibn Maja'],malik:['Malik','Muwatta'],ahmad:['Ahmad','Musnad Ahmad']};
+function _collRu(code){ const c=COLLECTIONS.find(x=>x.code===code); return c?c.ru:code; }
+// #204/#243: детектор ссылок на обсуждаемый хадис в тексте разбора («Бухари 5590» / «البخاري ٥٥٩٠» / «Muslim 2026») → кликабельные ссылки в нашу базу
 function _razFindHadithRefs(text){
   if(!text) return []; const out=[], seen=new Set();
   const toLat=s=>String(s).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
-  try{ COLLECTIONS.forEach(c=>{ [c.ru,c.ar].forEach(nm=>{ if(!nm) return;
-    const re=new RegExp(nm.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'[\\s,:№#\\-]*([\\d٠-٩]{1,5})','g'); let m;
-    while((m=re.exec(text))){ const num=toLat(m[1]); if(!num||num==='0') continue; const key=c.code+':'+num;
-      if(!seen.has(key)){ seen.add(key); out.push({code:c.code,num:num,label:c.ru+' №'+num}); } } }); }); }catch(e){}
+  const add=(code,num)=>{ if(!num||num==='0') return; const key=code+':'+num; if(seen.has(key)) return; seen.add(key); out.push({code:code,num:num,label:_collRu(code)+' №'+num}); };
+  try{
+    COLLECTIONS.forEach(c=>{ [c.ru,c.ar].concat(_COLL_EN[c.code]||[]).forEach(nm=>{ if(!nm) return;
+      const re=new RegExp(nm.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'[\\s,:№#\\-]*([\\d٠-٩]{1,5})','gi'); let m;
+      while((m=re.exec(text))){ add(c.code, toLat(m[1])); } }); });
+  }catch(e){}
   return out.slice(0,8);
 }
 
@@ -4665,7 +4670,8 @@ async function openOurRazbory(){
       html+='<div id="'+cid+'" style="display:none;padding:0 12px 11px;border-top:1px solid var(--border)">';
       if(c.kind==='audio'){ html+='<div style="margin:9px 0 4px"><span class="ourRazL" data-u="'+esc(c.url)+'" style="display:inline-flex;align-items:center;gap:7px;background:#16302a;color:#7fe3bf;border:1px solid #2e9b6b;border-radius:11px;padding:9px 15px;font-size:14px;cursor:pointer;font-weight:600">▶ Слушать аудио-разбор</span> <span style="font-size:11px;color:var(--hint)">(в канале · ниже — конспект из аудио)</span></div>'; }   // #201: заметная плей-кнопка аудио-разбора
       html+='<div style="white-space:pre-wrap;word-break:break-word;font-size:calc(15px * var(--txtScale,1));line-height:1.7;margin:8px 0;font-family:var(--arFont,\'Noto Naskh Arabic\',serif)">'+_linkifyTg(esc(c.text||''))+'</div>';   // #30: кликабельные t.me/@username
-      if(c.href){ var _hc=String(c.href).split(':'); html+='<div style="margin:6px 0;display:flex;gap:8px;flex-wrap:wrap"><span class="ourRazHadith" data-code="'+esc(_hc[0]||'')+'" data-num="'+esc(_hc[1]||'')+'" style="display:inline-block;color:#ffd479;cursor:pointer;border:1px solid #a8862e;border-radius:9px;padding:5px 12px;font-size:13px">📖 Открыть этот хадис в нашей базе ('+esc(c.href)+')</span><span class="ourRazHadFltBtn" data-href="'+esc(c.href)+'" style="display:inline-block;color:#d8cdff;cursor:pointer;border:1px solid #6c5ce7;border-radius:9px;padding:5px 12px;font-size:13px">🔎 разборы этого хадиса</span></div>'; }
+      if(c.href){ var _hc=String(c.href).split(':'); var _hru=_collRu(_hc[0]||'')+' №'+esc(_hc[1]||'');   // #243: по-русски «Муслим №2026», не код «muslim:2026»
+        html+='<div style="margin:6px 0;display:flex;gap:8px;flex-wrap:wrap"><span class="ourRazHadith" data-code="'+esc(_hc[0]||'')+'" data-num="'+esc(_hc[1]||'')+'" style="display:inline-block;color:#ffd479;cursor:pointer;border:1px solid #a8862e;border-radius:9px;padding:5px 12px;font-size:13px">📖 Открыть хадис в нашей базе: '+esc(_hru)+'</span><span class="ourRazHadFltBtn" data-href="'+esc(c.href)+'" style="display:inline-block;color:#d8cdff;cursor:pointer;border:1px solid #6c5ce7;border-radius:9px;padding:5px 12px;font-size:13px">🔎 разборы этого хадиса</span></div>'; }
       // #204: упомянутые в тексте хадисы (кроме уже привязанного href) → кликабельные ссылки в нашу базу
       try{ var _refs=_razFindHadithRefs(c.text||'').filter(rf=>(rf.code+':'+rf.num)!==String(c.href||''));
         if(_refs.length){ html+='<div style="margin:5px 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="font-size:11px;color:var(--hint)">📌 упомянуты:</span>'+_refs.map(rf=>'<span class="ourRazRef" data-code="'+esc(rf.code)+'" data-num="'+esc(rf.num)+'" style="display:inline-block;color:#ffd479;cursor:pointer;border:1px solid #a8862e;border-radius:8px;padding:3px 9px;font-size:12px">📖 '+esc(rf.label)+'</span>').join('')+'</div>'; } }catch(e){}
