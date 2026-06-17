@@ -130,6 +130,8 @@
   .isnad{color:var(--hint)}
   .matn{color:#fff;font-weight:700}
   .tword{color:#6fa8dc;font-weight:600}   /* #76: слова передатчика (حدثنا/أخبرنا/عن) — акцент, отделены от имён (серых) и матна (белого) */
+  .qAyah{color:#7fe3bf;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}   /* аят Корана в хадисе → клик в читалку */
+  .qAyah:active{opacity:.6}
   body.light .tword{color:#2f6aa8}
   .chip.off{opacity:.4;text-decoration:line-through}
   .status{text-align:center;color:var(--hint);padding:14px;font-size:14px}
@@ -185,7 +187,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v601</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v602</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -662,7 +664,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v601';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v602';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -992,13 +994,35 @@ function _cleanTextArtifacts(text){
   t = t.replace(/\s+/g, ' ').trim();
   return t;
 }
+// #(скрин Ahmad987): аяты Корана в хадисе (﴿…﴾ или {…}) → кликабельная ссылка на читалку Корана (как sunnah.com)
+function _linkAyatHtml(html){ try{ return String(html).replace(/(﴿[^﴾]+﴾|\{[^{}]{10,}\})/g, m=>'<span class="qAyah" title="Открыть этот аят в читалке Корана — нажми">'+m+'</span>'); }catch(e){ return html; } }
 function hl(text,groups){
   const disp=_cleanTextArtifacts(text||'');   // хадисы — всегда как есть; очищаем мусор перед отображением
-  if(cfg.hideIsnad){ const sp=splitIsnad(disp); return markTword(markMatn(highlight(sp[1]||disp,groups,modes))); }   // показываем только матн
-  if(!cfg.isnad) return markTword(markMatn(highlight(disp,groups,modes)));
-  const sp=splitIsnad(disp); if(!sp[0]) return markTword(markMatn(highlight(disp,groups,modes)));
-  return markTword(markMatn('<span class="isnad">'+highlight(sp[0],groups,modes)+'</span> '+highlight(sp[1],groups,modes)));
+  let r;
+  if(cfg.hideIsnad){ const sp=splitIsnad(disp); r=markTword(markMatn(highlight(sp[1]||disp,groups,modes))); }   // показываем только матн
+  else if(!cfg.isnad) r=markTword(markMatn(highlight(disp,groups,modes)));
+  else { const sp=splitIsnad(disp); r=sp[0]?markTword(markMatn('<span class="isnad">'+highlight(sp[0],groups,modes)+'</span> '+highlight(sp[1],groups,modes))):markTword(markMatn(highlight(disp,groups,modes))); }
+  return _linkAyatHtml(r);
 }
+// поиск аята по тексту-фрагменту (для клика по ﴿…﴾): canon-содержание в Коране
+let _qAyIdx=null;
+// канон для матчинга аятов: фолд расширенных коранических символов (ٱ алиф-васла, дагger-алиф, ی/ۇ) ПЕРЕД диапазон-фильтром
+function _qc(s){ return canon(String(s||'').replace(/[ٱآأإٲٳٵ]/g,'ا').replace(/[ىیئ]/g,'ي').replace(/[ؤۇۆ]/g,'و')).replace(/[^ء-ي ]/g,'').replace(/ا/g,'').replace(/\s+/g,' ').trim(); }   // скелет БЕЗ алифа: убирает двусмысленность дагger-алифа Корана (اعطينٰك=اعطيناك, إلٰه=اله)
+async function _buildQAyIdx(){ if(_qAyIdx) return _qAyIdx; try{ const arr=await loadQuran(); _qAyIdx=arr.map(v=>({s:v.s,a:v.a,c:_qc(v.text)})); }catch(e){ _qAyIdx=[]; } return _qAyIdx; }
+async function _findAyah(seg){ let c=_qc(seg); if(c.length<8) return null;
+  const idx=await _buildQAyIdx();
+  for(const v of idx){ if(v.c && v.c.indexOf(c)>=0) return {s:v.s,a:v.a}; }   // сегмент целиком в аяте
+  const w=c.split(' ').filter(x=>x.length>1); if(w.length>=4){ const sub=w.slice(0,6).join(' '); for(const v of idx){ if(v.c.indexOf(sub)>=0) return {s:v.s,a:v.a}; } }   // первые 6 слов
+  for(const v of idx){ if(c.indexOf(v.c)>=0 && v.c.length>=12) return {s:v.s,a:v.a}; }   // аят целиком в сегменте
+  return null;
+}
+// клик по аяту в хадисе → читалка Корана на нём (закрываем оверлеи, чтобы было видно)
+document.addEventListener('click', async e=>{ const a=e.target&&e.target.closest&&e.target.closest('.qAyah'); if(!a) return; e.stopPropagation();
+  const t=(a.textContent||'').replace(/[﴿﴾{}«»]/g,' ').trim();
+  try{ a.style.opacity='.6'; const sa=await _findAyah(t); a.style.opacity='';
+    if(sa){ try{ document.querySelectorAll('.modal').forEach(m=>{ if(m.id!=='qrModal' && m.style.display && m.style.display!=='none') m.style.display='none'; }); }catch(_e){}
+      openQuranReader(sa.s, sa.a); try{toast('📖 Коран '+sa.s+':'+sa.a);}catch(_t){} }
+    else { try{toast('Аят не распознан в Коране');}catch(_t){} } }catch(_e){} });
 /* ===== копирование ===== */
 function copyText(t){ try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(()=>toast('Скопировано ✓'),()=>_fbCopy(t)); } else _fbCopy(t); }catch(e){ _fbCopy(t); } }
 function cleanRu(t){ return (t||'').replace(/\\[rn]/g,' ').replace(/[\r\n]+/g,' ').replace(/\s+/g,' ').trim(); }   // убираем литеральные "\n" и мусор в готовых переводах
