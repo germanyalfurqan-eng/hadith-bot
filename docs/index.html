@@ -185,7 +185,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v586</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v587</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -428,6 +428,7 @@
     </div>
     <div class="hint" style="margin:0 0 8px">Дополнительные функции и сервисы.</div>
     <div class="hint" style="margin:8px 0 2px;font-size:12px">📝 Личное</div>
+    <div class="row"><span>🤖 Помощник Muslimoon <span style="color:var(--hint);font-size:11px">(спросить про хадис/аят/слово/тему)</span></span><button class="go" id="assistBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="row"><span>📝 Мои заметки <span style="color:var(--hint);font-size:11px">(к хадисам и аятам, с ИИ)</span></span><button class="go" id="notesBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="hint" style="margin:8px 0 2px;font-size:12px">📖 Чтение книг</div>
     <div class="row"><span>📗 Читать наши сборники (Бухари, Муслим…)</span><button class="go" id="readBtn2" style="padding:5px 12px">Открыть</button></div>
@@ -655,7 +656,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v586';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v587';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1119,6 +1120,54 @@ function openNotes(){
 }
 // обновить вид кнопок 📝 на видимых карточках (закрашены если есть заметка)
 function _refreshNoteBtns(){ try{ document.querySelectorAll('.noteBtn').forEach(b=>{ const has=!!_noteByRef(b.dataset.rk); b.style.color=has?'var(--mark)':'var(--text)'; b.title=has?'Заметка есть — изменить':'Добавить заметку'; }); }catch(e){} }
+
+/* ===================== 🤖 ПОМОЩНИК Muslimoon (#214) — ИИ-ответы по проекту с правилами ===================== */
+function _assistHist(){ try{ return JSON.parse(sessionStorage.getItem('muslimoon_assist')||'[]'); }catch(e){ return []; } }
+function _assistSave(a){ try{ sessionStorage.setItem('muslimoon_assist', JSON.stringify((a||[]).slice(-30))); }catch(e){} }
+function openAssistant(){
+  let m=document.getElementById('assistModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='assistModal';
+    m.innerHTML='<div class="panel" style="max-width:640px;padding-top:0;display:flex;flex-direction:column;max-height:88vh">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 8px;padding:13px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:15px">🤖 Помощник Muslimoon</b><button class="mini" id="assistClose">закрыть ✕</button></div>'
+      +'<div id="assistMsgs" style="flex:1;overflow:auto;min-height:180px"></div>'
+      +'<div class="hint" style="font-size:10.5px;margin:4px 0;color:var(--hint)">⚠️ Ответы ИИ — вспомогательны, возможны ошибки, не замена учёным. Проверяйте источники.</div>'
+      +'<div style="display:flex;gap:6px;align-items:flex-end;border-top:1px solid var(--border);padding-top:8px"><textarea id="assistInput" placeholder="Спросите про хадис, аят, слово, тему…" style="flex:1;box-sizing:border-box;min-height:42px;max-height:120px;border:1px solid var(--border);border-radius:10px;padding:9px;background:var(--bg);color:var(--text);font-size:14px;resize:none"></textarea><button id="assistSend" class="go" style="padding:10px 16px;background:var(--btn);color:#fff;border:none;border-radius:10px;cursor:pointer;flex:none">▶</button></div>'
+      +'</div>';
+    document.body.appendChild(m);
+    m.querySelector('#assistClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+    const inp=m.querySelector('#assistInput'); const send=m.querySelector('#assistSend');
+    send.onclick=()=>_assistSend(m);
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); _assistSend(m); } });
+    inp.addEventListener('input',()=>{ inp.style.height='auto'; inp.style.height=Math.min(120,inp.scrollHeight)+'px'; });
+  }
+  m.style.zIndex='10002'; m.style.display='flex';
+  _assistRender(m);
+  setTimeout(()=>{ try{ m.querySelector('#assistInput').focus(); }catch(e){} },60);
+}
+function _assistRender(m){ const box=m.querySelector('#assistMsgs'); const h=_assistHist();
+  if(!h.length){ box.innerHTML='<div class="hint" style="padding:14px;font-size:13px;line-height:1.6">Задайте вопрос по Корану, хадисам, словам, учёным или темам — помощник ответит, опираясь на первоисточники, и подскажет, что искать в приложении.<br><br>Например: «Что говорит ислам о терпении?», «Хадис про намерения», «Что значит слово بدعة?»</div>'; return; }
+  box.innerHTML=h.map(msg=>{
+    if(msg.role==='user') return '<div style="text-align:right;margin:8px 0"><span style="display:inline-block;background:var(--btn);color:#fff;border-radius:12px 12px 2px 12px;padding:8px 12px;font-size:14px;max-width:85%;text-align:left;white-space:pre-wrap;word-break:break-word">'+esc(msg.text)+'</span></div>';
+    return '<div style="text-align:left;margin:8px 0"><span style="display:inline-block;background:var(--card);border:1px solid var(--border);border-radius:12px 12px 12px 2px;padding:9px 12px;font-size:14px;max-width:92%;white-space:pre-wrap;word-break:break-word;line-height:1.6">'+(msg.loading?'<span class="hint">🤖 думаю…</span>':_linkifyTg(esc(msg.text)))+(msg.cached?' <span style="color:var(--hint);font-size:10px" title="из памяти, бесплатно">♻️</span>':'')+'</span></div>';
+  }).join('');
+  box.scrollTop=box.scrollHeight;
+}
+async function _assistSend(m){ const inp=m.querySelector('#assistInput'); const q=(inp.value||'').trim(); if(!q) return;
+  if(!BACKEND_URL){ toast('Помощник работает на сервере'); return; }
+  inp.value=''; inp.style.height='auto';
+  const h=_assistHist(); h.push({role:'user',text:q}); h.push({role:'bot',text:'',loading:true}); _assistSave(h); _assistRender(m);
+  try{
+    const r=await fetch(BACKEND_URL+'/assistant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:q,initData:INITDATA})});
+    const j=await r.json().catch(()=>({}));
+    const a=_assistHist(); if(a.length&&a[a.length-1].loading) a.pop();   // убрать «думаю…»
+    if(r.status===403){ a.push({role:'bot',text:(j&&j.message)||'Помощник пока не открыт для вас.'}); }
+    else if(r.status===429){ a.push({role:'bot',text:'⏳ Слишком часто — подождите немного.'}); }
+    else if(j&&j.answer){ a.push({role:'bot',text:j.answer,cached:!!j.cached}); }
+    else { a.push({role:'bot',text:'Не удалось получить ответ. Попробуйте переформулировать вопрос.'}); }
+    _assistSave(a); _assistRender(m);
+  }catch(e){ const a=_assistHist(); if(a.length&&a[a.length-1].loading) a.pop(); a.push({role:'bot',text:'Сеть недоступна — попробуйте позже.'}); _assistSave(a); _assistRender(m); }
+}
 
 /* ===================== ДАННЫЕ ===================== */
 const cache={}; let reverse=null, quran=null, muh=null;
@@ -9917,6 +9966,7 @@ var _lgB=document.getElementById('legendBtn'); if(_lgB) _lgB.onclick=()=>{ var m
 var _lgC=document.getElementById('legendClose'); if(_lgC) _lgC.onclick=()=>{ document.getElementById('legendModal').style.display='none'; };
 (function(){ var m=document.getElementById('legendModal'); if(m) m.addEventListener('click',function(e){ if(e.target===m) m.style.display='none'; }); })();   // R46: тап вне = закрыть
 var _tfC=document.getElementById('tafsirClose'); if(_tfC) _tfC.onclick=()=>{ document.getElementById('tafsirModal').style.display='none'; };
+var _asB=document.getElementById('assistBtn'); if(_asB) _asB.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openAssistant(); }catch(e){} };   // #214 помощник
 var _ntsB=document.getElementById('notesBtn'); if(_ntsB) _ntsB.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openNotes(); }catch(e){} };   // #45 заметки
 var _rb2=document.getElementById('readBtn2'); if(_rb2) _rb2.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openReader(); };
 var _rbr=document.getElementById('rootBrowBtn'); if(_rbr) _rbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openRootBrowser(); };

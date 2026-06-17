@@ -4026,6 +4026,50 @@ async def _api_serve(application=None):
             resp['config'] = load_access()
         return _cors(web.json_response(resp))
 
+    async def assistant(r):
+        # #214 (ПРАВИЛО владельца): помощник по проекту — ИИ-ответ по Корану/Сунне с незыблемыми правилами + самообучение (кэш ответов)
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('neuro', user):
+            return _deny('assistant')
+        if not rate_ok('assistant:' + _uid(user, r), 8, 120):
+            return _ratelimited()
+        _q = await _ai_quota(user, r)
+        if _q:
+            return _q
+        try:
+            q = (d.get('q') or '').strip()[:600]
+            if len(q) < 2:
+                return _cors(web.json_response({'answer': '', 'cached': False}))
+            akey = 'assist|' + q.lower()
+            cached = await loop.run_in_executor(None, neuro_get, akey)
+            if cached and isinstance(cached, dict) and cached.get('answer'):
+                await _notify_usage(user, "помощник", False, "", "", None, q=q)
+                out = dict(cached)
+                out['cached'] = True
+                return _cors(web.json_response(out))
+            sysp = (
+                "Ты — помощник исламского приложения Muslimoon (Коран и достоверная Сунна по первоисточникам). "
+                "Отвечай ТОЛЬКО на русском, ясно и по делу.\n"
+                "НЕЗЫБЛЕМЫЕ ПРАВИЛА:\n"
+                "1) Опирайся на Коран и Сунну (Бухари, Муслим, Абу Дауд, Тирмизи, Насаи, Ибн Маджа, Малик, Ахмад и др.).\n"
+                "2) Приводя хадис/аят — указывай источник (сборник+номер или сура:аят). Номер давай ТОЛЬКО при уверенности, не выдумывай.\n"
+                "3) Не выдумывай хадисы и факты. Не знаешь — честно скажи и предложи уточнить у учёных.\n"
+                "4) Не выноси собственных фетв и оценок достоверности — это дело учёных; мнения учёных передавай как мнения.\n"
+                "5) Тон уважительный; без политики, оскорблений и разжигания.\n"
+                "Если уместно, в конце подскажи, что искать в приложении (слово/номер/тему)."
+            )
+            ans = await loop.run_in_executor(None, ask_ai, q, sysp, False, 900)
+            ans = (ans or '').strip()
+            out = {'answer': ans, 'cached': False}
+            if ans and ans[0] not in '⚠❌⏸':
+                await loop.run_in_executor(None, neuro_put, akey, out)
+            await loop.run_in_executor(None, usage_log, user, "помощник", False, len(q), "", "")
+            await _notify_usage(user, "помощник", False, "", "", None, q=q)
+            return _cors(web.json_response(out))
+        except Exception as e:
+            return _cors(web.json_response({'answer': '', 'error': str(e)[:120]}))
+
     async def neuro(r):
         d = await _body(r)
         user = verify_init_data(d.get('initData'))
@@ -5010,7 +5054,7 @@ async def _api_serve(application=None):
         return _cors(web.json_response(res))
 
     a = web.Application()
-    a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro),
+    a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
