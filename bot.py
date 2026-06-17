@@ -5454,6 +5454,23 @@ async def _app_channel_watcher(application):
                         _journal_save("манифест (PDF) → канал приложения")
             except Exception as e:
                 print("manifest post error:", e)
+            # ЗАКОН 17.06 (владелец, «сто раз»): бэкап → в рабочий журнал (LOG_CHAT) + владельцу в ЛС, куда идут ошибки.
+            try:
+                rb = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/backup_note.txt",
+                                  headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
+                if rb.status_code == 200:
+                    bnote = base64.b64decode(rb.json().get("content", "")).decode("utf-8").strip()
+                    jb = _journal_load()
+                    if bnote and bnote != (jb.get("backup_post") or {}).get("note", ""):
+                        _btxt = "💾 " + bnote
+                        try: await application.bot.send_message(LOG_CHAT_ID, _btxt)
+                        except Exception: pass
+                        try: await application.bot.send_message(OWNER_ID, _btxt)
+                        except Exception: pass
+                        jb["backup_post"] = {"note": bnote, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+                        _journal_save("backup_post → рабочий журнал + ЛС владельца")
+            except Exception as e:
+                print("backup note post error:", e)
             note = ""
             try:
                 rr = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_note.txt",
