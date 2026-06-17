@@ -187,7 +187,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v605</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v606</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -664,7 +664,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v605';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v606';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -6029,6 +6029,7 @@ function highlightRelationalInDiv(ad){
     const frag=document.createDocumentFragment(); let pos=0;
     picked.forEach(m=>{ if(m.i>pos) frag.appendChild(document.createTextNode(txt.slice(pos,m.i)));
       const span=document.createElement('span'); span.textContent=txt.slice(m.i,m.i+m.len);
+      span.className='relNarr'; span.dataset.f=m.f;
       span.style.cssText='cursor:help;color:#8fe3a8;border-bottom:1px dashed #4eb573';
       span.title='Реляционное звено цепочки';
       span.onclick=(e)=>{ e.stopPropagation(); toast('🌿 '+m.ru+'. Конкретная личность определяется по соседям цепочки (коды Э1.1).'); };
@@ -6036,6 +6037,26 @@ function highlightRelationalInDiv(ad){
     if(pos<txt.length) frag.appendChild(document.createTextNode(txt.slice(pos)));
     node.parentNode.replaceChild(frag, node);
   });
+  try{ _resolveRelNarr(ad); }catch(e){}   // #246: «عن أبيه» → отец ПРЕДЫДУЩЕГО передатчика (по цепочке)
+}
+// #246 (владелец: «в чём проблема определить أبيه по предыдущему передатчику?»): отец = имя ПОСЛЕ первого «بن» у предыдущего .nhl-передатчика.
+// Только أبيه/أبيها (однозначно). جد/عم/خال НЕ резолвим автоматически — риск чужой карточки (#158).
+async function _resolveRelNarr(ad){
+  const seq=[...ad.querySelectorAll('.nhl,.relNarr')]; let prev='';
+  for(const el of seq){
+    if(el.classList&&el.classList.contains('nhl')){ prev=el.dataset.nm||el.textContent||''; continue; }
+    const f=el.dataset&&el.dataset.f; if(f!=='أبيه'&&f!=='أبيها') continue;
+    if(!prev) continue;
+    const ws=stripDiac(prev).split(/\s+/).filter(Boolean);
+    const bi=ws.findIndex(w=>w==='بن'||w==='ابن'); if(bi<0||bi+1>=ws.length) continue;
+    let rest=ws.slice(bi+1); const nb=rest.indexOf('بن'); if(nb>0) rest=rest.slice(0,nb);   // отца берём до следующего «بن» (деда не тащим)
+    const father=rest.join(' '); if(!father) continue;
+    let ruF=''; try{ ruF=arNameRu(father,4); }catch(e){}
+    let prevLbl=''; try{ prevLbl=_shuhraOf(prev,null)||prev.split(' ').slice(0,4).join(' '); }catch(e){ prevLbl=prev.split(' ').slice(0,4).join(' '); }
+    el.title='عن أبيه = '+father+(ruF?(' ('+ruF+')'):'')+' — отец передатчика «'+prevLbl+'». Нажми — карточка.';
+    el.style.color='#ffd479'; el.style.borderBottom='1px dashed #ffd479'; el.style.cursor='pointer';
+    el.onclick=(e)=>{ e.stopPropagation(); try{ openNarratorRijal(father); }catch(_e){ try{ toast('🌿 отец: '+father+(ruF?(' — '+ruF):'')); }catch(__e){} } };
+  }
 }
 // M397б: подсветка передатчиков В РУССКОМ ПЕРЕВОДЕ — матч слов перевода к арабским именам цепочки
 // скелетами согласных Ф-10 (Ибн Аббас ↔ ابن عباس). Клик = карточка равия (по арабскому имени).
@@ -7261,6 +7282,12 @@ function _shuhraOf(name, extRow){
   if(/^(هند بنت أبي أمية|أم سلمة)/.test(nm)) return 'أم المؤمنين أم سلمة';
   if(/^(رملة بنت أبي سفيان|أم حبيبة)/.test(nm)) return 'أم المؤمنين أم حبيبة';
   if(/^صفية بنت حيي/.test(nm)) return 'أم المؤمنين صفية';
+  // РОДОВАЯ шухра «ابن أبي X» (ابن أبي شيبة/ذئب/ليلى/مليكة): род известен по предку с кунья أبو X.
+  // Срабатывает ТОЛЬКО когда «بن أبي X» — НЕ отец (есть بن РАНЬШЕ), т.е. дед+. Для «سعد بن أبي وقاص»/«علي بن أبي طالب» (это отец) НЕ применяется → шухра остаётся по имени.
+  // Лечит #246: «عبد الله بن محمد بن أبي شيبة» давал «ابن محمد» (слепое عبد الله→ابن<отец>); теперь «ابن أبي شيبة».
+  for(let i=2;i<nw.length-1;i++){ if((nw[i]==='أبي'||nw[i]==='ابي') && nw[i-1]==='بن'){
+    let priorBn=false; for(let k=0;k<i-1;k++){ if(nw[k]==='بن') priorBn=true; }
+    if(priorBn) return 'ابن أبي '+nw[i+1]; break; } }
   let nis='';
   if(extRow&&extRow[0]){ const ws=String(extRow[0]).split(' '); const t=[];
     for(let i=0;i<ws.length;i++){ const w=ws[i];
@@ -7272,7 +7299,9 @@ function _shuhraOf(name, extRow){
   const first=(/^(عبد|عبيد)$/.test(nw[0])&&nw[1])?(nw[0]+' '+nw[1]):nw[0];      // составное первое имя НЕ рвать («عبد الهاشمي» — мусор)
   if(nis && nis!==nw[nw.length-1]) return first+' '+nis;
   if(nw[2]==='بن'&&nw.length>=4) return nw.slice(0,4).join(' ');   // «عبد الرحمن بن مهدي» целиком, не обрубок
-  if(nw.length>3 && nw[1]==='بن') return nw.slice(0,3).join(' ');
+  // фоллбэк «имя بن ОТЕЦ»: отец бывает СОСТАВНЫМ (أبي خالد / عبد الأعلى / عبيد الله) — не рубить на 3 слова.
+  // Лечило «علي بن أبي»→«علي بن أبي طالب», «يونس بن عبد»→«يونس بن عبد الأعلى».
+  if(nw[1]==='بن'&&nw[2]){ const comp=/^(أبي|ابي|أبو|ابو|أم|ام|عبد|عبيد)$/.test(nw[2])&&nw[3]; return nw.slice(0, comp?4:3).join(' '); }
   return nw.slice(0,3).join(' ');
 }
 // поколение: صحابي — ТОЛЬКО доказанное рангом (слово владельца: «сахабство должно быть доказано»);
@@ -7868,7 +7897,9 @@ async function showNarratorCardLocal(name, host){
   if(_ruNm&&_shDiff&&_ruNm!==_ruSh) h+='<div style="direction:ltr;text-align:left;font-size:11.5px;color:#8fa3c7">полное: '+esc(_ruNm)+'</div>';
   try{ const fl=(await loadNarrFlags())[String(id)]; if(fl) h+='<div style="margin-top:3px">'+_flagBadge(fl, c[1])+'</div>'; }catch(e){}   // M386+M402 (тап → его хадисы в Сахихах)
   try{ const wk=(await loadNarrWiki())[String(id)];
-    if(_WIKI_NARR_OK&&wk&&wk.u) h+='<div style="direction:ltr;text-align:left;margin-top:3px"><span class="nWiki" data-u="'+esc(wk.u)+'" style="cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px"><b style="font-family:Georgia,serif">W</b> Википедия'+(wk.l?(' · '+esc(wk.l)):'')+' ↗</span></div>'; }catch(e){}
+    const _wq=encodeURIComponent((_shDiff?_sh:c[1])||name||'');
+    if(_WIKI_NARR_OK&&wk&&wk.u) h+='<div style="direction:ltr;text-align:left;margin-top:3px"><span class="nWiki" data-u="'+esc(wk.u)+'" style="cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px"><b style="font-family:Georgia,serif">W</b> Википедия'+(wk.l?(' · '+esc(wk.l)):'')+' ↗</span></div>';
+    else if(_wq) h+='<div style="direction:ltr;text-align:left;margin-top:3px"><span class="nWiki" data-u="https://ar.wikipedia.org/w/index.php?search='+_wq+'" style="cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px" title="Поиск этого передатчика в Википедии по самому известному имени"><b style="font-family:Georgia,serif">W</b> Википедия (поиск) ↗</span></div>'; }catch(e){}   // УКАЗ #246: Википедия на КАЖДОМ равии. Прямые краул-ссылки тёзочны (gated _WIKI_NARR_OK=false) → честный ПОИСК по имени, не ложная статья (#158)
   let _snSid=''; try{ _snSid=(await loadMid2Sid())[String(c[0])]||''; }catch(e){}   // #141
   h+='<div style="font-size:11px;margin:2px 0 7px">'+(((cfg.shLink||'wiki')!=='off')?('📖 <span class="shamNarr" data-id="'+c[0]+'" style="color:var(--link);cursor:pointer;text-decoration:underline dotted" title="Открыть эту карточку на сайте shamela.ws">موسوعة رواة الحديث (база Мактабы) ↗</span> · '):'')+(_snSid?('<span class="snNarr" data-u="https://sunnah.com/narrator/'+esc(_snSid)+'" style="color:#7fb0d8;cursor:pointer;text-decoration:underline dotted" title="Карточка передатчика на sunnah.com">🌐 sunnah.com ↗</span> · '):'')+'<span class="ntOpen" data-id="'+c[0]+'" style="color:#5b87b5;cursor:pointer;font-weight:700" title="Открыть общую таблицу передатчиков на этом номере">#'+c[0]+' 📋</span></div>'
     +row('الكنية',c[2])+row('النسب',c[3])+row('سنة الوفاة',c[4]?('~'+c[4]+'هـ'):'')+row('الطبقة',c[7])
@@ -8762,13 +8793,19 @@ async function verifyNarr(card, place, text){
       if(extra.length) h+='🚨 id ПРИСВОЕН, но в эталоне Мактабы его НЕТ: <b>'+extra.length+'</b> (id '+extra.join(', ')+') — возможно НЕВЕРНАЯ карточка (клик откроет не того передатчика). #142';
       h+='</div>'; }
     else if(alarm){ h+='<div style="margin-top:7px;color:#e0b3a8;font-size:11px">⚠️ По тексту передатчиков <b>'+authCount+'</b>, а приложение подсветило <b>'+ourMids.length+'</b> — расхождение в количестве.</div>'; }
+    // #246 (владелец: «где код цепи чтобы перейти и смотреть какие ещё хадисы этой цепочкой»): КОД ЦЕПИ прямо в боксе сверки → База иснадов
+    let _cidHtml='';
+    try{ const _full=await dzChainFull(place.bid, place.num);
+      if(_full && _full.seq && _full.seq.length){ const _ci=await _isnadInfo(_full.seq, _full.forms);
+        if(_ci && _ci.cid) _cidHtml='<span class="vChainCode" data-cid="'+esc(_ci.cid)+'" title="Открыть базу иснадов на этой цепи — где ещё встречается тот же иснад" style="cursor:pointer;font-size:11.5px;color:#c9b8ff;border:1px solid #6c5ce7;border-radius:8px;padding:3px 10px;font-family:monospace">⛓ '+esc(_ci.cid)+(_ci.n>=2?(' · ещё '+(_ci.n-1)+' хадис'+_pluralHadith(_ci.n-1)):'')+' ↗</span>'; } }catch(e){}
     // #93 (полезные функции таблицы цепей): копировать цепь целиком (передатчики + формы передачи + id)
-    h+='<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><span class="vCopyChain" style="cursor:pointer;font-size:11.5px;color:var(--link);border:1px solid var(--border);border-radius:8px;padding:3px 10px">📋 Копировать цепь</span></div>';
+    h+='<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><span class="vCopyChain" style="cursor:pointer;font-size:11.5px;color:var(--link);border:1px solid var(--border);border-radius:8px;padding:3px 10px">📋 Копировать цепь</span>'+_cidHtml+'</div>';
     box.innerHTML=h;
     try{ const _cc=box.querySelector('.vCopyChain'); if(_cc) _cc.onclick=(e)=>{ e.stopPropagation();
       const _ct=auth.map((r,i)=>(i>0?(forms[i-1]?(' ← '+forms[i-1]+' ← '):' ← '):'')+r[1]+(r[2]?(' [id'+r[2]+']'):'')).join('');
       const _hdr='⛓ Цепь передатчиков'+((place&&place.num)?(' (хадис №'+place.num+')'):'')+':\n';
       try{ copyText(_hdr+_ct); toast('Цепь скопирована ✓'); }catch(_e){} }; }catch(e){}
+    try{ const _vcc=box.querySelector('.vChainCode'); if(_vcc) _vcc.onclick=(e)=>{ e.stopPropagation(); try{ openIsnadBase(_vcc.dataset.cid); }catch(_e){} }; }catch(e){}   // #246: код цепи → база иснадов
     box.querySelectorAll('.vChip').forEach(ch=>{ if(ch.dataset.mid) ch.onclick=(e)=>{ e.stopPropagation(); try{ openLink('https://shamela.ws/narrator/'+ch.dataset.mid); }catch(_e){} }; });
     card.appendChild(box);
     // Уведомление об ошибке ШЛЁТСЯ (владелец просил оставить), но с ЗАЩИТОЙ ОТ СПАМА: одну и ту же ошибку (этот хадис) не повторяем чаще раза в 12ч.
@@ -9690,7 +9727,7 @@ var _nd=document.getElementById('noDiacSw'); if(_nd){ _nd.classList.toggle('on',
 var _sun=document.getElementById('sunnahSw'); if(_sun){ _sun.classList.toggle('on',!!cfg.sunnahOne); _sun.onclick=()=>{ cfg.sunnahOne=!cfg.sunnahOne; saveCfg(cfg); _sun.classList.toggle('on',!!cfg.sunnahOne); toast(cfg.sunnahOne?'🔆 Доп. поиск Sunnah.one включён':'Sunnah.one выключен'); }; }
 var _isn=document.getElementById('isnadLinkSw'); if(_isn){ _isn.classList.toggle('on',!!cfg.isnadLink); _isn.onclick=()=>{ cfg.isnadLink=!cfg.isnadLink; saveCfg(cfg); _isn.classList.toggle('on',!!cfg.isnadLink); toast(cfg.isnadLink?'🔗 Ссылки isnad.link включены':'isnad.link выключен'); }; }   // #54: был дублирующийся id isnadSw → тумблер не жался
 /* ===== Глубокие ссылки: открыть приложение СРАЗУ на нужном месте. Работает в Telegram (?startapp=TOKEN) и в браузере (?g=TOKEN).
-   Токены: q_2_255 (Коран 2:255) · b_16_78 (книга turath id 16, стр.78) · r_muslim_2408 (наш ридер: Муслим №2408) · cat (каталог Мактабы). ===== */
+   Токены: q_2_255 (Коран 2:255) · b_16_78 (книга turath id 16, стр.78) · r_muslim_2408 (наш ридер: Муслим №2408) · n_3889 (карточка передатчика по mid) · cat (каталог Мактабы). ===== */
 const APP_WEB_URL='https://germanyalfurqan-eng.github.io/hadith-bot/';
 const APP_TG_URL='https://t.me/muslimoontt_bot?startapp=';
 function deepLinkUrls(token){ const e=encodeURIComponent(token); return { web:APP_WEB_URL+'?g='+e, tg:APP_TG_URL+e }; }
@@ -9705,6 +9742,7 @@ function runDeepLink(){ const g=_deepLinkToken(); if(!g) return; const p=g.split
       const _a=await loadMuhaymin(); const _h=_a.find(x=>String(x.n)===String(p[1])); const _res=document.getElementById('res');
       if(_h&&_res){ _res.innerHTML=''; _groups=[]; _res.appendChild(makeCard({type:'m',h:_h})); } }catch(e){} })(); }
     else if(t==='raz' && p[1]){ try{ openOurRazbory(); setTimeout(()=>{ try{ const el=document.getElementById('raz_'+p[1]); if(el){ el.style.display='block'; const hd=el.previousElementSibling; if(hd){ const ar=hd.querySelector('.razArrow'); if(ar) ar.textContent='▲'; } el.scrollIntoView({block:'center'}); } }catch(e){} }, 900); }catch(e){} }   // З-30: ссылка на разбор
+    else if(t==='n' && p[1]){ (async()=>{ try{ const c=await _narrCard(p[1]); if(c&&c[1]) openNarratorRijal(c[1]); }catch(e){} })(); }   // #246: карточка передатчика по mid (n_3889) — для дип-ссылки со скрина карточки
     else if(t==='cat') openCatalog();
   }catch(e){} }, 650); }
 try{ runDeepLink(); }catch(e){}

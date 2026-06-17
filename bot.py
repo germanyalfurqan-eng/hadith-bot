@@ -5368,12 +5368,18 @@ def _format_channel_post(note):
     def esc(s): return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     lines = (note or "").split("\n")
     photo = None
+    deeplink = None     # #246: глубокая ссылка «открыть в приложении ровно то, что на скрине» (startapp-токен r_muslim_987 / q_2_255 / b_16_78)
     rest = []
     for ln in lines:
         m = re.match(r'^\s*SHOT:\s*(.+?)\s*$', ln)
         if m and photo is None and not rest:            # только если ещё не было текста (SHOT — в шапке)
             p = m.group(1).strip()
             photo = p if p.startswith("http") else ("https://germanyalfurqan-eng.github.io/hadith-bot/" + p.lstrip("/"))
+            continue
+        ml = re.match(r'^\s*LINK:\s*(.+?)\s*$', ln)
+        if ml and deeplink is None and not rest:
+            tok = ml.group(1).strip()
+            deeplink = tok if tok.startswith("http") else ("https://t.me/muslimoontt_bot?startapp=" + tok)
             continue
         rest.append(ln)
     main, instr, in_instr = [], [], False
@@ -5387,6 +5393,8 @@ def _format_channel_post(note):
     body = esc(main_txt)
     if instr_txt:
         body += "\n\n<blockquote expandable>📋 <b>Как пользоваться</b>\n" + esc(instr_txt) + "</blockquote>"
+    if deeplink:
+        body += '\n\n👉 <a href="' + esc(deeplink) + '">Открыть в приложении то, что на скрине</a>'
     body += "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot?startapp\n🤖 Бот: https://t.me/muslimoontt_bot"
     return photo, body
 
