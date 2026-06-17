@@ -994,6 +994,7 @@ _AI_CALLS = []
 _AI_KILL = False           # авто-выключение (спам)
 _AI_KILL_MANUAL = False    # ручное выключение владельцем
 _AI_KILL_PENDING = None    # текст уведомления владельцу (отправится при следующем апдейте)
+_GROUP_AI_OFF = True       # #236 (слово владельца «выключи ии ботяра в джамаат ру пока»): ОТДЕЛЬНЫЙ рубильник ИИ-«ботяра» в ГРУППАХ — по умолчанию ВЫКЛ; не трогает /neuro и личку. Вкл: владелец пишет боту «ботяра вкл»
 _MAINTENANCE = False       # B4: режим обслуживания (бот стоп/старт) — для остальных бот молчит-заглушка, владелец работает
 AI_RATE_LIMIT = 35         # >35 вызовов ИИ за окно → авария
 AI_RATE_WINDOW = 120       # секунд
@@ -1457,7 +1458,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 
     # 🚨 авто-рубильник ИИ (защита баланса DeepSeek): уведомить владельца о срабатывании + команды управления
-    global _AI_KILL, _AI_KILL_MANUAL, _AI_KILL_PENDING
+    global _AI_KILL, _AI_KILL_MANUAL, _AI_KILL_PENDING, _GROUP_AI_OFF
     if _AI_KILL_PENDING:
         _m = _AI_KILL_PENDING; _AI_KILL_PENDING = None
         try: await context.bot.send_message(OWNER_ID, _m)
@@ -1471,7 +1472,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _AI_KILL_MANUAL = True
         await update.message.reply_text("⏸ ИИ выключен вручную. Включить: «ии вкл»."); return
     if is_owner(update) and text.lower() in ("ии статус", "статус ии", "ai status"):
-        await update.message.reply_text(f"ИИ: {'⏸ ВЫКЛ' if ai_kill_active() else '✅ вкл'}\nВызовов за {AI_RATE_WINDOW}с: {len(_AI_CALLS)}/{AI_RATE_LIMIT}\nавто-выкл={_AI_KILL} · ручной={_AI_KILL_MANUAL}"); return
+        await update.message.reply_text(f"ИИ: {'⏸ ВЫКЛ' if ai_kill_active() else '✅ вкл'}\nВызовов за {AI_RATE_WINDOW}с: {len(_AI_CALLS)}/{AI_RATE_LIMIT}\nавто-выкл={_AI_KILL} · ручной={_AI_KILL_MANUAL}\nботяра в группах: {'⏸ ВЫКЛ' if _GROUP_AI_OFF else '✅ вкл'}"); return
+    # #236: отдельный рубильник ИИ-«ботяра» в ГРУППАХ (@jamaat_ru) — не трогает /neuro и личку
+    if is_owner(update) and text.lower() in ("ботяра вкл", "ботяра включи", "включи ботяра", "чат-ии вкл"):
+        _GROUP_AI_OFF = False
+        await update.message.reply_text("✅ Ботяра в группах включён (реагирует на «ботяра»/ответ боту). Выключить: «ботяра выкл»."); return
+    if is_owner(update) and text.lower() in ("ботяра выкл", "выключи ботяра", "ботяра стоп", "чат-ии выкл"):
+        _GROUP_AI_OFF = True
+        await update.message.reply_text("⏸ Ботяра в группах выключен (в личке и /neuro работают). Включить: «ботяра вкл»."); return
 
     # B4: режим обслуживания — «бот стоп» / «бот старт» (только владелец); для остальных бот отвечает заглушкой
     global _MAINTENANCE
@@ -2504,6 +2512,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # В чате/канале: отвечаем ТОЛЬКО если есть "ботяра" или ответ боту
         elif chat_type != "private" and not _ai_loop_guard(update, text):
+            if _GROUP_AI_OFF:
+                return   # #236: ИИ-«ботяра» в группах (@jamaat_ru) выключен отдельным рубильником (вкл: владелец боту «ботяра вкл»)
             if "ботяра" in text.lower() or (is_reply_to_bot and not is_reply_to_channel):
                 if not rate_ok('botchat:' + str(chat_id), limit=6, window=120):
                     return
