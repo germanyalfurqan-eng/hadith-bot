@@ -185,7 +185,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v585</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v586</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -655,7 +655,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v585';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v586';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1475,6 +1475,11 @@ function updateReadBtn(){
 // #180: dev-удаление из ленты — локальный список скрытых запросов (владелец-разработчик прячет нерелевантное)
 function _trendHidden(){ try{ return JSON.parse(localStorage.getItem('trend_hidden')||'[]'); }catch(e){ return []; } }
 function _trendHide(q){ try{ const a=_trendHidden(); if(a.indexOf(q)===-1){ a.push(q); localStorage.setItem('trend_hidden', JSON.stringify(a.slice(-500))); } }catch(e){} }
+// #167 алгоритм-1: ЛИЧНАЯ статистика поиска (локально) → персональные рекомендации в ленте
+function _histLoad(){ try{ return JSON.parse(localStorage.getItem('muslimoon_hist')||'[]'); }catch(e){ return []; } }
+function _histPush(q,tab){ try{ if(!q) return; q=String(q).trim().slice(0,80); if(q.length<2) return; const a=_histLoad(); const i=a.findIndex(x=>x.q===q&&x.tab===tab);
+  if(i>=0){ a[i].n=(a[i].n||1)+1; a[i].t=Date.now(); } else { a.push({q:q,tab:tab,n:1,t:Date.now()}); }
+  localStorage.setItem('muslimoon_hist', JSON.stringify(a.slice(-200))); }catch(e){} }
 // #167: Лента — глобальный тренд (что чаще всего ищут все пользователи; /api/popular). Клик по строке → открыть тот поиск.
 async function renderTrending(){
   const res=document.getElementById('res'); if(!res) return;
@@ -1484,6 +1489,24 @@ async function renderTrending(){
   if(typeof tab!=='undefined' && tab!=='trending') return;   // #5-фикс: пока грузили ленту, юзер ушёл на др.вкладку — не подменять её содержимое
   const _hid=new Set(_trendHidden()); items=items.filter(it=>it&&it.q&&!_hid.has(it.q));   // #180: убрать скрытые
   res.innerHTML='';
+  // строка-рекомендация (общая для личной и глобальной ленты)
+  const _recoRow=(q,tabName,n,personal)=>{ const row=document.createElement('div');
+    row.style.cssText='cursor:pointer;border:1px solid '+(personal?'#6c5ce7':'var(--border)')+';border-radius:12px;padding:10px 12px;margin:6px 0;display:flex;justify-content:space-between;align-items:center;gap:10px;background:'+(personal?'rgba(108,92,231,.07)':'var(--card)');
+    const ic=(tabName==='quran')?'📖':'📚';
+    row.innerHTML='<span style="font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+ic+' '+esc(q)+'</span>';
+    const right=document.createElement('span'); right.style.cssText='display:flex;align-items:center;gap:8px;white-space:nowrap;flex:none';
+    right.innerHTML='<span style="font-size:12px;color:var(--hint)">'+(personal?'↩ ':'🔎 ')+esc(String(n||0))+'</span>'; row.appendChild(right);
+    row.onclick=()=>{ try{ const want=(tabName==='quran')?'quran':'hadith'; const tb=document.querySelector('.tab[data-tab="'+want+'"]'); if(tb) tb.click(); const qi=document.getElementById('q'); if(qi) qi.value=q; runSearch(true); }catch(e){} };
+    return row; };
+  // #167 АЛГОРИТМ-1: персональные рекомендации по ВАШЕЙ статистике поиска (локально)
+  try{ const hist=_histLoad().filter(x=>x&&x.q&&!_hid.has(x.q));
+    if(hist.length){ const top=hist.slice().sort((a,b)=>(b.n-a.n)||(b.t-a.t)).slice(0,5);
+      const ph=document.createElement('div'); ph.className='hint'; ph.style.cssText='font-size:13px;color:#c9b8ff;margin:4px 0 6px';
+      ph.innerHTML='📌 Вам может быть интересно <span style="color:var(--hint);font-size:11px">(по вашим поискам)</span>';
+      res.appendChild(ph);
+      top.forEach(it=>res.appendChild(_recoRow(it.q,it.tab,it.n,true)));
+      const sep=document.createElement('div'); sep.style.cssText='height:1px;background:var(--border);margin:12px 0 4px'; res.appendChild(sep);
+    } }catch(e){}
   const hd=document.createElement('div'); hd.className='hint'; hd.style.cssText='font-size:13px;color:#9fd3a8;margin:4px 0 8px';
   hd.innerHTML='🔥 Что чаще всего ищут (нажми — открою): <span style="color:var(--hint);font-size:11px">✕ — убрать из ленты</span>';
   res.appendChild(hd);
@@ -1834,6 +1857,7 @@ async function redoSmart(){ const q=(document.getElementById('q').value||'').tri
 document.addEventListener('click',e=>{ if(e.target && e.target.classList && e.target.classList.contains('redoAi')) redoSmart(); });
 let _logT2;
 function logSearch(q,tab,count){
+  try{ if(count>0) _histPush(q,tab); }catch(e){}   // #167: личная история (только удачные поиски) для персональных рекомендаций
   if(!BACKEND_URL || !q || q.length<3) return;
   clearTimeout(_logT2);
   _logT2=setTimeout(()=>{ try{ fetch(BACKEND_URL+'/searchlog',{method:'POST',headers:{'Content-Type':'application/json'},

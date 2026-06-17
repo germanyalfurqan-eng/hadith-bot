@@ -2115,10 +2115,13 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 replied = update.message.reply_to_message
                 if replied.audio or replied.voice or replied.video or replied.photo or replied.document:
                     hint = replied.caption or ""
-                    await update.message.reply_text("🔍 Анализирую...")
+                    _st = await update.message.reply_text("🔍 Распознаю содержимое (ИИ)…")   # #109: одно редактируемое сообщение вместо спама «Анализирую»+результат
                     desc = ai_describe_media(hint)
                     pending_edits[chat_id] = {"action": "add_registry", "description": desc}
-                    await update.message.reply_text(f"📝 {desc}\n\nСохранить в реестр? (да/нет)")
+                    try:
+                        await _st.edit_text(f"📝 {desc}\n\nСохранить в реестр? (да/нет)")
+                    except Exception:
+                        await update.message.reply_text(f"📝 {desc}\n\nСохранить в реестр? (да/нет)")
                     return
                 else:
                     await update.message.reply_text("❌ Ответь на медиа.")
@@ -2137,10 +2140,13 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if chat_type == "private" and (is_forward or has_media):
             hint = text or ""
-            await update.message.reply_text("🔍 Анализирую...")
+            _st = await update.message.reply_text("🔍 Распознаю содержимое (ИИ)…")   # #109: одно редактируемое сообщение вместо «Анализирую»+результат
             desc = ai_describe_media(hint)
             pending_edits[chat_id] = {"action": "add_registry", "description": desc}
-            await update.message.reply_text(f"📝 {desc}\n\nСохранить в реестр? (да/нет)")
+            try:
+                await _st.edit_text(f"📝 {desc}\n\nСохранить в реестр? (да/нет)")
+            except Exception:
+                await update.message.reply_text(f"📝 {desc}\n\nСохранить в реестр? (да/нет)")
             return
 
         if text:
