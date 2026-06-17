@@ -98,6 +98,8 @@
        font-size:15px;background:var(--bg);color:var(--text);resize:vertical;min-height:50px}
   .card{background:rgba(20,30,44,.62);backdrop-filter:blur(9px) saturate(1.1);-webkit-backdrop-filter:blur(9px) saturate(1.1);
         border:1px solid rgba(120,150,200,.16);border-radius:14px;padding:12px;margin-bottom:10px;box-shadow:0 4px 18px #0006}
+  /* #224: шрифт KFGQPC Sindhi Naskh (Мединская фабрика печати Корана). Если файл лежит в ./fonts/ — активируется; иначе берётся одноимённый системный, фолбэк — Noto Naskh. */
+  @font-face{font-family:'KFGQPC Sindhi Naskh';src:local('KFGQPC Sindhi Naskh'),local('KFGQPC Uthman Taha Naskh'),url('./fonts/kfgqpc-sindhi-naskh.woff2') format('woff2'),url('./fonts/kfgqpc-sindhi-naskh.ttf') format('truetype');font-display:swap}
   .ar{font-size:calc(19px * var(--txtScale,1));line-height:2;direction:rtl;text-align:right;font-family:var(--arFont,"Noto Naskh Arabic","Amiri",serif);user-select:text;overflow-wrap:break-word;word-break:break-word}   /* #184: длинная арабская строка без пробелов не вываливается за экран */
   /* #77: комментарий составителя (قال أبو عيسى/قال أبو داود) — НЕ часть хадиса: абзац с отступом, приглушённый цвет, отбивка */
   .cnote{display:block;margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);text-indent:1.3em;color:var(--hint);font-size:.9em;line-height:1.75}
@@ -183,7 +185,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v582</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v583</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -375,6 +377,7 @@
         <option value="trad">Традиционный (узкий)</option>
         <option value="amiri">Amiri (насх)</option>
         <option value="naskh">Noto Naskh (чёткий)</option>
+        <option value="kfgqpc">KFGQPC Sindhi Naskh (Мединский)</option>
         <option value="sans">Без засечек</option>
       </select></div>
     <div class="row"><span>🔠 Шрифт интерфейса <span style="color:var(--hint);font-size:11px">(русский текст, кнопки)</span></span>
@@ -650,7 +653,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v582';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v583';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -764,7 +767,7 @@ if(!cfg._rpoff){ cfg.recent=false; cfg.popular=false; cfg._rpoff=1; saveCfg(cfg)
 function applyTheme(){ document.body.classList.toggle('light', cfg.theme==='light'); }
 try{ applyTheme(); }catch(e){}
 // #51: выбор шрифта арабского текста (некоторым «Traditional Arabic» кажется вытянутым)
-const _AR_FONTS={trad:'"Traditional Arabic","Amiri",serif', amiri:'"Amiri",serif', naskh:'"Noto Naskh Arabic","Amiri",serif', sans:'"Segoe UI","Noto Sans Arabic",system-ui,sans-serif'};
+const _AR_FONTS={trad:'"Traditional Arabic","Amiri",serif', amiri:'"Amiri",serif', naskh:'"Noto Naskh Arabic","Amiri",serif', sans:'"Segoe UI","Noto Sans Arabic",system-ui,sans-serif', kfgqpc:'"KFGQPC Sindhi Naskh","KFGQPC Uthman Taha Naskh","Noto Naskh Arabic",serif'};   // #224: KFGQPC (Мединская фабрика)
 function applyArFont(){ try{ document.documentElement.style.setProperty('--arFont', _AR_FONTS[cfg.arFont]||_AR_FONTS.naskh); }catch(e){} }
 try{ applyArFont(); }catch(e){}
 // #81/#88/#89/#105: шрифт ИНТЕРФЕЙСА/русского текста. По умолчанию — СИСТЕМНЫЙ (как было всегда: владелец просил менять ТОЛЬКО арабский #51); Times/Georgia — опции в настройках.
@@ -942,6 +945,11 @@ const _TWORDS=['حدثناه','حدثنا','حدثني','اخبرنا','اخبر
 function _twPat(w){ return [...w].map(ch=>{ const c=(ch==='ا')?'[اأإآ]':ch; return c+'[ً-ْٰـ]*'; }).join(''); }
 const _TW_RE=new RegExp('(^|[\\s،؛>])('+_TWORDS.map(_twPat).join('|')+')(?=[\\s،؛<]|$)','g');
 function markTword(html){ try{ return String(html).replace(_TW_RE,'$1<span class="tword">$2</span>'); }catch(e){ return html; } }
+// #30: кликабельные Telegram-ссылки (t.me/…, @username) в УЖЕ экранированном тексте (разборы, заметки). Клик → openLink (нативный Telegram).
+function _linkifyTg(escHtml){ try{ let h=String(escHtml);
+  h=h.replace(/(https?:\/\/)?(t\.me|telegram\.me)\/([A-Za-z0-9_\/+\-]+)/g, (m)=>{ const u=(/^https?:/i.test(m)?m:('https://'+m)).replace(/"/g,'&quot;'); return '<span class="tgLink" data-u="'+u+'" style="color:var(--link);cursor:pointer;text-decoration:underline">'+m+' ↗</span>'; });
+  h=h.replace(/(^|[\s(,])@([A-Za-z][A-Za-z0-9_]{4,31})\b/g, (m,p,u)=>p+'<span class="tgLink" data-u="https://t.me/'+u+'" style="color:var(--link);cursor:pointer;text-decoration:underline">@'+u+'</span>');
+  return h; }catch(e){ return escHtml; } }
 function _cleanTextArtifacts(text){
   // M500: очистка инлайн-мусора из парсинга PDF перед отображением
   if(!text) return text;
@@ -1083,7 +1091,7 @@ function authBadge(code, grade, num){
 // (تحقيق/شرح: «قال النووي», «قوله:», ссылки тома/стр (N/N), هامش/طبعة, footnote-маркеры P\x01 и (¬N)). Убираем управляющие байты +
 // footnote-ссылки + обрезаем хвост-аппарат по ПЕРВОМУ editor-voice маркеру (только если он дальше 40 симв — не трогаем сам матн).
 // Проверено на 2842: 57 хадисов чистятся (#3/#7 57k→1k и др.), 0 обрезов реального матна (обычные #1/#145/#987/#2408 не тронуты).
-const _MUS_CUT=/قَوْلُهُ:|قوله:|قوله :|قال النووي|قال الإمام|قال القاضي|قال أبو العباس|قال الحافظ|قال أحمد بسيوني|وقال أحمد بسيوني|في المفهم|المفهم |الإكمال للقاضي|شرح مسلم للنووي|شرح الأبي|هامش |طبعة |\(\s*[\d٠-٩]+\s*\/\s*[\d٠-٩]+\s*\)/;
+const _MUS_CUT=/قَوْلُهُ:|قوله:|قوله :|قال النووي|قال الإمام|قال القاضي|قال أبو العباس|قال الحافظ|قال أحمد بسيوني|وقال أحمد بسيوني|في المفهم|المفهم |الإكمال للقاضي|شرح مسلم للنووي|شرح الأبي|هامش |طبعة |قال أهل اللغة|من أهل اللغة|أهل اللغة|قال عياض|قال القاضي عياض|قال القرطبي|قال الواحدي|قال الزمخشري|قال ابن فارس|قال بن فارس|قال الجوهري|قال الخطابي|قال الأزهري|\(\s*[\d٠-٩]+\s*\/\s*[\d٠-٩]+\s*\)/;   // #215: + غариб-комментарий лингвистов (Абд аль-Баки) выносится из матна
 function _muslimStripApparatus(t){ if(!t) return t;
   t=t.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').replace(/[Pp]\s*\(?¬[\d٠-٩]+\)?/g,'').replace(/\(?¬[\d٠-٩]+\)?/g,'').replace(/([»؀-ۿ])[Pp](?=[؀-ۿ])/g,'$1');   // #215: + стрип приклеенного page-маркера P между арабским
   const m=_MUS_CUT.exec(t); if(m && m.index>40) t=t.slice(0,m.index);
@@ -1168,10 +1176,12 @@ async function loadQuranTr(ed){ if(_qTrC[ed]) return _qTrC[ed];
   }catch(e){}
   if(Object.keys(map).length) _qTrC[ed]=map;
   return map; }
-let hadithRu=null;
-async function loadHadithRu(){ if(hadithRu)return hadithRu; setStatus('Загружаю русские переводы хадисов…');
-  const j=await (await fetch('./hadith_ru.json')).json();
-  hadithRu=j.map(x=>{ const t=cleanRu(x.t); return {s:x.s,n:x.n,t:t,norm:t.toLowerCase()}; }); return hadithRu; }
+let hadithRu=null, hadithRuP=null;
+async function loadHadithRu(silent){ if(hadithRu)return hadithRu; if(hadithRuP) return hadithRuP;   // #159: guard от гонки (N карточек → 1 фетч) + тихий префетч
+  if(!silent){ try{ setStatus('Загружаю русские переводы хадисов…'); }catch(e){} }
+  hadithRuP=(async()=>{ const j=await (await fetch('./hadith_ru.json')).json();
+    hadithRu=j.map(x=>{ const t=cleanRu(x.t); return {s:x.s,n:x.n,t:t,norm:t.toLowerCase()}; }); return hadithRu; })();
+  return hadithRuP; }
 // арабский оригинал хадиса по коду+номеру (для русских карточек: тахридж/передатчики/Arabus/огласовки)
 async function getArabicHadith(code,num){
   try{ const arr=await loadByCode(code); const h=arr.find(x=>String(x.num)===String(num)); return h?(h.text||''):''; }catch(e){ return ''; }
@@ -1300,11 +1310,11 @@ async function openMaktabaPage(bid, num, text){
       const isStdCollection=(['1681','1727'].includes(b));
       if(isStdCollection && n){ const _an=n.replace(/[0-9]/g,function(d){ return '٠١٢٣٤٥٦٧٨٩'[+d]; });
         const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(_an+' -')+'&book='+b+'&page=1&initData='+encodeURIComponent(INITDATA));
-        const j=await r.json().catch(()=>({})); const d=(j&&j.data)||[]; const hit=d.find(x=>String(x.book_id)===b)||d[0]; if(hit) page=hit.page_id||hit.page; }
+        const j=await r.json().catch(()=>({})); const d=(j&&j.data)||[]; const hit=d.find(x=>String(x.book_id)===b); if(hit) page=hit.page_id||hit.page; }   // #220: НЕ брать d[0] из ДРУГОЙ книги (вело на чужой хадис) — только точное совпадение book_id
       // 2) ФОЛБЭК по тексту матна — верно при ЛЮБОМ издании, для изданий с иной нумерацией, или если номер не помог
       if(!page){ const snip=_matnSnippet(text);
         if(snip){ const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(snip)+'&book='+b+'&page=1&initData='+encodeURIComponent(INITDATA));
-          const j=await r.json().catch(()=>({})); const d=(j&&j.data)||[]; const hit=d.find(x=>String(x.book_id)===b)||d[0]; if(hit) page=hit.page_id||hit.page; } }
+          const j=await r.json().catch(()=>({})); const d=(j&&j.data)||[]; const hit=d.find(x=>String(x.book_id)===b); if(hit) page=hit.page_id||hit.page; } }   // #220: только своя книга, иначе открыть книгу без листа (не чужой хадис)
     }catch(e){}
   }
   const u='https://shamela.ws/book/'+b+(page?('/'+page):'');
@@ -4474,7 +4484,7 @@ async function openOurRazbory(){
         +'<span class="razArrow" data-a="'+cid+'" style="flex:none;color:var(--hint)">▼</span></div>';
       // ПОЛНЫЙ разбор (скрыт)
       html+='<div id="'+cid+'" style="display:none;padding:0 12px 11px;border-top:1px solid var(--border)">';
-      html+='<div style="white-space:pre-wrap;word-break:break-word;font-size:calc(15px * var(--txtScale,1));line-height:1.7;margin:8px 0;font-family:var(--arFont,\'Noto Naskh Arabic\',serif)">'+esc(c.text||'')+'</div>';
+      html+='<div style="white-space:pre-wrap;word-break:break-word;font-size:calc(15px * var(--txtScale,1));line-height:1.7;margin:8px 0;font-family:var(--arFont,\'Noto Naskh Arabic\',serif)">'+_linkifyTg(esc(c.text||''))+'</div>';   // #30: кликабельные t.me/@username
       if(c.href){ var _hc=String(c.href).split(':'); html+='<div style="margin:6px 0;display:flex;gap:8px;flex-wrap:wrap"><span class="ourRazHadith" data-code="'+esc(_hc[0]||'')+'" data-num="'+esc(_hc[1]||'')+'" style="display:inline-block;color:#ffd479;cursor:pointer;border:1px solid #a8862e;border-radius:9px;padding:5px 12px;font-size:13px">📖 Открыть этот хадис в нашей базе ('+esc(c.href)+')</span><span class="ourRazHadFltBtn" data-href="'+esc(c.href)+'" style="display:inline-block;color:#d8cdff;cursor:pointer;border:1px solid #6c5ce7;border-radius:9px;padding:5px 12px;font-size:13px">🔎 разборы этого хадиса</span></div>'; }
       html+='<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:12.5px">';
       html+=(c.by?('<span class="ourRazL" data-u="'+esc(c.by_url||'https://t.me/hadis_isnad')+'" style="color:#c9b8ff;cursor:pointer;text-decoration:underline">✍️ '+esc(c.by)+' ↗</span>'):'<span style="color:#e0b34a">⚠️ автор требует уточнения</span>');
@@ -4488,7 +4498,7 @@ async function openOurRazbory(){
     const _hi=body.querySelector('#ourRazHadFlt'); if(_hi){ _hi.oninput=()=>{ _hf=_hi.value; const ss=_hi.selectionStart; render(); const ni=body.querySelector('#ourRazHadFlt'); if(ni){ ni.focus(); try{ni.setSelectionRange(ss,ss);}catch(e){} } }; }   // #202
     const _hc2=body.querySelector('#ourRazHadClr'); if(_hc2){ _hc2.onclick=()=>{ _hf=''; render(); }; }   // #202 сброс фильтра по хадису
     body.querySelectorAll('.ourRazHadFltBtn').forEach(a=>a.onclick=(e)=>{ e.stopPropagation(); _hf=a.dataset.href||''; render(); });   // #202 фильтр по хадису из карточки
-    body.querySelectorAll('.ourRazL,.ourRazCh').forEach(a=>a.onclick=()=>{ try{ openLink(a.dataset.u||'https://t.me/hadis_isnad'); }catch(e){} });
+    body.querySelectorAll('.ourRazL,.ourRazCh,.tgLink').forEach(a=>a.onclick=(e)=>{ try{ e.stopPropagation(); }catch(_e){} try{ openLink(a.dataset.u||'https://t.me/hadis_isnad'); }catch(_e2){} });   // #30: + .tgLink (t.me/@username в тексте)
     body.querySelectorAll('.razHead').forEach(hd=>hd.onclick=()=>{ const el=document.getElementById(hd.dataset.id); const ar=hd.querySelector('.razArrow'); if(el){ const vis=el.style.display!=='none'; el.style.display=vis?'none':'block'; if(ar) ar.textContent=vis?'▼':'▲'; } });
     body.querySelectorAll('.ourRazShare').forEach(a=>a.onclick=(e)=>{ e.stopPropagation(); try{ const u=deepLinkUrls('raz_'+a.dataset.mid).tg; copyText(u); toast('📤 Ссылка на разбор скопирована'); try{hap('light');}catch(_e){} }catch(_e){} });   // З-30
     body.querySelectorAll('.ourRazHadith').forEach(a=>a.onclick=(e)=>{ e.stopPropagation(); const c=a.dataset.code,n=a.dataset.num; if(!c||!n) return; try{ m.style.display='none'; }catch(_e){}   // открыть хадис разбора в нашей карточке
@@ -4895,6 +4905,10 @@ function _qrPlay(s, a){ _qrWordStop();
   au.onplaying=()=>{ if(window._qrAudio===au){ _qrBtnSet(a,'⏸'); if(!_qw.length) _buildWT(); try{_miniSync();}catch(e){} } };
   au.onpause=()=>{ if(window._qrAudio===au && !au.ended){ _qrBtnSet(a,'▶'); try{_miniSync();}catch(e){} } };
   au.onended=_advance;
+  // #223: устойчивость — если аят не загрузился (сетевой сбой), не зависаем: одна повторная попытка, затем идём к следующему (плеер играет дальше в фоне, не стопорится через пару аятов)
+  au.onerror=()=>{ if(window._qrAudio!==au||window._qrStopped||au.__adv) return;
+    if(!au.__retried){ au.__retried=1; setTimeout(()=>{ if(window._qrAudio===au && !au.__adv){ try{ au.play().catch(()=>{}); }catch(e){} } }, 700); }
+    else { au.__adv=1; _advance(); } };
   au.play().catch(()=>{ _qrBtnSet(a,'▶'); toast('Аудио сейчас недоступно'); });
   try{ cfg.qrLast={s:s,a:a}; saveCfg(cfg); }catch(e){}   // M356: помним, где слушал
   // M353: Media Session — системный плеер (шторка/экран блокировки) держит аудио-сессию активной при свёрнутом Telegram
@@ -5434,7 +5448,7 @@ function addTr(meta,card,text,ayah,fav){
   const tr=document.createElement('button');tr.className='tr-btn';
   const _ref0=ayah?null:refOf(fav); const _ready=_ref0&&READY_RU.indexOf(_ref0.source)!==-1;
   if(ayah){ setTrReady(tr); tr.title='Перевод аята (Кулиев/Абу Адель) — бесплатно'; }
-  else if(_ready){ setTrReady(tr); }
+  else if(_ready){ setTrReady(tr); try{ loadHadithRu(true); }catch(e){} }   // #159: тихий префетч готового перевода в фоне — клик мгновенный
   else { setTrAI(tr);   // по умолчанию «ИИ» (ярко); если найдём в базе — перекрасим в ♻️
     if(_ref0 && _ref0.source && (_ref0.num||_ref0.num===0)){
       ensureTrIndex(_ref0.source).then(()=>{ const e=trHas(_ref0.source,_ref0.num); if(e) setTrBase(tr,e,_ref0.source); }); } }
@@ -7396,9 +7410,15 @@ function loadRazByH(){ if(_razByH) return Promise.resolve(_razByH); if(_razByHP)
   _razByHP=fetch('./razbory_byhadith.json?'+APPVER).then(r=>r.ok?r.json():{}).then(j=>{_razByH=j||{};return _razByH;}).catch(()=>{_razByH={};return _razByH;}); return _razByHP; }
 function _openRazbor(mids){ try{ openOurRazbory(); setTimeout(()=>{ try{ (mids||[]).forEach(mid=>{ const el=document.getElementById('raz_'+mid); if(el){ el.style.display='block'; const hd=el.previousElementSibling; if(hd){ const ar=hd.querySelector('.razArrow'); if(ar) ar.textContent='▲'; } } }); const f=document.getElementById('raz_'+(mids&&mids[0])); if(f) f.scrollIntoView({block:'center'}); }catch(e){} }, 900); }catch(e){} }
 function razboryBadge(code, num, meta, card){
-  loadRazByH().then(idx=>{ const mids=idx[String(code)+':'+String(num)]; if(!mids||!mids.length) return;
-    const b=document.createElement('span'); b.className='src'; b.style.cssText='cursor:pointer;background:#2a1f3e;color:#d8cdff;border:1px solid #6c5ce7;margin-inline-start:6px;white-space:nowrap';
-    b.textContent='📿 наш разбор'+(mids.length>1?(' ('+mids.length+')'):''); b.title='Разбор достоверности этого хадиса нашими мухаддисами — нажми';
+  loadRazByH().then(async idx=>{ const mids=idx[String(code)+':'+String(num)]; if(!mids||!mids.length) return;
+    // #208: вердикт разбора (недостоверный/достоверный) ВИДНО прямо на бейдже рядом — как Бухари 5590 (отметка рядом с разбором)
+    let verd=''; try{ const rc=await loadRazCards(); const cm={}; ((rc&&rc.cards)||[]).forEach(cc=>{cm[cc.mid]=cc;});
+      for(const mid of mids){ const cc=cm[mid]; if(cc&&cc.verd){ verd=cc.verd; if(cc.verd==='недостоверный') break; } } }catch(e){}
+    const _no=(verd==='недостоверный');
+    const b=document.createElement('span'); b.className='src';
+    b.style.cssText='cursor:pointer;margin-inline-start:6px;white-space:nowrap;'+(_no?'background:#3d1717;color:#ff9b7a;border:1px solid #b3502e':(verd==='достоверный'?'background:#16302a;color:#7fe3bf;border:1px solid #2e9b6b':'background:#2a1f3e;color:#d8cdff;border:1px solid #6c5ce7'));
+    const _vt=_no?' · 🚫 недостоверный':(verd==='достоверный'?' · ✓ достоверный':'');
+    b.textContent='📿 наш разбор'+(mids.length>1?(' ('+mids.length+')'):'')+_vt; b.title='Разбор достоверности этого хадиса нашими мухаддисами — нажми';
     b.onclick=(e)=>{ try{e.stopPropagation();}catch(_e){} _openRazbor(mids); };
     meta.appendChild(b); }).catch(()=>{});
 }
