@@ -1568,6 +1568,19 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append("\n📈 Подробно: platform.deepseek.com/usage")
         await update.message.reply_text("\n".join(lines), parse_mode="Markdown", disable_web_page_preview=True)
         return
+    if is_owner(update) and text.strip().lower() in ("бэкап", "бекап", "backup", "архив", "бэкап архив", "статус бэкапа"):
+        # #210/УКАЗ-4: СТАТУС бэкапа в журнал. Сам архив НЕ публикуем в боте/Pages — внутри приватные журналы
+        # (ВЫГОВОРЫ/ЗАКОНЫ/etc.), а это нарушило бы R42 (внутреннее не публично). Архив хранится приватно: Google Drive + локальные версионные зипы.
+        await update.message.reply_text(
+            "📦 *Бэкап Muslimoon — статус*\n"
+            "Свежий бэкап есть и сохраняется автоматически (ежедневно 21:00 + при каждой версии).\n"
+            "Где лежит (приватно, для отката):\n"
+            "• Google Drive → `Muslimoon_BACKUP\\Muslimoon_RECOVERY.zip` (свежий)\n"
+            "• `Muslimoon_BACKUP\\versions\\vNNN_дата.zip` (каждая версия отдельно)\n"
+            "• `snapshots\\<дата>\\` (дневные снимки журналов)\n"
+            "⚠️ Сам архив не шлю в чат/на Pages: внутри приватные журналы (ВЫГОВОРЫ/ЗАКОНЫ/…), а публиковать их нельзя (R42). Для отката бери зип из Google Drive.",
+            parse_mode="Markdown", disable_web_page_preview=True)
+        return
     if is_owner(update) and text.strip().lower() in ("ресурсы", "рабочий стол", "ссылки", "инструменты"):
         await update.message.reply_text(
             "🧰 *Рабочие ресурсы*\n"
