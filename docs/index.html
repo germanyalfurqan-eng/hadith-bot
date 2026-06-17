@@ -187,7 +187,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v606</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v607</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -664,7 +664,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v606';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v607';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4304,7 +4304,7 @@ async function openAuthor(authorName){
   let m=document.getElementById('authorModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='authorModal';
     m.innerHTML='<div class="panel" style="max-width:640px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 12px;padding:14px 16px 11px;border-bottom:1px solid var(--border)"><b id="authTitle" style="font-size:14px;direction:rtl;text-align:right"></b><button class="mini" id="authClose" style="flex:none">закрыть ✕</button></div>'
-     +'<div style="display:flex;gap:6px;margin-bottom:8px"><button class="mini" id="authBio" style="flex:1;background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:8px 11px;font-size:13px">📜 Биография (ИИ)</button><button class="mini" id="authTr" style="flex:1;border:1px solid var(--border);color:var(--text);padding:8px 11px;font-size:13px">🌐 Перевести названия</button></div>'
+     +'<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap"><button class="mini" id="authBio" style="flex:1;background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:8px 11px;font-size:13px">📜 Биография (ИИ)</button><button class="mini" id="authTr" style="flex:1;border:1px solid var(--border);color:var(--text);padding:8px 11px;font-size:13px">🌐 Перевести названия</button><button class="mini" id="authWiki" title="Поиск автора в Википедии" style="flex:none;border:1px solid #72777d;color:#e6e6e6;padding:8px 11px;font-size:13px"><b style="font-family:Georgia,serif">W</b> Википедия</button></div>'
      +'<div id="authBioOut" style="display:none;margin-bottom:8px;font-size:13px;line-height:1.55;border:1px solid var(--border);border-radius:8px;padding:9px;background:var(--bg)"></div>'
      +'<div id="authList" style="max-height:54vh;overflow:auto"></div></div>';
     document.body.appendChild(m); m.querySelector('#authClose').onclick=()=>m.style.display='none';
@@ -4320,6 +4320,7 @@ async function openAuthor(authorName){
       it.innerHTML='<div style="font-weight:600;color:var(--link);font-size:15px">'+esc((tr&&tr.voc)?tr.voc:b.n)+'</div>'+((tr&&tr.ru)?('<div style="direction:ltr;text-align:left;font-size:13px;color:#bcd0ff">'+esc(tr.ru)+'</div>'):'')+(b.c?('<div style="font-size:11px;color:var(--hint)">'+esc(catLabel(b.c).split(' — ')[1]||b.c)+'</div>'):'');
       it.onclick=()=>{ m.style.display='none'; openBook(b.i); }; list.appendChild(it); }); };
   drawList();
+  try{ const _aw=m.querySelector('#authWiki'); if(_aw) _aw.onclick=()=>{ try{ openLink('https://ar.wikipedia.org/w/index.php?search='+encodeURIComponent(authorName)); }catch(e){} }; }catch(e){}   // #207: Википедия у имён-авторов (поиск; «несколько статей» = результаты поиска)
   m.querySelector('#authBio').onclick=async()=>{ const b=m.querySelector('#authBio'); if(out.dataset.shown==='1'){ out.style.display='none'; out.dataset.shown=''; return; }
     out.style.display='block'; out.innerHTML='<span class="hint">📜 ИИ готовит биографию…</span>'; out.dataset.shown='1';
     try{ const r=await fetch(BACKEND_URL+'/authorinfo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({author:authorName,initData:INITDATA})});
@@ -9883,6 +9884,8 @@ document.getElementById('goBtn').onclick=()=>{ hap('medium');
   }catch(e){} });
   el.addEventListener('keydown',e=>{ if(e.key==='Enter'){ if(e.shiftKey) return;   // Shift+Enter = перенос строки
       e.preventDefault(); clearTimeout(t); try{collapseBookSugg();}catch(e){} try{ el.style.height='auto'; el.style.overflowY='hidden'; }catch(e){} runSearch(true); } });   // Enter → поиск · #198: схлопнуть авторост textarea в компактную форму
+  // #198 (владелец: «вбил больше текста, обновилось, но форму поиску красивую не вернуло»): авто-поиск ПРИ НАБОРЕ оставлял поле раздутым (схлоп был только на Enter/Найти). Схлопываем при УХОДЕ из поля → компактная форма возвращается, не мешая правке.
+  el.addEventListener('blur',()=>{ try{ el.style.height='auto'; el.style.overflowY='hidden'; }catch(e){} });
   el.addEventListener('input',()=>{ clearTimeout(t); const v=el.value.trim();
     if(v.length<2){ if(!v){_seq++;document.getElementById('res').innerHTML='';setStatus('');} const _nh=document.getElementById('narrHint'); if(_nh) _nh.style.display='none'; return; }
     if(modes.ai) return;   // режим «По смыслу (ИИ)»: НЕ дёргать ИИ на каждую букву (тратит ключ) — только по «Найти»/Enter
