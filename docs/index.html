@@ -185,7 +185,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v584</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v585</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -427,6 +427,8 @@
       <b>☰ Ещё</b><button class="mini" id="menuClose">закрыть ✕</button>
     </div>
     <div class="hint" style="margin:0 0 8px">Дополнительные функции и сервисы.</div>
+    <div class="hint" style="margin:8px 0 2px;font-size:12px">📝 Личное</div>
+    <div class="row"><span>📝 Мои заметки <span style="color:var(--hint);font-size:11px">(к хадисам и аятам, с ИИ)</span></span><button class="go" id="notesBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="hint" style="margin:8px 0 2px;font-size:12px">📖 Чтение книг</div>
     <div class="row"><span>📗 Читать наши сборники (Бухари, Муслим…)</span><button class="go" id="readBtn2" style="padding:5px 12px">Открыть</button></div>
     <div class="hint" style="margin:8px 0 2px;font-size:12px">🔎 Поиск</div>
@@ -653,7 +655,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v584';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v585';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1034,6 +1036,89 @@ function renderFav(by){
       d.appendChild(rm); box.appendChild(d); });
   });
 }
+
+/* ===================== 📝 ЗАМЕТКИ (#45) — личные заметки к хадисам/аятам + свободные, взаимодействие с ИИ ===================== */
+function loadNotes(){ try{ return JSON.parse(localStorage.getItem('muslimoon_notes'))||[]; }catch(e){ return []; } }
+function saveNotes(a){ try{ localStorage.setItem('muslimoon_notes', JSON.stringify((a||[]).slice(-1000))); }catch(e){} }
+function _noteByRef(rk){ if(!rk) return null; return loadNotes().find(n=>n.rk===rk)||null; }
+function _noteId(){ return 'n'+Date.now().toString(36)+Math.floor((+new Date()%9973)).toString(36); }   // без Math.random (детерм. ок — id для localStorage)
+// открыть редактор заметки (ref={type,...}, rk — ключ привязки, label — подпись, prefillText — для свободной)
+function openNoteEditor(rk, label, ref){
+  let m=document.getElementById('noteEditModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='noteEditModal';
+    m.innerHTML='<div class="panel" style="max-width:560px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b id="neTitle">📝 Заметка</b><button class="mini" id="neClose">закрыть ✕</button></div>'
+      +'<div id="neLabel" class="hint" style="margin-bottom:6px;direction:rtl;text-align:right"></div>'
+      +'<textarea id="neText" placeholder="Ваша мысль, пометка, вопрос…" style="width:100%;box-sizing:border-box;min-height:120px;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--bg);color:var(--text);font-size:15px;line-height:1.6;resize:vertical"></textarea>'
+      +'<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button class="go" id="neSave" style="padding:8px 16px;background:var(--btn);color:#fff;border:none;border-radius:9px;cursor:pointer">💾 Сохранить</button>'
+      +'<button class="go" id="neDel" style="padding:8px 14px;background:transparent;border:1px solid #b3502e;color:#ff9b7a;border-radius:9px;cursor:pointer;display:none">🗑 Удалить</button>'
+      +'<button class="go" id="neCancel" style="padding:8px 14px;background:transparent;border:1px solid var(--border);color:var(--text);border-radius:9px;cursor:pointer">Отмена</button></div></div>';
+    document.body.appendChild(m);
+    m.querySelector('#neClose').onclick=()=>m.style.display='none'; m.querySelector('#neCancel').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+  }
+  m.style.zIndex='10003'; m.style.display='flex';
+  const existing=_noteByRef(rk); const lblEl=m.querySelector('#neLabel'); const txt=m.querySelector('#neText');
+  lblEl.innerHTML=label?('📌 '+esc(label)):'<span style="color:var(--hint)">свободная заметка</span>';
+  txt.value=existing?existing.text:''; setTimeout(()=>{ try{txt.focus();}catch(e){} },50);
+  const delB=m.querySelector('#neDel'); delB.style.display=existing?'inline-block':'none';
+  delB.onclick=()=>{ let a=loadNotes(); const i=a.findIndex(n=>n.rk===rk); if(i>=0){ a.splice(i,1); saveNotes(a); } m.style.display='none'; toast('Заметка удалена'); try{ if(document.getElementById('notesModal')&&document.getElementById('notesModal').style.display!=='none') openNotes(); }catch(e){} _refreshNoteBtns(); };
+  m.querySelector('#neSave').onclick=()=>{ const v=txt.value.trim(); let a=loadNotes(); const i=a.findIndex(n=>n.rk===rk);
+    if(!v){ if(i>=0){ a.splice(i,1); saveNotes(a); } m.style.display='none'; _refreshNoteBtns(); return; }
+    const rec={id:existing?existing.id:_noteId(), rk:rk||('free_'+_noteId()), text:v, label:label||'', ref:ref||null, date:_nowStr()};
+    if(i>=0) a[i]=rec; else a.push(rec); saveNotes(a); m.style.display='none'; toast('Заметка сохранена ✓'); try{hap('light');}catch(e){}
+    try{ if(document.getElementById('notesModal')&&document.getElementById('notesModal').style.display!=='none') openNotes(); }catch(e){} _refreshNoteBtns(); };
+}
+function _nowStr(){ try{ const d=new Date(); const p=x=>String(x).padStart(2,'0'); return p(d.getDate())+'.'+p(d.getMonth()+1)+'.'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes()); }catch(e){ return ''; } }
+// клик по заметке → переход к хадису/аяту (как избранное)
+function _openNoteRef(n){ try{ const ref=n.ref; if(!ref) return; const md=document.getElementById('notesModal'); if(md) md.style.display='none';
+  if(ref.type==='q' && ref.s){ const _tq=document.querySelector('.tab[data-tab="quran"]'); if(_tq) _tq.click(); const _qi=document.getElementById('q'); if(_qi) _qi.value=ref.s+':'+(ref.a||1); runSearch(true); }
+  else if(ref.type==='m' && ref.n){ const _th=document.querySelector('.tab[data-tab="hadith"]'); if(_th) _th.click(); loadMuhaymin().then(a=>{ const h=a.find(x=>String(x.n)===String(ref.n)); const res=document.getElementById('res'); if(h){ _groups=[]; res.appendChild(makeCard({type:'m',h})); } }); }
+  else if(ref.type==='h' && ref.source && ref.num!=null){ openReader(ref.source, String(ref.num)); }
+}catch(e){} }
+// 🔎 ИИ по заметке: найти связанные хадисы/аяты по смыслу заметки (использует умный поиск)
+function _noteAi(n){ try{ const md=document.getElementById('notesModal'); if(md) md.style.display='none';
+  const _th=document.querySelector('.tab[data-tab="hadith"]'); if(_th) _th.click();
+  const ai=document.querySelector('.chip[data-mode="ai"]'); if(ai && !ai.classList.contains('on')) ai.click();
+  const qi=document.getElementById('q'); if(qi){ qi.value=(n.text||'').slice(0,200); runSearch(true); toast('🔎 Ищу по смыслу заметки…'); }
+}catch(e){} }
+function openNotes(){
+  let m=document.getElementById('notesModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='notesModal';
+    m.innerHTML='<div class="panel" style="max-width:640px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 10px;padding:14px 16px 11px;border-bottom:1px solid var(--border)"><b style="font-size:15px">📝 Мои заметки</b><button class="mini" id="notesClose">закрыть ✕</button></div><div id="notesBody" style="max-height:78vh;overflow:auto"></div></div>';
+    document.body.appendChild(m); m.querySelector('#notesClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+  }
+  m.style.zIndex='10002'; m.style.display='flex';
+  const body=m.querySelector('#notesBody');
+  const render=(q)=>{ let a=loadNotes().slice().reverse(); const qq=(q||'').toLowerCase().trim();
+    if(qq) a=a.filter(n=>((n.text||'')+' '+(n.label||'')).toLowerCase().indexOf(qq)>=0);
+    let h='<div style="font-size:12.5px;color:var(--hint);margin-bottom:8px">Личные заметки к хадисам и аятам (хранятся на вашем устройстве). Кнопка 📝 есть на карточке каждого хадиса и аята. ИИ может найти источники по смыслу вашей мысли.</div>';
+    h+='<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><button id="notesAdd" class="go" style="padding:7px 14px;background:var(--btn);color:#fff;border:none;border-radius:9px;cursor:pointer">+ Новая заметка</button></div>';
+    h+='<input id="notesSearch" placeholder="🔎 поиск по заметкам…" value="'+esc(q||'')+'" style="width:100%;box-sizing:border-box;margin-bottom:10px;padding:8px 11px;border-radius:9px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px">';
+    if(!a.length){ h+='<div class="hint" style="padding:18px;text-align:center">'+(loadNotes().length?'Ничего не найдено.':'Пока нет заметок. Нажмите «+ Новая заметка» или 📝 на карточке хадиса/аята.')+'</div>'; }
+    a.forEach(n=>{ h+='<div class="card" style="padding:10px;margin-bottom:8px">'
+      +(n.label?('<div style="font-size:12px;color:var(--link);margin-bottom:4px;direction:rtl;text-align:right">📌 '+esc(n.label)+'</div>'):'')
+      +'<div style="white-space:pre-wrap;word-break:break-word;font-size:14.5px;line-height:1.6">'+_linkifyTg(esc(n.text||''))+'</div>'
+      +'<div style="font-size:11px;color:var(--hint);margin-top:5px">🕐 '+esc(n.date||'')+'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:7px;font-size:12.5px">'
+      +'<span class="noteEdit" data-rk="'+esc(n.rk)+'" style="cursor:pointer;color:var(--link);text-decoration:underline">✏️ изменить</span>'
+      +(n.ref?'<span class="noteOpen" data-id="'+esc(n.id)+'" style="cursor:pointer;color:#7fe0a0;text-decoration:underline">📖 открыть источник</span>':'')
+      +'<span class="noteAi" data-id="'+esc(n.id)+'" style="cursor:pointer;color:#c9b8ff;text-decoration:underline">🔎 найти по смыслу (ИИ)</span>'
+      +'<span class="noteDel" data-rk="'+esc(n.rk)+'" style="cursor:pointer;color:#ff9b7a;text-decoration:underline">🗑 удалить</span>'
+      +'</div></div>'; });
+    body.innerHTML=h;
+    const _all=loadNotes();
+    body.querySelector('#notesAdd').onclick=()=>openNoteEditor('free_'+_noteId(), '', null);
+    const si=body.querySelector('#notesSearch'); if(si){ si.oninput=()=>{ const ss=si.selectionStart; render(si.value); const ni=body.querySelector('#notesSearch'); if(ni){ ni.focus(); try{ni.setSelectionRange(ss,ss);}catch(e){} } }; }
+    body.querySelectorAll('.noteEdit').forEach(el=>el.onclick=()=>{ const n=_noteByRef(el.dataset.rk); openNoteEditor(el.dataset.rk, n?n.label:'', n?n.ref:null); });
+    body.querySelectorAll('.noteOpen').forEach(el=>el.onclick=()=>{ const n=_all.find(x=>x.id===el.dataset.id); if(n) _openNoteRef(n); });
+    body.querySelectorAll('.noteAi').forEach(el=>el.onclick=()=>{ const n=_all.find(x=>x.id===el.dataset.id); if(n) _noteAi(n); });
+    body.querySelectorAll('.noteDel').forEach(el=>el.onclick=()=>{ let arr=loadNotes(); const i=arr.findIndex(x=>x.rk===el.dataset.rk); if(i>=0){ arr.splice(i,1); saveNotes(arr); } render(si?si.value:''); _refreshNoteBtns(); });
+  };
+  render('');
+}
+// обновить вид кнопок 📝 на видимых карточках (закрашены если есть заметка)
+function _refreshNoteBtns(){ try{ document.querySelectorAll('.noteBtn').forEach(b=>{ const has=!!_noteByRef(b.dataset.rk); b.style.color=has?'var(--mark)':'var(--text)'; b.title=has?'Заметка есть — изменить':'Добавить заметку'; }); }catch(e){} }
 
 /* ===================== ДАННЫЕ ===================== */
 const cache={}; let reverse=null, quran=null, muh=null;
@@ -5404,6 +5489,15 @@ async function doExplain(text, ayah, ref, host, btn){
 }
 function addTr(meta,card,text,ayah,fav){
   if(fav) addStar(meta,fav);
+  // #45: кнопка 📝 «заметка» — личная пометка к этому хадису/аяту (хранится локально, видна в «Мои заметки»)
+  try{ let _nrk=null,_nlbl='',_nref=null;
+    if(ayah && ayah.s){ _nrk='q|'+ayah.s+'|'+ayah.a; _nlbl='Коран '+ayah.s+':'+ayah.a; _nref={type:'q',s:ayah.s,a:ayah.a}; }
+    else { const _r=refOf(fav); if(_r && _r.source && _r.num!=null){ const _n=String(_r.num).replace(/#.*/,''); const _isM=(_r.source==='muhaymin'); _nrk=(_isM?'m|'+_n:'h|'+_r.source+'|'+_n); _nlbl=(fav&&fav.label)||((_r.source||'')+' №'+_n); _nref=(_isM?{type:'m',n:_n}:{type:'h',source:_r.source,num:_n}); } }
+    if(_nrk){ const nb=document.createElement('button'); nb.className='tr-btn noteBtn'; nb.dataset.rk=_nrk; nb.textContent='📝';
+      nb.style.cssText='background:transparent;border:1px solid var(--border);padding:6px 11px';
+      const _hn=!!_noteByRef(_nrk); nb.style.color=_hn?'var(--mark)':'var(--text)'; nb.title=_hn?'Заметка есть — изменить':'Добавить заметку';
+      nb.onclick=()=>openNoteEditor(_nrk,_nlbl,_nref); meta.appendChild(nb); }
+  }catch(e){}
   const cp=document.createElement('button');cp.className='tr-btn';cp.textContent='⧉';
   cp.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
   cp.title='Копировать';
@@ -9799,6 +9893,7 @@ var _lgB=document.getElementById('legendBtn'); if(_lgB) _lgB.onclick=()=>{ var m
 var _lgC=document.getElementById('legendClose'); if(_lgC) _lgC.onclick=()=>{ document.getElementById('legendModal').style.display='none'; };
 (function(){ var m=document.getElementById('legendModal'); if(m) m.addEventListener('click',function(e){ if(e.target===m) m.style.display='none'; }); })();   // R46: тап вне = закрыть
 var _tfC=document.getElementById('tafsirClose'); if(_tfC) _tfC.onclick=()=>{ document.getElementById('tafsirModal').style.display='none'; };
+var _ntsB=document.getElementById('notesBtn'); if(_ntsB) _ntsB.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openNotes(); }catch(e){} };   // #45 заметки
 var _rb2=document.getElementById('readBtn2'); if(_rb2) _rb2.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openReader(); };
 var _rbr=document.getElementById('rootBrowBtn'); if(_rbr) _rbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openRootBrowser(); };
 var _hsb=document.getElementById('hadScienceBtn'); if(_hsb) _hsb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openHadithScience(); };
