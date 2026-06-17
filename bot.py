@@ -2144,6 +2144,49 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("❌ Отмена.")
             return
 
+        # #163: подтверждение голосовой ЗАЯВКИ (в аудио бывают ошибки распознавания — переспрашиваем перед записью)
+        if chat_id in pending_edits and pending_edits[chat_id].get("action") == "add_request_voice":
+            pend = pending_edits.pop(chat_id)
+            if text.lower().strip() in ["да", "ок", "ok", "yes", "записать", "запиши", "верно", "ага"]:
+                vtxt = pend.get("text", "")
+                dup = req_dup(vtxt)
+                if dup:
+                    await update.message.reply_text(f"⚠️ Похоже, уже есть — заявка №{dup}. Не дублирую.")
+                else:
+                    rid = req_add(vtxt)
+                    try:
+                        if update.effective_chat.id != LOG_CHAT_ID:
+                            await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid} (голосом, {_now_msk()}):\n{vtxt[:1500]}")
+                    except Exception:
+                        pass
+                    await update.message.reply_text(f"📥 Заявка #{rid} записана ✅ (голосом). Ищи в журнале командой «заявки».")
+            else:
+                await update.message.reply_text("❌ Не записал. Надиктуй заново или поправь текстом «заявка <текст>».")
+            return
+
+        # #163: голосовая ЗАЯВКА — владелец шлёт голосовое в ЛИЧКУ (без текста) → Whisper → подтверждение перед записью
+        if chat_type == "private" and update.message.voice and not is_forward and not (text and text.strip()):
+            _vst = await update.message.reply_text("🎤 Распознаю голосовое (Whisper)…")
+            vtxt = None
+            try:
+                _vf = await context.bot.get_file(update.message.voice.file_id)
+                _vp = os.path.join("/tmp", f"vreq_{update.message.message_id}.ogg")
+                await _vf.download_to_drive(_vp)
+                vtxt = await asyncio.get_event_loop().run_in_executor(None, transcribe_audio, _vp)
+                try: os.remove(_vp)
+                except Exception: pass
+            except Exception:
+                vtxt = None
+            if not vtxt or not vtxt.strip():
+                try: await _vst.edit_text("❌ Не удалось распознать голосовое (нужен OPENAI_API_KEY/Whisper на Railway). Можешь текстом: «заявка <текст>».")
+                except Exception: pass
+                return
+            pending_edits[chat_id] = {"action": "add_request_voice", "text": vtxt.strip()}
+            _msg = f"📝 Я распознал так:\n\n«{vtxt.strip()[:1200]}»\n\nЗаписать как заявку? (да / нет). В аудио бывают ошибки — проверь текст."
+            try: await _vst.edit_text(_msg)
+            except Exception: await update.message.reply_text(_msg)
+            return
+
         if chat_type == "private" and (is_forward or has_media):
             hint = text or ""
             _st = await update.message.reply_text("🔍 Распознаю содержимое (ИИ)…")   # #109: одно редактируемое сообщение вместо «Анализирую»+результат
