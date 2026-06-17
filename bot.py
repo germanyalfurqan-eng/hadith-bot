@@ -2054,6 +2054,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception: pass
         if chat_id in _AI_BAN or user_id in _AI_BAN:
             return
+        # #213 (УКАЗ — комплексная защита ОТ спама): глобальный анти-флуд ДО любой обработки.
+        # Не-владелец шлёт слишком часто → тихо игнорируем (не тратим обработку/ИИ; НЕ отвечаем — иначе усилили бы спам).
+        if not rate_ok('flood:' + str(user_id), limit=15, window=30):
+            return
+        if chat_type in ("group", "supergroup") and not rate_ok('floodchat:' + str(chat_id), limit=45, window=30):
+            return
         # Режим «только свои группы»: в неразрешённой группе бот полностью молчит
         if chat_type in ("group", "supergroup"):
             acc = _access_cache or {}
