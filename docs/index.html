@@ -185,7 +185,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v589</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v590</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -656,7 +656,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v589';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v590';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -706,6 +706,16 @@ const COLLECTIONS = [
   {code:'malik',ru:'Малик',ar:'مالك'},
   {code:'ahmad',ru:'Ахмад',ar:'أحمد'},
 ];
+// #204: детектор ссылок на обсуждаемый хадис в тексте разбора («Бухари 5590» / «البخاري ٥٥٩٠») → кликабельные ссылки в нашу базу
+function _razFindHadithRefs(text){
+  if(!text) return []; const out=[], seen=new Set();
+  const toLat=s=>String(s).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+  try{ COLLECTIONS.forEach(c=>{ [c.ru,c.ar].forEach(nm=>{ if(!nm) return;
+    const re=new RegExp(nm.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'[\\s,:№#\\-]*([\\d٠-٩]{1,5})','g'); let m;
+    while((m=re.exec(text))){ const num=toLat(m[1]); if(!num||num==='0') continue; const key=c.code+':'+num;
+      if(!seen.has(key)){ seen.add(key); out.push({code:c.code,num:num,label:c.ru+' №'+num}); } } }); }); }catch(e){}
+  return out.slice(0,8);
+}
 
 /* ===== M44: ДРУГИЕ СБОРНИКИ (основные — чипами выше; эти — по кнопке «➕ Другие сборники») ===== */
 /* Издания лежат рядом: в превью — miniapp/editions/, в проде — docs/editions/ (GitHub Pages) */
@@ -4649,8 +4659,12 @@ async function openOurRazbory(){
         +'<span class="razArrow" data-a="'+cid+'" style="flex:none;color:var(--hint)">▼</span></div>';
       // ПОЛНЫЙ разбор (скрыт)
       html+='<div id="'+cid+'" style="display:none;padding:0 12px 11px;border-top:1px solid var(--border)">';
+      if(c.kind==='audio'){ html+='<div style="margin:9px 0 4px"><span class="ourRazL" data-u="'+esc(c.url)+'" style="display:inline-flex;align-items:center;gap:7px;background:#16302a;color:#7fe3bf;border:1px solid #2e9b6b;border-radius:11px;padding:9px 15px;font-size:14px;cursor:pointer;font-weight:600">▶ Слушать аудио-разбор</span> <span style="font-size:11px;color:var(--hint)">(в канале · ниже — конспект из аудио)</span></div>'; }   // #201: заметная плей-кнопка аудио-разбора
       html+='<div style="white-space:pre-wrap;word-break:break-word;font-size:calc(15px * var(--txtScale,1));line-height:1.7;margin:8px 0;font-family:var(--arFont,\'Noto Naskh Arabic\',serif)">'+_linkifyTg(esc(c.text||''))+'</div>';   // #30: кликабельные t.me/@username
       if(c.href){ var _hc=String(c.href).split(':'); html+='<div style="margin:6px 0;display:flex;gap:8px;flex-wrap:wrap"><span class="ourRazHadith" data-code="'+esc(_hc[0]||'')+'" data-num="'+esc(_hc[1]||'')+'" style="display:inline-block;color:#ffd479;cursor:pointer;border:1px solid #a8862e;border-radius:9px;padding:5px 12px;font-size:13px">📖 Открыть этот хадис в нашей базе ('+esc(c.href)+')</span><span class="ourRazHadFltBtn" data-href="'+esc(c.href)+'" style="display:inline-block;color:#d8cdff;cursor:pointer;border:1px solid #6c5ce7;border-radius:9px;padding:5px 12px;font-size:13px">🔎 разборы этого хадиса</span></div>'; }
+      // #204: упомянутые в тексте хадисы (кроме уже привязанного href) → кликабельные ссылки в нашу базу
+      try{ var _refs=_razFindHadithRefs(c.text||'').filter(rf=>(rf.code+':'+rf.num)!==String(c.href||''));
+        if(_refs.length){ html+='<div style="margin:5px 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="font-size:11px;color:var(--hint)">📌 упомянуты:</span>'+_refs.map(rf=>'<span class="ourRazRef" data-code="'+esc(rf.code)+'" data-num="'+esc(rf.num)+'" style="display:inline-block;color:#ffd479;cursor:pointer;border:1px solid #a8862e;border-radius:8px;padding:3px 9px;font-size:12px">📖 '+esc(rf.label)+'</span>').join('')+'</div>'; } }catch(e){}
       html+='<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:12.5px">';
       html+=(c.by?('<span class="ourRazL" data-u="'+esc(c.by_url||'https://t.me/hadis_isnad')+'" style="color:#c9b8ff;cursor:pointer;text-decoration:underline">✍️ '+esc(c.by)+' ↗</span>'):'<span style="color:#e0b34a">⚠️ автор требует уточнения</span>');
       html+='<span class="ourRazL" data-u="'+esc(c.url)+'" style="color:var(--link);cursor:pointer;text-decoration:underline">🔗 разбор '+(c.kind==='audio'?'(аудио ▶)':'(пост)')+' в канале</span>';
@@ -4666,7 +4680,7 @@ async function openOurRazbory(){
     body.querySelectorAll('.ourRazL,.ourRazCh,.tgLink').forEach(a=>a.onclick=(e)=>{ try{ e.stopPropagation(); }catch(_e){} try{ openLink(a.dataset.u||'https://t.me/hadis_isnad'); }catch(_e2){} });   // #30: + .tgLink (t.me/@username в тексте)
     body.querySelectorAll('.razHead').forEach(hd=>hd.onclick=()=>{ const el=document.getElementById(hd.dataset.id); const ar=hd.querySelector('.razArrow'); if(el){ const vis=el.style.display!=='none'; el.style.display=vis?'none':'block'; if(ar) ar.textContent=vis?'▼':'▲'; } });
     body.querySelectorAll('.ourRazShare').forEach(a=>a.onclick=(e)=>{ e.stopPropagation(); try{ const u=deepLinkUrls('raz_'+a.dataset.mid).tg; copyText(u); toast('📤 Ссылка на разбор скопирована'); try{hap('light');}catch(_e){} }catch(_e){} });   // З-30
-    body.querySelectorAll('.ourRazHadith').forEach(a=>a.onclick=(e)=>{ e.stopPropagation(); const c=a.dataset.code,n=a.dataset.num; if(!c||!n) return; try{ m.style.display='none'; }catch(_e){}   // открыть хадис разбора в нашей карточке
+    body.querySelectorAll('.ourRazHadith,.ourRazRef').forEach(a=>a.onclick=(e)=>{ e.stopPropagation(); const c=a.dataset.code,n=a.dataset.num; if(!c||!n) return; try{ m.style.display='none'; }catch(_e){}   // #204: открыть хадис разбора (привязанный или упомянутый в тексте)
       try{ openReader(c, String(n)); }catch(_e){ try{ const qi=document.getElementById('q'); if(qi){ const th=document.querySelector('.tab[data-tab="hadith"]'); if(th) th.click(); qi.value=c+' '+n; runSearch(true); } }catch(_e2){} } });
   };
   render();
