@@ -2160,8 +2160,28 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text and update.message.reply_to_message and re.match(r'^\s*(в\s*разбор[ыа]|разбор\s*в\s*базу|сохрани\s*разбор|это\s*разбор)\s*$', text.strip().lower()):
             rep = update.message.reply_to_message
             rt = rep.text or rep.caption or ""
+            doc_name = ""
+            # #216/#196: если приложен ДОКУМЕНТ (.docx/.txt — работа Шабаба и т.п.) — скачиваем и извлекаем текст (без доп.библиотек)
+            if (not rt or len(rt) < 40) and getattr(rep, "document", None):
+                try:
+                    d = rep.document; doc_name = d.file_name or ""
+                    f = await context.bot.get_file(d.file_id)
+                    blob = bytes(await f.download_as_bytearray())
+                    low = doc_name.lower()
+                    if low.endswith(".docx"):
+                        import zipfile, io as _io, html as _htmlmod
+                        z = zipfile.ZipFile(_io.BytesIO(blob))
+                        xml = z.read("word/document.xml").decode("utf-8", "ignore")
+                        xml = re.sub(r'</w:p>', "\n", xml); xml = re.sub(r'<[^>]+>', "", xml)
+                        dt = _htmlmod.unescape(xml).strip()
+                        if dt: rt = (rt + "\n\n" + dt) if rt else dt
+                    elif low.endswith(".txt"):
+                        dt = blob.decode("utf-8", "ignore").strip()
+                        if dt: rt = (rt + "\n\n" + dt) if rt else dt
+                except Exception as _e:
+                    pass
             if not rt:
-                await update.message.reply_text("❌ В том сообщении нет текста. Ответь словом «в разборы» на текстовый разбор.")
+                await update.message.reply_text("❌ В том сообщении нет текста/распознаваемого документа (.docx/.txt). Ответь «в разборы» на текстовый разбор или Word-файл.")
                 return
             src_url = ""
             try:
@@ -2172,12 +2192,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
             raw = _data_get("razbory_raw.json", []) or []
             new_id = max([x.get("id", 0) for x in raw], default=0) + 1
-            entry = {"id": new_id, "text": rt[:4000], "url": src_url,
+            entry = {"id": new_id, "text": rt[:9000], "url": src_url, "doc": doc_name,
                      "from": (rep.from_user.full_name if rep.from_user else ""), "ts": _now_msk()}
             raw.append(entry)
             _data_put("razbory_raw.json", raw, f"raw razbor +#{new_id} (всего {len(raw)})")
             await update.message.reply_text(
-                f"📿 Сырой разбор #{new_id} сохранён (всего {len(raw)}). Claude оформит его в карточку: тема, вердикт, хадис+ссылка, конспект."
+                f"📿 Сырой разбор #{new_id} сохранён (всего {len(raw)}){(' · из файла '+doc_name) if doc_name else ''}. Claude оформит его в карточку: тема, вердикт, хадис+ссылка, конспект."
                 + (f"\n🔗 {src_url}" if src_url else ""))
             return
 
