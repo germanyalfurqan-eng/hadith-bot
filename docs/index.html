@@ -185,7 +185,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v583</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v584</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -653,7 +653,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v583';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v584';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3580,13 +3580,20 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
   try{ razboryBadge(code, (h.num||h.n), meta, card); }catch(e){}   // обратная связь: «📿 наш разбор» если хадис разбирали на канале
   try{ ourMaterialBadge(code, (h.num||h.n), meta, card); }catch(e){}   // M52: отметка «от Muslimoon»
   if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp){ sp.style.cursor='pointer'; sp.onclick=()=>openReader(code,String(h.num)); } }
+  // #234/#237: у Муслима буквы риваятов sunnah.com (654a/654b…) ПРЯМО рядом с номером — кликабельно. Буквы авторитетные из muslim_riw.json (1879 номеров с риваятами).
+  if(code==='muslim' && !riwNo){ (async()=>{ try{ const rw=await loadMuslimRiw(); const _bn=String(h.num).replace(/[^0-9]/g,''); const lets=rw&&rw[_bn];
+    if(lets && lets.length){ const sp=meta.querySelector('.src'); if(sp){ const rs=document.createElement('span');
+      rs.style.cssText='font-size:10.5px;color:var(--link);margin-inline-start:6px;cursor:pointer;white-space:nowrap';
+      rs.textContent='· sunnah.com '+lets.map(L=>_bn+L).join('·'); rs.title='Риваяты этого хадиса на sunnah.com — нажми (откроется '+_bn+lets[0]+')';
+      rs.onclick=(e)=>{ try{e.stopPropagation();}catch(_e){} try{ openLink('https://sunnah.com/muslim:'+_bn+lets[0]); }catch(_e2){} };
+      sp.insertAdjacentElement('afterend', rs); } } }catch(e){} })(); }
   if(code==='muslim' && !riwNo){ (async()=>{ try{ const nm=await _muslimNums(h.num); if(nm){ const sp=meta.querySelector('.src');
     if(sp){ const ex=document.createElement('span'); ex.style.cssText='font-size:10px;color:var(--hint);margin:0 6px 0 8px;white-space:nowrap;opacity:.8';
       ex.title='Основной номер хадиса — №'+h.num+' (нумерация Абд аль-Баки, эталон учёных). Дополнительно для справки: сквозной номер по всей книге и номер хадиса внутри раздела — не путать с основным.';
       ex.textContent='ⓘ сквозной '+nm[0]+' · в разделе '+nm[1]; sp.parentNode.insertBefore(ex, sp.nextSibling); } } }catch(e){} })(); }
   const _fk = riwNo ? ('h|'+code+'|'+h.num+'#'+riwNo) : ('h|'+code+'|'+h.num);
   const _lab = arOf(code)+' №'+h.num+(riwNo?(' (риваят '+riwNo+')'):'');
-  addTr(meta,card,text,null,{k:_fk,type:'h',coll:arOf(code),label:_lab,text:(text||'').slice(0,200)}); card.appendChild(meta); return card;
+  addTr(meta,card,text,null,{k:_fk,type:'h',coll:arOf(code),label:_lab,text:(text||'').slice(0,200),_riwNo:riwNo,_riwTot:riwTot}); card.appendChild(meta); return card;   // #234: позиция риваята → точная буква sunnah.com
 }
 function cardMuh(d,groups){
   const {h}=d; const card=document.createElement('div');card.className='card';
@@ -5550,7 +5557,11 @@ function addTr(meta,card,text,ayah,fav){
       // УКАЗ-3 (слово владельца 16.06): у Муслима риваяты sunnah.com = номер+буква (2408a/2408b…). Буквы — АВТОРИТЕТНЫЕ из muslim_riw.json
       // (краул страниц книг sunnah.com), НЕ наугад по индексу. Основная кнопка → первая буква (обычно «a»); если риваятов >1 — чипы a/b/c… на каждый.
       if(_slug==='muslim'){ (async()=>{ try{ const rw=await loadMuslimRiw(); const lets=rw&&rw[_scn];
-        if(lets && lets.length){ _primSuf=lets[0]; sb.title='Открыть риваят '+_scn+lets[0]+' на sunnah.com';
+        if(lets && lets.length){
+          // #234: если это карточка-риваят (разбивка по ⚬) и число риваятов = числу букв sunnah — кнопка ведёт на ИМЕННО эту букву (риваят 1→a, 2→b)
+          const _ri=fav&&fav._riwNo, _rt=fav&&fav._riwTot;
+          if(_ri && _rt===lets.length && lets[_ri-1]){ _primSuf=lets[_ri-1]; sb.textContent='🌐 sunnah.com ('+_scn+lets[_ri-1]+')'; sb.title='Открыть риваят '+_scn+lets[_ri-1]+' на sunnah.com'; return; }
+          _primSuf=lets[0]; sb.title='Открыть риваят '+_scn+lets[0]+' на sunnah.com';
           if(lets.length>1){ sb.textContent='🌐 sunnah.com ('+_scn+lets[0]+')';
             const wrap=document.createElement('span'); wrap.style.cssText='display:inline-flex;gap:4px;flex-wrap:wrap;align-items:center;margin-inline-start:4px;vertical-align:middle';
             const lbl=document.createElement('span'); lbl.className='hint'; lbl.style.cssText='font-size:11px'; lbl.textContent='риваяты:'; wrap.appendChild(lbl);
