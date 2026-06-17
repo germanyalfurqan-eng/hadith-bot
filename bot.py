@@ -2155,6 +2155,32 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(f"📝 {desc}\n\nСохранить в реестр? (да/нет)")
             return
 
+        # #196 (интерфейс доносить разборы): ответь на сообщение (разбор Абу Сафии/чужой пост о достоверности) словом «в разборы» →
+        # бот сохранит его как СЫРОЙ разбор (data/razbory_raw.json), Claude оформит в карточку (тема/вердикт/хадис/конспект).
+        if text and update.message.reply_to_message and re.match(r'^\s*(в\s*разбор[ыа]|разбор\s*в\s*базу|сохрани\s*разбор|это\s*разбор)\s*$', text.strip().lower()):
+            rep = update.message.reply_to_message
+            rt = rep.text or rep.caption or ""
+            if not rt:
+                await update.message.reply_text("❌ В том сообщении нет текста. Ответь словом «в разборы» на текстовый разбор.")
+                return
+            src_url = ""
+            try:
+                ch = rep.sender_chat or rep.chat
+                if ch and getattr(ch, "username", None):
+                    src_url = f"https://t.me/{ch.username}/{rep.message_id}"
+            except Exception:
+                pass
+            raw = _data_get("razbory_raw.json", []) or []
+            new_id = max([x.get("id", 0) for x in raw], default=0) + 1
+            entry = {"id": new_id, "text": rt[:4000], "url": src_url,
+                     "from": (rep.from_user.full_name if rep.from_user else ""), "ts": _now_msk()}
+            raw.append(entry)
+            _data_put("razbory_raw.json", raw, f"raw razbor +#{new_id} (всего {len(raw)})")
+            await update.message.reply_text(
+                f"📿 Сырой разбор #{new_id} сохранён (всего {len(raw)}). Claude оформит его в карточку: тема, вердикт, хадис+ссылка, конспект."
+                + (f"\n🔗 {src_url}" if src_url else ""))
+            return
+
         if text:
             reg_cmd = parse_registry_command(text)
             if reg_cmd and reg_cmd != "add_media":
