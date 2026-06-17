@@ -1891,9 +1891,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not note:
                 await update.message.reply_text("Пусто. Напиши: анонс <текст обновления>")
                 return
-            body = note + "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot?startapp\n🤖 Бот: https://t.me/muslimoontt_bot"
             try:
-                await context.bot.send_message(APP_CHANNEL_ID, body, disable_web_page_preview=True)
+                await _post_app_channel(context.bot, note)   # ЗАКОН С31: скрин + анонс + сворачиваемая инструкция
                 j = _journal_load(); j["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
                 _journal_save("анонс → канал приложения (вручную)")
                 await update.message.reply_text("✅ Опубликовал в канал @muslimoonapp.")
@@ -5274,8 +5273,7 @@ async def _setup(application):
             last = (j.get("app_post") or {}).get("note", "")
             if note != last:
                 try:
-                    body = (note + "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot?startapp\n🤖 Бот: https://t.me/muslimoontt_bot")
-                    await application.bot.send_message(APP_CHANNEL_ID, body, disable_web_page_preview=True)
+                    await _post_app_channel(application.bot, note)   # ЗАКОН С31: скрин + анонс + сворачиваемая инструкция
                     j["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
                     _journal_save("app_post → канал приложения")
                 except Exception as e:
@@ -5358,6 +5356,56 @@ async def _razbory_fetch_bg(application):
     except Exception:
         pass
 
+def _format_channel_post(note):
+    """ЗАКОН (С31, владелец): пост обновления в @muslimoonapp = [скрин из приложения] + анонс + СВОРАЧИВАЕМАЯ инструкция (Telegram expandable-цитата).
+    Формат update_note.txt:
+        SHOT: shots/v605.png        ← опц. ПЕРВАЯ строка: относит. путь (Pages) или http-URL скрина
+        <анонс: заголовок + пункты>
+        ИНСТРУКЦИЯ:                 ← опц. маркер; всё ниже уходит в сворачиваемую цитату
+        <шаги инструкции>
+    Возвращает (photo_url|None, html_body). Тело — под parse_mode="HTML".
+    Обратная совместимость: нет маркеров → весь note идёт анонсом (как раньше), просто HTML-эскейп."""
+    def esc(s): return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    lines = (note or "").split("\n")
+    photo = None
+    rest = []
+    for ln in lines:
+        m = re.match(r'^\s*SHOT:\s*(.+?)\s*$', ln)
+        if m and photo is None and not rest:            # только если ещё не было текста (SHOT — в шапке)
+            p = m.group(1).strip()
+            photo = p if p.startswith("http") else ("https://germanyalfurqan-eng.github.io/hadith-bot/" + p.lstrip("/"))
+            continue
+        rest.append(ln)
+    main, instr, in_instr = [], [], False
+    for ln in rest:
+        if not in_instr and re.match(r'^\s*(?:📋\s*)?ИНСТРУКЦИЯ\s*:?\s*$', ln.strip(), re.I):
+            in_instr = True
+            continue
+        (instr if in_instr else main).append(ln)
+    main_txt = "\n".join(main).strip()
+    instr_txt = "\n".join(instr).strip()
+    body = esc(main_txt)
+    if instr_txt:
+        body += "\n\n<blockquote expandable>📋 <b>Как пользоваться</b>\n" + esc(instr_txt) + "</blockquote>"
+    body += "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot?startapp\n🤖 Бот: https://t.me/muslimoontt_bot"
+    return photo, body
+
+async def _post_app_channel(bot, note):
+    """Единый постер в @muslimoonapp: скрин (если есть) + анонс + сворачиваемая инструкция. Фолбэк — текстом, чтобы пост не потерялся."""
+    photo, body = _format_channel_post(note)
+    try:
+        if photo:
+            if len(body) <= 1024:
+                await bot.send_photo(APP_CHANNEL_ID, photo=photo, caption=body, parse_mode="HTML")
+            else:
+                await bot.send_photo(APP_CHANNEL_ID, photo=photo, parse_mode="HTML")
+                await bot.send_message(APP_CHANNEL_ID, body, parse_mode="HTML", disable_web_page_preview=True)
+        else:
+            await bot.send_message(APP_CHANNEL_ID, body, parse_mode="HTML", disable_web_page_preview=True)
+    except Exception:
+        # фото 404 / HTML не прошёл — отправляем тело текстом (HTML), пост обязан выйти
+        await bot.send_message(APP_CHANNEL_ID, body, parse_mode="HTML", disable_web_page_preview=True)
+
 async def _app_channel_watcher(application):
     """Фон: раз в 5 мин публикует новую update_note.txt в @muslimoonapp (см. _setup)."""
     while True:
@@ -5391,8 +5439,7 @@ async def _app_channel_watcher(application):
             j = _journal_load()
             last = (j.get("app_post") or {}).get("note", "")
             if note != last:
-                body = (note + "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot?startapp\n🤖 Бот: https://t.me/muslimoontt_bot")
-                await application.bot.send_message(APP_CHANNEL_ID, body, disable_web_page_preview=True)
+                await _post_app_channel(application.bot, note)   # ЗАКОН С31: скрин + анонс + сворачиваемая инструкция
                 j["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
                 _journal_save("app_post → канал приложения (авто-вотчер, 5 мин)")
         except Exception as e:

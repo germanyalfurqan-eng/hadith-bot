@@ -187,7 +187,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v604</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v605</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -664,7 +664,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v604';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v605';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1214,25 +1214,6 @@ async function _assistSend(m){ const inp=m.querySelector('#assistInput'); const 
     _assistSave(a); _assistRender(m);
   }catch(e){ const a=_assistHist(); if(a.length&&a[a.length-1].loading) a.pop(); a.push({role:'bot',text:'Сеть недоступна — попробуйте позже.'}); _assistSave(a); _assistRender(m); }
 }
-// «Разбор цепи (ИИ)» (как Гемини): ИИ разбирает каждого передатчика иснада по джарх-тадиль. Помощник #214, вопрос заточен. НЕ канон (пометка «проверь»).
-async function _chainGradeAI(text, host, btn){
-  if(!host) return; if(!BACKEND_URL){ host.textContent='ИИ-разбор работает на сервере'; return; }
-  if(btn&&btn.dataset.shown==='1'){ host.style.display='none'; btn.dataset.shown=''; return; }
-  let isnad=''; try{ const sp=splitIsnad(text||''); isnad=(sp[0]||text||'').slice(0,600); }catch(e){ isnad=(text||'').slice(0,600); }
-  const q='Разбери ИСНАД (цепь передатчиков) этого хадиса по науке джарх ва тадиль. Для КАЖДОГО передатчика по порядку дай: имя (и шухра/полное если знаешь), статус (сика/садук/да‘иф/маджхуль), кратко джарх и тадиль (что сказали учёные — Ибн Хаджар, Ибн Маин, аз-Захаби и др.), кунья/нисба. В конце — вывод о цепи (непрерывна ли, слабые звенья). Цепь: '+isnad;
-  host.style.display='block'; host.innerHTML='<span class="hint">🔍 Разбираю цепь по джарх-тадиль (ИИ)…</span>'; if(btn) btn.dataset.shown='1';
-  try{
-    const r=await fetch(BACKEND_URL+'/assistant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:q,initData:INITDATA})});
-    const j=await r.json().catch(()=>({}));
-    if(r.status===403){ host.innerHTML='<span class="hint">'+((j&&j.message)||'функция пока не открыта')+'</span>'; return; }
-    if(r.status===429){ host.innerHTML='<span class="hint">⏳ слишком часто — подожди немного</span>'; return; }
-    if(j&&j.answer){ host.innerHTML='<div style="border:1px solid #6c5ce7;border-radius:10px;padding:10px;background:rgba(108,92,231,.08);font-size:13.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word">'
-        +'<div style="color:#b9a9ff;font-size:11px;margin-bottom:6px">'+(j.cached?'♻️ Разбор цепи (ИИ, из базы)':'🔍 Разбор цепи по джарх-тадиль (ИИ — вспомогательно, ПРОВЕРЬ; не редакция Muslimoon, финал за учёными)')+'</div>'
-        +_linkifyTg(esc(j.answer))+'</div>'; }
-    else host.innerHTML='<span class="hint">Не удалось разобрать цепь. Попробуй позже.</span>';
-  }catch(e){ host.innerHTML='<span class="hint">Сеть недоступна — попробуй позже.</span>'; }
-}
-
 /* ===================== ДАННЫЕ ===================== */
 const cache={}; let reverse=null, quran=null, muh=null;
 async function loadReverse(){ if(reverse)return reverse; try{ reverse=await (await fetch(REVERSE_INDEX_URL)).json(); }catch(e){ reverse={}; } return reverse; }
@@ -8627,6 +8608,10 @@ async function _codifHighlight(text, card, out, place){
   if(rec.na && rec.na.length){
     const f2id={}, names=[]; const naMids=new Set();
     for(const pr of rec.na){ const ph=pr[0], id=String(pr[1]); if(ph && !(ph in f2id)){ f2id[ph]=id; names.push(ph); naMids.add(id); } }
+    // УКАЗ (распознать передатчиков в КАЖДОМ хадисе): na — авторитетная цепь, НО у Муслим-риваятов (⚬) и др. ТЕКСТ может содержать СВОИ имена не из na.
+    // Добавляем передатчиков из ТЕКСТА этого хадиса, резолвя в базу равиев (_narrLookup) — чтобы подсветить ВСЕХ в тексте, не только совпавших с na.
+    try{ const _extra=isnadNarrators(text).filter(_keepNarr);
+      for(const nm of _extra){ if(nm in f2id) continue; let _mid=null; try{ _mid=await _narrLookup(nm); }catch(e){} if(_mid!=null){ f2id[nm]=String(_mid); names.push(nm); } } }catch(e){}
     // #160/#158: при наличии авторитетной na подсвечиваем ТОЛЬКО её (= строгий стандарт sunnah.com). Эвристический n НЕ добавляем —
     // он тащил мусор-матн (напр. «الله ما كذبني #484» в Бухари 5590) и тёзка-дубли с неверными id. na — полная цепь, добивка не нужна.
     if(names.length){
@@ -8778,14 +8763,12 @@ async function verifyNarr(card, place, text){
       h+='</div>'; }
     else if(alarm){ h+='<div style="margin-top:7px;color:#e0b3a8;font-size:11px">⚠️ По тексту передатчиков <b>'+authCount+'</b>, а приложение подсветило <b>'+ourMids.length+'</b> — расхождение в количестве.</div>'; }
     // #93 (полезные функции таблицы цепей): копировать цепь целиком (передатчики + формы передачи + id)
-    h+='<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><span class="vCopyChain" style="cursor:pointer;font-size:11.5px;color:var(--link);border:1px solid var(--border);border-radius:8px;padding:3px 10px">📋 Копировать цепь</span>'
-      +'<span class="vChainAI" style="cursor:pointer;font-size:11.5px;color:#d8cdff;border:1px solid #6c5ce7;border-radius:8px;padding:3px 10px" title="ИИ разберёт каждого передатчика по джарх-тадиль (вспомогательно, проверь)">🔍 Разбор цепи (ИИ)</span></div><div class="vChainAIout" style="margin-top:7px;display:none"></div>';
+    h+='<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><span class="vCopyChain" style="cursor:pointer;font-size:11.5px;color:var(--link);border:1px solid var(--border);border-radius:8px;padding:3px 10px">📋 Копировать цепь</span></div>';
     box.innerHTML=h;
     try{ const _cc=box.querySelector('.vCopyChain'); if(_cc) _cc.onclick=(e)=>{ e.stopPropagation();
       const _ct=auth.map((r,i)=>(i>0?(forms[i-1]?(' ← '+forms[i-1]+' ← '):' ← '):'')+r[1]+(r[2]?(' [id'+r[2]+']'):'')).join('');
       const _hdr='⛓ Цепь передатчиков'+((place&&place.num)?(' (хадис №'+place.num+')'):'')+':\n';
       try{ copyText(_hdr+_ct); toast('Цепь скопирована ✓'); }catch(_e){} }; }catch(e){}
-    try{ const _ai=box.querySelector('.vChainAI'), _aout=box.querySelector('.vChainAIout'); if(_ai&&_aout) _ai.onclick=(e)=>{ e.stopPropagation(); _chainGradeAI(text, _aout, _ai); }; }catch(e){}   // #G: ИИ-разбор цепи (как Гемини)
     box.querySelectorAll('.vChip').forEach(ch=>{ if(ch.dataset.mid) ch.onclick=(e)=>{ e.stopPropagation(); try{ openLink('https://shamela.ws/narrator/'+ch.dataset.mid); }catch(_e){} }; });
     card.appendChild(box);
     // Уведомление об ошибке ШЛЁТСЯ (владелец просил оставить), но с ЗАЩИТОЙ ОТ СПАМА: одну и ту же ошибку (этот хадис) не повторяем чаще раза в 12ч.
@@ -9667,7 +9650,7 @@ window.showUpdateNotes=async function(ver){
   const body=m.querySelector('#wnBody'); body.innerHTML='<div class="hint">Загружаю…</div>'; m.style.display='flex';
   let txt=''; try{ const r=await fetch('./update_note.txt?cb='+Date.now(),{cache:'no-store'}); if(r.ok) txt=await r.text(); }catch(e){}
   // строки-пункты: непустые, кроме заголовка «🆕 Обновление…»
-  const lines=(txt||'').split('\n').map(s=>s.replace(/\s+$/,'')).filter(s=>s.trim() && !/^🆕\s*Обновление/i.test(s));
+  const lines=(txt||'').split('\n').map(s=>s.replace(/\s+$/,'')).filter(s=>s.trim() && !/^🆕\s*Обновление/i.test(s) && !/^\s*SHOT:/i.test(s));   // SHOT: — служебная строка скрина для канала, в аппе не показываем
   body.innerHTML='';
   if(!lines.length){ body.innerHTML='<div class="hint">Описание пунктов пока недоступно.</div>'; }
   lines.forEach(line=>{ const row=document.createElement('div'); row.style.cssText='display:flex;gap:8px;align-items:flex-start;border-bottom:1px solid var(--border);padding:8px 2px';
