@@ -185,7 +185,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v588</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v589</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -656,7 +656,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v588';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v589';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7338,10 +7338,17 @@ const _AR2RU={'عبد الله':'Абдуллах','عبد الرحمن':'Абд
 const _AR2RU_CH={'ب':'б','ت':'т','ث':'с','ج':'дж','ح':'х','خ':'х','د':'д','ذ':'з','ر':'р','ز':'з','س':'с','ش':'ш','ص':'с','ض':'д','ط':'т','ظ':'з','غ':'г','ف':'ф','ق':'к','ك':'к','ل':'л','م':'м','ن':'н','ه':'х'};
 function _arWordRu(w){
   if(_AR2RU[w]) return _AR2RU[w];
+  // #231 (ЗАКОН — находимость по рус.имени): фолд хамзы/алифа/я перед словарём.
+  // Словарь хранит بare-формы (ابراهيم/احمد/اسحاق), а имена приходят с хамзой (إبراهيم/أحمد/إسحاق) → промах → ломаный фонетич.фолбэк («Абарахим»). Нормализуем.
+  const _fold=s=>(s||'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ؤ/g,'و').replace(/ئ/g,'ي');
+  const wf=_fold(w);
+  if(wf!==w && _AR2RU[wf]) return _AR2RU[wf];
   let art=''; let base=w;
   if(/^ال./.test(w)){ base=w.slice(2); const c0=base[0]; const sun={'ت':1,'ث':1,'د':1,'ذ':1,'ر':1,'ز':1,'س':1,'ش':1,'ص':1,'ض':1,'ط':1,'ظ':1,'ل':1,'ن':1};
-    if(_AR2RU[base]){ const b=_AR2RU[base]; return (sun[c0]?('а'+(_AR2RU_CH[c0]||'')+'-'):'аль-')+b; }
-    art=sun[c0]?('а'+(_AR2RU_CH[c0]||'')+'-'):'аль-'; }
+    const bf=_fold(base); const bhit=_AR2RU[base]||_AR2RU[bf];
+    if(bhit){ return (sun[c0]?('а'+(_AR2RU_CH[c0]||'')+'-'):'аль-')+bhit; }
+    art=sun[c0]?('а'+(_AR2RU_CH[c0]||'')+'-'):'аль-'; base=bf; }
+  else base=wf;
   let out='', prevCons=false;
   for(let i=0;i<base.length;i++){ const ch=base[i];
     if(ch==='ا'||ch==='أ'||ch==='إ'||ch==='آ'||ch==='ء'||ch==='ع'){ if(!out) out+='а'; else if(prevCons){ out+='а'; } prevCons=false; continue; }
