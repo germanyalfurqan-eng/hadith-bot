@@ -187,7 +187,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v607</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v608</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -664,7 +664,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v607';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v608';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7348,6 +7348,11 @@ const _WIKI_NARR_OK=false;   // TB-26: краул дал ТЁЗОК (равий�
 let _narrWiki=null;
 function loadNarrWiki(){ if(_narrWiki) return Promise.resolve(_narrWiki);
   return fetch('./narrators_wiki.json').then(r=>r.ok?r.json():{}).then(j=>{_narrWiki=j||{};return _narrWiki;}).catch(()=>{_narrWiki={};return _narrWiki;}); }
+// #247 (владелец: «все имена должны быть сами огласованы, зачем тратить ИИ»): narr_voc.json {mid: ОГЛАСОВАННОЕ имя} —
+// собрано из codif.na (имена в НАШЕМ огласованном тексте), build_narr_voc.py. Огласовки из реального текста, БЕЗ ИИ.
+let _narrVoc=null;
+function loadNarrVoc(){ if(_narrVoc) return Promise.resolve(_narrVoc);
+  return fetch('./narr_voc.json?v='+APPVER).then(r=>r.ok?r.json():{}).then(j=>{_narrVoc=j||{};return _narrVoc;}).catch(()=>{_narrVoc={};return _narrVoc;}); }
 function _narrRow(c){   // строка-кандидат: ПРИВЫЧНОЕ имя (M385) + полное + рус + мета (وفاة/ранг)
   const r=document.createElement('div');
   r.style.cssText='padding:8px 11px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center';
@@ -7889,13 +7894,17 @@ async function showNarratorCardLocal(name, host){
   let _ext=null; try{ _ext=(await loadNarrExt()).get(id); }catch(e){}
   const _sh=_shuhraOf(c[1], _ext);
   const _shDiff=!!_sh && stripDiac(_sh)!==stripDiac(c[1]||'');
+  // #247: ОГЛАСОВАННОЕ имя из корпуса (narr_voc) — приоритет в шапке (огласовки сами, без ИИ); иначе шухра/полное (#246).
+  let _voc=''; try{ _voc=(await loadNarrVoc())[String(id)]||''; }catch(e){}
+  const _hdrName = _voc || (_shDiff?_sh:c[1]);
+  const _showFull = stripDiac(_hdrName)!==stripDiac(c[1]||'');
   let h='<div style="border:1px solid #6c5ce7;border-radius:12px;padding:11px;margin:6px 0;background:rgba(108,92,231,.07);direction:rtl;text-align:right">'
-    +'<div style="font-weight:700;font-size:17px;color:#ffd479">👤 '+esc(_shDiff?_sh:c[1])+'</div>'
-    +(_shDiff?('<div style="font-size:13px;color:#d9ccff;margin-top:1px">'+esc(c[1])+'</div>'):'');
-  let _ruSh=''; try{ _ruSh=arNameRu(_shDiff?_sh:c[1],5); }catch(e){}
+    +'<div style="font-weight:700;font-size:17px;color:#ffd479">👤 '+esc(_hdrName)+'</div>'
+    +(_showFull?('<div style="font-size:13px;color:#d9ccff;margin-top:1px">'+esc(c[1])+'</div>'):'');
+  let _ruSh=''; try{ _ruSh=arNameRu(_hdrName,5); }catch(e){}
   let _ruNm=''; try{ _ruNm=arNameRu(c[1],7); }catch(e){}
   if(_ruSh) h+='<div style="direction:ltr;text-align:left;font-size:13px;color:#bcd0ff;margin-top:2px">≈ '+esc(_ruSh)+'</div>';
-  if(_ruNm&&_shDiff&&_ruNm!==_ruSh) h+='<div style="direction:ltr;text-align:left;font-size:11.5px;color:#8fa3c7">полное: '+esc(_ruNm)+'</div>';
+  if(_ruNm&&_showFull&&_ruNm!==_ruSh) h+='<div style="direction:ltr;text-align:left;font-size:11.5px;color:#8fa3c7">полное: '+esc(_ruNm)+'</div>';
   try{ const fl=(await loadNarrFlags())[String(id)]; if(fl) h+='<div style="margin-top:3px">'+_flagBadge(fl, c[1])+'</div>'; }catch(e){}   // M386+M402 (тап → его хадисы в Сахихах)
   try{ const wk=(await loadNarrWiki())[String(id)];
     const _wq=encodeURIComponent((_shDiff?_sh:c[1])||name||'');
