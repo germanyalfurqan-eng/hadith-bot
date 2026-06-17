@@ -185,7 +185,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v592</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v593</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -594,6 +594,10 @@
       <div id="banList" class="hint" style="margin-top:8px"></div>
     </div>
     <div class="accf">
+      <div class="ah"><div><div class="at">🤖 ИИ-«ботяра» в группах</div><div class="ad">Реакция бота на «ботяра»/ответ в группах (@jamaat_ru). Личка и /neuro не затрагиваются. По умолчанию ВЫКЛ. (#236)</div></div>
+        <button class="go" id="groupAiTgl" style="padding:6px 12px">проверить…</button></div>
+    </div>
+    <div class="accf">
       <div class="ah"><div><div class="at">💳 Баланс ИИ</div><div class="ad">DeepSeek (для юзеров) · GPT и Gemini (внутр. кухня).</div></div>
         <button class="go" id="balBtn" style="padding:6px 12px">Проверить</button></div>
       <div id="balOut" class="hint" style="margin-top:8px">нажми «Проверить»</div>
@@ -656,7 +660,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v592';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v593';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -9456,10 +9460,23 @@ async function checkBalance(){
   if(ge){ html+='<div><b>🟣 Gemini</b> <span class="hint" style="font-size:11px">('+esc(ge.model||'?')+', кухня)</span>: '+(ge.enabled?'✅ вкл · бесплатный лимит':'⚪ ключа нет')+'</div>'; }
   out.innerHTML=html||'нет данных';
 }
-async function openDev(){ document.getElementById('devModal').style.display='flex'; document.getElementById('balOut').textContent='нажми «Проверить»'; document.getElementById('jOut').textContent='загружаю…'; try{ if(!ACC) await fetchAccess(); }catch(e){} renderBanList(); await loadDev(); document.getElementById('jOut').textContent=(DEV_DATA&&DEV_DATA.forbidden)?'⛔ только владелец (открой через Telegram)':'выбери журнал — покажу последние записи'; }
+async function openDev(){ document.getElementById('devModal').style.display='flex'; document.getElementById('balOut').textContent='нажми «Проверить»'; document.getElementById('jOut').textContent='загружаю…'; try{ if(!ACC) await fetchAccess(); }catch(e){} renderBanList(); try{ var _gt=document.getElementById('groupAiTgl'); if(_gt&&_gt._load) _gt._load(); }catch(e){}   // #236: подгрузить состояние рубильника ботяры
+  await loadDev(); document.getElementById('jOut').textContent=(DEV_DATA&&DEV_DATA.forbidden)?'⛔ только владелец (открой через Telegram)':'выбери журнал — покажу последние записи'; }
 var _dv=document.getElementById('devBtn'); if(_dv) _dv.onclick=openDev;
 var _dc=document.getElementById('devClose'); if(_dc) _dc.onclick=()=>{ document.getElementById('devModal').style.display='none'; };
 var _bb=document.getElementById('balBtn'); if(_bb) _bb.onclick=checkBalance;
+// #236: рубильник ИИ-«ботяра» в группах прямо из Кабинета (вкл/выкл; сервер только владельцу)
+(function(){ var _gt=document.getElementById('groupAiTgl'); if(!_gt) return;
+  var _set=function(on){ _gt.textContent=on?'✅ ВКЛ — нажми, чтобы выключить':'⏸ ВЫКЛ — нажми, чтобы включить'; _gt.style.background=on?'#173d30':'#3a2230'; _gt.dataset.on=on?'1':''; };
+  async function _req(setVal){ if(!BACKEND_URL){ _gt.textContent='нужен сервер'; return; }
+    try{ var body={initData:INITDATA}; if(typeof setVal==='boolean') body.set=setVal;
+      var r=await fetch(BACKEND_URL+'/groupai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(r.status===403){ _gt.textContent='🔒 только владелец'; return; }
+      var j=await r.json().catch(function(){return{};}); _set(!!j.on);
+    }catch(e){ _gt.textContent='нет связи'; } }
+  _gt.onclick=function(){ _req(_gt.dataset.on?false:true); };
+  _gt._load=function(){ _req(); };   // подгрузить состояние при открытии Кабинета
+})();
 // M238: замечание/правка для Claude (владелец → журнал разработки → заявки)
 // ЧЕРНОВИК замечания: сохраняем набранное, чтобы НЕ потерять при ошибке/перезагрузке
 (function(){ const dt=document.getElementById('dfText'); if(!dt) return;

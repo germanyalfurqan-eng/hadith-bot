@@ -4165,6 +4165,17 @@ async def _api_serve(application=None):
         except Exception as e:
             return _cors(web.json_response({'answer': '', 'error': str(e)[:120]}))
 
+    async def groupai(r):
+        # #236: app-рубильник ИИ-«ботяра» в группах (ТОЛЬКО владелец). POST {set:bool} вкл/выкл; без set — текущее состояние.
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not (user and str(user.get('id')) == str(OWNER_ID)):
+            return _deny('groupai')
+        global _GROUP_AI_OFF
+        if isinstance(d.get('set'), bool):
+            _GROUP_AI_OFF = (not d['set'])
+        return _cors(web.json_response({'on': (not _GROUP_AI_OFF)}))
+
     async def neuro(r):
         d = await _body(r)
         user = verify_init_data(d.get('initData'))
@@ -5149,7 +5160,7 @@ async def _api_serve(application=None):
         return _cors(web.json_response(res))
 
     a = web.Application()
-    a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant),
+    a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
