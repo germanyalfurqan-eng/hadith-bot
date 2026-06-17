@@ -1862,19 +1862,34 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # ===== Добавить заявку: «заявка <текст>» / «замечание <текст>» (+ подсказка о дубле) =====
         if _tl.startswith("заявка ") or _tl.startswith("замечание ") or _tl == "заявка" or _tl == "замечание":
             body = text.strip()[6:].strip() if _tl.startswith("заявк") or _tl == "заявка" else text.strip()[9:].strip()
-            if not body:
-                await update.message.reply_text("✍️ Напиши: *заявка <текст>* — запишу с номером. Скрин: пришли фото с подписью «заявка ...».", parse_mode="Markdown")
+            img_flag = False; imgkey = ""
+            rep = update.message.reply_to_message
+            # #245: «заявка» РЕПЛАЕМ на сообщение (в т.ч. в @jamaat_ru) → регистрируем текст/фото отвеченного сообщения
+            if not body and rep:
+                body = (rep.text or rep.caption or "").strip()
+                if getattr(rep, "photo", None):
+                    try: imgkey = str(rep.photo[-1].file_id); img_flag = True
+                    except Exception: pass
+            if not body and not img_flag:
+                await update.message.reply_text("✍️ Напиши: *заявка <текст>* — или ответь «заявка» на сообщение. Скрин: фото с подписью «заявка ...».", parse_mode="Markdown")
                 return
             dup = req_dup(body)
             if dup:
                 await update.message.reply_text(f"⚠️ Похоже, ты это уже присылал — *заявка №{dup}*. Не дублирую.\n(Если всё же другое — допиши подробнее и пришли ещё раз.)", parse_mode="Markdown")
                 return
-            rid = req_add(body)
+            chat_type = getattr(update.effective_chat, "type", "")
+            from_chat = " (из чата @jamaat_ru)" if chat_type in ("group", "supergroup") else ""
+            rid = req_add((body or "(скрин)") + from_chat, img_flag, imgkey)
+            # #245: дубль ВЛАДЕЛЬЦУ В ЛС — все заявки в переписке с ботом (если команда не из самой ЛС)
             try:
-                if update.effective_chat.id != LOG_CHAT_ID:   # #41/#90: НЕ дублировать эхо в тот же чат
-                    await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid} ({_now_msk()}):\n{body[:1500]}")
+                if update.effective_chat.id != OWNER_ID:
+                    await context.bot.send_message(OWNER_ID, f"📥 Заявка #{rid}{from_chat} ({_now_msk()}):\n{body[:1500]}" + ("\n🖼 со скрином" if img_flag else ""))
             except Exception: pass
-            await update.message.reply_text(f"📥 *Заявка #{rid}* записана ✅ ({_now_msk()})\nУникальный № — ищи в журнале командой «заявки».", parse_mode="Markdown")
+            try:
+                if update.effective_chat.id not in (LOG_CHAT_ID, OWNER_ID):   # #41/#90: НЕ дублировать эхо в тот же чат
+                    await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid}{from_chat} ({_now_msk()}):\n{body[:1500]}")
+            except Exception: pass
+            await update.message.reply_text(f"📥 *Заявка #{rid}* записана ✅{from_chat} ({_now_msk()})\nПродублировал тебе в ЛС с ботом. Журнал — командой «заявки».", parse_mode="Markdown")
             return
         # ===== АНОНС в канал приложения вручную ===== «анонс» = текущий update_note.txt; «анонс <текст>» = свой
         if _tl == "анонс" or _tl.startswith("анонс ") or _tl.startswith("анонс\n"):
