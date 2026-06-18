@@ -4068,7 +4068,13 @@ async def _api_serve(application=None):
         else:
             who = "аноним"
         tag = "🆕 свежий (DeepSeek, ключ потрачен)" if fresh else "♻️ из базы (ключ НЕ потрачен)"
-        loc = f" {src} №{num}" if (src and num not in (None, '')) else ""
+        # #272/«ссылка вкладки»: МЕСТО = кликабельная дип-ссылка ровно на карточку хадиса в приложении (m_ для Мухаймина, r_ для остальных)
+        if src and num not in (None, ''):
+            _sa = ('m_' + str(num)) if src == 'muhaymin' else ('r_' + str(src) + '_' + str(num))
+            loc = f" [{src} №{num}](https://t.me/muslimoontt_bot?startapp={_sa})"
+            loc_plain = f" {src} №{num}"
+        else:
+            loc = ""; loc_plain = ""
         if saved and saved.get("new"):
             _what = (": " + saved["what"]) if saved.get("what") else ""
             extra = f" · 📦 накоплено{_what} (в базе всего {saved.get('total', '?')})"
@@ -4077,9 +4083,14 @@ async def _api_serve(application=None):
         ftag = {"перевод": "#перевод", "нейро": "#нейро", "огласовки": "#огласовки"}.get(feat, "#" + re.sub(r"\s+", "", feat))
         _qs = (" · 🔎 «" + str(q)[:70] + "»") if q else ""   # M301: ЗА ЧТО потрачено (текст запроса)
         try:
-            await application.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} 🤖 {feat}: {who}{loc} — {tag}{extra}{_qs}", parse_mode="Markdown")
+            await application.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} 🤖 {feat}: {who}{loc} — {tag}{extra}{_qs}", parse_mode="Markdown", disable_web_page_preview=True)
         except Exception:
-            pass
+            # B-004 «can't parse entities»: спецсимвол (_ * [ ] ` ) в имени/запросе ломал Markdown → шлём БЕЗ разметки, сообщение НЕ теряем
+            try:
+                who_plain = ("@" + user["username"]) if (user and user.get("username")) else (str(uid) if uid else "аноним")
+                await application.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} {feat}: {who_plain}{loc_plain} — {tag}{extra}{_qs}")
+            except Exception:
+                pass
     async def _notify(text):
         if application:
             try:
