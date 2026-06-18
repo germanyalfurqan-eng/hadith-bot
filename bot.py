@@ -2707,9 +2707,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # В чате/канале: отвечаем ТОЛЬКО если есть "ботяра" или ответ боту
         elif chat_type != "private" and not _ai_loop_guard(update, text):
-            if _GROUP_AI_OFF:
-                return   # #236: ИИ-«ботяра» в группах (@jamaat_ru) выключен отдельным рубильником (вкл: владелец боту «ботяра вкл»)
-            if "ботяра" in text.lower() or (is_reply_to_bot and not is_reply_to_channel):
+            # #236/#284: ботяра-ИИ в группе отвечает ТОЛЬКО при ВКЛ рубильнике. Когда ВЫКЛ — НЕ выходим из обработчика:
+            # обычные команды-лукапы (Бухари 7288 / Коран / передатчик) ниже ДОЛЖНЫ работать (бот = админ группы, сообщения получает).
+            if (not _GROUP_AI_OFF) and ("ботяра" in text.lower() or (is_reply_to_bot and not is_reply_to_channel)):
                 if not rate_ok('botchat:' + str(chat_id), limit=6, window=120):
                     return
                 clean = text.replace("ботяра", "").strip()
@@ -2724,8 +2724,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await log_bot_ai(update, context)
                 return
 
-        # AI на "ботяра" в группах
-        if (parse_botyara(text) is not None or is_reply_to_bot) and not _ai_loop_guard(update, text):
+        # AI на "ботяра" в группах (#284: при выключенном групповом ИИ в группе — НЕ запускаем ботяру; в личке работает)
+        if (parse_botyara(text) is not None or is_reply_to_bot) and not _ai_loop_guard(update, text) and not (_GROUP_AI_OFF and chat_type != "private"):
             if not rate_ok('botchat:' + str(chat_id), limit=6, window=120):
                 return
             clean = text
