@@ -1,0 +1,25 @@
+# C32: свой Dockerfile вместо nixpacks (тот стал флакать на сборке image, хотя конфиг не менялся с рабочего v613).
+# Бот тянет ВСЕ данные удалённо (raw.githubusercontent/jsdelivr) → в образе нужен только bot.py + зависимости. Лёгкий, быстрый, надёжный.
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+# ffmpeg — для аудио-команд бота (pydub). Надёжный Debian-apt.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Зависимости (manylinux-wheels cp312 — компиляция не нужна).
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# Только код бота (данные — удалённо). data/ — для рантайм-файлов.
+COPY bot.py .
+RUN mkdir -p data
+
+# Бот: long-polling Telegram + aiohttp API на $PORT (Railway задаёт PORT).
+CMD ["python", "bot.py"]
