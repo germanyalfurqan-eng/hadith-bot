@@ -187,7 +187,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v613</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v614</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -665,7 +665,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v613';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v614';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7387,7 +7387,7 @@ function _flagSearch(nm, f){
   runSearch(true);
 }
 document.addEventListener('click', e=>{ const b=e.target&&e.target.closest&&e.target.closest('.flgB'); if(!b) return; e.stopPropagation(); _flagSearch(b.dataset.nm||'', b.dataset.f||''); });
-const _WIKI_NARR_OK=false;   // TB-26: краул дал ТЁЗОК (равий→король Саудии!) — чипы скрыты до пере-краула с валидацией эпохи (M471)
+const _WIKI_NARR_OK=true;   // #258 (С32): включено на ВЫВЕРЕННЫХ ссылках v7 (резолв реальной статьи ru→en→ar, тёзка-проверка: ism+отец+⊆+различающий токен+эпоха+категория). Король Саудии/Пророк/эмир Кордовы отсекаются. narrators_wiki.json = narrators_wiki_v7
 let _narrWiki=null;
 function loadNarrWiki(){ if(_narrWiki) return Promise.resolve(_narrWiki);
   return fetch('./narrators_wiki.json').then(r=>r.ok?r.json():{}).then(j=>{_narrWiki=j||{};return _narrWiki;}).catch(()=>{_narrWiki={};return _narrWiki;}); }
@@ -7473,6 +7473,10 @@ const _AR2RU={'عبد الله':'Абдуллах','عبد الرحمن':'Абд
  'مره':'Мурра','عجلان':'Аджлан','سماك':'Симак','زبيده':'Зубайда','سيرين':'Сирин','حيان':'Хайян'};
 const _AR2RU_CH={'ب':'б','ت':'т','ث':'с','ج':'дж','ح':'х','خ':'х','د':'д','ذ':'з','ر':'р','ز':'з','س':'с','ش':'ш','ص':'с','ض':'д','ط':'т','ظ':'з','غ':'г','ف':'ф','ق':'к','ك':'к','ل':'л','م':'м','ن':'н','ه':'х'};
 function _arWordRu(w){
+  if(w==='بن'||w==='ابن') return 'ибн';   // связка насаба — НЕ фонетический «Бан»
+  if(w==='بنت') return 'бинт';
+  if(w==='ابو'||w==='أبو') return 'Абу';
+  if(w==='ابي'||w==='أبي') return 'Аби';
   if(_AR2RU[w]) return _AR2RU[w];
   // #231 (ЗАКОН — находимость по рус.имени): фолд хамзы/алифа/я перед словарём.
   // Словарь хранит بare-формы (ابراهيم/احمد/اسحاق), а имена приходят с хамзой (إبراهيم/أحمد/إسحاق) → промах → ломаный фонетич.фолбэк («Абарахим»). Нормализуем.
@@ -7941,15 +7945,16 @@ async function showNarratorCardLocal(name, host){
   let h='<div style="border:1px solid #6c5ce7;border-radius:12px;padding:11px;margin:6px 0;background:rgba(108,92,231,.07);direction:rtl;text-align:right">'
     +'<div style="font-weight:700;font-size:17px;color:#ffd479">👤 '+esc(_hdrName)+'</div>'
     +(_showFull?('<div style="font-size:13px;color:#d9ccff;margin-top:1px">'+esc(c[1])+'</div>'):'');
+  let _wk=null; try{ _wk=(await loadNarrWiki())[String(id)]||null; }catch(e){}
   let _ruSh=''; try{ _ruSh=arNameRu(_hdrName,5); }catch(e){}
+  // #258: если у равия ВЫВЕРЕННАЯ статья Википедии — её НАЗВАНИЕ и есть правильное рус. имя (напр. «Катада ибн Диама»), показываем его, а не авто-транслит.
+  if(_WIKI_NARR_OK && _wk && _wk.t && /[А-Яа-яЁё]/.test(_wk.t)) _ruSh=_wk.t;
   let _ruNm=''; try{ _ruNm=arNameRu(c[1],7); }catch(e){}
   if(_ruSh) h+='<div style="direction:ltr;text-align:left;font-size:13px;color:#bcd0ff;margin-top:2px">≈ '+esc(_ruSh)+'</div>';
   if(_ruNm&&_showFull&&_ruNm!==_ruSh) h+='<div style="direction:ltr;text-align:left;font-size:11.5px;color:#8fa3c7">полное: '+esc(_ruNm)+'</div>';
   try{ const fl=(await loadNarrFlags())[String(id)]; if(fl) h+='<div style="margin-top:3px">'+_flagBadge(fl, c[1])+'</div>'; }catch(e){}   // M386+M402 (тап → его хадисы в Сахихах)
-  try{ const wk=(await loadNarrWiki())[String(id)];
-    const _wq=encodeURIComponent((_shDiff?_sh:c[1])||name||'');
-    if(_WIKI_NARR_OK&&wk&&wk.u) h+='<div style="direction:ltr;text-align:left;margin-top:3px"><span class="nWiki" data-u="'+esc(wk.u)+'" style="cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px"><b style="font-family:Georgia,serif">W</b> Википедия'+(wk.l?(' · '+esc(wk.l)):'')+' ↗</span></div>';
-    else if(_wq) h+='<div style="direction:ltr;text-align:left;margin-top:3px"><span class="nWiki" data-u="https://ar.wikipedia.org/w/index.php?search='+_wq+'" style="cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px" title="Поиск этого передатчика в Википедии по самому известному имени"><b style="font-family:Georgia,serif">W</b> Википедия (поиск) ↗</span></div>'; }catch(e){}   // УКАЗ #246: Википедия на КАЖДОМ равии. Прямые краул-ссылки тёзочны (gated _WIKI_NARR_OK=false) → честный ПОИСК по имени, не ложная статья (#158)
+  // #258: ТОЛЬКО прямая ВЫВЕРЕННАЯ ссылка (ru→en→ar). Нет статьи → ничего (кнопку-поиск убрали — она ловила тёзок, #207 был зря).
+  if(_WIKI_NARR_OK && _wk && _wk.u) h+='<div style="direction:ltr;text-align:left;margin-top:3px"><span class="nWiki" data-u="'+esc(_wk.u)+'" style="cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px"><b style="font-family:Georgia,serif">W</b> Википедия'+(_wk.l&&_wk.l!=='ru'?(' · '+esc(_wk.l)):'')+' ↗</span></div>';
   let _snSid=''; try{ _snSid=(await loadMid2Sid())[String(c[0])]||''; }catch(e){}   // #141
   h+='<div style="font-size:11px;margin:2px 0 7px">'+(((cfg.shLink||'wiki')!=='off')?('📖 <span class="shamNarr" data-id="'+c[0]+'" style="color:var(--link);cursor:pointer;text-decoration:underline dotted" title="Открыть эту карточку на сайте shamela.ws">موسوعة رواة الحديث (база Мактабы) ↗</span> · '):'')+(_snSid?('<span class="snNarr" data-u="https://sunnah.com/narrator/'+esc(_snSid)+'" style="color:#7fb0d8;cursor:pointer;text-decoration:underline dotted" title="Карточка передатчика на sunnah.com">🌐 sunnah.com ↗</span> · '):'')+'<span class="ntOpen" data-id="'+c[0]+'" style="color:#5b87b5;cursor:pointer;font-weight:700" title="Открыть общую таблицу передатчиков на этом номере">#'+c[0]+' 📋</span></div>'
     +row('الكنية',c[2])+row('النسب',c[3])+row('سنة الوفاة',c[4]?('~'+c[4]+'هـ'):'')+row('الطبقة',c[7])
