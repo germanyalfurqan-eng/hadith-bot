@@ -1917,9 +1917,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             body = text.strip()[6:].strip() if _tl.startswith("заявк") or _tl == "заявка" else text.strip()[9:].strip()
             img_flag = False; imgkey = ""
             rep = update.message.reply_to_message
-            # #245: «заявка» РЕПЛАЕМ на сообщение (в т.ч. в @jamaat_ru) → регистрируем текст/фото отвеченного сообщения
-            if not body and rep:
-                body = (rep.text or rep.caption or "").strip()
+            # #245/#274: «заявка [коммент]» РЕПЛАЕМ на сообщение → регистрируем ОСНОВНОЙ текст отвеченного сообщения + коммент владельца.
+            # БАГ #274 (исправлено): раньше при наличии коммента основное сообщение (на которое ответили) ТЕРЯЛОСЬ — писался только коммент.
+            if rep:
+                rep_text = (rep.text or rep.caption or "").strip()
+                if rep_text:
+                    body = (rep_text + "\n— коммент владельца: " + body) if body else rep_text
                 if getattr(rep, "photo", None):
                     try: imgkey = str(rep.photo[-1].file_id); img_flag = True
                     except Exception: pass
