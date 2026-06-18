@@ -1215,6 +1215,57 @@ def ask_ai_with_memory(prompt, owner=True):
         system += f"\n\nЧто ты знаешь о владельце и контексте:\n{memory_text}"
     return ask_ai(prompt, system, owner=owner)
 
+# === C32: УМНЫЙ АССИСТЕНТ ЖУРНАЛА (технадзор-помощник). Регламент — АССИСТЕНТ_РЕГЛАМЕНТ.md ===
+ASSIST_SYS = (
+    "Ты — УМНЫЙ АССИСТЕНТ-ТЕХНАДЗОР в рабочем журнале проекта Muslimoon (исламское приложение: база хадисов имама Муршида, "
+    "Telegram мини-апп + этот бот). С тобой общается ВЛАДЕЛЕЦ проекта. Разработчик и технадзор — Claude: он читает заявки "
+    "(journal.json requests) и ошибки и ПРИНИМАЕТ МЕРЫ. Ты — связующее звено: понимаешь владельца и не даёшь его словам потеряться.\n"
+    "ЗАДАЧА: понять сообщение владельца (часто КОРОТКОЕ и КОНТЕКСТНОЕ — реакция на отчёт выше: «нету её», «не работает», "
+    "«почему», «опять»), и:\n"
+    "• если можешь — коротко ответить по делу;\n"
+    "• если нужно действие/исправление/проверка — ПОДТВЕРДИ, что передал задачу разработчику (Claude), чтобы он принял меры.\n"
+    "Отвечай по-русски, коротко, по-человечески, уважительно, без воды. Не выдумывай факты.\n"
+    "ВСЕГДА в самом конце добавляй ОТДЕЛЬНОЙ строкой ровно: ESCALATE: <одно предложение, что передать разработчику> — "
+    "если нужно действие; либо ESCALATE: нет — если это просто вопрос/реплика без действий."
+)
+async def _journal_assistant(update, context, text):
+    rep = update.message.reply_to_message
+    ctx = ''
+    if rep and (getattr(rep, 'text', None) or getattr(rep, 'caption', None)):
+        ctx = "\n\nКОНТЕКСТ (сообщение, на которое отвечает владелец):\n" + (rep.text or rep.caption)[:900]
+    sys_p = ASSIST_SYS
+    try:
+        mem = load_memory()
+        if mem:
+            sys_p += "\n\nКонтекст проекта:\n" + "\n".join("- " + (m.get('text', '')) for m in mem[-15:])
+    except Exception:
+        pass
+    try:
+        await update.message.reply_text("🤔 …")
+    except Exception:
+        pass
+    ans = ask_ai("Сообщение владельца: " + text[:900] + ctx, sys_p, owner=True, max_tokens=700)
+    esc = ''
+    if 'ESCALATE:' in ans:
+        ans, _, esc = ans.partition('ESCALATE:')
+        esc = esc.strip()
+    ans = ans.replace('⚡ *Модель:*', '· модель:').strip()
+    try:
+        await update.message.reply_text("🤝 " + ans[:1600])
+    except Exception:
+        pass
+    if esc and esc.lower().strip(' .—-') not in ('нет', 'no', ''):
+        try:
+            rid = req_add("🤝 [ассистент журнала] " + esc[:400] + " | владелец: «" + text[:200] + "»")
+            await context.bot.send_message(LOG_CHAT_ID, "📨 Передал разработчику (Claude) — заявка #%d: %s" % (rid, esc[:200]))
+        except Exception:
+            pass
+    try:
+        j = _journal_load(); j.setdefault("assistant_log", []).insert(0, {"d": _now_msk(), "q": text[:300], "a": ans[:300], "esc": esc[:200]})
+        j["assistant_log"] = j["assistant_log"][:300]; _journal_save("assistant_log")
+    except Exception:
+        pass
+
 # ---- Накопительный кэш переводов матнов (хранится в репо на GitHub) ----
 TRANS_FILE = "translations.json"
 _trans_cache = None
@@ -2111,6 +2162,17 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         if replied.sender_chat:
             is_reply_to_channel = True
+
+    # ============ C32: УМНЫЙ АССИСТЕНТ ЖУРНАЛА — владелец пишет в LOG_CHAT свободным текстом (в т.ч. реплаем на отчёт, «Нету ее») ============
+    # Понимает контекст и реагирует (отвечает/эскалирует Claude). Только в журнале и только владелец. Команды уже обработаны выше (return).
+    if chat_id == LOG_CHAT_ID and user_id == OWNER_ID and text and not text.startswith('/') and not _ai_loop_guard(update, text):
+        if rate_ok('jassist:' + str(user_id), limit=20, window=120):
+            try:
+                await _journal_assistant(update, context, text)
+            except Exception as e:
+                try: await update.message.reply_text("⚠️ Ассистент журнала споткнулся: " + str(e)[:140])
+                except Exception: pass
+        return
 
     # ============ G9: «ботяра» для белого списка (не владелец) ============
     if user_id != OWNER_ID and text and not _ai_loop_guard(update, text):
