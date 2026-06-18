@@ -187,7 +187,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v623</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v624</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -670,7 +670,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v623';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v624';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7264,8 +7264,11 @@ async function narrCandidates(qRaw){
   const out=[];
   if(isArabic(qRaw)){
     const [idx, ext]=await Promise.all([loadNarrNames(), loadNarrExt()]);
-    const cn=_narrCanon(qRaw); if(cn.length<2) return out;
+    let cn=_narrCanon(qRaw); if(cn.length<2) return out;
+    cn=cn.replace(/عبدال/g,'عبد ال').replace(/عبيدال/g,'عبيد ال');   // #157/#231: слитные теофорные (عبدالله→عبد الله, عبيدالله→عبيد الله) — иначе не матчатся с раздельными в базе
     const words=cn.split(' ');
+    const _nisRoots=words.filter(w=>/^ال.{2,}ي$/.test(w)).map(w=>w.slice(2,-1));   // #157/#231: нисба «القعنبي»→корень «قعنب» (мост к родословной «بن قعنب»)
+    const _nonNis=words.filter(w=>!/^ال.{2,}ي$/.test(w));
     for(const it of idx){ const nm=it[0]; let sc=0;
       const e=ext.get(it[1]); const full=e&&e[0]?(nm+' '+e[0]):nm;   // имя + كنية + نسبة («سفيان الثوري» находит нисбу)
       if(nm===cn) sc=200; else if(nm.indexOf(cn)===0) sc=100;
@@ -7274,6 +7277,7 @@ async function narrCandidates(qRaw){
       else if(words.length>1 && words[0]===nm.split(' ')[0] && words.every(w=>(' '+full).indexOf(' '+w)>=0)) sc=78;   // запрос начинается с ПЕРВОГО имени равия (سفيان الثوري — сам Суфьян выше отца)
       else if(full!==nm && (' '+full+' ').indexOf(' '+cn+' ')>=0) sc=70;
       else if(words.length>1 && words.every(w=>(' '+full).indexOf(' '+w)>=0)) sc=60;
+      else if(_nisRoots.length && _nonNis.length>=2 && _nonNis.every(w=>(' '+full).indexOf(' '+w)>=0) && _nisRoots.every(r=>full.indexOf(r)>=0)) sc=72;   // #157/#231: нисба-корень + остальные имена в родословной (القعنبي↔بن قعنب → اль-Каʿнаби находится)
       else if(nm.indexOf(cn)>0) sc=35;
       else if(full!==nm && full.indexOf(cn)>0) sc=25;
       if(sc) out.push({nm:nm,id:it[1],sc:sc-nm.length*0.05+Math.min(e?e[2]:0,150)*0.02, y:e?(e[1]||0):0}); }
