@@ -187,7 +187,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v627</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v628</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -680,7 +680,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v627';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v628';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2835,6 +2835,7 @@ function bookAuthorOf(id){ id=String(id||''); try{ if(_catalog){ const b=_catalo
 let _bookView={id:null,pg:1};
 function openBook(bookId, startPg, _forceTurath){
   const id=String(bookId||'').replace(/[^0-9]/g,''); if(!id) return;
+  try{ _pushRecentBook(id); }catch(e){}   // M111+: запоминаем открытые книги → раздел «🕐 Недавно читал» в каталоге
   // «Муслим в Мактабе = в Избранном»: издания Сахих Муслим (тур. печать 711 / ت عبد الباقي 1727) открываем
   // НАШИМ ридером (muslim_baqi, нумерация Абд аль-Баки) — тот же текст и номера, что в избранном/поиске/у учёных.
   // Наш ридер локальный (muslim_baqi.json), поэтому работает даже без бэкенда — ставим ДО проверки BACKEND_URL.
@@ -4272,6 +4273,9 @@ async function loadBookTr(){ if(_bookTrLoaded) return; _bookTrLoaded=true;
     for(const k in v){ if(!_catTr.map[k]) _catTr.map[k]={}; _catTr.map[k].voc=v[k]; } } }catch(e){}
 }
 // Избранное каталога (id книг, localStorage). Поиск — право человека: это лишь удобная подборка.
+// M111+: недавно читаные книги (авто, по открытию в читалке) — для раздела «🕐 Недавно читал» в каталоге. Локально, самый свежий — первым.
+function _recentBooks(){ try{ return JSON.parse(localStorage.getItem('recent_books')||'[]').map(String); }catch(e){ return []; } }
+function _pushRecentBook(id){ try{ id=String(id||'').replace(/[^0-9]/g,''); if(!id) return; let a=_recentBooks().filter(x=>x!==id); a.unshift(id); if(a.length>20) a=a.slice(0,20); localStorage.setItem('recent_books', JSON.stringify(a)); }catch(e){} }
 function _catFavs(){ try{ return JSON.parse(localStorage.getItem('cat_favs')||'[]'); }catch(e){ return []; } }
 function _catFavSave(a){ try{ localStorage.setItem('cat_favs', JSON.stringify([...new Set(a)].slice(0,500))); }catch(e){} }
 function _catFavToggle(id){ id=String(id); let a=_catFavs(); if(a.indexOf(id)!==-1){ a=a.filter(x=>x!==id); } else { a.push(id); } _catFavSave(a); return a.indexOf(id)!==-1; }
@@ -4831,7 +4835,7 @@ async function openCatalog(q0){   // q0 (опц.) — начальный зап�
     m.innerHTML='<div class="panel" style="max-width:640px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 12px;padding:14px 16px 11px;border-bottom:1px solid var(--border)"><b id="catTitle" style="font-size:14px;line-height:1.3">📚 Мактаба аш-Шамиля<br><span style="font-size:11px;color:var(--hint);font-weight:400" dir="rtl">المكتبة الشاملة · <span dir="ltr" style="unicode-bidi:isolate">'+cat.length+' книг</span></span></b><button class="mini" id="catClose" style="flex:none">закрыть ✕</button></div>'
      +'<input id="catSearch" placeholder="🔎 Введите название книги или автора…" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:2px solid var(--btn);border-radius:10px;padding:10px 12px;font-size:15px;margin-bottom:7px">'
      +'<div style="display:flex;gap:12px;margin-bottom:7px;font-size:13px"><label style="display:flex;gap:5px;align-items:center;cursor:pointer;color:var(--text)"><input type="checkbox" id="catByTitle" checked> 📖 по названию</label><label style="display:flex;gap:5px;align-items:center;cursor:pointer;color:var(--text)"><input type="checkbox" id="catByAuthor" checked> ✍️ по автору</label></div>'
-     +'<select id="catCat" title="Выбрать раздел библиотеки" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:14px;margin-bottom:7px"><option value="" selected>📂 Все разделы — выбрать…</option><option value="__first40__">📜 Первоисточники хадисов</option><option value="__rijal__">📚 Наша подборка риджаль (149)</option><option value="__fav__">⭐ Моё избранное</option>'+cats.map(c=>'<option value="'+esc(c)+'">'+esc(catLabel(c))+'</option>').join('')+'</select>'
+     +'<select id="catCat" title="Выбрать раздел библиотеки" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:14px;margin-bottom:7px"><option value="" selected>📂 Все разделы — выбрать…</option><option value="__first40__">📜 Первоисточники хадисов</option><option value="__rijal__">📚 Наша подборка риджаль (149)</option><option value="__fav__">⭐ Моё избранное</option><option value="__recent__">🕐 Недавно читал</option>'+cats.map(c=>'<option value="'+esc(c)+'">'+esc(catLabel(c))+'</option>').join('')+'</select>'
      +'<div style="display:flex;gap:6px;margin-bottom:6px"><button class="mini" id="catAi" style="flex:1.6;background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:9px 11px;font-size:14px">🧠 Умный поиск книги (ИИ)</button><button class="mini" id="catFavBtn" style="flex:1;border:1px solid #a8862e;color:#ffd75e;background:transparent;padding:9px 11px;font-size:14px">⭐ Избранное</button></div>'
      +'<div style="display:flex;align-items:center;gap:8px;margin:-2px 0 8px;flex-wrap:wrap"><span class="hint" id="catAiHint" style="font-size:12px;color:var(--hint);flex:1;min-width:140px">📖 <b style="color:var(--text)">Тапни книгу — читать/листать</b></span><span id="catModeTog" style="cursor:pointer;font-size:11.5px;color:#bff5d4;border:1px solid #2e9b5b;border-radius:8px;padding:3px 9px;white-space:nowrap">➕ искать по сборникам</span></div>'   // #249: каталог-читалка по умолчанию = чтение; «+ в поиск» — отдельным режимом по переключателю
      +'<div id="catPickBar" style="display:none;align-items:center;gap:7px;margin:0 0 8px;background:rgba(46,155,91,.08);border:1px solid #2e9b5b;border-radius:10px;padding:7px 10px"></div>'
@@ -4929,6 +4933,7 @@ async function openCatalog(q0){   // q0 (опц.) — начальный зап�
       const ql=(m.querySelector('#catSearch').value||'').toLowerCase().trim();
       try{ await _ensureFirstSrcRank(cat); }catch(e){}   // ранги 39 первоисточников (1 раз, кэш) — для приоритет-сортировки обзора/поиска
       if(qc==='__fav__'){ const fv=_catFavs(); arr=cat.filter(b=>fv.indexOf(String(b.i))!==-1); headPrefix='⭐ Избранное · '; }
+      else if(qc==='__recent__'){ const rb=_recentBooks(); const ci={}; cat.forEach(b=>{ ci[String(b.i)]=b; }); arr=rb.map(id=>ci[id]).filter(Boolean); headPrefix='🕐 Недавно читал · '; }   // M111+: книги, что юзер открывал, самые свежие — первыми
       else if(qc==='__first40__'){ const src=await loadFirstSrc(); const seen={}; const list40=[];
         src.forEach(s=>{ const b=_matchSource(cat,s); if(b && !seen[b.i]){ seen[b.i]=1; b.__srcRu=s.ru; list40.push(b); } });
         arr=list40; headPrefix='📜 Первоисточники · '; }
@@ -4975,6 +4980,7 @@ async function openCatalog(q0){   // q0 (опц.) — начальный зап�
       if(qc==='__fav__'){ try{ _catFavDefaults(m, cat); }catch(e){} }   // подборка по умолчанию сверху
       if(!arr.length){ const list=m.querySelector('#catList');
         if(qc==='__fav__'){ /* пусто — дефолтная подборка уже показана выше */ }
+        else if(qc==='__recent__'){ const tip=document.createElement('div'); tip.className='hint'; tip.style.cssText='font-size:13px;margin:8px 0;text-align:center'; tip.innerHTML='🕐 Пока пусто. Открой любую книгу из каталога — она появится здесь для быстрого возврата.'; list.appendChild(tip); }
         else if(ql){ const tip=document.createElement('div'); tip.className='hint'; tip.style.cssText='font-size:13px;margin:8px 0'; tip.textContent='Ничего по названию/автору. Попробуй «🧠 Умный поиск книги (ИИ)».'; list.appendChild(tip); _catNotFound(list,(m.querySelector('#catSearch').value||'')); } }
     };
     // если русский запрос УЖЕ распознавался ИИ — сразу выдаём через ИИ-поиск (автокэш), иначе обычный фильтр
