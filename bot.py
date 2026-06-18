@@ -325,6 +325,7 @@ OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")   # актуальная бесплатная модель (1.5-flash устаревает)
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+BACKUP_SECRET = os.environ.get("BACKUP_SECRET", "")   # #259/#261: общий секрет для приёма локального бэкапа (ps1 -> /api/backup_push -> журнал/ЛС)
 OWNER_ID = 131827895
 OWNER_CHANNEL_ID = -1001660979432
 LOG_CHAT_ID = -1003480426073
@@ -1568,17 +1569,18 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append("\n📈 Подробно: platform.deepseek.com/usage")
         await update.message.reply_text("\n".join(lines), parse_mode="Markdown", disable_web_page_preview=True)
         return
-    if is_owner(update) and text.strip().lower() in ("бэкап", "бекап", "backup", "архив", "бэкап архив", "статус бэкапа"):
-        # #210/УКАЗ-4: СТАТУС бэкапа в журнал. Сам архив НЕ публикуем в боте/Pages — внутри приватные журналы
-        # (ВЫГОВОРЫ/ЗАКОНЫ/etc.), а это нарушило бы R42 (внутреннее не публично). Архив хранится приватно: Google Drive + локальные версионные зипы.
+    if is_owner(update) and text.strip().lower() in ("бэкап", "бекап", "backup", "архив", "бэкап архив", "статус бэкапа", "бэкап файл", "пришли бэкап", "скинь бэкап"):
+        # #259/#261: сам ZIP приходит в ЖУРНАЛ УВЕДОМЛЕНИЙ (LOG_CHAT) + владельцу в ЛС при каждом бэкапе (локальный ps1 -> /api/backup_push -> send_document).
+        # Приватно (внутри журналы R42) — поэтому НЕ в публичный канал/Pages.
         await update.message.reply_text(
-            "📦 *Бэкап Muslimoon — статус*\n"
-            "Свежий бэкап есть и сохраняется автоматически (ежедневно 21:00 + при каждой версии).\n"
-            "Где лежит (приватно, для отката):\n"
+            "📦 *Бэкап Muslimoon*\n"
+            "Свежий `Muslimoon_RECOVERY.zip` приходит в журнал + тебе в ЛС файлом при каждом бэкапе (ежедневно 21:00 + при каждой версии).\n"
+            "Нужен прямо сейчас? Запусти локально `backup_muslimoon.ps1` — он соберёт свежий zip и пришлёт его сюда.\n"
+            "Где ещё лежит (приватно, для отката):\n"
             "• Google Drive → `Muslimoon_BACKUP\\Muslimoon_RECOVERY.zip` (свежий)\n"
             "• `Muslimoon_BACKUP\\versions\\vNNN_дата.zip` (каждая версия отдельно)\n"
             "• `snapshots\\<дата>\\` (дневные снимки журналов)\n"
-            "⚠️ Сам архив не шлю в чат/на Pages: внутри приватные журналы (ВЫГОВОРЫ/ЗАКОНЫ/…), а публиковать их нельзя (R42). Для отката бери зип из Google Drive.",
+            "⚠️ Файл только в журнал/ЛС: внутри приватные журналы (ВЫГОВОРЫ/ЗАКОНЫ/…), публиковать нельзя (R42) — не пересылай.",
             parse_mode="Markdown", disable_web_page_preview=True)
         return
     if is_owner(update) and text.strip().lower() in ("ресурсы", "рабочий стол", "ссылки", "инструменты"):
@@ -5191,6 +5193,44 @@ async def _api_serve(application=None):
         res = await loop.run_in_executor(None, arabus_fetch, w, root)
         return _cors(web.json_response(res))
 
+    async def backup_push(r):
+        # #259/#261: локальный backup_muslimoon.ps1 заливает сюда свежий Muslimoon_RECOVERY.zip,
+        # бот пересылает САМ ФАЙЛ в ЖУРНАЛ УВЕДОМЛЕНИЙ (LOG_CHAT) + владельцу в ЛС (приватно — внутри журналы, R42).
+        # Аутентификация — общий секрет BACKUP_SECRET (env Railway == локальный .backup_secret).
+        if not application:
+            return _cors(web.json_response({'error': 'no_app'}, status=503))
+        if not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled', 'message': 'BACKUP_SECRET не задан в env Railway'}, status=503))
+        try:
+            secret = ''; caption = ''; filename = 'Muslimoon_RECOVERY.zip'; data = None
+            reader = await r.multipart()
+            async for part in reader:
+                if part.name == 'secret':
+                    secret = (await part.text()).strip()
+                elif part.name == 'caption':
+                    caption = (await part.text()).strip()
+                elif part.name == 'file':
+                    filename = part.filename or filename
+                    data = await part.read(decode=False)
+            if not secret or secret != BACKUP_SECRET:
+                return _cors(web.json_response({'error': 'auth'}, status=403))
+            if not data:
+                return _cors(web.json_response({'error': 'no_file'}, status=400))
+            if len(data) > 49 * 1024 * 1024:
+                return _cors(web.json_response({'error': 'too_big', 'size': len(data)}, status=413))
+            kb = round(len(data) / 1024)
+            cap = ("📦 БЭКАП Muslimoon · " + (caption or ("свежий " + filename)) + (" (%d КБ)" % kb)) + "\n🗄 Резервная копия (журналы+bot.py+index.html). Приватно (R42) — не пересылать."
+            sent = []
+            for chat in (LOG_CHAT_ID, OWNER_ID):
+                try:
+                    await application.bot.send_document(chat, document=bytes(data), filename=filename, caption=cap[:1000])
+                    sent.append(chat)
+                except Exception:
+                    pass
+            return _cors(web.json_response({'ok': bool(sent), 'sent': sent, 'size': len(data), 'filename': filename}))
+        except Exception as e:
+            return _cors(web.json_response({'error': str(e)[:160]}, status=500))
+
     a = web.Application()
     a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
@@ -5210,6 +5250,7 @@ async def _api_serve(application=None):
                   web.post('/api/structure', structure_results),
                   web.get('/api/book_page', book_page), web.post('/api/isnad_ai', isnad_ai_h),
                   web.post('/api/devfeedback', devfeedback), web.post('/api/worklog', worklog),
+                  web.post('/api/backup_push', backup_push),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))
@@ -5288,6 +5329,20 @@ async def _setup(application):
             if note:
                 j["log_deploy"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
                 _journal_save("log_deploy дедуп")
+        # Claude → ЖУРНАЛ (только LOG_CHAT, НЕ в публичный канал): отчёты по ошибкам/работе.
+        # Закон владельца: ошибку решил → отчитайся в журнал в тот же день. Я пишу journal_note.txt, бот постит при рестарте (дедуп).
+        try:
+            jn = ""
+            rj = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/journal_note.txt",
+                              headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
+            if rj.status_code == 200:
+                jn = base64.b64decode(rj.json().get("content", "")).decode("utf-8").strip()
+            if jn and jn != (j.get("journal_note") or {}).get("note", ""):
+                await application.bot.send_message(LOG_CHAT_ID, jn, disable_web_page_preview=True)
+                j["journal_note"] = {"note": jn, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+                _journal_save("journal_note → LOG")
+        except Exception:
+            pass
         # Публичный канал @muslimoonapp: постим, только если note НОВЫЙ. Ошибку — В LOG (чтобы видеть, ПОЧЕМУ молчит).
         if note:
             last = (j.get("app_post") or {}).get("note", "")

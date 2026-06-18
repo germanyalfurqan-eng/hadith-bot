@@ -187,7 +187,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v612</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:59%;left:100%;transform:translateY(-50%);margin-left:5px;white-space:nowrap">v613</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -381,6 +381,7 @@
         <option value="kfgqpc">KFGQPC Sindhi Naskh</option>
         <option value="sans">Без засечек</option>
       </select></div>
+    <div class="row" style="margin-top:-4px;padding-top:0"><span id="arFontStatus" style="font-size:11.5px;color:var(--hint);line-height:1.4"></span></div>
     <div class="row"><span>🔠 Шрифт интерфейса <span style="color:var(--hint);font-size:11px">(русский текст, кнопки)</span></span>
       <select id="uiFontSel" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 8px">
         <option value="system">Обычный (по умолчанию)</option>
@@ -664,7 +665,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v612';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v613';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -797,6 +798,29 @@ try{ applyTheme(); }catch(e){}
 const _AR_FONTS={trad:'"Traditional Arabic","Amiri",serif', amiri:'"Amiri",serif', naskh:'"Noto Naskh Arabic","Amiri",serif', sans:'"Segoe UI","Noto Sans Arabic",system-ui,sans-serif', kfgqpc:'"KFGQPC Sindhi Naskh","KFGQPC Uthman Taha Naskh","Noto Naskh Arabic",serif'};   // #224: KFGQPC (Мединская фабрика)
 function applyArFont(){ try{ document.documentElement.style.setProperty('--arFont', _AR_FONTS[cfg.arFont]||_AR_FONTS.naskh); }catch(e){} }
 try{ applyArFont(); }catch(e){}
+// #264/#256: «как понять, установлен ли шрифт на устройстве» — детекция доступности шрифта (сравнение ширин строки на canvas с базовыми) + индикатор.
+function fontInstalled(name){ try{
+  const test='بسم الله الرحمن الرحيم مّحَمَّدٌ ABCabcg1234567890', size='38px';
+  const ctx=(window.__fdCv||(window.__fdCv=document.createElement('canvas'))).getContext('2d');
+  for(const b of ['monospace','serif','sans-serif']){
+    ctx.font=size+' '+b; const w0=ctx.measureText(test).width;
+    ctx.font=size+" '"+name+"',"+b; const w1=ctx.measureText(test).width;
+    if(Math.abs(w1-w0)>0.3) return true;   // ширина отличается от базового → шрифт реально применился (установлен/загружен)
+  }
+  return false;
+}catch(e){ return false; } }
+const _AR_PRIM={trad:'Traditional Arabic',amiri:'Amiri',naskh:'Noto Naskh Arabic',sans:'Noto Sans Arabic',kfgqpc:'KFGQPC Sindhi Naskh'};
+const _AR_PRIM2={kfgqpc:'KFGQPC Uthman Taha Naskh'};
+function _updArFontStatus(){
+  const el=document.getElementById('arFontStatus'); if(!el) return;
+  const run=()=>{ try{
+    const k=cfg.arFont||'naskh', prim=_AR_PRIM[k]||''; if(!prim){ el.textContent=''; return; }
+    let ok=fontInstalled(prim); if(!ok&&_AR_PRIM2[k]) ok=fontInstalled(_AR_PRIM2[k]);
+    if(ok){ el.textContent='✅ «'+prim+'» доступен на устройстве — он и отображается.'; el.style.color='#7fd6a0'; }
+    else { el.textContent='⚠️ «'+prim+'» не найден на устройстве — показываю запасной шрифт. Чтобы включить — установи этот шрифт в систему телефона.'; el.style.color='#e6b800'; }
+  }catch(e){} };
+  try{ (document.fonts&&document.fonts.ready)? document.fonts.ready.then(run) : run(); }catch(e){ run(); }
+}
 // #81/#88/#89/#105: шрифт ИНТЕРФЕЙСА/русского текста. По умолчанию — СИСТЕМНЫЙ (как было всегда: владелец просил менять ТОЛЬКО арабский #51); Times/Georgia — опции в настройках.
 const _UI_FONTS={system:'-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif', times:'"Times New Roman",Georgia,serif', georgia:'Georgia,"Times New Roman",serif'};
 function applyUiFont(){ try{ document.documentElement.style.setProperty('--uiFont', _UI_FONTS[cfg.uiFont]||_UI_FONTS.system); }catch(e){} }
@@ -822,7 +846,14 @@ let _appReport=function(){};
     if(msg.includes('promise rejection')) return 'Асинхронная операция провалилась';
     return 'Техническая ошибка в приложении';
   }catch(e){ return 'Ошибка анализа'; } }
-  function _report(msg, where, stack){ try{ if(!BACKEND_URL||!msg||_cnt>12) return; const k=(msg+'|'+where).slice(0,160); if(_sent[k]) return; _sent[k]=1; _cnt++;
+  // A-114: транзиентный/штатный шум — НЕ тревога. «Failed to fetch»/«Load failed»/«Script error.» = разрыв сети в мобильном
+  // webview (ожидаемо), а «(штатно)» = сработал локальный фолбэк. Их НЕ шлём в журнал, чтобы тревоги были настоящими.
+  function _benign(msg, where){ const m=String(msg||'').toLowerCase();
+    if(/\(штатно/.test(m)) return true;
+    if(/^script error\.?$/.test(m)) return true;
+    if(/(failed to fetch|load failed|networkerror|network request failed|the network connection was lost|cancelled|отменена|the operation was aborted|load cancelled)/.test(m)) return true;
+    return false; }
+  function _report(msg, where, stack){ try{ if(!BACKEND_URL||!msg||_cnt>12) return; if(_benign(msg, where)) return; const k=(msg+'|'+where).slice(0,160); if(_sent[k]) return; _sent[k]=1; _cnt++;
     const simple=_simplifyError(msg, where);
     fetch(BACKEND_URL+'/errlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:String(msg).slice(0,300),where:String(where||'').slice(0,120),stack:String(stack||'').slice(0,600),simple:simple,ver:(typeof APPVER!=='undefined'?APPVER:''),initData:INITDATA})}).catch(()=>{}); }catch(e){} }
   window.addEventListener('error', e=>{ try{ _report(e.message||'error',(e.filename||'').split('/').pop()+':'+(e.lineno||''), e.error&&e.error.stack); }catch(_){} });
@@ -9794,7 +9825,7 @@ try{ if(tg&&tg.onEvent){   // на десктопе/старом TG fullscreen �
 if(cfg.fullscreen && _fsSupported()){ applyFullscreen(); }   // восстановить при следующем открытии
 var _gl=document.getElementById('glowSw'); if(_gl){ _gl.classList.toggle('on',!cfg.noLogoGlow); _gl.onclick=()=>{ cfg.noLogoGlow=!cfg.noLogoGlow; saveCfg(cfg); _gl.classList.toggle('on',!cfg.noLogoGlow); toast(cfg.noLogoGlow?'Свечение выключено':'✨ Свечение включено'); }; }
 var _th=document.getElementById('themeSel'); if(_th){ _th.value=cfg.theme||'dark'; _th.onchange=()=>{ cfg.theme=_th.value; saveCfg(cfg); applyTheme(); toast(cfg.theme==='light'?'Светлая тема ☀️':'Тёмная тема 🌙'); }; }
-var _arf=document.getElementById('arFontSel'); if(_arf){ _arf.value=cfg.arFont||'naskh'; _arf.onchange=()=>{ cfg.arFont=_arf.value; saveCfg(cfg); applyArFont(); toast('🔡 Шрифт арабского изменён'); }; }   // #51 · #138 дефолт naskh
+var _arf=document.getElementById('arFontSel'); if(_arf){ _arf.value=cfg.arFont||'naskh'; _updArFontStatus(); _arf.onchange=()=>{ cfg.arFont=_arf.value; saveCfg(cfg); applyArFont(); _updArFontStatus(); toast('🔡 Шрифт арабского изменён'); }; }   // #51 · #138 дефолт naskh · #264/#256 индикатор наличия шрифта
 var _uif=document.getElementById('uiFontSel'); if(_uif){ _uif.value=cfg.uiFont||'system'; _uif.onchange=()=>{ cfg.uiFont=_uif.value; saveCfg(cfg); applyUiFont(); toast('🔠 Шрифт интерфейса изменён'); }; }   // #81/#89
 var _rcw=document.getElementById('recentSw'); if(_rcw){ _rcw.classList.toggle('on',cfg.recent!==false); _rcw.onclick=()=>{ cfg.recent=(cfg.recent===false); saveCfg(cfg); _rcw.classList.toggle('on',cfg.recent!==false); if(cfg.recent===false) hideRecent(); }; }
 var _tjw=document.getElementById('tafJumpSw'); if(_tjw){ _tjw.classList.toggle('on',cfg.tafJump!==false); _tjw.onclick=()=>{ cfg.tafJump=(cfg.tafJump===false); saveCfg(cfg); _tjw.classList.toggle('on',cfg.tafJump!==false); }; }
