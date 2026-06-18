@@ -3056,6 +3056,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 msg += f"\n\n📖 Также:\n• " + "\n• ".join(similar[:5])
             _src_code = {"ahmad_local": "ahmad"}.get(collection, collection)
             msg += muhaymin_crossref_note(_src_code, number)
+            # #269: прямая ссылка — открыть ЭТУ карточку хадиса в приложении одним тапом
+            _sa269 = ('m_' + str(number)) if _src_code == 'muhaymin' else ('r_' + str(_src_code) + '_' + str(number))
+            msg += f"\n\n📲 Открыть карточку в приложении: https://t.me/muslimoontt_bot?startapp={_sa269}"
 
             await send_long(update, msg)
             return
