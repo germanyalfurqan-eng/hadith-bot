@@ -198,7 +198,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v650</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v651</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -692,7 +692,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v650';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v651';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7123,11 +7123,13 @@ async function openHTableV2(slug){
       let all=pick2(); let added=all.slice(start,start+80);
       while(added.length<80 && (m._seg||0)<60){ m._seg=(m._seg||0)+1; const nx=await _htbLoad(sg,m._seg); if(!nx) break; sh=Object.assign({},sh,nx); m._sh=sh; all=pick2(); added=all.slice(start,start+80); }
       for(const num of added){ list.appendChild(await rowV2(sg,num)); } addMore(sg); }; list.appendChild(more); }
+    async function _codifNa(bid,num){ if(!bid) return []; const seg=Math.floor(parseInt(num,10)/1000); const k='cf_'+bid+'_'+seg; if(!(k in _htbSh)){ try{ const r=await fetch('./codif/'+bid+'_'+seg+'.json?v='+APPVER); _htbSh[k]=r.ok?await r.json():null; }catch(e){ _htbSh[k]=null; } } const sh=_htbSh[k]; return (sh&&sh[num]&&sh[num].na)||[]; }
   async function rowV2(sg,num,g){
     const seg=Math.floor(parseInt(num,10)/1000); const sh=await _htbLoad(sg,seg)||{}; const e=sh[num]||{};
     const d=document.createElement('div'); d.className='htbRow'; d.style.cssText='padding:8px 4px;border-bottom:1px solid var(--border);font-size:12.5px';
-    const an=_htbMeta[sg].ar||''; const na=e.na||[]; const gnum=g||e.g||'';
-    const tkParts=Object.keys(e.tk||{}).map(k=>'<span style="color:var(--hint)">'+esc(k)+':</span> '+e.tk[k].map(x=>'<span class="htbTk" data-k="'+esc(k)+'" data-n="'+esc(x)+'" style="color:var(--link);cursor:pointer">'+esc(x)+'</span>').join('، '));
+    const an=_htbMeta[sg].ar||''; const gnum=g||e.g||'';
+    const na=await _codifNa(_htbMeta[sg].bid, num);
+    const tkParts=Object.keys(e.tk||{}).map(k=>{ const nm=(_htbMeta[k]&&_htbMeta[k].ar)||k; return '<span style="color:var(--hint)">'+esc(nm)+':</span> '+(e.tk[k]||[]).map(x=>'<span class="htbTk" data-k="'+esc(k)+'" data-n="'+x+'" style="color:var(--link);cursor:pointer">'+arN(x)+'</span>').join('، '); });
     d.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span class="htbOpen" style="font-weight:700;cursor:pointer" title="Открыть хадис в читалке">'+(gnum!==''?('<b style="color:#e0b34a">№'+gnum+'</b> · '):'')+'<span style="color:#9fd3a8" dir="rtl">'+esc(e.src||(an+' : '+arN(num)))+'</span> 📖</span>'
       +'<span style="font-family:monospace;font-size:11px;color:#cdbcff;flex:none">'+esc(e.uvp||'')+' · '+esc(e.c||'')+' · '+esc(e.s||'')+'</span></div>'
       +(e.t?('<div dir="rtl" style="margin-top:3px;font-size:13px;line-height:1.7;color:var(--text)">'+esc(e.t)+(e.t.length>=400?'…':'')+'</div>'):'')
@@ -7135,7 +7137,7 @@ async function openHTableV2(slug){
       +(tkParts.length?('<div dir="rtl" style="margin-top:3px;font-size:12px;line-height:1.8"><span style="color:#9fd3a8">تخريج (где ещё): </span>'+tkParts.join(' · ')+'</div>'):'')
       +'<div style="margin-top:4px;font-size:11px;color:var(--hint)">🔗 Раскрытие состава '+esc(e.s||'')+' (цепь, '+na.length+' зв.):</div>'
       +'<div style="margin-top:2px;display:flex;flex-wrap:wrap;gap:5px">'+na.map((x,i)=>'<span dir="rtl" style="font-size:12px;background:rgba(108,92,231,.10);border-radius:6px;padding:1px 6px">'+(na.length-i)+' · #'+esc(x[1])+' '+esc(x[0])+'</span>').join('')+'</div>';
-    d.querySelectorAll('.htbTk').forEach(x=>x.onclick=()=>{ const k=x.dataset.k, nn=String(x.dataset.n).replace(/[^0-9]/g,''); const sl=_arName2slug(k); try{ m.style.display='none'; }catch(e){} if(sl){ try{ openReader(sl, nn); }catch(e){} } });
+    d.querySelectorAll('.htbTk').forEach(x=>x.onclick=()=>{ const sl=x.dataset.k, nn=String(x.dataset.n).replace(/[^0-9]/g,''); try{ m.style.display='none'; }catch(e){} try{ openReader(sl, nn); }catch(e){} });
     const _op=d.querySelector('.htbOpen'); if(_op) _op.onclick=()=>{ try{ m.style.display='none'; }catch(e){} try{ openReader(sg, num); }catch(e){} };
     return d;
   }
