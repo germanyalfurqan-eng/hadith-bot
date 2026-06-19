@@ -198,7 +198,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v641</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v642</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -691,7 +691,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v641';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v642';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5996,14 +5996,37 @@ const _TT_BOOK={
  'Ибн Аби Асим':{ar:'السنة لابن أبي عاصم',ru:'Ибн Аби Асима'},'Ибн Абд аль-Барр':{ar:'التمهيد',ru:'Ибн Абд аль-Барра'},
  'Ибн Аби ад-Дунья':{ar:'ابن أبي الدنيا',ru:'Ибн Аби ад-Дунья'},'Ибн аль-Мубарак':{ar:'مسند ابن المبارك',ru:'Ибн аль-Мубарака'}};
 let _ttShard={};
-async function _ttLoad(seg){ if(!(seg in _ttShard)){ try{ const r=await fetch('./tt_takhrij/ahmad_'+seg+'.json?v='+APPVER); _ttShard[seg]=r.ok?await r.json():null; }catch(e){ _ttShard[seg]=null; } } return _ttShard[seg]; }
+async function _ttLoad(slug,seg){ const k=slug+'_'+seg; if(!(k in _ttShard)){ try{ const r=await fetch('./tt_takhrij/'+slug+'_'+seg+'.json?v='+APPVER); _ttShard[k]=r.ok?await r.json():null; }catch(e){ _ttShard[k]=null; } } return _ttShard[k]; }
+// v642: TT-тахридж расширен на издания аль-Арнаута (Абу Давуд/Ибн Маджа/Тирмизи/Насаи) + أطراف Сахих аль-Бухари. Источник = ref.source (детект по слагу/bid).
+const _TT_SRC={
+ ahmad:{slug:'ahmad',bid:'25794',label:'Муснад Ахмада (تحقيق аль-Арнаута)'},
+ abudawud:{slug:'abudawud',bid:'1726',label:'Сунан Абу Давуда (تحقيق аль-Арнаута)'},
+ ibnmajah:{slug:'ibnmajah',bid:'1198',label:'Сунан Ибн Маджа (تحقيق аль-Арнаута)'},
+ nasai:{slug:'nasai',bid:'829',label:'Сунан ан-Насаи (ط الرسالة · аль-Арнаут)'}};
+ // tirmidhi:{slug:'tirmidhi',bid:'1363',...} — ОТКЛЮЧЁН: нумерация الرسالة (до 4299) расходится со стандартом (Шакир ~3956), нужна сверка выравнивания перед включением.
+const _TT_BID2SRC={'25794':'ahmad','1726':'abudawud','654':'abudawud','117359':'abudawud','1198':'ibnmajah','98138':'ibnmajah','829':'nasai','1339':'nasai'};
+function _ttSrcOf(ref){ let s=ref.source; if(s==='ibnmaja') s='ibnmajah'; if(_TT_SRC[s]) return s;
+  try{ const _pl=_codifPlace(ref); if(_pl){ const b=_TT_BID2SRC[String(_pl.bid)]; if(b) return b; } }catch(e){} return null; }
 async function renderTTtakhrij(ref, box){
   if(!ref||ref.num==null) return;
-  let isAhmad = (ref.source==='ahmad');
-  try{ if(!isAhmad){ const _pl=_codifPlace(ref); if(_pl && String(_pl.bid)==='25794') isAhmad=true; } }catch(e){}
-  if(!isAhmad) return;
   const num=parseInt(String(ref.num).replace(/[^0-9]/g,''),10); if(!num) return;
-  const sh=await _ttLoad(Math.floor(num/1000)); if(!sh) return;
+  // Сахих аль-Бухари — أطراف (где ещё в самом Бухари) + تحفة الأشراف
+  let isBuk=(ref.source==='bukhari');
+  try{ if(!isBuk){ const _pl=_codifPlace(ref); if(_pl && (String(_pl.bid)==='1681'||String(_pl.bid)==='1')) isBuk=true; } }catch(e){}
+  if(isBuk){
+    const sh=await _ttLoad('bukhari_atraf', Math.floor(num/1000)); if(!sh) return;
+    const e=sh[String(num)]; if(!e) return;
+    let html='<div style="border:1px solid #c9a84e;border-radius:9px;padding:7px 9px;margin-top:7px;background:rgba(201,168,78,.06)">'
+      +'<div style="font-size:12.5px;font-weight:600;color:#d6b85a;margin-bottom:3px">🔖 Тахридж от TT <span style="opacity:.7;font-weight:400">· أطراف Сахих аль-Бухари</span></div>';
+    if(e.a && e.a.length) html+='<div dir="rtl" style="font-size:13.5px;line-height:1.9"><span style="color:#9fd3a8">أطرافه (где ещё в Бухари): </span>'+e.a.map(n=>'<span class="ttN" data-b="1681" data-n="'+n+'" style="color:var(--link);cursor:pointer">'+n+'</span>').join('، ')+'</div>';
+    if(e.t) html+='<div dir="rtl" style="font-size:12px;color:var(--hint);margin-top:3px">تحفة الأشراف: '+e.t+'</div>';
+    html+='</div>'; box.innerHTML=html;
+    box.querySelectorAll('.ttN').forEach(x=>x.onclick=()=>{ try{ openByCodeNum(x.dataset.b, +x.dataset.n); }catch(e){ try{ openBook(x.dataset.b, +x.dataset.n); }catch(_e){} } });
+    return;
+  }
+  const src=_ttSrcOf(ref); if(!src) return;
+  const cfg=_TT_SRC[src];
+  const sh=await _ttLoad(cfg.slug, Math.floor(num/1000)); if(!sh) return;
   const e=sh[String(num)]; if(!e) return;
   const fmtZone=(z)=>{ const order=['Бухари','Муслим','Абу Давуд','Тирмизи','Насаи','Ибн Маджа','Малик','Дарими']; const ks=[...order.filter(k=>z[k]),...Object.keys(z).filter(k=>order.indexOf(k)<0)];
     return ks.map(k=>{ const bk=_TT_BOOK[k]||{}; const bid=bk.b; const first=z[k][0];
@@ -6012,11 +6035,11 @@ async function renderTTtakhrij(ref, box){
       const ru=bk.ru?(' <span style="color:var(--hint);font-size:11.5px">('+bk.ru+')</span>'):'';
       return '<div style="margin:1px 0">'+nm+ru+': '+nums+'</div>'; }).join(''); };
   let html='<div style="border:1px solid #c9a84e;border-radius:9px;padding:7px 9px;margin-top:7px;background:rgba(201,168,78,.06)">'
-    +'<div style="font-size:12.5px;font-weight:600;color:#d6b85a;margin-bottom:3px">🔖 Тахридж от TT <span style="opacity:.7;font-weight:400">· Муснад Ахмада (تحقيق аль-Арнаута)</span></div>';
+    +'<div style="font-size:12.5px;font-weight:600;color:#d6b85a;margin-bottom:3px">🔖 Тахридж от TT <span style="opacity:.7;font-weight:400">· '+cfg.label+'</span></div>';
   if(e.g) html+='<div style="font-size:11.5px;color:var(--hint);direction:rtl;margin-bottom:4px">'+esc(e.g)+'</div>';
   if(e.d && Object.keys(e.d).length) html+='<div dir="rtl" style="font-size:13.5px;line-height:1.9;margin:2px 0"><span style="color:#9fd3a8">أخرجه (тот же хадис): </span>'+fmtZone(e.d)+'</div>';
   if(e.s && Object.keys(e.s).length) html+='<div dir="rtl" style="font-size:13px;line-height:1.9;margin:2px 0"><span style="color:#e0b34a">شواهد (свидетельства): </span>'+fmtZone(e.s)+'</div>';
-  if(e.i && e.i.length) html+='<div dir="rtl" style="font-size:12.5px;margin:2px 0"><span style="color:var(--hint)">في المسند (Ахмад): </span>'+e.i.map(n=>'<span class="ttN" data-b="25794" data-n="'+n+'" style="color:var(--link);cursor:pointer">'+n+'</span>').join('، ')+'</div>';
+  if(e.i && e.i.length) html+='<div dir="rtl" style="font-size:12.5px;margin:2px 0"><span style="color:var(--hint)">في الكتاب (тот же сборник): </span>'+e.i.map(n=>'<span class="ttN" data-b="'+cfg.bid+'" data-n="'+n+'" style="color:var(--link);cursor:pointer">'+n+'</span>').join('، ')+'</div>';
   html+='</div>';
   box.innerHTML=html;
   box.querySelectorAll('.ttN').forEach(x=>x.onclick=()=>{ try{ openByCodeNum(x.dataset.b, +x.dataset.n); }catch(e){ try{ openBook(x.dataset.b, +x.dataset.n); }catch(_e){} } });
