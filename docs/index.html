@@ -198,7 +198,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v648</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v649</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -692,7 +692,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v648';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v649';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7087,29 +7087,45 @@ async function openHTableV2(slug){
   const pick=m.querySelector('#htbPick'), list=m.querySelector('#htbList'), q=m.querySelector('#htbQ');
   if(_htbMeta===undefined){ try{ const r=await fetch('./htable/meta.json?v='+APPVER); _htbMeta=r.ok?await r.json():null; }catch(e){ _htbMeta=null; } }
   if(!_htbMeta){ list.innerHTML='<div class="hint">Таблица недоступна.</div>'; return; }
-  pick.innerHTML=''; Object.keys(_htbMeta).forEach(sg=>{ const b=document.createElement('button'); b.className='chip'; b.textContent=_htbMeta[sg].name+' ('+_htbMeta[sg].count.toLocaleString('ru')+')'; b.onclick=()=>render(sg); pick.appendChild(b); });
+  const IDX=_htbMeta._index||{pages:0,total:0,sahih:0};
+  // панель: «Все (общая)» + сборники + фильтр достоверности
+  pick.innerHTML='';
+  const allB=document.createElement('button'); allB.className='chip'; allB.style.cssText='background:rgba(159,211,168,.18);font-weight:700'; allB.textContent='📚 Все (общая, '+(IDX.total||0).toLocaleString('ru')+')'; allB.onclick=()=>renderAll(); pick.appendChild(allB);
+  Object.keys(_htbMeta).forEach(sg=>{ if(sg[0]==='_') return; const b=document.createElement('button'); b.className='chip'; b.textContent=_htbMeta[sg].name+' ('+_htbMeta[sg].count.toLocaleString('ru')+')'; b.onclick=()=>render(sg); pick.appendChild(b); });
+  const dl=document.createElement('label'); dl.style.cssText='display:flex;align-items:center;gap:5px;font-size:12.5px;cursor:pointer;width:100%;margin-top:2px;color:#9fd3a8';
+  dl.innerHTML='<input type="checkbox" id="htbSah" '+(m._sah?'checked':'')+'> ✔️ только достоверные (صحيح, '+(IDX.sahih||0).toLocaleString('ru')+')';
+  pick.appendChild(dl); dl.querySelector('#htbSah').onchange=(e)=>{ m._sah=e.target.checked; if(m._mode==='all') renderAll(); else if(m._sg) render(m._sg); };
   const arN=(n)=>String(n).replace(/[0-9]/g,d=>'٠١٢٣٤٥٦٧٨٩'[+d]);
+  // === общая лента по глобальному индексу (сквозной №) ===
+  let _idxPg={};
+  async function _idxLoad(p){ if(!(p in _idxPg)){ try{ const r=await fetch('./htable/index_'+p+'.json?v='+APPVER); _idxPg[p]=r.ok?await r.json():[]; }catch(e){ _idxPg[p]=[]; } } return _idxPg[p]; }
+  async function renderAll(){ m._mode='all'; m._sg=null; q.style.display='none'; list.innerHTML='<div class="hint">⏳…</div>';
+    m._ip=0; m._ii=0; list.innerHTML=''; await moreAll(); }
+  async function moreAll(){ const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:10px;width:100%;padding:9px;border:1px solid var(--border);border-radius:9px'; more.textContent='ещё ↓';
+    let shown=0; while(shown<60 && m._ip<(IDX.pages||0)){ const pg=await _idxLoad(m._ip);
+      while(m._ii<pg.length && shown<60){ const [g,sl,nm,sa]=pg[m._ii++]; if(m._sah && !sa) continue; list.appendChild(await rowV2(sl,nm,g)); shown++; }
+      if(m._ii>=pg.length){ m._ip++; m._ii=0; } }
+    if(m._ip<(IDX.pages||0)){ more.onclick=()=>{ more.remove(); moreAll(); }; list.appendChild(more); } }
   async function render(sg, only){
-    list.innerHTML='<div class="hint">⏳…</div>'; q.style.display='block'; q.value=only||''; m._sg=sg;
-    const cnt=_htbMeta[sg].count; const maxseg=Math.floor((cnt+200)/1000);
+    m._mode='coll'; list.innerHTML='<div class="hint">⏳…</div>'; q.style.display='block'; q.value=only||''; m._sg=sg;
     let nums=[];
-    if(only){ const seg=Math.floor(parseInt(only,10)/1000); const sh=await _htbLoad(sg,seg)||{}; if(sh[only]) nums=[only]; }
-    else { // первые ~80 хадисов первого шарда + кнопка дальше (ленивая пагинация по шардам)
-      const sh=await _htbLoad(sg,0)||{}; nums=Object.keys(sh).sort((a,b)=>(+a)-(+b)).slice(0,80); m._seg=0; m._sh=sh; }
+    if(only){ const seg=Math.floor(parseInt(only,10)/1000); const sh=await _htbLoad(sg,seg)||{}; if(sh[only]) nums=[only]; m._sh=sh; }
+    else { const sh=await _htbLoad(sg,0)||{}; nums=Object.keys(sh).sort((a,b)=>(+a)-(+b)); m._seg=0; m._sh=sh; if(m._sah) nums=nums.filter(n=>sh[n]&&sh[n].sah); nums=nums.slice(0,80); }
     list.innerHTML='';
     for(const num of nums){ list.appendChild(await rowV2(sg,num)); }
     if(!only) addMore(sg);
   }
   function addMore(sg){ const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:10px;width:100%;padding:9px;border:1px solid var(--border);border-radius:9px'; more.textContent='ещё ↓';
-    more.onclick=async()=>{ more.remove(); const sh=m._sh||{}; const all=Object.keys(sh).sort((a,b)=>(+a)-(+b)); const start=list.querySelectorAll('.htbRow').length; let added=all.slice(start,start+80);
-      if(added.length<80){ m._seg=(m._seg||0)+1; const nx=await _htbLoad(sg,m._seg); if(nx){ m._sh=Object.assign({},sh,nx); added=Object.keys(m._sh).sort((a,b)=>(+a)-(+b)).slice(start,start+80); } }
+    more.onclick=async()=>{ more.remove(); let sh=m._sh||{}; const start=list.querySelectorAll('.htbRow').length; const pick2=()=>{ let a=Object.keys(sh).sort((x,y)=>(+x)-(+y)); if(m._sah) a=a.filter(n=>sh[n]&&sh[n].sah); return a; };
+      let all=pick2(); let added=all.slice(start,start+80);
+      while(added.length<80 && (m._seg||0)<60){ m._seg=(m._seg||0)+1; const nx=await _htbLoad(sg,m._seg); if(!nx) break; sh=Object.assign({},sh,nx); m._sh=sh; all=pick2(); added=all.slice(start,start+80); }
       for(const num of added){ list.appendChild(await rowV2(sg,num)); } addMore(sg); }; list.appendChild(more); }
-  async function rowV2(sg,num){
+  async function rowV2(sg,num,g){
     const seg=Math.floor(parseInt(num,10)/1000); const sh=await _htbLoad(sg,seg)||{}; const e=sh[num]||{};
     const d=document.createElement('div'); d.className='htbRow'; d.style.cssText='padding:8px 4px;border-bottom:1px solid var(--border);font-size:12.5px';
-    const an=_htbMeta[sg].ar||''; const na=e.na||[];
+    const an=_htbMeta[sg].ar||''; const na=e.na||[]; const gnum=g||e.g||'';
     const tkParts=Object.keys(e.tk||{}).map(k=>'<span style="color:var(--hint)">'+esc(k)+':</span> '+e.tk[k].map(x=>'<span class="htbTk" data-k="'+esc(k)+'" data-n="'+esc(x)+'" style="color:var(--link);cursor:pointer">'+esc(x)+'</span>').join('، '));
-    d.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span class="htbOpen" style="font-weight:700;color:#9fd3a8;cursor:pointer" title="Открыть хадис в читалке"><span dir="rtl">'+esc(e.src||(an+' : '+arN(num)))+'</span> 📖</span>'
+    d.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span class="htbOpen" style="font-weight:700;cursor:pointer" title="Открыть хадис в читалке">'+(gnum!==''?('<b style="color:#e0b34a">№'+gnum+'</b> · '):'')+'<span style="color:#9fd3a8" dir="rtl">'+esc(e.src||(an+' : '+arN(num)))+'</span> 📖</span>'
       +'<span style="font-family:monospace;font-size:11px;color:#cdbcff;flex:none">'+esc(e.uvp||'')+' · '+esc(e.c||'')+' · '+esc(e.s||'')+'</span></div>'
       +(e.t?('<div dir="rtl" style="margin-top:3px;font-size:13px;line-height:1.7;color:var(--text)">'+esc(e.t)+(e.t.length>=400?'…':'')+'</div>'):'')
       +(e.dawa?('<div style="margin-top:3px;font-size:11.5px;color:#e0b34a">✔️ Достоверность: '+esc(e.dawa)+'</div>'):(e.h?('<div style="margin-top:3px;font-size:11.5px;color:#e0b34a">✔️ '+esc(e.h)+'</div>'):''))
