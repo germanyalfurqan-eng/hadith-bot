@@ -198,7 +198,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v646</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v647</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -465,6 +465,7 @@
         <div class="row"><span>📋 Таблица всех передатчиков (18 989 равиев)</span><button class="go" id="narrTblBtn" style="padding:5px 12px">Открыть</button></div>
         <div class="row"><span>📊 Таблица цепей передачи (база иснадов)</span><button class="go" id="chainTblBtn" style="padding:5px 12px">Открыть</button></div>
         <div class="row"><span>📒 Таблица всех хадисов (идентификация)</span><button class="go" id="hadTblBtn" style="padding:5px 12px">Открыть</button></div>
+        <div class="row"><span>📊 Таблица хадисов по звеньям (U·V·P · цепь C · состав S · достоверность · тахридж)</span><button class="go" id="hadTblV2Btn" style="padding:5px 12px">Открыть</button></div>
         <div class="row"><span>🌿 Тахридж — уникальные хадисы (версии по случаю)</span><button class="go" id="tahrijBtn" style="padding:5px 12px">Открыть</button></div>
     <div class="hint" style="margin:11px 0 5px;font-size:12.5px;font-weight:700;color:var(--text)">ℹ️ О проекте и связь</div>
         <div class="row" style="margin-top:8px;border-top:1px solid var(--border);padding-top:12px"><span>🔗 Поделиться приложением</span><span style="display:flex;gap:6px;flex:none"><button class="go" id="shareAppBtn" style="padding:5px 12px">📲 Поделиться</button><button class="go" id="copyAppLink" style="padding:5px 12px;background:transparent;border:1px solid var(--border);color:var(--text)">Копировать</button></span></div>
@@ -691,7 +692,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v646';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v647';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7073,6 +7074,55 @@ async function openTahrijTable(){
 /* ===== 📒 M449: ТАБЛИЦА ВСЕХ ХАДИСОВ (идентификация без матна/иснада) — слово владельца 14.06.
    Строка: общий № · книга·№ · код цепи · id передатчиков · № версии · № уник. хадиса. Данные htab/p<N>.json. ===== */
 let _htMeta=undefined; const _htPage={};
+/* ===== 📊 v647 (С36): ТАБЛИЦА ХАДИСОВ в формате образца (построчно по звеньям) — U.V.P·C·S·достоверность·тахридж. Данные htable/<slug>_<seg>.json ===== */
+let _htbMeta=undefined; const _htbSh={};
+async function _htbLoad(slug,seg){ const k=slug+'_'+seg; if(!(k in _htbSh)){ try{ const r=await fetch('./htable/'+slug+'_'+seg+'.json?v='+APPVER); _htbSh[k]=r.ok?await r.json():null; }catch(e){ _htbSh[k]=null; } } return _htbSh[k]; }
+async function openHTableV2(slug){
+  let m=document.getElementById('htbModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='htbModal';
+    m.innerHTML='<div class="panel" style="max-width:760px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 8px;padding:13px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:14.5px">📊 Таблица хадисов (по звеньям)</b><button class="mini" id="htbClose" style="flex:none">закрыть ✕</button></div><div id="htbPick" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div><input id="htbQ" placeholder="№ хадиса" inputmode="numeric" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;margin-bottom:6px;display:none"><div id="htbList" style="max-height:64vh;overflow:auto"></div></div>';
+    document.body.appendChild(m); m.querySelector('#htbClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
+  m.style.zIndex='10006'; m.style.display='flex';
+  const pick=m.querySelector('#htbPick'), list=m.querySelector('#htbList'), q=m.querySelector('#htbQ');
+  if(_htbMeta===undefined){ try{ const r=await fetch('./htable/meta.json?v='+APPVER); _htbMeta=r.ok?await r.json():null; }catch(e){ _htbMeta=null; } }
+  if(!_htbMeta){ list.innerHTML='<div class="hint">Таблица недоступна.</div>'; return; }
+  pick.innerHTML=''; Object.keys(_htbMeta).forEach(sg=>{ const b=document.createElement('button'); b.className='chip'; b.textContent=_htbMeta[sg].name+' ('+_htbMeta[sg].count.toLocaleString('ru')+')'; b.onclick=()=>render(sg); pick.appendChild(b); });
+  const arN=(n)=>String(n).replace(/[0-9]/g,d=>'٠١٢٣٤٥٦٧٨٩'[+d]);
+  async function render(sg, only){
+    list.innerHTML='<div class="hint">⏳…</div>'; q.style.display='block'; q.value=only||''; m._sg=sg;
+    const cnt=_htbMeta[sg].count; const maxseg=Math.floor((cnt+200)/1000);
+    let nums=[];
+    if(only){ const seg=Math.floor(parseInt(only,10)/1000); const sh=await _htbLoad(sg,seg)||{}; if(sh[only]) nums=[only]; }
+    else { // первые ~80 хадисов первого шарда + кнопка дальше (ленивая пагинация по шардам)
+      const sh=await _htbLoad(sg,0)||{}; nums=Object.keys(sh).sort((a,b)=>(+a)-(+b)).slice(0,80); m._seg=0; m._sh=sh; }
+    list.innerHTML='';
+    for(const num of nums){ list.appendChild(await rowV2(sg,num)); }
+    if(!only) addMore(sg);
+  }
+  function addMore(sg){ const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:10px;width:100%;padding:9px;border:1px solid var(--border);border-radius:9px'; more.textContent='ещё ↓';
+    more.onclick=async()=>{ more.remove(); const sh=m._sh||{}; const all=Object.keys(sh).sort((a,b)=>(+a)-(+b)); const start=list.querySelectorAll('.htbRow').length; let added=all.slice(start,start+80);
+      if(added.length<80){ m._seg=(m._seg||0)+1; const nx=await _htbLoad(sg,m._seg); if(nx){ m._sh=Object.assign({},sh,nx); added=Object.keys(m._sh).sort((a,b)=>(+a)-(+b)).slice(start,start+80); } }
+      for(const num of added){ list.appendChild(await rowV2(sg,num)); } addMore(sg); }; list.appendChild(more); }
+  async function rowV2(sg,num){
+    const seg=Math.floor(parseInt(num,10)/1000); const sh=await _htbLoad(sg,seg)||{}; const e=sh[num]||{};
+    const d=document.createElement('div'); d.className='htbRow'; d.style.cssText='padding:8px 4px;border-bottom:1px solid var(--border);font-size:12.5px';
+    const an=_htbMeta[sg].ar||''; const na=e.na||[];
+    const tkParts=Object.keys(e.tk||{}).map(k=>'<span style="color:var(--hint)">'+esc(k)+':</span> '+e.tk[k].map(x=>'<span class="htbTk" data-k="'+esc(k)+'" data-n="'+esc(x)+'" style="color:var(--link);cursor:pointer">'+esc(x)+'</span>').join('، '));
+    d.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span dir="rtl" style="font-weight:700;color:#9fd3a8">'+esc(an)+' : '+arN(num)+'</span>'
+      +'<span style="font-family:monospace;font-size:11px;color:#cdbcff;flex:none">'+esc(e.uvp||'')+' · '+esc(e.c||'')+' · '+esc(e.s||'')+'</span></div>'
+      +(e.dawa?('<div style="margin-top:3px;font-size:11.5px;color:#e0b34a">✔️ '+esc(e.dawa)+'</div>'):(e.h?('<div style="margin-top:3px;font-size:11.5px;color:#e0b34a">✔️ '+esc(e.h)+'</div>'):''))
+      +(tkParts.length?('<div dir="rtl" style="margin-top:3px;font-size:12px;line-height:1.8"><span style="color:#9fd3a8">تخريج: </span>'+tkParts.join(' · ')+'</div>'):'')
+      +'<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:5px">'+na.map((x,i)=>'<span dir="rtl" style="font-size:12px;background:rgba(108,92,231,.10);border-radius:6px;padding:1px 6px">'+(na.length-i)+'·#'+esc(x[1])+' '+esc(x[0])+'</span>').join('')+'</div>';
+    d.querySelectorAll('.htbTk').forEach(x=>x.onclick=()=>{ const k=x.dataset.k, nn=String(x.dataset.n).replace(/[^0-9]/g,''); const sl=_arName2slug(k); try{ m.style.display='none'; }catch(e){} if(sl){ try{ openReader(sl, nn); }catch(e){} } });
+    return d;
+  }
+  q.oninput=()=>{ const v=q.value.replace(/[^0-9]/g,''); if(m._sg){ render(m._sg, v||undefined); } };
+  // авто-выбор
+  render(slug||Object.keys(_htbMeta)[0]);
+}
+// арабское имя сборника -> slug приложения (для клика по тахриджу)
+function _arName2slug(ar){ const M={'صحيح البخاري':'bukhari','صحيح مسلم':'muslim','سنن أبي داود':'abudawud','جامع الترمذي':'tirmidhi','سنن النسائي':'nasai','سنن ابن ماجه':'ibnmajah','موطأ مالك':'malik','مسند أحمد':'ahmad'}; return M[ar]||null; }
 async function openHadithTable(){
   let m=document.getElementById('hadTblModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='hadTblModal';
@@ -10320,6 +10370,7 @@ var _ntb=document.getElementById('narrTblBtn'); if(_ntb) _ntb.onclick=()=>{ docu
 var _ctb=document.getElementById('chainTblBtn'); if(_ctb) _ctb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openIsnadBase(); }catch(e){} };
 var _icb=document.getElementById('isnadCtorBtn'); if(_icb) _icb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openIsnadCtor(); }catch(e){} };   // M483 конструктор иснада
 var _htb=document.getElementById('hadTblBtn'); if(_htb) _htb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openHadithTable(); }catch(e){} };   // M449 таблица всех хадисов
+var _htb2=document.getElementById('hadTblV2Btn'); if(_htb2) _htb2.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openHTableV2(); }catch(e){} };   // v647 таблица по звеньям (формат образца)
 var _thb=document.getElementById('tahrijBtn'); if(_thb) _thb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openTahrijTable(); }catch(e){} };   // M495 тахридж уникальных хадисов
 var _cbr=document.getElementById('catBrowBtn'); if(_cbr) _cbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openCatalog(); };
 // M356: «Читать Коран» ПРОДОЛЖАЕТ с места, где остановился (cfg.qrLast: последняя читанная/слушанная сура+аят)
