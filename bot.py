@@ -5291,7 +5291,7 @@ async def _api_serve(application=None):
                 elif part.name == 'file':
                     filename = part.filename or filename
                     data = await part.read(decode=False)
-            if not secret or secret != BACKUP_SECRET:
+            if not secret or secret.strip() != (BACKUP_SECRET or '').strip():   # #259: strip обеих сторон — невидимый пробел/перенос в env Railway давал ложный 403
                 return _cors(web.json_response({'error': 'auth'}, status=403))
             if not data:
                 return _cors(web.json_response({'error': 'no_file'}, status=400))
@@ -5310,7 +5310,7 @@ async def _api_serve(application=None):
         except Exception as e:
             return _cors(web.json_response({'error': str(e)[:160]}, status=500))
 
-    a = web.Application()
+    a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
     a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
