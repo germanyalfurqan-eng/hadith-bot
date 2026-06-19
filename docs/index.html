@@ -198,7 +198,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v638</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v639</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -691,7 +691,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v638';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v639';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5975,12 +5975,39 @@ function _tkShingles(canonStr,n){ const w=(canonStr||'').split(' ').filter(x=>x.
 function _tkOverlap(a,b){ if(!a.size||!b.size) return 0; const small=a.size<=b.size?a:b, big=a.size<=b.size?b:a; let inter=0; small.forEach(x=>{ if(big.has(x)) inter++; }); return inter/small.size; }   // overlap-коэффициент по МЕНЬШЕМУ матну (короткая версия ⊂ длинной = тот же хадис)
 const TKH_SAME_THR=0.33;   // overlap биграмм ≥ порога → «тот же хадис»; ниже → «похожий отрывок». 0.33 калибровано: тот же матн с РАЗНЫМ иснадом даёт ~0.35–0.5 (иснад различается, ~половина текста), общий фрагмент — ~0.1–0.25 (разрыв ~2×).
 function _tkGrade(srcSh,candText){ if(!srcSh||!srcSh.size) return 'similar'; const cSh=_tkShingles(canon(splitIsnad(candText)[1]||candText),2); return _tkOverlap(srcSh,cSh)>=TKH_SAME_THR?'same':'similar'; }
+// 🔖 ТАХРИДЖ ОТ TT — строго по нашему разобранному تحقيق издателя (v1: Муснад Ахмада / аль-Арнаут). Отдельный блок, прямой/шавахид раздельно, кликабельные номера.
+const _TT_BID={'Бухари':'1681','Муслим':'1727','Абу Давуд':'654','Тирмизи':'1363','Насаи':'829','Ибн Маджа':'1198','Малик':'28107','Дарими':'21795','Ахмад':'25794','Ибн Хузайма':'1446','Ибн Хиббан':'537','Хумайди':'8493','Тайалиси':'1456','Ибн Аби Шейба':'333','Абу Яʿла':'181'};
+let _ttShard={};
+async function _ttLoad(seg){ if(!(seg in _ttShard)){ try{ const r=await fetch('./tt_takhrij/ahmad_'+seg+'.json?v='+APPVER); _ttShard[seg]=r.ok?await r.json():null; }catch(e){ _ttShard[seg]=null; } } return _ttShard[seg]; }
+async function renderTTtakhrij(ref, box){
+  if(!ref||ref.num==null) return;
+  let isAhmad = (ref.source==='ahmad');
+  try{ if(!isAhmad){ const _pl=_codifPlace(ref); if(_pl && String(_pl.bid)==='25794') isAhmad=true; } }catch(e){}
+  if(!isAhmad) return;
+  const num=parseInt(String(ref.num).replace(/[^0-9]/g,''),10); if(!num) return;
+  const sh=await _ttLoad(Math.floor(num/1000)); if(!sh) return;
+  const e=sh[String(num)]; if(!e) return;
+  const fmtZone=(z)=>{ const order=['Бухари','Муслим','Абу Давуд','Тирмизи','Насаи','Ибн Маджа','Малик','Дарими']; const ks=[...order.filter(k=>z[k]),...Object.keys(z).filter(k=>order.indexOf(k)<0)];
+    return ks.map(k=>{ const bid=_TT_BID[k]; const nums=z[k].map(n=> bid?('<span class="ttN" data-b="'+bid+'" data-n="'+n+'" style="color:var(--link);cursor:pointer">'+n+'</span>'):('<span style="color:var(--hint)">'+n+'</span>')).join('، ');
+      return '<b style="color:var(--text)">'+esc(k)+':</b> '+nums; }).join(' · '); };
+  let html='<div style="border:1px solid #c9a84e;border-radius:9px;padding:7px 9px;margin-top:7px;background:rgba(201,168,78,.06)">'
+    +'<div style="font-size:12.5px;font-weight:600;color:#d6b85a;margin-bottom:3px">🔖 Тахридж от TT <span style="opacity:.7;font-weight:400">· Муснад Ахмада (تحقيق аль-Арнаута)</span></div>';
+  if(e.g) html+='<div style="font-size:11.5px;color:var(--hint);direction:rtl;margin-bottom:4px">'+esc(e.g)+'</div>';
+  if(e.d && Object.keys(e.d).length) html+='<div dir="rtl" style="font-size:13.5px;line-height:1.9;margin:2px 0"><span style="color:#9fd3a8">أخرجه (тот же хадис): </span>'+fmtZone(e.d)+'</div>';
+  if(e.s && Object.keys(e.s).length) html+='<div dir="rtl" style="font-size:13px;line-height:1.9;margin:2px 0"><span style="color:#e0b34a">شواهد (свидетельства): </span>'+fmtZone(e.s)+'</div>';
+  if(e.i && e.i.length) html+='<div dir="rtl" style="font-size:12.5px;margin:2px 0"><span style="color:var(--hint)">في المسند (Ахмад): </span>'+e.i.map(n=>'<span class="ttN" data-b="25794" data-n="'+n+'" style="color:var(--link);cursor:pointer">'+n+'</span>').join('، ')+'</div>';
+  html+='</div>';
+  box.innerHTML=html;
+  box.querySelectorAll('.ttN').forEach(x=>x.onclick=()=>{ try{ openByCodeNum(x.dataset.b, +x.dataset.n); }catch(e){ try{ openBook(x.dataset.b, +x.dataset.n); }catch(_e){} } });
+}
 async function doTakhrij(text, ref, out, btn, force){
   const myseq=++_takhSeq; const aborted=()=>myseq!==_takhSeq;
   btn.disabled=true; const prev=btn.textContent; btn.textContent='ищу…'; out.style.display='block';
   out.innerHTML='';
   const mk=()=>{ const d=document.createElement('div'); out.appendChild(d); return d; };
-  const tkSec=mk(), muhSec=mk();
+  const tkSec=mk(), muhSec=mk(), ttSec=mk();
+  // 🔖 Тахридж от TT (تحقيق издателя, v1 — пока Муснад Ахмада / аль-Арнаут). Строго по тахриджу TT, отдельный блок, кликабельные номера.
+  try{ await renderTTtakhrij(ref, ttSec); }catch(e){}
   // наш указатель аль-Мухаймин — ТОЧНАЯ привязка по источнику+номеру (обратный индекс, не текст-поиск)
   try{ await loadReverse(); if(reverse && ref && ref.source){ const mu=reverse[ref.source+' '+ref.num]||reverse[ref.source+' '+toAr(String(ref.num||''))];
     if(mu&&mu.length){ const nums=[...new Set(mu.map(x=>String(x.m)))].join(', ');
