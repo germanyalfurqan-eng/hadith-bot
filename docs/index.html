@@ -199,7 +199,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v654</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v655</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -693,7 +693,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v654';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v655';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8924,9 +8924,45 @@ function _isnadSlots(text){
   }
   return out;
 }
+// С38: ЕДИНЫЙ источник истины для не-5 книг — ЧИСТАЯ цепь [[имя-в-тексте, id], …] в порядке иснада.
+// База = i (мост ~83%), имена резолвим в КАНОН и ищем форму в тексте; добор из n (id∉i) без цепи передачи КНИГИ (قراءة/سماع, год смерти >360).
+// Используют И подсветка (_codifHighlight), И сверка (verifyNarr) — чтобы число/состав совпадали (как полагается).
+async function _codifNarrPairs(rec, text){
+  if(!rec) return [];
+  const _iset=new Set((rec.i||[]).map(String));
+  let _iord=(rec.i||[]).map(String).filter(x=>x!=='?');
+  _iord=_iord.slice().reverse(); if(_iord.length>1) _iord=_iord.slice(1);          // порядок текста, без верхнего собирателя
+  const _nph={}; for(const pr of (rec.n||[])){ const id=String(pr[1]); if(!(id in _nph)) _nph[id]=String(pr[0]||''); }
+  const _BOOKMARK=/(?:قراه|قرات|قراءه|سماعا?|اجازه|مناوله|كتب الي|اذن لي)/;
+  const _order=[..._iord]; const _seenId=new Set(_iord);
+  for(const pr of (rec.n||[])){ const _ph=stripDiac(String(pr[0]||'')), _nid=String(pr[1]);
+    if(_iset.has(_nid)||_seenId.has(_nid)) continue;                                // уже в i — берём из i (id моста надёжнее n)
+    if(_BOOKMARK.test(_ph)) continue;                                              // цепь передачи КНИГИ, не передатчик хадиса
+    _order.push(_nid); _seenId.add(_nid); }
+  if(!_order.length) return [];
+  const _STOPNIS=new Set(['الحافظ','الامام','الشيخ','القاضي','الحاكم','العلامه','المحدث','الفقيه','الحجه','السيد','الزاهد','الثقه','الكبير','الصغير','الصدوق','المقري','الراوي','الاستاذ']);
+  const _norm=s=>_narrCanon(s).replace(/(^|\s)اب[اي](\s)/g,'$1ابو$2');
+  const _ct=' '+_norm(stripDiac(String(text||'')).replace(/ـ/g,''))+' ';
+  const out=[]; const used=new Set(); let _cur=0;
+  for(const id of _order){ let c=null; try{ c=await _narrCard(id); }catch(e){} if(!c||!c[1]) continue;
+    if(!_iset.has(String(id)) && +c[4]>360) continue;   // n-добор: поздний (>360 г.х.) = цепь передачи КНИГИ/издателя (الجنزروذي/الشحامي…), не иснад хадиса
+    const cands=[], wo=String(c[1]).split(/\s+/).filter(Boolean);
+    for(let L=Math.min(wo.length,7);L>=2;L--) cands.push(wo.slice(0,L).join(' '));                           // префиксы полного имени (длинные → короткие)
+    if(c[2]) cands.push(String(c[2]).split(/\s+/).slice(0,2).join(' '));                                     // кунья (أبو هريرة)
+    if(c[3]) String(c[3]).split(/\s+/).forEach(t=>{ if(t.length>=4&&/^ال/.test(t)&&!_STOPNIS.has(t)) cands.push(t); });   // нисба-токены (الزهري), без титулов
+    if(_nph[String(id)]){ const tp=stripDiac(_nph[String(id)]).split(/حدثنا|حدثني|حدثناه|اخبرنا|اخبرني|انبانا|انباني|سمعت|\sعن\s|قال|يقول|⦗|«|\?/)[0]||''; if(tp.trim().split(/\s+/).length<=5) cands.push(tp.trim()); }  // запасной якорь: фраза n до имени
+    if(wo[0] && _norm(wo[0]).length>=4) cands.push(wo[0]);   // одиночное имя (سفيان/مالك/شعبة) — ПОСЛЕДНИЙ приоритет
+    let pick=null, pos=-1;
+    for(const cand of cands){ const cc=_norm(cand); if(cc.length<4) continue;
+      let p=_ct.indexOf(' '+cc+' ',_cur); if(p<0) p=_ct.indexOf(' '+cc,_cur); if(p<0) p=_ct.indexOf(' '+cc);    // по порядку иснада, затем по всему тексту
+      if(p>=0){ pick=cand; pos=p; break; } }
+    if(pick && !used.has(pick)){ used.add(pick); out.push([pick,String(id)]); if(pos>=0) _cur=Math.max(_cur,pos); }
+  }
+  return out;
+}
 async function _codifHighlight(text, card, out, place){
   // ПРАВИЛО синхронности (слово владельца): подсвечиваем РОВНО передатчиков таблицы — ни лишних, ни пропущенных.
-  // Основной путь — ПОЗИЦИОННАЯ бижекция: слот иснада i ↔ id цепи таблицы i (без угадывания по имени).
+  // Для 5 книг — авторитетная цепь na; для остальных — ИМЕННАЯ привязка цепи i (_codifNarrPairs), НЕ позиционная угадайка.
   const rec=await codifChain(place.bid, place.num); if(!rec || (!(rec.na&&rec.na.length) && !(rec.i&&rec.i.length))) return false;   // na-only рек (хадис с цепью без codif) тоже подсвечиваем
   // R52/В-01/#142 (Сессия26): АВТОРИТЕТНАЯ цепь na = передатчики sunnah.com/Мактабы, локализованные в НАШЕМ тексте, с ВЕРНЫМИ id.
   // Подсветка ИЗ НЕЁ = полнота как у sunnah.com: параллельные иснады (ح/و), финальный сахаби, верные карточки (build_authhl.py). Приоритет над эвристическим n.
@@ -8947,44 +8983,11 @@ async function _codifHighlight(text, card, out, place){
       return true;
     }
   }
-  // ===== С38 (УКАЗ владельца «передатчики во ВСЕХ первоисточниках светились как полагается»): ИМЕННАЯ привязка цепи, НЕ позиционная угадайка =====
-  // База = поле i (цепь id-моста, ~83% точн.). Каждый id резолвим в КАНОНИЧЕСКОЕ имя и находим его форму В ТЕКСТЕ
-  // (префиксы имени + кунья + нисба-токены) → клик ведёт НА ИМЕННО ЭТОТ id (без пере-резолва по имени → нет «чужой карточки»).
-  // Канон.имя как якорь авто-режет матн-хвосты резолвера n (чужой id → его имени в тексте нет → не метим) и не тащит позиционный съезд.
-  // Старый путь (raw-n как есть + позиционная биекция slots↔ids) УБРАН: n тащил цепь передачи КНИГИ (قراءة/سماع) и фрагменты матна, биекция давала чужие карточки.
-  const _iset=new Set((rec.i||[]).map(String));
-  let _iord=(rec.i||[]).map(String).filter(x=>x!=='?');
-  _iord=_iord.slice().reverse(); if(_iord.length>1) _iord=_iord.slice(1);          // порядок текста, без верхнего собирателя (его имени в матне нет)
-  // карта id→фраза резолвера n (запасной якорь формы, гарантированно есть в тексте)
-  const _nph={}; for(const pr of (rec.n||[])){ const id=String(pr[1]); if(!(id in _nph)) _nph[id]=String(pr[0]||''); }
-  // ДОБОР recall: id из n, которых НЕТ в i (параллельные пути/пропуски моста), НО без цепи передачи КНИГИ (قراءة/سماع/إجازة — это не иснад хадиса)
-  const _BOOKMARK=/(?:قراه|قرات|قراءه|سماعا?|اجازه|مناوله|كتب الي|اذن لي)/;
-  const _order=[..._iord]; const _seenId=new Set(_iord);
-  for(const pr of (rec.n||[])){ const _ph=stripDiac(String(pr[0]||'')), _nid=String(pr[1]);
-    if(_iset.has(_nid)||_seenId.has(_nid)) continue;                                // уже в i — берём из i (id моста надёжнее n)
-    if(_BOOKMARK.test(_ph)) continue;                                              // цепь передачи КНИГИ, не передатчик хадиса
-    _order.push(_nid); _seenId.add(_nid); }
-  if(!_order.length) return false;
-  // нисба-токены тащат титулы (الحافظ القرشي الزهري…) — титулы НЕ якорь имени (матчат любой текст)
-  const _STOPNIS=new Set(['الحافظ','الامام','الشيخ','القاضي','الحاكم','العلامه','المحدث','الفقيه','الحجه','السيد','الزاهد','الثقه','الكبير','الصغير','الصدوق','المقري','الراوي','الاستاذ']);
-  const _norm=s=>_narrCanon(s).replace(/(^|\s)اب[اي](\s)/g,'$1ابو$2');
-  const _ct=' '+_norm(stripDiac(String(text||'')).replace(/ـ/g,''))+' ';
-  const f2id={}, names=[]; let _cur=0;
-  for(const id of _order){ let c=null; try{ c=await _narrCard(id); }catch(e){} if(!c||!c[1]) continue;
-    if(!_iset.has(String(id)) && +c[4]>360) continue;   // n-добор: поздний (>360 г.х.) передатчик = цепь передачи КНИГИ/издателя (الجنزروذي/الشحامي…), не иснад хадиса
-    const cands=[], wo=String(c[1]).split(/\s+/).filter(Boolean);
-    for(let L=Math.min(wo.length,7);L>=2;L--) cands.push(wo.slice(0,L).join(' '));                           // префиксы полного имени (длинные → короткие)
-    if(c[2]) cands.push(String(c[2]).split(/\s+/).slice(0,2).join(' '));                                     // кунья (أبو هريرة)
-    if(c[3]) String(c[3]).split(/\s+/).forEach(t=>{ if(t.length>=4&&/^ال/.test(t)&&!_STOPNIS.has(t)) cands.push(t); });   // нисба-токены (الزهري), без титулов
-    if(_nph[String(id)]){ const tp=stripDiac(_nph[String(id)]).split(/حدثنا|حدثني|حدثناه|اخبرنا|اخبرني|انبانا|انباني|سمعت|\sعن\s|قال|يقول|⦗|«|\?/)[0]||''; if(tp.trim().split(/\s+/).length<=5) cands.push(tp.trim()); }  // запасной якорь: фраза n, обрезанная до имени
-    if(wo[0] && _norm(wo[0]).length>=4) cands.push(wo[0]);   // одиночное имя (سفيان/مالك/شعبة) — ПОСЛЕДНИЙ приоритет; курсор-порядок + бن-гард в highlightNarratorsInDiv снижают риск тёзки
-    let pick=null, pos=-1;
-    for(const cand of cands){ const cc=_norm(cand); if(cc.length<4) continue;
-      let p=_ct.indexOf(' '+cc+' ',_cur); if(p<0) p=_ct.indexOf(' '+cc,_cur); if(p<0) p=_ct.indexOf(' '+cc);    // по порядку иснада, затем по всему тексту
-      if(p>=0){ pick=cand; pos=p; break; } }
-    if(pick && !(pick in f2id)){ f2id[pick]=String(id); names.push(pick); if(pos>=0) _cur=Math.max(_cur,pos); }
-  }
-  if(!names.length) return false;
+  // ===== С38 (УКАЗ «передатчики во ВСЕХ первоисточниках светились как полагается»): ИМЕННАЯ привязка цепи (общий _codifNarrPairs), НЕ позиционная угадайка =====
+  const _pairs=await _codifNarrPairs(rec, text);
+  if(!_pairs.length) return false;
+  const f2id={}, names=[];
+  for(const _p of _pairs){ f2id[_p[0]]=_p[1]; names.push(_p[0]); }
   setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
     highlightNarratorsInDiv(ad, names, async nm=>{ const id=f2id[nm]; out.style.display='block'; let c=null; try{ c=await _narrCard(id); }catch(e){}
       showNarratorBio((c&&c[1])||nm, out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }); }
@@ -9017,11 +9020,13 @@ async function verifyNarr(card, place, text){
   try{
     if(card.dataset.verifyOn) return; card.dataset.verifyOn='1';
     // ПРИЛОЖЕНИЕ: что подсветили (codif n)
-    let ourMids=[]; let ourNames=[]; let recNa=null, recGap=null;
-    try{ const rec=await codifChain(place.bid,place.num);
+    let ourMids=[]; let ourNames=[]; let recNa=null, recGap=null, rec=null, cleanPairs=null;
+    try{ rec=await codifChain(place.bid,place.num);
       if(rec){ recNa=(rec.na&&rec.na.length)?rec.na:null; recGap=(rec.gap&&rec.gap.length)?rec.gap:null;
-        const src = recNa || rec.n;   // R52/В-01: подсвечивает na (авторитет), иначе n
-        if(src){ const seen=new Set(); const dedupN=[]; for(const pr of src){ const id=String(pr[1]); if(!seen.has(id)){ seen.add(id); dedupN.push(pr); } } ourMids=[...seen]; ourNames=dedupN.map(x=>x[0]); } } }catch(e){}
+        if(recNa){ const seen=new Set(); const dedupN=[]; for(const pr of recNa){ const id=String(pr[1]); if(!seen.has(id)){ seen.add(id); dedupN.push(pr); } } ourMids=[...seen]; ourNames=dedupN.map(x=>x[0]); }
+        else if(rec.i||rec.n){   // С38: не-5 книги — «приложение» = РОВНО то, что подсветили (общий _codifNarrPairs), а не сырой n (тащил матн/цепь книги)
+          try{ cleanPairs=await _codifNarrPairs(rec, text); }catch(e){ cleanPairs=[]; }
+          const seen=new Set(); for(const pr of (cleanPairs||[])){ const id=String(pr[1]); if(!seen.has(id)) seen.add(id); } ourMids=[...seen]; ourNames=(cleanPairs||[]).map(x=>x[0]); } } }catch(e){}
     // #132: codif пуст → приложение подсвечивает по ТЕКСТУ (_autoHLGuess: isnadNarrators+_keepNarr). Считаем подсветку ПО ФАКТУ — иначе показывали ложный «приложение: 0» при 5 выделенных именах.
     if(!ourNames.length){ try{ ourNames=[...new Set(isnadNarrators(text).filter(_keepNarr))]; }catch(e){} }
     const forms=_isnadForms(text);
@@ -9034,8 +9039,12 @@ async function verifyNarr(card, place, text){
     } else {
       const rows=await _verifyChain(place.bid, place.num);
       if(rows&&rows.length){ auth=rows.filter(r=>r[2]); authMids=[...new Set(auth.map(r=>String(r[2])))]; srcLbl='sunnah.com / Мактаба'; idMode=true; }
+      else if(cleanPairs && cleanPairs.length){
+        // С38: не-5 книги с codif — цепь-схема из ТОЙ ЖЕ чистой привязки, что и подсветка (число и состав совпадают)
+        auth=cleanPairs.map(p=>[null,p[0],p[1]]); authMids=null; srcLbl='цепь codif + база равиев Мактабы'; idMode=false;
+      }
       else {
-        // НЕТ краула — определяю передатчиков САМ из текста хадиса (универсально, любой сборник)
+        // НЕТ ни краула, ни codif — определяю передатчиков САМ из текста хадиса (универсально, любой сборник)
         let slots=[]; try{ slots=_isnadSlots(text||''); }catch(e){}
         // #157 (З-09): даже БЕЗ краула резолвим имя в нашу базу равиев (_narrLookup) → карточка кликабельна сразу.
         auth=[]; for(const s of slots){ let mid=null; try{ mid=await _narrLookup(s); }catch(e){} auth.push([null,s,(mid!=null?String(mid):null)]); }
