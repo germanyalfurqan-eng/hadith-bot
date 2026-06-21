@@ -199,7 +199,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v662</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v663</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -693,7 +693,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v662';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v663';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -6915,17 +6915,22 @@ async function dzChainInto(host, bid, num){
     let codes, forms=(full&&full.forms)||[], dispFromNa=false, _src='dz';
     if(naChain){ codes=naChain.map(p=>Number(p[1])); dispFromNa=true; _src='na'; }
     else {
-      let _txt=''; try{ const _ar=host.querySelector&&host.querySelector('.ar'); if(_ar) _txt=_ar.textContent||''; }catch(e){}
-      let _pairs=null;
-      if(_rec && (_rec.i||_rec.n)){ try{ _pairs=await _codifNarrPairs(_rec, _txt); }catch(e){} }
-      if((!_pairs||!_pairs.length) && _txt){ try{ const _sl=_isnadSlots(_txt)||[]; _pairs=[]; for(const _s of _sl){ let _m=null; try{ _m=await _narrLookup(_s); }catch(e){} if(_m!=null) _pairs.push([_s,String(_m)]); } }catch(e){} }
-      if(_pairs && _pairs.length){ codes=_pairs.map(p=>Number(p[1])); dispFromNa=true; _src='codif'; }   // все числовые id → зелёные кликабельные, как na
-      else if(seq){ codes=seq; _src='dz'; }   // последний фолбэк — старые dz-коды Э1.1
+      // С38 (П-04): verify/ (эталон sunnah.com, 5 книг) ПЕРЕД codif — авторитетно, как Сверка; чинит «0/2» при пустом na (Насаи 3921: 85/93 покрыто verify).
+      let _vr=null; try{ _vr=await _verifyChain(bid, num); }catch(e){}
+      if(_vr && _vr.length){ const _vm=_vr.filter(r=>r[2]).map(r=>Number(r[2])); if(_vm.length){ codes=_vm; dispFromNa=true; _src='verify'; } }
+      if(!codes || !codes.length){
+        let _txt=''; try{ const _ar=host.querySelector&&host.querySelector('.ar'); if(_ar) _txt=_ar.textContent||''; }catch(e){}
+        let _pairs=null;
+        if(_rec && (_rec.i||_rec.n)){ try{ _pairs=await _codifNarrPairs(_rec, _txt); }catch(e){} }
+        if((!_pairs||!_pairs.length) && _txt){ try{ const _sl=_isnadSlots(_txt)||[]; _pairs=[]; for(const _s of _sl){ let _m=null; try{ _m=await _narrLookup(_s); }catch(e){} if(_m!=null) _pairs.push([_s,String(_m)]); } }catch(e){} }
+        if(_pairs && _pairs.length){ codes=_pairs.map(p=>Number(p[1])); dispFromNa=true; _src='codif'; }   // все числовые id → зелёные кликабельные, как na
+        else if(seq){ codes=seq; _src='dz'; }   // последний фолбэк — старые dz-коды Э1.1
+      }
     }
     if(!codes || !codes.length) return;
     const box=document.createElement('div'); box.style.cssText='margin-top:8px;padding-top:7px;border-top:1px dashed var(--border)';
     const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:11px;margin-bottom:4px';
-    lbl.textContent=(_src==='na')?'🧬 Цепочка передатчиков (по сверке sunnah.com/Мактаба · тап — карточка):':((_src==='codif')?'🧬 Цепочка передатчиков (по базе Мактабы · тап — карточка):':'🧬 Цепочка по кодам Э1.1 (форма передачи между именами · тап — карточка):');
+    lbl.textContent=(_src==='na'||_src==='verify')?'🧬 Цепочка передатчиков (по сверке sunnah.com/Мактаба · тап — карточка):':((_src==='codif')?'🧬 Цепочка передатчиков (по базе Мактабы · тап — карточка):':'🧬 Цепочка по кодам Э1.1 (форма передачи между именами · тап — карточка):');
     box.appendChild(lbl);
     const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl;align-items:flex-start'; box.appendChild(row);
     _dzChips(codes, row, forms);
