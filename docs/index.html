@@ -199,7 +199,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v667</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v668</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -694,7 +694,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v667';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v668';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7121,11 +7121,37 @@ let _htMeta=undefined; const _htPage={};
 /* ===== 📊 v647 (С36): ТАБЛИЦА ХАДИСОВ в формате образца (построчно по звеньям) — U.V.P·C·S·достоверность·тахридж. Данные htable/<slug>_<seg>.json ===== */
 let _htbMeta=undefined; const _htbSh={};
 async function _htbLoad(slug,seg){ const k=slug+'_'+seg; if(!(k in _htbSh)){ try{ const r=await fetch('./htable/'+slug+'_'+seg+'.json?v='+APPVER); _htbSh[k]=r.ok?await r.json():null; }catch(e){ _htbSh[k]=null; } } return _htbSh[k]; }
+// 📄 С39: экспорт открытых строк таблицы в АЛЬБОМНУЮ HTML-таблицу (читать + Печать→Сохранить как PDF)
+function exportHTableLandscape(){
+  const rows=[...document.querySelectorAll('#htbList .htbRow')];
+  if(!rows.length){ try{toast('Сначала открой сборник или ленту');}catch(_){} return; }
+  const esc=s=>String(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  let body='';
+  rows.forEach(r=>{
+    const head=((r.querySelector('.htbOpen')||{}).innerText||'').replace(/📖/g,'').trim();
+    const codes=((r.querySelector('span[style*="monospace"]')||{}).innerText||'').trim();
+    let matn='', mx=0;
+    r.querySelectorAll('div[dir="rtl"]').forEach(dv=>{ const t=(dv.innerText||'').trim(); if(t.length>mx && !/تخريج|где ещё/.test(t)){ mx=t.length; matn=t; } });
+    let hukm=''; r.querySelectorAll('div').forEach(dv=>{ const t=(dv.innerText||'').trim(); if(/✔️|Достоверность/.test(t) && t.length<70) hukm=t.replace(/✔️|Достоверность:?/g,'').trim(); });
+    let tah=''; r.querySelectorAll('div[dir="rtl"]').forEach(dv=>{ const t=(dv.innerText||'').trim(); if(/تخريج|где ещё/.test(t)) tah=t.replace(/.*?:\s*/,'').trim(); });
+    const chain=[...r.querySelectorAll('span[dir="rtl"]')].map(s=>(s.innerText||'').trim()).filter(t=>/#/.test(t)).join('  ←  ');
+    body+='<tr><td class=num>'+esc(head)+'</td><td class=matn>'+esc(matn)+'</td><td class=hukm>'+esc(hukm)+'</td><td class=tah>'+esc(tah)+'</td><td class=code>'+esc(codes)+(chain?('<br>'+esc(chain)):'')+'</td></tr>';
+  });
+  const html='<!doctype html><html lang=ru dir=ltr><head><meta charset=utf-8><title>Таблица хадисов</title>'
+   +'<style>@page{size:A4 landscape;margin:7mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:8px}h2{margin:4px 0;font-size:15px}table{border-collapse:collapse;width:100%;table-layout:fixed}th,td{border:1px solid #888;padding:4px 6px;vertical-align:top;font-size:11px;word-wrap:break-word;overflow-wrap:anywhere}th{background:#222;color:#fff}td.matn{direction:rtl;font-size:13px;line-height:1.7;width:42%}td.num{width:11%;color:#a06d00;font-weight:700}td.hukm{width:9%}td.tah{direction:rtl;width:23%;font-size:11px}td.code{width:15%;font-family:monospace;font-size:9px;color:#5a3da8;direction:rtl}tr:nth-child(even){background:#f6f6f6}@media print{h2,.note{display:none}}</style></head>'
+   +'<body><h2>📊 Таблица хадисов — '+rows.length+' строк (альбомная)</h2>'
+   +'<table><thead><tr><th>№ / Сборник</th><th>Текст хадиса</th><th>Достоверность</th><th>تخريج (где ещё)</th><th>Цепь · коды (C·S·U·V·P)</th></tr></thead><tbody>'+body+'</tbody></table>'
+   +'<p class=note style="font-size:10px;color:#888;margin-top:8px">Muslimoon · чтобы сохранить PDF: Печать (Ctrl/⌘+P) → «Сохранить как PDF», ориентация альбомная.</p></body></html>';
+  let w=null; try{ w=window.open('','_blank'); }catch(e){}
+  if(w&&w.document){ w.document.open(); w.document.write(html); w.document.close(); try{ setTimeout(()=>{ try{ w.focus(); w.print(); }catch(_){} },700); }catch(_){} }
+  else { try{ const b=new Blob([html],{type:'text/html;charset=utf-8'}); const u=URL.createObjectURL(b); if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.openLink) Telegram.WebApp.openLink(u); else window.open(u,'_blank'); }catch(e){ try{toast('Не удалось открыть — браузер заблокировал окно');}catch(_){} } }
+}
 async function openHTableV2(slug){
   let m=document.getElementById('htbModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='htbModal';
-    m.innerHTML='<div class="panel" style="max-width:760px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 8px;padding:13px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:14.5px">📊 Таблица хадисов (по звеньям)</b><button class="mini" id="htbClose" style="flex:none">закрыть ✕</button></div><div id="htbPick" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div><input id="htbQ" placeholder="№ хадиса" inputmode="numeric" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;margin-bottom:6px;display:none"><div id="htbList" style="max-height:64vh;overflow:auto"></div></div>';
+    m.innerHTML='<div class="panel" style="max-width:760px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 8px;padding:13px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:14.5px">📊 Таблица хадисов (по звеньям)</b><span style="flex:none;display:flex;gap:6px"><button class="mini" id="htbPdf" title="Открыть открытые строки альбомной таблицей — для чтения и сохранения в PDF (Печать → Сохранить как PDF)">📄 PDF (альбом)</button><button class="mini" id="htbClose">закрыть ✕</button></span></div><div id="htbPick" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div><input id="htbQ" placeholder="№ хадиса" inputmode="numeric" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px;margin-bottom:6px;display:none"><div id="htbList" style="max-height:64vh;overflow:auto"></div></div>';
     document.body.appendChild(m); m.querySelector('#htbClose').onclick=()=>m.style.display='none';
+    m.querySelector('#htbPdf').onclick=()=>{ try{ exportHTableLandscape(); }catch(e){ try{toast('Сначала открой сборник или ленту');}catch(_){} } };
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
   m.style.zIndex='10006'; m.style.display='flex';
   const pick=m.querySelector('#htbPick'), list=m.querySelector('#htbList'), q=m.querySelector('#htbQ');
