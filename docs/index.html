@@ -199,7 +199,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v655</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v656</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -693,7 +693,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v655';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v656';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5740,7 +5740,19 @@ function addTr(meta,card,text,ayah,fav){
   // огласовки/тахридж/передатчики тоже .tr-out) и чистый текст из dataset.tr (без подписи/ссылки «обновить»).
   cp.onclick=()=>{ let s=text; if(fav&&fav.label) s+='\n— '+fav.label;
     if(out && out.style.display!=='none'){ const trv=(out.dataset.tr||'').trim()||(out.textContent||'').trim(); if(trv) s+='\n\n'+trv; }
-    copyWithSig(s); };
+    // С38 (заявка владельца): к скопированному хадису — РУС. источник + ссылка на ЭТОТ ЖЕ хадис в боте (не общий линк аппа)
+    try{
+      const _r=ayah?null:refOf(fav); let _tok=null, _srcRu='';
+      if(ayah && ayah.s && ayah.a){ _tok='q_'+ayah.s+'_'+ayah.a; _srcRu='📖 Коран '+ayah.s+':'+ayah.a; }
+      else if(_r && _r.source && _r.num!=null){ let _n=String(_r.num); const _ri=_n.match(/#(\d+)/); _n=_n.replace(/#.*/,'');
+        _tok=(_r.source==='muhaymin')?('m_'+_n):('r_'+_r.source+'_'+_n+(_ri?('-'+_ri[1]):''));   // START_PARAM: риваят как «-N» (Telegram startapp = [A-Za-z0-9_-])
+        const _br=bookRuOf(_r.source); if(_br) _srcRu='📚 '+_br+' '+_n+(_ri?(' (риваят '+_ri[1]+')'):''); }
+      if(_srcRu) s+='\n\n'+_srcRu;
+      if(cfg.sig!==false) s+='\n— 📗 Muslimoon — Коран и хадисы';
+      s+='\n'+(_tok?deepLinkUrls(_tok).tg:APP_LINK);
+      copyText(s);
+    }catch(e){ copyWithSig(s); }
+  };
   meta.appendChild(cp);
   // 📍 «Поделиться местом» (заявка владельца): ссылка откроет приложение на ЭТОМ ЖЕ хадисе/аяте — «в том же месте, смотря на то же место».
   try{ const _ref=ayah?null:refOf(fav); let _tok=null;
@@ -8911,14 +8923,16 @@ function _codifPlace(ref){ if(!ref||ref.num==null) return null;
 function _isnadSlots(text){
   // ⚠️ фолдим хамзу (أإآ→ا, ئ→ي, ؤ→و, ء→''): stripDiac хамзу сохраняет, а глаголы передачи (أخبرنا/أخبرني) и «أنه» иначе не режутся
   let c=stripDiac(String(text||'')).replace(/ـ/g,'').replace(/[أإآ]/g,'ا').replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/ء/g,'');
-  c=c.split(/«|»|\sيقول|قال رسول|قال النبي|عن النبي|سمع النبي|سمعت رسول|سمعت النبي|ان النبي|ان رسول الله|رايت النبي|رايت رسول/)[0]||c;
+  c=c.split(/«|»|\sيقول|قال رسول|قال النبي|عن النبي|سمع النبي|سمعت رسول|سمعت النبي|ان النبي|ان رسول الله|رايت النبي|رايت رسول|بهذا الاسناد|باسناده|بمثله|وساق الحديث|بهذا الحديث|بهذا الخبر/)[0]||c;
+  c=c.replace(/^[٠-٩0-9]+\s*/,'');   // С38: срезаем ведущий номер хадиса (٣٩) — это не передатчик
   const VERB=/\s*(?:حدثناه|حدثنا|حدثني|اخبرنا|اخبرني|انبانا|انباني|سمعت|سمع|عن|قالا|قالوا|قال|ثنا)\s+/g;
   const out=[];
   for(let seg of c.split(VERB)){
     seg=(seg||'').replace(/[،,.:؛«»()\[\]"]/g,' ').replace(/\s+/g,' ').trim();
     seg=seg.replace(/رضي الله عنه?م?ا?|صلي الله عليه وسلم|عليه السلام|رحمه الله/g,'').replace(/\s+/g,' ').trim();
-    seg=seg.replace(/\s+(?:انه|انها|ان|قال|قالت|يقول)$/,'').trim();
+    seg=seg.replace(/^(?:و|ف|ثم)\s+/,'').replace(/\s+(?:انه|انها|ان|قال|قالت|يقول)$/,'').trim();   // С38: ведущий союз و/ف/ثم — не часть имени
     if(seg.length<3) continue;
+    if(!/[ا-ي]{2,}/.test(seg)) continue;   // С38: сегмент без арабского слова (цифры/одиночные буквы) — не передатчик
     if(/^(?:رسول الله|النبي|الله)(?:\s|$)/.test(seg)) continue;
     out.push(seg);
   }
@@ -9020,9 +9034,14 @@ async function verifyNarr(card, place, text){
   try{
     if(card.dataset.verifyOn) return; card.dataset.verifyOn='1';
     // ПРИЛОЖЕНИЕ: что подсветили (codif n)
-    let ourMids=[]; let ourNames=[]; let recNa=null, recGap=null, rec=null, cleanPairs=null;
+    let ourMids=[]; let ourNames=[]; let recNa=null, recGap=null, rec=null, cleanPairs=null, _abbrevRiw=false;
     try{ rec=await codifChain(place.bid,place.num);
       if(rec){ recNa=(rec.na&&rec.na.length)?rec.na:null; recGap=(rec.gap&&rec.gap.length)?rec.gap:null;
+        // С38 (заявка владельца «Муслим риваят 4/6 — чужая цепь»): СОКРАЩЁННЫЙ/чужой риваят (متن «بهذا الإسناد/نحوه/مثله», базовых имён na в ЭТОМ тексте нет) → база na НЕ про этот риваят → показываем РЕАЛЬНЫХ передатчиков этого текста, а не цепь основного риваята.
+        if(recNa){ const _ctn=' '+_narrCanon(stripDiac(String(text||'')).replace(/ـ/g,''))+' '; let _hit=0;
+          for(const p of recNa){ const ph=_narrCanon(stripDiac(String(p[0]||''))).split(' ').filter(w=>w.length>1).slice(0,3).join(' '); if(ph.length>=4 && _ctn.indexOf(' '+ph)>=0) _hit++; }
+          const _abM=/بهذا الاسناد|باسناده|بمثله|نحوه|مثله|وساق الحديث|بهذا الحديث|بهذا الخبر/.test(stripDiac(String(text||'')).replace(/ـ/g,''));
+          if(_hit===0 || (_abM && _hit<Math.ceil(recNa.length/2))){ _abbrevRiw=true; recNa=null; recGap=null; } }
         if(recNa){ const seen=new Set(); const dedupN=[]; for(const pr of recNa){ const id=String(pr[1]); if(!seen.has(id)){ seen.add(id); dedupN.push(pr); } } ourMids=[...seen]; ourNames=dedupN.map(x=>x[0]); }
         else if(rec.i||rec.n){   // С38: не-5 книги — «приложение» = РОВНО то, что подсветили (общий _codifNarrPairs), а не сырой n (тащил матн/цепь книги)
           try{ cleanPairs=await _codifNarrPairs(rec, text); }catch(e){ cleanPairs=[]; }
@@ -9037,7 +9056,7 @@ async function verifyNarr(card, place, text){
       auth = recNa.map(p=>[null,p[0],String(p[1])]).concat(gapList.map(g=>[null,g[0], (g[1]!=null?String(g[1]):null)]));
       authMids=recNa.map(p=>String(p[1])); srcLbl='sunnah.com / Мактаба'; idMode=true;
     } else {
-      const rows=await _verifyChain(place.bid, place.num);
+      const rows=_abbrevRiw?null:await _verifyChain(place.bid, place.num);   // С38: сокращённый риваят — эталон основного риваята не про этот текст, идём по тексту
       if(rows&&rows.length){ auth=rows.filter(r=>r[2]); authMids=[...new Set(auth.map(r=>String(r[2])))]; srcLbl='sunnah.com / Мактаба'; idMode=true; }
       else if(cleanPairs && cleanPairs.length){
         // С38: не-5 книги с codif — цепь-схема из ТОЙ ЖЕ чистой привязки, что и подсветка (число и состав совпадают)
