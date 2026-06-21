@@ -199,7 +199,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v661</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v662</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -693,7 +693,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v661';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v662';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8998,14 +8998,16 @@ async function _codifNarrPairs(rec, text){
   // С38 (указ «не пропускать передатчиков»): ДОБОР УВЕРЕННЫХ имён из ОТОБРАЖАЕМОГО текста — книги с разрежённым codif (Адаб Муфрад 14%, Зухд…).
   // Только специфичные: «X بن Y» (≥3 слова) ИЛИ кунья «أبو X» с ОДНОЗНАЧНЫМ _narrLookup → НЕ тёзка-гадание. Краткие (علي/يونس) пропускаем.
   try{
+    let _guar={}, _shu={}; try{ _guar=await _loadGuar()||{}; }catch(e){} try{ _shu=await _loadShuhra()||{}; }catch(e){}   // С38: однозначные карты (тёзка-безопасны по построению)
     const _haveNm=out.map(p=>_narrCanon(p[0])); const _haveId=new Set(out.map(p=>String(p[1])));
     for(const _s0 of (_isnadSlots(text)||[])){
       const _s=String(_s0).split(/\s+/).slice(0,5).join(' ').trim();
-      const _cs=_narrCanon(_s); if(_cs.length<5) continue;
-      const _conf = _cs.split(' ').filter(Boolean).length>=3 && /(?:^| )(?:بن|ابن)(?: |$)/.test(' '+_cs+' ');   // только специфичное «X بن Y» (бара-кунья أبو مالك = тёзка → НЕ берём)
+      const _cs=_narrCanon(_s); if(_cs.length<4) continue;
+      const _safe = (_guar[_cs]!=null) || (_shu[_cs]!=null);   // форма В гарант/шухра = ОДНОЗНАЧНА (مالك→б.Анаса, قتادة→ас-Садуси, ابن عباس) → берём даже краткую
+      const _conf = _safe || (_cs.split(' ').filter(Boolean).length>=3 && /(?:^| )(?:بن|ابن)(?: |$)/.test(' '+_cs+' '));   // иначе только специфичное «X بن Y» (бара-кунья/علي/يونس = тёзка → НЕ берём)
       if(!_conf) continue;
       if(_haveNm.some(h=>h && (h.indexOf(_cs)>=0||_cs.indexOf(h)>=0))) continue;
-      let _mid=null; try{ _mid=await _narrLookup(_s); }catch(e){}
+      let _mid=null; if(_safe){ _mid=(_guar[_cs]!=null?_guar[_cs]:_shu[_cs]); } else { try{ _mid=await _narrLookup(_s); }catch(e){} }
       if(_mid!=null && !_haveId.has(String(_mid))){
         let _c=null; try{ _c=await _narrCard(_mid); }catch(e){}
         const _disp=((_c&&_c[1])? String(_c[1]).split(/\s+/).slice(0,4).join(' ') : _s).replace(/\s+(?:بن|ابن)$/,'').trim();   // С38: ЧИСТОЕ имя из базы (не текст-слот с матн-хвостом موقوف); без висячего «بن»
