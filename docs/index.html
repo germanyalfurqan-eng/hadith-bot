@@ -199,7 +199,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v670</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v671</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -694,7 +694,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v670';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v671';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7122,16 +7122,20 @@ let _htMeta=undefined; const _htPage={};
 let _htbMeta=undefined; const _htbSh={};
 async function _htbLoad(slug,seg){ const k=slug+'_'+seg; if(!(k in _htbSh)){ try{ const r=await fetch('./htable/'+slug+'_'+seg+'.json?v='+APPVER); _htbSh[k]=r.ok?await r.json():null; }catch(e){ _htbSh[k]=null; } } return _htbSh[k]; }
 // 📄 С39: экспорт открытых строк таблицы в АЛЬБОМНУЮ HTML-таблицу (читать + Печать→Сохранить как PDF)
-function exportHTableLandscape(){
+async function exportHTableLandscape(){
   const rows=[...document.querySelectorAll('#htbList .htbRow')];
   if(!rows.length){ try{toast('Сначала открой сборник или ленту');}catch(_){} return; }
+  try{toast('Готовлю полный текст…');}catch(_){}
   const esc=s=>String(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  // ПОЛНЫЙ текст хадисов из изданий (а не обрезанный 300 симв. из таблицы) — заявка «хадисы в ячейках неполные»
+  const FULL={}; for(const sg of [...new Set(rows.map(r=>r.dataset.slug).filter(Boolean))]){
+    try{ const arr=await loadByCode(sg); const mp={}; (arr||[]).forEach(h=>{ mp[String(h.num)]=h.text||''; }); FULL[sg]=mp; }catch(e){ FULL[sg]={}; } }
   let body='';
   rows.forEach(r=>{
     const head=((r.querySelector('.htbOpen')||{}).innerText||'').replace(/📖/g,'').trim();
     const codes=((r.querySelector('span[style*="monospace"]')||{}).innerText||'').trim();
-    let matn='', mx=0;
-    r.querySelectorAll('div[dir="rtl"]').forEach(dv=>{ const t=(dv.innerText||'').trim(); if(t.length>mx && !/تخريج|где ещё/.test(t)){ mx=t.length; matn=t; } });
+    let matn=(FULL[r.dataset.slug]&&FULL[r.dataset.slug][r.dataset.num])||''; let mx=matn.length;
+    if(!matn) r.querySelectorAll('div[dir="rtl"]').forEach(dv=>{ const t=(dv.innerText||'').trim(); if(t.length>mx && !/تخريج|где ещё/.test(t)){ mx=t.length; matn=t; } });
     let hukm=''; r.querySelectorAll('div').forEach(dv=>{ const t=(dv.innerText||'').trim(); if(/✔️|Достоверность/.test(t) && t.length<70) hukm=t.replace(/✔️|Достоверность:?/g,'').trim(); });
     let tah=''; r.querySelectorAll('div[dir="rtl"]').forEach(dv=>{ const t=(dv.innerText||'').trim(); if(/تخريج|где ещё/.test(t)) tah=t.replace(/.*?:\s*/,'').trim(); });
     const chain=[...r.querySelectorAll('span[dir="rtl"]')].map(s=>(s.innerText||'').trim()).filter(t=>/#/.test(t)).join('  ←  ');
@@ -7196,7 +7200,7 @@ async function openHTableV2(slug){
     async function _codifNa(bid,num){ if(!bid) return []; const seg=Math.floor(parseInt(num,10)/500); /* ФИКС: codif по 500, не 1000 → цепь №≥500 была пустой */ const k='cf_'+bid+'_'+seg; if(!(k in _htbSh)){ try{ const r=await fetch('./codif/'+bid+'_'+seg+'.json?v='+APPVER); _htbSh[k]=r.ok?await r.json():null; }catch(e){ _htbSh[k]=null; } } const sh=_htbSh[k]; return (sh&&sh[num]&&sh[num].na)||[]; }
   async function rowV2(sg,num,g){
     const seg=Math.floor(parseInt(num,10)/1000); const sh=await _htbLoad(sg,seg)||{}; const e=sh[num]||{};
-    const d=document.createElement('div'); d.className='htbRow'; d.style.cssText='padding:8px 4px;border-bottom:1px solid var(--border);font-size:12.5px';
+    const d=document.createElement('div'); d.className='htbRow'; d.dataset.slug=sg; d.dataset.num=String(num); d.style.cssText='padding:8px 4px;border-bottom:1px solid var(--border);font-size:12.5px';
     const an=_htbMeta[sg].ar||''; const gnum=g||e.g||'';
     const na=await _codifNa(_htbMeta[sg].bid, num);
     const tkParts=Object.keys(e.tk||{}).map(k=>{ const nm=(_htbMeta[k]&&_htbMeta[k].ar)||k; return '<span style="color:var(--hint)">'+esc(nm)+':</span> '+(e.tk[k]||[]).map(x=>'<span class="htbTk" data-k="'+esc(k)+'" data-n="'+x+'" style="color:var(--link);cursor:pointer">'+arN(x)+'</span>').join('، '); });
