@@ -199,7 +199,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v660</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v661</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -693,7 +693,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v660';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v661';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8976,7 +8976,7 @@ async function _codifNarrPairs(rec, text){
     if(_iset.has(_nid)||_seenId.has(_nid)) continue;                                // уже в i — берём из i (id моста надёжнее n)
     if(_BOOKMARK.test(_ph)) continue;                                              // цепь передачи КНИГИ, не передатчик хадиса
     _order.push(_nid); _seenId.add(_nid); }
-  if(!_order.length) return [];
+  if(!_order.length && !String(text||'').trim()) return [];   // С38: при пустом codif НО есть текст — идём к добору из текста (Адаб Муфрад и т.п.)
   const _STOPNIS=new Set(['الحافظ','الامام','الشيخ','القاضي','الحاكم','العلامه','المحدث','الفقيه','الحجه','السيد','الزاهد','الثقه','الكبير','الصغير','الصدوق','المقري','الراوي','الاستاذ']);
   const _norm=s=>_narrCanon(s).replace(/(^|\s)اب[اي](\s)/g,'$1ابو$2');
   const _ct=' '+_norm(stripDiac(String(text||'')).replace(/ـ/g,''))+' ';
@@ -8995,6 +8995,24 @@ async function _codifNarrPairs(rec, text){
       if(p>=0){ pick=cand; pos=p; break; } }
     if(pick && !used.has(pick)){ used.add(pick); out.push([pick,String(id)]); if(pos>=0) _cur=Math.max(_cur,pos); }
   }
+  // С38 (указ «не пропускать передатчиков»): ДОБОР УВЕРЕННЫХ имён из ОТОБРАЖАЕМОГО текста — книги с разрежённым codif (Адаб Муфрад 14%, Зухд…).
+  // Только специфичные: «X بن Y» (≥3 слова) ИЛИ кунья «أبو X» с ОДНОЗНАЧНЫМ _narrLookup → НЕ тёзка-гадание. Краткие (علي/يونس) пропускаем.
+  try{
+    const _haveNm=out.map(p=>_narrCanon(p[0])); const _haveId=new Set(out.map(p=>String(p[1])));
+    for(const _s0 of (_isnadSlots(text)||[])){
+      const _s=String(_s0).split(/\s+/).slice(0,5).join(' ').trim();
+      const _cs=_narrCanon(_s); if(_cs.length<5) continue;
+      const _conf = _cs.split(' ').filter(Boolean).length>=3 && /(?:^| )(?:بن|ابن)(?: |$)/.test(' '+_cs+' ');   // только специфичное «X بن Y» (бара-кунья أبو مالك = тёзка → НЕ берём)
+      if(!_conf) continue;
+      if(_haveNm.some(h=>h && (h.indexOf(_cs)>=0||_cs.indexOf(h)>=0))) continue;
+      let _mid=null; try{ _mid=await _narrLookup(_s); }catch(e){}
+      if(_mid!=null && !_haveId.has(String(_mid))){
+        let _c=null; try{ _c=await _narrCard(_mid); }catch(e){}
+        const _disp=((_c&&_c[1])? String(_c[1]).split(/\s+/).slice(0,4).join(' ') : _s).replace(/\s+(?:بن|ابن)$/,'').trim();   // С38: ЧИСТОЕ имя из базы (не текст-слот с матн-хвостом موقوف); без висячего «بن»
+        out.push([_disp,String(_mid)]); _haveNm.push(_narrCanon(_disp)); _haveId.add(String(_mid));
+      }
+    }
+  }catch(e){}
   return out;
 }
 async function _codifHighlight(text, card, out, place){
