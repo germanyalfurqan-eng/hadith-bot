@@ -199,7 +199,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v658</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v659</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -693,7 +693,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v658';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v659';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -6157,7 +6157,7 @@ function _keepNarr(nm){ const t=(nm||'').trim();
   return false;
 }
 // Подсветить передатчиков ПРЯМО в тексте иснада (клик по имени → биография). Безопасно: ходим по текстовым узлам.
-function highlightNarratorsInDiv(ad, names, onClick){
+function highlightNarratorsInDiv(ad, names, onClick, idMap){
   if(ad.dataset.narrOn) return; ad.dataset.narrOn='1';
   const pats=names.map(nm=>{ const c=canon(nm); if(!c) return null;
     try{ return {nm, re:new RegExp([...c].map(ch=> ch===' ' ? '[\\s'+DIAC+']+' : letterClass(ch)+'['+DIAC+']*').join(''))}; }catch(e){ return null; } }).filter(Boolean);
@@ -6178,7 +6178,8 @@ function highlightNarratorsInDiv(ad, names, onClick){
     picked.forEach(m=>{ if(m.i>pos) frag.appendChild(document.createTextNode(txt.slice(pos,m.i)));
       const span=document.createElement('span'); span.textContent=txt.slice(m.i,m.i+m.len);
       span.className='nhl'; span.dataset.nm=m.nm;   // M411: класс+имя — для дописывания #кодов
-      span.style.cssText='cursor:pointer;color:#ffeaae;background:#1e3a28;border-radius:4px;padding:0 3px;font-weight:700;box-shadow:0 0 0 1px rgba(90,180,120,.45)'; span.title='Нажми: кто это + слова учёных';   // TB-35 повтор(#35): НЕПРОЗРАЧНАЯ пилюля (свой фон) — читаемо и на тёмной/светлой теме, и поверх жёлтого <mark> (раньше rgba .30 просвечивал жёлтым → имя сливалось)
+      const _mid=idMap&&idMap[m.nm]; if(_mid) span.dataset.id=_mid;   // С38 (заявка владельца): id равия — в dataset и подсказке при наведении
+      span.style.cssText='cursor:pointer;color:#ffeaae;background:#1e3a28;border-radius:4px;padding:0 3px;font-weight:700;box-shadow:0 0 0 1px rgba(90,180,120,.45)'; span.title=(_mid?('id'+_mid+' · '):'')+'Нажми: кто это + слова учёных';   // TB-35: НЕПРОЗРАЧНАЯ пилюля
       span.onclick=(e)=>{ e.stopPropagation();
         try{ onClick(m.nm); }catch(_e){ try{ openNarratorRijal(m.nm); }catch(__e){} }   // M427: клик обязан сработать — фолбэк в модал-карточку
       };
@@ -9001,7 +9002,7 @@ async function _codifHighlight(text, card, out, place){
     if(names.length){
       setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
         highlightNarratorsInDiv(ad, names, async nm=>{ const id=f2id[nm]; out.style.display='block'; let c=null; try{ c=await _narrCard(id); }catch(e){}
-          showNarratorBio((c&&c[1])||nm, out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }); }
+          showNarratorBio((c&&c[1])||nm, out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }, f2id); }
         try{ highlightRelationalInDiv(ad); }catch(e){} }); }catch(e){} }, 0);
       return true;
     }
@@ -9013,7 +9014,7 @@ async function _codifHighlight(text, card, out, place){
   for(const _p of _pairs){ f2id[_p[0]]=_p[1]; names.push(_p[0]); }
   setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
     highlightNarratorsInDiv(ad, names, async nm=>{ const id=f2id[nm]; out.style.display='block'; let c=null; try{ c=await _narrCard(id); }catch(e){}
-      showNarratorBio((c&&c[1])||nm, out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }); }
+      showNarratorBio((c&&c[1])||nm, out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }, f2id); }
     try{ highlightRelationalInDiv(ad); }catch(e){} }); }catch(e){} }, 0);
   return true;
 }
@@ -9060,8 +9061,17 @@ async function verifyNarr(card, place, text){
     const forms=_isnadForms(text);
     let auth, authMids, srcLbl, idMode, gapList=null;
     if(recNa){
-      // #158 СТРОГО: эталон = ПОЛНАЯ цепь sunnah.com = na (опознано ✓) + gap (sunnah знает, мы НЕТ — ✗: либо нет в тексте, либо мост не опознал mid=null). Любой gap → НЕ зелёный.
       gapList = recGap||[];
+      // С38 (заявка владельца «почему несоответствие не исправляешь»): gap = равии, которых МОСТ не сопоставил по id.
+      // Дорезолвим ОДНОЗНАЧНЫЕ (≥3 слов, есть «بن») имена в нашу базу — если равий есть, это пробел моста (заполняем → опознан, не алярм).
+      // Краткие/неоднозначные (يونس) НЕ трогаем (риск тёзки) — остаются «почти» (жёлтый), не «расхождение».
+      try{ const _resG=[], _trueG=[];
+        for(const g of (gapList||[])){ let mid=g[1]; const _w=String(g[0]||'').trim().split(/\s+/);
+          if(mid==null && _w.length>=3 && /بن|ابن/.test(stripDiac(String(g[0]||'')))){ try{ mid=await _narrLookup(g[0]); }catch(e){} }   // огласовки снимаем — иначе «بْنُ» не матчит «بن»
+          if(mid!=null) _resG.push([g[0],String(mid)]); else _trueG.push(g); }
+        if(_resG.length){ recNa=recNa.concat(_resG); const _ex=new Set(ourMids); for(const p of _resG){ if(!_ex.has(p[1])){ _ex.add(p[1]); ourMids.push(p[1]); ourNames.push(p[0]); } } }
+        gapList=_trueG;
+      }catch(e){}
       auth = recNa.map(p=>[null,p[0],String(p[1])]).concat(gapList.map(g=>[null,g[0], (g[1]!=null?String(g[1]):null)]));
       authMids=recNa.map(p=>String(p[1])); srcLbl='sunnah.com / Мактаба'; idMode=true;
     } else {
@@ -9087,17 +9097,18 @@ async function verifyNarr(card, place, text){
     const missResolved = recNa ? gapList.filter(g=>g[1]!=null).length : missing.length;   // resolved-missing → можно в бот; чистый unres → НЕ спамим
     const extra = (idMode && !recNa) ? ourMids.filter(m=>!new Set(authMids).has(m)) : [];
     const cntMis = authCount!==ourCount;
-    // #158: СТРОГО — любой gap (включая неопознанных мостом) → тревога, НЕ зелёный. Иначе (без na) старая логика.
-    const alarm = recNa ? (gapList.length>0) : (idMode && (cntMis || missing.length>0 || extra.length>0));
+    // С38 (заявка «бардак красным на каждом хадисе»): для recNa остаток gap = ПРОБЕЛ МОСТА (равий есть у sunnah, у нас id краткой формой не привязан) — это НЕ противоречие текста. → ЖЁЛТЫЙ «почти», НЕ красный «РАСХОЖДЕНИЕ».
+    const softGap = !!recNa && gapList.length>0;
+    const alarm = recNa ? false : (idMode && (cntMis || missing.length>0 || extra.length>0));   // красный — только реальные противоречия (лишний id/счёт), не пробелы моста
     // #119/#111 (З-09): ДЕТЕКТОР УСЕЧЁННОГО ТЕКСТА. Показанный текст без маркеров иснада (حدثنا/أخبرنا/عن) и начинается с матна (قال رسول/النبي) → иснад отсутствует в показе. Флагуем ТОЛЬКО при авторитетном эталоне, где краул подтверждает наличие иснада ≥2 (иначе риск ложного флага на хадисах, где автор НАМЕРЕННО дал только матн — CLAUDE.md п.4).
     const _flat=stripDiac(String(text||'')).replace(/ـ/g,'').replace(/[أإآ]/g,'ا');
     const _hasIsnad=/(?:^|\s)(?:حدثنا|حدثني|حدثناه|اخبرنا|اخبرني|انبانا|انباني|سمعت|ثنا)\s|\sعن\s/.test(_flat);
     const textWithoutIsnad = !_hasIsnad && /^\s*(?:قال|فقال|وقال)\s+(?:رسول|النبي)/.test(_flat);
     const box=document.createElement('div'); box.className='verifyBox';
-    const _bc = !idMode ? '#3a4a66' : (alarm?'#e0796a':'#3a8a5a'); const _bg = !idMode ? 'rgba(90,120,170,.08)' : (alarm?'rgba(224,121,106,.10)':'rgba(58,138,90,.08)');
+    const _bc = !idMode ? '#3a4a66' : (alarm?'#e0796a':(softGap?'#d8a85a':'#3a8a5a')); const _bg = !idMode ? 'rgba(90,120,170,.08)' : (alarm?'rgba(224,121,106,.10)':(softGap?'rgba(216,168,90,.10)':'rgba(58,138,90,.08)'));
     box.style.cssText='margin-top:9px;border-radius:10px;padding:9px 11px;font-size:12px;border:1px solid '+_bc+';background:'+_bg+';';
-    const _hdr = !idMode ? '🔵 Сверка по базе Мактабы (передатчики опознаны по тексту)' : (alarm?'🔴 СВЕРКА: РАСХОЖДЕНИЕ с sunnah.com':'🟢 Сверка: совпадает с sunnah.com');   // #238/#239: не «недоступна» — сверка ИДЁТ по Мактабе для ВСЕХ; sunnah.com — доп.слой для 5 сборников. УКАЗ-1.
-    const _hcol = !idMode ? '#6fb0e0' : (alarm?'#e0796a':'#7fd3a0');   // #238: синий «по Мактабе» (не серый «недоступно»)
+    const _hdr = !idMode ? '🔵 Сверка по базе Мактабы (передатчики опознаны по тексту)' : (alarm?'🔴 СВЕРКА: РАСХОЖДЕНИЕ с sunnah.com':(softGap?('🟡 Сверка: почти совпадает — '+gapList.length+' равия'+(gapList.length===1?'':'/-ев')+' мост не привязал по краткой форме'):'🟢 Сверка: совпадает с sunnah.com'));   // С38: жёлтый «почти» вместо красного для пробелов моста
+    const _hcol = !idMode ? '#6fb0e0' : (alarm?'#e0796a':(softGap?'#e0c07a':'#7fd3a0'));
     let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b style="color:'+_hcol+'">'+_hdr+'</b>'
       +'<span style="color:var(--hint)">'+(idMode?('эталон ('+srcLbl+'): <b>'+authCount+'</b> · '):'')+'приложение: <b style="color:'+(cntMis&&idMode?'#e0796a':'inherit')+'">'+ourCount+'</b></span></div>';
     // #119/#111: текст-уровневая тревога — показан только матн, а эталон знает иснад (≥2 передатчика)
@@ -9122,6 +9133,8 @@ async function verifyNarr(card, place, text){
       }
     }
     if(!idMode) h+='<div style="margin-top:6px;color:var(--hint);font-size:11px">👤 Передатчики опознаны по нашей базе Мактабы موسوعة الرواة (18 989 равиев) — клик откроет карточку. Доп. сверка с sunnah.com доступна для 5 сборников (Бухари·Муслим·Насаи·Абу-Дауд·Ибн-Маджа), где их цепи размечены пофамильно; для остальных эталон — Мактаба.</div>';   // #238/#239: честно почему 5, без «краул идёт»
+    if(softGap && idMode){ const gn=gapList.map(g=>esc(g[0])).join('، ');
+      h+='<div class="vDet" style="margin-top:7px;color:#e0c07a;font-size:11px">🟡 Эталон sunnah.com: <b>'+authCount+'</b> равиев, у нас привязано по id <b>'+ourCount+'</b>. Краткой формой мост не сопоставил: <b>'+gn+'</b>. Это <b>пробел нашего моста</b> (id-связка), а НЕ ошибка текста или sunnah.com — состав цепи и хадис верны.</div>'; }
     if(alarm && idMode){ h+='<div class="vDet" style="margin-top:7px;color:#e0b3a8;font-size:11px">';
       if(missing.length){ const gn=(recNa?gapList:[]).map(g=>esc(g[0])+(g[1]==null?' (мост не опознал)':'')).join('، ');
         h+='🚨 Эталон (sunnah.com/Мактаба): <b>'+authCount+'</b> передатчиков, опознано приложением <b>'+ourCount+'</b>. НЕ опознано <b>'+missing.length+'</b>'+(gn?(': '+gn):'')+'. Строгий стандарт (#158): зелёным — только когда опознаны ВСЕ как в sunnah.com.<br>'; }
