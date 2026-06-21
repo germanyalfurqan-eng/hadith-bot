@@ -138,6 +138,7 @@
   .tr-btn{padding:6px 12px;background:var(--btn);color:#fff;font-size:13px}
   .tr-out{margin-top:8px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:calc(14px * var(--txtScale,1));display:none}
   mark{background:var(--mark);color:#241c00;border-radius:3px;padding:0 1px}
+  mark.hlx{background:#ff7a18;color:#1a0a00;font-weight:700;box-shadow:inset 0 0 0 1.5px #b34d0a;border-radius:3px;padding:0 2px}  /* точное совпадение с огласовками в режиме «Огласовки» — ярче однокоренных */
   .isnad{color:var(--hint)}
   .matn{color:#fff;font-weight:700}
   .tword{color:#6fa8dc;font-weight:600}   /* #76: слова передатчика (حدثنا/أخبرنا/عن) — акцент, отделены от имён (серых) и матна (белого) */
@@ -198,7 +199,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v653</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v654</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -692,7 +693,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v653';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v654';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1017,7 +1018,13 @@ function highlight(raw,groups,modes){
   for(const term of terms){ try{ const c=canon(term); if(!c) continue;
     const pat=[...c].map(ch=> ch===' ' ? '[\\s'+DIAC+']+' : letterClass(ch)+'['+DIAC+']*').join('');
     html=html.replace(new RegExp(pat,'g'), m=>'%%HL%%'+m+'%%EL%%'); }catch(e){} }
-  return html.split('%%HL%%').join('<mark>').split('%%EL%%').join('</mark>');
+  html=html.split('%%HL%%').join('<mark>').split('%%EL%%').join('</mark>');
+  // режим «Огласовки»: точное совпадение С огласовками — ярче (hlx), однокоренное (тот же корень, др. огласовки) — обычным жёлтым
+  if(modes&&modes.diac){ try{
+    const ex=terms.filter(t=>new RegExp('['+DIAC+']').test(t)).map(t=>esc(t).replace(/ـ/g,''));
+    if(ex.length){ html=html.replace(/<mark>([^<]*)<\/mark>/g,(mm,inner)=>{ const inn=inner.replace(/ـ/g,''); return ex.some(q=>inn.indexOf(q)!==-1)?'<mark class="hlx">'+inner+'</mark>':mm; }); }
+  }catch(e){} }
+  return html;
 }
 function esc(s){return (s||'').replace(/�/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function _safeHref(u){ u=String(u||''); if(!/^https?:\/\//i.test(u)) return '#'; return esc(u).replace(/"/g,'&quot;'); }   // QA(#3): безопасный href — только http(s) (блок javascript:/data:) + экранирование кавычек (defense-in-depth от attribute-XSS в сетевых URL)
@@ -8940,43 +8947,47 @@ async function _codifHighlight(text, card, out, place){
       return true;
     }
   }
-  // Сессия21 (Э1.1): если есть СОХРАНЁННЫЙ разбор (поле n=[[фраза,id]] из резолвера AR-Sanad) — рендерим ЕГО (R52: апп показывает определённое, не угадывает рантайм)
-  if(rec.n && rec.n.length){
-    const f2id={}, names=[];
-    for(const pr of rec.n){ const ph=pr[0], id=String(pr[1]); if(ph && !(ph in f2id)){ f2id[ph]=id; names.push(ph); } }
-    if(names.length){
-      setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
-        highlightNarratorsInDiv(ad, names, async nm=>{ const id=f2id[nm]; out.style.display='block'; let c=null; try{ c=await _narrCard(id); }catch(e){}
-          showNarratorBio((c&&c[1])||nm, out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }); }
-        try{ highlightRelationalInDiv(ad); }catch(e){} }); }catch(e){} }, 0);
-      return true;
-    }
-  }
-  if(!rec.i || !rec.i.length) return false;   // na-only рек без i (созданный из цепи) — фолбэк не нужен (аудит: rec.i.slice падал)
-  let ids=rec.i.slice().reverse(); if(ids.length>1) ids=ids.slice(1);   // порядок текста, без верхнего (автор-собиратель, его имени в матне нет)
-  const slots=_isnadSlots(text);
-  const f2full={}, names=[];
-  const full=async id=>{ if(id==='?') return null; let c=null; try{ c=await _narrCard(id); }catch(e){} return c&&c[1]?c[1]:null; };
-  if(slots.length && slots.length===ids.length){
-    for(let i=0;i<slots.length;i++){ if(ids[i]==='?') continue; const fl=await full(ids[i]); if(fl && !(slots[i] in f2full)){ f2full[slots[i]]=fl; names.push(slots[i]); } }
-  } else {
-    // запас (число слотов ≠ цепи): матч КАЖДОГО id таблицы по формам (имя-префиксы + кунья + нисба), أبو/أبا/أبي → أبو
-    const norm=s=>_narrCanon(s).replace(/(^|\s)اب[اي](\s)/g,'$1ابو$2');
-    const ct=' '+norm(stripDiac(String(text||'')).replace(/ـ/g,''))+' ';
-    const seen=new Set();
-    for(const id of rec.i){ if(id==='?'||seen.has(String(id))) continue; seen.add(String(id));
-      let c=null; try{ c=await _narrCard(id); }catch(e){} if(!c||!c[1]) continue;
-      const cands=[], wo=String(c[1]).split(/\s+/).filter(Boolean);
-      for(let L=Math.min(wo.length,7);L>=2;L--) cands.push(wo.slice(0,L).join(' '));
-      if(c[2]) cands.push(String(c[2]).split(/\s+/).slice(0,2).join(' '));         // кунья (أبو هريرة)
-      if(c[3]) String(c[3]).split(/\s+/).forEach(t=>{ if(t.length>=4&&/^ال/.test(t)) cands.push(t); });  // нисба-токены (الزهري)
-      let pick=null; for(const cand of cands){ const cc=norm(cand); if(cc.length<4) continue; if(ct.indexOf(' '+cc)>=0){ pick=cand; break; } }
-      if(pick && !(pick in f2full)){ f2full[pick]=c[1]; names.push(pick); }
-    }
+  // ===== С38 (УКАЗ владельца «передатчики во ВСЕХ первоисточниках светились как полагается»): ИМЕННАЯ привязка цепи, НЕ позиционная угадайка =====
+  // База = поле i (цепь id-моста, ~83% точн.). Каждый id резолвим в КАНОНИЧЕСКОЕ имя и находим его форму В ТЕКСТЕ
+  // (префиксы имени + кунья + нисба-токены) → клик ведёт НА ИМЕННО ЭТОТ id (без пере-резолва по имени → нет «чужой карточки»).
+  // Канон.имя как якорь авто-режет матн-хвосты резолвера n (чужой id → его имени в тексте нет → не метим) и не тащит позиционный съезд.
+  // Старый путь (raw-n как есть + позиционная биекция slots↔ids) УБРАН: n тащил цепь передачи КНИГИ (قراءة/سماع) и фрагменты матна, биекция давала чужие карточки.
+  const _iset=new Set((rec.i||[]).map(String));
+  let _iord=(rec.i||[]).map(String).filter(x=>x!=='?');
+  _iord=_iord.slice().reverse(); if(_iord.length>1) _iord=_iord.slice(1);          // порядок текста, без верхнего собирателя (его имени в матне нет)
+  // карта id→фраза резолвера n (запасной якорь формы, гарантированно есть в тексте)
+  const _nph={}; for(const pr of (rec.n||[])){ const id=String(pr[1]); if(!(id in _nph)) _nph[id]=String(pr[0]||''); }
+  // ДОБОР recall: id из n, которых НЕТ в i (параллельные пути/пропуски моста), НО без цепи передачи КНИГИ (قراءة/سماع/إجازة — это не иснад хадиса)
+  const _BOOKMARK=/(?:قراه|قرات|قراءه|سماعا?|اجازه|مناوله|كتب الي|اذن لي)/;
+  const _order=[..._iord]; const _seenId=new Set(_iord);
+  for(const pr of (rec.n||[])){ const _ph=stripDiac(String(pr[0]||'')), _nid=String(pr[1]);
+    if(_iset.has(_nid)||_seenId.has(_nid)) continue;                                // уже в i — берём из i (id моста надёжнее n)
+    if(_BOOKMARK.test(_ph)) continue;                                              // цепь передачи КНИГИ, не передатчик хадиса
+    _order.push(_nid); _seenId.add(_nid); }
+  if(!_order.length) return false;
+  // нисба-токены тащат титулы (الحافظ القرشي الزهري…) — титулы НЕ якорь имени (матчат любой текст)
+  const _STOPNIS=new Set(['الحافظ','الامام','الشيخ','القاضي','الحاكم','العلامه','المحدث','الفقيه','الحجه','السيد','الزاهد','الثقه','الكبير','الصغير','الصدوق','المقري','الراوي','الاستاذ']);
+  const _norm=s=>_narrCanon(s).replace(/(^|\s)اب[اي](\s)/g,'$1ابو$2');
+  const _ct=' '+_norm(stripDiac(String(text||'')).replace(/ـ/g,''))+' ';
+  const f2id={}, names=[]; let _cur=0;
+  for(const id of _order){ let c=null; try{ c=await _narrCard(id); }catch(e){} if(!c||!c[1]) continue;
+    if(!_iset.has(String(id)) && +c[4]>360) continue;   // n-добор: поздний (>360 г.х.) передатчик = цепь передачи КНИГИ/издателя (الجنزروذي/الشحامي…), не иснад хадиса
+    const cands=[], wo=String(c[1]).split(/\s+/).filter(Boolean);
+    for(let L=Math.min(wo.length,7);L>=2;L--) cands.push(wo.slice(0,L).join(' '));                           // префиксы полного имени (длинные → короткие)
+    if(c[2]) cands.push(String(c[2]).split(/\s+/).slice(0,2).join(' '));                                     // кунья (أبو هريرة)
+    if(c[3]) String(c[3]).split(/\s+/).forEach(t=>{ if(t.length>=4&&/^ال/.test(t)&&!_STOPNIS.has(t)) cands.push(t); });   // нисба-токены (الزهري), без титулов
+    if(_nph[String(id)]){ const tp=stripDiac(_nph[String(id)]).split(/حدثنا|حدثني|حدثناه|اخبرنا|اخبرني|انبانا|انباني|سمعت|\sعن\s|قال|يقول|⦗|«|\?/)[0]||''; if(tp.trim().split(/\s+/).length<=5) cands.push(tp.trim()); }  // запасной якорь: фраза n, обрезанная до имени
+    if(wo[0] && _norm(wo[0]).length>=4) cands.push(wo[0]);   // одиночное имя (سفيان/مالك/شعبة) — ПОСЛЕДНИЙ приоритет; курсор-порядок + бن-гард в highlightNarratorsInDiv снижают риск тёзки
+    let pick=null, pos=-1;
+    for(const cand of cands){ const cc=_norm(cand); if(cc.length<4) continue;
+      let p=_ct.indexOf(' '+cc+' ',_cur); if(p<0) p=_ct.indexOf(' '+cc,_cur); if(p<0) p=_ct.indexOf(' '+cc);    // по порядку иснада, затем по всему тексту
+      if(p>=0){ pick=cand; pos=p; break; } }
+    if(pick && !(pick in f2id)){ f2id[pick]=String(id); names.push(pick); if(pos>=0) _cur=Math.max(_cur,pos); }
   }
   if(!names.length) return false;
   setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
-    highlightNarratorsInDiv(ad, names, nm=>{ const fl=f2full[nm]||nm; out.style.display='block'; showNarratorBio(fl,out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }); }
+    highlightNarratorsInDiv(ad, names, async nm=>{ const id=f2id[nm]; out.style.display='block'; let c=null; try{ c=await _narrCard(id); }catch(e){}
+      showNarratorBio((c&&c[1])||nm, out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }); }
     try{ highlightRelationalInDiv(ad); }catch(e){} }); }catch(e){} }, 0);
   return true;
 }
