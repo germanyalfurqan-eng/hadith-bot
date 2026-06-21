@@ -199,7 +199,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v659</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v660</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -693,7 +693,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v659';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v660';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1063,6 +1063,10 @@ function _cleanTextArtifacts(text){
   // M500: очистка инлайн-мусора из парсинга PDF перед отображением
   if(!text) return text;
   let t = text;
+  // С38 (П-04, Ибн Хиббан): снять HTML-теги Шамелы (<span data-type="title">…</span>) — не часть хадиса
+  t = t.replace(/<[^>]+>/g, ' ');
+  // С38: арабо-индийские цифры-маркеры заголовков/страниц: (٩٠٦)، [٢٦٣]
+  t = t.replace(/\s*[\(\[]\s*[٠-٩]{1,4}\s*[\)\]]\s*/g, ' ');
   // убираем одиночные номера-маркеры в скобках: (333), (240) — 1-4 цифры
   t = t.replace(/\s*\([0-9]{1,4}\)\s*/g, ' ');
   // убираем ссылки на страницы/листы издания: (ص: 263), [ص: 773], [ص 773], (صفحة: NNN), [جـ N] — УКАЗ-1: мусор-вставки нумерации листов НЕ часть хадиса
@@ -6906,14 +6910,22 @@ async function dzChainInto(host, bid, num){
     const naChain=(_rec&&_rec.na&&_rec.na.length)? _rec.na : null;
     const full=await dzChainFull(bid, num);
     const seq=(full&&full.seq&&full.seq.length)? full.seq : null;
-    if(!naChain && !seq) return;
-    // ⛓ ОТОБРАЖЕНИЕ цепи: АВТОРИТЕТНАЯ na (если есть) → цепь = блок «Сверка», верные id (тест: dz-коды совпадали со сверкой лишь 0.7% → рисуем из na). Иначе старые dz-коды.
-    let codes, forms, dispFromNa=false;
-    if(naChain){ codes=naChain.map(p=>Number(p[1])); forms=(full&&full.forms)||[]; dispFromNa=true; }
-    else { codes=seq; forms=full.forms; }
+    // ⛓ С38 ЕДИНЫЙ РЕЗОЛВЕР (П-04, унификация): цепь питается ТЕМ ЖЕ, что Сверка и подсветка → они совпадают.
+    // Каскад: na (5 книг) → codif _codifNarrPairs (i/n по тексту) → текст-слоты → dz-коды (последний фолбэк, U-коды).
+    let codes, forms=(full&&full.forms)||[], dispFromNa=false, _src='dz';
+    if(naChain){ codes=naChain.map(p=>Number(p[1])); dispFromNa=true; _src='na'; }
+    else {
+      let _txt=''; try{ const _ar=host.querySelector&&host.querySelector('.ar'); if(_ar) _txt=_ar.textContent||''; }catch(e){}
+      let _pairs=null;
+      if(_rec && (_rec.i||_rec.n)){ try{ _pairs=await _codifNarrPairs(_rec, _txt); }catch(e){} }
+      if((!_pairs||!_pairs.length) && _txt){ try{ const _sl=_isnadSlots(_txt)||[]; _pairs=[]; for(const _s of _sl){ let _m=null; try{ _m=await _narrLookup(_s); }catch(e){} if(_m!=null) _pairs.push([_s,String(_m)]); } }catch(e){} }
+      if(_pairs && _pairs.length){ codes=_pairs.map(p=>Number(p[1])); dispFromNa=true; _src='codif'; }   // все числовые id → зелёные кликабельные, как na
+      else if(seq){ codes=seq; _src='dz'; }   // последний фолбэк — старые dz-коды Э1.1
+    }
+    if(!codes || !codes.length) return;
     const box=document.createElement('div'); box.style.cssText='margin-top:8px;padding-top:7px;border-top:1px dashed var(--border)';
     const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:11px;margin-bottom:4px';
-    lbl.textContent=dispFromNa?'🧬 Цепочка передатчиков (по сверке sunnah.com/Мактаба · тап — карточка):':'🧬 Цепочка по кодам Э1.1 (форма передачи между именами · тап — карточка):';
+    lbl.textContent=(_src==='na')?'🧬 Цепочка передатчиков (по сверке sunnah.com/Мактаба · тап — карточка):':((_src==='codif')?'🧬 Цепочка передатчиков (по базе Мактабы · тап — карточка):':'🧬 Цепочка по кодам Э1.1 (форма передачи между именами · тап — карточка):');
     box.appendChild(lbl);
     const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl;align-items:flex-start'; box.appendChild(row);
     _dzChips(codes, row, forms);
@@ -8933,7 +8945,7 @@ function _codifPlace(ref){ if(!ref||ref.num==null) return null;
 function _isnadSlots(text){
   // ⚠️ фолдим хамзу (أإآ→ا, ئ→ي, ؤ→و, ء→''): stripDiac хамзу сохраняет, а глаголы передачи (أخبرنا/أخبرني) и «أنه» иначе не режутся
   let c=stripDiac(String(text||'')).replace(/ـ/g,'').replace(/[أإآ]/g,'ا').replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/ء/g,'');
-  c=c.split(/«|»|\sيقول|قال رسول|قال النبي|عن النبي|سمع النبي|سمعت رسول|سمعت النبي|ان النبي|ان رسول الله|رايت النبي|رايت رسول|بهذا الاسناد|باسناده|بمثله|وساق الحديث|بهذا الحديث|بهذا الخبر/)[0]||c;
+  c=c.split(/«|»|\sيقول|قال رسول|قال النبي|عن النبي|سمع النبي|سمعت رسول|سمعت النبي|ان النبي|ان رسول الله|رايت النبي|رايت رسول|بهذا الاسناد|باسناده|بمثله|وساق الحديث|بهذا الحديث|بهذا الخبر|</)[0]||c;   // С38: + граница HTML-тега <
   c=c.replace(/^[٠-٩0-9]+\s*/,'');   // С38: срезаем ведущий номер хадиса (٣٩) — это не передатчик
   const VERB=/\s*(?:حدثناه|حدثنا|حدثني|اخبرناه|اخبرنا|اخبرني|انبانا|انباني|انبانيه|انبا|سمعت|سمع|عن|قالا|قالوا|قال|ثناه|ثنا|انا|نا)\s+/g;   // С38: + короткие формы старого стиля (نا=ثنا, انا=انبانا, انبا) — Таухид/Ибн Мубарак/Творение деяний
   const out=[];
@@ -8943,6 +8955,7 @@ function _isnadSlots(text){
     seg=seg.replace(/^(?:و|ف|ثم)\s+/,'').replace(/\s+(?:انه|انها|ان|قال|قالت|يقول)$/,'').trim();   // С38: ведущий союз و/ف/ثم — не часть имени
     if(seg.length<3) continue;
     if(!/[ا-ي]{2,}/.test(seg)) continue;   // С38: сегмент без арабского слова (цифры/одиночные буквы) — не передатчик
+    if(/^(?:ذكر|باب|جماع|كتاب|فصل|القول في)\s/.test(seg)) continue;   // С38 (П-04): заголовок главы — не передатчик (Ибн Хиббан «ذكر رجاء…»)
     if(/^(?:رسول الله|النبي|الله)(?:\s|$)/.test(seg)) continue;
     out.push(seg);
   }
