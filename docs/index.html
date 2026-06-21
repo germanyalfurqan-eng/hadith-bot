@@ -199,7 +199,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v656</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v657</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -693,7 +693,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v656';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v657';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8925,7 +8925,7 @@ function _isnadSlots(text){
   let c=stripDiac(String(text||'')).replace(/ـ/g,'').replace(/[أإآ]/g,'ا').replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/ء/g,'');
   c=c.split(/«|»|\sيقول|قال رسول|قال النبي|عن النبي|سمع النبي|سمعت رسول|سمعت النبي|ان النبي|ان رسول الله|رايت النبي|رايت رسول|بهذا الاسناد|باسناده|بمثله|وساق الحديث|بهذا الحديث|بهذا الخبر/)[0]||c;
   c=c.replace(/^[٠-٩0-9]+\s*/,'');   // С38: срезаем ведущий номер хадиса (٣٩) — это не передатчик
-  const VERB=/\s*(?:حدثناه|حدثنا|حدثني|اخبرنا|اخبرني|انبانا|انباني|سمعت|سمع|عن|قالا|قالوا|قال|ثنا)\s+/g;
+  const VERB=/\s*(?:حدثناه|حدثنا|حدثني|اخبرناه|اخبرنا|اخبرني|انبانا|انباني|انبانيه|انبا|سمعت|سمع|عن|قالا|قالوا|قال|ثناه|ثنا|انا|نا)\s+/g;   // С38: + короткие формы старого стиля (نا=ثنا, انا=انبانا, انبا) — Таухид/Ибн Мубарак/Творение деяний
   const out=[];
   for(let seg of c.split(VERB)){
     seg=(seg||'').replace(/[،,.:؛«»()\[\]"]/g,' ').replace(/\s+/g,' ').trim();
@@ -9144,7 +9144,16 @@ async function verifyNarr(card, place, text){
   }catch(e){}
 }
 function _autoHLGuess(text, card, out){
-  let names; try{ names=isnadNarrators(text).filter(_keepNarr); }catch(e){ return; }
+  let names; try{ names=isnadNarrators(text).filter(_keepNarr); }catch(e){ names=[]; }
+  // С38 (книги без codif — Таухид/Ибн Аббас/Творение деяний…): чистим заголовки книги/глав (не передатчики) и ДОБАВЛЯЕМ ровные слоты иснада из _isnadSlots (он почищен от №/союзов/цепи книги) — isnadNarrators местами пропускал всю цепь.
+  try{ const _TTL=/^(مسند|كتاب|باب|فضل|ذكر|جماع|ما يروي|ما جاء|اول|اخر|القول في|تفسير)(\s|$)/;
+    names=(names||[]).filter(n=>{ const c=_narrCanon(n); return c && !_TTL.test(c) && n.indexOf(' - ')<0; });
+    const _have=new Set(names.map(n=>_narrCanon(n)));
+    for(const s of (_isnadSlots(text)||[])){ const cs=_narrCanon(s);
+      if(cs.length<4 || _have.has(cs) || _TTL.test(cs) || s.indexOf(' - ')>=0) continue;
+      if(/(?:^| )(?:بن|ابن|ابو|ابي|ام|عبد)(?: |$)/.test(' '+cs+' ') || _keepNarr(s)){ names.push(s); _have.add(cs); }
+    }
+  }catch(e){}
   // M389: длинный текст (аппарат/акваль) — дополнить именами по словарю форм всего текста
   if(String(text||'').length>280){
     findKnownNames(text).then(extra=>{ try{ if(!extra.length) return;
