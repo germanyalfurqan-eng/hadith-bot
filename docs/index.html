@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v702</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v703</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v702';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v703';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -6055,6 +6055,10 @@ const _TT_BOOK={
  'Ибн Аби ад-Дунья':{ar:'ابن أبي الدنيا',ru:'Ибн Аби ад-Дунья'},'Ибн аль-Мубарак':{ar:'مسند ابن المبارك',ru:'Ибн аль-Мубарака'}};
 let _ttShard={};
 async function _ttLoad(slug,seg){ const k=slug+'_'+seg; if(!(k in _ttShard)){ try{ const r=await fetch('./tt_takhrij/'+slug+'_'+seg+'.json?v='+APPVER); _ttShard[k]=r.ok?await r.json():null; }catch(e){ _ttShard[k]=null; } } return _ttShard[k]; }
+// карта كتاب Бухари (диапазоны номеров → арабское имя книги, из sunnah by_book) — чтобы атраф показывались СГРУППИРОВАННО по книге (один хадис в разных главах виден явно)
+let _bukBooks=null;
+async function _loadBukBooks(){ if(_bukBooks===null){ try{ _bukBooks=await fetchJSON('./bukhari_books.json?v='+APPVER, 15000, {silent:true}); }catch(e){ _bukBooks=[]; } } return _bukBooks; }
+function _bukBookOf(n){ if(!_bukBooks) return ''; for(const b of _bukBooks){ if(n>=b[0]&&n<=b[1]) return b[2]; } return ''; }
 // v642: TT-тахридж расширен на издания аль-Арнаута (Абу Давуд/Ибн Маджа/Тирмизи/Насаи) + أطراف Сахих аль-Бухари. Источник = ref.source (детект по слагу/bid).
 const _TT_SRC={
  ahmad:{slug:'ahmad',bid:'25794',label:'Муснад Ахмада (تحقيق аль-Арнаута)'},
@@ -6078,7 +6082,16 @@ async function renderTTtakhrij(ref, box){
     let html='<div style="border:1px solid #c9a84e;border-radius:9px;padding:7px 9px;margin-top:7px;background:rgba(201,168,78,.06)">'
       +'<div style="font-size:12.5px;font-weight:600;color:#d6b85a;margin-bottom:2px">🔖 Тот же хадис — в других местах Сахиха <span style="opacity:.7;font-weight:400">· أطراف</span></div>'
       +'<div style="font-size:11px;color:var(--hint);margin-bottom:5px;line-height:1.5">аль-Бухари приводит один хадис <b>частями в разных книгах</b> (праздники, молитва, никах…). Это его места по эталонному указателю <b>تحفة الأشراف</b> аль-Мизи'+(e.t?(' №'+esc(''+e.t)):'')+' — нажми номер, чтобы открыть.</div>';
-    if(e.a && e.a.length) html+='<div dir="rtl" style="font-size:14px;line-height:2"><span style="color:#9fd3a8">أطرافه: </span>'+e.a.map(n=>'<span class="ttN" data-b="1681" data-n="'+n+'" style="color:var(--link);cursor:pointer">'+n+'</span>').join('، ')+'</div>';
+    if(e.a && e.a.length){ await _loadBukBooks();
+      const _bg={}, _bo=[];
+      e.a.forEach(n=>{ const bk=_bukBookOf(n)||'؟'; if(!_bg[bk]){ _bg[bk]=[]; _bo.push(bk); } _bg[bk].push(n); });
+      _bo.forEach(bk=>_bg[bk].sort((a,b)=>a-b));
+      _bo.sort((x,y)=>Math.min.apply(null,_bg[x])-Math.min.apply(null,_bg[y]));   // книги в порядке мусхафа
+      if(_bukBooks&&_bukBooks.length) html+='<div dir="rtl" style="font-size:13.5px;line-height:1.95">'+_bo.map(bk=>{
+          const nums=_bg[bk].map(n=>'<span class="ttN" data-b="1681" data-n="'+n+'" style="color:var(--link);cursor:pointer">'+n+'</span>').join('، ');
+          return '<div style="margin:1.5px 0"><span style="color:#9fd3a8;font-weight:600">'+esc(bk)+'</span>: '+nums+'</div>'; }).join('')+'</div>';
+      else html+='<div dir="rtl" style="font-size:14px;line-height:2"><span style="color:#9fd3a8">أطرافه: </span>'+e.a.map(n=>'<span class="ttN" data-b="1681" data-n="'+n+'" style="color:var(--link);cursor:pointer">'+n+'</span>').join('، ')+'</div>';
+    }
     html+='</div>'; box.innerHTML=html;
     box.querySelectorAll('.ttN').forEach(x=>x.onclick=()=>{ try{ openByCodeNum(x.dataset.b, +x.dataset.n); }catch(e){ try{ openBook(x.dataset.b, +x.dataset.n); }catch(_e){} } });
     return;
