@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v698</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v699</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v698';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v699';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8646,6 +8646,10 @@ async function showNarratorBio(name, out){
     out.appendChild(pw);
     }   // конец else (дубль кнопок не строим при noPartBtns)
   }catch(e){}
+  // #чистка карточки (УКАЗ «внизу вакханалия никому непонятная»): ОДИН вводный заголовок-навигатор над разделами оценок — объясняет, что ВСЕ блоки ниже = слова учёных о равии и как они соотносятся (от выверенного разбора к сырым упоминаниям). Сами разделы НЕ трогаем → полностью откатываемо. Шаг 2 (слияние разделов в один) — отдельным заходом, после показа владельцу.
+  if(c){ try{ const _intro=document.createElement('div'); _intro.style.cssText='margin-top:10px;padding:8px 11px;border-radius:10px;background:rgba(108,92,231,.08);border:1px solid var(--border);font-size:12px;color:var(--hint);line-height:1.65';
+    _intro.innerHTML='<b style="color:#d9ccff">📚 Что говорили о нём учёные</b> — разделы ниже идут <b>от готового к сырому</b>, раскрывай нужный:<div style="margin-top:4px;font-size:11.5px">📖 <b style="color:#bff5d4">База Мактаба</b> — готовые выводы &nbsp;·&nbsp; 📚 <b style="color:#d9ccff">149 трудов</b> — оценки по категориям &nbsp;·&nbsp; 📊 <b style="color:#bcd2ff">по критикам</b> — у кого есть записи &nbsp;·&nbsp; 🔍 <b style="color:#ffd479">упоминания</b> — сырые места (ещё не разобраны)</div>';
+    out.appendChild(_intro); }catch(e){} }
   // #5 (вердикты вверх): готовый джарх-тадиль учёных из موسوعة — СРАЗУ под карточкой (как в ТГ-образце: цитаты+источник+ثقة)
   if(c && c[8]){ try{ renderMosuaJarh(c, out); }catch(e){} }
   if(c){ try{ renderNarrVerdicts(c[0], out); }catch(e){} }   // 📚 оценки из 149 трудов (наш глубокий анализ — цитаты+квалификация)
@@ -8655,13 +8659,13 @@ async function showNarratorBio(name, out){
   if(BACKEND_URL){
     const sec=document.createElement('div'); sec.style.cssText='margin-top:8px;border:1px solid #b8860b;border-radius:10px;overflow:hidden';
     const hdr=document.createElement('div'); hdr.style.cssText='cursor:pointer;padding:8px 11px;background:rgba(184,134,11,.13);font-size:12.5px;color:#ffd479;font-weight:700;display:flex;justify-content:space-between;gap:8px;align-items:center';
-    hdr.innerHTML='<span>🔍 Упоминания в наших трудах · ⚠️ обработка не завершена</span><span class="rjTg">▾</span>';
-    const body=document.createElement('div'); body.classList.add('narrMentions'); body.style.cssText='padding:8px 11px';
+    hdr.innerHTML='<span>🔍 Упоминания в наших трудах · ⚠️ обработка не завершена</span><span class="rjTg">▸</span>';   // #чистка карточки: свёрнуто по умолчанию — сырые/незавершённые места, не «стена» под карточкой
+    const body=document.createElement('div'); body.classList.add('narrMentions'); body.style.cssText='padding:8px 11px;display:none';
     body.innerHTML='<div style="font-size:11.5px;color:var(--hint);margin-bottom:7px">⚠️ Это просто НАЙДЕННЫЕ МЕСТА, где встречается имя — <b>не вердикт</b>. Нужно разобрать, что и почему сказал мутабарун. Готовые выводы учёных — ниже, «База Мактаба».</div>';
     const rijalBox=document.createElement('div'); body.appendChild(rijalBox);
-    hdr.onclick=()=>{ const op=body.style.display!=='none'; body.style.display=op?'none':'block'; hdr.querySelector('.rjTg').textContent=op?'▸':'▾'; };
+    let _rjLoaded=false;
+    hdr.onclick=()=>{ const op=body.style.display!=='none'; body.style.display=op?'none':'block'; hdr.querySelector('.rjTg').textContent=op?'▸':'▾'; if(!op && !_rjLoaded){ _rjLoaded=true; try{ doRijalCorpus(name, rijalBox, null); }catch(e){} } };   // #чистка: ленивая загрузка — фетч упоминаний ТОЛЬКО при раскрытии (perf + не грузим сырое зря)
     sec.appendChild(hdr); sec.appendChild(body); out.appendChild(sec);
-    try{ doRijalCorpus(name, rijalBox, null); }catch(e){}
   }
   if(c && _mtbBox){ try{ renderMutabarunSummary(c[0], _mtbBox, out); }catch(e){} }   // #5 шаг2
   const extra=document.createElement('div'); out.appendChild(extra);
