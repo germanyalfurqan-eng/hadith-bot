@@ -1655,7 +1655,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 lines.append(f"• {q} — {e.get('n', 0)}× ({e.get('tab', '')}, нашли {e.get('cnt', 0)})")
         else:
             lines.append("пока пусто")
-        await update.message.reply_text("\n".join(lines)[:3900], parse_mode="Markdown")
+        try:
+            await update.message.reply_text("\n".join(lines)[:3900], parse_mode="Markdown")
+        except Exception:   # B «can't parse entities»: спецсимвол в сыром запросе ломал Markdown → без разметки
+            await update.message.reply_text("\n".join(lines)[:3900])
         return
 
     if is_owner(update) and text.strip().lower() in ("отзывы", "обратная связь", "комментарии", "ошибки людей"):
@@ -1667,7 +1670,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for x in fb[:15]:
             c = f" · {x['ctx']}" if x.get("ctx") else ""
             lines.append(f"\n*№{x.get('id','?')}* · {x['d']} · {x['u']}{c}\n  «{x['t']}»")
-        await update.message.reply_text("\n".join(lines)[:3900], parse_mode="Markdown")
+        try:
+            await update.message.reply_text("\n".join(lines)[:3900], parse_mode="Markdown")
+        except Exception:   # B «can't parse entities»: спецсимвол в тексте отзыва → без разметки
+            await update.message.reply_text("\n".join(lines)[:3900])
         return
 
     # ===== Владельцу: журналы (расход ИИ и накопление) =====
@@ -1689,7 +1695,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 who_full = who if (str(uid_) in ('', who)) else f"{who} [id {uid_}]"
                 lines.append(f"  {'🆕' if x.get('fresh') else '♻️'} {x['d']} · {who_full} · {x.get('f','')}{loc}")
         lines.append("\n📄 Файл: github.com/" + GITHUB_REPO + "/blob/data/journal.json")
-        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        try:
+            await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        except Exception:   # B «can't parse entities»: спецсимвол в имени/src → без разметки
+            await update.message.reply_text("\n".join(lines))
         return
     if is_owner(update) and text.strip().lower() in ("накопление", "журнал накопления", "накопления", "переводы накоплено"):
         j = _journal_load(); tr = j["translations"]; tot = tr.get("totals", {})
@@ -4060,17 +4069,19 @@ def isnad_ai(text):
 async def _api_serve(application=None):
     from aiohttp import web
     loop = asyncio.get_event_loop()
-    async def _notify_usage(user, feat, fresh, src, num, saved, q=""):
+    async def _notify_usage(user, feat, fresh, src, num, saved, q="", frag=""):
         # зеркалим ВСЮ активность ИИ в рабочий канал-журнал (LOG_CHAT_ID) — и траты, и из базы.
         # M301 (по требованию владельца): кэш-вызовы НЕ глушим — показываем с тем же ПОДРОБНЫМ описанием
         # (что/где/запрос), чтобы видеть активность функции; разница только в метке 🆕 потрачено / ♻️ из базы.
         if not application:
             return
         uid = (user or {}).get("id")
+        _nm = ((user or {}).get("first_name", "") + " " + (user or {}).get("last_name", "")).strip()
+        _nm = re.sub(r"[*_`\[\]()]", "", _nm)   # #312: чистим Markdown-спецсимволы в имени
         if user and user.get("username"):
-            who = "@" + user["username"]
+            who = (f"{_nm} " if _nm else "") + "@" + user["username"]   # #312: ИМЯ + @username
         elif uid:
-            who = f"[{uid}](tg://user?id={uid})"   # кликабельно: перейти к человеку по ID
+            who = f"[{_nm or uid}](tg://user?id={uid})"   # #312: кликабельно — имя (или id) → человек
         else:
             who = "аноним"
         tag = "🆕 свежий (DeepSeek, ключ потрачен)" if fresh else "♻️ из базы (ключ НЕ потрачен)"
@@ -4088,13 +4099,14 @@ async def _api_serve(application=None):
             extra = ""
         ftag = {"перевод": "#перевод", "нейро": "#нейро", "огласовки": "#огласовки"}.get(feat, "#" + re.sub(r"\s+", "", feat))
         _qs = (" · 🔎 «" + str(q)[:70] + "»") if q else ""   # M301: ЗА ЧТО потрачено (текст запроса)
+        _fr = (" · 📝 «" + re.sub(r"[*_`\[\]()]", "", str(frag))[:90] + "…»") if frag else ""   # #312: фрагмент потраченного текста
         try:
-            await application.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} 🤖 {feat}: {who}{loc} — {tag}{extra}{_qs}", parse_mode="Markdown", disable_web_page_preview=True)
+            await application.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} 🤖 {feat}: {who}{loc} — {tag}{extra}{_qs}{_fr}", parse_mode="Markdown", disable_web_page_preview=True)
         except Exception:
             # B-004 «can't parse entities»: спецсимвол (_ * [ ] ` ) в имени/запросе ломал Markdown → шлём БЕЗ разметки, сообщение НЕ теряем
             try:
                 who_plain = ("@" + user["username"]) if (user and user.get("username")) else (str(uid) if uid else "аноним")
-                await application.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} {feat}: {who_plain}{loc_plain} — {tag}{extra}{_qs}")
+                await application.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} {feat}: {who_plain}{loc_plain} — {tag}{extra}{_qs}{_fr}")
             except Exception:
                 pass
     async def _notify(text):
@@ -4927,7 +4939,7 @@ async def _api_serve(application=None):
                 stored = await loop.run_in_executor(None, lambda: (_coll_load(source) or {}).get(str(num)))
             if stored and stored.get('ru') and not _is_mostly_arabic(stored['ru']):   # битый арабский кэш игнорируем → переведём заново через DeepSeek
                 await loop.run_in_executor(None, usage_log, user, "перевод", False, len(text), source, str(num or ""))
-                await _notify_usage(user, "перевод", False, source, num, None)   # ♻️ из базы, ключ НЕ потрачен
+                await _notify_usage(user, "перевод", False, source, num, None, frag=(stored.get('ru') or text))   # ♻️ из базы, ключ НЕ потрачен
                 return _cors(web.json_response({'translation': stored['ru'], 'cached': True}))
             # 2) нет в базе (или force) → переводим заново и копим (перезаписываем оборванный)
             tr = await loop.run_in_executor(None, translate_matn, text, "", True, force)
@@ -4936,7 +4948,7 @@ async def _api_serve(application=None):
             if tr and source and num not in (None, ''):
                 saved = await loop.run_in_executor(None, coll_add_translation, source, num, text, tr)
             await loop.run_in_executor(None, usage_log, user, "перевод", True, len(text), source, str(num or ""))
-            await _notify_usage(user, "перевод", True, source, num, saved)
+            await _notify_usage(user, "перевод", True, source, num, saved, frag=(tr or text))
             return _cors(web.json_response({'translation': tr, 'cached': False}))
         except Exception as e:
             return _cors(web.json_response({'translation': '', 'error': str(e)}))
