@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v680</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v681</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v680';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v681';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3197,8 +3197,9 @@ async function _bookLoad(){
     // ⧉ копировать страницу
     r2.appendChild(mk('⧉ копия', ()=>{ const t=tEl.dataset.txt||tEl.textContent||''; try{ navigator.clipboard.writeText(t).then(function(){ toast('📋 Страница скопирована'); }, function(){ toast('Не вышло'); }); }catch(e){ toast('Не вышло'); } }));   // QA-low: тост успеха только при resolve (async reject не ловился sync-catch → фальшивое «скопировано»)
     // 🔗 ссылка на ЭТУ страницу книги (открой/перешли — откроется ровно здесь, в Telegram и в браузере)
-    r2.appendChild(mk('🔗 Ссылка', ()=>{ const pg=(m._inp&&m._inp.value)||_bookView.pg; const u=deepLinkUrls('b_'+_bookView.id+'_'+pg);
-      try{ navigator.clipboard.writeText('📖 '+bnm+' — стр. '+pg+'\n'+u.tg+'\n'+u.web).then(function(){ toast('🔗 Ссылка на эту страницу скопирована'); }, function(){ toast('Ссылка: '+u.web); }); }catch(e){ toast('Ссылка: '+u.web); } }));   // QA-low: тост успеха только при resolve
+    r2.appendChild(mk('🔗 Поделиться местом', ()=>{ const pg=(m._inp&&m._inp.value)||_bookView.pg; const u=deepLinkUrls('b_'+_bookView.id+'_'+pg);   // #318: «поделиться местом» (книга+страница) — нативный TG-share + фолбэк копирование
+      try{ if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.openTelegramLink){ Telegram.WebApp.openTelegramLink('https://t.me/share/url?url='+encodeURIComponent(u.tg)+'&text='+encodeURIComponent('📖 '+bnm+' — стр. '+pg)); return; } }catch(e){}
+      try{ navigator.clipboard.writeText('📖 '+bnm+' — стр. '+pg+'\n'+u.tg+'\n'+u.web).then(function(){ toast('🔗 Ссылка на это место скопирована'); }, function(){ toast('Ссылка: '+u.web); }); }catch(e){ toast('Ссылка: '+u.web); } }));   // QA-low: тост успеха только при resolve
     // A− / A+ шрифт прямо тут
     r2.appendChild(mk('A−', ()=>{ cfg.fontScale=Math.max(0.7,(cfg.fontScale||1)-0.1); saveCfg(cfg); applyFontScale(); }));
     r2.appendChild(mk('A+', ()=>{ cfg.fontScale=Math.min(2.2,(cfg.fontScale||1)+0.1); saveCfg(cfg); applyFontScale(); }));
@@ -10858,9 +10859,8 @@ function _readRender(){
   const h=_readArr[_readIdx];
   document.getElementById('readPos').textContent='№'+(h.num!==undefined?h.num:(_readIdx+1))+'  ('+(_readIdx+1)+' из '+_readArr.length+')';
   const body=document.getElementById('readBody'); body.innerHTML='';
-  const sg=_groups; _groups=[];                 // в читалке без подсветки запроса
-  try{ body.appendChild(cardHadith({code:_readCode,h,noNav:true},[])); }catch(e){ const d=document.createElement('div');d.className='ar';d.innerHTML=esc(h.text||'');body.appendChild(d); }
-  _groups=sg;
+  const sg=_groups;                 // #311: в читалке СОХРАНЯЕМ подсветку искомого слова (зашёл из поиска → sg непуст; из меню/новый поиск → []) — тот же hl(), Arabus не затронут
+  try{ body.appendChild(cardHadith({code:_readCode,h,noNav:true},sg||[])); }catch(e){ const d=document.createElement('div');d.className='ar';d.innerHTML=esc(h.text||'');body.appendChild(d); }
 }
 async function _prefetchTranslate(){   // ОТКЛЮЧЁН (жалоба владельца 19.06: «перевод стреляет сам без кнопки, тратит ключ»). Перевод — ТОЛЬКО по нажатию кнопки «Перевод». Авто-префетч больше не дёргает ИИ.
   return;
