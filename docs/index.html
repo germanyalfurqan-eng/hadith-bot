@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v704</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v705</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v704';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v705';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -6070,6 +6070,20 @@ const _TT_SRC={
 const _TT_BID2SRC={'25794':'ahmad','1726':'abudawud','654':'abudawud','117359':'abudawud','1198':'ibnmajah','98138':'ibnmajah','829':'nasai','1339':'nasai','1435':'tirmidhi','1363':'tirmidhi','7895':'tirmidhi'};
 function _ttSrcOf(ref){ let s=ref.source; if(s==='ibnmaja') s='ibnmajah'; if(_TT_SRC[s]) return s;
   try{ const _pl=_codifPlace(ref); if(_pl){ const b=_TT_BID2SRC[String(_pl.bid)]; if(b) return b; } }catch(e){} return null; }
+// клик по месту тахриджа → открыть хадис по НАШЕМУ (sunnah) номеру через читалку (openReader), а НЕ страницу Мактабы (её нумерация другая → открывался ЧУЖОЙ хадис, жалоба владельца). bid печати → код читалки.
+const _BID2READ={'1681':'bukhari','1727':'muslim','829':'nasai','8361':'nasaikubra','1198':'ibnmajah','25794':'ahmad','654':'abudawud','1726':'abudawud','117359':'abudawud','1363':'tirmidhi','1435':'tirmidhi','7895':'tirmidhi','8140':'malik','1733':'darimi','9944':'ibnabishayba'};   // 711 (Муслим тур.печать) НЕ тут — его номера другие, клик идёт через openByCodeNum (_mListSheet конвертирует)
+function _ttOpenPlace(bid,num){ const code=_BID2READ[String(bid)]; if(code && typeof isReadable==='function' && isReadable(code)){ try{ openReader(code, +num); return; }catch(e){} } try{ openByCodeNum(String(bid), +num); }catch(e){ try{ openBook(String(bid), +num); }catch(_e){} } }
+// кросс-сборники для хадиса (по M495 place2su→su→места): bid→[номера], кроме самого хадиса. Лёгкий индекс (шарды 6-88К), полные издания НЕ грузим.
+async function _ttCrossPlaces(ref){ try{ const _pl=_codifPlace(ref)||{bid:String((ref&&ref.bid)||'1681'),num:String(ref.num)}; if(!_pl||_pl.num==null) return {};
+    const ph=(parseInt(_pl.bid,10)+parseInt(_pl.num,10))%100;
+    let su=0; const r=await fetch('./tahrij/place2su_'+ph+'.json?v='+APPVER); if(r.ok){ const p2s=await r.json(); su=p2s[_pl.bid+'|'+_pl.num]||0; }
+    if(!su) return {};
+    const pls=await _thPlaces(su); const out={};
+    pls.forEach(([bb,nn])=>{ if(String(bb)===String(_pl.bid)) return; (out[String(bb)]=out[String(bb)]||[]).push(nn); });
+    if(out['1727'] && out['711']) delete out['711'];   // дубль Муслима: Абд аль-Баки (1727) приоритетнее турецкой печати (711)
+    return out;
+  }catch(e){ return {}; } }
+const _TT_RANK={'1681':1,'1727':2,'711':2,'654':3,'1726':3,'117359':3,'7895':4,'1435':4,'1363':4,'829':5,'8361':5,'1198':6,'28107':7,'25794':8};
 async function renderTTtakhrij(ref, box){
   if(!ref||ref.num==null) return;
   const num=parseInt(String(ref.num).replace(/[^0-9]/g,''),10); if(!num) return;
@@ -6077,14 +6091,24 @@ async function renderTTtakhrij(ref, box){
   let isBuk=(ref.source==='bukhari');
   try{ if(!isBuk){ const _pl=_codifPlace(ref); if(_pl && (String(_pl.bid)==='1681'||String(_pl.bid)==='1')) isBuk=true; } }catch(e){}
   if(isBuk){
-    const sh=await _ttLoad('bukhari_atraf', Math.floor(num/1000)); if(!sh) return;
-    const e=sh[String(num)]; if(!e) return;
+    const sh=await _ttLoad('bukhari_atraf', Math.floor(num/1000));
+    const e=(sh&&sh[String(num)])||null;
+    let cross={}; try{ await loadBooksMap(); }catch(_e){}
+    try{ cross=await _ttCrossPlaces({source:'bukhari',num:String(num),bid:'1681'}); }catch(_e){}   // кросс-сборники из M495 (Муслим/Насаи/Ибн Маджа/Ахмад…), лёгкий индекс
+    const crossKeys=Object.keys(cross);
+    if(!(e&&e.a&&e.a.length) && !crossKeys.length) return;
     let html='<div style="border:1px solid #c9a84e;border-radius:9px;padding:7px 9px;margin-top:7px;background:rgba(201,168,78,.06)">'
-      +'<div style="font-size:12.5px;font-weight:600;color:#d6b85a;margin-bottom:3px">🔖 Сахих аль-Бухари <span style="opacity:.7;font-weight:400">· أطراف (где ещё передаётся у аль-Бухари)</span></div>';
-    if(e.a && e.a.length) html+='<div dir="rtl" style="font-size:14.5px;line-height:2"><span style="color:#9fd3a8">أطرافه: </span>'+e.a.slice().sort((a,b)=>a-b).map(n=>'<span class="ttN" data-n="'+n+'" style="color:var(--link);cursor:pointer;text-decoration:underline dotted">'+n+'</span>').join('، ')+'</div>';
-    if(e.t) html+='<div dir="rtl" style="font-size:11.5px;color:var(--hint);margin-top:3px">تحفة الأشراف: '+esc(''+e.t)+'</div>';
+      +'<div style="font-size:12.5px;font-weight:600;color:#d6b85a;margin-bottom:4px">🔖 Где ещё передаётся этот хадис <span style="opacity:.7;font-weight:400">· التخريج</span></div>';
+    if(e&&e.a&&e.a.length) html+='<div dir="rtl" style="font-size:14px;line-height:1.95;margin:1px 0"><span style="color:#9fd3a8;font-weight:600">صحيح البخاري</span> <span style="color:var(--hint);font-size:11px">(أطراف)</span>: '+e.a.slice().sort((a,b)=>a-b).map(n=>'<span class="ttN" data-n="'+n+'" style="color:var(--link);cursor:pointer;text-decoration:underline dotted">'+n+'</span>').join('، ')+'</div>';
+    crossKeys.sort((x,y)=>((_TT_RANK[x]||90)-(_TT_RANK[y]||90))||(x-y)).forEach(bb=>{
+      const nm=(typeof bookName==='function'&&bookName(String(bb)))||('книга '+bb);
+      const nums=[...new Set(cross[bb])].sort((a,b)=>a-b).map(n=>'<span class="ttX" data-b="'+bb+'" data-n="'+n+'" style="color:var(--link);cursor:pointer;text-decoration:underline dotted">'+n+'</span>').join('، ');
+      html+='<div dir="rtl" style="font-size:14px;line-height:1.95;margin:1px 0"><span style="color:#9fd3a8;font-weight:600">'+esc(nm)+'</span>: '+nums+'</div>';
+    });
+    if(e&&e.t) html+='<div dir="rtl" style="font-size:11px;color:var(--hint);margin-top:4px">تحفة الأشراف '+esc(''+e.t)+' (аль-Мизи) + наш тахридж по 64 печатям</div>';
     html+='</div>'; box.innerHTML=html;
-    box.querySelectorAll('.ttN').forEach(x=>x.onclick=()=>{ const _n=+x.dataset.n; try{ openReader('bukhari', _n); }catch(e){ try{ openByCodeNum('1681', _n); }catch(_e){} } });   // ФИКС владельца: клик открывает хадис по НАШЕМУ (sunnah) номеру (openReader находит x.num===n), а НЕ страницу Мактабы (её нумерация другая → открывался чужой хадис)
+    box.querySelectorAll('.ttN').forEach(x=>x.onclick=()=>_ttOpenPlace('1681', x.dataset.n));   // ФИКС: клик → хадис по НАШЕМУ номеру (openReader), не страница Мактабы
+    box.querySelectorAll('.ttX').forEach(x=>x.onclick=()=>_ttOpenPlace(x.dataset.b, x.dataset.n));
     return;
   }
   const src=_ttSrcOf(ref); if(!src) return;
@@ -6155,7 +6179,7 @@ async function doTakhrij(text, ref, out, btn, force){
     const bn=(typeof bookName==='function'&&bookName(String(bb)))||('книга '+bb);
     row.appendChild(Object.assign(document.createElement('span'),{textContent:bn+': ',style:'color:var(--hint)'}));
     byb[bb].sort((x,y)=>x-y).forEach((nn,i2)=>{ const a=document.createElement('span'); a.textContent='№'+nn; a.style.cssText='color:var(--link);cursor:pointer'; a.title='Открыть в читалке';
-      a.onclick=()=>{ try{ openByCodeNum(String(bb),nn); }catch(_e){ try{ openBook(String(bb),nn); }catch(__e){} } };
+      a.onclick=()=>_ttOpenPlace(String(bb),nn);   // ФИКС: открыть по НАШЕМУ номеру (openReader), а не страницу Мактабы (был тот же баг клика, что в أطраф)
       row.appendChild(a); if(i2<byb[bb].length-1) row.appendChild(Object.assign(document.createElement('span'),{textContent:'، '})); });
     tkSec.appendChild(row); });
   btn.disabled=false; btn.textContent=prev;
