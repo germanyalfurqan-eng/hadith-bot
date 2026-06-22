@@ -199,7 +199,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v675</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v676</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -250,6 +250,7 @@
   </div>
   <div id="narrSugg" style="display:none;margin:-2px 0 8px;border:1px solid #6c5ce7;border-radius:12px;background:var(--card);overflow:hidden;max-height:300px;overflow-y:auto;box-shadow:0 6px 18px #0006"></div>
   <div id="narrHint" style="display:none;align-items:center;gap:8px;margin:-2px 0 8px;padding:7px 11px;border:1px solid #6c5ce7;border-radius:10px;background:rgba(108,92,231,.10)"></div><!-- #85: ненавязчивая подсказка карточки равия в обычном поиске -->
+  <div id="isnadHint" style="display:none;align-items:center;gap:8px;margin:-2px 0 8px;padding:7px 11px;border:1px solid #6c5ce7;border-radius:10px;background:rgba(108,92,231,.10)"></div><!-- УКАЗ С40: вставлен полный иснад → предложить разбор в цепь -->
   <div id="recentBox" style="display:none;margin:-4px 0 8px;border:1px solid var(--border);border-radius:10px;background:var(--card);overflow:hidden;box-shadow:0 6px 18px #0006">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 11px;border-bottom:1px solid var(--border)"><span class="hint" style="font-size:11px">🕐 Недавние</span><span><span id="recentClr" style="cursor:pointer;color:var(--link);font-size:11px">очистить</span> <span id="recentClose" style="cursor:pointer;color:var(--hint);font-size:14px;margin-inline-start:8px">✕</span></span></div>
     <div id="recentList"></div>
@@ -694,7 +695,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v675';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v676';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1717,7 +1718,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   var _nc=document.querySelector('.chip[data-mode="narr"]'); if(_nc){ _nc.style.display = tab==='hadith'?'':'none';   // 👤 «Передатчик» — в Аятах не к месту (замечание владельца)
     if(tab!=='hadith' && modes.narr){ modes.narr=false; _nc.classList.remove('on'); try{ hideNarrSugg(); }catch(e){} } }
   ['chain','any'].forEach(function(md){ var _c=document.querySelector('.chip[data-mode="'+md+'"]'); if(_c){ _c.style.display = tab==='hadith'?'':'none';   // #60/#67: ⛓Цепь / 🌐Любой текст — иснад/Мактаба-режимы, в Аятах не нужны (но 🔬Расширенный ВЕРНУЛ — полезен для подбора фраз и в Коране, заявка #67)
-    if(tab!=='hadith' && modes[md]){ modes[md]=false; _c.classList.remove('on'); if(md==='chain'){ try{ _chainSel.length=0; var _co=document.getElementById('chainOut'); if(_co) _co.innerHTML=''; chainRender(); }catch(e){} } } } });   // QA-low: chainRender скрывает бокс Цепи при уходе с вкладки (оставался со старыми чипами)
+    if(tab!=='hadith' && modes[md]){ modes[md]=false; _c.classList.remove('on'); if(md==='chain'){ try{ _chainSel.length=0; window._chainFormPre=''; window._chainFormPost=''; window._chainForms=[]; var _co=document.getElementById('chainOut'); if(_co) _co.innerHTML=''; chainRender(); }catch(e){} } } } });   // QA-low: chainRender скрывает бокс Цепи при уходе с вкладки (оставался со старыми чипами)
   document.getElementById('q').placeholder = tab==='hadith'?'Слово, фраза или № хадиса…':'Слово, № суры или 2:255…';
   document.getElementById('res').innerHTML=''; setStatus(''); updateQuranHelper();
   try{ hideRecent(); }catch(e){}   // M256: недавние не авто-показ — только по 🕐
@@ -6368,6 +6369,12 @@ function _formMatch(got, want){
   return got===want;
 }
 function _formFilterOpts(cur){ return _FORM_FILTER.map(o=>'<option value="'+o[0]+'"'+(o[0]===(cur||'')?' selected':'')+'>'+o[1]+'</option>').join(''); }
+// С40: ПОЛНЫЙ список форм для селектов цепи (включает все коды dz: THi/AKHi/QAL/NA) — чтобы разобранная из иснада форма корректно показывалась в селекте, а не «сбрасывалась» на «любая»
+const _CH_FORM_LIST=[['','↔ любая форма'],['AN','عن (عنعنة)'],['ANN','أنّ'],['TH','حدّثنا (سماع)'],['THi','حدّثني'],['AKH','أخبرنا (قراءة)'],['AKHi','أخبرني'],['ANB','أنبأنا (إجازة)'],['SAM','سمعت (سماع صريح)'],['QAL','قال'],['NA','نا'],['!AN','أي صريح (НЕ عن — тадлис)']];
+function _chFormOpts(cur){ return _CH_FORM_LIST.map(o=>'<option value="'+o[0]+'"'+(o[0]===(cur||'')?' selected':'')+(_FORM_TIP[o[0]]?(' title="'+_FORM_TIP[o[0]]+'"'):'')+'>'+o[1]+'</option>').join(''); }
+// С40: список форм для панели разбора иснада (чистые арабские формы — здесь УКАЗЫВАЕМ форму, не фильтруем)
+const _ISNAD_FORM_LIST=[['','— форма —'],['TH','حدّثنا'],['THi','حدّثني'],['AKH','أخبرنا'],['AKHi','أخبرني'],['ANB','أنبأنا'],['SAM','سمعت'],['AN','عن'],['ANN','أنّ'],['QAL','قال'],['NA','نا']];
+function _isnadFormOpts(cur){ return _ISNAD_FORM_LIST.map(o=>'<option value="'+o[0]+'"'+(o[0]===(cur||'')?' selected':'')+(_FORM_TIP[o[0]]?(' title="'+_FORM_TIP[o[0]]+'"'):'')+'>'+o[1]+'</option>').join(''); }
 function _dzShU(code){ return parseInt(_md5x(code).slice(0,4),16)%64; }
 async function dzUReg(code){ const sh=_dzShU(code); const m=await _dzFetch(_dzUC,sh,'./dz/u'+sh+'.json'); return (m&&m[code])||null; }
 async function dzUPart(code){ const sh=_dzShU(code); const m=await _dzFetch(_dzUNC,sh,'./dz/un'+sh+'.json'); return (m&&m[code])||null; }
@@ -6375,7 +6382,7 @@ async function dzPart(id){ const sh=Math.floor(id/200); const m=await _dzFetch(_
 /* ===== M447 Э-Ц1: РЕЖИМ «ЦЕПЬ» — хадисы по сочетанию передатчиков в иснаде (MVP по dz-разметке Э1.1).
    Якорь = самый редкий из выбранных (его участие НЕ усечено кэпом) → его места проверяем цепочками dz/b:
    все выбранные ID в цепи (+опция «рядом» = индексы подряд). Формы передачи (حدثنا/عن) — этап Э-Ц2. ===== */
-window._chainSel=[]; window._chainAdj=false;
+window._chainSel=[]; window._chainAdj=false; window._chainFormPre=''; window._chainFormPost='';   // С40: формы до 1-го / после последнего
 function _chainBox(){
   let b=document.getElementById('chainBox');
   if(!b){ b=document.createElement('div'); b.id='chainBox';
@@ -6389,11 +6396,22 @@ function chainRender(){
   const md=window._chainMode||'any';
   window._chainForms=(window._chainForms||[]).slice(0,Math.max(0,_chainSel.length-1));
   const _sh2=nm=>esc(String(nm||'').split(' ').slice(0,2).join(' '));
+  const seqMode=(md==='seq');
+  // С40: селект формы передачи на КАЖДОМ стыке. kind: 'pre'(жёлт,до 1-го) · 'mid'(зел,между) · 'post'(жёлт,после посл.)
+  const _chFsel=(idKey,fv,title,kind)=>{ const amb=(kind!=='mid');
+    const bg=fv?(amb?'#3d3417':'#173d30'):'var(--bg)', col=fv?(amb?'#f5e6bf':'#bff5d4'):'var(--hint)', bd=fv?(amb?'#9b7e2e':'#2e9b5b'):'var(--border)';
+    return '<select class="chForm" data-e="'+idKey+'" title="'+title+'" style="margin:2px;font-size:11px;background:'+bg+';color:'+col+';border:1px solid '+bd+';border-radius:7px;padding:3px 5px;direction:rtl">'+_chFormOpts(fv)+'</select>'; };
   const chipParts=[];
   _chainSel.forEach((c,i)=>{
+    if(seqMode && i===0)   // форма ПЕРЕД 1-м передатчиком (как собиратель книги его цитирует)
+      chipParts.push(_chFsel('pre', window._chainFormPre||'', 'Форма, которой собиратель цитирует 1-го передатчика ('+_sh2(c.nm)+'): حدثنا/أخبرنا…', 'pre'));
     chipParts.push('<span style="display:inline-flex;align-items:center;gap:6px;background:#2e1d4a;border:1px solid #6c5ce7;border-radius:9px;padding:5px 9px;margin:2px;direction:rtl"><b style="font-size:13.5px">'+esc(c.nm)+'</b><span style="font-size:10px;color:#9b8bd0">#'+esc(String(c.id))+'</span><span class="chDel" data-i="'+i+'" style="cursor:pointer;color:#e07f7f;font-weight:700;padding:0 3px">✕</span></span>');   // QA-HIGH: esc(c.id) — защита от XSS через подделанную share-ссылку #go= (c.id из ctx)
-    if(i<_chainSel.length-1 && md==='seq'){ const fv=window._chainForms[i]||'';
-      chipParts.push('<select class="chForm" data-e="'+i+'" title="Форма передачи на этом звене: как '+_sh2(_chainSel[i].nm)+' получил от '+_sh2(_chainSel[i+1].nm)+'" style="margin:2px;font-size:11px;background:'+(fv?'#173d30':'var(--bg)')+';color:'+(fv?'#bff5d4':'var(--hint)')+';border:1px solid '+(fv?'#2e9b5b':'var(--border)')+';border-radius:7px;padding:3px 5px;direction:rtl">'+_formFilterOpts(fv)+'</select>'); }
+    if(seqMode){
+      if(i<_chainSel.length-1){ const fv=window._chainForms[i]||'';   // форма МЕЖДУ парой
+        chipParts.push(_chFsel(String(i), fv, 'Как '+_sh2(c.nm)+' получил от '+_sh2(_chainSel[i+1].nm)+' (форма передачи)', 'mid')); }
+      else   // форма ПОСЛЕ последнего (как он получил выше — от Пророка ﷺ / следующего звена)
+        chipParts.push(_chFsel('post', window._chainFormPost||'', 'Как последний ('+_sh2(c.nm)+') получил выше (от Пророка ﷺ / следующего): سمعت/عن النبي/قال…', 'post'));
+    }
   });
   const chips=chipParts.join('');
   b.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:13px;color:#c9b8ff;font-weight:700">⛓ Цепь передачи — набирай имя в поиске и тапай подсказку (нужно от 2):</span><span id="chainX" title="Свернуть и выключить режим Цепь" style="cursor:pointer;color:#e07f7f;font-weight:700;border:1px solid var(--border);border-radius:6px;padding:1px 8px;flex:none">✕</span></div>'
@@ -6424,8 +6442,10 @@ function chainRender(){
     try{ _undoPush('удаление звена '+c.nm.split(' ').slice(0,2).join(' '), ()=>{ _chainSel.splice(Math.min(_ix,_chainSel.length),0,c); chainRender(); }); }catch(e){} });   // QA-low: undo вставляет звено на ИСХОДНУЮ позицию (был push в конец → ломал порядок seq-цепи)
   const _cbl=b.querySelector('#chainBaseLink'); if(_cbl) _cbl.onclick=()=>{ try{ openIsnadBase(); }catch(e){} };
   b.querySelectorAll('input[name="chOrd"]').forEach(r=>r.onchange=()=>{ window._chainMode=r.value; window._chainAdj=(r.value==='adj'); chainRender(); });
-  b.querySelectorAll('.chForm').forEach(s=>s.onchange=()=>{ window._chainForms=window._chainForms||[]; window._chainForms[+s.dataset.e]=s.value;
-    s.style.background=s.value?'#173d30':'var(--bg)'; s.style.color=s.value?'#bff5d4':'var(--hint)'; s.style.borderColor=s.value?'#2e9b5b':'var(--border)'; });   // M486: форма-фильтр ребра
+  b.querySelectorAll('.chForm').forEach(s=>s.onchange=()=>{ const e=s.dataset.e; const amb=(e==='pre'||e==='post');
+    if(e==='pre') window._chainFormPre=s.value; else if(e==='post') window._chainFormPost=s.value;
+    else { window._chainForms=window._chainForms||[]; window._chainForms[+e]=s.value; }   // M486/С40: форма-фильтр стыка (pre/между/post)
+    const on=!!s.value; s.style.background=on?(amb?'#3d3417':'#173d30'):'var(--bg)'; s.style.color=on?(amb?'#f5e6bf':'#bff5d4'):'var(--hint)'; s.style.borderColor=on?(amb?'#9b7e2e':'#2e9b5b'):'var(--border)'; });
   const cx=b.querySelector('#chainX'); if(cx) cx.onclick=()=>{ chainModeOff(); };   // R46: закрыть = выключить режим
   _chainSyncGo();   // R45: ОДНА кнопка — главная «Найти» становится «Найти цепь» (дубль в боксе убран)
 }
@@ -6522,7 +6542,8 @@ async function _replayAct(a){
     if(a.t==='book'){ openBook(String(a.bid), a.pg); return; }
     if(a.t==='quran'){ openQuranReader(a.s, a.a||1); return; }
     if(a.t==='chain'){ if(typeof modes!=='undefined'&&!modes.chain){ const c=document.querySelector('.chip[data-mode="chain"]'); if(c) c.click(); }
-      window._chainSel.length=0; (a.sel||[]).forEach(x=>{ if(!x) return; const _id=Number(x.id); if(!isFinite(_id)) return; _chainSel.push({id:_id, nm:String(x.nm||'')}); });   // QA-HIGH: санитизация ctx из #go= (id только число, nm строка) — 2-й слой против XSS share-ссылкой
+      window._chainSel.length=0; window._chainFormPre=''; window._chainFormPost=''; window._chainForms=[];   // С40: сбросить формы стыков при реплее из истории (там pre/post не сохранены)
+      (a.sel||[]).forEach(x=>{ if(!x) return; const _id=Number(x.id); if(!isFinite(_id)) return; _chainSel.push({id:_id, nm:String(x.nm||'')}); });   // QA-HIGH: санитизация ctx из #go= (id только число, nm строка) — 2-й слой против XSS share-ссылкой
       window._chainMode=(a.mode==='seq'||a.mode==='adj'||a.mode==='any')?a.mode:'any'; window._chainAdj=(window._chainMode==='adj')||!!a.adj; chainRender(); if(_chainSel.length>=2) chainRun(); return; }   // #2: восстановить под-режим цепи (был потерян → seq-цепь игралась в чужом режиме)
   }catch(e){ toast('Не удалось вернуться на этот этап'); }
 }
@@ -6685,7 +6706,8 @@ async function chainRunSeq(out){
     out.innerHTML='<div class="hint" style="color:#e0b34a">Цепей с такой конструкцией ПОДРЯД не нашлось. Проверь порядок (1-й передаёт ОТ 2-го) или переключись на «вместе в иснаде»/«рядом».</div>'; return; }
   try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){}
   // M486: фильтр ФОРМ передачи на рёбрах + подсчёт ДОСТУПНЫХ форм (подсказка) — выравниваем подцепь в цепи
-  const wantForms=window._chainForms||[]; const anyForm=wantForms.some(Boolean);
+  const wantForms=window._chainForms||[]; const preF=window._chainFormPre||'', postF=window._chainFormPost||'';
+  const anyForm=wantForms.some(Boolean)||!!preF||!!postF;   // С40: pre (до 1-го) и post (после посл.) тоже считаются фильтром
   const _alignStart=(seq)=>{ for(let st=0; st+groups.length<=seq.length; st++){ let ok=true;
       for(let k=0;k<groups.length;k++){ if(groups[k].indexOf(seq[st+k])<0){ ok=false; break; } } if(ok) return st; } return -1; };
   const availForms=Array.from({length:Math.max(0,groups.length-1)},()=>({}));   // на каждом ребре: какие формы встречаются (для подсказки)
@@ -6695,9 +6717,12 @@ async function chainRunSeq(out){
   // собрать доступные формы по рёбрам (по ВСЕМ найденным, до фильтра)
   allRecs.forEach(rc=>{ if(!rc.f) return; const st=_alignStart(rc.s); if(st<0) return;
     for(let k=0;k<groups.length-1;k++){ const g=rc.f[st+k+1]||''; const cnt=rc.n||1; availForms[k][g]=(availForms[k][g]||0)+cnt; } });
-  // применить фильтр форм
+  // применить фильтр форм (между-рёбра + pre f[st] + post f[st+N] если цепь длиннее выбранной)
   const recs=allRecs.filter(rc=>{ if(!anyForm) return true; if(!rc.f) return false; const st=_alignStart(rc.s); if(st<0) return false;
-    for(let k=0;k<wantForms.length;k++){ if(!wantForms[k]) continue; if(!_formMatch(rc.f[st+k+1]||'', wantForms[k])) return false; } return true; });
+    if(preF && !_formMatch(rc.f[st]||'', preF)) return false;
+    for(let k=0;k<wantForms.length;k++){ if(!wantForms[k]) continue; if(!_formMatch(rc.f[st+k+1]||'', wantForms[k])) return false; }
+    if(postF){ const pp=st+groups.length; if(pp<rc.s.length && !_formMatch(rc.f[pp]||'', postF)) return false; }   // post фильтрует только если цепь продолжается ниже выбранной (иначе — пометка marfu', не ограничение)
+    return true; });
   recs.sort((a,b)=>(b.n||0)-(a.n||0));
   const totH=recs.reduce((s,r)=>s+(r.n||0),0);
   out.innerHTML='';
@@ -6732,6 +6757,131 @@ async function chainRunSeq(out){
     more.disabled=shown>=recs.length; };
   out.appendChild(more); more.onclick=draw; draw();
 }
+/* ===== УКАЗ С40: РАЗБОР ПОЛНОГО ИСНАДА В ЦЕПЬ ПЕРЕДАЧИ =====
+   Владелец вставляет полный иснад (حدثنا فلان، ثنا فلان، أنا فلان، عن فلان…) → апп СРАЗУ предлагает надстройку:
+   разобрать на передатчиков, опознать/подтвердить КАЖДОГО, форма передачи ПЕРЕД 1-м · МЕЖДУ парами · ПОСЛЕ последнего. */
+const _ISNAD_FORM_MAP={
+  'حدثنا':'TH','ثنا':'TH','نا':'TH','حدثناه':'TH','ثناه':'TH',
+  'حدثني':'THi','ثني':'THi',
+  'اخبرنا':'AKH','انا':'AKH','اخبرناه':'AKH',
+  'اخبرني':'AKHi',
+  'انبانا':'ANB','نبانا':'ANB','ابنا':'ANB','انباني':'ANB','ابانا':'ANB',
+  'سمعت':'SAM',
+  'عن':'AN',
+  'ان':'ANN',
+  'قال':'QAL','قالت':'QAL'
+};
+function _isnNorm(s){ return String(s||'').replace(/[ً-ْـٰ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/ؤ/g,'و').replace(/ئ/g,'ي'); }
+function _parseIsnad(raw){
+  const toks=String(raw||'').split(/[\s،؛,.:؟!"«»()\[\]؛،‏‎]+/).map(x=>x.trim()).filter(Boolean);
+  const REL=new Set(['ابيه','ابيها','امه','امها','جده','جدها','عمه','عمها','اخيه','ابي']);
+  const links=[]; let curForm=''; let curNames=[]; let post='';
+  const flush=()=>{ if(curNames.length){ const nm=curNames.join(' '); links.push({form:curForm, name:nm, rel:REL.has(_isnNorm(nm))}); } curNames=[]; };
+  for(let i=0;i<toks.length;i++){ const nt=_isnNorm(toks[i]);
+    if(nt==='ح') continue;   // تحويل (переход к параллельной цепи)
+    if(_ISNAD_FORM_MAP[nt]!==undefined){ flush(); curForm=_ISNAD_FORM_MAP[nt]; continue; }
+    curNames.push(toks[i]); }
+  flush();
+  // последнее «звено» = Пророк ﷺ → это marfu', его форма уходит «после последнего»
+  if(links.length){ const last=links[links.length-1];
+    if(/رسول|النبي|نبي|المصطفى|رسولالله/.test(_isnNorm(last.name).replace(/\s/g,''))){ post=last.form; links.pop(); } }
+  return {links, post};
+}
+function _isnadDetect(t){ if(!isArabic(t)||String(t).length<14) return false;
+  const p=_parseIsnad(t);
+  const strong=p.links.filter(l=>['TH','THi','AKH','AKHi','ANB','SAM'].indexOf(l.form)>=0).length;
+  const named=p.links.filter(l=>l.name && l.name.replace(/\s/g,'').length>=3).length;
+  return p.links.length>=2 && strong>=1 && named>=2; }
+function _isnadHintShow(text){ const box=document.getElementById('isnadHint'); if(!box) return;
+  const p=_parseIsnad(text); box.innerHTML='';
+  const a=document.createElement('span'); a.style.cssText='flex:1;cursor:pointer;display:flex;align-items:center;gap:7px;min-width:0';
+  a.innerHTML='<span style="font-size:16px;flex:none">🧬</span><span style="font-size:12.5px;color:var(--text)">Похоже на полный <b>иснад</b> · передатчиков: '+p.links.length+' — <span style="color:var(--link)">разобрать в цепь с формами передачи ›</span></span>';
+  a.onclick=()=>{ try{hap('light');}catch(e){} box.style.display='none'; openIsnadParse(text); };
+  const x=document.createElement('span'); x.textContent='✕'; x.title='Скрыть'; x.style.cssText='cursor:pointer;opacity:.55;font-size:13px;padding:0 2px;flex:none';
+  x.onclick=(e)=>{ e.stopPropagation(); box.style.display='none'; };
+  box.appendChild(a); box.appendChild(x); box.style.display='flex'; }
+function _isnadBox(){ let b=document.getElementById('isnadBox');
+  if(!b){ b=document.createElement('div'); b.id='isnadBox';
+    b.style.cssText='display:none;margin:8px 0;padding:11px;border:1px solid #6c5ce7;border-radius:12px;background:rgba(108,92,231,.08)';
+    b.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:7px"><span style="font-size:13px;color:#c9b8ff;font-weight:700">🧬 Разбор иснада в цепь передачи</span><span id="isnadX" title="Закрыть" style="cursor:pointer;color:#e07f7f;font-weight:700;border:1px solid var(--border);border-radius:6px;padding:1px 8px;flex:none">✕</span></div>'
+      +'<div style="font-size:11.5px;color:var(--hint);margin-bottom:6px;line-height:1.5">Проверь КАЖДОГО передатчика (✓ опознан / ⚠️ выбери вручную). Форма передачи — селект на каждом стыке: <b style="color:#f5e6bf">⬆ до 1-го</b> · между парами · <b style="color:#f5e6bf">после последнего</b>.</div>'
+      +'<div id="isnadBody"></div>'
+      +'<div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap"><button id="isnadBuild" class="go" style="flex:1;min-width:160px;padding:9px;font-size:13.5px">✅ Построить цепь и искать</button><button id="isnadCancel" class="mini" style="padding:9px 13px;border:1px solid var(--border);border-radius:9px">отмена</button></div>';
+    const anchor=document.getElementById('res'); anchor.parentNode.insertBefore(b, anchor);
+    b.querySelector('#isnadX').onclick=()=>{ b.style.display='none'; };
+    b.querySelector('#isnadCancel').onclick=()=>{ b.style.display='none'; };
+    b.querySelector('#isnadBuild').onclick=()=>{ _isnadCommit(); }; }
+  return b; }
+async function openIsnadParse(text){ const p=_parseIsnad(text);
+  if(p.links.length<2){ toast('Не похоже на иснад из нескольких передатчиков'); return; }
+  const links=p.links.map(l=>({raw:l.name, form:l.form, rel:l.rel, cands:[], pick:null, _open:false}));
+  window._isnadState={links, post:p.post};
+  const box=_isnadBox(); box.style.display='block';
+  box.querySelector('#isnadBody').innerHTML='<div class="hint">⏳ Опознаю передатчиков по базе موسوعة الرواة…</div>';
+  try{ box.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){}
+  await Promise.all(links.map(async l=>{ if(l.rel){ l.cands=[]; l.pick=null; return; }
+    try{ let c=await narrCandidates(l.raw);
+      if(!c.length){ const w=l.raw.split(/\s+/); for(const k of [4,3,2]){ if(w.length>k){ const c2=await narrCandidates(w.slice(0,k).join(' ')); if(c2.length){ c=c2; break; } } } }
+      l.cands=(c||[]).slice(0,6);
+      // С40/[[tyozka-resolver-guar-card]]: дефолт-выбор через namesake-safe гарант-карту _narrLookup (مالك→Malik ibn Anas, ابن عمر→сподвижник), а НЕ топ скоринга (даёт тёзку #152). Кандидаты narrCandidates — для альтернатив.
+      let gid=null; try{ gid=await _narrLookup(l.raw); }catch(e){}
+      if(gid!=null){ l.pick=gid;
+        if(!l.cands.some(x=>x.id===gid)){ let nm=''; for(const p of (_narrNames||[])){ if(p[1]===gid){ nm=p[0]; break; } } l.cands.unshift({nm:nm||('#'+gid), id:gid, sc:1000}); } }
+      else l.pick=l.cands.length?l.cands[0].id:null;
+    }catch(e){ l.cands=[]; l.pick=null; } }));
+  _isnadRender(); }
+function _isnSh(nm){ return esc(String(nm||'').split(' ').slice(0,2).join(' ')); }
+function _isnadLinkRow(l,i){
+  const picked=l.pick!=null?(l.cands.find(c=>c.id===l.pick)||{nm:'#'+l.pick,id:l.pick}):null;
+  let h='<div style="border:1px solid '+(picked?'#2e9b5b':'#9b3a3a')+';border-radius:9px;padding:7px 9px;background:'+(picked?'rgba(46,155,91,.08)':'rgba(155,58,58,.08)')+';margin:2px 0 4px">';
+  h+='<div style="display:flex;align-items:center;gap:7px"><span style="font-size:11px;color:var(--hint);flex:none">'+(i+1)+'.</span>';
+  h+='<span style="flex:1;direction:rtl;text-align:right;font-size:14.5px;font-weight:700">'+esc(l.raw)+'</span>';
+  h+='<span class="isnDel" data-i="'+i+'" title="Убрать звено" style="cursor:pointer;color:#e07f7f;font-weight:700;padding:0 4px;flex:none">✕</span></div>';
+  if(picked) h+='<div style="font-size:12px;color:#9fd3a8;margin-top:3px;direction:rtl;text-align:right">✓ '+esc(picked.nm)+' <span style="color:var(--hint)">#'+esc(String(picked.id))+'</span> · <span class="isnAlt" data-i="'+i+'" style="cursor:pointer;color:var(--link)">другой вариант ▾</span></div>';
+  else if(l.rel) h+='<div style="font-size:11.5px;color:#e0b34a;margin-top:3px">↪ относительная форма (его отец/дед) — <span class="isnAlt" data-i="'+i+'" style="cursor:pointer;color:var(--link)">указать человека ▾</span></div>';
+  else h+='<div style="font-size:11.5px;color:#e0b34a;margin-top:3px">⚠️ не опознан — <span class="isnAlt" data-i="'+i+'" style="cursor:pointer;color:var(--link)">выбрать вручную ▾</span></div>';
+  if(l._open){ h+='<div style="margin-top:5px;border-top:1px dashed var(--border);padding-top:5px">';
+    h+='<input class="isnSearch" data-i="'+i+'" placeholder="набрать имя (араб/рус)…" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px;direction:rtl;text-align:right;margin-bottom:5px">';
+    if(l.cands.length) l.cands.forEach(c=>{ h+='<div class="isnPick" data-i="'+i+'" data-id="'+c.id+'" style="cursor:pointer;padding:5px 7px;border-radius:6px;direction:rtl;text-align:right;font-size:13.5px;'+(c.id===l.pick?'background:rgba(46,155,91,.15)':'')+'">'+esc(c.nm)+' <span style="color:var(--hint);font-size:11px">#'+esc(String(c.id))+'</span></div>'; });
+    else h+='<div class="hint" style="font-size:11.5px">кандидатов нет — набери имя выше</div>';
+    h+='</div>'; }
+  h+='</div>'; return h; }
+function _isnadFsel(idKey,cur,title){ return '<select class="isnFsel" data-e="'+idKey+'" title="'+title+'" style="font-size:12px;direction:rtl;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:3px 7px;min-width:104px">'+_isnadFormOpts(cur)+'</select>'; }
+function _isnadRender(){ const st=window._isnadState; if(!st) return;
+  const body=document.getElementById('isnadBody'); if(!body) return;
+  const rows=[];
+  st.links.forEach((l,i)=>{
+    const lab= i===0 ? '⬆ форма от собирателя к 1-му передатчику' : ('форма: '+_isnSh(st.links[i-1].raw)+' ← '+_isnSh(l.raw));
+    rows.push('<div style="margin:5px 0 1px;font-size:10.5px;color:var(--hint)">'+lab+'</div>');
+    rows.push('<div>'+_isnadFsel(String(i), l.form, esc(lab))+'</div>');
+    rows.push(_isnadLinkRow(l,i));
+  });
+  rows.push('<div style="margin:6px 0 1px;font-size:10.5px;color:#e0b34a">⬆ форма от последнего к Пророку ﷺ (سمعت رسول الله / عن النبي / قال)</div>');
+  rows.push('<div>'+_isnadFsel('post', st.post, 'Форма marfu — как последний передатчик получил от Пророка ﷺ')+'</div>');
+  body.innerHTML=rows.join('');
+  body.querySelectorAll('.isnFsel').forEach(s=>s.onchange=()=>{ const e=s.dataset.e; if(e==='post') st.post=s.value; else st.links[+e].form=s.value; });
+  body.querySelectorAll('.isnDel').forEach(x=>x.onclick=()=>{ st.links.splice(+x.dataset.i,1); if(st.links.length) _isnadRender(); else { const ib=document.getElementById('isnadBox'); if(ib) ib.style.display='none'; toast('Все звенья убраны'); } });
+  body.querySelectorAll('.isnAlt').forEach(b=>b.onclick=()=>{ const i=+b.dataset.i; st.links[i]._open=!st.links[i]._open; _isnadRender(); });
+  body.querySelectorAll('.isnPick').forEach(b=>b.onclick=()=>{ const i=+b.dataset.i, id=+b.dataset.id; st.links[i].pick=id; st.links[i]._open=false; _isnadRender(); });
+  body.querySelectorAll('.isnSearch').forEach(inp=>{ let tm; inp.oninput=()=>{ clearTimeout(tm); const i=+inp.dataset.i, q=inp.value.trim();
+    tm=setTimeout(async()=>{ if(q.length<2) return; try{ const c=await narrCandidates(q); st.links[i].cands=(c||[]).slice(0,6); st.links[i]._open=true; _isnadRender();
+      const ni=document.querySelector('.isnSearch[data-i="'+i+'"]'); if(ni){ ni.value=q; ni.focus(); } }catch(e){} },260); }; });
+}
+function _isnadCommit(){ const st=window._isnadState; if(!st) return;
+  const kept=st.links.filter(l=>l.pick!=null);
+  if(kept.length<2){ toast('Нужно минимум 2 опознанных передатчика — выбери их вручную (⚠️ красные)'); return; }
+  if(typeof modes!=='undefined' && !modes.chain){ const c=document.querySelector('.chip[data-mode="chain"]'); if(c) c.click(); else modes.chain=true; }
+  try{ document.getElementById('q').value=''; }catch(e){}
+  window._chainSel=kept.map(l=>{ const c=l.cands.find(x=>x.id===l.pick); return {id:l.pick, nm:(c?c.nm:('#'+l.pick))}; });
+  window._chainMode='seq'; window._chainAdj=false;
+  window._chainFormPre=kept[0].form||'';   // форма перед 1-м
+  window._chainForms=[]; for(let i=0;i<kept.length-1;i++) window._chainForms[i]=kept[i+1].form||'';   // между парами = вводящая форма следующего
+  window._chainFormPost=st.post||'';   // после последнего (marfu)
+  const ib=document.getElementById('isnadBox'); if(ib) ib.style.display='none';
+  window._isnadState=null;
+  chainRender(); if(window._chainSel.length>=2) chainRun();
+  try{ document.getElementById('chainBox').scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){}
+  toast('⛓ Цепь построена из иснада ('+kept.length+' звен.) — ищу конструкцию'); }
 // #241: приоритет сборников для сортировки результатов поиска по цепи (первоисточники сначала: Бухари→Муслим→Абу Дауд→Тирмизи→Насаи→Ибн Маджа→Малик→Ахмад, затем остальные)
 const _BID2SLUG={'1681':'bukhari','1727':'muslim','711':'muslim','1726':'abudawud','829':'nasai','1198':'ibnmajah','28107':'malik','25794':'ahmad'};
 const _SRC_PRIO_BIDS=['1681','1727','711','1726','829','1198','28107','25794'];
@@ -10332,9 +10482,12 @@ document.getElementById('goBtn').onclick=()=>{ hap('medium');
   // #198 (владелец: «вбил больше текста, обновилось, но форму поиску красивую не вернуло»): авто-поиск ПРИ НАБОРЕ оставлял поле раздутым (схлоп был только на Enter/Найти). Схлопываем при УХОДЕ из поля → компактная форма возвращается, не мешая правке.
   el.addEventListener('blur',()=>{ try{ el.style.height='auto'; el.style.overflowY='hidden'; }catch(e){} });
   el.addEventListener('input',()=>{ clearTimeout(t); const v=el.value.trim();
-    if(v.length<2){ if(!v){_seq++;document.getElementById('res').innerHTML='';setStatus('');} const _nh=document.getElementById('narrHint'); if(_nh) _nh.style.display='none'; return; }
+    if(v.length<2){ if(!v){_seq++;document.getElementById('res').innerHTML='';setStatus('');} const _nh=document.getElementById('narrHint'); if(_nh) _nh.style.display='none'; const _ih0=document.getElementById('isnadHint'); if(_ih0) _ih0.style.display='none'; return; }
     if(modes.ai) return;   // режим «По смыслу (ИИ)»: НЕ дёргать ИИ на каждую букву (тратит ключ) — только по «Найти»/Enter
     if(!v.trim()){ try{ hideNarrSugg(); }catch(e){} }   // R46: пустое поле — подсказки равиев закрываются сами
+    try{ const _ih=document.getElementById('isnadHint');   // УКАЗ С40: вставлен полный иснад → предложить разбор в цепь (в обычном поиске и в режиме Цепь)
+      if(tab==='hadith' && !modes.ai && !modes.any && _isnadDetect(v)) _isnadHintShow(v);
+      else if(_ih) _ih.style.display='none'; }catch(e){}
     if(modes.narr||modes.chain){ if(/^[\d٠-٩\s:№#×.]+$/.test(v)){ hideNarrSugg(); } else { t=setTimeout(()=>narrSuggest(v),230); return; } }   // 👤 передатчик/⛓ цепь: живые подсказки; ЧИСЛА идут дальше — обычный поиск по номеру
     // НЕ авто-искать НЕОДНОЗНАЧНЫЙ номер аята (235 → 2:35 / 23:5): пусть помощник покажет варианты, юзер выберет
     if(tab==='quran'){ const mn=v.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)); if(/^\d{2,6}$/.test(mn) && (mn.length>=4 || +mn>114) && ayahCandidates(mn).length>1){ return; } }
@@ -10384,7 +10537,7 @@ function goHome(){
   document.getElementById('q').value=''; selCols.clear(); selExtra.clear(); _qHist=[]; try{_qHistUpd();}catch(e){} try{ clearSearchScope(); }catch(e){}
   modes.ai=modes.root=modes.diac=modes.matnonly=modes.neuro=false; groupSrc=false;   // сброс режимов (ИИ и пр.)
   // TB-16: лого=домой закрывает И окна режимов равиев: бокс Цепи (с очисткой выбора), Передатчика, Любого текста, подсказки
-  try{ modes.chain=false; modes.narr=false; modes.any=false; _chainSel.length=0; chainRender(); narrBoxShow(false); anyBoxShow(false); hideNarrSugg(); _chainSyncGo(); }catch(e){}
+  try{ modes.chain=false; modes.narr=false; modes.any=false; _chainSel.length=0; window._chainFormPre=''; window._chainFormPost=''; window._chainForms=[]; var _ihn=document.getElementById('isnadHint'); if(_ihn)_ihn.style.display='none'; var _ibx=document.getElementById('isnadBox'); if(_ibx)_ibx.style.display='none'; chainRender(); narrBoxShow(false); anyBoxShow(false); hideNarrSugg(); _chainSyncGo(); }catch(e){}
   // заявка: при «домой» сбрасывать и подсказки-чипы (narrHint «Похоже на передатчика», транслит, книги)
   try{ ['narrHint','qSugg','tlSugg','bookSugg','narrSugg'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.style.display='none'; el.innerHTML=''; } }); }catch(e){}
   document.querySelectorAll('.modes .chip').forEach(c=>c.classList.remove('on'));
