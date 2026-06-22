@@ -199,7 +199,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v676</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v677</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -695,7 +695,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v676';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v677';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7842,7 +7842,8 @@ function _narrRow(c){   // строка-кандидат: ПРИВЫЧНОЕ и�
   r.style.cssText='padding:8px 11px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center';
   let ruN=''; try{ ruN=arNameRu(c.nm, 6); }catch(e){}
   // M361: левая колонка РОВНАЯ (фикс-ширина) — минимальные данные: вафат / ранг (рождение+место добавим датасетом)
-  const nbBadge=c._nb?('<span title="Известный сосед по цепям выбранных передатчиков ('+c._nb+' совместных звеньев в иснадах) — предложен первым" style="display:inline-block;font-size:9.5px;color:#c9b8ff;border:1px solid #6c5ce7;border-radius:6px;padding:0 5px;margin-top:2px">🔗 встречается с ним в цепях ×'+c._nb+'</span>'+(c._nbSah?(' <span title="И КОНКРЕТНО в Сахихайн (аль-Бухари/Муслим) их связь встречается '+c._nbSah+' раз — не просто оба рижаль Сахихайн, а вместе" style="display:inline-block;font-size:9.5px;color:#bff5d4;border:1px solid #2e9b5b;background:rgba(46,155,91,.12);border-radius:6px;padding:0 5px;margin-top:2px">🟢 вместе в Сахихайн ×'+c._nbSah+'</span>'):'')):'';
+  const _nbWho=c._nbWith?esc(String(c._nbWith).split(' ').slice(0,2).join(' ')):'выбранным';   // #331: НАЗВАТЬ, с кем связь (напр. «с الأعمش»)
+  const nbBadge=c._nb?('<span title="Этот передатчик встречается в одних иснадах с '+_nbWho+' ('+c._nb+' совместных звеньев) — поэтому предложен выше" style="display:inline-block;font-size:9.5px;color:#c9b8ff;border:1px solid #6c5ce7;border-radius:6px;padding:0 5px;margin-top:2px">🔗 с <b dir="rtl">'+_nbWho+'</b> в цепях ×'+c._nb+'</span>'+(c._nbSah?(' <span title="И КОНКРЕТНО в Сахихайн (аль-Бухари/Муслим) их связь встречается '+c._nbSah+' раз — не просто оба рижаль Сахихайн, а вместе" style="display:inline-block;font-size:9.5px;color:#bff5d4;border:1px solid #2e9b5b;background:rgba(46,155,91,.12);border-radius:6px;padding:0 5px;margin-top:2px">🟢 вместе в Сахихайн ×'+c._nbSah+'</span>'):'')):'';
   r.innerHTML='<span class="nsMeta" style="font-size:11px;color:var(--hint);flex:none;width:118px;line-height:1.4">'+(c.y?('<span dir="rtl">وفاة ~'+c.y+'هـ</span>'):'<span style="opacity:.4">—</span>')+(c.id!=null?('<span style="display:block;color:#5b87b5;font-size:10px">#'+c.id+'</span>'):'')+'</span>'
     +'<span style="flex:1;min-width:0"><b class="nsName" style="display:block;direction:rtl;text-align:right;font-size:14.5px;color:#ffd479">'+esc(c.nm)+'</b>'
     +(ruN?('<span style="display:block;text-align:right;font-size:11px;color:#bcd0ff">≈ '+esc(ruN)+'</span>'):'')+(nbBadge?('<span style="display:block;text-align:right">'+nbBadge+'</span>'):'')+'</span>';
@@ -7976,6 +7977,11 @@ function _narrRenderSugg(){
   const _seenId=new Set(); view=view.filter(c=>{ if(c.id==null) return true; if(_seenId.has(c.id)) return false; _seenId.add(c.id); return true; });
   // M401: в базе бывают ДУБЛЬ-ЗАПИСИ одного равия под разными id (سفيان الثوري ×2 с одинаковым вафатом) — схлопываем по канону имени+вафату
   const _seenNm=new Set(); view=view.filter(c=>{ const k=_narrCanon(stripDiac(c.nm))+'|'+(c.y||''); if(_seenNm.has(k)) return false; _seenNm.add(k); return true; });
+  // #331: аннотация связи (_nb) могла остаться на дубле, отброшенном дедупом (тёзка под другим id) → перенести на показанный
+  try{ const nbByName=new Map();
+    _narrLastCands.forEach(c=>{ if(c&&c._nb){ const k=_narrCanon(stripDiac(c.nm)); const cur=nbByName.get(k); if(!cur||c._nb>cur._nb) nbByName.set(k,c); } });
+    if(nbByName.size) view.forEach(c=>{ if(!c._nb){ const m=nbByName.get(_narrCanon(stripDiac(c.nm))); if(m){ c._nb=m._nb; c._nbWith=m._nbWith; c._nbSah=m._nbSah; } } });
+  }catch(e){}
   if(_narrSort==='year') view.sort((a,b)=>((a.y||9999)-(b.y||9999)));
   else if(_narrSort==='alpha') view.sort((a,b)=>(''+a.nm).localeCompare(''+b.nm,'ar'));
   // 'fame' = как пришло (скоринг известность+точность)
@@ -7997,22 +8003,22 @@ function _skelSubseq(qWords, nameSkels){ let j=0;
   return j>=qWords.length; }
 async function _chainAugment(cands, q){
   if(!(typeof modes!=='undefined'&&modes.chain) || !(window._chainSel&&window._chainSel.length)) return cands;
-  const nb=new Map(), nbSah=new Map();   // вес пары: всего / именно в Сахихайн (Бухари-Муслим)
+  const nb=new Map(), nbSah=new Map(), nbFrom=new Map();   // вес пары: всего / именно в Сахихайн / С КЕМ из выбранных (#331: назвать связь)
   for(const sel of window._chainSel){ try{ const np=await dzNP(sel.id); if(!np) continue;
-    const upd=p=>{ const id=p[0]; nb.set(id,Math.max(nb.get(id)||0,p[1]||0)); if(p[2]) nbSah.set(id,Math.max(nbSah.get(id)||0,p[2])); };
+    const upd=p=>{ const id=p[0], w=p[1]||0; if(w>(nb.get(id)||0) || !nb.has(id)){ nb.set(id,Math.max(w,nb.get(id)||0)); nbFrom.set(id, sel.nm); } if(p[2]) nbSah.set(id,Math.max(nbSah.get(id)||0,p[2])); };
     (np.t||[]).forEach(upd); (np.s||[]).forEach(upd); }catch(e){} }
   if(!nb.size) return cands;
   const isAr=/[ء-ي]/.test(q);
   const qWords=q.trim().split(/\s+/).map(w=>(isAr?_skelAr(w):_skelRu(w))[0]).filter(Boolean);
   if(!qWords.length) return cands;
-  cands.forEach(c=>{ if(nb.has(c.id)){ c._nb=nb.get(c.id); c._nbSah=nbSah.get(c.id)||0; } });
+  cands.forEach(c=>{ if(nb.has(c.id)){ c._nb=nb.get(c.id); c._nbSah=nbSah.get(c.id)||0; c._nbWith=nbFrom.get(c.id)||''; } });
   const have=new Set(cands.map(c=>c.id)); const ext=await loadNarrExt(); const add=[];
   for(const [id,w] of [...nb.entries()].sort((a,b)=>b[1]-a[1])){
     if(have.has(id)) continue;
     const card=await _narrCard(id); if(!card) continue;
     const e=ext.get(id); const full=(card[1]||'')+' '+((e&&e[0])||'');
     const skels=full.split(/\s+/).map(x=>_skelAr(x)[0]).filter(Boolean);
-    if(_skelSubseq(qWords, skels)){ add.push({id, nm:card[1]||('#'+id), sc:1000+w, y:(e&&e[1])||0, _nb:w, _nbSah:nbSah.get(id)||0}); if(add.length>=8) break; }
+    if(_skelSubseq(qWords, skels)){ add.push({id, nm:card[1]||('#'+id), sc:1000+w, y:(e&&e[1])||0, _nb:w, _nbSah:nbSah.get(id)||0, _nbWith:nbFrom.get(id)||''}); if(add.length>=8) break; }
   }
   add.sort((a,b)=>b._nb-a._nb);
   // #3 (абу муавия): сильный имя-матч (гарант/famous, sc≥999, напр. أبو معاوية الضرير #5577) НЕ хоронить под соседями по цепи — он первым
