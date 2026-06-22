@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v687</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v688</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v687';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v688';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1463,6 +1463,9 @@ function cardHadithRu(d){ const card=document.createElement('div');card.classNam
   meta.innerHTML='<span class="src'+(canRead?' srcnav" style="cursor:pointer" title="Открыть в читалке на этом хадисе">📖 ':'">')+vocOf(d.s)+' · №'+d.n+'</span>';   // #37: с огласовками
   { const _rl=_ruSrcLine(d.s); if(_rl) meta.innerHTML+='<span class="srcru" style="display:block;width:100%;font-size:11.5px;color:var(--hint);margin-top:1px;direction:ltr;text-align:left">'+esc(_rl)+'</span>'; }   // #37: рус. название + автор
   if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp) sp.onclick=()=>openReader(d.s,String(d.n)); }
+  try{ ourHukmBadge(d.s, d.n, meta, card); }catch(e){}   // #309/аудит: достоверность·разбор·материал и в рус-карточке (единообразие с обычной/Мухэймин)
+  try{ razboryBadge(d.s, d.n, meta, card); }catch(e){}
+  try{ ourMaterialBadge(d.s, d.n, meta, card); }catch(e){}
   const fav={k:'h|'+d.s+'|'+d.n,type:'h',coll:arOf(d.s),label:arOf(d.s)+' №'+d.n,text:(d.ru||'').slice(0,200)};
   card.appendChild(meta);
   // подтянуть арабский оригинал → арабский текст + ПОЛНЫЙ набор кнопок (как у обычных постов)
@@ -5721,9 +5724,10 @@ async function doExplain(text, ayah, ref, host, btn){
   const src = ayah?'quran':((ref&&ref.source)||'x'); const num = ayah?(ayah.s+':'+ayah.a):(((ref&&ref.num)!=null)?ref.num:'');
   const kind = ayah?'quran':'hadith';
   host.style.display='block'; host.innerHTML='<span class="hint">🧠 Объясняю простыми словами…</span>'; if(btn) btn.dataset.shown='1';
+  const _ac=new AbortController(); const _to=setTimeout(()=>{try{_ac.abort();}catch(e){}},60000);   // #323-класс: объяснение не виснет вечно
   try{
     const r=await fetch(BACKEND_URL+'/explain',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text:text, source:src, num:num, kind:kind, initData:INITDATA})});
+      body:JSON.stringify({text:text, source:src, num:num, kind:kind, initData:INITDATA}), signal:_ac.signal}); clearTimeout(_to);
     const j=await r.json().catch(()=>({}));
     if(r.status===403){ host.innerHTML='<span class="hint">'+((j&&j.message)||'функция пока не открыта')+'</span>'; return; }
     if(r.status===429){ host.innerHTML='<span class="hint">⏳ слишком часто — подожди немного</span>'; return; }
@@ -5737,7 +5741,7 @@ async function doExplain(text, ayah, ref, host, btn){
       fb.querySelector('.exErr').onclick=()=>{ try{ openFeedback('ИИ-объяснение '+(kind==='quran'?'аята':'хадиса')+' '+src+(num!==''?(' №'+num):'')); }catch(e){} };
       host.appendChild(fb);
     } else host.innerHTML='<span class="hint">не удалось объяснить — попробуй ещё раз</span>';
-  }catch(e){ host.innerHTML='<span class="hint">🔧 сервис недоступен</span>'; }
+  }catch(e){ try{clearTimeout(_to);}catch(_t){} host.innerHTML='<span class="hint">'+((e&&e.name==='AbortError')?'⏳ объяснение долго не отвечает — попробуй ещё раз':'🔧 сервис недоступен')+'</span>'; }
 }
 function addTr(meta,card,text,ayah,fav){
   if(fav) addStar(meta,fav);
@@ -9538,12 +9542,13 @@ function addHelpQ(meta,txt){ const q=document.createElement('button'); q.classNa
 async function doTashkeel(text,out,btn,ref){
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }
   btn.disabled=true; const prev=btn.textContent; btn.textContent='…';
-  try{ const r=await fetch(BACKEND_URL+'/tashkeel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text, source:ref&&ref.source, num:ref&&ref.num, initData:INITDATA})});
+  const _ac=new AbortController(); const _to=setTimeout(()=>{try{_ac.abort();}catch(e){}},60000);   // #323-класс: огласовки не виснут вечно при зависании бэкенда
+  try{ const r=await fetch(BACKEND_URL+'/tashkeel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text, source:ref&&ref.source, num:ref&&ref.num, initData:INITDATA}), signal:_ac.signal}); clearTimeout(_to);
     const j=await r.json().catch(()=>({}));
     if(r.status===403){ toast(j.message||'Огласовки пока не для всех'); }
     else if(r.ok && j.text){ out.innerHTML='<div style="color:#ffb74d;font-size:12px;margin-bottom:4px">⚠️ Огласовки расставил ИИ — возможны ошибки (не от автора).</div><div class="ar" style="font-size:18px;line-height:2">'+esc(j.text)+'</div>'; out.style.display='block'; }
     else toast('Не удалось расставить'); }
-  catch(e){ toast('🔧 Сервис недоступен — возможно, идёт обновление'); }
+  catch(e){ try{clearTimeout(_to);}catch(_t){} toast((e&&e.name==='AbortError')?'⏳ Огласовки долго не отвечают — попробуй ещё раз':'🔧 Сервис недоступен — возможно, идёт обновление'); }
   btn.disabled=false; btn.textContent=prev;
 }
 // isnad.link deep-link: наш код сборника → slug книги + глава по номеру хадиса (карта isnad/chapters.json)
