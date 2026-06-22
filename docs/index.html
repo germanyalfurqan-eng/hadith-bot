@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v700</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v701</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v700';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v701';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1031,7 +1031,7 @@ function highlight(raw,groups,modes){
   }catch(e){} }
   return html;
 }
-function esc(s){return (s||'').replace(/�/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function esc(s){return (s||'').replace(/�/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}   // QA-свип(XSS): экранируем " — esc-вывод вставляется в innerHTML-атрибуты title="…"/value="…"/data-…; кавычка ломала границу атрибута (attribute-XSS). & экранируется первым → &quot; не двоится; _safeHref/_chFsel с доп. .replace(/"/) безопасны (кавычек уже нет).
 function _safeHref(u){ u=String(u||''); if(!/^https?:\/\//i.test(u)) return '#'; return esc(u).replace(/"/g,'&quot;'); }   // QA(#3): безопасный href — только http(s) (блок javascript:/data:) + экранирование кавычек (defense-in-depth от attribute-XSS в сетевых URL)
 function splitIsnad(text){
   // КОНСЕРВАТИВНО: красим иснад только когда УВЕРЕНЫ (принцип владельца «не уверен — не выделяй»).
@@ -1307,7 +1307,7 @@ async function _assistSend(m){ const inp=m.querySelector('#assistInput'); const 
 }
 /* ===================== ДАННЫЕ ===================== */
 const cache={}; let reverse=null, quran=null, muh=null;
-async function loadReverse(){ if(reverse)return reverse; try{ reverse=await (await fetch(REVERSE_INDEX_URL)).json(); }catch(e){ reverse={}; } return reverse; }
+async function loadReverse(){ if(reverse)return reverse; try{ reverse=await fetchJSON(REVERSE_INDEX_URL, 45000, {silent:true}); }catch(e){ reverse={}; } return reverse; }   // QA-свип: таймаут (обратный индекс ~5МБ не виснет вечно)
 function gradeOf(h){ const g=h.grades&&h.grades[0]; return g?(g.grade||'').toString():''; }
 // Степень достоверности из источника (учёные/sunnah) — ПОМЕЧАЕМ, что это НЕ наша проверка.
 const GRADE_NOTE='Оценка указана по источнику (учёные / sunnah.com), не нашей редакцией. Наша проверка будет добавлена позже.';
@@ -1412,7 +1412,7 @@ async function loadExtra(code){ if(_local[code])return _local[code]; const e=EXT
   _local[code]=j.map(x=>{ const raw=(x.ar||x.t||'').replace(/\s+/g,' ').trim(); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }
 async function loadQuran(){ if(quran)return quran;
   try{ if(!(typeof modes!=='undefined'&&(modes.narr||modes.chain))) setStatus('Загружаю Коран…'); }catch(e){}   // в режимах равиев фоновая загрузка молчит («зачем при поиске передатчика грузить Коран»)
-  const j=await (await fetch(QURAN_URL)).json();
+  let j; try{ j=await fetchJSON(QURAN_URL, 30000); }catch(e){ try{ setStatus('Не удалось загрузить Коран — проверь сеть'); }catch(_){} throw e; }   // QA-свип: таймаут вместо вечного зависания читалки Корана (был голый fetch на критичном пути)
   quran=j.map(v=>{ const raw=(v.text||'').replace(/﻿/g,'').replace(/\s+/g,' ').trim();
     return {s:v.s,a:v.a,text:raw,norm:''}; }); return quran; }
 let quranRu=null;
@@ -1492,7 +1492,7 @@ async function loadMuhaymin(silent){ if(muh)return muh; if(!silent) setStatus('�
   // A-115: ретрай против ТРАНЗИЕНТНОГО 404/сбоя (момент деплоя Pages/связь) — иначе база не грузится и сыплет ложной ошибкой.
   let j=null, lastErr=null;
   for(let att=0; att<3; att++){
-    try{ const r=await fetch(MUHAYMIN_URL+(att?('?r='+att):'')); if(!r.ok) throw new Error('HTTP '+r.status); j=await r.json(); break; }
+    try{ j=await fetchJSON(MUHAYMIN_URL+(att?('?r='+att):''), 60000, {silent:true}); break; }   // QA-свип: таймаут на попытку (база ~8.4МБ не виснет вечно на медленной сети; ретрай ниже ловит throw)
     catch(e){ lastErr=e; if(att<2){ if(!silent) setStatus('База грузится… (попытка '+(att+2)+')'); await new Promise(res=>setTimeout(res, 800*(att+1))); } }
   }
   if(!j){ if(!silent) setStatus('База не загрузилась — проверь сеть и попробуй ещё раз'); throw lastErr||new Error('muhaymin load failed'); }
@@ -5113,8 +5113,8 @@ async function _qrWordPlay(s, a){
   _qrWordStop();
   toast('✨ Чтение по словам (Хусари)…');
   const _wpTok=window._wpSeq; let data=_wtData[s];
-  if(!data){ try{ const r=await fetch('./wordtimings/'+s+'.json'); const j=await r.json(); if(!j.audio||!j.v){ toast('Разметка недоступна'); return; } data=j; _wtData[s]=j; }
-    catch(e){ toast('🔧 разметка не загрузилась'); return; } }
+  if(!data){ try{ const j=await fetchJSON('./wordtimings/'+s+'.json', 30000, {silent:true}); if(!j.audio||!j.v){ toast('Разметка недоступна'); return; } data=j; _wtData[s]=j; }
+    catch(e){ toast('🔧 разметка не загрузилась'); return; } }   // QA-свип: таймаут (разметка по словам Хусари не виснет спиннером)
   if(_wpTok!==window._wpSeq) return;   // QA-low: пока грузилась разметка — нажали стоп / запустили другое → не стартуем устаревшее аудио
   const V=data.v; const t0=V[a]||V['1']; if(!t0){ toast('Нет тайминга'); return; }
   let curA=(V[a]?a:1), curWord=-1; window._qrNow={s:s,a:curA,mode:'word'};
@@ -5132,6 +5132,7 @@ async function _qrWordPlay(s, a){
     let wi=-1; for(const sg of tc.s){ if(ms>=sg[1] && ms<sg[2]){ wi=sg[0]; break; } }
     if(wi!==curWord){ curWord=wi; const blk=document.getElementById('qr-'+curA); if(blk){ const qws=blk.querySelectorAll('.qw'); qws.forEach(x=>x.classList.remove('qwnow')); const off=_off(curA, tc.s.length); const idx=wi-1-off; if(wi>0 && qws[idx]) qws[idx].classList.add('qwnow'); } } };
   au.onended=()=>{ if(window._qrWordAudio===au) _qrWordStop(); };
+  au.onerror=()=>{ if(window._qrWordAudio===au){ toast('Аудио недоступно'); _qrWordStop(); } };   // QA-свип: без onerror ошибка загрузки/декода аудио оставляла спиннер навсегда (как в _qrPlay/_qrWordByWord)
   au.play().then(()=>toast('✨ Чтение по словам — Хусари')).catch(()=>{ toast('Аудио недоступно'); });
 }
 // РЕЖИМ B: чтение ПО СЛОВАМ — отдельная запись каждого слова (quran.com wbw), для заучивания
@@ -6339,18 +6340,18 @@ function highlightNarrRuInDiv(div, arNames, onClick){
 /* ===== БАЗА ПЕРЕДАТЧИКОВ (расшифрованная Мактаба, 18989 равиев) — карточка как в Шамиле ===== */
 let _narrNames=null, _narrNamesP=null, _narrShard={};
 function loadNarrNames(){ if(_narrNames) return Promise.resolve(_narrNames); if(_narrNamesP) return _narrNamesP;
-  _narrNamesP=fetch('./narrators_names.json').then(r=>r.ok?r.json():null).then(async j=>{ _narrNames=j||[];
+  _narrNamesP=fetchJSON('./narrators_names.json', 20000, {silent:true}).then(async j=>{ _narrNames=j||[];   // QA-свип: таймаут (индекс имён — узкое место подсветки; голый fetch висел)
     // M381: расширенный индекс форм (كنية/نسب: أبو مالك الأشعري، الحسن البصري…) — уникальные вливаются в общий
-    try{ const r2=await fetch('./narrators_names2.json'); if(r2.ok){ const n2=await r2.json();
-      (n2.u||[]).forEach(p=>_narrNames.push(p)); window._narrMulti=n2.m||[]; } }catch(e){}
+    try{ const n2=await fetchJSON('./narrators_names2.json', 20000, {silent:true});
+      (n2.u||[]).forEach(p=>_narrNames.push(p)); window._narrMulti=n2.m||[]; }catch(e){}   // QA-свип: таймаут (вторичный индекс форм)
     // Сессия21: набор ПЕРВЫХ слов имён равиев موسوعة — проверка подсветки (واحد/رحمة/صدور — НЕ имена → не метим)
     try{ const S=new Set(), F=new Set(); _narrNames.forEach(p=>{ const nm=p[0]||''; if(!nm) return; F.add(nm); const f=nm.split(' ')[0]; if(f&&f.length>1){ S.add(f); S.add(f.replace(/^ال/,'')); } }); window._narrKnownW=S; window._narrKnownF=F; }catch(e){}
     return _narrNames; }).catch(()=>{_narrNames=[];return _narrNames;}); return _narrNamesP; }
 function _narrCanon(s){ s=(s||'').replace(/[ً-ْـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه'); return s.replace(/\s+/g,' ').trim(); }
 let _shuhraMap=null, _guarMap=null;
-async function _loadShuhra(){ if(_shuhraMap===null){ try{ _shuhraMap=await (await fetch('./narr_shuhra.json?v='+APPVER)).json(); }catch(e){ _shuhraMap={}; } } return _shuhraMap; }
+async function _loadShuhra(){ if(_shuhraMap===null){ try{ _shuhraMap=await fetchJSON('./narr_shuhra.json?v='+APPVER, 20000, {silent:true}); }catch(e){ _shuhraMap={}; } } return _shuhraMap; }   // QA-свип: таймаут (резолв имён не виснет)
 // #169/#170: ГАРАНТ-КАРТА канонических id (build_narr_guar.py из авторитетной na, доминирующий id на форму — namesake-safe).
-async function _loadGuar(){ if(_guarMap===null){ try{ _guarMap=await (await fetch('./narr_guar.json?v='+APPVER)).json(); }catch(e){ _guarMap={}; } } return _guarMap; }
+async function _loadGuar(){ if(_guarMap===null){ try{ _guarMap=await fetchJSON('./narr_guar.json?v='+APPVER, 20000, {silent:true}); }catch(e){ _guarMap={}; } } return _guarMap; }   // QA-свип: таймаут (гарант-карта тёзок не виснет)
 async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.length) return null; const cn=_narrCanon(name); if(cn.length<4) return null;
   // #169/#170 (тёзка-резолвер): ГАРАНТ знаменитых ПЕРВЫМ — лечит «مالك→ат-Таии вместо б.Анаса», «قتادة→ар-Рахави вместо ас-Садуси». Неоднозначные (2 Суфьяна) в карту НЕ попали → их решает контекст цепи.
   { try{ const g=await _loadGuar(); if(g && g[cn]!=null) return g[cn]; }catch(e){} }
@@ -8630,7 +8631,7 @@ async function showNarratorBio(name, out){
       cb2.textContent='🧬 По разобранным цепям (точнее: ловит и короткие формы)';
       cb2.onclick=async()=>{ cb2.disabled=true; cb2.textContent='⏳…';
         const places=await dzPart(c[0]);
-        if(!places||!places.length){ cb2.textContent='🧬 мест пока нет (Э1.1)'; return; }
+        if(!places||!places.length){ cb2.textContent='🧬 мест пока нет (Э1.1)'; cb2.disabled=false; return; }   // QA-свип: возвращаем кнопку в активное (была застрявшая disabled при пустом результате — нельзя повторить)
         try{ await loadBooksMap(); }catch(e){}
         cb2.style.display='none';
         const bx2=document.createElement('div');
@@ -9663,7 +9664,7 @@ async function doTafsir(s,a,out,btn,key,lang){
   const ed = lang==='ru' ? tf.ru : tf.ar; const isAr = lang==='ar';
   out.style.display='block'; out.innerHTML='<span class="hint">Загружаю тафсир…</span>';
   try{
-    const j=await (await fetch(TAFSIR_CDN+ed+'/'+s+'/'+a+'.json')).json();
+    const j=await fetchJSON(TAFSIR_CDN+ed+'/'+s+'/'+a+'.json', 15000, {silent:true});   // QA-свип: таймаут (CDN тафсира не виснет вечно «Загружаю тафсир…»)
     let txt=(j.text||'').replace(/\[\[[^\]]*\]\]/g,'').trim();
     let html='<div style="margin:2px 0">'
       +'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">'+TAFSIRS.map(t=>'<span class="tfk chip" data-k="'+t.key+'" style="cursor:pointer;font-size:12px'+(t.key===key?';background:var(--btn);color:#fff;border-color:var(--btn)':'')+'">'+t.nm+'</span>').join('')+'</div>'
@@ -9974,7 +9975,7 @@ function setTrBase(tr,e,src){ tr.textContent='♻️ Перевод'; const idx=
   tr.style.cssText='background:#1b2430;border:1px solid #3a4b5e;color:#9fb4cc;padding:6px 11px'; }
 const RU_TITLE={bukhari:'Сахих аль-Бухари',muslim:'Сахих Муслим',abudawud:'Сунан Абу Дауд',tirmidhi:'Сунан ат-Тирмизи',ibnmajah:'Сунан Ибн Маджа',nasai:'Сунан ан-Насаи',malik:'аль-Муватта (Малик)',ahmad:'Муснад Ахмада',muhaymin:'аль-Мухаймин',muqbil:'аль-Мукбиль · ас-Сахих'};
 function ruTitle(code){ return RU_TITLE[code]||((COLLECTIONS.find(c=>c.code===code)||{}).ru)||((EXTRA_MAP[code]||{}).ru)||code; }
-function trHead(ref){ return (ref&&ref.source)?('<div style="color:var(--link);font-size:12px;margin-bottom:3px">📖 '+esc(ruTitle(ref.source))+(ref.num?(' №'+ref.num):'')+'</div>'):''; }
+function trHead(ref){ return (ref&&ref.source)?('<div style="color:var(--link);font-size:12px;margin-bottom:3px">📖 '+esc(ruTitle(ref.source))+(ref.num?(' №'+esc(''+ref.num)):'')+'</div>'):''; }   // QA-свип(XSS): ref.num в esc (вставляется в innerHTML; String() — esc падает на числе)
 async function doTranslate(text,out,btn,ref,force){
   const _silent=ref&&ref.silent;   // #159-фикс: префетч-режим — подавить пользовательские тосты на путях ошибки
   const orig=btn.textContent, origStyle=btn.style.cssText; btn.disabled=true; btn.textContent='⏳…';
