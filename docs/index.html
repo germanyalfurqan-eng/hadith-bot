@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v682</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v683</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v682';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v683';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -9589,8 +9589,10 @@ async function translateTafsir(txt, key, s, a, host, btn){
   if(!BACKEND_URL){ host.textContent='перевод заработает на сервере'; return; }
   host.innerHTML='<span class="hint">🧠 Перевожу тафсир (по абзацам)…</span>'; if(btn){ btn.style.pointerEvents='none'; btn.textContent='…'; }
   const restore=()=>{ if(btn){ btn.style.pointerEvents=''; btn.textContent='🧠 Перевести (ИИ)'; } };
+  const _ac=new AbortController(); const _to=setTimeout(()=>{try{_ac.abort();}catch(e){}},60000);   // #323: таймаут 60с — перевод тафсира/равия не виснет вечно
   try{ const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text:(txt||'').slice(0,11000), source:'tafsir_'+key, num:s+':'+a, initData:INITDATA})});
+      body:JSON.stringify({text:(txt||'').slice(0,11000), source:'tafsir_'+key, num:s+':'+a, initData:INITDATA}), signal:_ac.signal});
+    clearTimeout(_to);
     const j=await r.json().catch(()=>({}));
     if(r.status===403){ host.innerHTML='<span class="hint">'+((j&&j.message)||'перевод пока не открыт')+'</span>'; restore(); return; }
     if(j&&j.translation){
@@ -9602,7 +9604,7 @@ async function translateTafsir(txt, key, s, a, host, btn){
       if(btn){ btn.style.pointerEvents=''; btn.textContent='⬇️ К переводу'; btn.title='Перейти к переводу (ниже)'; btn.onclick=()=>{ try{ host.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} }; }
       if(cfg.tafJump!==false){ setTimeout(()=>{ try{ host.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} }, 60); }
     } else { host.innerHTML='<span class="hint">не удалось перевести</span>'; restore(); }
-  }catch(e){ host.innerHTML='<span class="hint">🔧 сервис недоступен</span>'; restore(); }
+  }catch(e){ try{clearTimeout(_to);}catch(_t){} host.innerHTML='<span class="hint">'+((e&&e.name==='AbortError')?'⏳ перевод долго не отвечает — попробуй ещё раз':'🔧 сервис недоступен')+'</span>'; restore(); }
 }
 async function doTafsir(s,a,out,btn,key,lang){
   const tf=TAFSIRS.find(t=>t.key===key)||TAFSIRS[0]; key=tf.key;
@@ -9939,8 +9941,10 @@ async function doTranslate(text,out,btn,ref,force){
   }
   if(!BACKEND_URL){ if(!_silent) toast('Перевод заработает после подключения сервера (DeepSeek)'); restore(); return; }
   if(force) btn.textContent='🔄…';
+  const _ac=new AbortController(); const _to=setTimeout(()=>{try{_ac.abort();}catch(e){}}, 60000);   // #323: перевод не висит вечно — таймаут 60с → ошибка ловится ниже, кнопка не залипает «⏳»
   try{ const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text, source:ref&&ref.source, num:ref&&ref.num, force:!!force, initData:INITDATA})});
+      body:JSON.stringify({text, source:ref&&ref.source, num:ref&&ref.num, force:!!force, initData:INITDATA}), signal:_ac.signal});
+    clearTimeout(_to);
     const j=await r.json().catch(()=>({}));
     if(r.status===403){ if(!_silent) toast(j.message||'Перевод тебе пока не открыт.'); restore(); return; }
     if(r.ok && j.translation){
@@ -9959,7 +9963,7 @@ async function doTranslate(text,out,btn,ref,force){
     }
     try{ out.innerHTML='<span class="hint">⚠️ Не удалось перевести — попробуй ещё раз</span>'; out.style.display='block'; }catch(_e){}   // не оставлять «⏳ Перевожу…»
     if(!_silent) toast('Не удалось перевести'); restore();
-  }catch(e){ try{ out.innerHTML='<span class="hint">⚠️ Сервис недоступен — возможно, идёт обновление. Попробуй через минуту.</span>'; out.style.display='block'; }catch(_e){} if(!_silent) toast('🔧 Сервис недоступен — возможно, идёт обновление. Попробуй через минуту.'); restore(); }
+  }catch(e){ try{clearTimeout(_to);}catch(_t){} const _ab=(e&&e.name==='AbortError'); const _m=_ab?'⏳ Перевод долго не отвечает — попробуй ещё раз':'⚠️ Сервис недоступен — возможно, идёт обновление. Попробуй через минуту.'; try{ out.innerHTML='<span class="hint">'+_m+'</span>'; out.style.display='block'; }catch(_e){} if(!_silent) toast(_ab?'⏳ Перевод долго не отвечает — попробуй ещё раз':'🔧 Сервис недоступен — попробуй через минуту.'); restore(); }
 }
 
 /* ===================== УПРАВЛЕНИЕ ДОСТУПОМ (G9, серверное) ===================== */
