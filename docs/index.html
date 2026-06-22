@@ -111,7 +111,9 @@
   @font-face{font-family:'KFGQPC HAFS Uthmanic Script';src:local('KFGQPC HAFS Uthmanic Script'),url('https://cdn.jsdelivr.net/gh/thetruetruth/quran-data-kfgqpc@main/hafs/font/hafs.18.woff2') format('woff2');font-display:swap}
   /* #290: KFGQPC Uthman Taha Naskh — официальный насх мусхафа, ВЕБ-шрифт (jsDelivr, свободно для Корана). */
   @font-face{font-family:'KFGQPC Uthman Taha Naskh';src:local('KFGQPC Uthman Taha Naskh'),url('https://cdn.jsdelivr.net/gh/GlobalQuran/site@master/upload/img/font-quran/kfc_naskh-webfont.woff') format('woff');font-display:swap}
-  .ar{font-size:calc(19px * var(--txtScale,1));line-height:2;direction:rtl;text-align:right;font-family:var(--arFont,"Noto Naskh Arabic","Amiri",serif);user-select:text;overflow-wrap:break-word;word-break:break-word}   /* #184: длинная арабская строка без пробелов не вываливается за экран */
+  .ar{font-size:calc(19px * var(--txtScale,1));line-height:2;direction:rtl;text-align:right;font-family:var(--arFont,"Noto Naskh Arabic","Amiri",serif);user-select:text;-webkit-user-select:text;-moz-user-select:text;-webkit-touch-callout:default;overflow-wrap:break-word;word-break:break-word}   /* #184: длинная арабская строка без пробелов не вываливается за экран · #302/#325: webkit-префиксы+touch-callout — iOS Telegram WebView выделял текст только с ними */
+  /* #302/#325: явно разрешить выделение текста хадиса/перевода/слов внутри карточки (iOS WebView по умолчанию режет) */
+  #res .card, #res .ar, .ar .qw, .ru, .cnote, .trbox{ -webkit-user-select:text; user-select:text; -webkit-touch-callout:default }
   /* #77: комментарий составителя (قال أبو عيسى/قال أبو داود) — НЕ часть хадиса: абзац с отступом, приглушённый цвет, отбивка */
   .cnote{display:block;margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);text-indent:1.3em;color:var(--hint);font-size:.9em;line-height:1.75}
   .cnote::before{content:"✎ комментарий составителя";display:block;text-indent:0;font-size:10px;color:var(--link);opacity:.85;margin-bottom:3px;font-family:-apple-system,Segoe UI,sans-serif}
@@ -199,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v677</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v678</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -527,8 +529,9 @@
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:10px">
         <button class="go" id="readFirst" style="padding:8px 10px" title="В начало книги">⏮</button>
         <button class="go" id="readPrev" style="padding:8px 12px">← пред.</button>
-        <input type="number" id="readJump" placeholder="№ хадиса →" min="1" title="Введи НОМЕР хадиса в этой книге и нажми Enter — листалка перейдёт к нему (это номер хадиса, не том/страница)"
-               style="width:118px;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:7px 9px;font-size:13px">
+        <input type="number" id="readJump" placeholder="№ хадиса" min="1" inputmode="numeric" title="Введи НОМЕР хадиса в этой книге и нажми Enter или кнопку «→» — листалка перейдёт к нему (это номер хадиса, не том/страница)"
+               style="width:96px;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:7px 9px;font-size:13px">
+        <button class="go" id="readJumpGo" style="padding:8px 11px" title="Перейти к введённому номеру хадиса">→</button>
         <button class="go" id="readNext" style="padding:8px 12px">след. →</button>
         <button class="go" id="readLast" style="padding:8px 10px" title="В конец книги">⏭</button>
       </div>
@@ -695,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v677';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v678';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -10910,7 +10913,10 @@ var _rnext=document.getElementById('readNext'); if(_rnext) _rnext.onclick=()=>{ 
 // #38: «в начало / в конец книги» (как в Мактабе) — массив _readArr загружен целиком, длина известна
 var _rfirst=document.getElementById('readFirst'); if(_rfirst) _rfirst.onclick=()=>{ _readFindM=[]; _readFindPos=-1; var _fi=document.getElementById('readFindInfo'); if(_fi)_fi.textContent=''; _readIdx=0; _readRender(); try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
 var _rlast=document.getElementById('readLast'); if(_rlast) _rlast.onclick=()=>{ _readFindM=[]; _readFindPos=-1; var _fi=document.getElementById('readFindInfo'); if(_fi)_fi.textContent=''; _readIdx=(_readArr&&_readArr.length?_readArr.length-1:0); _readRender(); try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
-var _rjump=document.getElementById('readJump'); if(_rjump) _rjump.onkeydown=(e)=>{ if(e.key==='Enter'){ const qn=String(parseInt(_rjump.value,10)); const i=_readArr?_readArr.findIndex(x=>String(x.num)===qn):-1; if(i>=0){_readFindM=[];_readFindPos=-1;document.getElementById('readFindInfo').textContent='';_readIdx=i;_readRender();} else toast('№ не найден'); } };
+var _rjump=document.getElementById('readJump');
+function _readJumpGo(){ if(!_rjump) return; const v=parseInt(_rjump.value,10); if(!isFinite(v)){ toast('Введи номер хадиса'); return; } const qn=String(v); const i=_readArr?_readArr.findIndex(x=>String(x.num)===qn):-1; if(i>=0){_readFindM=[];_readFindPos=-1;var _rfi=document.getElementById('readFindInfo'); if(_rfi)_rfi.textContent='';_readIdx=i;_readRender(); try{_rjump.blur();}catch(e){}} else toast('№ '+qn+' не найден в этой книге'); }   // #317: переход по номеру — и Enter, и кнопка «→» (на моб. клавиатуре Enter нет)
+if(_rjump) _rjump.onkeydown=(e)=>{ if(e.key==='Enter'){ e.preventDefault(); _readJumpGo(); } };
+var _rjumpGo=document.getElementById('readJumpGo'); if(_rjumpGo) _rjumpGo.onclick=_readJumpGo;
 var _rfind=document.getElementById('readFind'); if(_rfind){ let _rft; _rfind.addEventListener('input',()=>{ clearTimeout(_rft); _rft=setTimeout(_readDoFind,350); }); _rfind.addEventListener('keydown',e=>{ if(e.key==='Enter'){ clearTimeout(_rft); if(_readFindM.length) _readFindStep(1); else _readDoFind(); } }); }
 
 async function boot(){
