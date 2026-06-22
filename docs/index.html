@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v694</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v695</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v694';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v695';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8123,7 +8123,7 @@ async function narrOpen(nm){
   const shortNm=nm.split(' ').slice(0,3).join(' ');
   // M360: участие ищем ТОЧНОЙ ФРАЗОЙ (кавычки M335) — пословный AND захватывал ЧУЖИХ по куску имени
   // («هشام» из «معاذ بن هشام» = ад-Даставаи ≠ Хишам ибн Аммар). Короткие формы без отчества — после дизамбигуации Э1.1.
-  hb.textContent='🔎 Хадисы с его участием (точная форма «'+shortNm+'»)';
+  hb.textContent='🔎 По тексту имени «'+shortNm+'» (где назван целиком)';
   hb.onclick=()=>{ try{ hap('light'); }catch(e){} _narrBypass=true; const q=document.getElementById('q'); q.value='"'+shortNm+'"'; hideNarrSugg(); runSearch(true); };
   box.appendChild(hb);
   const hbHint=document.createElement('div'); hbHint.className='hint'; hbHint.style.cssText='font-size:11px;margin:-3px 0 8px';
@@ -8131,7 +8131,7 @@ async function narrOpen(nm){
   box.appendChild(hbHint);
   // 🧬 M378b: ТОЧНОЕ участие по кодам Э1.1 (штудированные иснады 33 печатей, включая короткие формы — это не текст-поиск)
   const cb=document.createElement('button'); cb.className='mini'; cb.style.cssText='width:100%;padding:9px;margin-bottom:8px;font-size:13px;border:1px solid #2e6b9b;color:#bfe0f5;background:#16314d;border-radius:10px;cursor:pointer';
-  cb.textContent='🧬 Участие по кодам Э1.1 (точно, по штудированным иснадам)';
+  cb.textContent='🧬 По разобранным цепям (точнее: ловит и короткие формы, без тёзок)';
   cb.onclick=async()=>{ cb.disabled=true; cb.textContent='⏳ беру коды…';
     try{
       const id=await _narrLookup(nm);
@@ -8316,7 +8316,7 @@ function _qCat(q){ const cs=q.c||[]; for(const c of ['adl','jarh','jahl','nosama
   return (q.v||[]).some(w=>_TADIL_KW.some(t=>(''+w).indexOf(t)===0))?'adl':'jarh'; }   // фолбэк для старых шардов без c
 function _qToolsRow(qtxt, key, bookName){   // мини-кнопки Перевод/Объяснить/Огласовки на цитате
   const wrap=document.createElement('div');
-  const tl=document.createElement('div'); tl.style.cssText='display:flex;gap:5px;flex-wrap:wrap;margin-top:4px';
+  const tl=document.createElement('div'); tl.style.cssText='display:none;gap:5px;flex-wrap:wrap;margin-top:4px';   // #чистка вакханалии: скрыт по умолчанию, раскрывается по «🛠»
   const trH=document.createElement('div'); trH.style.cssText='display:none';
   const exH=document.createElement('div'); exH.style.cssText='display:none';
   const tkH=document.createElement('div'); tkH.style.cssText='display:none';
@@ -8327,11 +8327,14 @@ function _qToolsRow(qtxt, key, bookName){   // мини-кнопки Перев�
   tkB.onclick=async()=>{ if(tkB.dataset.shown==='1'){ tkH.style.display='none'; tkB.dataset.shown=''; return; }
     if(tkH.dataset.done==='1'){ tkH.style.display='block'; tkB.dataset.shown='1'; return; }
     if(!BACKEND_URL){ toast('Нужен сервер'); return; } tkB.disabled=true; const p=tkB.textContent; tkB.textContent='…';
-    try{ const r=await fetch(BACKEND_URL+'/tashkeel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:qtxt.slice(0,3500),source:key,num:0,initData:INITDATA})}); const j=await r.json().catch(()=>({}));
+    const _ac=new AbortController(); const _to=setTimeout(()=>{try{_ac.abort();}catch(e){}},60000);   // #323-класс: огласовки записи не виснут вечно
+    try{ const r=await fetch(BACKEND_URL+'/tashkeel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:qtxt.slice(0,3500),source:key,num:0,initData:INITDATA}), signal:_ac.signal}); clearTimeout(_to); const j=await r.json().catch(()=>({}));
       if(j&&j.text){ tkH.innerHTML='<div class="ar" style="direction:rtl;text-align:right;font-size:15px;line-height:2.05;border:1px solid var(--border);border-radius:9px;padding:8px;margin-top:5px;white-space:pre-wrap"></div>'; tkH.firstChild.textContent=j.text; tkH.style.display='block'; tkH.dataset.done='1'; tkB.dataset.shown='1'; try{ enableArabusTap(tkH.firstChild); }catch(e){} } else toast('Не удалось');
-    }catch(e){ toast('🔧 сервис'); } tkB.disabled=false; tkB.textContent=p; };
+    }catch(e){ try{clearTimeout(_to);}catch(_t){} toast((e&&e.name==='AbortError')?'⏳ долго не отвечает — попробуй ещё':'🔧 сервис'); } tkB.disabled=false; tkB.textContent=p; };
   tl.appendChild(trB); tl.appendChild(exB); tl.appendChild(tkB);
-  wrap.appendChild(tl); wrap.appendChild(tkH); wrap.appendChild(trH); wrap.appendChild(exH);
+  const tgl=mk('🛠 инструменты', ()=>{ const open=tl.style.display==='none'; tl.style.display=open?'flex':'none'; tgl.textContent=open?'🛠 скрыть':'🛠 инструменты'; });   // #чистка: ОДНА кнопка вместо триплета на каждой записи
+  tgl.style.cssText='font-size:10.5px;padding:1px 7px;opacity:.7;margin-top:4px';
+  wrap.appendChild(tgl); wrap.appendChild(tl); wrap.appendChild(tkH); wrap.appendChild(trH); wrap.appendChild(exH);
   return wrap;
 }
 async function renderNarrVerdicts(id, host){
@@ -8601,12 +8604,12 @@ async function showNarratorBio(name, out){
     const pw=document.createElement('div'); pw.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px';
     const hb2=document.createElement('button'); hb2.className='mini'; hb2.style.cssText='flex:1;min-width:46%;padding:8px;border:1px solid var(--border);border-radius:9px;font-size:12px';
     const short2=name.split(' ').slice(0,3).join(' ');
-    hb2.textContent='🔎 Хадисы с его участием';
+    hb2.textContent='🔎 По тексту имени (где назван целиком)';
     hb2.onclick=()=>{ try{hap('light');}catch(e){} const q=document.getElementById('q'); if(q) q.value='"'+short2+'"'; _narrBypass=true;
       try{ const nM=document.getElementById('narrModal'); if(nM) nM.style.display='none'; }catch(e){} runSearch(true); };
     pw.appendChild(hb2);
     if(c){ const cb2=document.createElement('button'); cb2.className='mini'; cb2.style.cssText='flex:1;min-width:46%;padding:8px;border:1px solid #2e6b9b;color:#bfe0f5;background:#16314d;border-radius:9px;font-size:12px';
-      cb2.textContent='🧬 Участие по кодам Э1.1';
+      cb2.textContent='🧬 По разобранным цепям (точнее: ловит и короткие формы)';
       cb2.onclick=async()=>{ cb2.disabled=true; cb2.textContent='⏳…';
         const places=await dzPart(c[0]);
         if(!places||!places.length){ cb2.textContent='🧬 мест пока нет (Э1.1)'; return; }
