@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v688</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v689</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v688';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v689';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3277,7 +3277,7 @@ async function _bookLoad(){
             let rnum=n;
             if(_bkCode==='muslim'){ try{ const arr=await loadByCode('muslim'); const mm2=(arr||[]).find(h=>String(h.num)===String(n)); rnum=(mm2&&mm2.fw)||null; }catch(e){ rnum=null; } }
             if(rnum!=null){ try{
-              const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-'+_bkCode+'/'+rnum+'.min.json')).json();
+              const j=await fetchJSON('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-'+_bkCode+'/'+rnum+'.min.json', 15000, {silent:true});   // #323-класс: готовый перевод с CDN не виснет (таймаут 15с; при сбое этот номер пропускается)
               const h=(j.hadiths||[])[0];
               if(h&&h.text){ got++; const d=document.createElement('div'); d.style.cssText='margin:7px 0;padding:8px 10px;border:1px solid #2e9b5b;border-radius:10px;background:rgba(46,155,91,.07);font-size:13.5px;line-height:1.6';
                 d.innerHTML='<div style="color:#7ee2a8;font-size:12px;margin-bottom:3px">📘 Хадис №'+n+' — готовый перевод (бесплатно):</div>'+esc(cleanRu(h.text));
@@ -3308,14 +3308,15 @@ async function _bookLoad(){
       if(tEl.dataset.voc==='1'){ me.innerHTML=esc(tEl.dataset.txt||'').replace(/\n+/g,'<br>'); tEl.dataset.voc=''; tkb.textContent='◌ Огласовки (ИИ)'; try{ enableArabusTap(me); }catch(e){} return; }
       if(!BACKEND_URL){ toast('Нужен сервер'); return; }
       const txt=tEl.dataset.txt||me.textContent||''; tkb.disabled=true; const p=tkb.textContent; tkb.textContent='…';
-      try{ const r=await fetch(BACKEND_URL+'/tashkeel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:txt.slice(0,3500),source:_bref.source,num:_bref.num,initData:INITDATA})});
+      const _ac=new AbortController(); const _to=setTimeout(()=>{try{_ac.abort();}catch(e){}},60000);   // #323-класс: огласовки книги не виснут вечно при зависании
+      try{ const r=await fetch(BACKEND_URL+'/tashkeel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:txt.slice(0,3500),source:_bref.source,num:_bref.num,initData:INITDATA}), signal:_ac.signal}); clearTimeout(_to);
         const j=await r.json().catch(()=>({}));
         if(r.status===429){ toast((j&&j.message)||'Лимит ИИ — подожди'); }
         else if(r.status===403){ toast((j&&j.message)||'Огласовки пока не для всех'); }
         else if(j&&j.text){ const warn='<div style="color:#ffb74d;font-size:12px;margin-bottom:6px;direction:rtl">⚠️ Огласовки расставил ИИ — возможны ошибки (не от автора).</div>';
           me.innerHTML=warn+esc(j.text).replace(/\n+/g,'<br>'); tEl.dataset.voc='1'; tkb.textContent='◌ Без огласовок'; try{ enableArabusTap(me); }catch(e){} }
         else toast('Не удалось расставить'); }
-      catch(e){ toast('🔧 Сервис недоступен'); }
+      catch(e){ try{clearTimeout(_to);}catch(_t){} toast((e&&e.name==='AbortError')?'⏳ Огласовки долго не отвечают — попробуй ещё раз':'🔧 Сервис недоступен'); }
       tkb.disabled=false; if(tkb.textContent==='…') tkb.textContent=p;
     };
     aiPanel.appendChild(tkb);
