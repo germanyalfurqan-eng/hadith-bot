@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v679</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v680</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v679';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v680';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2528,14 +2528,16 @@ async function runSearch(explicit){
       if(rs){ const code=rs.code, qn=String(parseInt(rs.num,10));
         const C=COLLECTIONS.find(x=>x.code===code), X=EXTRA_MAP[code]; let h=null;
         try{
-          if(code==='muhaymin'){ const a=await loadMuhaymin(); h=a.find(x=>String(x.n)===qn); if(h) add({type:'m',h}); }
-          else if(code==='ahmad'){ const a=await loadAhmad(); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
-          else if(X&&X.file){ const a=await loadLocal(code,X.file); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
-          else if(X){ const a=await loadExtra(code); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
-          else if(C&&C.file){ const a=await loadLocal(code,C.file); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
-          else { h=await getOne(code,qn); if(h) add({type:'h',code,h}); }
+          if(code==='muhaymin'){ const a=await loadMuhaymin(); h=a.find(x=>String(x.n)===qn); }
+          else if(code==='ahmad'){ const a=await loadAhmad(); h=a.find(x=>x.num===qn); }
+          else if(X&&X.file){ const a=await loadLocal(code,X.file); h=a.find(x=>x.num===qn); }
+          else if(X){ const a=await loadExtra(code); h=a.find(x=>x.num===qn); }
+          else if(C&&C.file){ const a=await loadLocal(code,C.file); h=a.find(x=>x.num===qn); }
+          else { h=await getOne(code,qn); }
         }catch(e){}
-        if(seq!==_seq) return; setHead(true); setStatus(''); logSearch(shown,tab,count);
+        if(seq!==_seq) return;   // #308: устаревший запуск (live-search обогнал Enter) НЕ вставляет карточку → нет дубля
+        if(h) add(code==='muhaymin'?{type:'m',h}:{type:'h',code,h});
+        setHead(true); setStatus(''); logSearch(shown,tab,count);
         if(!count) res.innerHTML='<div class="status">'+esc(nameOf(code))+' №'+qn+' — не нашёл. Проверь номер.</div>';
         return; }
     }
@@ -3922,10 +3924,11 @@ function cardMuh(d,groups){
   warn.textContent='⚠️ Книга в обработке — возможны ошибки распознавания. Автор: مرشد بن يوسف.';
   card.appendChild(warn);
   const meta=document.createElement('div');meta.className='meta';
-  meta.innerHTML='<span class="badge muh">الْمُهَيْمِن №'+h.n+' · مُرْشِد بن يُوسُف</span>'+
+  meta.innerHTML='<span class="badge muh srcnav" style="cursor:pointer" title="Открыть в читалке на этом хадисе">📖 الْمُهَيْمِن №'+h.n+' · مُرْشِد بن يُوسُف</span>'+
     '<span class="src" style="direction:rtl">'+esc(h.b||'')+' › '+esc(h.c||'')+'</span>'+
     '<span class="srcru" style="display:block;width:100%;font-size:11.5px;color:var(--hint);margin-top:1px;direction:ltr;text-align:left">аль-Мухаймин (الموحد المهيمن على الدين) · Муршид ибн Юсуф</span>';   // #37: рус. название + автор
   if(rv.length>1) meta.innerHTML+='<span class="grade">риваятов: '+rv.length+'</span>';
+  { const _sp=meta.querySelector('.srcnav'); if(_sp) _sp.onclick=()=>{ try{ openReader('muhaymin', String(h.n)); }catch(e){} }; }   // #319/#330: метка аль-Мухаймина кликабельна → читалка на этом хадисе (ридер muhaymin рабочий #265)
   let _mk=null; try{ for(const r of rv){ const s=(typeof r==='object'&&r.s)?r.s:''; const k=_srefToMaktaba(s); if(k){ _mk=k; break; } } }catch(e){}   // #39/#43: страница Мактабы из short_ref (первый резолвимый риваят)
   addTr(meta,card,h.text,null,{k:'m|'+h.n,type:'m',coll:'المهيمن',label:'المهيمن №'+h.n,text:((rv[0]&&rv[0].t)||'').slice(0,200),_mk:_mk}); card.appendChild(meta); return card;
 }
@@ -10809,7 +10812,7 @@ function _fillExtraSections(){ const sw=document.getElementById('extraSections')
   _cats.forEach(([c,lab])=> sw.appendChild(_extraSectChip(lab, lab, async()=>{ const cat=await loadCatalog(); return new Set(cat.filter(b=>b.c===c).map(b=>String(b.i))); })));
 }
 function openExtra(){ const t=document.getElementById('extraTotal'); if(t) t.textContent=EXTRA.length; try{ _fillExtraSections(); }catch(e){} renderExtraList(); document.getElementById('extraModal').style.display='flex'; const s=document.getElementById('extraSearch'); if(s){ s.value=''; } }
-var _eb=document.getElementById('extraBtn'); if(_eb) _eb.onclick=()=>openCatalog();   // СРАЗУ каталог Мактабы (мультивыбор разделов/книг/авторов) — без окна-переходника
+var _eb=document.getElementById('extraBtn'); if(_eb) _eb.onclick=()=>openExtra();   // #305/#306: вернул панель «Другие сборники» (чипы разделов + книги с «+»); полный каталог — кнопкой «вся Мактаба» внутри панели
 var _eb2=document.getElementById('extraBtn2'); if(_eb2) _eb2.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openCatalog(); };
 var _ec=document.getElementById('extraClose'); if(_ec) _ec.onclick=()=>{ document.getElementById('extraModal').style.display='none'; };
 var _eam=document.getElementById('extraAllMaktaba'); if(_eam) _eam.onclick=()=>{ document.getElementById('extraModal').style.display='none'; openCatalog(); };
