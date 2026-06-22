@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v678</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v679</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v678';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v679';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8516,9 +8516,14 @@ function renderMosuaJarh(c, out){
         if(fr.t) h+='<div class="ar" style="font-size:13.5px;line-height:1.95">'+_mosuaHtml(fr.t)+'</div>';
         card.innerHTML=h;
         try{ const _bk=card.querySelector('.mosuaBk'); if(_bk) _bk.onclick=(e)=>{ e.stopPropagation(); try{ openCatalog(_bk.dataset.q); }catch(_e){} }; }catch(e){}   // #52: → каталог с этой книгой
-        // M369/M369b (поправка владельца): кнопка ОДНА (сверху), а переводы ложатся ПОД КАЖДОЙ цитатой (R39)
+        // M369/M369b + С40-фикс расхода: перевод ложится ПОД КАЖДОЙ цитатой, но ТОЛЬКО ПО ТАПУ (никакого авто-перевода/каскада — раньше один клик жёг ключ на N фрагментов и флудил канал)
         if(fr.t && fr.t.length>15){ card.classList.add('mosFr'); card.__t=fr.t;
-          const to=document.createElement('div'); to.className='tr-out mosTr'; to.style.cssText='display:none;margin-top:4px;direction:ltr;text-align:left'; card.appendChild(to); }
+          const to=document.createElement('div'); to.className='tr-out mosTr'; to.style.cssText='display:none;margin-top:4px;direction:ltr;text-align:left';
+          const fb=document.createElement('button'); fb.className='mini'; fb.textContent='🧠 перевод'; fb.title='Перевести эту цитату (ИИ)'; fb.style.cssText='font-size:11px;padding:2px 8px;margin-top:5px';
+          fb.onclick=(e)=>{ if(e&&e.stopPropagation) e.stopPropagation(); if(fb.__d) return; fb.__d=1; fb.textContent='…'; to.style.display='block';
+            let hsh=0; const s=fr.t||''; for(let q=0;q<s.length;q++) hsh=(hsh*31+s.charCodeAt(q))>>>0;
+            try{ translateTafsir(s.slice(0,3000),'mosua'+c[0],hsh%1000000,0,to,null); }catch(_e){} fb.textContent='✓ переведено'; };
+          card.appendChild(fb); card.appendChild(to); }
         host.appendChild(card); });
     } else {
       host.className='ar'; host.style.cssText='font-size:13.5px;line-height:1.95;white-space:pre-wrap;direction:rtl;text-align:right'; host.textContent=txt;
@@ -8527,26 +8532,12 @@ function renderMosuaJarh(c, out){
   _mosuaRenderInto(jt, c[8]);
   const tro=document.createElement('div'); tro.className='tr-out'; tro.style.cssText='display:none;margin-top:7px';
   const mk=(t,fn)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=t; b.style.cssText='font-size:12px;padding:4px 9px'; b.onclick=fn; return b; };
-  // M369b: одна кнопка — переводит цитаты ЛЕСЕНКОЙ, каждый перевод появляется под своей цитатой; повторный клик = стоп
-  const trAllBtn=mk('🧠 Перевод (ИИ)', null);
+  // С40-фикс расхода: ОДИН вызов на всю карточку (раньше — каскад по фрагментам: N платных вызовов DeepSeek + N уведомлений в канал, цикл продолжался даже после закрытия окна → флуд SMS и трата ключа без нажатия). Перевод по отдельной цитате — кнопка «🧠 перевод» под ней (по тапу).
+  const trAllBtn=mk('🧠 Перевод всего (ИИ)', null);
   trAllBtn.onclick=async()=>{
-    const frs=[...jt.querySelectorAll('.mosFr')];
-    if(!frs.length){ try{ translateTafsir((jt.dataset.txt||c[8]).slice(0,9000),'narrator'+c[0],c[0],0,tro,null); }catch(e){} return; }
-    if(trAllBtn.__run){ trAllBtn.__run=false; trAllBtn.textContent='🧠 Перевод (ИИ)'; return; }
-    trAllBtn.__run=true;
-    for(let i=0;i<frs.length;i++){
-      if(!trAllBtn.__run) break;
-      trAllBtn.textContent='🧠 перевожу '+(i+1)+'/'+frs.length+' · нажми = стоп';
-      const fcard=frs[i]; const to=fcard.querySelector('.mosTr'); if(!to) continue;
-      to.style.display='block';
-      if(to.dataset.done!=='1'){
-        let hsh=0; const s=fcard.__t||''; for(let q=0;q<s.length;q++) hsh=(hsh*31+s.charCodeAt(q))>>>0;
-        try{ translateTafsir(s.slice(0,3000), 'mosua'+c[0], hsh%1000000, 0, to, null); }catch(e){}
-        to.dataset.done='1';
-        await new Promise(r=>setTimeout(r, 800));
-      }
-    }
-    trAllBtn.__run=false; trAllBtn.textContent='🧠 Перевод (ИИ) ✓';
+    if(trAllBtn.__busy) return; trAllBtn.__busy=true; trAllBtn.textContent='🧠 перевожу…';
+    try{ await translateTafsir((jt.dataset.txt||c[8]).slice(0,9000),'narrator'+c[0],c[0],0,tro,null); }catch(e){}
+    trAllBtn.__busy=false; trAllBtn.textContent='🧠 Перевод всего (ИИ) ✓';
   };
   tools.appendChild(trAllBtn);
   const tkb=mk('◌ Огласовки (ИИ)', null);
