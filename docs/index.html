@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v710</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v711</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v710';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v711';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -921,6 +921,10 @@ async function fetchJSON(url, ms, opts){ ms=ms||20000;
     const err=new Error('fetchJSON: '+reason); err._url=url; err._timeout=ab; throw err; }
   finally{ clearTimeout(t); }
 }
+async function bjson(url, ms){ ms=ms||20000; const _ac=new AbortController(); const _to=setTimeout(()=>{ try{_ac.abort();}catch(e){} }, ms);
+  try{ const r=await fetch(url,{signal:_ac.signal}); return await r.json().catch(()=>({})); }
+  catch(e){ return {}; }
+  finally{ clearTimeout(_to); } }
 let ALLOW=null;   // {app,translate,neuro,bot} с сервера
 let ACC=null;     // полный конфиг доступа (для owner-панели)
 let ME=null;      // {id,username,owner,verified}
@@ -3086,8 +3090,7 @@ async function _bookLoad(){
   const tEl=m.querySelector('#bookText'), navEl=m.querySelector('#bookNav'), ttl=m.querySelector('#bookTitle');
   tEl.innerHTML='<span class="hint">📖 Загружаю страницу…</span>';
   try{
-    const r=await fetch(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+_bookView.pg+'&initData='+encodeURIComponent(INITDATA));
-    const j=await r.json().catch(()=>({})); const meta=j.meta||{};
+    const j=await bjson(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+_bookView.pg+'&initData='+encodeURIComponent(INITDATA), 30000); const meta=j.meta||{};   // QA-свип: таймаут 30с (был голый fetch → белый экран при зависании /book_page)
     // «как в Шамиле»: пользователь прыгает по ПЕЧАТНОЙ странице, а turath листает только по «листу» (pg).
     // Подгоняем лист так, чтобы попасть РОВНО в нужную печатную страницу (до 2 шагов авто-коррекции).
     if(_bookView.want!=null && typeof meta.page==='number' && meta.page!==_bookView.want && (_bookView.snaps||0)<2){
