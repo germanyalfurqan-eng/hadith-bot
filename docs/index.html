@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v711</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v712</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v711';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v712';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2943,8 +2943,7 @@ function _bkApplyTheme(tEl){
 }
 // M347: прыжок по ТОМУ — бинарный поиск первого листа с meta.vol >= t (живые мета turath; ~12-18 запросов, с тостом)
 async function _bkFetchMeta(pg){
-  try{ const r=await fetch(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+pg+'&initData='+encodeURIComponent(INITDATA));
-    const j=await r.json().catch(()=>({})); const mt=j.meta||{};
+  try{ const j=await bjson(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+pg+'&initData='+encodeURIComponent(INITDATA), 25000); const mt=j.meta||{};
     return {vol:(mt.vol!=null?parseInt(String(mt.vol).replace(/[^0-9]/g,'')):null), has:!!(j.text&&j.text.trim())};
   }catch(e){ return null; }
 }
@@ -3050,8 +3049,7 @@ function _bkSavePos(){ try{ const pos=JSON.parse(localStorage.getItem('bk_pos')|
   localStorage.setItem('bk_pos', JSON.stringify(pos)); }catch(e){} }
 // дозагрузка соседней страницы В ТО ЖЕ окно (как в Шамиле: «тахмиль ас-сафха ат-талия/ас-сабика») — читать подряд, не перелистывая
 async function _bookFetchClean(pg){
-  try{ const r=await fetch(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+pg+'&initData='+encodeURIComponent(INITDATA));
-    const j=await r.json().catch(()=>({})); const meta=j.meta||{};
+  try{ const j=await bjson(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+pg+'&initData='+encodeURIComponent(INITDATA), 25000); const meta=j.meta||{};
     const clean=(j.text||'').replace(/<[^>]*>/g,'').replace(/ /g,' ');
     return {clean, page:(typeof meta.page==='number'?meta.page:null), headings:(meta.headings||[]).filter(Boolean)};
   }catch(e){ return null; }
@@ -8800,8 +8798,7 @@ async function doRijalCorpus(name, out, btn){
   };
   async function loadMore(mb){
     if(st.loading) return; st.loading=true; if(mb){ mb.textContent='⏳ загружаю…'; mb.disabled=true; }
-    try{ const r=await fetch(BACKEND_URL+'/rijal?name='+encodeURIComponent(name)+'&page='+(st.page+1)+'&initData='+encodeURIComponent(INITDATA));
-      const jj=await r.json().catch(()=>({}));
+    try{ const jj=await bjson(BACKEND_URL+'/rijal?name='+encodeURIComponent(name)+'&page='+(st.page+1)+'&initData='+encodeURIComponent(INITDATA), 20000);
       if(r.status===429){ if(mb){mb.textContent='Слишком часто — подожди';mb.disabled=false;} st.loading=false; return; }
       if(r.status===403){ st.done=true; st.loading=false; if(!st.all.length) out.innerHTML='<div class="hint">Функция пока не открыта.</div>'; else render(); return; }
       if((jj&&jj.error)||r.status>=500){ st.done=true; st.loading=false; if(!st.all.length) out.innerHTML='<div class="hint">🔧 Сервер риджаля недоступен — подними Railway.</div>'; else render(); return; }
@@ -10457,7 +10454,7 @@ function runDeepLink(){ const g=_deepLinkToken(); if(!g) return; const p=g.split
     else if(t==='m' && p[1]){ (async()=>{ try{ const _th=document.querySelector('.tab[data-tab="hadith"]'); if(_th) _th.click();   // 📍 share-place: аль-Мухаймин №p[1] карточкой (он вне читалки)
       const _a=await loadMuhaymin(); const _h=_a.find(x=>String(x.n)===String(p[1])); const _res=document.getElementById('res');
       if(_h&&_res){ _res.innerHTML=''; _groups=[]; _res.appendChild(makeCard({type:'m',h:_h})); } }catch(e){} })(); }
-    else if(t==='raz' && p[1]){ try{ openOurRazbory(); setTimeout(()=>{ try{ const el=document.getElementById('raz_'+p[1]); if(el){ el.style.display='block'; const hd=el.previousElementSibling; if(hd){ const ar=hd.querySelector('.razArrow'); if(ar) ar.textContent='▲'; } el.scrollIntoView({block:'center'}); } }catch(e){} }, 900); }catch(e){} }   // З-30: ссылка на разбор
+    else if(t==='raz' && p[1]){ try{ openOurRazbory(); setTimeout(()=>{ try{ const el=document.getElementById('raz_'+String(p[1]).replace(/[^a-zA-Z0-9_-]/g,'')); if(el){ el.style.display='block'; const hd=el.previousElementSibling; if(hd){ const ar=hd.querySelector('.razArrow'); if(ar) ar.textContent='▲'; } el.scrollIntoView({block:'center'}); } }catch(e){} }, 900); }catch(e){} }   // З-30: ссылка на разбор
     else if(t==='n' && p[1]){ (async()=>{ try{ const c=await _narrCard(p[1]); if(c&&c[1]) openNarratorRijal(c[1]); }catch(e){} })(); }   // #246: карточка передатчика по mid (n_3889) — для дип-ссылки со скрина карточки
     else if(t==='cat') openCatalog();
   }catch(e){} }, 650); }
