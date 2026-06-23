@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v715</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v716</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v715';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v716';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7045,6 +7045,26 @@ async function _isnadInfo(codes, forms){
   const rec=(m&&m[cid])||null;
   return {cid, n:(rec?rec.n:1), ex:(rec?rec.ex:[])};
 }
+// С41: ХРЕБЕТ ЦЕПИ — реальная частота по ОПОЗНАННЫМ передатчикам. cid дробится U-кодами кратких форм
+// (45.7% звеньев не опознаны → один иснад = сотни cid). Хребет = последовательность только числовых id (>=2),
+// U-коды отброшены → собирает варианты одной цепи вместе (реестр isnad/back_*.json, билдер build_backbone.py).
+function _backCode(codes){ const nums=(codes||[]).filter(x=>typeof x==='number'); if(nums.length<2) return null; return 'B'+_md5(nums.map(String).join('|')).slice(0,10); }
+var _backC={};
+async function _backRec(bc){
+  if(!bc||!/^B[0-9a-fA-F]{6,}/.test(bc)) return null;
+  const pref=bc.slice(1,3); let m=_backC[pref];
+  if(m===undefined){ try{ const r=await fetch('./isnad/back_'+pref+'.json?v='+APPVER); m=r.ok?await r.json():{}; }catch(e){ m={}; } _backC[pref]=m; }
+  const rec=(m&&m[bc])||null;
+  return rec?{bc, n:rec.n, v:rec.v, ids:rec.ids, ex:(rec.ex||[]), q:rec.q}:null;
+}
+async function _backInfo(codes){ const bc=_backCode(codes); if(!bc) return null; return await _backRec(bc); }
+// С41 РЕВИЗИЯ: знак НАДЁЖНОСТИ хребта (по рангам якорей риджаль). weak = есть обскурный (مجهول/مستور/مقبول) →
+// краткая форма имени могла слиться по тёзкам → счёт завышен. strong = все опознанные известны → счёт достоверен.
+function _qBadge(q){
+  if(q==='strong') return '<span title="Все опознанные передатчики — известные (ثقة/صدوق/ثبت…). Счёт этой цепи достоверен." style="color:#6cc18a;font-size:10.5px;white-space:nowrap">✅ надёжно</span>';
+  if(q==='weak') return '<span title="Среди опознанных есть обскурный передатчик (مجهول/مستور/مقبول). Краткая форма имени могла резолвиться в ОДНОГО человека, хотя в разных хадисах это РАЗНЫЕ тёзки → счёт может СМЕШИВАТЬ разные цепи (завышен). Опирайся на надёжные ✅." style="color:#e0a24a;font-size:10.5px;white-space:nowrap;cursor:help">⚠️ возможны тёзки</span>';
+  return '';
+}
 // M475: связи учитель↔ученик из تهذيب الكمال (эталон аль-Мизи) — для метки подтверждённых смежностей цепи
 var _tlinkCache={};
 async function _tlinkGet(id){
@@ -7165,6 +7185,23 @@ async function dzChainInto(host, bid, num){
           ls.innerHTML='🔗 связи: <b>'+s.conf+'/'+s.total+'</b> подтв. الكمال';
           ci.appendChild(ls);
         } }catch(e){} })();
+        // С41: ХРЕБЕТ — честная частота этой цепи по опознанным передатчикам (cid дробится U-кодами/формами)
+        (async()=>{ try{
+          const bbi=await _backInfo(seq||codes);
+          if(bbi && bbi.n>info.n){
+            const bb=document.createElement('div'); bb.style.cssText='margin-top:7px;font-size:11.5px;color:var(--hint);line-height:1.5';
+            bb.innerHTML='🧬 Эта цепочка <b>опознанных передатчиков</b> встречается <b style="color:#9fd3a8">'+bbi.n+' раз'+(bbi.n%10===1&&bbi.n%100!==11?'':'а')+'</b> '
+              +'<span style="cursor:help" title="Тот же набор опознанных передатчиков записан '+bbi.v+' кодами цепи — В ОСНОВНОМ из-за НЕопознанных кратких звеньев (U-код: один человек в разных хадисах получает разный код); форма передачи (حدثنا/عن) влияет минимально (≈2%). Варианты собраны по именованным передатчикам.">(из '+bbi.v+' вариантов записи ⓘ)</span> '+_qBadge(bbi.q);
+            const bp=document.createElement('span'); bp.style.cssText='margin-right:8px;cursor:pointer;color:var(--link)'; bp.textContent=' 📍 где встречается';
+            const blst=document.createElement('div'); blst.style.cssText='display:none;margin-top:4px';
+            bp.onclick=async()=>{ if(blst.style.display!=='none'){ blst.style.display='none'; return; } blst.style.display='block';
+              if(blst.dataset.b) return; blst.dataset.b='1';
+              try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){}
+              (bbi.ex||[]).slice(0,40).forEach(p=>blst.appendChild(_dzPlaceRow(p[0],p[1],null)));
+              if(bbi.n>(bbi.ex||[]).length){ const mo=document.createElement('div'); mo.className='hint'; mo.style.cssText='font-size:10.5px;margin-top:3px'; mo.textContent='… показаны первые '+(bbi.ex||[]).length+' из '+bbi.n; blst.appendChild(mo); } };
+            bb.appendChild(bp); box.appendChild(bb); box.appendChild(blst);
+          }
+        }catch(e){} })();
         if(info.n>=2){
           const others=info.ex.filter(p=>!(String(p[0])===String(bid)&&String(p[1])===String(num)));
           const bt=document.createElement('span'); bt.style.cssText='cursor:pointer;color:var(--link)';
@@ -7188,9 +7225,26 @@ async function dzChainInto(host, bid, num){
 }
 /* ===== ⛓ M449: БАЗА ИСНАДОВ — браузер самых частых цепей передачи (наглядная «база иснадов» из реестра 230k) ===== */
 let _topChains=null, _chMeta=undefined; const _chPageCache={};
+let _backMeta=undefined; const _backPageCache={};   // С41: режим «по передатчикам» (хребты) — back_meta.json / back_p<N>.json
 // Поиск в таблице цепей: по коду цепи (C…) → показать саму цепь + где встречается; по имени → резолв id равия.
 async function ibDoSearch(q, focusEl, listEl){
   focusEl.innerHTML=''; if(!q) return;
+  if(/^B[0-9a-fA-F]{6,}/.test(q)){   // С41: код ХРЕБТА (агрегат по опознанным передатчикам)
+    let bi=null; try{ bi=await _backRec(q); }catch(e){}
+    if(!bi){ focusEl.innerHTML='<div class="hint">Хребет '+esc(q)+' не найден в реестре.</div>'; return; }
+    const d=document.createElement('div'); d.style.cssText='border:1px solid #6c5ce7;border-radius:11px;padding:10px;margin-bottom:9px;background:rgba(108,92,231,.09)';
+    d.innerHTML='<div style="font-size:12px;color:#c9b8ff;margin-bottom:6px">🧬 Хребет <b style="font-family:monospace">'+esc(q)+'</b> · по опознанным передатчикам · <b style="color:#9fd3a8">📊 '+bi.n+' хадис'+_pluralHadith(bi.n)+'</b> <span style="color:#e0b34a" title="Тот же набор опознанных передатчиков записан '+bi.v+' кодами цепи — В ОСНОВНОМ из-за НЕопознанных кратких звеньев (U-коды), форма передачи влияет минимально">(из '+bi.v+' кодов)</span> '+_qBadge(bi.q)+'</div>';
+    const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl'; d.appendChild(row);
+    try{ _dzChips(bi.ids, row); }catch(e){}
+    const pl=document.createElement('div'); pl.style.cssText='margin-top:6px;cursor:pointer;color:var(--link);font-size:12px'; pl.textContent='📍 где встречается ('+bi.n+')';
+    const lst=document.createElement('div'); lst.style.cssText='display:none;margin-top:4px';
+    pl.onclick=async()=>{ if(lst.style.display!=='none'){ lst.style.display='none'; return; } lst.style.display='block'; if(lst.dataset.b) return; lst.dataset.b='1';
+      try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){}
+      (bi.ex||[]).slice(0,40).forEach(p=>lst.appendChild(_dzPlaceRow(p[0],p[1],null)));
+      if(bi.n>(bi.ex||[]).length){ const mo=document.createElement('div'); mo.className='hint'; mo.style.cssText='font-size:10.5px;margin-top:3px'; mo.textContent='… показаны первые '+(bi.ex||[]).length+' из '+bi.n; lst.appendChild(mo); } };
+    d.appendChild(pl); d.appendChild(lst); focusEl.appendChild(d);
+    return;
+  }
   if(/^C[0-9a-fA-F]{6,}/.test(q)){   // код цепи
     let rec=null; try{ rec=await _regRec(q); }catch(e){}
     if(!rec){ focusEl.innerHTML='<div class="hint">Цепь '+esc(q)+' не найдена в реестре.</div>'; return; }
@@ -7215,9 +7269,10 @@ async function openIsnadBase(focusCid){
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='isnadBaseModal';
     m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 8px;padding:13px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:14.5px">📊 Таблица цепей передачи</b><button class="mini" id="ibClose" style="flex:none">закрыть ✕</button></div>'
       +'<div class="hint" style="font-size:11.5px;margin-bottom:6px">Все цепи передачи (иснады) реестра M449, по убыванию частоты. Тап по передатчику — карточка; «где встречается» — хадисы с этой цепью.</div>'
-      +'<input id="ibSearch" placeholder="🔍 Поиск: код цепи (C…) или имя передатчика (الأعمش)…" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:9px;padding:8px 11px;background:var(--bg);color:var(--text);font-size:13px;margin-bottom:6px">'
+      +'<input id="ibSearch" placeholder="🔍 Поиск: код цепи (C…) / хребта (B…) / имя передатчика (الأعمش)…" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:9px;padding:8px 11px;background:var(--bg);color:var(--text);font-size:13px;margin-bottom:6px">'
       +'<div id="ibFocus"></div>'
-      +'<label style="display:flex;gap:6px;align-items:center;cursor:pointer;font-size:12px;color:var(--text);margin-bottom:4px"><input type="checkbox" id="ibClean"> ✓ только полностью опознанные цепи (все звенья = равии базы)</label>'
+      +'<div id="ibModeRow" style="display:flex;gap:6px;margin-bottom:6px"><button class="mini" id="ibModeCid" style="flex:1;padding:6px;border:1px solid var(--border);border-radius:8px;font-size:11.5px">🔗 По кодам цепи</button><button class="mini" id="ibModeBack" style="flex:1;padding:6px;border:1px solid var(--border);border-radius:8px;font-size:11.5px" title="Реальная частота: варианты одной цепи собраны по ОПОЗНАННЫМ передатчикам — U-коды кратких форм и разные формы передачи (حدثنا/عن) больше не дробят счёт">🧬 По передатчикам</button></div>'
+      +'<label id="ibCleanLbl" style="display:flex;gap:6px;align-items:center;cursor:pointer;font-size:12px;color:var(--text);margin-bottom:4px"><input type="checkbox" id="ibClean"> <span id="ibCleanTxt">✓ только полностью опознанные цепи (все звенья = равии базы)</span></label>'
       +'<div id="ibInfo" class="hint" style="font-size:11px;margin-bottom:6px"></div>'
       +'<div id="ibList" style="max-height:54vh;overflow:auto"></div></div>';
     document.body.appendChild(m); m.querySelector('#ibClose').onclick=()=>m.style.display='none';
@@ -7233,10 +7288,15 @@ async function openIsnadBase(focusCid){
   if(_chMeta===undefined){ try{ const r=await fetch('./isnad/chains_meta.json'); _chMeta=r.ok?await r.json():null; }catch(e){ _chMeta=null; } }
   if(!_chMeta && !_topChains){ try{ const r=await fetch('./isnad/top_chains.json'); _topChains=r.ok?await r.json():[]; }catch(e){ _topChains=[]; } }
   list.innerHTML='';
-  let kind='all', loaded=[], pagesLoaded=0, shown=0; const step=30;
-  const totOf=()=> _chMeta? (kind==='clean'?_chMeta.nClean:_chMeta.nAll) : loaded.length;
-  const pgOf=()=> _chMeta? (kind==='clean'?_chMeta.pagesClean:_chMeta.pagesAll) : 1;
+  let kind='all', loaded=[], pagesLoaded=0, shown=0, strongOnly=false; const step=30;
+  // С41: в режиме «хребты» фильтр «только надёжные» (q==='strong') скрывает хребты с обскурными якорями (over-merge тёзок)
+  const view=()=> (kind==='back'&&strongOnly)? loaded.filter(r=>r.q==='strong') : loaded;
+  const totOf=()=> kind==='back'? (_backMeta?(strongOnly?(_backMeta.nStrong||0):_backMeta.nBack):0) : (_chMeta? (kind==='clean'?_chMeta.nClean:_chMeta.nAll) : loaded.length);
+  const pgOf=()=> kind==='back'? (_backMeta?_backMeta.pages:0) : (_chMeta? (kind==='clean'?_chMeta.pagesClean:_chMeta.pagesAll) : 1);
   async function ensure(upto){
+    if(kind==='back'){ while(view().length<upto && pagesLoaded<pgOf()){ const k='back_'+pagesLoaded; let pg=_backPageCache[k];
+        if(!pg){ try{ const r=await fetch('./isnad/back_p'+pagesLoaded+'.json?v='+APPVER); pg=r.ok?await r.json():[]; }catch(e){ pg=[]; } _backPageCache[k]=pg; }
+        loaded=loaded.concat(pg); pagesLoaded++; } return; }
     if(_chMeta){ while(loaded.length<upto && pagesLoaded<pgOf()){ const k=kind+'_'+pagesLoaded; let pg=_chPageCache[k];
         if(!pg){ try{ const r=await fetch('./isnad/chains_'+kind+'_p'+pagesLoaded+'.json'); pg=r.ok?await r.json():[]; }catch(e){ pg=[]; } _chPageCache[k]=pg; }
         loaded=loaded.concat(pg); pagesLoaded++; } }
@@ -7244,6 +7304,26 @@ async function openIsnadBase(focusCid){
   }
   const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:10px;width:100%;padding:9px;border:1px solid var(--border);border-radius:9px';
   const rowEl=(ch,rank)=>{
+    if(ch.bb){   // С41: строка-ХРЕБЕТ (агрегат по опознанным передатчикам)
+      const d=document.createElement('div'); d.style.cssText='padding:8px 4px;border-bottom:1px solid var(--border)';
+      const tp=document.createElement('div'); tp.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px';
+      tp.innerHTML='<span style="font-size:12px;color:var(--hint)">#'+rank+' · <b style="color:#bcd0ff;font-family:monospace">'+esc(ch.bb)+'</b> <span class="ibCpy" title="Копировать код хребта" style="cursor:pointer;font-size:11px">📋</span> · <span title="Тот же набор опознанных передатчиков записан '+ch.v+' кодами цепи — В ОСНОВНОМ из-за НЕопознанных кратких звеньев (U-коды); форма передачи влияет минимально" style="color:#e0b34a">'+ch.v+' код'+_pluralHadith(ch.v)+'</span> '+_qBadge(ch.q)+'</span><span style="font-size:12px;color:#9fd3a8;font-weight:700">📊 '+ch.n+' хадис'+_pluralHadith(ch.n)+'</span>';
+      d.appendChild(tp);
+      try{ const _cp=tp.querySelector('.ibCpy'); if(_cp) _cp.onclick=(e)=>{ e.stopPropagation(); try{ navigator.clipboard.writeText(ch.bb).catch(()=>{}); }catch(_e){} try{ toast('📋 Код хребта скопирован: '+ch.bb); }catch(_e){} }; }catch(e){}
+      const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl'; d.appendChild(row);
+      _dzChips(ch.ids, row);   // ids — все числовые → зелёные кликабельные карточки
+      const pl=document.createElement('span'); pl.style.cssText='display:inline-block;margin-top:5px;cursor:pointer;color:var(--link);font-size:12px';
+      pl.textContent='📍 где встречается ('+ch.n+')';
+      const lst=document.createElement('div'); lst.style.cssText='display:none;margin-top:4px';
+      pl.onclick=async()=>{ if(lst.style.display!=='none'){ lst.style.display='none'; return; } lst.style.display='block';
+        if(lst.dataset.built) return; lst.dataset.built='1';
+        try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){}
+        let bi=null; try{ bi=await _backInfo(ch.ids); }catch(e){}
+        const ex=(bi&&bi.ex)||[];
+        ex.slice(0,40).forEach(p=>lst.appendChild(_dzPlaceRow(p[0],p[1],null)));
+        if(ch.n>ex.length){ const mo=document.createElement('div'); mo.className='hint'; mo.style.cssText='font-size:10.5px;margin-top:3px'; mo.textContent='… показаны первые '+ex.length+' из '+ch.n; lst.appendChild(mo); } };
+      d.appendChild(pl); d.appendChild(lst); return d;
+    }
     const idn=ch.seq.filter(x=>typeof x==='number').length;
     const d=document.createElement('div'); d.style.cssText='padding:8px 4px;border-bottom:1px solid var(--border)';
     const tp=document.createElement('div'); tp.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px';
@@ -7265,14 +7345,26 @@ async function openIsnadBase(focusCid){
     d.appendChild(pl); d.appendChild(lst); return d;
   };
   const draw=async()=>{ more.textContent='⏳…'; more.disabled=true; await ensure(shown+step);
-    loaded.slice(shown,shown+step).forEach((ch,i)=>list.insertBefore(rowEl(ch,shown+i+1), more));
-    shown=Math.min(loaded.length, shown+step);
-    const tot=totOf(); if(info) info.textContent='Цепей: '+tot.toLocaleString('ru')+' · показано '+shown;
-    const done=(shown>=loaded.length) && (!_chMeta || pagesLoaded>=pgOf());
-    more.textContent=done?'— все цепи показаны —':'⬇️ Показать ещё (всего '+tot.toLocaleString('ru')+')'; more.disabled=done; };
+    const vv=view();
+    vv.slice(shown,shown+step).forEach((ch,i)=>list.insertBefore(rowEl(ch,shown+i+1), more));
+    shown=Math.min(vv.length, shown+step);
+    const tot=totOf(); if(info) info.textContent=(kind==='back'?(strongOnly?'🧬✅ Надёжных хребтов: ':'🧬 Хребтов (частые, n≥3): '):'Цепей: ')+tot.toLocaleString('ru')+' · показано '+shown;
+    const done=(shown>=vv.length) && (kind==='back'? pagesLoaded>=pgOf() : (!_chMeta || pagesLoaded>=pgOf()));
+    more.textContent=done?(kind==='back'?'— все хребты показаны —':'— все цепи показаны —'):'⬇️ Показать ещё (всего '+tot.toLocaleString('ru')+')'; more.disabled=done; };
   const reset=async()=>{ list.innerHTML=''; loaded=[]; pagesLoaded=0; shown=0; list.appendChild(more); await draw(); };
-  const cb=m.querySelector('#ibClean'); if(cb){ cb.checked=false; cb.onchange=()=>{ kind=cb.checked?'clean':'all'; reset(); }; }
-  await reset(); more.onclick=draw;
+  // С41: переключатель режимов «по кодам цепи» ↔ «по передатчикам (хребты)»
+  const mCid=m.querySelector('#ibModeCid'), mBack=m.querySelector('#ibModeBack'), cleanLbl=m.querySelector('#ibCleanLbl'), cb=m.querySelector('#ibClean'), cleanTxt=m.querySelector('#ibCleanTxt');
+  const _setMode=(md)=>{ kind=md; strongOnly=false; if(cb) cb.checked=false;
+    const _base='flex:1;padding:6px;border:1px solid ', act='#6c5ce7;border-radius:8px;font-size:11.5px;background:rgba(108,92,231,.18);color:#c9b8ff', ina='var(--border);border-radius:8px;font-size:11.5px;background:transparent;color:var(--text)';
+    if(mCid) mCid.style.cssText=_base+(md==='back'?ina:act);
+    if(mBack) mBack.style.cssText=_base+(md==='back'?act:ina);
+    if(cleanLbl) cleanLbl.style.display='flex';   // С41: чекбокс виден в ОБОИХ режимах (в хребтах = «только надёжные»)
+    if(cleanTxt) cleanTxt.textContent=(md==='back')?'✅ только надёжные цепи (скрыть مجهول/مستور — где счёт может смешивать тёзок)':'✓ только полностью опознанные цепи (все звенья = равии базы)';
+    reset(); };
+  if(cb){ cb.onchange=()=>{ if(kind==='back'){ strongOnly=cb.checked; } else { kind=cb.checked?'clean':'all'; } reset(); }; }
+  if(mCid) mCid.onclick=()=>_setMode('all');
+  if(mBack) mBack.onclick=async()=>{ if(_backMeta===undefined){ try{ const r=await fetch('./isnad/back_meta.json?v='+APPVER); _backMeta=r.ok?await r.json():null; }catch(e){ _backMeta=null; } } if(!_backMeta){ try{ toast('Реестр хребтов недоступен'); }catch(e){} return; } _setMode('back'); };
+  _setMode('all'); more.onclick=draw;
 }
 /* ===== 🌿 M495: ТАХРИДЖ — УНИКАЛЬНЫЕ ХАДИСЫ (версии одного случая, формула Ф-17). Данные tahrij/. ===== */
 let _thMeta=undefined; const _thIdxPage={}, _thSp={};
@@ -9495,7 +9587,13 @@ async function verifyNarr(card, place, text){
     let _cidHtml='';
     try{ const _full=await dzChainFull(place.bid, place.num);
       if(_full && _full.seq && _full.seq.length){ const _ci=await _isnadInfo(_full.seq, _full.forms);
-        if(_ci && _ci.cid) _cidHtml='<span class="vChainCode" data-cid="'+esc(_ci.cid)+'" title="Открыть базу иснадов на этой цепи — где ещё встречается тот же иснад" style="cursor:pointer;font-size:11.5px;color:#c9b8ff;border:1px solid #6c5ce7;border-radius:8px;padding:3px 10px;font-family:monospace">⛓ '+esc(_ci.cid)+(_ci.n>=2?(' · ещё '+(_ci.n-1)+' хадис'+_pluralHadith(_ci.n-1)):'')+' ↗</span>'; } }catch(e){}
+        if(_ci && _ci.cid) _cidHtml='<span class="vChainCode" data-cid="'+esc(_ci.cid)+'" title="Открыть базу иснадов на этой цепи — где ещё встречается тот же иснад" style="cursor:pointer;font-size:11.5px;color:#c9b8ff;border:1px solid #6c5ce7;border-radius:8px;padding:3px 10px;font-family:monospace">⛓ '+esc(_ci.cid)+(_ci.n>=2?(' · ещё '+(_ci.n-1)+' хадис'+_pluralHadith(_ci.n-1)):'')+' ↗</span>';
+        // С41: ЧЕСТНЫЙ счёт по ОПОЗНАННЫМ передатчикам (cid дробится формами/U-кодами → «ещё 1» обманчиво)
+        try{ const _bi=await _backInfo(_full.seq); if(_bi && _bi.n>((_ci&&_ci.n)||1)){
+          const _qn=(_bi.q==='weak'?' ⚠️ среди опознанных есть обскурный (مجهول/مستور) — счёт может смешивать тёзок':(_bi.q==='strong'?' ✅ имена надёжны':'')), _qm=(_bi.q==='weak'?' ⚠️':(_bi.q==='strong'?' ✅':''));
+          _cidHtml+='<span class="vBackCode" data-bb="'+esc(_bi.bc)+'" title="По ОПОЗНАННЫМ передатчикам эта же цепочка встречается '+_bi.n+' раз. В режиме кодов раздроблена на '+_bi.v+' кодов — В ОСНОВНОМ НЕопознанными краткими звеньями (U-коды), форма передачи минимально. Тап — открыть этот хребет.'+_qn+'" style="cursor:pointer;font-size:11.5px;color:#bff5d4;border:1px solid #2e9b5b;border-radius:8px;padding:3px 10px;font-family:monospace">🧬 по передатчикам: '+_bi.n+_qm+' ↗</span>';
+        } }catch(e){}
+      } }catch(e){}
     // #93 (полезные функции таблицы цепей): копировать цепь целиком (передатчики + формы передачи + id)
     h+='<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><span class="vCopyChain" style="cursor:pointer;font-size:11.5px;color:var(--link);border:1px solid var(--border);border-radius:8px;padding:3px 10px">📋 Копировать цепь</span>'+_cidHtml+'</div>';
     box.innerHTML=h;
@@ -9504,6 +9602,7 @@ async function verifyNarr(card, place, text){
       const _hdr='⛓ Цепь передатчиков'+((place&&place.num)?(' (хадис №'+place.num+')'):'')+':\n';
       try{ copyText(_hdr+_ct); toast('Цепь скопирована ✓'); }catch(_e){} }; }catch(e){}
     try{ const _vcc=box.querySelector('.vChainCode'); if(_vcc) _vcc.onclick=(e)=>{ e.stopPropagation(); try{ openIsnadBase(_vcc.dataset.cid); }catch(_e){} }; }catch(e){}   // #246: код цепи → база иснадов
+    try{ const _vbc=box.querySelector('.vBackCode'); if(_vbc) _vbc.onclick=(e)=>{ e.stopPropagation(); try{ openIsnadBase(_vbc.dataset.bb); }catch(_e){} }; }catch(e){}   // С41: код хребта → база иснадов (фокус на хребте)
     box.querySelectorAll('.vChip').forEach(ch=>{ if(ch.dataset.mid) ch.onclick=(e)=>{ e.stopPropagation(); try{ openLink('https://shamela.ws/narrator/'+ch.dataset.mid); }catch(_e){} }; });
     card.appendChild(box);
     // Уведомление об ошибке ШЛЁТСЯ (владелец просил оставить), но с ЗАЩИТОЙ ОТ СПАМА: одну и ту же ошибку (этот хадис) не повторяем чаще раза в 12ч.
