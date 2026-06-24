@@ -996,6 +996,16 @@ _AI_KILL = False           # авто-выключение (спам)
 _AI_KILL_MANUAL = False    # ручное выключение владельцем
 _AI_KILL_PENDING = None    # текст уведомления владельцу (отправится при следующем апдейте)
 _GROUP_AI_OFF = True       # #236 (слово владельца «выключи ии ботяра в джамаат ру пока»): ОТДЕЛЬНЫЙ рубильник ИИ-«ботяра» в ГРУППАХ — по умолчанию ВЫКЛ; не трогает /neuro и личку. Вкл: владелец пишет боту «ботяра вкл»
+_AI_PUBLIC_OFF = True      # 🔒 ГЛАВНЫЙ РУБИЛЬНИК (срочный указ владельца): ВЕСЬ ИИ (DeepSeek + бесплатные модели) для НЕ-владельца ВЫКЛ во ВСЕХ чатах. Владелец всегда с ИИ. Единый чокпоинт — в ask_ai. Вернуть всем: «дипсик всем вкл»
+def _save_ai_gate():
+    """Сохранить состояние рубильника публичного ИИ (переживает рестарт/деплой)."""
+    try: _data_put("ai_gate.json", {"public_off": _AI_PUBLIC_OFF}, "🔒 рубильник публичного ИИ")
+    except Exception: pass
+def _load_ai_gate():
+    """Загрузить состояние рубильника при старте (дефолт — ВЫКЛ для публики = безопасно)."""
+    global _AI_PUBLIC_OFF
+    try: _AI_PUBLIC_OFF = bool(_data_get("ai_gate.json", {"public_off": True}).get("public_off", True))
+    except Exception: _AI_PUBLIC_OFF = True
 _MAINTENANCE = False       # B4: режим обслуживания (бот стоп/старт) — для остальных бот молчит-заглушка, владелец работает
 AI_RATE_LIMIT = 35         # >35 вызовов ИИ за окно → авария
 AI_RATE_WINDOW = 120       # секунд
@@ -1142,6 +1152,8 @@ def ask_special(prompt, system=None):
     return None, None
 
 def ask_ai(prompt, system=None, owner=False, max_tokens=None):
+    if _AI_PUBLIC_OFF and not owner:   # 🔒 ГЛАВНЫЙ РУБИЛЬНИК: ИИ (DeepSeek/free) только для владельца — для всех остальных чатов ВЫКЛ
+        return None
     if ai_kill_active():   # 🚨 авто-рубильник: ИИ выключен (спам/вручную) — не дёргаем ни DeepSeek, ни бесплатные
         return "⏸ ИИ временно на паузе (защита от спама). Включит владелец."
     if system is None:
@@ -1510,7 +1522,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 
     # 🚨 авто-рубильник ИИ (защита баланса DeepSeek): уведомить владельца о срабатывании + команды управления
-    global _AI_KILL, _AI_KILL_MANUAL, _AI_KILL_PENDING, _GROUP_AI_OFF
+    global _AI_KILL, _AI_KILL_MANUAL, _AI_KILL_PENDING, _GROUP_AI_OFF, _AI_PUBLIC_OFF
     if _AI_KILL_PENDING:
         _m = _AI_KILL_PENDING; _AI_KILL_PENDING = None
         try: await context.bot.send_message(OWNER_ID, _m)
@@ -1524,7 +1536,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _AI_KILL_MANUAL = True
         await update.message.reply_text("⏸ ИИ выключен вручную. Включить: «ии вкл»."); return
     if is_owner(update) and text.lower() in ("ии статус", "статус ии", "ai status"):
-        await update.message.reply_text(f"ИИ: {'⏸ ВЫКЛ' if ai_kill_active() else '✅ вкл'}\nВызовов за {AI_RATE_WINDOW}с: {len(_AI_CALLS)}/{AI_RATE_LIMIT}\nавто-выкл={_AI_KILL} · ручной={_AI_KILL_MANUAL}\nботяра в группах: {'⏸ ВЫКЛ' if _GROUP_AI_OFF else '✅ вкл'}"); return
+        await update.message.reply_text(f"ИИ: {'⏸ ВЫКЛ' if ai_kill_active() else '✅ вкл'}\nВызовов за {AI_RATE_WINDOW}с: {len(_AI_CALLS)}/{AI_RATE_LIMIT}\nавто-выкл={_AI_KILL} · ручной={_AI_KILL_MANUAL}\nботяра в группах: {'⏸ ВЫКЛ' if _GROUP_AI_OFF else '✅ вкл'}\n🔒 ИИ для публики: {'⏸ ВЫКЛ (только владелец)' if _AI_PUBLIC_OFF else '✅ доступен всем'}"); return
     # #236: отдельный рубильник ИИ-«ботяра» в ГРУППАХ (@jamaat_ru) — не трогает /neuro и личку
     if is_owner(update) and text.lower() in ("ботяра вкл", "ботяра включи", "включи ботяра", "чат-ии вкл"):
         _GROUP_AI_OFF = False
@@ -1532,6 +1544,13 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_owner(update) and text.lower() in ("ботяра выкл", "выключи ботяра", "ботяра стоп", "чат-ии выкл"):
         _GROUP_AI_OFF = True
         await update.message.reply_text("⏸ Ботяра в группах выключен (в личке и /neuro работают). Включить: «ботяра вкл»."); return
+    # 🔒 ГЛАВНЫЙ РУБИЛЬНИК: ИИ (DeepSeek + все модели) ТОЛЬКО для владельца — во всех остальных чатах ВЫКЛ
+    if is_owner(update) and text.lower() in ("дипсик всем выкл", "дипсик выкл всем", "ии всем выкл", "ии только мне", "дипсик только мне", "ии публично выкл", "публичный ии выкл"):
+        _AI_PUBLIC_OFF = True; _save_ai_gate()
+        await update.message.reply_text("🔒 ГОТОВО: ИИ (DeepSeek и все модели) теперь ТОЛЬКО для тебя. Во всех остальных чатах/группах/мини-аппе ИИ выключен. Вернуть всем: «дипсик всем вкл»."); return
+    if is_owner(update) and text.lower() in ("дипсик всем вкл", "дипсик вкл всем", "ии всем вкл", "ии публично вкл", "публичный ии вкл", "дипсик всем включи"):
+        _AI_PUBLIC_OFF = False; _save_ai_gate()
+        await update.message.reply_text("✅ ИИ снова доступен всем (с учётом лимитов и доступа feature_allowed). Сделать только себе: «дипсик всем выкл»."); return
 
     # B4: режим обслуживания — «бот стоп» / «бот старт» (только владелец); для остальных бот отвечает заглушкой
     global _MAINTENANCE
@@ -2187,7 +2206,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ============ G9: «ботяра» для белого списка (не владелец) ============
-    if user_id != OWNER_ID and text and not _ai_loop_guard(update, text):
+    if user_id != OWNER_ID and text and not _ai_loop_guard(update, text) and not _AI_PUBLIC_OFF:  # 🔒 мастер-рубильник: ИИ не-владельцу ВЫКЛ
         _bq = parse_botyara(text)
         _triggered = (_bq is not None) or (is_reply_to_bot and not is_reply_to_channel)
         if _triggered and feature_allowed('bot', tg_user_dict(update)):
@@ -5715,4 +5734,5 @@ async def _on_error(update, context):
     except Exception:
         pass
 app.add_error_handler(_on_error)
+_load_ai_gate()   # 🔒 восстановить состояние рубильника публичного ИИ (дефолт — ВЫКЛ для публики)
 app.run_polling(drop_pending_updates=True)
