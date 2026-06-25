@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v724</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v725</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v724';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v725';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5455,7 +5455,10 @@ async function _qrSuggestGo(val){   // живые подсказки: номер
 function _qrSearchGo(val){ val=(val||'').trim(); if(!val) return; var _sg=document.getElementById('qrSugg'); if(_sg)_sg.style.display='none';
   let mm=val.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
   let m1=mm.match(/^(\d{1,3})\s*[:\.\s]\s*(\d{1,3})$/);   // сура:аят
-  if(m1){ openQuranReader(+m1[1], +m1[2]); return; }
+  if(m1){ const _s=+m1[1], _a=+m1[2];   // QA#3: валидируем диапазон аята при прямом Enter (раньше 2:300 молча открывал суру без скролла)
+    if(_s<1||_s>114){ try{ toast('В Коране 114 сур'); }catch(e){} return; }
+    if(_a<1||(SURA_AYAHS[_s-1]&&_a>SURA_AYAHS[_s-1])){ try{ toast('В суре '+_s+' ('+(SURA_NAMES[_s-1]||'')+') аятов: '+(SURA_AYAHS[_s-1]||'?')+' — аята '+_a+' нет'); }catch(e){} return; }
+    openQuranReader(_s, _a); return; }
   if(/^\d{1,3}$/.test(mm)){ const n=+mm; if(n>=1&&n<=114){ openQuranReader(n,0); return; } }
   // по названию суры
   const q=(val||'').toLowerCase().replace('сура','').replace('сура','').trim();
@@ -8551,7 +8554,10 @@ async function renderMutabarunSummary(id, box, out){
     fw.innerHTML='<div style="font-size:12px;color:var(--hint);margin-bottom:5px">📝 Упомянут в трудах <b style="color:#bcd2ff">'+found.length+'</b> критиков'+(found.length?' (нажми → его места ниже):':':')+'</div>';
     const fb=document.createElement('div'); fb.style.cssText='display:flex;gap:5px;flex-wrap:wrap';
     if(found.length){ found.forEach(cr=>{ const ch=document.createElement('span'); ch.className='chip'; ch.style.cssText='font-size:12px;border:1px solid #3a5b9b;color:#bcd2ff;background:rgba(58,91,155,.12);cursor:pointer;direction:rtl'; ch.textContent='📝 '+_critRu(cr); ch.title='Раскрыть найденные места этого критика ниже (упоминание ≠ оценка!)';
-        ch.onclick=()=>{ try{ const mb=out.querySelector('.narrMentions'); if(mb){ mb.style.display='block'; const tg=mb.parentNode&&mb.parentNode.querySelector('.rjTg'); if(tg) tg.textContent='▾'; mb.scrollIntoView({behavior:'smooth',block:'start'}); } }catch(e){} try{hap('light');}catch(e){} };
+        ch.onclick=()=>{ try{hap('light');}catch(e){}
+          // QA-M2: раньше искало .narrMentions (нигде не создаётся) → мёртвый клик. Теперь открываем вкладку «🔍 Упоминания» аккордеона (там реальные места критиков).
+          try{ const tb=[...document.querySelectorAll('button')].find(b=>(b.textContent||'').trim()==='🔍 Упоминания'); if(tb){ tb.click(); try{ tb.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} return; } }catch(e){}
+          try{ const mb=out.querySelector('.narrMentions'); if(mb){ mb.style.display='block'; mb.scrollIntoView({behavior:'smooth',block:'start'}); } }catch(e){} };
         fb.appendChild(ch); }); }
     else fb.innerHTML='<span style="color:var(--hint);font-size:12px">— в наших трудах мутабарунов не нашёл (имя бывает в иной форме: كنية/نسب)</span>';
     fw.appendChild(fb); box.appendChild(fw);
@@ -9868,7 +9874,7 @@ async function doTafsir(s,a,out,btn,key,lang){
     const x=out.querySelector('.tfx'); if(x) x.onclick=()=>{ var mm=document.getElementById('tafsirModal'); if(mm) mm.style.display='none'; };
     const tDiv=out.querySelector('.tafsirText'), fInp=out.querySelector('.tfFind'), fInfo=out.querySelector('.tfFindInfo'), rawT=txt;   // поиск ВНУТРИ тафсира
     if(fInp&&tDiv) fInp.oninput=()=>{ const term=fInp.value.trim();
-      if(!term){ tDiv.innerHTML=esc(rawT).replace(/\n+/g,'<br>'); fInfo.textContent=''; return; }
+      if(!term){ tDiv.innerHTML = rawT ? esc(rawT).replace(/\n+/g,'<br>') : 'Для этого аята в этом тафсире нет текста.'; fInfo.textContent=''; return; }   // QA#6: при пустом тафсире не стираем сообщение «нет текста»
       let h=esc(rawT), cnt=0; try{ const re=new RegExp('('+term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'); h=h.replace(re,m=>{cnt++;return '@@H@@'+m+'@@E@@';}); }catch(e){}
       tDiv.innerHTML=h.replace(/\n+/g,'<br>').split('@@H@@').join('<mark>').split('@@E@@').join('</mark>');
       fInfo.textContent=cnt?('✓ '+cnt):'нет'; const fm=tDiv.querySelector('mark'); if(fm) fm.scrollIntoView({block:'center'}); };
