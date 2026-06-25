@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v722</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v723</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v722';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v723';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2897,7 +2897,7 @@ function openBook(bookId, startPg, _forceTurath){
   let _ourCode=null;
   try{ for(const cd in COLL_BIDS){ if((COLL_BIDS[cd]||[]).map(String).indexOf(id)>=0){ _ourCode=cd; break; } }
        if(!_ourCode){ for(const cd in EXTRA_BIDS){ if(String(EXTRA_BIDS[cd])===id){ _ourCode=cd; break; } } } }catch(e){}
-  if(!_forceTurath && _ourCode && isReadable(_ourCode)){ try{ openReader(_ourCode); toast('📖 Открываю наше издание: '+nameOf(_ourCode)); }catch(e){} return; }   // #179: _forceTurath — фолбэк из ридера при сбое загрузки (без петли)
+  if(!_forceTurath && _ourCode && isReadable(_ourCode) && !startPg){ try{ openReader(_ourCode); toast('📖 Открываю наше издание: '+nameOf(_ourCode)); }catch(e){} return; }   // #179: _forceTurath — фолбэк из ридера при сбое загрузки (без петли). C1-QA: при заданной СТРАНИЦЕ (лист из карточки равия) НЕ редиректить в openReader (он теряет позицию→хадис #1) — открываем точную страницу Мактабы ниже
   if(!BACKEND_URL){ toast('Читалка книги работает на сервере'); return; }
   let sp=parseInt(String(startPg||'').replace(/[^0-9]/g,''))||1; if(sp<1) sp=1;
   // M318: ПРОДОЛЖИТЬ ЧТЕНИЕ — если страница не указана, возвращаемся туда, где остановились
@@ -3837,16 +3837,16 @@ async function appendMaktaba(seq, q, primary){
     const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(q)+'&initData='+encodeURIComponent(INITDATA));
     if(seq!==_seq) return;
     const j=await r.json().catch(()=>({}));
-    if(r.status===403){ sec.textContent='🌐 Мактаба: доступ пока не открыт.'; return; }
-    if(r.status===429){ sec.textContent='🌐 Слишком часто, подожди немного.'; return; }
+    if(r.status===403){ sec.textContent='🌐 Мактаба: доступ пока не открыт.'; try{ res.appendChild(sec); }catch(e){} return; }
+    if(r.status===429){ sec.textContent='🌐 Слишком часто, подожди немного.'; try{ res.appendChild(sec); }catch(e){} return; }
     let data=j.data||[]; let fn=j.first_n||0;
     if(_scopeIds && _scopeIds.size){ data=data.filter(x=>_scopeIds.has(String(x.book_id))); fn=0; }   // 🎯 только выбранные книги
     // M283: СТРОГО — только результаты, где есть ВСЕ значимые слова запроса (терпим к приставкам). Не в ИИ-режиме.
     let strictWords=null; if(!modes.ai && cfg.strictSearch!==false){ const ww=_strictQWords(q); if(ww.length>=2) strictWords=ww; }   // тумблер «Строгий поиск» (по умолч. ВКЛ)
     // БЕЗ авто-дедупа (R16): один хадис в разных книгах показываем везде; уникальность — фильтр-кнопки.
     if(!data.length){
-      if(_scopeIds){ sec.textContent='🎯 В выбранных книгах на этой странице совпадений нет.'; try{ res.appendChild(maktabaMoreBtn(seq,q,{page:(j.page||1)})); }catch(e){} return; }
-      sec.textContent='🤷 По Мактабе точного совпадения нет. Попробуй характерную фразу из матна.'; try{ maktabaSunnahBtn(res,seq,q); addNotFoundBtn(res,q); }catch(e){} return; }
+      if(_scopeIds){ sec.textContent='🎯 В выбранных книгах на этой странице совпадений нет.'; try{ res.appendChild(sec); }catch(e){} try{ res.appendChild(maktabaMoreBtn(seq,q,{page:(j.page||1)})); }catch(e){} return; }   // M1-QA: показываем само сообщение, не только кнопку
+      sec.textContent='🤷 По Мактабе точного совпадения нет. Попробуй характерную фразу из матна.'; try{ res.appendChild(sec); }catch(e){} try{ maktabaSunnahBtn(res,seq,q); addNotFoundBtn(res,q); }catch(e){} return; }
     await loadBooksMap();
     let fsrc=data.slice(0,fn), rest=data.slice(fn);
     if(strictWords){ fsrc=fsrc.filter(x=>_snipHasAll(x.snip,strictWords)); rest=rest.filter(x=>_snipHasAll(x.snip,strictWords)); }
@@ -3860,7 +3860,7 @@ async function appendMaktaba(seq, q, primary){
     res.appendChild(sec);   // #161: статус-индикатор «ищу по Мактабе» — ВНИЗУ результатов (а не над карточкой Бухари)
     res.appendChild(maktabaMoreBtn(seq,q,{page:(j.page||1)}, strictWords));
     try{ maktabaSunnahBtn(res,seq,q); }catch(e){}
-  }catch(e){ sec.textContent='🌐 Мактаба сейчас недоступна — попробуй позже.'; }
+  }catch(e){ sec.textContent='🌐 Мактаба сейчас недоступна — попробуй позже.'; try{ res.appendChild(sec); }catch(_e){} }   // H1-QA: при сетевой ошибке в scope-поиске (res.innerHTML очищен) sec не добавлялся → пустой экран; теперь показываем сообщение
 }
 
 function cardHadith(d,groups){
@@ -6495,7 +6495,9 @@ function chainRender(){
     const kd=b.querySelector('#chainKnown')||(()=>{ const d=document.createElement('div'); d.id='chainKnown'; d.style.cssText='font-size:11.5px;color:#9fd3a8;margin-top:5px;line-height:1.6'; b.querySelector('#chainOut').parentNode.insertBefore(d, b.querySelector('#chainOut')); return d; })();
     kd.innerHTML=known.length?known.join('<br>')+'<span style="color:var(--hint)"> · это подсказка из наших иснадов, НЕ ограничение поиска</span>':'';
   }catch(e){} })(); }
-  b.querySelectorAll('.chDel').forEach(x=>x.onclick=()=>{ const _ix=+x.dataset.i; const c=_chainSel[_ix]; _chainSel.splice(_ix,1); chainRender();
+  b.querySelectorAll('.chDel').forEach(x=>x.onclick=()=>{ const _ix=+x.dataset.i; const c=_chainSel[_ix]; _chainSel.splice(_ix,1);
+    try{ if(window._chainForms && window._chainForms.length){ window._chainForms.splice(Math.min(_ix, window._chainForms.length-1), 1); } }catch(e){}   // M3-QA: при удалении ВНУТРЕННЕГО звена убрать форму его стыка, иначе формы передачи сдвигаются на чужие стыки (seq-фильтр давал неверную конструкцию)
+    chainRender();
     try{ _undoPush('удаление звена '+c.nm.split(' ').slice(0,2).join(' '), ()=>{ _chainSel.splice(Math.min(_ix,_chainSel.length),0,c); chainRender(); }); }catch(e){} });   // QA-low: undo вставляет звено на ИСХОДНУЮ позицию (был push в конец → ломал порядок seq-цепи)
   const _cbl=b.querySelector('#chainBaseLink'); if(_cbl) _cbl.onclick=()=>{ try{ openIsnadBase(); }catch(e){} };
   b.querySelectorAll('input[name="chOrd"]').forEach(r=>r.onchange=()=>{ window._chainMode=r.value; window._chainAdj=(r.value==='adj'); chainRender(); });
