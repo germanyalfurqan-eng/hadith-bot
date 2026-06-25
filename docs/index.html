@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v721</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v722</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v721';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v722';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4619,7 +4619,7 @@ async function openNarratorRijal(name){
       rjOut.innerHTML='<div class="hint" style="margin-bottom:7px">📚 Найдено мест: <b>'+(jj.count||data.length).toLocaleString('ru')+'</b> в трудах риджаля (по '+(jj.books||150)+' книгам критиков · показаны первые '+data.length+'):</div>';
       data.forEach(x=>{ const c=document.createElement('div'); c.className='card'; c.style.cssText='margin-bottom:7px';
         const loc=(x.vol?('т.'+x.vol+' '):'')+(x.page!=null?('стр. '+x.page):'');
-        c.innerHTML='<div class="rjH" style="font-size:12.5px;color:var(--link);direction:rtl;text-align:right;font-weight:600;cursor:pointer">📖 '+esc(x.book_name||'')+(x.critic?(' <span style="color:#bff5d4">· '+esc(x.critic)+'</span>'):'')+(loc?(' <span style="color:var(--hint);font-weight:400">· '+esc(loc)+'</span>'):'')+'</div>'
+        c.innerHTML='<div class="rjH" style="font-size:12.5px;color:var(--link);direction:rtl;text-align:right;font-weight:600;cursor:pointer">📖 '+esc(x.book_name||'')+(x.critic?(' <span style="color:#bff5d4">· '+esc(_critRu(x.critic))+'</span>'):'')+(loc?(' <span style="color:var(--hint);font-weight:400">· '+esc(loc)+'</span>'):'')+'</div>'
           +'<div class="ar" style="font-size:16px;margin-top:5px;line-height:1.9">'+esc((x.snip||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim())+'</div>';
         c.querySelector('.rjH').onclick=()=>{ try{ openBook(x.book_id, x.page_id||x.page||1); }catch(e){} };
         try{ enableArabusTap(c.querySelector('.ar')); if(_arabusOn) c.querySelector('.ar').style.cursor='pointer'; }catch(e){}
@@ -6960,9 +6960,14 @@ function _dzPlaceRow(bid,num,leaf){
     +_shamChip(id, leaf)
     +'<span style="flex:none;font-size:12px;color:#7fb3ff;text-align:left">№'+esc(String(num))+(leaf?('<span style="display:block;font-size:11px">📖 лист '+esc(String(leaf))+'</span>'):'')+'</span>';
   d.onclick=()=>{ try{ hap('light'); }catch(e){}
-    const slug=_BID2SLUG[id];   // #241: основной первоисточник → открыть КАРТОЧКУ хадиса (openReader), а не просто книгу/номер
-    if(slug && num!=null && String(num)!==''){ try{ openReader(slug, String(num)); return; }catch(e){} }
-    if(leaf){ try{ openBook(id, leaf); }catch(e){} } else { const q=document.getElementById('q'); if(q){ q.value=String(num); runSearch(true); } } };
+    // замечание владельца «нажимаю — не тот хадис, перенесло в поиск, вернуться нельзя, всё сбросилось»:
+    // ЛИСТ (leaf) = ТОЧНАЯ страница Мактабы → всегда верный хадис, открывается МОДАЛОМ (карточка равия цела за ним).
+    // Поэтому при наличии leaf — приоритет openBook(bid, leaf) (не рискуем рассинхроном нумерации изданий в openReader).
+    // НИКОГДА не уходим в runSearch (он-то и затирал карточку равия).
+    const slug=_BID2SLUG[id];
+    if(leaf){ try{ openBook(id, leaf); return; }catch(e){} }                       // точная страница издания — модал, контекст сохранён
+    if(slug && num!=null && String(num)!==''){ try{ openReader(slug, String(num)); return; }catch(e){} }   // нет листа, но есть читалка
+    try{ toast('📖 '+(bookName(id)||('книга '+id))+' · №'+num); }catch(e){} };       // последний случай — просто подсказка, карточку НЕ сбрасываем
   const w=d.querySelector('.dzW'); if(w) w.onclick=(e)=>{ e.stopPropagation(); try{ openLink(wiki.url); }catch(_e){ window.open(wiki.url,'_blank'); } };
   if(!ar){ try{ loadBooksMap().then(()=>{ const el=d.querySelector('.dzBn'); const nm=bookName(id); if(el&&nm) el.textContent=nm; }); }catch(e){} }   // страховка: карта догрузилась — имя дописать (не оставлять «книга №»)
   return d;
@@ -8126,6 +8131,8 @@ function arNameRu(name, maxWords){   // «هشام بن عمار بن نصير»
     const r=_arWordRu(w); if(r) out.push(r); }
   return out.join(' ');
 }
+// P0-1 (владелец «имена критиков на арабском»): транслит имени критика (أبو حاتم→Абу Хатим). Фолбэк на арабский, если транслит пуст.
+function _critRu(ar){ if(!ar) return ''; try{ let ru=arNameRu(String(ar), 5); if(ru && /[А-Яа-яЁё]/.test(ru)){ return ru.charAt(0).toUpperCase()+ru.slice(1); } return ar; }catch(e){ return ar; } }
 function hideNarrSugg(){ const b=document.getElementById('narrSugg'); if(b) b.style.display='none'; }
 let _narrSugSeq=0, _narrSort='fame', _narrLastCands=null;
 function _narrRenderSugg(){
@@ -8243,20 +8250,13 @@ async function narrOpen(nm){
       const q2=document.getElementById('q'); if(q2&&window._resBackQ!==undefined) q2.value=window._resBackQ;
       try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(e){} };
     box.appendChild(bk); }
-  // 🔎 заявка владельца: «хишам ибн аммار — почему не находит 5590 Бухари» → кнопка поиска ХАДИСОВ с участием равия
-  const hb=document.createElement('button'); hb.className='go'; hb.style.cssText='width:100%;padding:9px;margin-bottom:8px;font-size:14px';
+  // #9 (замечание владельца «зачем дублироваться»): было ДВЕ почти равные кнопки «найти его хадисы» (по тексту имени + по цепям).
+  // По R45 (не множить сущности): ОДНА ГЛАВНАЯ — точная (по разобранным цепям, ловит короткие формы, без тёзок);
+  // поиск по тексту имени демонтирован во ВТОРИЧНУЮ кнопку-фолбэк ниже («ещё: по тексту имени»). Логика обеих сохранена.
   const shortNm=nm.split(' ').slice(0,3).join(' ');
-  // M360: участие ищем ТОЧНОЙ ФРАЗОЙ (кавычки M335) — пословный AND захватывал ЧУЖИХ по куску имени
-  // («هشام» из «معاذ بن هشام» = ад-Даставаи ≠ Хишам ибн Аммар). Короткие формы без отчества — после дизамбигуации Э1.1.
-  hb.textContent='🔎 По тексту имени «'+shortNm+'» (где назван целиком)';
-  hb.onclick=()=>{ try{ hap('light'); }catch(e){} _narrBypass=true; const q=document.getElementById('q'); q.value='"'+shortNm+'"'; hideNarrSugg(); runSearch(true); };
-  box.appendChild(hb);
-  const hbHint=document.createElement('div'); hbHint.className='hint'; hbHint.style.cssText='font-size:11px;margin:-3px 0 8px';
-  hbHint.textContent='Ищется имя ЦЕЛИКОМ как словосочетание — тёзки по куску слова не цепляются. Места, где он назван коротко (просто «هشام»), подключатся после дизамбигуации по цепочке (Э1.1).';
-  box.appendChild(hbHint);
   // 🧬 M378b: ТОЧНОЕ участие по кодам Э1.1 (штудированные иснады 33 печатей, включая короткие формы — это не текст-поиск)
-  const cb=document.createElement('button'); cb.className='mini'; cb.style.cssText='width:100%;padding:9px;margin-bottom:8px;font-size:13px;border:1px solid #2e6b9b;color:#bfe0f5;background:#16314d;border-radius:10px;cursor:pointer';
-  cb.textContent='🧬 По разобранным цепям (точнее: ловит и короткие формы, без тёзок)';
+  const cb=document.createElement('button'); cb.className='go'; cb.style.cssText='width:100%;padding:10px;margin-bottom:4px;font-size:14px';
+  cb.textContent='📚 Все хадисы с ним (точно — по разобранным цепям)';
   cb.onclick=async()=>{ cb.disabled=true; cb.textContent='⏳ беру коды…';
     try{
       const id=await _narrLookup(nm);
@@ -8268,7 +8268,7 @@ async function narrOpen(nm){
       cb.style.display='none';
       const bx=document.createElement('div'); bx.style.cssText='margin-bottom:8px';
       const lb=document.createElement('div'); lb.className='hint'; lb.style.cssText='font-size:12px;margin:2px 0 4px';
-      lb.textContent='🧬 Точное участие (код #'+id+'): мест '+places.length+(places.length>=400?'+ (показаны первые 400)':'')+':';
+      lb.textContent='📚 Хадисы с его участием — '+places.length+(places.length>=400?'+ (первые 400)':'')+' · нажми строку → откроется хадис:';
       bx.appendChild(lb);
       const list=document.createElement('div'); bx.appendChild(list);
       let shown=0; const step=30;
@@ -8281,6 +8281,15 @@ async function narrOpen(nm){
     }catch(e){ cb.textContent='🔧 не вышло — попробуй ещё раз'; cb.disabled=false; }
   };
   box.appendChild(cb);
+  // владелец: «сначала КАРТОЧКА, потом хадисы кнопкой» — авто-раскрытие убрано; кнопка «Хадисы с его участием» переехала ПОД карточку (см. box.insertBefore(out,...) ниже)
+  // #9 вторичный фолбэк: поиск по ТЕКСТУ имени (где назван целиком) — мелкая ссылка-кнопка под главной, не дублирует
+  const hb=document.createElement('button'); hb.className='mini'; hb.style.cssText='width:100%;padding:7px;margin-bottom:3px;font-size:12px;border:1px solid var(--border);border-radius:9px;color:var(--hint);background:transparent;cursor:pointer';
+  hb.textContent='🔎 Ещё: по тексту имени «'+shortNm+'» (где назван целиком)';
+  hb.onclick=()=>{ try{ hap('light'); }catch(e){} _narrBypass=true; const q=document.getElementById('q'); q.value='"'+shortNm+'"'; hideNarrSugg(); runSearch(true); };
+  box.appendChild(hb);
+  const hbHint=document.createElement('div'); hbHint.className='hint'; hbHint.style.cssText='font-size:10.5px;margin:-1px 0 8px;opacity:.75';
+  hbHint.textContent='Текстовый запасной вариант: имя ЦЕЛИКОМ как словосочетание (тёзки по куску слова не цепляются). Главная кнопка выше — точнее, ловит и короткие формы.';
+  box.appendChild(hbHint);
   // M412: учителя/ученики по штудированным парам (dz-цепочки) → отфильтрованная таблица
   const tt=document.createElement('div'); tt.style.cssText='display:flex;gap:7px;margin-bottom:8px';
   const mkTS=(lbl,key)=>{ const b=document.createElement('button'); b.className='mini'; b.style.cssText='flex:1;padding:8px;border:1px solid var(--border);border-radius:10px;font-size:12.5px'; b.textContent=lbl;
@@ -8294,9 +8303,14 @@ async function narrOpen(nm){
     return b; };
   tt.appendChild(mkTS('👨‍🏫 Его учителя','t')); tt.appendChild(mkTS('👨‍🎓 Его ученики','s'));
   box.appendChild(tt);
-  const out=document.createElement('div'); out.dataset.noPartBtns='1';   // R45: кнопки участия уже СВЕРХУ карточки — внизу не дублируем
+  const out=document.createElement('div'); out.dataset.noPartBtns='1'; out.dataset.noClose='1';   // P0-4: «✕ свернуть» внутри showNarratorBio лишний (есть «← Назад»); P0-5: дубль учителей/учеников не строить (кнопки уже есть выше)
   box.appendChild(out);
   await showNarratorBio(nm, out);
+  // владелец «сначала карточка, потом хадисы»: переносим контент карточки (имя/оценки/био = out) ВЫШЕ кнопок участия (cb/hb/tt), сразу под «← Назад»
+  try{ box.insertBefore(out, cb);
+    const cap=document.createElement('div'); cap.style.cssText='font-size:13px;font-weight:700;color:#c9b8ff;margin:10px 0 4px;border-top:1px solid var(--border);padding-top:9px';
+    cap.textContent='📚 Его хадисы (участие в иснадах):'; box.insertBefore(cap, cb);
+  }catch(e){}
   try{ window.scrollTo({top:res.offsetTop-8,behavior:'smooth'}); }catch(e){}
 }
 async function narrRun(q, seq){
@@ -8446,8 +8460,8 @@ function _qToolsRow(qtxt, key, bookName){   // мини-кнопки Перев�
   const exH=document.createElement('div'); exH.style.cssText='display:none';
   const tkH=document.createElement('div'); tkH.style.cssText='display:none';
   const mk=(t,fn)=>{ const x=document.createElement('button'); x.className='mini'; x.textContent=t; x.style.cssText='font-size:11px;padding:2px 7px'; x.onclick=fn; return x; };
-  const trB=mk('🧠 Перевод', ()=>{ try{ translateTafsir(qtxt.slice(0,9000), key, 0, 0, trH, trB); }catch(e){} });
-  const exB=mk('💬 Объяснить', ()=>{ try{ doExplain('Запись о передатчике в труде риджаля «'+bookName+'»: '+qtxt.slice(0,5000), null, {source:key, num:''}, exH, exB); }catch(e){} });
+  const trB=mk('🧠 Перевод', ()=>{ try{ const _hn=(function(s){let h=0;for(let i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0;}return Math.abs(h);})(qtxt||''); translateTafsir(qtxt.slice(0,9000), key, _hn, 0, trH, trB, 'jarh'); }catch(e){} });   // P0-2: kind='jarh' (правильный промт) + P1-4 уник.кэш-ключ (хеш текста, не 0:0)
+  const exB=mk('💬 Объяснить', ()=>{ try{ doExplain('Объясни простым русским, что означает эта оценка передатчика (джарх ва таʿдиль) из труда риджаля «'+bookName+'»: смысл термина оценки и вывод о надёжности равия. Не выдумывай — опирайся на текст записи. Текст: '+qtxt.slice(0,5000), null, {source:key, num:'', book:bookName}, exH, exB); }catch(e){} });
   const tkB=mk('◌ Огласовки', null);
   tkB.onclick=async()=>{ if(tkB.dataset.shown==='1'){ tkH.style.display='none'; tkB.dataset.shown=''; return; }
     if(tkH.dataset.done==='1'){ tkH.style.display='block'; tkB.dataset.shown='1'; return; }
@@ -8491,7 +8505,7 @@ async function renderNarrVerdicts(id, host){
       let h='<div style="font-size:11.5px;color:#9fb6d6">📕 '+esc(it.b.b)+(it.b.a?(' — '+esc(it.b.a)):'')
         +((it.q.w && cat.k!=='sama')?(' <span style="font-size:10.5px;border-radius:6px;padding:1px 6px;white-space:nowrap;background:rgba(255,212,121,.12);color:#ffd479;border:1px solid #b8860b" title="Кто вынес это суждение (атрибуция автоматическая — проверяй по источнику)">🗣 '+esc(it.q.w)+'</span>'):'')
         +(verds.length?(' '+verds.map(w=>'<span class="vTerm" data-w="'+esc(w)+'" title="Нажми — перевод термина" style="cursor:pointer;font-size:10.5px;border-radius:6px;padding:1px 6px;white-space:nowrap;background:'+cat.bg+';color:'+cat.tx+';border:1px solid '+cat.col+'">'+esc(w)+'</span>').join(' ')):'')+'</div>';
-      h+='<div style="direction:rtl;text-align:right;font-size:14px;line-height:1.78;margin-top:3px">…'+esc(it.q.q)+'…</div>';
+      h+='<div style="direction:rtl;text-align:right;font-size:16px;line-height:1.95;margin-top:3px">…'+esc(it.q.q)+'…</div>';
       if(it.q.p!=null) h+='<div style="margin-top:2px"><span class="vOpen" data-bid="'+it.b.i+'" data-pg="'+it.q.p+'" style="cursor:pointer;color:var(--link);font-size:11px">📖 открыть в книге (стр. '+it.q.p+')</span></div>';
       card.innerHTML=h;
       card.appendChild(_qToolsRow(it.q.q, 'narrv'+id+'_'+it.b.i+'_'+j, it.b.b));
@@ -8532,7 +8546,7 @@ async function renderMutabarunSummary(id, box, out){
     const fw=document.createElement('div'); fw.style.cssText='margin-bottom:8px';
     fw.innerHTML='<div style="font-size:12px;color:var(--hint);margin-bottom:5px">📝 Упомянут в трудах <b style="color:#bcd2ff">'+found.length+'</b> критиков'+(found.length?' (нажми → его места ниже):':':')+'</div>';
     const fb=document.createElement('div'); fb.style.cssText='display:flex;gap:5px;flex-wrap:wrap';
-    if(found.length){ found.forEach(cr=>{ const ch=document.createElement('span'); ch.className='chip'; ch.style.cssText='font-size:12px;border:1px solid #3a5b9b;color:#bcd2ff;background:rgba(58,91,155,.12);cursor:pointer;direction:rtl'; ch.textContent='📝 '+cr; ch.title='Раскрыть найденные места этого критика ниже (упоминание ≠ оценка!)';
+    if(found.length){ found.forEach(cr=>{ const ch=document.createElement('span'); ch.className='chip'; ch.style.cssText='font-size:12px;border:1px solid #3a5b9b;color:#bcd2ff;background:rgba(58,91,155,.12);cursor:pointer;direction:rtl'; ch.textContent='📝 '+_critRu(cr); ch.title='Раскрыть найденные места этого критика ниже (упоминание ≠ оценка!)';
         ch.onclick=()=>{ try{ const mb=out.querySelector('.narrMentions'); if(mb){ mb.style.display='block'; const tg=mb.parentNode&&mb.parentNode.querySelector('.rjTg'); if(tg) tg.textContent='▾'; mb.scrollIntoView({behavior:'smooth',block:'start'}); } }catch(e){} try{hap('light');}catch(e){} };
         fb.appendChild(ch); }); }
     else fb.innerHTML='<span style="color:var(--hint);font-size:12px">— в наших трудах мутабарунов не нашёл (имя бывает в иной форме: كنية/نسب)</span>';
@@ -8610,7 +8624,7 @@ async function showNarratorCardLocal(name, host){
     for(const k of _cks){ if(_NARR_RU[k]){ _ruSh=_NARR_RU[k]; break; } } }catch(e){}   // #сподвижники: курированное рус-имя (Абу Хурайра и т.д.) поверх авто-транслита/вики
   let _ruNm=''; try{ _ruNm=arNameRu(_c1,7); }catch(e){}
   if(_ruSh) h+='<div style="direction:ltr;text-align:left;font-size:13px;color:#bcd0ff;margin-top:2px">≈ '+esc(_ruSh)+'</div>';
-  if(_ruNm&&_showFull&&_ruNm!==_ruSh) h+='<div style="direction:ltr;text-align:left;font-size:11.5px;color:#8fa3c7">полное: '+esc(_ruNm)+'</div>';
+  if(_ruNm&&_showFull&&_ruNm!==_ruSh) h+='<div style="direction:ltr;text-align:left;font-size:13px;color:#8fa3c7">полное: '+esc(_ruNm)+'</div>';
   // ⭐ С38 (заявка владельца): СПОДВИЖНИКАМ — ЗОЛОТОЙ знак сахаба (приоритет над «رجال الشيخين»; الصحابة كلهم عدول)
   // Определяем по РАНГУ/ТАБАКЕ (без имени!) + гарант-список ПО ПРЕФИКСУ имени — иначе «مالك بن أنس» ловил подстроку «أنس بن مالك» (ложный сахаба).
   let _isSah=false;
@@ -8626,7 +8640,7 @@ async function showNarratorCardLocal(name, host){
   let _hc=0; try{ const _pp=await dzPart(c[0]); _hc=Array.isArray(_pp)?_pp.length:0; }catch(e){}   // РЕДИЗАЙН: счётчик хадисов (мест в разобранных цепях, как кнопка «по цепям») — метрика в шапку (dzPart = кэш-шард, дёшево)
   h+='<div style="font-size:11px;margin:2px 0 7px">'+(((cfg.shLink||'wiki')!=='off')?('📖 <span class="shamNarr" data-id="'+c[0]+'" style="color:var(--link);cursor:pointer;text-decoration:underline dotted" title="Открыть эту карточку на сайте shamela.ws">موسوعة رواة الحديث (база Мактабы) ↗</span> · '):'')+(_snSid?('<span class="snNarr" data-u="https://sunnah.com/narrator/'+esc(_snSid)+'" style="color:#7fb0d8;cursor:pointer;text-decoration:underline dotted" title="Карточка передатчика на sunnah.com (у sunnah.com СВОЯ нумерация, не совпадает с № Мактабы)">🌐 sunnah.com #'+esc(_snSid)+' ↗</span> · '):'')+'<span class="ntOpen" data-id="'+c[0]+'" style="color:#5b87b5;cursor:pointer;font-weight:700" title="№ в موсوعة рواة الحديث (Мактаба). На sunnah.com у того же человека ДРУГОЙ номер — нумерации справочников не совпадают.">№ Мактабы '+c[0]+' 📋</span></div>'
     +row('الكنية',c[2])+row('النسب',c[3])+row('سنة الوفاة',c[4]?('~'+c[4]+'هـ'):'')+row('الطبقة',c[7])
-    +(_hc>0?('<div style="margin:5px 0;direction:rtl"><span style="display:inline-block;background:rgba(46,107,155,.15);border:1px solid #2e6b9b;border-radius:8px;padding:3px 11px;font-size:12.5px"><b style="color:#bcd2ff">📜 '+_hc+'</b> <span style="color:var(--hint);font-size:11px">хадисов (мест в разобранных цепях)</span></span></div>'):'')
+    +(_hc>0?('<div style="margin:5px 0;direction:rtl"><span class="partCount" title="Показать эти хадисы — нажми" style="display:inline-block;cursor:pointer;background:rgba(46,107,155,.15);border:1px solid #2e6b9b;border-radius:8px;padding:3px 11px;font-size:12.5px"><b style="color:#bcd2ff">📜 '+_hc+'</b> <span style="color:var(--hint);font-size:11px">хадисов (мест в разобранных цепях) ↓</span></span></div>'):'')
     +rank('الرتبة عند ابن حجر',c[5])+rank('الرتبة عند الذهبي',c[6])
     +((c[5]||c[6])?'<div style="font-size:10.5px;color:var(--hint);margin-top:2px">↑ поздние своды — справочно (Ибн Хаджар и аз-Захаби НЕ из 48 мутабарунов); эталон — акваль 48 из 150 книг, разделы ниже (R38)</div>':'');
   // 📜 биография-сводка по-русски (заявка: «первым делом общая признанная биография на арабском и русском»)
@@ -8640,6 +8654,8 @@ async function showNarratorCardLocal(name, host){
   }catch(e){}
   h+='</div>';
   host.insertAdjacentHTML('afterbegin', h);
+  try{ const _pc=host.querySelector('.partCount'); if(_pc) _pc.onclick=()=>{ try{ hap('light'); }catch(e){}   // владелец «почему 10420 не кликабельно»: чип-счётчик → открыть тот же список хадисов, что и кнопка «Все хадисы с ним»
+    const cbtn=[...document.querySelectorAll('#res .card button')].find(b=>(b.textContent||'').indexOf('Все хадисы с ним')>=0); if(cbtn){ try{ cbtn.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} cbtn.click(); } }; }catch(e){}
   try{ const _hd=host.firstElementChild, _at=_hd&&_hd.querySelector('.narrAltT'), _ab=_hd&&_hd.querySelector('.narrAltB'); if(_at&&_ab){ _at.onclick=()=>{ const op=_ab.style.display==='none'; _ab.style.display=op?'block':'none'; _at.textContent=(op?'▾':'▸')+' '+_at.textContent.replace(/^[▸▾]\s*/,''); }; } }catch(e){}   // #сподвижники: тумблер «другие варианты имени»
   // M367 (заявка по скрину: «где тут перевод на русский и где огласовки»): инструменты у САМОЙ шапки биографии
   try{
@@ -8846,7 +8862,7 @@ async function doRijalCorpus(name, out, btn){
   const st=(out._rj=out._rj||{all:[],page:0,count:0,books:150,sort:'book',loading:false,done:false});
   const renderCard=(x)=>{ const c=document.createElement('div'); c.className='card'; c.style.cssText='margin-bottom:7px';
     const loc=(x.vol?('т.'+x.vol+' '):'')+(x.page!=null?('стр. '+x.page):'');
-    c.innerHTML='<div class="rjH" style="font-size:12.5px;color:var(--link);direction:rtl;text-align:right;font-weight:600;cursor:pointer" title="Открыть книгу на этой странице">📖 '+esc(x.book_name||'')+(x.critic?(' <span style="color:#bff5d4">· '+esc(x.critic)+'</span>'):'')+(loc?(' <span style="color:var(--hint);font-weight:400">· '+esc(loc)+'</span>'):'')+'</div>'
+    c.innerHTML='<div class="rjH" style="font-size:12.5px;color:var(--link);direction:rtl;text-align:right;font-weight:600;cursor:pointer" title="Открыть книгу на этой странице">📖 '+esc(x.book_name||'')+(x.critic?(' <span style="color:#bff5d4">· '+esc(_critRu(x.critic))+'</span>'):'')+(loc?(' <span style="color:var(--hint);font-weight:400">· '+esc(loc)+'</span>'):'')+'</div>'
       +'<div class="ar" style="font-size:16px;margin-top:5px;line-height:1.9">'+esc((x.snip||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim())+'</div>';
     c.querySelector('.rjH').onclick=()=>{ try{ openBook(x.book_id, x.page_id||x.page||1); }catch(e){} };
     try{ enableArabusTap(c.querySelector('.ar')); if(_arabusOn) c.querySelector('.ar').style.cursor='pointer'; }catch(e){}
@@ -8870,7 +8886,7 @@ async function doRijalCorpus(name, out, btn){
         const tr=(st.sort!=='author' && typeof _catTr!=='undefined' && _catTr.map)?(_catTr.map[g]||null):null;
         const wk=(st.sort!=='author' && window._wikiT)?(window._wikiT[String(x.book_id)]||null):null;
         const gh=document.createElement('div'); gh.style.cssText='font-weight:700;color:#d9ccff;font-size:13px;margin:9px 0 2px;direction:rtl;text-align:right;cursor:pointer;user-select:none';
-        gh.innerHTML='<span class="gTg" style="color:var(--hint);font-weight:400;font-size:11px;float:left">▾ свернуть</span>'+(st.sort==='author'?'✍️ ':'📕 ')+esc((tr&&tr.voc)?tr.voc:g);
+        gh.innerHTML='<span class="gTg" style="color:var(--hint);font-weight:400;font-size:11px;float:left">▾ свернуть</span>'+(st.sort==='author'?'✍️ ':'📕 ')+esc((tr&&tr.voc)?tr.voc:(st.sort==='author'?_critRu(g):g));
         out.appendChild(gh);
         if((tr&&tr.ru)||wk){
           const sub=document.createElement('div'); sub.style.cssText='direction:ltr;text-align:left;font-size:12px;color:#bcd0ff;margin:0 0 4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
@@ -9790,21 +9806,22 @@ const TAFSIRS=[
   {key:'baghawi',  nm:'Багави',   ar:'ar-tafsir-al-baghawi', ru:null},
 ];
 // 🧠 перевод ТАФСИРА (для толкований без готового рус) — накопительно (source=tafsir_<key>), по абзацам
-async function translateTafsir(txt, key, s, a, host, btn){
+async function translateTafsir(txt, key, s, a, host, btn, kind){
   if(!host) return; host.style.display='block';   // FIX: в читалке книги контейнер был display:none → перевод приходил, но был скрыт
   if(!BACKEND_URL){ host.textContent='перевод заработает на сервере'; return; }
-  host.innerHTML='<span class="hint">🧠 Перевожу тафсир (по абзацам)…</span>'; if(btn){ btn.style.pointerEvents='none'; btn.textContent='…'; }
+  const _isJarh=(kind==='jarh');   // P0-2: оценка передатчика — НЕ тафсир (другой промт на бэке через source)
+  host.innerHTML='<span class="hint">🧠 Перевожу '+(_isJarh?'оценку':'тафсир')+'…</span>'; if(btn){ btn.style.pointerEvents='none'; btn.textContent='…'; }
   const restore=()=>{ if(btn){ btn.style.pointerEvents=''; btn.textContent='🧠 Перевести (ИИ)'; } };
   const _ac=new AbortController(); const _to=setTimeout(()=>{try{_ac.abort();}catch(e){}},60000);   // #323: таймаут 60с — перевод тафсира/равия не виснет вечно
   try{ const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text:(txt||'').slice(0,11000), source:'tafsir_'+key, num:s+':'+a, initData:INITDATA}), signal:_ac.signal});
+      body:JSON.stringify({text:(txt||'').slice(0,11000), source:(_isJarh?'jarh_':'tafsir_')+key, num:s+':'+a, initData:INITDATA}), signal:_ac.signal});
     clearTimeout(_to);
     const j=await r.json().catch(()=>({}));
     if(r.status===403){ host.innerHTML='<span class="hint">'+((j&&j.message)||'перевод пока не открыт')+'</span>'; restore(); return; }
     if(j&&j.translation){
       const paras=j.translation.split(/\n+/).filter(p=>p.trim());
       host.innerHTML='<div style="border:1px solid #6c5ce7;border-radius:10px;padding:10px;background:rgba(108,92,231,.08);font-size:14px;line-height:1.75">'
-        +'<div style="color:#b9a9ff;font-size:11px;margin-bottom:6px">'+(j.cached?'♻️ Перевод тафсира (из базы, бесплатно)':'🧠 Перевод тафсира (ИИ — возможны ошибки, сверяйте)')+'</div>'
+        +'<div style="color:#b9a9ff;font-size:11px;margin-bottom:6px">'+(j.cached?('♻️ Перевод '+(_isJarh?'оценки':'тафсира')+' (из базы, бесплатно)'):('🧠 Перевод '+(_isJarh?'оценки передатчика':'тафсира')+' (ИИ — возможны ошибки, сверяйте)'))+'</div>'
         +paras.map(p=>'<p style="margin:0 0 8px">'+esc(p)+'</p>').join('')+'</div>';
       // M205: перевод появляется НИЖЕ длинного оригинала — кнопка становится указателем «к переводу» + авто-прокрутка
       if(btn){ btn.style.pointerEvents=''; btn.textContent='⬇️ К переводу'; btn.title='Перейти к переводу (ниже)'; btn.onclick=()=>{ try{ host.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} }; }
