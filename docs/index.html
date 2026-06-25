@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v726</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v727</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v726';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v727';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -11167,6 +11167,20 @@ var _rgo=document.getElementById('readGo'); if(_rgo) _rgo.onclick=()=>{ const c=
 var _rfrom=document.getElementById('readFrom'); if(_rfrom) _rfrom.onkeydown=(e)=>{ if(e.key==='Enter'){ e.preventDefault(); if(_rgo) _rgo.onclick(); } };   // #317: Enter в поле «с №» открывает сборник (раньше работала только кнопка «Открыть»)
 var _rprev=document.getElementById('readPrev'); if(_rprev) _rprev.onclick=()=>{ if(_readFindM.length){ _readFindStep(-1); } else { _readIdx--; _readRender(); } try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
 var _rnext=document.getElementById('readNext'); if(_rnext) _rnext.onclick=()=>{ if(_readFindM.length){ _readFindStep(1); } else { _readIdx++; _readRender(); } try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
+// #296: свайп влево/вправо в читалке хадисов = листать (как кнопки ← пред / след →), но НЕ мешая выделению текста.
+// Стражи: игнорируем, если ИДЁТ выделение (getSelection непустой), жест долгий (>500мс = тянут/выделяют) или вертикальный. passive:true → нативное выделение/скролл не ломаем.
+var _rbody=document.getElementById('readBody');
+if(_rbody && !_rbody._swipeWired){ _rbody._swipeWired=true; var _rsx=0,_rsy=0,_rst=0;
+  _rbody.addEventListener('touchstart',function(e){ if(e.touches.length!==1) return; _rsx=e.touches[0].clientX; _rsy=e.touches[0].clientY; _rst=Date.now(); },{passive:true});
+  _rbody.addEventListener('touchend',function(e){ var t=e.changedTouches&&e.changedTouches[0]; if(!t||Date.now()-_rst>500) return;
+    try{ if(String((window.getSelection&&window.getSelection())||'').trim()) return; }catch(_e){}   // идёт выделение текста — не листать (заявка #296: «чтобы не мешало выделять»)
+    var dx=t.clientX-_rsx, dy=t.clientY-_rsy;
+    if(Math.abs(dx)>60 && Math.abs(dx)>Math.abs(dy)*2){
+      if(_readFindM.length){ _readFindStep(dx<0?1:-1); }
+      else { var _n=(_readArr&&_readArr.length)||0; if(dx<0 && _readIdx<_n-1){ _readIdx++; _readRender(); } else if(dx>0 && _readIdx>0){ _readIdx--; _readRender(); } }
+      try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(_e2){}
+    } },{passive:true});
+}
 // #38: «в начало / в конец книги» (как в Мактабе) — массив _readArr загружен целиком, длина известна
 var _rfirst=document.getElementById('readFirst'); if(_rfirst) _rfirst.onclick=()=>{ _readFindM=[]; _readFindPos=-1; var _fi=document.getElementById('readFindInfo'); if(_fi)_fi.textContent=''; _readIdx=0; _readRender(); try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
 var _rlast=document.getElementById('readLast'); if(_rlast) _rlast.onclick=()=>{ _readFindM=[]; _readFindPos=-1; var _fi=document.getElementById('readFindInfo'); if(_fi)_fi.textContent=''; _readIdx=(_readArr&&_readArr.length?_readArr.length-1:0); _readRender(); try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
