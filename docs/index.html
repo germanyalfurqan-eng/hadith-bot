@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v723</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v724</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v723';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v724';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1168,7 +1168,7 @@ function renderFav(by){
               const _a=await loadMuhaymin(); const _h=_a.find(x=>String(x.n)===_num); const _res=document.getElementById('res');
               if(_h){ _groups=[]; _res.appendChild(makeCard({type:'m',h:_h})); } else { try{ toast('Хадис аль-Мухаймина №'+_num+' не найден'); }catch(_t){} } }
             else if(p[0]==='h' && p[1] && p[2]){ openReader(p[1], String(p[2]).replace(/#.*/,'')); }
-            else if(p[0]==='mk' && p[1]){ try{ openBook(p[1], p[3]?String(p[3]).replace(/#.*/,''):undefined); }   // #174-фикс: openBook(bid, ЛИСТ=p[3]) — p[2] это № хадиса, НЕ страница (регресс v535); старые ключи без p[3] → книга без листа
+            else if(p[0]==='mk' && p[1]){ const _lf=(f.leaf||p[3]); try{ openBook(p[1], _lf?String(_lf).replace(/#.*/,''):undefined); }   // QA#1: лист из отдельного поля f.leaf (нов.формат), фолбэк p[3] (старые сохранённые ключи 4-полевые). openBook(bid, ЛИСТ) — p[2] это № хадиса, не страница
               catch(_e){ if(f.label){ const _qi=document.getElementById('q'); if(_qi) _qi.value=f.label; runSearch(true); } } }
             else if(f.label){ const _qi=document.getElementById('q'); if(_qi) _qi.value=f.label; runSearch(true); }
           }catch(_e){} };
@@ -3085,10 +3085,12 @@ async function _bookAddPrev(){
 }
 async function _bookLoad(){
   const m=document.getElementById('bookModal'); if(!m) return;
+  const my=(window._bkSeq=(window._bkSeq||0)+1);   // QA#2: токен против гонки быстрого листания (устаревший ответ не перетирает текущую страницу)
   const tEl=m.querySelector('#bookText'), navEl=m.querySelector('#bookNav'), ttl=m.querySelector('#bookTitle');
   tEl.innerHTML='<span class="hint">📖 Загружаю страницу…</span>';
   try{
     const j=await bjson(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+_bookView.pg+'&initData='+encodeURIComponent(INITDATA), 30000); const meta=j.meta||{};   // QA-свип: таймаут 30с (был голый fetch → белый экран при зависании /book_page)
+    if(my!==window._bkSeq) return;   // QA#2: пока грузили — пользователь перелистнул дальше; этот ответ устарел, не рисуем
     // «как в Шамиле»: пользователь прыгает по ПЕЧАТНОЙ странице, а turath листает только по «листу» (pg).
     // Подгоняем лист так, чтобы попасть РОВНО в нужную печатную страницу (до 2 шагов авто-коррекции).
     if(_bookView.want!=null && typeof meta.page==='number' && meta.page!==_bookView.want && (_bookView.snaps||0)<2){
@@ -3601,7 +3603,7 @@ async function maktabaByNum(seq, n){
       +((tr&&tr.ru)?('<div style="font-size:12.5px;color:#bcd0ff;margin-top:2px">'+esc(tr.ru)+'</div>'):'');
     const ar=document.createElement('div'); ar.className='ar'; ar.style.cssText='font-size:16px;line-height:2;margin-top:6px'; ar.textContent=it[1]; card.appendChild(ar);
     const meta=document.createElement('div'); meta.className='meta';
-    try{ addTr(meta, card, it[1], null, {k:'mk|'+bid+'|'+n+'|'+(it[0]||''), type:'h', coll:bn, label:bn+' №'+n, text:it[1].slice(0,200)}); }catch(e){}   // #174-фикс: 4-е поле = лист (для открытия openBook на нужной странице)
+    try{ addTr(meta, card, it[1], null, {k:'mk|'+bid+'|'+n, leaf:(it[0]||''), type:'h', coll:bn, label:bn+' №'+n, text:it[1].slice(0,200)}); }catch(e){}   // QA#1-фикс: ключ ЕДИНЫЙ (mk|bid|n) как в развёрнутом виде (3667) → нет дублей/рассинхрона звезды; лист вынесен в отдельное поле f.leaf (для openBook)
     card.appendChild(meta);
     if(it[0]){ const ob=document.createElement('span'); ob.style.cssText='display:inline-block;margin-top:6px;color:var(--link);cursor:pointer;font-weight:700;font-size:13.5px';   // #48: убрано подчёркивание — было непостоянно (та же книга вверху без подчёркивания); цвет ссылки достаточно
       ob.textContent='📖 '+bn+' №'+n; ob.title='Открыть '+bn+' №'+n+' в книге (лист '+it[0]+')'; ob.onclick=()=>{ try{ openBook(bid, it[0]); }catch(e){} }; card.appendChild(ob); }   // R45: «Книга №» активная ссылка как везде (не «открыть в книге»)
@@ -9844,7 +9846,7 @@ async function doTafsir(s,a,out,btn,key,lang){
       +'<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center">'
         +'<span class="tflang chip" data-l="ar" style="cursor:pointer;font-size:12px'+(isAr?';background:#2e5b3a;color:#fff;border-color:#2e9b5b':'')+'">📖 Оригинал (ар)</span>'
         +(tf.ru?('<span class="tflang chip" data-l="ru" style="cursor:pointer;font-size:12px'+(!isAr?';background:#10331f;color:#bff5d4;border-color:#2e9b5b':'')+'">📘 Перевод (рус, готовый)</span>')
-               :(isAr?'<span class="tftr chip" style="cursor:pointer;font-size:12px;background:#3a2d5e;border-color:#6c5ce7;color:#e0d7ff">🧠 Перевести (ИИ)</span>':''))
+               :((isAr&&txt)?'<span class="tftr chip" style="cursor:pointer;font-size:12px;background:#3a2d5e;border-color:#6c5ce7;color:#e0d7ff">🧠 Перевести (ИИ)</span>':''))
         +'<span class="tfcopy chip" title="Скопировать текст толкования" style="cursor:pointer;font-size:12px">⧉ Копировать</span>'
       +'</div>'
       +'<div style="display:flex;gap:6px;margin-bottom:6px"><input class="tfFind" placeholder="🔎 найти слово в этом толковании…" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:13px"><span class="tfFindInfo hint" style="font-size:11px;align-self:center;white-space:nowrap"></span></div>'
@@ -10586,6 +10588,7 @@ var _ac=document.getElementById('acSw'); if(_ac){ _ac.classList.toggle('on',!!cf
 var _wt=document.getElementById('wtSw'); if(_wt){ _wt.classList.toggle('on',cfg.wordTap!==false); _wt.onclick=()=>{ cfg.wordTap=(cfg.wordTap===false); saveCfg(cfg); _wt.classList.toggle('on',cfg.wordTap!==false); if(document.getElementById('q').value.trim()&&tab==='quran') runSearch(); }; }
 var _qse=document.getElementById('qSpaceExactSw'); if(_qse){ _qse.classList.toggle('on',!!cfg.qSpaceExact); _qse.onclick=()=>{ cfg.qSpaceExact=!cfg.qSpaceExact; saveCfg(cfg); _qse.classList.toggle('on',!!cfg.qSpaceExact); if(document.getElementById('q').value.trim()&&tab==='quran') runSearch(); }; }   // M309 тумблер «учитывать пробел»
 var _qhl=document.getElementById('qHlSw'); if(_qhl){ _qhl.classList.toggle('on',cfg.qHl!==false); _qhl.onclick=()=>{ cfg.qHl=(cfg.qHl===false); saveCfg(cfg); _qhl.classList.toggle('on',cfg.qHl!==false); toggleQHl(); }; }
+try{ toggleQHl(); }catch(e){}   // QA#4: применить НАЧАЛЬНОЕ состояние подсветки при загрузке (при сохранённом qHl=false класс no-q-highlight иначе не навешивался до клика тоггла)
 var _sig=document.getElementById('sigSw'); if(_sig){ _sig.classList.toggle('on',cfg.sig!==false); _sig.onclick=()=>{ cfg.sig=(cfg.sig===false); saveCfg(cfg); _sig.classList.toggle('on',cfg.sig!==false); }; }
 function applyZoom(){ var m=document.getElementById('vpMeta'); if(!m) return;
   m.setAttribute('content', cfg.noZoom ? 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' : 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes'); }
