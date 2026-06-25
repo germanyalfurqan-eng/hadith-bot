@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v725</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v726</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v725';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v726';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -918,6 +918,29 @@ async function fetchJSON(url, ms, opts){ ms=ms||20000;
   catch(e){ const ab=(e&&e.name==='AbortError');
     const reason=ab?('таймаут '+Math.round(ms/1000)+'с'):((e&&e.message)||'сбой сети');
     if(!(opts&&opts.silent)){ try{ _appReport('Загрузка книги не удалась ('+reason+'): '+String(url).split('/').pop().slice(0,50), 'fetchJSON'); }catch(_){} }   // M350: silent — когда выше есть штатный фолбэк
+    const err=new Error('fetchJSON: '+reason); err._url=url; err._timeout=ab; throw err; }
+  finally{ clearTimeout(t); }
+}
+// 💾 Постоянный кэш книг (Cache Storage). Крупные СТАБИЛЬНЫЕ издания (Ахмад 25МБ, Муслим 8.6МБ, Абу Авана,
+// Ибн Хиббан, Абу Яʿля, Исхак, Бухари-мин…) после первого открытия живут в кэше браузера → повторное
+// открытие МГНОВЕННО из кэша, БЕЗ сети и БЕЗ таймаута. Убирает класс авто-ошибок «таймаут загрузки книги»
+// (#301 ishaq / #326 abuyala / #338,#342 ahmad / #341 muslim_baqi): Telegram WebView часто перезагружает
+// аппу — раньше каждый заход пере-качивал 5-25МБ по флакающей мобильной сети и рвался по таймауту.
+// ⚠️ При ПЕРЕСБОРКЕ данных любой кэшируемой книги — поднять _BOOK_CACHE_NS (это инвалидирует кэш у всех).
+// Совместим с fetchJSON по сигнатуре и формату ошибки (журнал /api/errlog, opts.silent).
+const _BOOK_CACHE_NS='muslimoon-books-v1';
+async function cachedFetchJSON(url, ms, opts){ ms=ms||60000; opts=opts||{};
+  let cache=null;
+  try{ if(window.caches){ cache=await caches.open(_BOOK_CACHE_NS);
+        const hit=await cache.match(url);
+        if(hit){ try{ return await hit.json(); }catch(_){ try{ await cache.delete(url); }catch(__){} } } } }catch(e){ cache=null; }
+  const ctl=new AbortController(); const t=setTimeout(()=>{ try{ctl.abort();}catch(e){} }, ms);
+  try{ const r=await fetch(url,{signal:ctl.signal}); if(!r.ok) throw new Error('HTTP '+r.status);
+    try{ if(cache) await cache.put(url, r.clone()); }catch(e){}   // кладём сырой ответ; ошибки квоты глотаем (фолбэк = текущее поведение)
+    return await r.json(); }
+  catch(e){ const ab=(e&&e.name==='AbortError');
+    const reason=ab?('таймаут '+Math.round(ms/1000)+'с'):((e&&e.message)||'сбой сети');
+    if(!(opts&&opts.silent)){ try{ _appReport('Загрузка книги не удалась ('+reason+'): '+String(url).split('/').pop().slice(0,50), 'fetchJSON'); }catch(_){} }
     const err=new Error('fetchJSON: '+reason); err._url=url; err._timeout=ab; throw err; }
   finally{ clearTimeout(t); }
 }
@@ -1375,8 +1398,8 @@ async function loadCollection(code){
   if(code==='muslim'){   // Муслим — нумерация Абд аль-Баки (как sunnah.com): 2363=пальмы. fw = номер fawazahmed0 для готового перевода
     setStatus('Загружаю Сахих Муслим (Абд аль-Баки)…');
     // A-033: 8.6МБ на медленной сети рвётся за дефолтные 20с → 2 попытки по 60с, репорт только при втором фейле
-    let j; try{ j=await fetchJSON('./muslim_baqi.json',60000,{silent:true}); }
-    catch(_e){ j=await fetchJSON('./muslim_baqi.json',60000); }
+    let j; try{ j=await cachedFetchJSON('./muslim_baqi.json',60000,{silent:true}); }
+    catch(_e){ j=await cachedFetchJSON('./muslim_baqi.json',60000); }
     // УКАЗ-3 (слово владельца 16.06): отображаем ЧИСТЫЙ матн из турецкого изд. 711 (без شرح/غريب, в отличие от Абд аль-Баки с комментариями). num/fw/подсветка-na остаются на baqi.
     let _mclean={}; try{ const cj=await fetchJSON('./muslim_clean.json?v='+APPVER,60000,{silent:true}); if(cj) _mclean=cj; }catch(_e){}
     cache[code]=j.map(x=>({num:String(x.num),text:_muslimStripApparatus(_mclean[String(x.num)]||x.ar||''),grade:'',fw:x.fw||null,norm:''}));   // #226: чистим аппарат редактора (شرح/تحقيق) из матна
@@ -1397,22 +1420,22 @@ async function loadCollection(code){
 async function fetchEdition(code){
   // A-034/035: большие издания (Бухари 9.4МБ, Абу Дауд 6.6МБ) рвутся на мобильной сети → 2 попытки зеркала + CDN с 45с
   const local='./editions/ara-'+code+'.min.json';
-  try{ return await fetchJSON(local, 60000, {silent:true}); }
-  catch(e){ try{ return await fetchJSON(local, 60000, {silent:true}); }
+  try{ return await cachedFetchJSON(local, 60000, {silent:true}); }
+  catch(e){ try{ return await cachedFetchJSON(local, 60000, {silent:true}); }
     catch(e2){ return await fetchJSON(EDITION_URL(code), 45000); } }
 }
 let ahmadArr=null;
 async function loadAhmad(){ if(ahmadArr)return ahmadArr; setStatus('Загружаю Муснад Ахмада (большой)…');
-  const j=await fetchJSON(AHMAD_URL, 45000);
+  const j=await cachedFetchJSON(AHMAD_URL, 90000);   // 25МБ — самый большой; кэш Cache Storage (повторное открытие мгновенно) + таймаут 90с (#338/#342)
   ahmadArr=j.map(x=>({num:String(x.n),text:x.t||'',grade:x.g||'',norm:''})); return ahmadArr; }
 const _local={};
 async function loadLocal(code,file){ if(_local[code])return _local[code]; setStatus('Загружаю '+nameOf(code)+'…');
-  const j=await fetchJSON('./'+file, 90000);   // A-124: крупные книги (Абу Авана 22МБ, Насаи-Кубра/Абу Яʿля 12-13МБ) не успевали за 20с на мобильном Telegram
+  const j=await cachedFetchJSON('./'+file, 90000);   // A-124: крупные книги (Абу Авана 22МБ, Насаи-Кубра/Абу Яʿля 12-13МБ) не успевали за 20с на мобильном Telegram; кэш Cache Storage убирает повтор-таймауты (#301/#326)
   _local[code]=j.map(x=>{ const raw=(x.ar||x.t||'').replace(/\s+/g,' ').trim(); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }
 async function loadExtra(code){ if(_local[code])return _local[code]; const e=EXTRA_MAP[code]; setStatus('Загружаю '+(e?e.short:code)+'…');
   if(e&&e.cdn){ const j=await fetchEdition(code);
     _local[code]=(j.hadiths||[]).map(h=>({num:String(h.hadithnumber),text:(h.text||'').replace(/\s+/g,' ').trim(),grade:gradeOf(h),norm:''})); return _local[code]; }
-  const j=await fetchJSON(EXTRA_BASE+code+'.json', 90000);   // A-124: крупные издания (Ибн Хиббан 11МБ, Абу Авана 22МБ…) — таймаут 90с вместо 20с
+  const j=await cachedFetchJSON(EXTRA_BASE+code+'.json', 90000);   // A-124: крупные издания (Ибн Хиббан 11МБ, Абу Авана 22МБ…) — таймаут 90с; кэш Cache Storage → повторное открытие мгновенно (#301 ishaq/#326 abuyala)
   _local[code]=j.map(x=>{ const raw=(x.ar||x.t||'').replace(/\s+/g,' ').trim(); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }
 async function loadQuran(){ if(quran)return quran;
   try{ if(!(typeof modes!=='undefined'&&(modes.narr||modes.chain))) setStatus('Загружаю Коран…'); }catch(e){}   // в режимах равиев фоновая загрузка молчит («зачем при поиске передатчика грузить Коран»)
@@ -11141,6 +11164,7 @@ var _rc=document.getElementById('readClose'); if(_rc) _rc.onclick=()=>{ document
 var _rfb=document.getElementById('readFbBtn'); if(_rfb) _rfb.onclick=()=>{ try{ openFeedback('читалка: '+(ruTitle(_readCode)||_readCode||'')); }catch(e){} };   // #276: обращение технадзору из читалки
 var _rback=document.getElementById('readBack'); if(_rback) _rback.onclick=_readToPick;
 var _rgo=document.getElementById('readGo'); if(_rgo) _rgo.onclick=()=>{ const c=document.getElementById('readSel').value; const f=document.getElementById('readFrom').value; _readOpen(c,f); };
+var _rfrom=document.getElementById('readFrom'); if(_rfrom) _rfrom.onkeydown=(e)=>{ if(e.key==='Enter'){ e.preventDefault(); if(_rgo) _rgo.onclick(); } };   // #317: Enter в поле «с №» открывает сборник (раньше работала только кнопка «Открыть»)
 var _rprev=document.getElementById('readPrev'); if(_rprev) _rprev.onclick=()=>{ if(_readFindM.length){ _readFindStep(-1); } else { _readIdx--; _readRender(); } try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
 var _rnext=document.getElementById('readNext'); if(_rnext) _rnext.onclick=()=>{ if(_readFindM.length){ _readFindStep(1); } else { _readIdx++; _readRender(); } try{document.getElementById('readBody').scrollIntoView({block:'nearest'});}catch(e){} };
 // #38: «в начало / в конец книги» (как в Мактабе) — массив _readArr загружен целиком, длина известна
