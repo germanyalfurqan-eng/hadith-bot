@@ -3081,9 +3081,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg = f"📖 {NAMES.get(collection, collection)}, №{number}\n\n"
             if ar:
                 msg += f"🔤 {ar}\n\n"
-            if not tr and ar:
-                tr = translate_matn(ar, owner=is_owner(update))   # нет готового перевода → ИИ-перевод (кэш) — чтобы у КАЖДОГО хадиса был красивый пост араб+рус (синхрон с приложением)
-                if tr: lang = "рус"
+            if (not tr or lang == "англ") and ar:   # БАГ (владелец «почему английский»): нет русского издания → бот показывал АНГЛИЙСКИЙ. Проект русскоязычный → ИИ-перевод на русский; английский НЕ показываем
+                _ru = translate_matn(ar, "had_" + str(collection), owner=is_owner(update))   # нет готового перевода → ИИ-перевод (кэш) — у КАЖДОГО хадиса красивый пост араб+рус
+                if _ru:
+                    tr = _ru; lang = "рус"
+                elif lang == "англ":
+                    tr = ""   # ИИ не дал (не-владелец/гейт) — английский НЕ показываем (русскоязычный проект), лучше арабский без перевода
             if tr:
                 msg += f"🌍 {tr}\n"
             if gr:
