@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v736</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v737</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v736';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v737';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8594,15 +8594,16 @@ function _isMut(c){ return c && !_MUT_LATE.has(c); }
 const _SEVERE=['متروك','كذاب','وضاع','يكذب','ليس بشيء','متهم','تركوه','يضع','ساقط'];
 // ⚖️ ПРАВИЛО науки хадиса (указ владельца): تصديق = ≥2 свидетельства ДВУХ муʿтабаров из 48.
 // 1 таʿдиль توثиق НЕ устанавливает. Исключение: НЕТ джарха + Сахихайн (Бухари+Муслим) = 2 свидетельства.
-function _ttNeuro(list, sah){
+function _ttNeuro(list, inSahihayn){
   const tadil=new Set(), jarh=new Set(); let jah=0, posCnt=0, negCnt=0, severe=false;
   list.forEach(c=>{ const s=_TT_SCORE[c[1]]; if(s===undefined) return;
     if(c[1]==='مجهول'||c[1]==='لا أعرفه'||c[1]==='مجهول الحال'){ jah++; return; }
     if(s>0){ posCnt++; if(_isMut(c[0])) tadil.add(c[0]); }
     else if(s<0){ negCnt++; if(_isMut(c[0])) jarh.add(c[0]); if(_SEVERE.indexOf(c[1])>=0) severe=true; } });
-  if(!posCnt && !negCnt && !jah) return null;
   const nT=tadil.size, nJ=jarh.size;
-  const sahihayn = !!(sah && sah.b && sah.b.length && sah.m && sah.m.length);   // в обоих Сахихах
+  // Сахихайн (флаг 'bm' = в Бухари И Муслиме, надёжно из loadNarrFlags) = 2 свидетельства если нет джарха
+  const sahihayn = (inSahihayn===true) || !!(inSahihayn && inSahihayn.b && inSahihayn.b.length && inSahihayn.m && inSahihayn.m.length);
+  if(!posCnt && !negCnt && !jah && !sahihayn) return null;
   const tawthiq = (nT>=2) || (sahihayn && nJ===0 && !severe);                    // توثиق установлен?
   let v,col,em,note='';
   if(severe || (nJ>=2 && nJ>=nT)){ v='ضعيف / متروك — отвергается (джарх муʿтабаров)'; col='#f87171'; em='🔴'; }
@@ -8629,8 +8630,8 @@ function _ttLinkRow(bid,page,mid){
 async function renderTestimoniesCard(mid, host){
   if(mid==null) return; let list=null; try{ list=await _testimGet(+mid); }catch(e){}
   if(!list || !list.length) return;
-  let _sah=null; try{ _sah=await _sahGet(+mid); }catch(e){}   // Сахихайн (Бухари+Муслим) — для правила توثيق
-  const neuro=_ttNeuro(list, _sah);
+  let _inSah=false; try{ const _fl=(await loadNarrFlags())[String(mid)]; _inSah=(_fl==='bm'); }catch(e){}   // флаг 'bm'=رجال الشيخين (Бухари И Муслим) — надёжно (как бейдж), для правила توثيق
+  const neuro=_ttNeuro(list, _inSah);
   const sec=document.createElement('div'); sec.style.cssText='margin-top:11px;border:1px solid #c39bd3;border-radius:12px;overflow:hidden;background:rgba(155,89,182,.07)';
   const hdr=document.createElement('div'); hdr.style.cssText='padding:10px 12px;background:rgba(155,89,182,.16);font-weight:700;color:#e8d4f2;font-size:13.5px;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer';
   // группировка по критику
@@ -8798,6 +8799,8 @@ async function showNarratorCardLocal(name, host){
   }catch(e){}
   h+='</div>';
   host.insertAdjacentHTML('afterbegin', h);
+  // 🧭 СВОД КРИТИКОВ + 🤖 НЕЙРО-МУХАККИК + ссылки-проверки — СРАЗУ под карточкой (заявка владельца: «нейромухакик где вывод? где ссылки на оценки на страницы?»)
+  try{ const _ttBox=document.createElement('div'); const _cardEl=host.firstElementChild; if(_cardEl&&_cardEl.nextSibling) host.insertBefore(_ttBox,_cardEl.nextSibling); else host.appendChild(_ttBox); await renderTestimoniesCard(id, _ttBox); }catch(e){}
   try{ const _pc=host.querySelector('.partCount'); if(_pc) _pc.onclick=()=>{ try{ hap('light'); }catch(e){}   // владелец «почему 10420 не кликабельно»: чип-счётчик → открыть тот же список хадисов, что и кнопка «Все хадисы с ним»
     const cbtn=[...document.querySelectorAll('#res .card button')].find(b=>(b.textContent||'').indexOf('Все хадисы с ним')>=0); if(cbtn){ try{ cbtn.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} cbtn.click(); } }; }catch(e){}
   try{ const _hd=host.firstElementChild, _at=_hd&&_hd.querySelector('.narrAltT'), _ab=_hd&&_hd.querySelector('.narrAltB'); if(_at&&_ab){ _at.onclick=()=>{ const op=_ab.style.display==='none'; _ab.style.display=op?'block':'none'; _at.textContent=(op?'▾':'▸')+' '+_at.textContent.replace(/^[▸▾]\s*/,''); }; } }catch(e){}   // #сподвижники: тумблер «другие варианты имени»
