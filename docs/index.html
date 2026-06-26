@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v737</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v738</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v737';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v738';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8315,13 +8315,13 @@ async function narrOpen(nm){
   const shortNm=nm.split(' ').slice(0,3).join(' ');
   // 🧬 M378b: ТОЧНОЕ участие по кодам Э1.1 (штудированные иснады 33 печатей, включая короткие формы — это не текст-поиск)
   const cb=document.createElement('button'); cb.className='go'; cb.style.cssText='width:100%;padding:10px;margin-bottom:4px;font-size:14px';
-  cb.textContent='📚 Все хадисы с ним (точно — по разобранным цепям)';
+  cb.textContent='📚 Хадисы, которые он передаёт';
   cb.onclick=async()=>{ cb.disabled=true; cb.textContent='⏳ беру коды…';
     try{
       const id=await _narrLookup(nm);
-      if(id==null){ cb.textContent='🧬 код для этой формы не найден — попробуй полное имя'; cb.disabled=false; return; }
+      if(id==null){ _narrBypass=true; const q=document.getElementById('q'); q.value='"'+shortNm+'"'; hideNarrSugg(); runSearch(true); return; }   // фолбэк: цепь-код не найден → поиск по тексту имени (одна кнопка)
       const places=await dzPart(id);
-      if(!places||!places.length){ cb.textContent='🧬 в штудированных иснадах мест пока нет (Э1.1 итерируется)'; return; }
+      if(!places||!places.length){ _narrBypass=true; const q=document.getElementById('q'); q.value='"'+shortNm+'"'; hideNarrSugg(); runSearch(true); return; }
       try{ await loadBooksMap(); }catch(e){}   // M403: названия печатей ДО рендера (было «книга №1198»)
       try{ await loadBookTr(); }catch(e){}
       cb.style.display='none';
@@ -8332,7 +8332,16 @@ async function narrOpen(nm){
       const list=document.createElement('div'); bx.appendChild(list);
       let shown=0; const step=30;
       const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:7px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px';
-      const draw=()=>{ places.slice(shown,shown+step).forEach(p=>list.appendChild(_dzPlaceRow(p[0],p[1],p[2]))); shown=Math.min(places.length,shown+step);
+      const draw=()=>{ places.slice(shown,shown+step).forEach(p=>{
+          const card=document.createElement('div'); card.style.cssText='border-bottom:1px solid var(--border);padding:5px 0;margin-bottom:2px';
+          const mt=document.createElement('div'); mt.className='ar'; mt.style.cssText='direction:rtl;text-align:right;font-size:16px;line-height:1.95;color:var(--text)'; card.appendChild(mt);
+          card.appendChild(_dzPlaceRow(p[0],p[1],p[2])); list.appendChild(card);
+          try{ const _bid=String(p[0]); const code=(typeof _BID2READ!=='undefined'&&_BID2READ[_bid])||(typeof _BID2SLUG!=='undefined'&&_BID2SLUG[_bid]);
+            if(code){ getOne(code,p[1]).then(h=>{ if(h&&h.text){ let _t=h.text.replace(/\s+/g,' ').trim(); mt.textContent='…'+_t.slice(0,220)+(_t.length>220?'…':''); } else mt.remove(); }).catch(()=>{mt.remove();}); }
+            else if(p[2] && typeof BACKEND_URL!=='undefined' && BACKEND_URL){ mt.textContent='⏳…'; bjson(BACKEND_URL+'/book_page?id='+_bid+'&pg='+p[2]+'&initData='+encodeURIComponent(INITDATA),15000).then(j=>{ if(j&&j.text){ let _t=String(j.text).replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim(); if(_t){ mt.textContent='…'+_t.slice(0,220)+(_t.length>220?'…':''); } else mt.remove(); } else mt.remove(); }).catch(()=>{mt.remove();}); }
+            else { mt.remove(); }
+          }catch(e){}
+        }); shown=Math.min(places.length,shown+step);
         more.textContent='⬇️ Показать ещё ниже ('+(places.length-shown)+')'; more.style.display=shown>=places.length?'none':''; };
       more.onclick=draw; draw(); bx.appendChild(more);
       cb.parentNode.insertBefore(bx, cb);
@@ -8341,14 +8350,8 @@ async function narrOpen(nm){
   };
   box.appendChild(cb);
   // владелец: «сначала КАРТОЧКА, потом хадисы кнопкой» — авто-раскрытие убрано; кнопка «Хадисы с его участием» переехала ПОД карточку (см. box.insertBefore(out,...) ниже)
-  // #9 вторичный фолбэк: поиск по ТЕКСТУ имени (где назван целиком) — мелкая ссылка-кнопка под главной, не дублирует
-  const hb=document.createElement('button'); hb.className='mini'; hb.style.cssText='width:100%;padding:7px;margin-bottom:3px;font-size:12px;border:1px solid var(--border);border-radius:9px;color:var(--hint);background:transparent;cursor:pointer';
-  hb.textContent='🔎 Ещё: по тексту имени «'+shortNm+'» (где назван целиком)';
-  hb.onclick=()=>{ try{ hap('light'); }catch(e){} _narrBypass=true; const q=document.getElementById('q'); q.value='"'+shortNm+'"'; hideNarrSugg(); runSearch(true); };
-  box.appendChild(hb);
-  const hbHint=document.createElement('div'); hbHint.className='hint'; hbHint.style.cssText='font-size:10.5px;margin:-1px 0 8px;opacity:.75';
-  hbHint.textContent='Текстовый запасной вариант: имя ЦЕЛИКОМ как словосочетание (тёзки по куску слова не цепляются). Главная кнопка выше — точнее, ловит и короткие формы.';
-  box.appendChild(hbHint);
+  // #9/ревизия владельца: ОДНА кнопка «Хадисы, которые он передаёт» (по иснадам, ловит короткие формы);
+  // текстовый поиск по имени теперь ФОЛБЭК ВНУТРИ неё (если цепь-код не найден) — не отдельная кнопка (не путать).
   // M412: учителя/ученики по штудированным парам (dz-цепочки) → отфильтрованная таблица
   const tt=document.createElement('div'); tt.style.cssText='display:flex;gap:7px;margin-bottom:8px';
   const mkTS=(lbl,key)=>{ const b=document.createElement('button'); b.className='mini'; b.style.cssText='flex:1;padding:8px;border:1px solid var(--border);border-radius:10px;font-size:12.5px'; b.textContent=lbl;
