@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v728</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v729</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v728';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v729';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2517,7 +2517,7 @@ async function runSearch(explicit){
       : (done?(((!numMode && !/[ء-يa-zа-яё]/i.test(q))?'🤔 Похоже на опечатку или случайные символы — введите слово, фразу или № хадиса':('Ничего не найдено 🤷'+(smartNote?' — попробуй иначе':'')))):'Ищу…');   // M199: junk-ввод («&88», «((») → понятная подсказка
     head.innerHTML = (smartNote?('<div style="color:var(--link);margin-bottom:4px;font-size:13px">'+esc(smartNote)+' <span class="redoAi" style="cursor:pointer;text-decoration:underline;white-space:nowrap">🔄 повторить глубже (ИИ)</span></div>'):'')+n; if(done && count>CAP) ensureMoreBtn(seq, _lastQueryTerms, q, groups, modes); };
   // M229: первые 40 — сразу (мгновенно видно), остальные до CAP — порциями (не блокирует ввод/исправление)
-  const add=(d)=>{ _results.push(d); count++; if(count<=40) res.appendChild(makeCard(d)); else if(count<=CAP){ _renderQ.push(d); if(!_flushT) _flushT=setTimeout(_flushRender,0); } else if(count===CAP+1){ ensureMoreBtn(seq, _lastQueryTerms, q, groups, modes); } };
+  const add=(d)=>{ _results.push(d); count++; if(count<=40) res.appendChild(makeCard(d)); else if(count<=CAP){ _renderQ.push(d); if(!_flushT) _flushT=setTimeout(_flushRender,0); } else if(count===CAP+1){ ensureMoreBtn(seq, _lastQueryTerms, q, groups, modes); } else if((count&31)===0){ const mb=document.getElementById('moreResBtn'); if(mb&&mb._upd) mb._upd(); } };   // #346: каждые ~32 новых результата освежаем подпись ленты (total растёт фоном)
   // «Искать ещё в большой библиотеке» — 16 изданий + Мукбиль (не грузим по умолчанию ~127МБ; по кнопке, с прогрессом, потом кэш в сессии)
   function addLibMore(){
     if(tab!=='hadith') return; const res=document.getElementById('res');
@@ -2765,20 +2765,40 @@ function relToggleEl(){ const t=document.createElement('div'); t.id='relToggle';
   t.textContent=relMode?'🎯 По релевантности (вкл)':'🎯 По релевантности';
   t.title='Сортировать: сначала самые подходящие (где больше слов запроса)';
   t.onclick=()=>{ relMode=!relMode; renderResultsView(); }; return t; }
-// A-100: кнопка «Показать ещё» при >CAP результатов (была вызвана, но не определена → краш ensureMoreBtn). Рендерит следующие 200 из _results.
+// #346: ЛЕНТА — прогрессивная подгрузка карточек по скроллу (sentinel IntersectionObserver).
+// total читается ВЖИВУЮ (getList()) → нет stale-total (старая кнопка держала total на момент создания,
+// пока _results дорастал фоном до 992 — показывала «из 201»). Кнопка = ручной фолбэк/индикатор.
+// ОДИН живой observer (не disconnect/reconnect на каждый триггер): после вставки партии кнопку
+// отодвигает вниз за rootMargin → повторный триггер только когда юзер доскроллит обратно
+// (естественный троттлинг — нет каскадного авто-рендера всего списка сразу, что морозит UI).
+function attachFeed(res, getList, startShown, makeFn, guard){
+  try{
+    const old=document.getElementById('moreResBtn'); if(old){ if(old._io)old._io.disconnect(); old.remove(); }
+    let shown=startShown||0; const STEP=150;
+    const b=document.createElement('button'); b.id='moreResBtn'; b.className='mini';
+    b.style.cssText='display:block;width:100%;margin:12px 0;padding:11px;border:1px solid var(--btn);border-radius:12px;background:transparent;color:var(--link);font-weight:700;font-size:14px;cursor:pointer';
+    const total=()=>{ try{ return getList().length; }catch(e){ return shown; } };
+    const upd=()=>{ const t=total(); if(shown>=t){ if(b._io)b._io.disconnect(); b.remove(); return; } b.textContent='📃 Показать ещё ('+(t-shown).toLocaleString('ru')+' из '+t.toLocaleString('ru')+')'; };
+    const renderBatch=()=>{ if(guard && !guard()) return; const list=getList(); const t=list.length; if(shown>=t){ upd(); return; }
+      const frag=document.createDocumentFragment(); const to=Math.min(shown+STEP,t);
+      for(let i=shown;i<to;i++){ try{ frag.appendChild(makeFn(list[i])); }catch(e){} }
+      if(b.parentNode) b.parentNode.insertBefore(frag,b); shown=to; upd(); };
+    try{ b._io=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting) renderBatch(); }); },{rootMargin:'320px'}); b._io.observe(b); }catch(e){}
+    b.onclick=renderBatch;
+    b._upd=upd;   // #346: внешняя дозапись в список (стриминг) обновляет подпись «N из total», не давая ей застрять
+    res.appendChild(b); upd();
+    return b;
+  }catch(e){ return null; }
+}
+// A-100/#346: при >200 результатов лента из _results (live total). Стартует с 200 (первые отрисованы стримингом).
 function ensureMoreBtn(seq){
   try{
     const res=document.getElementById('res'); if(!res) return;
     if(seq!==undefined && seq!==_seq) return;
     if(document.getElementById('moreResBtn')) return;
-    const total=_results.length; let shown=Math.min(200, total);
-    const b=document.createElement('button'); b.id='moreResBtn'; b.className='mini';
-    b.style.cssText='display:block;width:100%;margin:12px 0;padding:11px;border:1px solid var(--btn);border-radius:12px;background:transparent;color:var(--link);font-weight:700;font-size:14px;cursor:pointer';
-    const upd=()=>{ if(shown>=total){ b.remove(); return; } b.textContent='📃 Показать ещё ('+(total-shown)+' из '+total+')'; };
-    b.onclick=()=>{ const frag=document.createDocumentFragment(); const to=Math.min(shown+200,total);
-      for(let i=shown;i<to;i++){ try{ frag.appendChild(makeCard(_results[i])); }catch(e){} }
-      if(b.parentNode) b.parentNode.insertBefore(frag,b); shown=to; upd(); };
-    res.appendChild(b); upd();
+    if(_results.length<=200) return;
+    // guard: пока _renderQ дорисовывает первые 200 (асинхронно), не подгружать ленту вперёд (порядок карточек)
+    attachFeed(res, ()=>_results, 200, makeCard, ()=>!_renderQ.length && !_flushT);
   }catch(e){}
 }
 function ensureRelToggle(){ const res=document.getElementById('res'); if(!res.firstChild||document.getElementById('relToggle')||!_results.length||!_lastQueryTerms.length) return;
@@ -2869,9 +2889,13 @@ function renderResultsView(){
   if(relMode && _lastQueryTerms.length){ list=_results.map((d,i)=>[d,_relScore(d),i]).sort((a,b)=>(b[1]-a[1])||(a[2]-b[2])).map(x=>x[0]); }
   if(uniqMode){ const dd=dedupResults(list, uniqMode); list=dd.list; hid=dd.hidden; }
   const cnt='найдено: '+_results.length+(relMode?' · по релевантности':'')+(uniqMode?(' · '+(uniqMode==='version'?'уникальных версий':'уникальных хадисов')+' '+list.length+(hid?(' · свёрнуто '+hid):'')+(uniqMode==='hadith'?' · основная версия/متابعات — пометка скоро':'')):'');
-  res.appendChild(info((groupSrc?('📚 Сгруппировано по '+(tab==='quran'?'сурам':'сборникам')+' · '):'')+cnt+((!groupSrc&&list.length>400)?' (первые 400)':'')));
+  res.appendChild(info((groupSrc?('📚 Сгруппировано по '+(tab==='quran'?'сурам':'сборникам')+' · '):'')+cnt));
   res.appendChild(grpToggleEl()); res.appendChild(uniqToggleEl()); res.appendChild(relToggleEl());
-  if(!groupSrc){ list.slice(0,400).forEach(d=>res.appendChild(makeCard(d))); return; }
+  // #346: лента — первые 200 сразу, остальные подгружаются по скроллу (раньше жёстко обрезалось на 400 → 401+ были недостижимы)
+  if(!groupSrc){ const FIRST=Math.min(200,list.length);
+    for(let i=0;i<FIRST;i++) res.appendChild(makeCard(list[i]));
+    if(list.length>FIRST){ const _list=list; attachFeed(res, ()=>_list, FIRST, makeCard); }
+    return; }
   // группируем по ВСЕМ результатам → видны ВСЕ сборники/суры (не только первые 400)
   const groups={}; const order=[];
   list.forEach(d=>{ const k=srcKeyOf(d); if(!groups[k]){groups[k]=[];order.push(k);} groups[k].push(d); });
