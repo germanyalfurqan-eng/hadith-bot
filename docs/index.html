@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v729</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v730</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v729';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v730';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4583,10 +4583,13 @@ async function openNarratorRijal(name){
   m.style.zIndex='10003'; m.style.display='flex';
   m.querySelector('#narrTitle').textContent='👤 '+name;
   const body=m.querySelector('#narrBody'); body.innerHTML='<div class="hint">📜 Загружаю оценки учёных…</div>';
-  if(!BACKEND_URL){ body.innerHTML='<div class="hint">Работает на сервере.</div>'; return; }
+  // 🧭 ЛОКАЛЬНЫЕ свидетельства критиков (заявка владельца «видно всё») рисуем НЕЗАВИСИМО от бэкенда —
+  // даже если ИИ-свод недоступен/403/таймаут, оценки муʿтабаров видны.
+  const _renderLocalTT=async()=>{ try{ const _v=await _narrLookup(name); if(_v!=null) await renderTestimoniesCard(_v, body); }catch(e){} };
+  if(!BACKEND_URL){ body.innerHTML='<div class="hint">🧠 Свод ИИ — на сервере. Оценки критиков (локальные) — ниже.</div>'; await _renderLocalTT(); return; }
   let j={}; const _ac=new AbortController(); const _to=setTimeout(()=>{try{_ac.abort();}catch(e){}},20000);   // #323-класс: карточка передатчика не виснет вечно при зависании бэкенда (вечный «Загружаю оценки…»)
-  try{ const r=await fetch(BACKEND_URL+'/narrator_rijal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,initData:INITDATA}), signal:_ac.signal}); clearTimeout(_to); j=await r.json().catch(()=>({})); if(r.status===403){ body.innerHTML='<div class="hint">'+((j&&j.message)||'функция пока не открыта')+'</div>'; return; } }catch(e){ try{clearTimeout(_to);}catch(_t){} body.innerHTML='<div class="hint">'+((e&&e.name==='AbortError')?'⏳ сервис долго не отвечает — попробуй ещё раз':'🔧 сервис недоступен')+'</div>'; return; }
-  if(j.is_narrator===false){ body.innerHTML='<div class="hint">Похоже, это не имя передатчика. Это обычный поиск — ищи как искал. 🙂</div>'; return; }
+  try{ const r=await fetch(BACKEND_URL+'/narrator_rijal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,initData:INITDATA}), signal:_ac.signal}); clearTimeout(_to); j=await r.json().catch(()=>({})); if(r.status===403){ body.innerHTML='<div class="hint">'+((j&&j.message)||'функция пока не открыта')+'</div>'; await _renderLocalTT(); return; } }catch(e){ try{clearTimeout(_to);}catch(_t){} body.innerHTML='<div class="hint">'+((e&&e.name==='AbortError')?'⏳ ИИ-свод долго не отвечает':'🔧 ИИ-свод недоступен')+' — оценки критиков ниже.</div>'; await _renderLocalTT(); return; }
+  if(j.is_narrator===false){ body.innerHTML='<div class="hint">Похоже, это не имя передатчика. Это обычный поиск — ищи как искал. 🙂</div>'; await _renderLocalTT(); return; }
   body.innerHTML='';
   try{ const _vid=await _narrLookup(name); if(_vid!=null){ await renderNarrVerdicts(_vid, body); } }catch(e){}   // 📚 СВЕРХУ: точные оценки из 149 трудов (наш глубокий анализ)
   const row=(lbl,val)=>val?('<div style="margin-top:5px"><span style="color:var(--hint)">'+lbl+':</span> '+esc(val)+'</div>'):'';
@@ -4595,6 +4598,8 @@ async function openNarratorRijal(name){
     +row('Эпоха',j.era)+row('Оценка',j.grade)+row('Учёные',j.scholars)+row('Где искать',j.where)
     +'<div style="margin-top:6px;font-size:11px;color:var(--hint)">🧠 свод ИИ '+(j.cached?'(из базы)':'')+' — вспомогательно; проверяй по первоисточникам риджаль ниже.</div>';
   body.appendChild(card);
+  // 🧭 СВОД КРИТИКОВ + НЕЙРО-МУХАККИК (заявка владельца) — кто что сказал списком + авто-вывод + ссылки-проверки
+  try{ const _tvid=await _narrLookup(name); if(_tvid!=null) await renderTestimoniesCard(_tvid, body); }catch(e){}
   // M475/TB-28: поколение (отметка صحابي/تابعي) + связи учитель↔ученик из تهذيب الكمال (по нашему id, R45)
   try{
     const _vid2=await _narrLookup(name);
@@ -8574,6 +8579,75 @@ async function renderNarrVerdicts(id, host){
   body.querySelectorAll('.vOpen').forEach(o=>o.onclick=()=>{ try{ var mm=document.getElementById('catModal'); if(mm) mm.style.display='none'; openBook(+o.dataset.bid, +o.dataset.pg||1); }catch(e){} });
   try{ loadJarhGl(); }catch(e){}
   body.querySelectorAll('.vTerm').forEach(t=>t.onclick=(e)=>{ e.stopPropagation(); loadJarhGl().then(()=>{ const ex=jarhExplain(t.dataset.w); toast(ex||('«'+t.dataset.w+'» — термина пока нет в глоссарии')); }); });
+}
+// ====== СВИДЕТЕЛЬСТВА КРИТИКОВ → КАРТОЧКА РАВИЯ (заявка владельца): кто что сказал + нейро-вывод + ссылки-проверки ======
+// Данные: build_testimonies_app.py → miniapp/testimonies/<mid//100>.json = {mid:[[критик,термин,kind,текст,книга,bid,page],...]}
+let _testimShard={};
+async function _testimGet(mid){ const b=Math.floor(mid/100); if(_testimShard[b]===undefined){ try{ _testimShard[b]=await (await fetch('./testimonies/'+b+'.json?v='+APPVER)).json(); }catch(e){ _testimShard[b]=null; } } return (_testimShard[b]||{})[String(mid)]||null; }
+// баллы термина (детерминированно — НЕ ИИ, П-07): таʿдиль>0, джарх<0, джахаля=0
+const _TT_SCORE={'ثقة':3,'ثبت':3,'حجة':3,'إمام':3,'حافظ':2,'متقن':2,'صدوق':1,'لا بأس به':1,'ليس به بأس':1,'صالح':1,'صالح الحديث':1,'مأمون':1,'حسن الحديث':1,'محله الصدق':1,'مستقيم الحديث':1,'شيخ':0,
+ 'لين':-1,'لين الحديث':-1,'ليس بالقوي':-1,'يخطئ':-1,'يهم':-1,'فيه نظر':-2,'ضعيف':-2,'ضعيف جدا':-3,'مضطرب':-2,'لا يحتج به':-2,'لا يصح حديثه':-2,'لا يتابع عليه':-1,'منكر':-2,'منكر الحديث':-3,'واه':-3,'ليس بشيء':-3,'ليس بثقة':-3,'ساقط':-3,'متروك':-4,'تركوه':-4,'ضعفوه':-2,
+ 'كذاب':-5,'يكذب':-5,'وضاع':-5,'متهم':-4,'مجهول':0,'مجهول الحال':0,'لا أعرفه':0,'لا شيء':-3};
+function _ttNeuro(list){
+  let pos=0,neg=0,jah=0,sum=0,cnt=0; const has=t=>list.some(c=>c[1]===t);
+  list.forEach(c=>{ const s=_TT_SCORE[c[1]]; if(s===undefined) return; cnt++;
+    if(c[1]==='مجهول'||c[1]==='لا أعرفه'||c[1]==='مجهول الحال') jah++; else if(s>0) pos++; else if(s<0) neg++; sum+=s; });
+  if(!cnt) return null; const avg=sum/cnt;
+  let v,col,em;
+  if(has('كذاب')||has('يكذب')||has('وضاع')){ v='متّهم بالكذب — отвергается'; col='#f87171'; em='⛔'; }
+  else if((has('متروك')||has('تركوه')||has('ليس بشيء'))&&neg>=pos){ v='متروك / ضعيف جدًا — отвергается у большинства'; col='#f87171'; em='🔴'; }
+  else if(jah>=Math.max(1,cnt*0.6)){ v='مجهول — неизвестный (данных мало)'; col='#9aa7b5'; em='⚪'; }
+  else if(avg>=1.6){ v='ثقة — надёжный'; col='#4ade80'; em='🟢'; }
+  else if(avg>=0.5){ v='صدوق — правдивый (приемлемый)'; col='#86d99c'; em='🟢'; }
+  else if(avg>-0.6){ v='مختلف فيه — спорный (между таʿдиль и джарх)'; col='#ffd479'; em='🟡'; }
+  else { v='ضعيف — слабый у большинства'; col='#f8a07a'; em='🟠'; }
+  return {v:v,col:col,em:em,pos:pos,neg:neg,jah:jah,cnt:cnt};
+}
+// ссылки-проверки (turath bid==shamela id, page прямой). Внутри аппа «У нас» = наш ридер openBook.
+function _ttLinkRow(bid,page,mid){
+  const w=document.createElement('div'); w.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:4px';
+  const mk=(txt,col,fn)=>{ const a=document.createElement('span'); a.textContent=txt; a.style.cssText='cursor:pointer;font-size:11px;color:'+col+';border:1px solid '+col+'66;border-radius:5px;padding:1px 7px;white-space:nowrap'; a.onclick=(e)=>{e.stopPropagation();try{fn();}catch(_){}}; return a; };
+  if(bid&&page){ w.appendChild(mk('ش Шамела с.'+page,'#4ade80',()=>openLink('https://shamela.ws/book/'+bid+'/'+page)));
+    w.appendChild(mk('🅣 Turath','#6c8cff',()=>openLink('https://app.turath.io/book/'+bid+'/'+page)));
+    w.appendChild(mk('📖 У нас','#bfe3cf',()=>{ try{var mm=document.getElementById('narrModal'); if(mm)mm.style.display='none';}catch(_){} openBook(bid,page); })); }
+  else if(bid){ w.appendChild(mk('ش Шамела (книга)','#4ade80',()=>openLink('https://shamela.ws/book/'+bid))); }
+  if(mid) w.appendChild(mk('👤 موسوعة','#e8b04a',()=>openLink('https://shamela.ws/narrator/'+mid)));
+  return w;
+}
+// порядок критиков: эталонные 48 (_critOrd по рус.имени) → но у нас араб.имена; группируем по критику, таʿдиль-перевес вперёд
+async function renderTestimoniesCard(mid, host){
+  if(mid==null) return; let list=null; try{ list=await _testimGet(+mid); }catch(e){}
+  if(!list || !list.length) return;
+  const neuro=_ttNeuro(list);
+  const sec=document.createElement('div'); sec.style.cssText='margin-top:11px;border:1px solid #c39bd3;border-radius:12px;overflow:hidden;background:rgba(155,89,182,.07)';
+  const hdr=document.createElement('div'); hdr.style.cssText='padding:10px 12px;background:rgba(155,89,182,.16);font-weight:700;color:#e8d4f2;font-size:13.5px;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer';
+  // группировка по критику
+  const byc={}; const order=[];
+  list.forEach(c=>{ const k=c[0]||'—'; if(!byc[k]){byc[k]=[];order.push(k);} byc[k].push(c); });
+  hdr.innerHTML='<span>🧭 Свод критиков — кто что сказал ('+order.length+' критиков · '+list.length+' оценок)</span><span class="ttTg">▾</span>';
+  const bd=document.createElement('div'); bd.style.cssText='padding:9px 12px';
+  // 🤖 НЕЙРО-МУХАККИК — предварительный авто-вывод (детерминированный, не замена учёных)
+  if(neuro){ const nb=document.createElement('div'); nb.style.cssText='border:1px solid '+neuro.col+';border-radius:10px;padding:10px 11px;margin-bottom:10px;background:'+neuro.col+'14';
+    nb.innerHTML='<div style="font-weight:800;color:'+neuro.col+';font-size:14px">'+neuro.em+' Нейро-мухаккик: '+esc(neuro.v)+'</div>'
+      +'<div style="font-size:12px;color:var(--hint);margin-top:5px">🟢 таʿдиль <b style="color:#7fe3bf">'+neuro.pos+'</b> · 🔴 джарх <b style="color:#ff9b7a">'+neuro.neg+'</b>'+(neuro.jah?(' · ⚪ джахаля <b>'+neuro.jah+'</b>'):'')+' — по '+neuro.cnt+' оценкам критиков.</div>'
+      +'<div style="font-size:10.5px;color:var(--hint);margin-top:4px">🤖 Предварительный авто-вывод по балансу оценок (формула, не ИИ). НЕ замена иджтихада учёных — открой ссылки и проверь сам.</div>';
+    bd.appendChild(nb); }
+  // сортировка критиков: средний балл по убыванию (хвалившие вперёд) — наглядно
+  order.sort((a,b)=>{ const sc=arr=>arr.reduce((s,c)=>s+(_TT_SCORE[c[1]]||0),0)/arr.length; return sc(byc[b])-sc(byc[a]); });
+  order.forEach(cr=>{ const items=byc[cr];
+    const row=document.createElement('div'); row.style.cssText='border-bottom:1px solid var(--border);padding:7px 0';
+    const terms=[...new Set(items.map(c=>c[1]))];
+    const badges=terms.map(t=>{ const sc=_TT_SCORE[t]||0; const col=sc>0?'#2e9b5b':(sc<0?'#9b3b3b':'#7a8693'); const bg=sc>0?'rgba(46,155,91,.14)':(sc<0?'rgba(248,113,113,.12)':'rgba(122,134,147,.12)');
+      return '<span dir="rtl" style="font-size:13px;border-radius:7px;padding:1px 9px;margin:0 0 0 4px;background:'+bg+';color:'+(sc>0?'#7fe3bf':(sc<0?'#ff9b7a':'#9aa7b5'))+';border:1px solid '+col+'">'+esc(t)+'</span>'; }).join('');
+    row.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap"><span dir="rtl" style="font-size:14px;'+_AF+';color:#e8d4f2">'+esc(cr)+'</span><span>'+badges+'</span></div>';
+    // оригинал первой цитаты + ссылка
+    const c0=items[0];
+    if(c0[3]){ const q=document.createElement('div'); q.style.cssText='direction:rtl;text-align:right;font-size:14px;line-height:1.85;color:var(--hint);margin-top:3px'; q.textContent='…'+c0[3]+'…'; row.appendChild(q); }
+    row.appendChild(_ttLinkRow(c0[5], c0[6], mid));
+    bd.appendChild(row);
+  });
+  hdr.onclick=()=>{ const op=bd.style.display!=='none'; bd.style.display=op?'none':'block'; hdr.querySelector('.ttTg').textContent=op?'▸':'▾'; };
+  sec.appendChild(hdr); sec.appendChild(bd); host.appendChild(sec);
 }
 // M371: ЕДИНЫЙ порядок критиков ВЕЗДЕ — хронология по году смерти, РАННИЕ ПЕРВЫМИ (дух R38: ранние имамы — эталон)
 const _CRIT_DEATH={'аш-Шафии':820,'Яхья ибн Маин':847,'Али ибн аль-Мадини':849,'Ахмад ибн Ханбаль':855,'аль-Бухари':870,'Муслим':875,
