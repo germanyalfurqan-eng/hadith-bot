@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v735</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v736</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v735';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v736';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8588,20 +8588,31 @@ async function _testimGet(mid){ const b=Math.floor(mid/100); if(_testimShard[b]=
 const _TT_SCORE={'ثقة':3,'ثبت':3,'حجة':3,'إمام':3,'حافظ':2,'متقن':2,'صدوق':1,'لا بأس به':1,'ليس به بأس':1,'صالح':1,'صالح الحديث':1,'مأمون':1,'حسن الحديث':1,'محله الصدق':1,'مستقيم الحديث':1,'شيخ':0,
  'لين':-1,'لين الحديث':-1,'ليس بالقوي':-1,'يخطئ':-1,'يهم':-1,'فيه نظر':-2,'ضعيف':-2,'ضعيف جدا':-3,'مضطرب':-2,'لا يحتج به':-2,'لا يصح حديثه':-2,'لا يتابع عليه':-1,'منكر':-2,'منكر الحديث':-3,'واه':-3,'ليس بشيء':-3,'ليس بثقة':-3,'ساقط':-3,'متروك':-4,'تركوه':-4,'ضعفوه':-2,
  'كذاب':-5,'يكذب':-5,'وضاع':-5,'متهم':-4,'مجهول':0,'مجهول الحال':0,'لا أعرفه':0,'لا شيء':-3,'ذكره في الثقات':1,'ذكره في الضعفاء والمتروكين':-2,'يضع':-5};
-function _ttNeuro(list){
-  let pos=0,neg=0,jah=0,sum=0,cnt=0; const has=t=>list.some(c=>c[1]===t);
-  list.forEach(c=>{ const s=_TT_SCORE[c[1]]; if(s===undefined) return; cnt++;
-    if(c[1]==='مجهول'||c[1]==='لا أعرفه'||c[1]==='مجهول الحال') jah++; else if(s>0) pos++; else if(s<0) neg++; sum+=s; });
-  if(!cnt) return null; const avg=sum/cnt;
-  let v,col,em;
-  if(has('كذاب')||has('يكذب')||has('وضاع')){ v='متّهم بالكذب — отвергается'; col='#f87171'; em='⛔'; }
-  else if((has('متروك')||has('تركوه')||has('ليس بشيء'))&&neg>=pos){ v='متروك / ضعيف جدًا — отвергается у большинства'; col='#f87171'; em='🔴'; }
-  else if(jah>=Math.max(1,cnt*0.6)){ v='مجهول — неизвестный (данных мало)'; col='#9aa7b5'; em='⚪'; }
-  else if(avg>=1.6){ v='ثقة — надёжный'; col='#4ade80'; em='🟢'; }
-  else if(avg>=0.5){ v='صدوق — правдивый (приемлемый)'; col='#86d99c'; em='🟢'; }
-  else if(avg>-0.6){ v='مختلف فيه — спорный (между таʿдиль и джарх)'; col='#ffd479'; em='🟡'; }
-  else { v='ضعيف — слабый у большинства'; col='#f8a07a'; em='🟠'; }
-  return {v:v,col:col,em:em,pos:pos,neg:neg,jah:jah,cnt:cnt};
+// ПОЗДНИЕ суммаризаторы (НЕ из 48 муʿтабаров — их таʿдиль не засчитывается за свидетельство توثиق)
+const _MUT_LATE=new Set(['ابن حجر العسقلاني','ابن حجر','الذهبي','ابن عساكر','مسلمة بن قاسم','ابن الجوزي','المزي','ابن الملقن','مغلطاي','ابن عبد البر']);
+function _isMut(c){ return c && !_MUT_LATE.has(c); }
+const _SEVERE=['متروك','كذاب','وضاع','يكذب','ليس بشيء','متهم','تركوه','يضع','ساقط'];
+// ⚖️ ПРАВИЛО науки хадиса (указ владельца): تصديق = ≥2 свидетельства ДВУХ муʿтабаров из 48.
+// 1 таʿдиль توثиق НЕ устанавливает. Исключение: НЕТ джарха + Сахихайн (Бухари+Муслим) = 2 свидетельства.
+function _ttNeuro(list, sah){
+  const tadil=new Set(), jarh=new Set(); let jah=0, posCnt=0, negCnt=0, severe=false;
+  list.forEach(c=>{ const s=_TT_SCORE[c[1]]; if(s===undefined) return;
+    if(c[1]==='مجهول'||c[1]==='لا أعرفه'||c[1]==='مجهول الحال'){ jah++; return; }
+    if(s>0){ posCnt++; if(_isMut(c[0])) tadil.add(c[0]); }
+    else if(s<0){ negCnt++; if(_isMut(c[0])) jarh.add(c[0]); if(_SEVERE.indexOf(c[1])>=0) severe=true; } });
+  if(!posCnt && !negCnt && !jah) return null;
+  const nT=tadil.size, nJ=jarh.size;
+  const sahihayn = !!(sah && sah.b && sah.b.length && sah.m && sah.m.length);   // в обоих Сахихах
+  const tawthiq = (nT>=2) || (sahihayn && nJ===0 && !severe);                    // توثиق установлен?
+  let v,col,em,note='';
+  if(severe || (nJ>=2 && nJ>=nT)){ v='ضعيف / متروك — отвергается (джарх муʿтабаров)'; col='#f87171'; em='🔴'; }
+  else if(nJ>=1 && !tawthiq){ v='ضعيف / مختلف فيه — джарх не перекрыт توثиقом (нужно ≥2 муʿтабаров)'; col='#f8a07a'; em='🟠'; }
+  else if(tawthiq && nJ===0){ v=(nT>=2)?'ثقة — надёжный (توثيق ≥2 муʿтабаров)':'مقبول — Сахихайн без джарха (= 2 свидетельства)'; col='#4ade80'; em='🟢'; }
+  else if(tawthiq){ v='صدوق — приемлемый (توثيق ≥2, лёгкий джарх перекрыт)'; col='#86d99c'; em='🟢'; }
+  else if(nT===1 && nJ===0){ v='لم يثبت توثيقه — нужно 2 муʿтабара из 48 (есть 1)'; col='#ffd479'; em='🟡'; note='Если попадёт в Сахихайн без джарха — засчитается за 2 свидетельства.'; }
+  else if(jah>0 || (!nT&&!nJ)){ v='مجهول — неизвестный (нет توثиق двух муʿтабаров)'; col='#9aa7b5'; em='⚪'; }
+  else { v='مختلف فيه — спорный'; col='#ffd479'; em='🟡'; }
+  return {v:v,col:col,em:em,nT:nT,nJ:nJ,jah:jah,sahihayn:sahihayn,note:note,pos:posCnt,neg:negCnt,cnt:posCnt+negCnt+jah};
 }
 // ссылки-проверки (turath bid==shamela id, page прямой). Внутри аппа «У нас» = наш ридер openBook.
 function _ttLinkRow(bid,page,mid){
@@ -8618,7 +8629,8 @@ function _ttLinkRow(bid,page,mid){
 async function renderTestimoniesCard(mid, host){
   if(mid==null) return; let list=null; try{ list=await _testimGet(+mid); }catch(e){}
   if(!list || !list.length) return;
-  const neuro=_ttNeuro(list);
+  let _sah=null; try{ _sah=await _sahGet(+mid); }catch(e){}   // Сахихайн (Бухари+Муслим) — для правила توثيق
+  const neuro=_ttNeuro(list, _sah);
   const sec=document.createElement('div'); sec.style.cssText='margin-top:11px;border:1px solid #c39bd3;border-radius:12px;overflow:hidden;background:rgba(155,89,182,.07)';
   const hdr=document.createElement('div'); hdr.style.cssText='padding:10px 12px;background:rgba(155,89,182,.16);font-weight:700;color:#e8d4f2;font-size:13.5px;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer';
   // группировка по критику
@@ -8628,9 +8640,10 @@ async function renderTestimoniesCard(mid, host){
   const bd=document.createElement('div'); bd.style.cssText='padding:9px 12px';
   // 🤖 НЕЙРО-МУХАККИК — предварительный авто-вывод (детерминированный, не замена учёных)
   if(neuro){ const nb=document.createElement('div'); nb.style.cssText='border:1px solid '+neuro.col+';border-radius:10px;padding:10px 11px;margin-bottom:10px;background:'+neuro.col+'14';
-    nb.innerHTML='<div style="font-weight:800;color:'+neuro.col+';font-size:14px">'+neuro.em+' Нейро-мухаккик: '+esc(neuro.v)+'</div>'
-      +'<div style="font-size:12px;color:var(--hint);margin-top:5px">🟢 таʿдиль <b style="color:#7fe3bf">'+neuro.pos+'</b> · 🔴 джарх <b style="color:#ff9b7a">'+neuro.neg+'</b>'+(neuro.jah?(' · ⚪ джахаля <b>'+neuro.jah+'</b>'):'')+' — по '+neuro.cnt+' оценкам критиков.</div>'
-      +'<div style="font-size:10.5px;color:var(--hint);margin-top:4px">🤖 Предварительный авто-вывод по балансу оценок (формула, не ИИ). НЕ замена иджтихада учёных — открой ссылки и проверь сам.</div>';
+    nb.innerHTML='<div style="font-weight:800;color:'+neuro.col+';font-size:15px">'+neuro.em+' Нейро-мухаккик: '+esc(neuro.v)+'</div>'
+      +'<div style="font-size:13px;color:var(--hint);margin-top:5px">✅ توثيق муʿтабаров: <b style="color:'+(neuro.nT>=2?'#7fe3bf':'#ffd479')+'">'+neuro.nT+'</b> из 48 (нужно ≥2)'+(neuro.sahihayn?' · 📗📘 <b style="color:#7fe3bf">в Сахихайн</b>':'')+' · 🔴 джарх муʿтабаров: <b style="color:#ff9b7a">'+neuro.nJ+'</b>'+(neuro.jah?(' · ⚪ джахаля <b>'+neuro.jah+'</b>'):'')+'</div>'
+      +(neuro.note?('<div style="font-size:12px;color:#ffd479;margin-top:3px">ⓘ '+esc(neuro.note)+'</div>'):'')
+      +'<div style="font-size:11px;color:var(--hint);margin-top:4px">⚖️ Правило: تصديق = 2 свидетельства из 48 муʿтабаров (1 — не توثيق). Сахихайн без джарха = 2. Поздние (Ибн Хаджар/Захаби) — не свидетельство. 🤖 Формула, не ИИ — проверь по ссылкам.</div>';
     bd.appendChild(nb); }
   // сортировка критиков: средний балл по убыванию (хвалившие вперёд) — наглядно
   order.sort((a,b)=>{ const sc=arr=>arr.reduce((s,c)=>s+(_TT_SCORE[c[1]]||0),0)/arr.length; return sc(byc[b])-sc(byc[a]); });
