@@ -201,7 +201,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v738</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v739</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -698,7 +698,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v738';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v739';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8594,20 +8594,24 @@ const _TT_SCORE={'ثقة':3,'ثبت':3,'حجة':3,'إمام':3,'حافظ':2,'م�
 // ПОЗДНИЕ суммаризаторы (НЕ из 48 муʿтабаров — их таʿдиль не засчитывается за свидетельство توثиق)
 const _MUT_LATE=new Set(['ابن حجر العسقلاني','ابن حجر','الذهبي','ابن عساكر','مسلمة بن قاسم','ابن الجوزي','المزي','ابن الملقن','مغلطاي','ابن عبد البر']);
 function _isMut(c){ return c && !_MUT_LATE.has(c); }
+// РЕАЛЬНЫЙ критик (не мусор-экстракции типа «أنسا» = часть имени равия): имя содержит ядро известного критика
+const _CRIT_RE=/معين|حنبل|حاتم|زرعة|البخاري|النسائي|داود|الترمذي|المديني|الدارقطني|عدي|العقيلي|حبان|العجلي|الفلاس|القطان|مهدي|وكيع|المبارك|الفسوي|الحاكم|الساجي|نمير|الشافعي|اسحاق|راهويه|شعبة|الاوزاعي|حجر|الذهبي|العسقلاني|شاهين|عساكر|مسلمة|سعد|سفيان|البزار|الجوزجاني|خزيمة|قانع|الدارمي|نعيم|البرديجي|الميموني|الاثرم|صالح|الرازي/;
+function _critOk(name){ if(!name) return false; const n=String(name).trim(); return n.length>=5 && _CRIT_RE.test(n); }
 const _SEVERE=['متروك','كذاب','وضاع','يكذب','ليس بشيء','متهم','تركوه','يضع','ساقط'];
 // ⚖️ ПРАВИЛО науки хадиса (указ владельца): تصديق = ≥2 свидетельства ДВУХ муʿтабаров из 48.
 // 1 таʿдиль توثиق НЕ устанавливает. Исключение: НЕТ джарха + Сахихайн (Бухари+Муслим) = 2 свидетельства.
 function _ttNeuro(list, inSahihayn){
   const tadil=new Set(), jarh=new Set(); let jah=0, posCnt=0, negCnt=0, severe=false;
   list.forEach(c=>{ const s=_TT_SCORE[c[1]]; if(s===undefined) return;
-    if(c[1]==='مجهول'||c[1]==='لا أعرفه'||c[1]==='مجهول الحال'){ jah++; return; }
-    if(s>0){ posCnt++; if(_isMut(c[0])) tadil.add(c[0]); }
-    else if(s<0){ negCnt++; if(_isMut(c[0])) jarh.add(c[0]); if(_SEVERE.indexOf(c[1])>=0) severe=true; } });
+    const ok=_critOk(c[0]) && _isMut(c[0]);   // реальный РАННИЙ муʿтабар (мусор/поздние не считаются)
+    if(c[1]==='مجهول'||c[1]==='لا أعرفه'||c[1]==='مجهول الحال'){ if(ok) jah++; return; }
+    if(s>0){ posCnt++; if(ok) tadil.add(c[0]); }
+    else if(s<0){ negCnt++; if(ok){ jarh.add(c[0]); if(_SEVERE.indexOf(c[1])>=0) severe=true; } } });
   const nT=tadil.size, nJ=jarh.size;
   // Сахихайн (флаг 'bm' = в Бухари И Муслиме, надёжно из loadNarrFlags) = 2 свидетельства если нет джарха
   const sahihayn = (inSahihayn===true) || !!(inSahihayn && inSahihayn.b && inSahihayn.b.length && inSahihayn.m && inSahihayn.m.length);
   if(!posCnt && !negCnt && !jah && !sahihayn) return null;
-  const tawthiq = (nT>=2) || (sahihayn && nJ===0 && !severe);                    // توثиق установлен?
+  const tawthiq = (nT>=2) || (sahihayn && !severe);                    // توثиق установлен?
   let v,col,em,note='';
   if(severe || (nJ>=2 && nJ>=nT)){ v='ضعيف / متروك — отвергается (джарх муʿтабаров)'; col='#f87171'; em='🔴'; }
   else if(nJ>=1 && !tawthiq){ v='ضعيف / مختلف فيه — джарх не перекрыт توثиقом (нужно ≥2 муʿтабаров)'; col='#f8a07a'; em='🟠'; }
