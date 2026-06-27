@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v759</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v760</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v759';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v760';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1039,8 +1039,11 @@ function termMatch(term,doc,modes){
   return nf.indexOf(canon(term.t))!==-1;
 }
 function docMatch(doc,groups,modes){
-  return groups.some(g=>{ for(const t of g){ const hit=termMatch(t,doc,modes);
-    if(t.neg&&hit)return false; if(!t.neg&&!hit)return false; } return true; });
+  return groups.some(g=>{ let pos=0;   // Р-03: группа из ОДНИХ минусов (-الجمعة) не должна матчить всё подряд
+    for(const t of g){ const hit=termMatch(t,doc,modes);
+      if(t.neg){ if(hit) return false; }            // минус-терм присутствует → группа не подходит
+      else { pos++; if(!hit) return false; } }       // плюс-терм отсутствует → группа не подходит
+    return pos>0; });                                 // нужен хотя бы один сработавший позитив (иначе группа из одних минусов = ложный матч всей базы)
 }
 
 /* ===================== ПОДСВЕТКА ===================== */
@@ -2860,6 +2863,7 @@ function shareResults(){
   const mark=(t)=>{ t=(t||'').replace(/\s+/g,' '); if(_lastQueryTerms&&_lastQueryTerms.length){ try{ const sk=_lastQueryTerms.filter(w=>w.length>=3).sort((a,b)=>b.length-a.length).slice(0,6); for(const w of sk){ const re=new RegExp('('+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','g'); t=t.replace(re,'‹$1›'); } }catch(e){} } return t; };
   _results.slice(0,LIM).forEach(d=>{
     if(d.type==='q'){ const v=d.v; parts.push('📖 Коран '+v.s+':'+v.a+'\n'+mark((v.text||'')).slice(0,420)); }
+    else if(d.type==='hr'){ parts.push('📗 '+arOf(d.s)+(d.n?(' №'+d.n):'')+'\n'+mark(d.ru||'').slice(0,420)); }   // Р-02: русские результаты (hr) имеют s,n,ru, а не d.h — иначе уходила пустая «📗»
     else { const h=d.h, code=d.code||(d.type==='m'?'muhaymin':''), num=(h&&(h.num||h.n))||''; parts.push('📗 '+arOf(code)+(num?(' №'+num):'')+'\n'+mark((h&&h.text)||'').slice(0,420)); }
   });
   const qv=(document.getElementById('q').value||'').trim();
