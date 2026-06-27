@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v773</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v774</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v773';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v774';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4592,6 +4592,34 @@ function openNeuroTahkik(){
   plan.innerHTML='📋 <b>Что будет дальше (план):</b><br>• Реальное древо строится из всех طرق хадиса (по 150 трудам + сборникам).<br>• Каждое звено красится по جرح/تعديل из трудов мутабарун.<br>• Клик по связи → доказан ли سماع (по كتب المراسيل/التواريخ).<br>• ИИ собирает противоречия критиков и выносит итог по твоим правилам.';
   body.appendChild(plan);
 }
+// Р-37/Р-04: ЕДИНЫЙ рендер связей учитель↔ученик (تهذيب الكمال) — раньше дублировался в openNarratorRijal (старая горизонт. версия без счётчика) и showNarratorBio (новая вертик. со счётчиком передач). Версия = лучшая (вертик. строки, счётчик _edgesGet, рус.имя+год). onPick(name) — клик по связанному равию (модал→openNarratorRijal; лента→ре-рендер showNarratorBio). Возвращает true если что-то отрисовал.
+async function _renderTlinkLinks(id, host, onPick){
+  let _rec=null; try{ _rec=await _tlinkGet(id); }catch(e){}
+  if(!_rec) return false;
+  let _edg={}; try{ _edg=await _edgesGet(id); }catch(e){}
+  const _tea=[],_stu=[]; const _cnt=(oid)=>(_edg&&_edg[String(oid)])||0;
+  for(const k in _rec){ const v=_rec[k]; const i2=v.indexOf(':'); const rz=i2>=0?v.slice(i2+1):''; (v[0]==='T'?_tea:_stu).push([parseInt(k),rz]); }
+  _tea.sort((a,b)=>_cnt(b[0])-_cnt(a[0])); _stu.sort((a,b)=>_cnt(b[0])-_cnt(a[0]));   // сортировка по ЧИСЛУ передач (больше — выше)
+  if(!_tea.length && !_stu.length) return false;
+  const ts=document.createElement('div'); ts.style.cssText='margin-top:9px;border:1px solid #2e6b9b;border-radius:11px;padding:10px 12px;background:rgba(46,107,155,.07)';
+  ts.innerHTML='<div style="font-size:13px;font-weight:600;color:#bcd2ff;margin-bottom:4px">🔗 Учители ↔ ученики <span style="font-weight:400;color:var(--hint);font-size:11px">· تهذيب الكمال (аль-Мизи)</span></div><div style="font-size:10.5px;color:var(--hint);margin-bottom:4px">📜 N — сколько передач в нашей базе цепей · тап → карточка</div>';
+  const _mk=(arr,lbl)=>{ if(!arr.length) return; const d=document.createElement('div'); d.style.cssText='margin-top:7px';
+    d.innerHTML='<div style="color:var(--hint);font-size:12.5px;margin-bottom:4px;font-weight:600">'+lbl+' ('+arr.length+'):</div>';
+    const w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;gap:5px';
+    arr.slice(0,25).forEach(([oid,rz])=>{ const cnt=_cnt(oid);
+      const row=document.createElement('div'); row.style.cssText='cursor:pointer;border:1px solid var(--border);border-radius:9px;padding:6px 10px;background:rgba(255,255,255,.03)';
+      row.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="_tnm" style="font-size:15px;color:#cfe6d4;direction:rtl;text-align:right;font-weight:600;flex:1">#'+oid+'</span>'+(cnt?('<span style="flex-shrink:0;font-size:11.5px;color:#bcd2ff;background:rgba(46,107,155,.22);border:1px solid #2e6b9b;border-radius:7px;padding:1px 8px">📜 '+cnt+'</span>'):'')+'</div><div class="_tru" style="direction:ltr;text-align:left;font-size:11.5px;color:#8fa3c7;margin-top:2px"></div>';
+      _narrCard(oid).then(v=>{ if(v){ const _n=row.querySelector('._tnm'); if(_n&&v[1]) _n.textContent=v[1].split(/\s+/).slice(0,4).join(' ');
+        const _r=row.querySelector('._tru'); if(_r){ let ru=''; try{ ru=arNameRu(v[1],4); }catch(e){} const yr=v[4]?('† '+v[4]+' هـ'):''; _r.textContent=[ru?('≈ '+ru):'',yr].filter(Boolean).join('  ·  '); } } }).catch(()=>{});
+      if(rz) row.title='зафиксировано (تهذيب الكمال): '+((typeof _ramzHuman==='function'&&_ramzHuman(rz))||rz);
+      row.onclick=()=>{ _narrCard(oid).then(v=>{ if(v&&v[1]) onPick(v[1]); }).catch(()=>{}); };
+      w.appendChild(row); });
+    if(arr.length>25){ const mr=document.createElement('div'); mr.style.cssText='font-size:12px;color:var(--hint);margin-top:5px;text-align:center'; mr.textContent='+ ещё '+(arr.length-25); w.appendChild(mr); }
+    d.appendChild(w); ts.appendChild(d); };
+  _mk(_tea,'👨‍🏫 Учители (от кого передавал)'); _mk(_stu,'👨‍🎓 Ученики (кто от него)');
+  host.appendChild(ts);
+  return true;
+}
 async function openNarratorRijal(name){
   if(!name) return;
   let m=document.getElementById('narrModal');
@@ -4654,29 +4682,7 @@ async function openNarratorRijal(name){
         mk(1727,'📘 صحيح مسلم', sah.m);
         body.appendChild(sb);
       }
-      const rec=await _tlinkGet(_vid2);
-      if(rec){
-        const teachers=[], students=[];
-        for(const k in rec){ const v=rec[k]; const i=v.indexOf(':'); const rz=i>=0?v.slice(i+1):''; (v[0]==='T'?teachers:students).push([parseInt(k),rz]); }
-        if(teachers.length||students.length){
-          const tb=document.createElement('div'); tb.style.cssText='margin-top:11px;border:1px solid #2e9b5b;border-radius:12px;padding:10px;background:rgba(46,155,91,.06)';
-          tb.innerHTML='<div style="font-weight:700;color:#bff5d4;margin-bottom:5px">🔗 Связи по تهذيب الكمال (аль-Мизи)</div>'
-            +'<div style="font-size:10.5px;color:var(--hint);margin-bottom:6px">Учителя/ученики, перечисленные классическим сводом аль-Мизи (рамз сборника — в подсказке имени). Тап — карточка.</div>';
-          const mkRow=(arr,lbl)=>{ if(!arr.length) return; const d=document.createElement('div'); d.style.cssText='margin-top:6px';
-            d.innerHTML='<span style="color:var(--hint);font-size:12px">'+lbl+' ('+arr.length+'):</span>';
-            const wrap=document.createElement('div'); wrap.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl;margin-top:3px';
-            arr.slice(0,40).forEach(([oid,rz])=>{ const sp=document.createElement('span'); sp.style.cssText='cursor:pointer;font-size:12px;padding:3px 8px;border-radius:7px;border:1px solid var(--border);color:#9fd3a8'; sp.textContent='#'+oid;
-              _narrCard(oid).then(v=>{ if(v&&v[1]) sp.textContent=v[1].split(' ').slice(0,3).join(' '); }).catch(()=>{});
-              if(rz) sp.title='зафиксирована в: '+_ramzHuman(rz);
-              sp.onclick=()=>{ _narrCard(oid).then(v=>{ if(v&&v[1]) openNarratorRijal(v[1]); }).catch(()=>{}); };
-              wrap.appendChild(sp); });
-            d.appendChild(wrap); tb.appendChild(d);
-          };
-          mkRow(teachers,'👨‍🏫 Учителя (от кого передавал)');
-          mkRow(students,'👨‍🎓 Ученики (кто от него)');
-          body.appendChild(tb);
-        }
-      }
+      await _renderTlinkLinks(_vid2, body, (nm)=>openNarratorRijal(nm));   // Р-37/Р-04: был дубль (старая горизонт. версия) — теперь общий помощник (счётчик передач + рус.имя)
     }
   }catch(e){}
   // 📚 НЕЙРОМУХАДДИС: что сказали критики по 150 трудам риджаля (turath, точные места джарх/тадиль)
@@ -9015,31 +9021,8 @@ async function showNarratorBio(name, out){
     out.appendChild(pw);
     }   // конец else (дубль кнопок не строим при noPartBtns)
   }catch(e){}
-  // 🔗 РЕДИЗАЙН карточки шаг 1 (УКАЗ-карт-бланш, по макету): учители↔ученики (تهذيب الكمال аль-Мизи) ПРЯМО в карточке — раньше были ТОЛЬКО в модале openNarratorRijal; данные _tlinkGet (та же авторитетная сеть, id = _narrLookup = c[0]). Фича уровня sunnah.com/turath. Откатываемо (чисто additive).
-  if(c){ try{ const _rec=await _tlinkGet(c[0]);
-    let _edg={}; try{ _edg=await _edgesGet(c[0]); }catch(e){}
-    if(_rec){ const _tea=[],_stu=[]; const _cnt=(oid)=>(_edg&&_edg[String(oid)])||0;
-      for(const k in _rec){ const v=_rec[k]; const i2=v.indexOf(':'); const rz=i2>=0?v.slice(i2+1):''; (v[0]==='T'?_tea:_stu).push([parseInt(k),rz]); }
-      _tea.sort((a,b)=>_cnt(b[0])-_cnt(a[0])); _stu.sort((a,b)=>_cnt(b[0])-_cnt(a[0]));   // сортировка по ЧИСЛУ передач (больше — выше)
-      if(_tea.length||_stu.length){
-        const ts=document.createElement('div'); ts.style.cssText='margin-top:9px;border:1px solid #2e6b9b;border-radius:11px;padding:10px 12px;background:rgba(46,107,155,.07)';
-        ts.innerHTML='<div style="font-size:13px;font-weight:600;color:#bcd2ff;margin-bottom:4px">🔗 Учители ↔ ученики <span style="font-weight:400;color:var(--hint);font-size:11px">· تهذيب الكمال (аль-Мизи)</span></div><div style="font-size:10.5px;color:var(--hint);margin-bottom:4px">📜 N — сколько передач в нашей базе цепей · тап → карточка</div>';
-        const _mk=(arr,lbl)=>{ if(!arr.length) return; const d=document.createElement('div'); d.style.cssText='margin-top:7px';
-          d.innerHTML='<div style="color:var(--hint);font-size:12.5px;margin-bottom:4px;font-weight:600">'+lbl+' ('+arr.length+'):</div>';
-          const w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;gap:5px';
-          arr.slice(0,25).forEach(([oid,rz])=>{ const cnt=_cnt(oid);
-            const row=document.createElement('div'); row.style.cssText='cursor:pointer;border:1px solid var(--border);border-radius:9px;padding:6px 10px;background:rgba(255,255,255,.03)';
-            row.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="_tnm" style="font-size:15px;color:#cfe6d4;direction:rtl;text-align:right;font-weight:600;flex:1">#'+oid+'</span>'+(cnt?('<span style="flex-shrink:0;font-size:11.5px;color:#bcd2ff;background:rgba(46,107,155,.22);border:1px solid #2e6b9b;border-radius:7px;padding:1px 8px">📜 '+cnt+'</span>'):'')+'</div><div class="_tru" style="direction:ltr;text-align:left;font-size:11.5px;color:#8fa3c7;margin-top:2px"></div>';
-            _narrCard(oid).then(v=>{ if(v){ const _n=row.querySelector('._tnm'); if(_n&&v[1]) _n.textContent=v[1].split(/\s+/).slice(0,4).join(' ');
-              const _r=row.querySelector('._tru'); if(_r){ let ru=''; try{ ru=arNameRu(v[1],4); }catch(e){} const yr=v[4]?('† '+v[4]+' هـ'):''; _r.textContent=[ru?('≈ '+ru):'',yr].filter(Boolean).join('  ·  '); } } }).catch(()=>{});
-            if(rz) row.title='зафиксировано (تهذيب الكمال): '+((typeof _ramzHuman==='function'&&_ramzHuman(rz))||rz);
-            row.onclick=()=>{ _narrCard(oid).then(v=>{ if(v&&v[1]){ out.innerHTML=''; const bx=document.createElement('div'); out.appendChild(bx); showNarratorBio(v[1], bx); try{ out.scrollIntoView({block:'start',behavior:'smooth'}); }catch(_e){} } }).catch(()=>{}); };
-            w.appendChild(row); });
-          if(arr.length>25){ const mr=document.createElement('div'); mr.style.cssText='font-size:12px;color:var(--hint);margin-top:5px;text-align:center'; mr.textContent='+ ещё '+(arr.length-25); w.appendChild(mr); }
-          d.appendChild(w); ts.appendChild(d); };
-        _mk(_tea,'👨‍🏫 Учители (от кого передавал)'); _mk(_stu,'👨‍🎓 Ученики (кто от него)');
-        out.appendChild(ts);
-      } } }catch(e){} }
+  // 🔗 Учители↔ученики (تهذيب الكمال аль-Мизи) ПРЯМО в карточке. Р-37/Р-04: вынесено в общий помощник _renderTlinkLinks (раньше тот же блок дублировался в модале openNarratorRijal). Клик → ре-рендер карточки тем же showNarratorBio.
+  if(c){ try{ await _renderTlinkLinks(c[0], out, (nm)=>{ out.innerHTML=''; const bx=document.createElement('div'); out.appendChild(bx); showNarratorBio(nm, bx); try{ out.scrollIntoView({block:'start',behavior:'smooth'}); }catch(_e){} }); }catch(e){} }
   // 🧭 ЧИСТАЯ секция «Критические оценки» (свод критиков + нейро-вывод + ссылки) — как у sunnah.com (указ владельца: одна чистая, не каша)
   if(c){ try{ const _ttB=document.createElement('div'); out.appendChild(_ttB); await renderTestimoniesCard(c[0], _ttB); }catch(e){} }
   // Доп.источники (Мактаба/149 трудов/по критикам/упоминания) — ВТОРИЧНО, свёрнуто (раньше была каша из 4 равных вкладок наверху).
