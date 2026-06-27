@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v780</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v781</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v780';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v781';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4615,9 +4615,14 @@ async function _renderTlinkLinks(id, host, onPick){
   if(_rec) for(const k in _rec){ const v=_rec[k]; const i2=v.indexOf(':'); const rz=i2>=0?v.slice(i2+1):''; (v[0]==='T'?_teaM:_stuM).set(parseInt(k),rz); }
   const _extra=Object.keys(_edg).map(Number).filter(o=>!_teaM.has(o)&&!_stuM.has(o)).sort((a,b)=>_cnt(b)-_cnt(a)).slice(0,60);
   if(_extra.length){ const _cards=await Promise.all(_extra.map(o=>_narrCard(o).catch(()=>null)));
-    _extra.forEach((o,i)=>{ const nc=_cards[i]; const nd=nc&&nc[4]?parseInt(String(nc[4]).replace(/[^0-9]/g,'')):null;
+    _extra.forEach((o,i)=>{ const nc=_cards[i]; const nd=nc&&nc[4]?parseInt(String(nc[4]).replace(/[^0-9]/g,'')):null; const nt=_tabNum(nc&&nc[7]);
+      // ХРОНОЛОГИЯ-ГЕЙТ (В-01, заявка владельца #359 «الأعمش как ученик عائشة»): narr_edges = со-встречаемость в цепях, бывают ЛОЖНЫЕ дальние связи (через выпавшее звено/мурсаль). Прямой учитель↔ученик = соседние поколения. Отсекаем явно невозможное: разрыв ≥3 поколений (табака) ИЛИ ≥80 лет смерти. تهذيب-связи (выше) НЕ трогаем — авторитет аль-Мизи.
+      const tabGap=(_selfT&&nt)?Math.abs(_selfT-nt):0; const dGap=(_selfD&&nd)?Math.abs(_selfD-nd):0;
+      const _impossible=(_selfD&&nd)?(dGap>80):(tabGap>=4);   // год смерти точнее табаки: разрыв >80 лет (الأعمش↔عائشة=89 откинуть) ИЛИ ≥4 поколений (когда нет года). Реальные учители с разрывом ≤80/≤3 (الأعمش↔أبو وائل) остаются.
+      if(_impossible) return;
       if(_selfD&&nd){ (nd<=_selfD?_teaM:_stuM).set(o,''); }
-      else { const nt=_tabNum(nc&&nc[7]); if(_selfT&&nt&&nt!==_selfT){ (nt<_selfT?_teaM:_stuM).set(o,''); } else { _neuM.set(o,''); } } }); }   // фолбэк направления по табаке (поколению), если года смерти нет
+      else if(_selfT&&nt&&nt!==_selfT){ (nt<_selfT?_teaM:_stuM).set(o,''); }
+      else { _neuM.set(o,''); } }); }   // фолбэк направления по табаке если года смерти нет
   if(!_teaM.size && !_stuM.size && !_neuM.size) return false;
   const _arr=(m)=>[...m.entries()].sort((a,b)=>_cnt(b[0])-_cnt(a[0]));
   const _tea=_arr(_teaM),_stu=_arr(_stuM),_neu=_arr(_neuM);
