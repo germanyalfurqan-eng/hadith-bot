@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v764</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v765</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v764';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v765';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1436,6 +1436,11 @@ let ahmadArr=null;
 async function loadAhmad(){ if(ahmadArr)return ahmadArr; setStatus('Загружаю Муснад Ахмада (большой)…');
   let j; try{ j=await cachedFetchJSON(AHMAD_URL, 180000); }catch(_e){ j=await cachedFetchJSON(AHMAD_URL, 180000); }   // A-136: 25МБ — самый большой; кэш Cache Storage (повтор мгновенно) + таймаут 180с + 2 попытки (90с не хватало на медленной мобиле)
   ahmadArr=j.map(x=>({num:String(x.n),text:x.t||'',grade:x.g||'',norm:''})); return ahmadArr; }
+// A-136 шардинг: открыть ОДИН хадис Ахмада по номеру → грузим шард ~900КБ (ahmad/<num//1000>.json), НЕ весь 25МБ
+const _ahmOne={};
+async function loadAhmadOne(num){ if(ahmadArr){ return ahmadArr.find(x=>x.num===String(num))||null; }   // если полный массив уже в памяти (поиск/читалка) — берём оттуда
+  const b=Math.floor((+num)/1000); if(!(b in _ahmOne)){ try{ _ahmOne[b]=await cachedFetchJSON('./ahmad/'+b+'.json', 60000, {silent:true}); }catch(e){ _ahmOne[b]=null; } }
+  const m=_ahmOne[b]; const r=m&&m[String(num)]; return r?{num:String(num),text:r[0]||'',grade:r[1]||'',norm:''}:null; }
 const _local={};
 async function loadLocal(code,file){ if(_local[code])return _local[code]; setStatus('Загружаю '+nameOf(code)+'…');
   let j; try{ j=await cachedFetchJSON('./'+file, 180000); }catch(_e){ j=await cachedFetchJSON('./'+file, 180000); }   // A-124/A-137: крупные книги (muslim_baqi 8.4МБ, Абу Авана 22МБ, Насаи-Кубра/Абу Яʿля 12-13МБ); кэш Cache Storage + таймаут 180с + 2 попытки (60-90с не хватало на медленной мобиле)
@@ -2571,7 +2576,7 @@ async function runSearch(explicit){
         const C=COLLECTIONS.find(x=>x.code===code), X=EXTRA_MAP[code]; let h=null;
         try{
           if(code==='muhaymin'){ const a=await loadMuhaymin(); h=a.find(x=>String(x.n)===qn); }
-          else if(code==='ahmad'){ const a=await loadAhmad(); h=a.find(x=>x.num===qn); }
+          else if(code==='ahmad'){ h=await loadAhmadOne(qn); }
           else if(X&&X.file){ const a=await loadLocal(code,X.file); h=a.find(x=>x.num===qn); }
           else if(X){ const a=await loadExtra(code); h=a.find(x=>x.num===qn); }
           else if(C&&C.file){ const a=await loadLocal(code,C.file); h=a.find(x=>x.num===qn); }
@@ -2633,7 +2638,7 @@ async function runSearch(explicit){
         if(numMode){
           let h=null; const qn=String(parseInt(q,10));
           if(code==='muhaymin'){ const a=await loadMuhaymin(); h=a.find(x=>String(x.n)===qn); if(h) add({type:'m',h}); }
-          else if(code==='ahmad'){ const a=await loadAhmad(); h=a.find(x=>x.num===qn); if(h) add({type:'h',code:'ahmad',h}); }
+          else if(code==='ahmad'){ h=await loadAhmadOne(qn); if(h) add({type:'h',code:'ahmad',h}); }
           else if(X&&X.file){ const a=await loadLocal(code,X.file); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
           else if(X){ const a=await loadExtra(code); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
           else if(C&&C.file){ const a=await loadLocal(code,C.file); h=a.find(x=>x.num===qn); if(h) add({type:'h',code,h}); }
@@ -2734,7 +2739,7 @@ async function showHadithRefs(refs, sr, shown, seq){
   for(const rf of (refs||[]).slice(0,8)){ const code=_srcToCode(rf.src); const num=String(rf.num||'').replace(/[^0-9]/g,''); if(!code||!num) continue;
     try{ let h=null, a=null; const C=COLLECTIONS.find(x=>x.code===code), X=EXTRA_MAP[code];
       if(code==='muhaymin'){ a=await loadMuhaymin(); h=a.find(x=>String(x.n)===num); }
-      else if(code==='ahmad'){ a=await loadAhmad(); h=a.find(x=>x.num===num); }
+      else if(code==='ahmad'){ h=await loadAhmadOne(num); if(!h && phr.length){ a=await loadAhmad(); h=a.find(x=>x.num===num); } }   // быстрый шард; полный 25МБ только если номер не найден И нужен текст-фолбэк (M207)
       else if(X&&X.file){ a=await loadLocal(code,X.file); h=a.find(x=>x.num===num); }
       else if(X){ a=await loadExtra(code); h=a.find(x=>x.num===num); }
       else if(C&&C.file){ a=await loadLocal(code,C.file); h=a.find(x=>x.num===num); }
