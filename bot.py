@@ -4252,7 +4252,7 @@ async def _api_serve(application=None):
     def _uid(user, r):
         return str(user.get('id')) if user else ('ip:' + (r.remote or '?'))
 
-    async def health(r): return _cors(web.json_response({'ok': True}))
+    async def health(r): return _cors(web.json_response({'ok': True, 'ai': {'groq': bool(GROQ_API_KEY), 'gemini': bool(GEMINI_API_KEY), 'openrouter': bool(OPENROUTER_API_KEY), 'deepseek': bool(DEEPSEEK_API_KEY)}, 'public_ai_off': _AI_PUBLIC_OFF}))   # диагностика какие ИИ-ключи в env (без значений) + рубильник публичного ИИ
     async def opt(r): return _cors(web.Response(text=''))
     async def worklog(r):
         # #62/#63/#165: триггер уведомления владельцу о работе Claude над заявкой (Claude дёргает curl).
