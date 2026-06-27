@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v769</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v770</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v769';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v770';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1443,6 +1443,11 @@ const _ahmOne={};
 async function loadAhmadOne(num){ if(ahmadArr){ return ahmadArr.find(x=>x.num===String(num))||null; }   // если полный массив уже в памяти (поиск/читалка) — берём оттуда
   const b=Math.floor((+num)/1000); if(!(b in _ahmOne)){ try{ _ahmOne[b]=await cachedFetchJSON('./ahmad/'+b+'.json', 60000, {silent:true}); }catch(e){ _ahmOne[b]=null; } }
   const m=_ahmOne[b]; const r=m&&m[String(num)]; return r?{num:String(num),text:r[0]||'',grade:r[1]||'',norm:''}:null; }
+// шардинг Сахих Муслима: открыть ОДИН хадис по номеру → шард ~1МБ (muslim/<num//500>.json {num:[raw,fw]}), не весь 15МБ (baqi 8.4+clean 6.8)
+const _musOne={};
+async function loadMuslimOne(num){ if(cache['muslim']){ return cache['muslim'].find(x=>x.num===String(num))||null; }   // полный массив в памяти (читалка/поиск) — оттуда
+  const b=Math.floor((+num)/500); if(!(b in _musOne)){ try{ _musOne[b]=await cachedFetchJSON('./muslim/'+b+'.json', 60000, {silent:true}); }catch(e){ _musOne[b]=null; } }
+  const m=_musOne[b]; const r=m&&m[String(num)]; return r?{num:String(num),text:_muslimStripApparatus(r[0]||''),grade:'',fw:r[1]||null,norm:''}:null; }
 const _local={};
 async function loadLocal(code,file){ if(_local[code])return _local[code]; setStatus('Загружаю '+nameOf(code)+'…');
   let j; try{ j=await cachedFetchJSON('./'+file, 180000); }catch(_e){ j=await cachedFetchJSON('./'+file, 180000); }   // A-124/A-137: крупные книги (muslim_baqi 8.4МБ, Абу Авана 22МБ, Насаи-Кубра/Абу Яʿля 12-13МБ); кэш Cache Storage + таймаут 180с + 2 попытки (60-90с не хватало на медленной мобиле)
@@ -2930,7 +2935,7 @@ let _darimiCache=null,_darimiP=null;
 function loadDarimi(){ if(_darimiCache) return Promise.resolve(_darimiCache); if(_darimiP) return _darimiP;
   _darimiP=fetch('./editions/darimi.json?v='+APPVER).then(r=>r.ok?r.json():[]).then(j=>{ _darimiCache=Array.isArray(j)?j:[]; return _darimiCache; }).catch(()=>{ _darimiCache=[]; return _darimiCache; }); return _darimiP; }
 async function getOne(code,num){
-  if(code==='muslim'){ const a=await loadCollection('muslim'); return a.find(x=>x.num===String(num))||null; }   // Муслим — из Абд аль-Баки (наш файл)
+  if(code==='muslim'){ return await loadMuslimOne(num); }   // Муслим — шард ~1МБ по номеру (не весь 15МБ); если полный массив в кэше — loadMuslimOne берёт оттуда
   if(code==='darimi'){ const a=await loadDarimi(); const x=a.find(y=>String(y.num)===String(num)); return x?{num:String(x.num),text:(x.ar||'').replace(/\s+/g,' ').trim(),grade:'',norm:''}:null; }   // #151: Дарими — первоисточник, грузим из локального darimi.json (CDN 403)
   if(code==='ahmad'){ const a=await loadAhmad(); const x=a.find(y=>String(y.num)===String(num)); return x?{num:String(x.num),text:(x.text||'').replace(/\s+/g,' ').trim(),grade:x.grade||'',norm:''}:null; }   // #171: Ахмад — локальный (CDN ara-ahmad даёт иную нумерацию → клик не открывал)
   try{ const _X=EXTRA_MAP[code]; if(_X && (_X.file || (!_X.soon && !_X.muhaymin))){ const a=await loadByCode(code); const x=a.find(y=>String(y.num)===String(num)); if(x) return {num:String(x.num),text:(x.text||x.ar||'').replace(/\s+/g,' ').trim(),grade:x.grade||'',norm:''}; } }catch(e){}   // #171: прочие локальные первоисточники/издания (Ибн Хиббан, Насаи-Кубра, Абу Я‘ля…) — из наших editions, не с CDN
