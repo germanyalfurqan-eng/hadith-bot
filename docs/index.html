@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v747</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v748</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v747';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v748';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8606,6 +8606,9 @@ function _isMut(c){ return c && !_MUT_LATE.has(c); }
 const _CRIT_RE=/معين|حنبل|حاتم|زرعة|البخاري|النسائي|داود|الترمذي|المديني|الدارقطني|عدي|العقيلي|حبان|العجلي|الفلاس|القطان|مهدي|وكيع|المبارك|الفسوي|الحاكم|الساجي|نمير|الشافعي|اسحاق|راهويه|شعبة|الاوزاعي|حجر|الذهبي|العسقلاني|شاهين|عساكر|مسلمة|سعد|سفيان|البزار|الجوزجاني|خزيمة|قانع|الدارمي|نعيم|البرديجي|الميموني|الاثرم|صالح|الرازي/;
 function _critOk(name){ if(!name) return false; const n=String(name).trim(); return n.length>=5 && _CRIT_RE.test(n); }
 const _SEVERE=['متروك','كذاب','وضاع','يكذب','ليس بشيء','متهم','تركوه','يضع','ساقط'];
+// Взвешивание по строгости (джарх-таʿдиль): متشدد — одиночный جرح غير مفسر при توثيق не порочит; متساهل — мягкие.
+const _MUTASHADDID=new Set(['النسائي','يحيى بن معين','ابن معين','أبو حاتم الرازي','أبو حاتم','الجوزجاني','يحيى بن سعيد القطان','أبو زرعة الرازي']);
+const _MUTASAHIL=new Set(['ابن حبان','الحاكم','العجلي','الترمذي','ابن شاهين','أبو أحمد الحاكم']);
 // ⚖️ ПРАВИЛО науки хадиса (указ владельца): تصديق = ≥2 свидетельства ДВУХ муʿтабаров из 48.
 // 1 таʿдиль توثиق НЕ устанавливает. Исключение: НЕТ джарха + Сахихайн (Бухари+Муслим) = 2 свидетельства.
 function _ttNeuro(list, inSahihayn){
@@ -8616,18 +8619,21 @@ function _ttNeuro(list, inSahihayn){
     if(s>0){ posCnt++; if(ok) tadil.add(c[0]); }
     else if(s<0){ negCnt++; if(ok){ jarh.add(c[0]); if(_SEVERE.indexOf(c[1])>=0) severe=true; } } });
   const nT=tadil.size, nJ=jarh.size;
+  let strictJ=0; jarh.forEach(n=>{ if(_MUTASHADDID.has(n)) strictJ++; });
   // Сахихайн (флаг 'bm' = в Бухари И Муслиме, надёжно из loadNarrFlags) = 2 свидетельства если нет джарха
   const sahihayn = (inSahihayn===true) || !!(inSahihayn && inSahihayn.b && inSahihayn.b.length && inSahihayn.m && inSahihayn.m.length);
   if(!posCnt && !negCnt && !jah && !sahihayn) return null;
   const tawthiq = (nT>=2) || (sahihayn && !severe);                    // توثиق установлен?
   let v,col,em,note='';
+  const _strictTag = (strictJ>0 && nT>=1) ? ' Часть джарха — от строгих критиков (متشدد): جرح غير مفسر при توثيق не порочит.' : '';
   if(severe){ v='متروك — отвергается (тяжёлый джарх муʿтабаров)'; col='#f87171'; em='🔴'; }
   else if(nJ>=2 && nJ>=nT){ v='ضعيف — слабый (джарх большинства критиков)'; col='#f8a07a'; em='🟠'; }
   else if(tawthiq){ v=(nT>=2)?'ثقة — надёжный (توثيق ≥2 муʿтабаров)':'ثقة — надёжный (في الصحيحين — احتجّا به الشيخان)'; col='#4ade80'; em='🟢'; if(nJ>=1) note='Единичный лёгкий джарх не перекрывает توثيق (الجرح غير المفسر لا يقدح).'; }
+  else if(nT>=1 && nJ>=1){ v='مختلف فيه — спорный (таʿдиль ↔ джарх; توثيق двух не набран)'; col='#d6b35a'; em='🟡'; note='Учёные разошлись: есть и توثиق, и جرح — нужна проверка контекста.'+_strictTag; }
   else if(nJ>=1){ v='ضعيف — слабый (джарх не перекрыт توثиق двух муʿтабаров)'; col='#f8a07a'; em='🟠'; }
   else if(nT===1){ v='مجهول الحال — توثиق не установлен (1 муʿтабар, нужно 2)'; col='#9aa7b5'; em='⚪'; note='Если в Сахихайн без джарха — становится ثقة (احتجّا به الشيخان).'; }
   else { v='مجهول — неизвестный (нет توثиق двух муʿтабаров)'; col='#9aa7b5'; em='⚪'; }
-  return {v:v,col:col,em:em,nT:nT,nJ:nJ,jah:jah,sahihayn:sahihayn,note:note,pos:posCnt,neg:negCnt,cnt:posCnt+negCnt+jah};
+  return {v:v,col:col,em:em,nT:nT,nJ:nJ,jah:jah,sahihayn:sahihayn,note:note,pos:posCnt,neg:negCnt,strictJ:strictJ,cnt:posCnt+negCnt+jah};
 }
 // ссылки-проверки (turath bid==shamela id, page прямой). Внутри аппа «У нас» = наш ридер openBook.
 function _ttLinkRow(bid,page,mid){
