@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v760</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v761</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v760';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v761';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8821,6 +8821,19 @@ async function showNarratorCardLocal(name, host){
   if(!_isSah){ try{ const _cn=stripDiac(c[1]||'').trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc && (_cn===gc || _cn.startsWith(gc+' '))){ _isSah=true; break; } } }catch(e){} }
   if(_isSah) h+='<div style="margin-top:4px"><span style="display:inline-block;font-size:12.5px;font-weight:800;color:#241a00;background:linear-gradient(90deg,#f3d97f,#e3b94f);border-radius:8px;padding:2px 11px;box-shadow:0 0 0 1px #b8902a,0 0 9px rgba(232,195,90,.45)" title="Сподвижник Пророка ﷺ (صحابي) — высшая степень, الصحابة كلهم عدول">⭐ صحابي · Сподвижник</span></div>';
   try{ const fl=(await loadNarrFlags())[String(id)]; if(fl) h+='<div style="margin-top:3px">'+_flagBadge(fl, c[1])+'</div>'; }catch(e){}   // M386+M402 (тап → его хадисы в Сахихах)
+  // ⚠️ ТАДЛИС (заявка владельца): если равий — мудаллис, показать ЯВНО + источник-довод (تدليس критичен: عنعنة под вопросом). Детект из ранга Ибн Хаджара/Захаби/موسуعة.
+  try{ let _td=null; let _inSahT=false; try{ _inSahT=((await loadNarrFlags())[String(id)]==='bm'); }catch(e){}
+    try{ if(!window._MUDCACHE){ window._MUDCACHE=await fetch('mudallisin.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); } const _m=window._MUDCACHE[String(id)]; if(_m) _td={s:_m.s,q:_m.q,tier:_m.tier}; }catch(e){}   // приоритет — выверенный реестр мудаллисов (rabt + طبقات المدلسين)
+    if(!_td){ const _TDL=/يدلس|تدليس|مدلس|كثير التدليس/;   // фолбэк: текст ранга Ибн Хаджара/Захаби/موسуعة
+      if(_TDL.test(String(c[5]||''))) _td={s:'Ибн Хаджар · تقريب التهذيب', q:String(c[5])};
+      else if(_TDL.test(String(c[6]||''))) _td={s:'аз-Захаби · الكاشف', q:String(c[6])};
+      else if(_TDL.test(String(c[8]||''))){ const m=String(c[8]).match(/.{0,28}(?:يدلس|تدليس|مدلس).{0,44}/); _td={s:'موсуعة рواة الحديث (база Мактаба)', q:m?m[0].trim():'…يدلس…'}; } }
+    if(_td){ const _impl = _td.tier===2 ? 'Тадлис лёгкий (мартаба 2) — عنعنته принимается, особ. в Сахихайн.' : (_td.tier===3 ? 'Частый тадлис (мартаба 3) — его عنعنة НЕ принимается без явного تصريح بالسماع.' : (_td.tier>=4 ? 'Сильный тадлис (мартаба '+_td.tier+') — принимается только при явном سماع.' : (_inSahT?'В Сахихайн его передача принята муحаддиثами (тадлис лёгкий).':'Степень (مرتبة) тадлиса по «طبقات المدلسين» — уточняется.')));
+      h+='<div style="margin-top:6px;border:1px solid #c98a2a;border-radius:10px;padding:7px 10px;background:rgba(201,138,42,.13)">'
+      +'<div style="font-size:13.5px;font-weight:800;color:#f0b75a">⚠️ مُدَلِّس · мудаллис (تدليس)</div>'
+      +'<div style="font-size:11.5px;color:#e0c98f;margin-top:3px;direction:rtl;text-align:right">📌 довод — '+esc(_td.s)+': «'+esc(String(_td.q||'').slice(0,120))+'»</div>'
+      +'<div style="font-size:11px;color:var(--hint);margin-top:3px;direction:ltr;text-align:left">Передавал с تدليس (скрывал звено в иснаде). При عنعنة («عن/أنّ» без явного слышания) — осторожно. '+_impl+'</div></div>'; }
+  }catch(e){}
   // Википедия НА КАЖДОЙ карточке (заявка владельца, «сто раз говорил»): выверенная ссылка ИЛИ поиск. Для сподвижников/известных статья однозначна; для прочих помечено «(поиск)» (#207-тёзки честно обозначены).
   if(_WIKI_NARR_OK && _wk && _wk.u) h+='<div style="direction:ltr;text-align:left;margin-top:3px"><span class="nWiki" data-u="'+esc(_wk.u)+'" style="cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px"><b style="font-family:Georgia,serif">W</b> Википедия'+(_wk.l&&_wk.l!=='ru'?(' · '+esc(_wk.l)):'')+' ↗</span></div>';
   else { const _ru=!!(_ruSh&&/[А-Яа-яЁё]/.test(_ruSh)); const _wq=encodeURIComponent(_ru?_ruSh:((c[1]||'').replace(/[ً-ْٰ]/g,'').split(' ').slice(0,4).join(' ')));
