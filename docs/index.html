@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v778</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v779</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v778';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v779';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4599,18 +4599,25 @@ function openNeuroTahkik(){
   body.appendChild(plan);
 }
 // Р-37/Р-04: ЕДИНЫЙ рендер связей учитель↔ученик (تهذيب الكمال) — раньше дублировался в openNarratorRijal (старая горизонт. версия без счётчика) и showNarratorBio (новая вертик. со счётчиком передач). Версия = лучшая (вертик. строки, счётчик _edgesGet, рус.имя+год). onPick(name) — клик по связанному равию (модал→openNarratorRijal; лента→ре-рендер showNarratorBio). Возвращает true если что-то отрисовал.
+// номер табаки (поколения) для определения направления учитель/ученик когда нет года смерти. صحابي=0, الأولى..العاشرة=1..10.
+function _tabNum(t){ if(!t) return 0; const s=fold(stripDiac(String(t)));
+  if(/صحاب/.test(s)) return 0;
+  const ord={'الاولى':1,'الثانيه':2,'الثالثه':3,'الرابعه':4,'الخامسه':5,'السادسه':6,'السابعه':7,'الثامنه':8,'التاسعه':9,'العاشره':10,'الحاديه عشره':11,'الثانيه عشره':12};
+  for(const k in ord){ if(s.indexOf(k)>=0) return ord[k]; }
+  return 0; }
 async function _renderTlinkLinks(id, host, onPick){
   let _rec=null; try{ _rec=await _tlinkGet(id); }catch(e){}
   let _edg={}; try{ _edg=await _edgesGet(id); }catch(e){}
   const _cnt=(oid)=>(_edg&&_edg[String(oid)])||0;
   // КАМПАНИЯ карточки: объединяем تهذيب الكمال (авторитет.направление T/S) + narr_edges (реальные соседи из НАШИХ цепей, 56% покрытие vs tlink 38%). Направление соседа из цепей — по году смерти (старше=учитель). Год неизвестен → отдельный блок «связи» (не гадаем, В-01).
-  let _selfD=null; try{ const _sc=await _narrCard(id); _selfD=_sc&&_sc[4]?parseInt(String(_sc[4]).replace(/[^0-9]/g,'')):null; }catch(e){}
+  let _selfD=null,_selfT=0; try{ const _sc=await _narrCard(id); _selfD=_sc&&_sc[4]?parseInt(String(_sc[4]).replace(/[^0-9]/g,'')):null; _selfT=_tabNum(_sc&&_sc[7]); }catch(e){}
   const _teaM=new Map(),_stuM=new Map(),_neuM=new Map();
   if(_rec) for(const k in _rec){ const v=_rec[k]; const i2=v.indexOf(':'); const rz=i2>=0?v.slice(i2+1):''; (v[0]==='T'?_teaM:_stuM).set(parseInt(k),rz); }
   const _extra=Object.keys(_edg).map(Number).filter(o=>!_teaM.has(o)&&!_stuM.has(o)).sort((a,b)=>_cnt(b)-_cnt(a)).slice(0,60);
   if(_extra.length){ const _cards=await Promise.all(_extra.map(o=>_narrCard(o).catch(()=>null)));
     _extra.forEach((o,i)=>{ const nc=_cards[i]; const nd=nc&&nc[4]?parseInt(String(nc[4]).replace(/[^0-9]/g,'')):null;
-      if(_selfD&&nd){ (nd<=_selfD?_teaM:_stuM).set(o,''); } else { _neuM.set(o,''); } }); }
+      if(_selfD&&nd){ (nd<=_selfD?_teaM:_stuM).set(o,''); }
+      else { const nt=_tabNum(nc&&nc[7]); if(_selfT&&nt&&nt!==_selfT){ (nt<_selfT?_teaM:_stuM).set(o,''); } else { _neuM.set(o,''); } } }); }   // фолбэк направления по табаке (поколению), если года смерти нет
   if(!_teaM.size && !_stuM.size && !_neuM.size) return false;
   const _arr=(m)=>[...m.entries()].sort((a,b)=>_cnt(b[0])-_cnt(a[0]));
   const _tea=_arr(_teaM),_stu=_arr(_stuM),_neu=_arr(_neuM);
