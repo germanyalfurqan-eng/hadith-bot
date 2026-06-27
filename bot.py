@@ -5688,6 +5688,23 @@ async def start_cmd(update, context):
             pass
 
 app = ApplicationBuilder().token(TOKEN).post_init(_setup).build()
+# B-004 ГЛОБАЛЬНЫЙ ФИКС «can't parse entities» (×32 в журнале): спецсимвол (_*[]`) в тексте/имени/запросе ломал Markdown.
+# Патчим метод класса Bot.send_message → при ошибке разметки автоматически шлём БЕЗ parse_mode (сообщение НЕ теряется, ошибка не плодится). Покрывает и reply_text (он зовёт send_message).
+try:
+    from telegram.error import BadRequest as _BadReq
+    _BotCls = type(app.bot); _orig_send = _BotCls.send_message
+    async def _send_md_safe(self, *a, **kw):
+        try:
+            return await _orig_send(self, *a, **kw)
+        except _BadReq as e:
+            if kw.get("parse_mode") and "parse entities" in str(e).lower():
+                kw2 = dict(kw); kw2.pop("parse_mode", None)
+                return await _orig_send(self, *a, **kw2)
+            raise
+    _BotCls.send_message = _send_md_safe
+    print("B-004 fix: send_message обёрнут (fallback без разметки)")
+except Exception as _e:
+    print("B-004 fix НЕ применён:", _e)
 app.add_handler(CommandHandler("start", start_cmd))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
