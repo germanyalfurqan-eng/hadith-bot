@@ -324,6 +324,8 @@ OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 # Google Gemini (бесплатный лимит) — запасной/основной мотор для особых задач, если у OpenAI нет денег
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")   # актуальная бесплатная модель (1.5-flash устаревает)
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")   # 🆓 Groq — бесплатный, очень быстрый (указ владельца: первым). Ключ в Railway env.
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 BACKUP_SECRET = os.environ.get("BACKUP_SECRET", "")   # #259/#261: общий секрет для приёма локального бэкапа (ps1 -> /api/backup_push -> журнал/ЛС)
 OWNER_ID = 131827895
@@ -1134,6 +1136,25 @@ def ask_gemini(prompt, system=None):
     except Exception as e:
         return f"⚠️ Gemini недоступен: {e}"
 
+def ask_groq(prompt, system=None, max_tokens=None):
+    """Groq — бесплатный, очень быстрый, OpenAI-совместимый. Ключ GROQ_API_KEY на Railway. Возвращает текст или None/⚠️."""
+    if not GROQ_API_KEY:
+        return None
+    try:
+        msgs = []
+        if system: msgs.append({"role": "system", "content": system})
+        msgs.append({"role": "user", "content": prompt})
+        r = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},   # UA обязателен — без него Cloudflare 403 (1010)
+            json={"model": GROQ_MODEL, "messages": msgs, "max_tokens": max_tokens or 1500, "temperature": 0.3},
+            timeout=60)
+        if r.status_code == 200:
+            return r.json()["choices"][0]["message"]["content"].strip()
+        return f"⚠️ Groq код {r.status_code}: {r.text[:150]}"
+    except Exception as e:
+        return f"⚠️ Groq недоступен: {e}"
+
 def ask_special(prompt, system=None):
     """Особые задачи: пробуем OpenAI (если есть ключ+деньги), иначе Gemini (бесплатный лимит). Возвращает (ответ, имя_модели)."""
     if OPENAI_API_KEY:
@@ -1152,17 +1173,18 @@ def ask_special(prompt, system=None):
     return None, None
 
 def ask_ai(prompt, system=None, owner=False, max_tokens=None):
-    if _AI_PUBLIC_OFF and not owner:   # 🔒 ГЛАВНЫЙ РУБИЛЬНИК: ИИ (DeepSeek/free) только для владельца — для всех остальных чатов ВЫКЛ
-        return None
-    if ai_kill_active():   # 🚨 авто-рубильник: ИИ выключен (спам/вручную) — не дёргаем ни DeepSeek, ни бесплатные
+    if ai_kill_active():   # 🚨 авто-рубильник: ИИ выключен (спам/вручную) — не дёргаем ничего
         return "⏸ ИИ временно на паузе (защита от спама). Включит владелец."
     if system is None:
         system = f"Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском. Сегодняшняя дата: {datetime.now().strftime('%d.%m.%Y')}."
-    # для владельца — сначала его DeepSeek
-    if owner and DEEPSEEK_API_KEY:
-        d = ask_deepseek(prompt, system, max_tokens or 2000)
-        if d is not None:
-            return d
+    # 🆓 БЕСПЛАТНЫЕ ИИ — доступны ВСЕМ (указ владельца #379: сначала бесплатные, DeepSeek потом). Порядок Groq→Gemini→OpenRouter→DeepSeek.
+    g = ask_groq(prompt, system, max_tokens)   # 1) Groq (free, очень быстрый)
+    if g and not str(g).startswith("⚠️"):
+        return g
+    if GEMINI_API_KEY:                          # 2) Gemini (free)
+        _ga = ask_gemini(prompt, system)
+        if _ga and not str(_ga).startswith("⚠️"):
+            return _ga
     модели = [
         "meta-llama/llama-3.3-70b-instruct:free",
         "deepseek/deepseek-r1:free",
@@ -1180,12 +1202,9 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None):
     }
 
     if not OPENROUTER_API_KEY:
-        return "❌ API-ключ не настроен."
+        модели = []   # нет ключа OpenRouter → пропустить эту ступень, упасть к DeepSeek ниже
 
-    if system is None:
-        system = f"Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском. Сегодняшняя дата: {datetime.now().strftime('%d.%m.%Y')}."
-
-    for модель in модели:
+    for модель in модели:   # 3) OpenRouter (free модели)
         try:
             r = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
@@ -1214,7 +1233,12 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None):
                 continue
         except:
             continue
-    return "❌ Все AI-модели временно недоступны. Попробуйте позже."
+    # 4) 💎 DeepSeek (ПЛАТНЫЙ) — только владельцу ИЛИ когда «дипсик всем вкл» (_AI_PUBLIC_OFF=False). Бесплатные выше уже пробовались.
+    if (owner or not _AI_PUBLIC_OFF) and DEEPSEEK_API_KEY:
+        d = ask_deepseek(prompt, system, max_tokens or 2000)
+        if d is not None:
+            return d
+    return None
 
 def ask_ai_with_memory(prompt, owner=True):
     memory = load_memory()
