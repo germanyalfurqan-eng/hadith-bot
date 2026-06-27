@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v777</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v778</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v777';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v778';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4601,14 +4601,21 @@ function openNeuroTahkik(){
 // Р-37/Р-04: ЕДИНЫЙ рендер связей учитель↔ученик (تهذيب الكمال) — раньше дублировался в openNarratorRijal (старая горизонт. версия без счётчика) и showNarratorBio (новая вертик. со счётчиком передач). Версия = лучшая (вертик. строки, счётчик _edgesGet, рус.имя+год). onPick(name) — клик по связанному равию (модал→openNarratorRijal; лента→ре-рендер showNarratorBio). Возвращает true если что-то отрисовал.
 async function _renderTlinkLinks(id, host, onPick){
   let _rec=null; try{ _rec=await _tlinkGet(id); }catch(e){}
-  if(!_rec) return false;
   let _edg={}; try{ _edg=await _edgesGet(id); }catch(e){}
-  const _tea=[],_stu=[]; const _cnt=(oid)=>(_edg&&_edg[String(oid)])||0;
-  for(const k in _rec){ const v=_rec[k]; const i2=v.indexOf(':'); const rz=i2>=0?v.slice(i2+1):''; (v[0]==='T'?_tea:_stu).push([parseInt(k),rz]); }
-  _tea.sort((a,b)=>_cnt(b[0])-_cnt(a[0])); _stu.sort((a,b)=>_cnt(b[0])-_cnt(a[0]));   // сортировка по ЧИСЛУ передач (больше — выше)
-  if(!_tea.length && !_stu.length) return false;
+  const _cnt=(oid)=>(_edg&&_edg[String(oid)])||0;
+  // КАМПАНИЯ карточки: объединяем تهذيب الكمال (авторитет.направление T/S) + narr_edges (реальные соседи из НАШИХ цепей, 56% покрытие vs tlink 38%). Направление соседа из цепей — по году смерти (старше=учитель). Год неизвестен → отдельный блок «связи» (не гадаем, В-01).
+  let _selfD=null; try{ const _sc=await _narrCard(id); _selfD=_sc&&_sc[4]?parseInt(String(_sc[4]).replace(/[^0-9]/g,'')):null; }catch(e){}
+  const _teaM=new Map(),_stuM=new Map(),_neuM=new Map();
+  if(_rec) for(const k in _rec){ const v=_rec[k]; const i2=v.indexOf(':'); const rz=i2>=0?v.slice(i2+1):''; (v[0]==='T'?_teaM:_stuM).set(parseInt(k),rz); }
+  const _extra=Object.keys(_edg).map(Number).filter(o=>!_teaM.has(o)&&!_stuM.has(o)).sort((a,b)=>_cnt(b)-_cnt(a)).slice(0,60);
+  if(_extra.length){ const _cards=await Promise.all(_extra.map(o=>_narrCard(o).catch(()=>null)));
+    _extra.forEach((o,i)=>{ const nc=_cards[i]; const nd=nc&&nc[4]?parseInt(String(nc[4]).replace(/[^0-9]/g,'')):null;
+      if(_selfD&&nd){ (nd<=_selfD?_teaM:_stuM).set(o,''); } else { _neuM.set(o,''); } }); }
+  if(!_teaM.size && !_stuM.size && !_neuM.size) return false;
+  const _arr=(m)=>[...m.entries()].sort((a,b)=>_cnt(b[0])-_cnt(a[0]));
+  const _tea=_arr(_teaM),_stu=_arr(_stuM),_neu=_arr(_neuM);
   const ts=document.createElement('div'); ts.style.cssText='margin-top:9px;border:1px solid #2e6b9b;border-radius:11px;padding:10px 12px;background:rgba(46,107,155,.07)';
-  ts.innerHTML='<div style="font-size:13px;font-weight:600;color:#bcd2ff;margin-bottom:4px">🔗 Учители ↔ ученики <span style="font-weight:400;color:var(--hint);font-size:11px">· تهذيب الكمال (аль-Мизи)</span></div><div style="font-size:10.5px;color:var(--hint);margin-bottom:4px">📜 N — сколько передач в нашей базе цепей · тап → карточка</div>';
+  ts.innerHTML='<div style="font-size:13px;font-weight:600;color:#bcd2ff;margin-bottom:4px">🔗 Учители ↔ ученики <span style="font-weight:400;color:var(--hint);font-size:11px">· تهذيب الكمال + наши цепи передачи</span></div><div style="font-size:10.5px;color:var(--hint);margin-bottom:4px">📜 N — число передач в нашей базе цепей · направление по году смерти · тап → карточка</div>';
   const _mk=(arr,lbl)=>{ if(!arr.length) return; const d=document.createElement('div'); d.style.cssText='margin-top:7px';
     d.innerHTML='<div style="color:var(--hint);font-size:12.5px;margin-bottom:4px;font-weight:600">'+lbl+' ('+arr.length+'):</div>';
     const w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;gap:5px';
@@ -4622,7 +4629,7 @@ async function _renderTlinkLinks(id, host, onPick){
       w.appendChild(row); });
     if(arr.length>25){ const mr=document.createElement('div'); mr.style.cssText='font-size:12px;color:var(--hint);margin-top:5px;text-align:center'; mr.textContent='+ ещё '+(arr.length-25); w.appendChild(mr); }
     d.appendChild(w); ts.appendChild(d); };
-  _mk(_tea,'👨‍🏫 Учители (от кого передавал)'); _mk(_stu,'👨‍🎓 Ученики (кто от него)');
+  _mk(_tea,'👨‍🏫 Учители (от кого передавал)'); _mk(_stu,'👨‍🎓 Ученики (кто от него)'); _mk(_neu,'🔗 Связи по цепям (направление не определено — нет года смерти)');
   host.appendChild(ts);
   return true;
 }
