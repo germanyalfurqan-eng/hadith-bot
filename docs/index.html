@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v770</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v771</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v770';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v771';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1593,6 +1593,8 @@ const EXTRA_BIDS={ ibnhibban:'1729', ibnkhuzayma:'121382', darimi:'36114', adabm
 // номер СТРАНИЦЫ → открывалась не та страница. Теперь: ищем точную страницу по маркеру «<№> -» (механизм M314),
 // фолбэк — наш локальный ридер для основного сборника (точный хадис), иначе книга turath с начала.
 const _BID2CODE=(function(){ const m={}; for(const c in COLL_BIDS){ (COLL_BIDS[c]||[]).forEach(b=>{ m[String(b)]=c; }); } return m; })();
+// Р-06: bid → код ТОЛЬКО для сборников с готовым проф. рус-переводом на CDN (fawazahmed0 rus-*). Проверено: есть лишь rus-bukhari/muslim/abudawud (HTTP 200); tirmidhi/nasai/ibnmajah/ahmad=404, malik=403 → их НЕ помечать «📘 готовый» (иначе кнопка врёт и валится в фолбэк). Выведено из COLL_BIDS (единый источник), считается ОДИН раз на module-level — раньше пересоздавался при КАЖДОЙ загрузке книги.
+const _BK2RUSCODE=(function(){ const m={}; ['bukhari','muslim','abudawud'].forEach(c=>(COLL_BIDS[c]||[]).forEach(b=>{ m[String(b)]=c; })); return m; })();
 async function openByCodeNum(bid, num){
   let b=String(bid==null?'':bid).replace(/[^0-9]/g,''); const n=String(num==null?'':num).replace(/[^0-9]/g,'');
   if(!b) return;
@@ -3331,9 +3333,8 @@ async function _bookLoad(){
     let trOut=m.querySelector('#bookTrOut'); if(!trOut){ trOut=document.createElement('div'); trOut.id='bookTrOut'; trOut.className='tr-out'; tEl.parentNode.insertBefore(trOut, tEl.nextSibling); } trOut.style.display='none'; trOut.innerHTML='';
     const trb=document.createElement('button'); trb.className='mini'; trb.textContent='🧠 Перевод (ИИ)'; trb.title='Перевести страницу (ИИ, накопит.)';
     // M434 («мы же качали Бухари!»): печать КАНОНА → сперва ГОТОВЫЙ проф. перевод по №№ хадисов страницы (бесплатно, мгновенно); ИИ — только на остаток
-    const _BK2CODE={'1681':'bukhari','735':'bukhari','1376':'bukhari','1284':'bukhari','907':'bukhari','1727':'muslim','711':'muslim','1726':'abudawud','654':'abudawud','117359':'abudawud'};
     const _aiTr=()=>{ const txt=tEl.dataset.txt||tEl.textContent||''; try{ translateTafsir(txt.slice(0,9000), 'book'+_bookView.id, _bookView.id, _bookView.pg, trOut, trb); }catch(e){} };
-    const _bkCode=_BK2CODE[String(_bookView.id)];
+    const _bkCode=_BK2RUSCODE[String(_bookView.id)];  // Р-06: module-level карта (только bukhari/muslim/abudawud — у них реально есть rus-перевод на CDN)
     if(_bkCode){ trb.textContent='📘 Перевод (готовый)'; trb.title='У этой книги есть скачанный профессиональный перевод — бесплатно'; trb.style.cssText='background:#10331f;border:1px solid #2e9b5b;color:#bff5d4'; }
     trb.onclick=async()=>{
       const txt=tEl.dataset.txt||tEl.textContent||'';
