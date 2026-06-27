@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v765</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v766</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v765';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v766';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1329,8 +1329,9 @@ async function _assistSend(m){ const inp=m.querySelector('#assistInput'); const 
   if(!BACKEND_URL){ toast('Помощник работает на сервере'); return; }
   inp.value=''; inp.style.height='auto';
   const h=_assistHist(); h.push({role:'user',text:q}); h.push({role:'bot',text:'',loading:true}); _assistSave(h); _assistRender(m);
+  const _ac=new AbortController(); const _to=setTimeout(()=>_ac.abort(),60000);   // Р-78: таймаут 60с — пузырь «думаю…» не висит вечно при зависшем бэкенде
   try{
-    const r=await fetch(BACKEND_URL+'/assistant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:q,initData:INITDATA})});
+    const r=await fetch(BACKEND_URL+'/assistant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:q,initData:INITDATA}),signal:_ac.signal});
     const j=await r.json().catch(()=>({}));
     const a=_assistHist(); if(a.length&&a[a.length-1].loading) a.pop();   // убрать «думаю…»
     if(r.status===403){ a.push({role:'bot',text:(j&&j.message)||'Помощник пока не открыт для вас.'}); }
@@ -1338,7 +1339,8 @@ async function _assistSend(m){ const inp=m.querySelector('#assistInput'); const 
     else if(j&&j.answer){ a.push({role:'bot',text:j.answer,cached:!!j.cached}); }
     else { a.push({role:'bot',text:'Не удалось получить ответ. Попробуйте переформулировать вопрос.'}); }
     _assistSave(a); _assistRender(m);
-  }catch(e){ const a=_assistHist(); if(a.length&&a[a.length-1].loading) a.pop(); a.push({role:'bot',text:'Сеть недоступна — попробуйте позже.'}); _assistSave(a); _assistRender(m); }
+  }catch(e){ const a=_assistHist(); if(a.length&&a[a.length-1].loading) a.pop(); a.push({role:'bot',text:(e&&e.name==='AbortError')?'⏱ Долго не отвечает — попробуйте позже.':'Сеть недоступна — попробуйте позже.'}); _assistSave(a); _assistRender(m); }
+  finally{ clearTimeout(_to); }
 }
 /* ===================== ДАННЫЕ ===================== */
 const cache={}; let reverse=null, quran=null, muh=null;
@@ -8432,7 +8434,9 @@ async function narrAiResolve(q, host){
     const key='narr|'+q.toLowerCase(); let j=_aiCache[key];
     if(!j && BACKEND_URL){
       const meaning='Транслитерация имени. Передатчик хадисов (равий) написан русскими буквами: «'+q+'». В поле ФРАЗЫ дай 2-4 варианта АРАБСКОГО написания именно этого ИМЕНИ (полная форма с отцом/нисбой и краткая) — только имя, БЕЗ слов из хадисов.';
-      const r=await fetch(BACKEND_URL+'/neuro',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({meaning:meaning,kind:'hadith',initData:INITDATA})});
+      const _ac=new AbortController(); const _to=setTimeout(()=>_ac.abort(),60000);   // Р-79: таймаут 60с — не висит «Спрашиваю ИИ…» при зависшем бэкенде
+      const r=await fetch(BACKEND_URL+'/neuro',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({meaning:meaning,kind:'hadith',initData:INITDATA}),signal:_ac.signal});
+      clearTimeout(_to);
       if(r.ok){ j=await r.json(); _aiCache[key]=j; }
     }
     names=((j&&j.phrases)||[]).filter(isArabic);
@@ -9149,15 +9153,17 @@ async function doNarratorAI(name, out, btn){
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }
   btn.disabled=true; const prev=btn.textContent; btn.textContent='ИИ думает…';
   out.innerHTML='<span class="hint">🧠 Собираю справку об «'+esc(name)+'» (ИИ)…</span>';
-  try{ const r=await fetch(BACKEND_URL+'/narrator_ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name, initData:INITDATA})});
+  const _ac=new AbortController(); const _to=setTimeout(()=>_ac.abort(),60000);   // Р-77: таймаут 60с — кнопка не залипает «ИИ думает…» при зависшем бэкенде
+  try{ const r=await fetch(BACKEND_URL+'/narrator_ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name, initData:INITDATA}),signal:_ac.signal});
     if(r.status===403){ out.innerHTML='<span class="hint">ИИ-справка тебе пока не открыта.</span>'; }
+    else if(r.status===429){ out.innerHTML='<span class="hint">⏳ Слишком много запросов — подожди немного.</span>'; }
     else { const j=await r.json().catch(()=>({})); if(j.bio){
       out.innerHTML='<div style="border:1px solid #6c5ce7;border-radius:10px;padding:9px;margin-top:4px;background:rgba(108,92,231,.08);font-size:13.5px;line-height:1.55">'
         +'<div style="color:#b9a9ff;font-size:11px;margin-bottom:4px">🧠 Справка собрана ИИ '+(j.cached?'(из базы, бесплатно)':'')+' — возможны ошибки, сверяйте с источниками</div>'
         +esc(j.bio).replace(/\n+/g,'<br>')+'</div>'; }
       else out.innerHTML='<span class="hint">ИИ не дал ответа — попробуй полную карточку.</span>'; }
-  }catch(e){ out.innerHTML='<span class="hint">🔧 Сервис недоступен.</span>'; }
-  btn.disabled=false; btn.textContent=prev;
+  }catch(e){ out.innerHTML='<span class="hint">'+(e&&e.name==='AbortError'?'⏱ ИИ долго не отвечает — попробуй позже.':'🔧 Сервис недоступен.')+'</span>'; }
+  finally{ clearTimeout(_to); btn.disabled=false; btn.textContent=prev; }
 }
 // Оценка достоверности равия по рангам учёных (ибн Хаджар/Захаби) → цвет звена в древе
 function _narrGrade(rankH, rankZ){
