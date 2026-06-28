@@ -1718,9 +1718,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _src, _q = _rag_parse(text)
                 if _q or _src:
                     try:
-                        await context.bot.send_chat_action(update.effective_chat.id, 'typing')
+                        _wait = await update.message.reply_text('🔎 Ищу в нашей базе (первоисточники + риджаль)…')
                     except Exception:
-                        pass
+                        _wait = None
                     # рус → классические арабские термины (музыка→المعازف), если в запросе нет арабского
                     if _q and not re.search(r'[؀-ۿ]', _q):
                         try:
@@ -1737,10 +1737,21 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             pass
                     try:
                         _data = await _rag_query(_q, source=_src, n=5)
-                        await update.message.reply_text(_rag_fmt(_data), parse_mode='HTML',
-                                                        disable_web_page_preview=True)
+                        _out = _rag_fmt(_data)
+                        if _wait:
+                            try:
+                                await _wait.edit_text(_out, parse_mode='HTML', disable_web_page_preview=True)
+                            except Exception:
+                                await update.message.reply_text(_out, parse_mode='HTML', disable_web_page_preview=True)
+                        else:
+                            await update.message.reply_text(_out, parse_mode='HTML', disable_web_page_preview=True)
                     except Exception as _e:
-                        await update.message.reply_text('⚠️ RAG временно недоступен (%s). Попробуй позже.' % str(_e)[:80])
+                        _err = '⚠️ RAG временно недоступен (%s). Попробуй позже.' % str(_e)[:90]
+                        if _wait:
+                            try: await _wait.edit_text(_err)
+                            except Exception: await update.message.reply_text(_err)
+                        else:
+                            await update.message.reply_text(_err)
                     return
     except Exception:
         pass
