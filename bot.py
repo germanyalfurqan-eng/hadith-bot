@@ -1708,6 +1708,23 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # анонимный админ группы (пишет «от имени группы») — Telegram не отдаёт его ID; считаем доверенным
             _anon = bool(getattr(update.message, 'sender_chat', None) and update.effective_chat
                          and update.message.sender_chat.id == update.effective_chat.id)
+            # 🩺 ДИАГНОСТИКА (только владелец): видит ли бот токен и что отвечает Space
+            if _low in ('раг диаг', 'раг debug', 'раг тест') and (is_owner(update) or _anon):
+                import aiohttp
+                _t = RAG_HF_TOKEN
+                _info = ['🩺 RAG диагностика:',
+                         'HF_TOKEN: %s (длина %d)' % (('задан %s…%s' % (_t[:5], _t[-3:])) if _t else '❌ ПУСТ', len(_t)),
+                         'Space: %s' % RAG_SPACE_URL]
+                try:
+                    async with aiohttp.ClientSession() as _s:
+                        _h = {'Authorization': 'Bearer ' + _t} if _t else {}
+                        async with _s.get(RAG_SPACE_URL + '/health', headers=_h,
+                                          timeout=aiohttp.ClientTimeout(total=20)) as _r:
+                            _info.append('/health → HTTP %d (%s)' % (_r.status, (await _r.text())[:60]))
+                except Exception as _e:
+                    _info.append('/health → ошибка: %s' % str(_e)[:80])
+                await update.message.reply_text('\n'.join(_info))
+                return
             # команды управления доступом (только владелец или анон-админ группы)
             if is_owner(update) or _anon:
                 _ac = _rag_access_cmd(text)
