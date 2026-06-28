@@ -1544,6 +1544,11 @@ async def _rag_query(q, source=None, narrator=None, n=5):
     async with aiohttp.ClientSession() as s:
         async with s.get(RAG_SPACE_URL + '/search', params=params, headers=headers,
                          timeout=aiohttp.ClientTimeout(total=35)) as r:
+            ctype = r.headers.get('content-type', '')
+            if r.status != 200 or 'json' not in ctype:
+                body = (await r.text())[:120]
+                hint = ' — нет доступа к Space (проверь HF_TOKEN в Railway Variables)' if r.status in (401, 403, 404) else ''
+                raise RuntimeError('HTTP %s%s' % (r.status, hint))
             return await r.json()
 
 async def _hf_keepalive(application):
@@ -1635,6 +1640,20 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await context.bot.send_chat_action(update.effective_chat.id, 'typing')
                     except Exception:
                         pass
+                    # рус → классические арабские термины (музыка→المعازف), если в запросе нет арабского
+                    if _q and not re.search(r'[؀-ۿ]', _q):
+                        try:
+                            _kw = ask_ai(
+                                "Из темы/описания хадиса выдай 3-6 КЛАССИЧЕСКИХ арабских слов, как они звучат В САМИХ ХАДИСАХ "
+                                "(пример: музыка→المعازف, вино→الخمر, сосед→الجار). Только слова через пробел, без огласовок, без пояснений.\nТема: " + _q,
+                                "Ты знаток текстов хадисов. Отвечай ТОЛЬКО арабскими словами через пробел.",
+                                owner=is_owner(update))
+                            _kw = re.sub(r"\n*⚡ \*Модель:.*$", "", _kw or "", flags=re.S)
+                            _kw = re.sub(r"[^؀-ۿ\s]", " ", _kw).strip()
+                            if _kw:
+                                _q = _kw
+                        except Exception:
+                            pass
                     try:
                         _data = await _rag_query(_q, source=_src, n=5)
                         await update.message.reply_text(_rag_fmt(_data), parse_mode='HTML',
