@@ -1173,18 +1173,17 @@ def ask_special(prompt, system=None):
     return None, None
 
 def ask_ai(prompt, system=None, owner=False, max_tokens=None):
-    if ai_kill_active():   # 🚨 авто-рубильник: ИИ выключен (спам/вручную) — не дёргаем ничего
-        return "⏸ ИИ временно на паузе (защита от спама). Включит владелец."
+    # 🚨 авто-рубильник убран сверху: он защищал ПЛАТНЫЙ DeepSeek от спама. Теперь бесплатный Groq первый → бесплатные работают ВСЕГДА (эндпоинты сами rate-лимитят), килл гейтит ТОЛЬКО DeepSeek (ниже). Чинит «рубильник сам включается».
     if system is None:
         system = f"Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском. Сегодняшняя дата: {datetime.now().strftime('%d.%m.%Y')}."
     # 🆓 БЕСПЛАТНЫЕ ИИ — доступны ВСЕМ (указ владельца #379: сначала бесплатные, DeepSeek потом). Порядок Groq→Gemini→OpenRouter→DeepSeek.
     g = ask_groq(prompt, system, max_tokens)   # 1) Groq (free, очень быстрый)
     if g and not str(g).startswith("⚠️"):
-        return g
+        return g + "\n\n⚡ *Модель:* 🆓 Groq (Llama 3.3 70B) — бесплатно"
     if GEMINI_API_KEY:                          # 2) Gemini (free)
         _ga = ask_gemini(prompt, system)
         if _ga and not str(_ga).startswith("⚠️"):
-            return _ga
+            return _ga + "\n\n⚡ *Модель:* 🆓 Gemini — бесплатно"
     модели = [
         "meta-llama/llama-3.3-70b-instruct:free",
         "deepseek/deepseek-r1:free",
@@ -1233,11 +1232,11 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None):
                 continue
         except:
             continue
-    # 4) 💎 DeepSeek (ПЛАТНЫЙ) — только владельцу ИЛИ когда «дипсик всем вкл» (_AI_PUBLIC_OFF=False). Бесплатные выше уже пробовались.
-    if (owner or not _AI_PUBLIC_OFF) and DEEPSEEK_API_KEY:
+    # 4) 💎 DeepSeek (ПЛАТНЫЙ) — только владельцу ИЛИ «дипсик всем вкл» (_AI_PUBLIC_OFF=False), И не при killswitch. Бесплатные выше молчат.
+    if not ai_kill_active() and (owner or not _AI_PUBLIC_OFF) and DEEPSEEK_API_KEY:
         d = ask_deepseek(prompt, system, max_tokens or 2000)
-        if d is not None:
-            return d
+        if d is not None and not str(d).startswith("⚠️"):
+            return d + "\n\n💎 *Модель:* DeepSeek (платный — бесплатные были недоступны)"
     return None
 
 def ask_ai_with_memory(prompt, owner=True):
