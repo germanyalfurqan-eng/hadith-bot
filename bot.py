@@ -1703,14 +1703,17 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _low = text.lower().strip()
         if _low == 'раг' or _low.startswith(('раг ', 'rag ')):
             _uid = update.effective_user.id if update.effective_user else 0
-            # команды управления доступом (только владелец)
-            if is_owner(update):
+            # анонимный админ группы (пишет «от имени группы») — Telegram не отдаёт его ID; считаем доверенным
+            _anon = bool(getattr(update.message, 'sender_chat', None) and update.effective_chat
+                         and update.message.sender_chat.id == update.effective_chat.id)
+            # команды управления доступом (только владелец или анон-админ группы)
+            if is_owner(update) or _anon:
                 _ac = _rag_access_cmd(text)
                 if _ac is not None:
                     await update.message.reply_text(_ac)
                     return
-            # гейт доступа
-            if not _rag_allowed(_uid):
+            # гейт доступа: владелец / анон-админ группы / белый список / «всем вкл»
+            if not (is_owner(update) or _anon or _rag_allowed(_uid)):
                 if update.effective_chat and update.effective_chat.type == 'private':
                     await update.message.reply_text('🔒 RAG-поиск пока доступен только владельцу. Скоро откроем.')
                 return
