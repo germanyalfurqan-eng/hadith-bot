@@ -4259,6 +4259,9 @@ async def _api_serve(application=None):
             except Exception as e: out['groq_test'] = 'EXC:'+str(e)[:80]
             try: out['gemini_test'] = str(await loop.run_in_executor(None, ask_gemini, "ответь одним словом: тест", None))[:120]
             except Exception as e: out['gemini_test'] = 'EXC:'+str(e)[:80]
+            try: out['ask_ai_test'] = str(await loop.run_in_executor(None, ask_ai, "ответь одним словом: тест", None, False, 900))[:120]
+            except Exception as e: out['ask_ai_test'] = 'EXC:'+str(e)[:80]
+            out['kill'] = ai_kill_active()
         return _cors(web.json_response(out))
     async def opt(r): return _cors(web.Response(text=''))
     async def worklog(r):
