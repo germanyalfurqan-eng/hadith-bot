@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v788</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v789</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v788';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v789';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -9045,34 +9045,28 @@ async function showNarratorBio(name, out){
     out.appendChild(fi);
     if(out.dataset&&out.dataset.noPartBtns){ /* кнопки участия уже сверху (narrOpen) — дубль не строим (R45, замечание «зачем два раза») */ }
     else{
-    // M501/v699 (указ владельца, «вакханалия»): ОДНА кнопка вместо двух. Главное — точные цепи; «по тексту имени» — фильтром ВНУТРИ панели.
+    // sunnah.com-стиль «Hadith Narrated»: хадисы видны СРАЗУ (топ-5 + «показать ещё»), НЕ спрятаны за кнопкой (указ владельца «всё наглядно»). M501/v699.
     const pw=document.createElement('div'); pw.style.cssText='margin:4px 0 8px';
     const short2=name.split(' ').slice(0,3).join(' ');
     const _byText=()=>{ try{hap('light');}catch(e){} const q=document.getElementById('q'); if(q) q.value='"'+short2+'"'; _narrBypass=true;
       try{ const nM=document.getElementById('narrModal'); if(nM) nM.style.display='none'; }catch(e){} runSearch(true); };
-    const allb=document.createElement('button'); allb.className='mini';
-    allb.style.cssText='width:100%;padding:9px;border:1px solid #2e6b9b;color:#bfe0f5;background:#16314d;border-radius:9px;font-size:13px;font-weight:600';
-    allb.textContent='📜 Хадисы, которые он передаёт';
-    allb.onclick=async()=>{ try{hap('light');}catch(e){}
-      let places=null;
-      if(c){ allb.disabled=true; allb.textContent='⏳ ищу…'; try{ places=await dzPart(c[0]); }catch(e){} }
-      if(places&&places.length){
-        try{ await loadBooksMap(); }catch(e){}
-        allb.style.display='none';
-        const bx2=document.createElement('div');
-        const lb2=document.createElement('div'); lb2.className='hint'; lb2.style.cssText='font-size:12px;margin:2px 0 4px'; lb2.textContent='📜 Участие в хадисах (точно по цепям): мест '+places.length+':';
-        bx2.appendChild(lb2); const ls2=document.createElement('div'); bx2.appendChild(ls2);
-        let sh2=0; const mr2=document.createElement('button'); mr2.className='mini'; mr2.style.cssText='margin-top:6px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px';
-        const dr2=()=>{ places.slice(sh2,sh2+30).forEach(p=>ls2.appendChild(_dzPlaceRow(p[0],p[1],p[2]))); sh2=Math.min(places.length,sh2+30);
-          mr2.textContent='⬇️ Показать ещё ('+(places.length-sh2)+')'; mr2.style.display=sh2>=places.length?'none':'block'; };
-        mr2.onclick=dr2; dr2(); bx2.appendChild(mr2);
-        const tline=document.createElement('button'); tline.className='mini'; tline.style.cssText='margin-top:6px;width:100%;padding:7px;border:1px solid var(--border);border-radius:9px;font-size:12px;color:var(--hint)';
-        tline.textContent='🔎 Также по тексту имени (где назван целиком)';
-        tline.onclick=_byText; bx2.appendChild(tline);
-        pw.parentNode.insertBefore(bx2, pw.nextSibling);
-      } else { _byText(); }   // нет разобранных мест (или нет кода) → сразу по тексту имени
-    };
-    pw.appendChild(allb);
+    let _places=null; if(c){ try{ _places=await dzPart(c[0]); }catch(e){} }   // кэш-шард (уже грузился для счётчика) — дёшево
+    if(_places && _places.length){
+      try{ await loadBooksMap(); }catch(e){}
+      const lb=document.createElement('div'); lb.style.cssText='font-size:13px;font-weight:600;color:#bcd2ff;margin:2px 0 5px'; lb.textContent='📜 Хадисы, которые он передаёт ('+_places.length+'):';
+      pw.appendChild(lb);
+      const ls=document.createElement('div'); pw.appendChild(ls);
+      let sh=0; const mr=document.createElement('button'); mr.className='mini'; mr.style.cssText='margin-top:6px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px;font-size:12.5px';
+      const draw=(n)=>{ _places.slice(sh,sh+n).forEach(p=>ls.appendChild(_dzPlaceRow(p[0],p[1],p[2]))); sh=Math.min(_places.length,sh+n);
+        mr.textContent='⬇️ Показать ещё ('+(_places.length-sh)+')'; mr.style.display=sh>=_places.length?'none':'block'; };
+      mr.onclick=()=>draw(30); draw(5);   // топ-5 сразу видно, дальше по 30
+      pw.appendChild(mr);
+      const tline=document.createElement('button'); tline.className='mini'; tline.style.cssText='margin-top:6px;width:100%;padding:7px;border:1px solid var(--border);border-radius:9px;font-size:12px;color:var(--hint)';
+      tline.textContent='🔎 Также по тексту имени (где назван целиком)'; tline.onclick=_byText; pw.appendChild(tline);
+    } else {
+      const allb=document.createElement('button'); allb.className='mini'; allb.style.cssText='width:100%;padding:9px;border:1px solid #2e6b9b;color:#bfe0f5;background:#16314d;border-radius:9px;font-size:13px;font-weight:600';
+      allb.textContent='📜 Хадисы, которые он передаёт (по тексту имени)'; allb.onclick=_byText; pw.appendChild(allb);
+    }
     out.appendChild(pw);
     }   // конец else (дубль кнопок не строим при noPartBtns)
   }catch(e){}
@@ -9731,7 +9725,7 @@ async function _codifHighlight(text, card, out, place){
     if(names.length){
       setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
         highlightNarratorsInDiv(ad, names, async nm=>{ const id=f2id[nm]; out.style.display='block'; let c=null; try{ c=await _narrCard(id); }catch(e){}
-          showNarratorBio((c&&c[1])||nm, out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }, f2id); }
+          openNarratorRijal((c&&c[1])||nm); }, f2id);   /* не рвём карточку хадиса — равий открывается модалкой (как в поиске), указ владельца */ }
         try{ highlightRelationalInDiv(ad); }catch(e){} }); }catch(e){} }, 0);
       return true;
     }
@@ -9743,7 +9737,7 @@ async function _codifHighlight(text, card, out, place){
   for(const _p of _pairs){ f2id[_p[0]]=_p[1]; names.push(_p[0]); }
   setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
     highlightNarratorsInDiv(ad, names, async nm=>{ const id=f2id[nm]; out.style.display='block'; let c=null; try{ c=await _narrCard(id); }catch(e){}
-      showNarratorBio((c&&c[1])||nm, out); try{ out.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} }, f2id); }
+      openNarratorRijal((c&&c[1])||nm); }, f2id);   /* не рвём карточку хадиса — равий открывается модалкой (как в поиске), указ владельца */ }
     try{ highlightRelationalInDiv(ad); }catch(e){} }); }catch(e){} }, 0);
   return true;
 }
