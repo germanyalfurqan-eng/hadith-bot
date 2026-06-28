@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v786</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v784</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v786';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v784';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8705,12 +8705,7 @@ function _ttLinkRow(bid,page,mid){
   if(mid) w.appendChild(mk('👤 موسوعة','#e8b04a',()=>openLink('https://shamela.ws/narrator/'+mid)));
   return w;
 }
-// #369 (заявка владельца «порядок критиков как sunnah, не бардак»): арабская карта критиков → год смерти (هـ) = хронология/авторитет. Свод сортируется по ней (ранние имамы первыми), а не по среднему баллу.
-const _CRIT_AR_ORD={'يحيي بن معين':233,'ابن معين':233,'علي بن المديني':234,'ابن المديني':234,'احمد بن حنبل':241,'ابن حنبل':241,'عمرو بن علي':249,'الفلاس':249,'البخاري':256,'الجوزجاني':259,'العجلي':261,'مسلم':261,'ابو زرعة':264,'ابو زرعة الرازي':264,'ابو داود':275,'ابو داود السجستاني':275,'ابو حاتم':277,'ابو حاتم الرازي':277,'الترمذي':279,'البزار':292,'النسائي':303,'الساجي':307,'الطبري':310,'العقيلي':322,'ابن ابي حاتم':327,'ابن حبان':354,'ابن عدي':365,'الدارقطني':385,'ابن شاهين':385,'الحاكم':405,'ابن حزم':456,'ابن عبد البر':463,'الخطيب':463,'المزي':742,'الذهبي':748,'ابن حجر':852,'العسقلاني':852};
-function _critArOrd(n){ let s=''; try{ s=stripDiac(fold(String(n||''))).replace(/^(و|ف|قال|سمعت|عن|سالت|الحافظ|الامام)\s+/,'').trim(); }catch(e){ s=String(n||'').trim(); }
-  if(_CRIT_AR_ORD[s]!=null) return _CRIT_AR_ORD[s];
-  for(const k in _CRIT_AR_ORD){ if(s.indexOf(k)>=0||k.indexOf(s)>=0) return _CRIT_AR_ORD[k]; }   // вариант имени (с куньей/нисбой)
-  return 9999; }   // неизвестный критик — в конец
+// порядок критиков: эталонные 48 (_critOrd по рус.имени) → но у нас араб.имена; группируем по критику, таʿдиль-перевес вперёд
 async function renderTestimoniesCard(mid, host){
   if(mid==null) return; let list=null; try{ list=await _testimGet(+mid); }catch(e){}
   if(!list || !list.length) return;
@@ -8731,8 +8726,7 @@ async function renderTestimoniesCard(mid, host){
       +'<div style="font-size:11px;color:var(--hint);margin-top:4px">⚖️ Правило: تصديق = 2 свидетельства из 48 муʿтабаров (1 — не توثيق). Сахихайн без джарха = 2. Поздние (Ибн Хаджар/Захаби) — не свидетельство. 🤖 Формула, не ИИ — проверь по ссылкам.</div>';
     bd.appendChild(nb); }
   // сортировка критиков: средний балл по убыванию (хвалившие вперёд) — наглядно
-  order.sort((a,b)=>{ const oa=_critArOrd(a), ob=_critArOrd(b); if(oa!==ob) return oa-ob;   // #369: порядок критиков по хронологии/авторитету (ранние имамы первыми), как у sunnah.com — НЕ по среднему баллу
-    const sc=arr=>arr.reduce((s,c)=>s+(_TT_SCORE[c[1]]||0),0)/arr.length; return sc(byc[b])-sc(byc[a]); });   // тай-брейк (равная эпоха) — по баллу
+  order.sort((a,b)=>{ const sc=arr=>arr.reduce((s,c)=>s+(_TT_SCORE[c[1]]||0),0)/arr.length; return sc(byc[b])-sc(byc[a]); });
   order.forEach(cr=>{ const items=byc[cr];
     const row=document.createElement('div'); row.style.cssText='border-bottom:1px solid var(--border);padding:7px 0';
     const terms=[...new Set(items.map(c=>c[1]))];
@@ -9034,34 +9028,30 @@ async function showNarratorBio(name, out){
     out.appendChild(fi);
     if(out.dataset&&out.dataset.noPartBtns){ /* кнопки участия уже сверху (narrOpen) — дубль не строим (R45, замечание «зачем два раза») */ }
     else{
-    // M501/v699 (указ владельца, «вакханалия»): ОДНА кнопка вместо двух. Главное — точные цепи; «по тексту имени» — фильтром ВНУТРИ панели.
-    const pw=document.createElement('div'); pw.style.cssText='margin:4px 0 8px';
+    const pw=document.createElement('div'); pw.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px';
+    const hb2=document.createElement('button'); hb2.className='mini'; hb2.style.cssText='flex:1;min-width:46%;padding:8px;border:1px solid var(--border);border-radius:9px;font-size:12px';
     const short2=name.split(' ').slice(0,3).join(' ');
-    const _byText=()=>{ try{hap('light');}catch(e){} const q=document.getElementById('q'); if(q) q.value='"'+short2+'"'; _narrBypass=true;
+    hb2.textContent='🔎 По тексту имени (где назван целиком)';
+    hb2.onclick=()=>{ try{hap('light');}catch(e){} const q=document.getElementById('q'); if(q) q.value='"'+short2+'"'; _narrBypass=true;
       try{ const nM=document.getElementById('narrModal'); if(nM) nM.style.display='none'; }catch(e){} runSearch(true); };
-    const allb=document.createElement('button'); allb.className='mini';
-    allb.style.cssText='width:100%;padding:9px;border:1px solid #2e6b9b;color:#bfe0f5;background:#16314d;border-radius:9px;font-size:13px;font-weight:600';
-    allb.textContent='📜 Хадисы, которые он передаёт';
-    allb.onclick=async()=>{ try{hap('light');}catch(e){}
-      let places=null;
-      if(c){ allb.disabled=true; allb.textContent='⏳ ищу…'; try{ places=await dzPart(c[0]); }catch(e){} }
-      if(places&&places.length){
+    pw.appendChild(hb2);
+    if(c){ const cb2=document.createElement('button'); cb2.className='mini'; cb2.style.cssText='flex:1;min-width:46%;padding:8px;border:1px solid #2e6b9b;color:#bfe0f5;background:#16314d;border-radius:9px;font-size:12px';
+      cb2.textContent='🧬 По разобранным цепям (точнее: ловит и короткие формы)';
+      cb2.onclick=async()=>{ cb2.disabled=true; cb2.textContent='⏳…';
+        const places=await dzPart(c[0]);
+        if(!places||!places.length){ cb2.textContent='🧬 мест пока нет (Э1.1)'; cb2.disabled=false; return; }   // QA-свип: возвращаем кнопку в активное (была застрявшая disabled при пустом результате — нельзя повторить)
         try{ await loadBooksMap(); }catch(e){}
-        allb.style.display='none';
+        cb2.style.display='none';
         const bx2=document.createElement('div');
-        const lb2=document.createElement('div'); lb2.className='hint'; lb2.style.cssText='font-size:12px;margin:2px 0 4px'; lb2.textContent='📜 Участие в хадисах (точно по цепям): мест '+places.length+':';
+        const lb2=document.createElement('div'); lb2.className='hint'; lb2.style.cssText='font-size:12px;margin:2px 0 4px'; lb2.textContent='🧬 Точное участие (код #'+c[0]+'): мест '+places.length+':';
         bx2.appendChild(lb2); const ls2=document.createElement('div'); bx2.appendChild(ls2);
         let sh2=0; const mr2=document.createElement('button'); mr2.className='mini'; mr2.style.cssText='margin-top:6px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px';
         const dr2=()=>{ places.slice(sh2,sh2+30).forEach(p=>ls2.appendChild(_dzPlaceRow(p[0],p[1],p[2]))); sh2=Math.min(places.length,sh2+30);
-          mr2.textContent='⬇️ Показать ещё ('+(places.length-sh2)+')'; mr2.style.display=sh2>=places.length?'none':'block'; };
+          mr2.textContent='⬇️ Показать ещё ниже ('+(places.length-sh2)+')'; mr2.style.display=sh2>=places.length?'none':'block'; };
         mr2.onclick=dr2; dr2(); bx2.appendChild(mr2);
-        const tline=document.createElement('button'); tline.className='mini'; tline.style.cssText='margin-top:6px;width:100%;padding:7px;border:1px solid var(--border);border-radius:9px;font-size:12px;color:var(--hint)';
-        tline.textContent='🔎 Также по тексту имени (где назван целиком)';
-        tline.onclick=_byText; bx2.appendChild(tline);
         pw.parentNode.insertBefore(bx2, pw.nextSibling);
-      } else { _byText(); }   // нет разобранных мест (или нет кода) → сразу по тексту имени
-    };
-    pw.appendChild(allb);
+      };
+      pw.appendChild(cb2); }
     out.appendChild(pw);
     }   // конец else (дубль кнопок не строим при noPartBtns)
   }catch(e){}
