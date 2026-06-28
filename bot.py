@@ -1176,18 +1176,31 @@ def ask_special(prompt, system=None):
         return ask_gemini(prompt, system), "Gemini"
     return None, None
 
+# 📊 счётчик ИИ-вызовов за день (для подписи «сколько осталось» — указ владельца)
+_AI_DAY = {'d': '', 'n': 0}
+_AI_FREE_DAILY = 2500   # суммарный беспл. лимит/день (Groq+Gemini+OpenRouter, ориентир)
+def _ai_tick():
+    t = datetime.now().strftime('%Y-%m-%d')
+    if _AI_DAY['d'] != t:
+        _AI_DAY['d'] = t; _AI_DAY['n'] = 0
+    _AI_DAY['n'] += 1
+def _ai_left():
+    n = _AI_DAY['n']
+    return "📊 осталось ~%d из ~%d беспл. ИИ-ответов/день" % (max(0, _AI_FREE_DAILY - n), _AI_FREE_DAILY)
+
 def ask_ai(prompt, system=None, owner=False, max_tokens=None):
     # 🚨 авто-рубильник убран сверху: он защищал ПЛАТНЫЙ DeepSeek от спама. Теперь бесплатный Groq первый → бесплатные работают ВСЕГДА (эндпоинты сами rate-лимитят), килл гейтит ТОЛЬКО DeepSeek (ниже). Чинит «рубильник сам включается».
+    _ai_tick()
     if system is None:
         system = f"Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском. Сегодняшняя дата: {datetime.now().strftime('%d.%m.%Y')}."
     # 🆓 БЕСПЛАТНЫЕ ИИ — доступны ВСЕМ (указ владельца #379: сначала бесплатные, DeepSeek потом). Порядок Groq→Gemini→OpenRouter→DeepSeek.
     g = ask_groq(prompt, system, max_tokens)   # 1) Groq (free, очень быстрый)
     if g and not str(g).startswith("⚠️"):
-        return g + "\n\n⚡ *Модель:* 🆓 Groq (Llama 3.3 70B) — бесплатно"
+        return g + "\n\n⚡ *Модель:* 🆓 Groq (Llama 3.3 70B) — бесплатно\n" + _ai_left()
     if GEMINI_API_KEY:                          # 2) Gemini (free)
         _ga = ask_gemini(prompt, system)
         if _ga and not str(_ga).startswith("⚠️"):
-            return _ga + "\n\n⚡ *Модель:* 🆓 Gemini — бесплатно"
+            return _ga + "\n\n⚡ *Модель:* 🆓 Gemini — бесплатно\n" + _ai_left()
     модели = [
         "meta-llama/llama-3.3-70b-instruct:free",
         "deepseek/deepseek-r1:free",
@@ -1229,7 +1242,7 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None):
                 if max_tokens is None and len(ответ) > 2500:   # обрез только для обычного чата; перевод (max_tokens задан) — целиком
                     ответ = ответ[:2500] + "\n\n...(ответ сокращён)"
                 ответ = ответ.replace("\n\n\n", "\n\n")
-                return f"{ответ}\n\n⚡ *Модель:* {имя_модели}"
+                return f"{ответ}\n\n⚡ *Модель:* {имя_модели}\n" + _ai_left()
             elif r.status_code == 429:
                 continue
             else:
@@ -1240,7 +1253,7 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None):
     if not ai_kill_active() and (owner or not _AI_PUBLIC_OFF) and DEEPSEEK_API_KEY:
         d = ask_deepseek(prompt, system, max_tokens or 2000)
         if d is not None and not str(d).startswith("⚠️"):
-            return d + "\n\n💎 *Модель:* DeepSeek (платный — бесплатные были недоступны)"
+            return d + "\n\n💎 *Модель:* DeepSeek (платный — бесплатные были недоступны)\n" + _ai_left()
     return None
 
 def ask_ai_with_memory(prompt, owner=True):
@@ -1597,6 +1610,7 @@ def _rag_fmt(data):
         if h.get('app_url'): links.append('📱 <a href="%s">В аппе</a>' % h['app_url'])
         if links: lines.append(' · '.join(links))
         lines.append('')
+    lines.append('🔎 <b>Ответил:</b> RAG (ядро: первоисточники + риджаль) · поиск без лимита')
     return '\n'.join(lines)[:4000]
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
