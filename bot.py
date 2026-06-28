@@ -1529,6 +1529,71 @@ def _tts_mp3(text):
     except Exception:
         return None
 
+# ===== 🧩 RAG-АССИСТЕНТ: оперативный поиск по ядру (41 первоисточник + 81 риджаль) на HF Space =====
+# Команды (владелец в ЛС + чат @jamaat_ru): «раг <запрос>» (по всему ядру) ·
+#   «найди в <источник>: <запрос>» (скоуп) · «раг в <источник>: <запрос>».
+RAG_SPACE_URL = os.environ.get('HF_SPACE_URL', 'https://muslimoontt2024-muslimoon-rag.hf.space').rstrip('/')
+RAG_HF_TOKEN = os.environ.get('HF_TOKEN', '')
+
+async def _rag_query(q, source=None, narrator=None, n=5):
+    import aiohttp
+    params = {'q': q or '', 'n': str(n)}
+    if source: params['in'] = source
+    if narrator: params['by'] = narrator
+    headers = {'Authorization': 'Bearer ' + RAG_HF_TOKEN} if RAG_HF_TOKEN else {}
+    async with aiohttp.ClientSession() as s:
+        async with s.get(RAG_SPACE_URL + '/search', params=params, headers=headers,
+                         timeout=aiohttp.ClientTimeout(total=35)) as r:
+            return await r.json()
+
+async def _hf_keepalive(application):
+    """Пинг Space /health каждые 5 мин — чтобы НИКОГДА не засыпал (указ владельца)."""
+    import aiohttp
+    headers = {'Authorization': 'Bearer ' + RAG_HF_TOKEN} if RAG_HF_TOKEN else {}
+    await asyncio.sleep(50)
+    while True:
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get(RAG_SPACE_URL + '/health', headers=headers,
+                                 timeout=aiohttp.ClientTimeout(total=20)) as r:
+                    await r.read()
+        except Exception:
+            pass
+        await asyncio.sleep(300)
+
+def _rag_parse(text):
+    """'раг|найди [в <источник>:] <запрос>' → (source, query). Скоуп — после 'в' до ':'."""
+    t = text.strip()
+    low = t.lower()
+    for pref in ('найди', 'раг', 'rag'):
+        if low.startswith(pref):
+            t = t[len(pref):].strip(); low = t.lower(); break
+    source = None
+    if low.startswith('в ') and ':' in t:
+        head, q = t[2:].split(':', 1)
+        source = head.strip(); t = q.strip()
+    return source, t.strip()
+
+def _rag_fmt(data):
+    res = (data or {}).get('results', [])
+    if not res:
+        return '🔎 Ничего не нашёл. Попробуй точную арабскую фразу (2-4 слова) или укажи источник: «найди в бухари: <фраза>».'
+    src = data.get('in'); by = data.get('by')
+    head = '🔎 Найдено: %d' % data.get('count', len(res))
+    if src: head += ' · в «%s»' % src
+    if by: head += ' · передатчик «%s»' % by
+    lines = [head, '']
+    for i, h in enumerate(res, 1):
+        lines.append('%s <b>%s — %s</b> №%s' % (h.get('tier_label', ''), h.get('name', ''), h.get('author', ''), h.get('num', '')))
+        sn = (h.get('snippet') or '')[:280]
+        if sn: lines.append(sn)
+        links = []
+        if h.get('maktaba_url'): links.append('📖 <a href="%s">Мактаба</a>' % h['maktaba_url'])
+        if h.get('app_url'): links.append('📱 <a href="%s">В аппе</a>' % h['app_url'])
+        if links: lines.append(' · '.join(links))
+        lines.append('')
+    return '\n'.join(lines)[:4000]
+
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
@@ -1554,6 +1619,29 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
             await update.message.reply_text(f"📥 Заявка #{rid} со скрином записана ✅ (уникальный № — ищи в журнале командой «заявки»).")
             return
+    except Exception:
+        pass
+
+    # 🧩 RAG-поиск по ядру (первоисточники+риджаль): «раг <q>» / «найди в <источник>: <q>».
+    # Доступ: владелец в ЛС + чат @jamaat_ru (группы). Анти-спам — на стороне Space (по IP).
+    try:
+        _low = text.lower()
+        if _low.startswith(('раг ', 'rag ')) or _low.startswith('найди в ') or _low.startswith('раг в '):
+            _ct = update.effective_chat.type if update.effective_chat else ''
+            if is_owner(update) or _ct in ('group', 'supergroup'):
+                _src, _q = _rag_parse(text)
+                if _q or _src:
+                    try:
+                        await context.bot.send_chat_action(update.effective_chat.id, 'typing')
+                    except Exception:
+                        pass
+                    try:
+                        _data = await _rag_query(_q, source=_src, n=5)
+                        await update.message.reply_text(_rag_fmt(_data), parse_mode='HTML',
+                                                        disable_web_page_preview=True)
+                    except Exception as _e:
+                        await update.message.reply_text('⚠️ RAG временно недоступен (%s). Попробуй позже.' % str(_e)[:80])
+                    return
     except Exception:
         pass
 
@@ -5521,6 +5609,11 @@ async def _setup(application):
         asyncio.create_task(_razbory_fetch_bg(application))
     except Exception as e:
         print("razbory fetch start failed:", e)
+    # 🧩 RAG keep-alive: пинг HF Space каждые 5 мин, чтобы оперативная база НИКОГДА не засыпала
+    try:
+        asyncio.create_task(_hf_keepalive(application))
+    except Exception as e:
+        print("hf keepalive start failed:", e)
 
 async def _razbory_fetch_bg(application):
     """#147: разово тянет разборы /11..173 из @hadis_isnad (бот — участник): текст/аудио→Whisper→data/razbory.json.
