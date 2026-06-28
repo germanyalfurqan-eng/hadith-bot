@@ -1594,26 +1594,52 @@ def _rag_parse(text):
         source = head.strip(); t = q.strip()
     return source, t.strip()
 
-def _rag_fmt(data):
+def _rag_synth(question, hits, owner=False):
+    """NotebookLM-стиль: связный ответ по нашим источникам с цитатами [N]. Не выдумывает."""
+    if not hits:
+        return None
+    ctx = []
+    for i, h in enumerate(hits, 1):
+        ctx.append('[%d] (%s) %s — %s №%s\n%s' % (i, h.get('tier_label', ''), h.get('name', ''),
+                   h.get('author', ''), h.get('num', ''), (h.get('arabic') or h.get('snippet') or '')[:900]))
+    try:
+        ans = ask_ai(
+            'Вопрос: %s\n\nОтрывки из НАШИХ первоисточников:\n%s' % (question, '\n\n'.join(ctx)),
+            'Ты — ассистент Муслимун. Ответь по-русски КРАТКО и по делу ТОЛЬКО на основе отрывков, ссылайся на источники в виде [N]. '
+            'Соблюдай приоритет: Коран > первоисточник хадиса (Бухари/Муслим/сунан) > сборники > тафсир. '
+            'Если в отрывках нет ответа — честно скажи. Не выдумывай. Хукм о достоверности сам не выноси.',
+            owner=owner)
+        ans = re.sub(r"\n*⚡ \*Модель:.*$", "", ans or "", flags=re.S).strip()
+        ans = re.sub(r"\n*📊.*$", "", ans, flags=re.S).strip()
+        return ans or None
+    except Exception:
+        return None
+
+def _rag_fmt(data, answer=None):
     res = (data or {}).get('results', [])
     if not res:
-        return '🔎 Ничего не нашёл. Попробуй точную арабскую фразу (2-4 слова) или укажи источник: «найди в бухари: <фраза>».'
+        return '🔎 Ничего не нашёл. Попробуй точную арабскую фразу (2-4 слова) или укажи источник: «раг в бухари: <фраза>».'
     src = data.get('in'); by = data.get('by')
-    head = '🔎 Найдено: %d' % data.get('count', len(res))
-    if src: head += ' · в «%s»' % src
-    if by: head += ' · передатчик «%s»' % by
-    lines = [head, '']
+    lines = []
+    if answer:
+        lines += ['🧠 ' + answer, '']
+    head = '📚 <b>Источники</b> (найдено: %d' % data.get('count', len(res))
+    if src: head += ', в «%s»' % src
+    if by: head += ', передатчик «%s»' % by
+    head += '):'
+    lines.append(head)
     for i, h in enumerate(res, 1):
-        lines.append('%s <b>%s — %s</b> №%s' % (h.get('tier_label', ''), h.get('name', ''), h.get('author', ''), h.get('num', '')))
-        sn = (h.get('snippet') or '')[:280]
-        if sn: lines.append(sn)
+        lines.append('%s [%d] <b>%s — %s</b> №%s' % (h.get('tier_label', ''), i, h.get('name', ''), h.get('author', ''), h.get('num', '')))
+        if not answer:
+            sn = (h.get('snippet') or '')[:220]
+            if sn: lines.append(sn)
         links = []
         if h.get('maktaba_url'): links.append('📖 <a href="%s">Мактаба</a>' % h['maktaba_url'])
         if h.get('app_url'): links.append('📱 <a href="%s">В аппе</a>' % h['app_url'])
         if links: lines.append(' · '.join(links))
-        lines.append('')
-    lines.append('🔎 <b>Ответил:</b> RAG (ядро: первоисточники + риджаль) · поиск без лимита')
-    return '\n'.join(lines)[:4000]
+    lines.append('')
+    lines.append('🔎 <b>Ответил:</b> RAG (наша база: первоисточники + риджаль)')
+    return '\n'.join(lines)[:4090]
 
 # 🔐 ДОСТУП к RAG (указ владельца): пока только владелец; рубильник «всем» + белый/чёрный списки.
 # ⚠️ Railway ephemeral — список сбрасывается при редеплое (владелец перевыставляет; владелец доступен ВСЕГДА).
@@ -1771,7 +1797,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     _seen.add(_key); _merged.append(_r)
                             if len(_merged) >= 5:
                                 break
-                        _out = _rag_fmt({'count': len(_merged), 'in': _src, 'results': _merged[:5]})
+                        _top = _merged[:5]
+                        # NotebookLM-стиль: связный ответ по источникам (если что-то нашли)
+                        _ans = _rag_synth(_q, _top, owner=is_owner(update)) if _top else None
+                        _out = _rag_fmt({'count': len(_top), 'in': _src, 'results': _top}, answer=_ans)
                         if _wait:
                             try:
                                 await _wait.edit_text(_out, parse_mode='HTML', disable_web_page_preview=True)
