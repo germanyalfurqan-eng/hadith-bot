@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v786</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v787</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v786';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v787';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8733,18 +8733,24 @@ async function renderTestimoniesCard(mid, host){
   // сортировка критиков: средний балл по убыванию (хвалившие вперёд) — наглядно
   order.sort((a,b)=>{ const oa=_critArOrd(a), ob=_critArOrd(b); if(oa!==ob) return oa-ob;   // #369: порядок критиков по хронологии/авторитету (ранние имамы первыми), как у sunnah.com — НЕ по среднему баллу
     const sc=arr=>arr.reduce((s,c)=>s+(_TT_SCORE[c[1]]||0),0)/arr.length; return sc(byc[b])-sc(byc[a]); });   // тай-брейк (равная эпоха) — по баллу
-  order.forEach(cr=>{ const items=byc[cr];
-    const row=document.createElement('div'); row.style.cssText='border-bottom:1px solid var(--border);padding:7px 0';
+  const _TT_TOP=6;   // sunnah.com-стиль: показываем топ-критиков, остальные — по «показать всех» (без «вакханалии»)
+  order.forEach((cr,idx)=>{ const items=byc[cr];
+    const row=document.createElement('div'); row.dataset.ttRow='1'; row.style.cssText='border-bottom:1px solid var(--border);padding:7px 0';
+    if(idx>=_TT_TOP) row.style.display='none';
     const terms=[...new Set(items.map(c=>c[1]))];
     const badges=terms.map(t=>{ const sc=_TT_SCORE[t]||0; const col=sc>0?'#2e9b5b':(sc<0?'#9b3b3b':'#7a8693'); const bg=sc>0?'rgba(46,155,91,.14)':(sc<0?'rgba(248,113,113,.12)':'rgba(122,134,147,.12)');
       return '<span dir="rtl" style="font-size:16px;border-radius:7px;padding:1px 9px;margin:0 0 0 4px;background:'+bg+';color:'+(sc>0?'#7fe3bf':(sc<0?'#ff9b7a':'#9aa7b5'))+';border:1px solid '+col+'">'+esc(t)+'</span>'; }).join('');
     row.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap"><span dir="rtl" style="font-size:16px;'+_AF+';color:#e8d4f2">'+esc(cr)+'</span><span>'+badges+'</span></div>';
-    // оригинал первой цитаты + ссылка
     const c0=items[0];
     if(c0[3]){ const q=document.createElement('div'); q.style.cssText='direction:rtl;text-align:right;font-size:16px;line-height:1.95;color:var(--hint);margin-top:3px'; q.textContent='…'+c0[3]+'…'; row.appendChild(q); }
     row.appendChild(_ttLinkRow(c0[5], c0[6], mid));
     bd.appendChild(row);
   });
+  if(order.length>_TT_TOP){ const more=document.createElement('button'); more.className='mini';
+    more.style.cssText='margin-top:9px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px;font-size:12.5px;color:var(--hint)';
+    more.textContent='▾ Показать всех критиков ('+order.length+')'; let _op=false;
+    more.onclick=()=>{ _op=!_op; const rows=bd.querySelectorAll('[data-tt-row]'); rows.forEach((r,i)=>{ if(i>=_TT_TOP) r.style.display=_op?'block':'none'; }); more.textContent=_op?('▴ Свернуть до топ-'+_TT_TOP):('▾ Показать всех критиков ('+order.length+')'); };
+    bd.appendChild(more); }
   hdr.onclick=()=>{ const op=bd.style.display!=='none'; bd.style.display=op?'none':'block'; hdr.querySelector('.ttTg').textContent=op?'▸':'▾'; };
   sec.appendChild(hdr); sec.appendChild(bd); host.appendChild(sec);
 }
