@@ -1757,6 +1757,60 @@ def _rag_parse(text):
         source = head.strip(); t = q.strip()
     return source, t.strip()
 
+# коллекции с нумерацией sunnah (ara-* издания) — точный текст+перевод по номеру + рабочая ссылка sunnah.com.
+# (Ахмад/мусаннафы и пр. НЕ сюда: у них num=страница Мактабы, не номер хадиса.)
+_FAWAZ_COLS = {'bukhari', 'muslim', 'abudawud', 'tirmidhi', 'nasai', 'ibnmajah', 'malik'}
+_HRK = '[ً-ْٰـ]*'   # огласовки + тантвин + татвиль (для толерантного поиска)
+_LETCLS = {'ا': '[اأإآ]', 'أ': '[اأإآ]', 'إ': '[اأإآ]', 'آ': '[اأإآ]',
+           'ه': '[هة]', 'ة': '[هة]', 'ي': '[يى]', 'ى': '[يى]', 'و': '[وؤ]'}
+def _hl_arabic(text, terms):
+    """Выделить искомые слова в арабском тексте жирным+подчёркиванием (толерантно к огласовкам/хамзам)."""
+    if not text:
+        return ''
+    out = esc(text)
+    for t in sorted({(x or '').strip() for x in terms}, key=len, reverse=True):
+        if len(t) < 3:
+            continue
+        chars = [_LETCLS.get(c, re.escape(c)) for c in t if c.strip()]
+        if not chars:
+            continue
+        pat = _HRK.join(chars)
+        try:
+            out = re.sub('(' + pat + ')', r'<b><u>\1</u></b>', out, count=4)
+        except re.error:
+            pass
+    return out
+
+def _rag_cards(hits, terms, limit=4):
+    """Карточки хадисов: целый хадис (выделено искомое) + перевод + источник·№ + рабочая ссылка."""
+    cards = []
+    for h in hits[:limit]:
+        tok = h.get('app_token') or ''
+        m = re.match(r'r_(.+)_(\d+)$', tok)
+        slug = m.group(1) if m else None
+        num = m.group(2) if m else str(h.get('num', ''))
+        name = h.get('name', ''); ar = h.get('arabic') or h.get('snippet') or ''; ru = ''
+        if slug in _FAWAZ_COLS and num:
+            try:
+                a2, tr, _lang, _gr = get_hadith(slug, num)
+                if a2: ar = a2
+                if tr: ru = tr
+            except Exception:
+                pass
+        block = ['%s <b>%s</b> · №%s' % (h.get('tier_label', ''), name, num)]
+        block.append('<blockquote>%s</blockquote>' % _hl_arabic(ar[:1400], terms))
+        if ru:
+            block.append('🌍 ' + esc(ru[:600]))
+        link = []
+        if slug in _FAWAZ_COLS and num:
+            link.append('🔗 <a href="https://sunnah.com/%s:%s">sunnah.com</a>' % (slug, num))
+        if h.get('app_url'):
+            link.append('📱 <a href="%s">в аппе</a>' % h['app_url'])
+        if link:
+            block.append(' · '.join(link))
+        cards.append('\n'.join(block))
+    return cards
+
 def _rag_synth(question, hits, owner=False):
     """NotebookLM-стиль: связный ответ по нашим источникам с цитатами [N]. Не выдумывает."""
     if not hits:
@@ -1954,18 +2008,29 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     try:
                         # все термины ОДНИМ запросом — Space сам сделает фраза→AND→OR (без флуда по IP)
                         _qq = ' '.join(_terms) if _terms else (_q or '')
-                        _d = await _rag_query(_qq, source=_src, n=5)
-                        _top = (_d.get('results') or [])[:5]
-                        # NotebookLM-стиль: связный ответ по источникам (если что-то нашли)
-                        _ans = _rag_synth(_q, _top, owner=is_owner(update)) if _top else None
-                        _out = _rag_fmt({'count': len(_top), 'in': _src, 'results': _top}, answer=_ans)
+                        _d = await _rag_query(_qq, source=_src, n=6)
+                        _top = (_d.get('results') or [])[:6]
+                        if not _top:
+                            _none = '🔎 Ничего не нашёл по «%s». Попробуй точную арабскую фразу (2-4 слова) или «раг в бухари: <фраза>».' % _q
+                            if _wait:
+                                try: await _wait.edit_text(_none)
+                                except Exception: await update.message.reply_text(_none)
+                            else:
+                                await update.message.reply_text(_none)
+                            return
+                        _cards = _rag_cards(_top, _terms, limit=4)   # карточки: целый хадис+выделение+перевод+ссылка
+                        _hdr = '🔎 По запросу «%s»%s — карточки хадисов (%d из %d):' % (
+                            _q, (' в «%s»' % _src) if _src else '', len(_cards), len(_top))
                         if _wait:
-                            try:
-                                await _wait.edit_text(_out, parse_mode='HTML', disable_web_page_preview=True)
-                            except Exception:
-                                await update.message.reply_text(_out, parse_mode='HTML', disable_web_page_preview=True)
+                            try: await _wait.edit_text(_hdr)
+                            except Exception: await update.message.reply_text(_hdr)
                         else:
-                            await update.message.reply_text(_out, parse_mode='HTML', disable_web_page_preview=True)
+                            await update.message.reply_text(_hdr)
+                        for _c in _cards:
+                            try:
+                                await update.message.reply_text(_c, parse_mode='HTML', disable_web_page_preview=True)
+                            except Exception:
+                                await update.message.reply_text(re.sub('<[^>]+>', '', _c), disable_web_page_preview=True)
                     except Exception as _e:
                         _err = '⚠️ RAG временно недоступен (%s). Попробуй позже.' % str(_e)[:90]
                         if _wait:
