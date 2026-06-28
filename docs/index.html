@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v787</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v788</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v787';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v788';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4636,15 +4636,20 @@ async function _renderTlinkLinks(id, host, onPick){
   const _mk=(arr,lbl)=>{ if(!arr.length) return; const d=document.createElement('div'); d.style.cssText='margin-top:7px';
     d.innerHTML='<div style="color:var(--hint);font-size:12.5px;margin-bottom:4px;font-weight:600">'+lbl+' ('+arr.length+'):</div>';
     const w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;gap:5px';
-    arr.slice(0,25).forEach(([oid,rz])=>{ const cnt=_cnt(oid);
-      const row=document.createElement('div'); row.style.cssText='cursor:pointer;border:1px solid var(--border);border-radius:9px;padding:6px 10px;background:rgba(255,255,255,.03)';
+    const _SHOWN=6, _CAP=30;   // sunnah.com-стиль: топ-6 + «показать ещё» (было 25 сразу = стена-вакханалия)
+    arr.slice(0,_CAP).forEach(([oid,rz],ix)=>{ const cnt=_cnt(oid);
+      const row=document.createElement('div'); row.dataset.tlrow='1'; row.style.cssText='cursor:pointer;border:1px solid var(--border);border-radius:9px;padding:6px 10px;background:rgba(255,255,255,.03)';
+      if(ix>=_SHOWN) row.style.display='none';
       row.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="_tnm" style="font-size:15px;color:#cfe6d4;direction:rtl;text-align:right;font-weight:600;flex:1">#'+oid+'</span>'+(cnt?('<span style="flex-shrink:0;font-size:11.5px;color:#bcd2ff;background:rgba(46,107,155,.22);border:1px solid #2e6b9b;border-radius:7px;padding:1px 8px">📜 '+cnt+'</span>'):'')+'</div><div class="_tru" style="direction:ltr;text-align:left;font-size:11.5px;color:#8fa3c7;margin-top:2px"></div>';
       _narrCard(oid).then(v=>{ if(v){ const _n=row.querySelector('._tnm'); if(_n&&v[1]) _n.textContent=v[1].split(/\s+/).slice(0,4).join(' ');
         const _r=row.querySelector('._tru'); if(_r){ let ru=''; try{ ru=arNameRu(v[1],4); }catch(e){} const yr=v[4]?('† '+v[4]+' هـ'):''; _r.textContent=[ru?('≈ '+ru):'',yr].filter(Boolean).join('  ·  '); } } }).catch(()=>{});
       if(rz) row.title='зафиксировано (تهذيب الكمال): '+((typeof _ramzHuman==='function'&&_ramzHuman(rz))||rz);
       row.onclick=()=>{ _narrCard(oid).then(v=>{ if(v&&v[1]) onPick(v[1]); }).catch(()=>{}); };
       w.appendChild(row); });
-    if(arr.length>25){ const mr=document.createElement('div'); mr.style.cssText='font-size:12px;color:var(--hint);margin-top:5px;text-align:center'; mr.textContent='+ ещё '+(arr.length-25); w.appendChild(mr); }
+    if(arr.length>_SHOWN){ const mr=document.createElement('button'); mr.className='mini'; mr.style.cssText='margin-top:5px;width:100%;padding:7px;border:1px solid var(--border);border-radius:9px;font-size:12px;color:var(--hint)';
+      mr.textContent='▾ Показать ещё ('+(arr.length-_SHOWN)+')'; let _op=false;
+      mr.onclick=()=>{ _op=!_op; w.querySelectorAll('[data-tlrow]').forEach((r,i)=>{ if(i>=_SHOWN) r.style.display=_op?'block':'none'; }); mr.textContent=_op?'▴ Свернуть':('▾ Показать ещё ('+(arr.length-_SHOWN)+')'); };
+      w.appendChild(mr); }
     d.appendChild(w); ts.appendChild(d); };
   _mk(_tea,'👨‍🏫 Учители (от кого передавал)'); _mk(_stu,'👨‍🎓 Ученики (кто от него)'); _mk(_neu,'🔗 Связи по цепям (направление не определено — нет года смерти)');
   host.appendChild(ts);
