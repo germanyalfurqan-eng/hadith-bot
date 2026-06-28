@@ -1743,23 +1743,35 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         _wait = await update.message.reply_text('🔎 Ищу в нашей базе (первоисточники + риджаль)…')
                     except Exception:
                         _wait = None
-                    # рус → классические арабские термины (музыка→المعازف), если в запросе нет арабского
+                    # термины поиска: если в запросе нет арабского — попросить ОДИНОЧНЫЕ классические слова
+                    _terms = []
                     if _q and not re.search(r'[؀-ۿ]', _q):
                         try:
                             _kw = ask_ai(
-                                "Из темы/описания хадиса выдай 3-6 КЛАССИЧЕСКИХ арабских слов, как они звучат В САМИХ ХАДИСАХ "
-                                "(пример: музыка→المعازف, вино→الخمر, сосед→الجار). Только слова через пробел, без огласовок, без пояснений.\nТема: " + _q,
-                                "Ты знаток текстов хадисов. Отвечай ТОЛЬКО арабскими словами через пробел.",
+                                "Тема/вопрос про хадис. Выдай 3-6 ОДИНОЧНЫХ классических арабских СЛОВ (по одному слову, НЕ фразы), "
+                                "как они звучат в самих хадисах, каждое с новой строки (пример: музыка→المعازف и ملاهي; вино→الخمر; "
+                                "сосед→الجار). Без огласовок, без пояснений.\nТема: " + _q,
+                                "Ты знаток текстов хадисов. Только арабские одиночные слова, по одному на строку.",
                                 owner=is_owner(update))
                             _kw = re.sub(r"\n*⚡ \*Модель:.*$", "", _kw or "", flags=re.S)
-                            _kw = re.sub(r"[^؀-ۿ\s]", " ", _kw).strip()
-                            if _kw:
-                                _q = _kw
+                            _kw = re.sub(r"[^؀-ۿ\s]", " ", _kw)
+                            _terms = [w for w in _kw.split() if len(w) > 2][:5]
                         except Exception:
                             pass
+                    if not _terms:
+                        _terms = [_q] if _q else ['']
                     try:
-                        _data = await _rag_query(_q, source=_src, n=5)
-                        _out = _rag_fmt(_data)
+                        # поиск по КАЖДОМУ термину отдельно + слияние (المعازف находится сам по себе)
+                        _merged, _seen = [], set()
+                        for _tm in _terms:
+                            _d = await _rag_query(_tm, source=_src, n=5)
+                            for _r in (_d.get('results') or []):
+                                _key = (_r.get('name'), str(_r.get('num')))
+                                if _key not in _seen:
+                                    _seen.add(_key); _merged.append(_r)
+                            if len(_merged) >= 5:
+                                break
+                        _out = _rag_fmt({'count': len(_merged), 'in': _src, 'results': _merged[:5]})
                         if _wait:
                             try:
                                 await _wait.edit_text(_out, parse_mode='HTML', disable_web_page_preview=True)
