@@ -327,6 +327,9 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")   # актуа
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")   # 🆓 Groq — бесплатный, очень быстрый (указ владельца: первым). Ключ в Railway env.
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+# 🆓 GitHub Models (GPT-4o и др. бесплатно для разработчиков). Токен с правом Models. Фолбэк на GITHUB_TOKEN.
+GITHUB_MODELS_TOKEN = os.environ.get("GITHUB_MODELS_TOKEN", "") or GITHUB_TOKEN
+GITHUB_MODELS_MODEL = os.environ.get("GITHUB_MODELS_MODEL", "openai/gpt-4o-mini")
 BACKUP_SECRET = os.environ.get("BACKUP_SECRET", "")   # #259/#261: общий секрет для приёма локального бэкапа (ps1 -> /api/backup_push -> журнал/ЛС)
 OWNER_ID = 131827895
 OWNER_CHANNEL_ID = -1001660979432
@@ -1159,6 +1162,25 @@ def ask_groq(prompt, system=None, max_tokens=None):
     except Exception as e:
         return f"⚠️ Groq недоступен: {e}"
 
+def ask_github(prompt, system=None, max_tokens=None):
+    """🆓 GitHub Models (GPT-4o-mini/4o) — бесплатно для разработчиков. Токен с правом Models. OpenAI-совместимо."""
+    if not GITHUB_MODELS_TOKEN:
+        return None
+    try:
+        msgs = []
+        if system: msgs.append({"role": "system", "content": system})
+        msgs.append({"role": "user", "content": prompt})
+        r = requests.post(
+            "https://models.github.ai/inference/chat/completions",
+            headers={"Authorization": f"Bearer {GITHUB_MODELS_TOKEN}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
+            json={"model": GITHUB_MODELS_MODEL, "messages": msgs, "max_tokens": max_tokens or 1500, "temperature": 0.3},
+            timeout=60)
+        if r.status_code == 200:
+            return r.json()["choices"][0]["message"]["content"].strip()
+        return f"⚠️ GitHub Models код {r.status_code}: {r.text[:150]}"
+    except Exception as e:
+        return f"⚠️ GitHub Models недоступен: {e}"
+
 def ask_special(prompt, system=None):
     """Особые задачи: пробуем OpenAI (если есть ключ+деньги), иначе Gemini (бесплатный лимит). Возвращает (ответ, имя_модели)."""
     if OPENAI_API_KEY:
@@ -1201,6 +1223,10 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None):
         _ga = ask_gemini(prompt, system)
         if _ga and not str(_ga).startswith("⚠️"):
             return _ga + "\n\n⚡ *Модель:* 🆓 Gemini — бесплатно\n" + _ai_left()
+    if GITHUB_MODELS_TOKEN:                      # 3) GitHub Models (GPT-4o-mini, free)
+        _gh = ask_github(prompt, system, max_tokens)
+        if _gh and not str(_gh).startswith("⚠️"):
+            return _gh + "\n\n⚡ *Модель:* 🆓 GitHub GPT-4o-mini — бесплатно\n" + _ai_left()
     модели = [
         "meta-llama/llama-3.3-70b-instruct:free",
         "deepseek/deepseek-r1:free",
