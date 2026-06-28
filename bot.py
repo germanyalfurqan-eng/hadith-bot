@@ -1546,10 +1546,12 @@ def _tts_mp3(text):
 # Команды (владелец в ЛС + чат @jamaat_ru): «раг <запрос>» (по всему ядру) ·
 #   «найди в <источник>: <запрос>» (скоуп) · «раг в <источник>: <запрос>».
 RAG_SPACE_URL = os.environ.get('HF_SPACE_URL', 'https://muslimoontt2024-muslimoon-rag.hf.space').rstrip('/')
-RAG_HF_TOKEN = os.environ.get('HF_TOKEN', '')
+RAG_HF_TOKEN = (os.environ.get('HF_TOKEN', '') or '').strip().strip('"').strip("'")
 
 async def _rag_query(q, source=None, narrator=None, n=5):
     import aiohttp
+    if not RAG_HF_TOKEN:
+        raise RuntimeError('HF_TOKEN пуст в окружении бота — Railway не подхватил переменную. Открой Railway → сервис → ⋮ → Redeploy.')
     params = {'q': q or '', 'n': str(n)}
     if source: params['in'] = source
     if narrator: params['by'] = narrator
