@@ -1000,14 +1000,18 @@ _AI_KILL_PENDING = None    # текст уведомления владельц�
 _GROUP_AI_OFF = True       # #236 (слово владельца «выключи ии ботяра в джамаат ру пока»): ОТДЕЛЬНЫЙ рубильник ИИ-«ботяра» в ГРУППАХ — по умолчанию ВЫКЛ; не трогает /neuro и личку. Вкл: владелец пишет боту «ботяра вкл»
 _AI_PUBLIC_OFF = True      # 🔒 ГЛАВНЫЙ РУБИЛЬНИК (срочный указ владельца): ВЕСЬ ИИ (DeepSeek + бесплатные модели) для НЕ-владельца ВЫКЛ во ВСЕХ чатах. Владелец всегда с ИИ. Единый чокпоинт — в ask_ai. Вернуть всем: «дипсик всем вкл»
 def _save_ai_gate():
-    """Сохранить состояние рубильника публичного ИИ (переживает рестарт/деплой)."""
-    try: _data_put("ai_gate.json", {"public_off": _AI_PUBLIC_OFF}, "🔒 рубильник публичного ИИ")
+    """Сохранить состояние рубильников ИИ (публичный + ботяра-в-группах) — переживает рестарт/деплой. ФИКС: _GROUP_AI_OFF раньше НЕ персистился → каждый рестарт бота сбрасывал «ботяра вкл» обратно в ВЫКЛ (владелец «рубильник сам выключается»)."""
+    try: _data_put("ai_gate.json", {"public_off": _AI_PUBLIC_OFF, "group_off": _GROUP_AI_OFF}, "🔒 рубильники ИИ (публичный+ботяра)")
     except Exception: pass
 def _load_ai_gate():
-    """Загрузить состояние рубильника при старте (дефолт — ВЫКЛ для публики = безопасно)."""
-    global _AI_PUBLIC_OFF
-    try: _AI_PUBLIC_OFF = bool(_data_get("ai_gate.json", {"public_off": True}).get("public_off", True))
-    except Exception: _AI_PUBLIC_OFF = True
+    """Загрузить состояние рубильников при старте (дефолт — ВЫКЛ = безопасно; но если владелец включал — переживёт рестарт)."""
+    global _AI_PUBLIC_OFF, _GROUP_AI_OFF
+    try:
+        _g = _data_get("ai_gate.json", {"public_off": True, "group_off": True})
+        _AI_PUBLIC_OFF = bool(_g.get("public_off", True))
+        _GROUP_AI_OFF = bool(_g.get("group_off", True))
+    except Exception:
+        _AI_PUBLIC_OFF = True
 _MAINTENANCE = False       # B4: режим обслуживания (бот стоп/старт) — для остальных бот молчит-заглушка, владелец работает
 AI_RATE_LIMIT = 35         # >35 вызовов ИИ за окно → авария
 AI_RATE_WINDOW = 120       # секунд
@@ -1571,10 +1575,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"ИИ: {'⏸ ВЫКЛ' if ai_kill_active() else '✅ вкл'}\nВызовов за {AI_RATE_WINDOW}с: {len(_AI_CALLS)}/{AI_RATE_LIMIT}\nавто-выкл={_AI_KILL} · ручной={_AI_KILL_MANUAL}\nботяра в группах: {'⏸ ВЫКЛ' if _GROUP_AI_OFF else '✅ вкл'}\n🔒 ИИ для публики: {'⏸ ВЫКЛ (только владелец)' if _AI_PUBLIC_OFF else '✅ доступен всем'}"); return
     # #236: отдельный рубильник ИИ-«ботяра» в ГРУППАХ (@jamaat_ru) — не трогает /neuro и личку
     if is_owner(update) and text.lower() in ("ботяра вкл", "ботяра включи", "включи ботяра", "чат-ии вкл"):
-        _GROUP_AI_OFF = False
-        await update.message.reply_text("✅ Ботяра в группах включён (реагирует на «ботяра»/ответ боту). Выключить: «ботяра выкл»."); return
+        _GROUP_AI_OFF = False; _save_ai_gate()   # ФИКС: сохраняем — иначе рестарт бота (деплой) сбрасывал обратно в ВЫКЛ
+        await update.message.reply_text("✅ Ботяра в группах включён (реагирует на «ботяра»/ответ боту), переживёт рестарт. Выключить: «ботяра выкл»."); return
     if is_owner(update) and text.lower() in ("ботяра выкл", "выключи ботяра", "ботяра стоп", "чат-ии выкл"):
-        _GROUP_AI_OFF = True
+        _GROUP_AI_OFF = True; _save_ai_gate()
         await update.message.reply_text("⏸ Ботяра в группах выключен (в личке и /neuro работают). Включить: «ботяра вкл»."); return
     # 🔒 ГЛАВНЫЙ РУБИЛЬНИК: ИИ (DeepSeek + все модели) ТОЛЬКО для владельца — во всех остальных чатах ВЫКЛ
     if is_owner(update) and text.lower() in ("дипсик всем выкл", "дипсик выкл всем", "ии всем выкл", "ии только мне", "дипсик только мне", "ии публично выкл", "публичный ии выкл"):
@@ -4347,7 +4351,7 @@ async def _api_serve(application=None):
             return _deny('groupai')
         global _GROUP_AI_OFF
         if isinstance(d.get('set'), bool):
-            _GROUP_AI_OFF = (not d['set'])
+            _GROUP_AI_OFF = (not d['set']); _save_ai_gate()   # ФИКС: персист — переживёт рестарт/деплой
         return _cors(web.json_response({'on': (not _GROUP_AI_OFF)}))
 
     async def neuro(r):
