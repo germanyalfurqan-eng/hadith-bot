@@ -4252,7 +4252,14 @@ async def _api_serve(application=None):
     def _uid(user, r):
         return str(user.get('id')) if user else ('ip:' + (r.remote or '?'))
 
-    async def health(r): return _cors(web.json_response({'ok': True, 'ai': {'groq': bool(GROQ_API_KEY), 'gemini': bool(GEMINI_API_KEY), 'openrouter': bool(OPENROUTER_API_KEY), 'deepseek': bool(DEEPSEEK_API_KEY)}, 'public_ai_off': _AI_PUBLIC_OFF}))   # диагностика какие ИИ-ключи в env (без значений) + рубильник публичного ИИ
+    async def health(r):
+        out = {'ok': True, 'ai': {'groq': bool(GROQ_API_KEY), 'gemini': bool(GEMINI_API_KEY), 'openrouter': bool(OPENROUTER_API_KEY), 'deepseek': bool(DEEPSEEK_API_KEY)}, 'public_ai_off': _AI_PUBLIC_OFF}
+        if r.query.get('aitest'):   # диагностика: РЕАЛЬНО позвать каждый провайдер с Railway и вернуть результат/ошибку
+            try: out['groq_test'] = str(await loop.run_in_executor(None, ask_groq, "ответь одним словом: тест", None, 10))[:120]
+            except Exception as e: out['groq_test'] = 'EXC:'+str(e)[:80]
+            try: out['gemini_test'] = str(await loop.run_in_executor(None, ask_gemini, "ответь одним словом: тест", None))[:120]
+            except Exception as e: out['gemini_test'] = 'EXC:'+str(e)[:80]
+        return _cors(web.json_response(out))
     async def opt(r): return _cors(web.Response(text=''))
     async def worklog(r):
         # #62/#63/#165: триггер уведомления владельцу о работе Claude над заявкой (Claude дёргает curl).
