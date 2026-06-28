@@ -1613,6 +1613,62 @@ def _rag_fmt(data):
     lines.append('🔎 <b>Ответил:</b> RAG (ядро: первоисточники + риджаль) · поиск без лимита')
     return '\n'.join(lines)[:4000]
 
+# 🔐 ДОСТУП к RAG (указ владельца): пока только владелец; рубильник «всем» + белый/чёрный списки.
+# ⚠️ Railway ephemeral — список сбрасывается при редеплое (владелец перевыставляет; владелец доступен ВСЕГДА).
+_RAG_ACCESS_FILE = 'rag_access.json'
+_RAG_ACCESS = {'all': False, 'white': [], 'black': []}
+def _rag_access_load():
+    global _RAG_ACCESS
+    try:
+        _RAG_ACCESS = json.load(open(_RAG_ACCESS_FILE, encoding='utf-8'))
+    except Exception:
+        _RAG_ACCESS = {'all': False, 'white': [], 'black': []}
+    return _RAG_ACCESS
+def _rag_access_save():
+    try:
+        json.dump(_RAG_ACCESS, open(_RAG_ACCESS_FILE, 'w', encoding='utf-8'))
+    except Exception:
+        pass
+def _rag_allowed(uid):
+    try:
+        uid = int(uid)
+    except Exception:
+        return False
+    if uid == OWNER_ID:
+        return True
+    a = _rag_access_load()
+    if uid in a.get('black', []):
+        return False
+    if a.get('all'):
+        return True
+    return uid in a.get('white', [])
+def _rag_access_cmd(text):
+    """Команды владельца управления доступом RAG. Возвращает текст-ответ или None (не команда)."""
+    t = text.lower().strip()
+    a = _rag_access_load()
+    if t in ('раг доступ', 'rag доступ', 'раг статус'):
+        return ('🔐 Доступ RAG:\n• всем: %s\n• белый список: %s\n• чёрный список: %s\n\n'
+                'Команды: «раг всем вкл/выкл» · «раг белый +<id>» / «раг белый -<id>» · «раг чёрный +<id>» / «раг чёрный -<id>»'
+                % ('ВКЛ' if a.get('all') else 'выкл (только владелец+белый)', a.get('white', []) or '—', a.get('black', []) or '—'))
+    if t.startswith('раг всем'):
+        a['all'] = ('вкл' in t or 'on' in t)
+        _rag_access_save()
+        return '✅ RAG для всех: %s' % ('ВКЛЮЧЁН' if a['all'] else 'выключен (только владелец + белый список)')
+    m = re.match(r'раг\s+(бел|чёрн|черн)\w*\s+([+\-]?)(\d+)', t)
+    if m:
+        lst = 'white' if m.group(1) == 'бел' else 'black'
+        rm = m.group(2) == '-'
+        uid = int(m.group(3))
+        arr = a.setdefault(lst, [])
+        if rm:
+            if uid in arr: arr.remove(uid)
+        else:
+            if uid not in arr: arr.append(uid)
+        _rag_access_save()
+        return '✅ %s список: %s id %d → %s' % ('Белый' if lst == 'white' else 'Чёрный',
+                'убрал' if rm else 'добавил', uid, arr or '—')
+    return None
+
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
@@ -1641,13 +1697,24 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
-    # 🧩 RAG-поиск по ядру (первоисточники+риджаль): «раг <q>» / «найди в <источник>: <q>».
-    # Доступ: владелец в ЛС + чат @jamaat_ru (группы). Анти-спам — на стороне Space (по IP).
+    # 🧩 RAG-поиск по ядру (первоисточники+риджаль). Триггер — ТОЛЬКО слово «раг» (чтобы не мешать болтовне в чате).
+    # Доступ: пока только владелец; рубильник «всем» + белый/чёрный списки (команды владельца).
     try:
-        _low = text.lower()
-        if _low.startswith(('раг ', 'rag ')) or _low.startswith('найди в ') or _low.startswith('раг в '):
-            _ct = update.effective_chat.type if update.effective_chat else ''
-            if is_owner(update) or _ct in ('group', 'supergroup'):
+        _low = text.lower().strip()
+        if _low == 'раг' or _low.startswith(('раг ', 'rag ')):
+            _uid = update.effective_user.id if update.effective_user else 0
+            # команды управления доступом (только владелец)
+            if is_owner(update):
+                _ac = _rag_access_cmd(text)
+                if _ac is not None:
+                    await update.message.reply_text(_ac)
+                    return
+            # гейт доступа
+            if not _rag_allowed(_uid):
+                if update.effective_chat and update.effective_chat.type == 'private':
+                    await update.message.reply_text('🔒 RAG-поиск пока доступен только владельцу. Скоро откроем.')
+                return
+            if True:
                 _src, _q = _rag_parse(text)
                 if _q or _src:
                     try:
