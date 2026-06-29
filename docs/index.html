@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v798</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v799</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v798';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v799';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2961,7 +2961,7 @@ function bookName(id){ id=String(id||''); return (_booksMap&&_booksMap[id])||'';
 function bookAuthorOf(id){ id=String(id||''); try{ if(_catalog){ const b=_catalog.find(x=>String(x.i)===id); return b?(b.a||''):''; } }catch(e){} return ''; }
 // M216: читалка любой книги Мактабы (через turath /api/book_page) — листание + Arabus
 let _bookView={id:null,pg:1};
-function openBook(bookId, startPg, _forceTurath){
+function openBook(bookId, startPg, _forceTurath, _hl){
   const id=String(bookId||'').replace(/[^0-9]/g,''); if(!id) return;
   try{ _pushRecentBook(id); }catch(e){}   // M111+: запоминаем открытые книги → раздел «🕐 Недавно читал» в каталоге
   // «Муслим в Мактабе = в Избранном»: издания Сахих Муслим (тур. печать 711 / ت عبد الباقي 1727) открываем
@@ -2977,7 +2977,7 @@ function openBook(bookId, startPg, _forceTurath){
   let sp=parseInt(String(startPg||'').replace(/[^0-9]/g,''))||1; if(sp<1) sp=1;
   // M318: ПРОДОЛЖИТЬ ЧТЕНИЕ — если страница не указана, возвращаемся туда, где остановились
   if(!startPg){ try{ const pos=JSON.parse(localStorage.getItem('bk_pos')||'{}'); if(pos[id]&&pos[id].pg>1){ sp=pos[id].pg; setTimeout(()=>toast('▶ Продолжаю со стр. '+sp+' (читал ранее)'),300); } }catch(e){} }
-  _bookView={id:id, pg:sp};
+  _bookView={id:id, pg:sp, hl:(_hl||'')};   // hl = цитата для авто-подсветки в ридере (указ владельца: «У нас» выделять наглядно как в поиске)
   try{ _actPush({t:'book', bid:id, pg:sp}); }catch(e){}   // M462
   let m=document.getElementById('bookModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='bookModal';
@@ -3209,6 +3209,8 @@ async function _bookLoad(){
       try{ const _nms=isnadNarrators(_body).filter(_keepNarr); if(_nms.length) highlightNarratorsInDiv(mainEl, _nms, nm=>{ try{ openNarratorRijal(nm); }catch(e){} }); }catch(e){}
       if(_colo){ const _cf=document.createElement('div'); _cf.style.cssText='direction:rtl;text-align:left;font-size:11px;color:var(--hint);margin-top:9px;padding-top:6px;border-top:1px dashed var(--border)'; _cf.textContent='📄 '+_colo; mainEl.appendChild(_cf); }
       try{ enableArabusTap(mainEl); if(_arabusOn) mainEl.style.cursor='pointer'; }catch(e){}
+      // указ владельца: при открытии «У нас» (цитата критика) — авто-подсветить её наглядно, как в поиске
+      try{ if(_bookView.hl && typeof window._bookDoFind==='function'){ setTimeout(function(){ try{ window._bookDoFind(_bookView.hl); }catch(_e){} },60); } }catch(e){}
       const _pAdd=tEl.querySelector('#bookPrevAdd'); if(_pAdd){ if(_bookView.pg<=1) _pAdd.style.display='none'; _pAdd.onclick=_bookAddPrev; }
       const _nAdd=tEl.querySelector('#bookNextAdd'); if(_nAdd) _nAdd.onclick=_bookAddNext; }
     navEl.innerHTML=''; navEl.style.flexDirection='column'; navEl.style.gap='7px';
@@ -3279,6 +3281,7 @@ async function _bookLoad(){
         html = re ? esc(clean).replace(re, m=>'<mark>'+m+'</mark>') : esc(clean).split(esc(qf)).join('<mark>'+esc(qf)+'</mark>');
       } else html=esc(clean);
       me.innerHTML=html.replace(/\n+/g,'<br>'); try{ enableArabusTap(me); if(_arabusOn) me.style.cursor='pointer'; }catch(e){} const f=me.querySelector('mark'); if(f) try{ f.scrollIntoView({block:'center'}); }catch(e){} };
+    window._bookDoFind=doFind;   // для авто-подсветки цитаты при открытии «У нас» из карточки равия
     fnd.addEventListener('keydown',e=>{ if(e.key==='Enter') doFind(fnd.value); });
     fnd.addEventListener('search',()=>doFind(fnd.value));
     r2.appendChild(fnd);
@@ -8701,7 +8704,7 @@ function _ttNeuro(list, inSahihayn){
   return {v:v,col:col,em:em,nT:nT,nJ:nJ,jah:jah,sahihayn:sahihayn,note:note,pos:posCnt,neg:negCnt,strictJ:strictJ,cnt:posCnt+negCnt+jah};
 }
 // ссылки-проверки (turath bid==shamela id, page прямой). Внутри аппа «У нас» = наш ридер openBook.
-function _ttLinkRow(bid,page,mid,shnum,book){
+function _ttLinkRow(bid,page,mid,shnum,book,quote){
   const w=document.createElement('div'); w.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:4px';
   const mk=(txt,col,fn)=>{ const a=document.createElement('span'); a.textContent=txt; a.style.cssText='cursor:pointer;font-size:11px;color:'+col+';border:1px solid '+col+'66;border-radius:5px;padding:1px 7px'; a.onclick=(e)=>{e.stopPropagation();try{fn();}catch(_){}}; return a; };
   // указ владельца С46: у КАЖДОГО вердикта виден ИСТОЧНИК — НАЗВАНИЕ КНИГИ (не «источник»/«Шамела») + лист.
@@ -8711,7 +8714,7 @@ function _ttLinkRow(bid,page,mid,shnum,book){
   if(bid&&page){ if(shnum){ w.appendChild(mk('📖 '+(bk||'Шамела')+' · с.'+page,'#4ade80',()=>openLink('https://shamela.ws/book/'+bid+'/'+shnum)));
       w.appendChild(mk('🅣 Turath','#6c8cff',()=>openLink('https://app.turath.io/book/'+bid+'/'+shnum))); }
     else { w.appendChild(mk('📖 '+(bk||'Шамела')+' (книга)','#4ade80',()=>openLink('https://shamela.ws/book/'+bid))); }
-    w.appendChild(mk('📖 У нас','#bfe3cf',()=>{ try{var mm=document.getElementById('narrModal'); if(mm)mm.style.display='none';}catch(_){} openBook(bid,page); })); }
+    w.appendChild(mk('📖 У нас','#bfe3cf',()=>{ try{var mm=document.getElementById('narrModal'); if(mm)mm.style.display='none';}catch(_){} openBook(bid,page,false,quote); })); }
   else if(bid){ w.appendChild(mk('📖 '+(bk||'Шамела')+' (книга)','#4ade80',()=>openLink('https://shamela.ws/book/'+bid))); }
   else if(bk){ const sp=document.createElement('span'); sp.textContent='📖 '+bk; sp.style.cssText='font-size:11px;color:#9aa7b5;border:1px solid #3a434d;border-radius:5px;padding:1px 7px'; w.appendChild(sp); }
   if(mid) w.appendChild(mk('👤 موسوعة','#e8b04a',()=>openLink('https://shamela.ws/narrator/'+mid)));
@@ -8760,7 +8763,7 @@ async function renderTestimoniesCard(mid, host){
     // ≈ перевод вердикта на русский (глоссарий джарха) — рядом с оригиналом
     try{ const _vru=(v)=>{ const seen=new Set(),out=[]; String(v||'').split(/[\s،,]+/).filter(Boolean).forEach(w=>{ try{ const ex=jarhExplain(w); if(ex){ const ru=(ex.split(' — ')[1]||'').split(' · ')[0].trim(); if(ru&&!seen.has(ru)){ seen.add(ru); out.push(ru); } } }catch(e){} }); return out.join(', '); };
       const _ru=[...new Set(terms.map(_vru).filter(Boolean))].join('; '); if(_ru){ const r=document.createElement('div'); r.style.cssText='direction:ltr;text-align:left;font-size:12px;color:#9fb0c0;margin-top:3px'; r.textContent='≈ '+_ru; row.appendChild(r); } }catch(e){}
-    row.appendChild(_ttLinkRow(c0[5], c0[6], mid, c0[7], c0[4]));
+    row.appendChild(_ttLinkRow(c0[5], c0[6], mid, c0[7], c0[4], c0[3]));
     bd.appendChild(row);
   });
   if(order.length>_TT_TOP){ const more=document.createElement('button'); more.className='mini';
