@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v796</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v797</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v796';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v797';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -9042,6 +9042,13 @@ function renderMosuaJarh(c, out){
 async function showNarratorBio(name, out){
   out.style.display='block'; out.innerHTML='';
   out.dataset.noTT='1';   // 🔴 фикс дубля: свод критиков рендерит showNarratorBio ОДИН раз (ниже, после учители/ученики); showNarratorCardLocal свой свод пропускает по этому флагу
+  // 📂 прогрессивное раскрытие (консенсус ИИ + указ владельца: первый экран чистый, тяжёлые секции — под «раскрыть»)
+  const _accSec=(title,open)=>{ const w=document.createElement('div'); w.style.cssText='margin-top:9px;border:1px solid var(--border);border-radius:12px;overflow:hidden';
+    const h=document.createElement('div'); h.style.cssText='padding:11px 13px;background:rgba(108,92,231,.07);font-weight:600;color:#cdd6e0;font-size:13.5px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px';
+    h.innerHTML='<span>'+title+'</span><span class="accTg" style="color:var(--hint);flex:none">'+(open?'▾':'▸')+'</span>';
+    const b=document.createElement('div'); b.style.cssText='padding:8px 12px'; b.style.display=open?'block':'none';
+    h.onclick=()=>{ const o=b.style.display!=='none'; b.style.display=o?'none':'block'; h.querySelector('.accTg').textContent=o?'▸':'▾'; };
+    w.appendChild(h); w.appendChild(b); out.appendChild(w); return b; };
   // Идентификация (имя/كنية/نسب/وفاة/طبقة/رتبة + бейдж) — без джарха
   let c=null; try{ c=await showNarratorCardLocal(name, out); }catch(e){}
   try{ if(!out.dataset.noClose){ const _ch=document.createElement('div'); _ch.style.cssText='display:flex;justify-content:flex-end;margin:0 0 2px';   // #10 (R46): свернуть карточку равия → вернуться к результатам
@@ -9065,9 +9072,7 @@ async function showNarratorBio(name, out){
     let _places=null; if(c){ try{ _places=await dzPart(c[0]); }catch(e){} }   // кэш-шард (уже грузился для счётчика) — дёшево
     if(_places && _places.length){
       try{ await loadBooksMap(); }catch(e){}
-      const lb=document.createElement('div'); lb.style.cssText='font-size:13px;font-weight:600;color:#bcd2ff;margin:2px 0 5px'; lb.textContent='📜 Хадисы, которые он передаёт ('+_places.length+'):';
-      pw.appendChild(lb);
-      const ls=document.createElement('div'); pw.appendChild(ls);
+      const ls=document.createElement('div'); pw.appendChild(ls);   // подпись хадисов теперь в заголовке аккордеона (без дубля)
       let sh=0; const mr=document.createElement('button'); mr.className='mini'; mr.style.cssText='margin-top:6px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px;font-size:12.5px';
       const draw=(n)=>{ _places.slice(sh,sh+n).forEach(p=>ls.appendChild(_dzPlaceRow(p[0],p[1],p[2]))); sh=Math.min(_places.length,sh+n);
         mr.textContent='⬇️ Показать ещё ('+(_places.length-sh)+')'; mr.style.display=sh>=_places.length?'none':'block'; };
@@ -9079,8 +9084,8 @@ async function showNarratorBio(name, out){
       const allb=document.createElement('button'); allb.className='mini'; allb.style.cssText='width:100%;padding:9px;border:1px solid #2e6b9b;color:#bfe0f5;background:#16314d;border-radius:9px;font-size:13px;font-weight:600';
       allb.textContent='📜 Хадисы, которые он передаёт (по тексту имени)'; allb.onclick=_byText; pw.appendChild(allb);
     }
-    out.appendChild(pw);
-    }   // конец else (дубль кнопок не строим при noPartBtns)
+    _accSec('📜 Хадисы, которые он передаёт'+(_places&&_places.length?(' · '+_places.length):''), false).appendChild(pw);
+    }   // конец else (дубль кнопок не строим при noPartBtns) — хадисы свёрнуты в аккордеон (прогрессивно)
   }catch(e){}
   // ПОРЯДОК СЕКЦИЙ (указ владельца, очередь п.1): имя → 🤖 нейро-вывод + критики → учители/ученики → доп.источники.
   // 🧭 ЧИСТАЯ секция «Критические оценки» (свод критиков + нейро-вывод + ссылки) — как у sunnah.com (указ владельца: одна чистая, не каша). СНАЧАЛА (выше учителей/учеников).
