@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v792</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v793</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v792';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v793';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8725,6 +8725,7 @@ function _critArOrd(n){ let s=''; try{ s=stripDiac(fold(String(n||''))).replace(
 async function renderTestimoniesCard(mid, host){
   if(mid==null) return; let list=null; try{ list=await _testimGet(+mid); }catch(e){}
   if(!list || !list.length) return;
+  try{ await loadJarhGl(); }catch(e){}   // глоссарий джарха — для ≈ перевода вердикта критика на русский (оригинал+перевод рядом, указ владельца)
   let _inSah=false; try{ const _fl=(await loadNarrFlags())[String(mid)]; _inSah=(_fl==='bm'); }catch(e){}   // флаг 'bm'=رجال الشيخين (Бухари И Муслим) — надёжно (как бейдж), для правила توثيق
   const neuro=_ttNeuro(list, _inSah);
   const sec=document.createElement('div'); sec.style.cssText='margin-top:11px;border:1px solid #c39bd3;border-radius:12px;overflow:hidden;background:rgba(155,89,182,.07)';
@@ -8753,7 +8754,11 @@ async function renderTestimoniesCard(mid, host){
       return '<span dir="rtl" style="font-size:16px;border-radius:7px;padding:1px 9px;margin:0 0 0 4px;background:'+bg+';color:'+(sc>0?'#7fe3bf':(sc<0?'#ff9b7a':'#9aa7b5'))+';border:1px solid '+col+'">'+esc(t)+'</span>'; }).join('');
     row.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap"><span dir="rtl" style="font-size:16px;'+_AF+';color:#e8d4f2">'+esc(cr)+'</span><span>'+badges+'</span></div>';
     const c0=items[0];
-    if(c0[3]){ const q=document.createElement('div'); q.style.cssText='direction:rtl;text-align:right;font-size:16px;line-height:1.95;color:var(--hint);margin-top:3px'; q.textContent='…'+c0[3]+'…'; row.appendChild(q); }
+    // ОРИГИНАЛ слов критика — крупно в рамке (эталон; указ владельца «почему оригинал не показываешь»)
+    if(c0[3]){ const q=document.createElement('div'); q.style.cssText='direction:rtl;text-align:right;font-size:15.5px;line-height:1.85;color:#e6edf3;border:1px solid var(--border);background:rgba(255,255,255,.035);border-radius:8px;padding:5px 10px;margin-top:4px'; q.textContent=c0[3]; row.appendChild(q); }
+    // ≈ перевод вердикта на русский (глоссарий джарха) — рядом с оригиналом
+    try{ const _vru=(v)=>{ const seen=new Set(),out=[]; String(v||'').split(/[\s،,]+/).filter(Boolean).forEach(w=>{ try{ const ex=jarhExplain(w); if(ex){ const ru=(ex.split(' — ')[1]||'').split(' · ')[0].trim(); if(ru&&!seen.has(ru)){ seen.add(ru); out.push(ru); } } }catch(e){} }); return out.join(', '); };
+      const _ru=[...new Set(terms.map(_vru).filter(Boolean))].join('; '); if(_ru){ const r=document.createElement('div'); r.style.cssText='direction:ltr;text-align:left;font-size:12px;color:#9fb0c0;margin-top:3px'; r.textContent='≈ '+_ru; row.appendChild(r); } }catch(e){}
     row.appendChild(_ttLinkRow(c0[5], c0[6], mid, c0[7], c0[4]));
     bd.appendChild(row);
   });
