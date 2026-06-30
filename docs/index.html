@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v832</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v833</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v832';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v833';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8713,17 +8713,21 @@ function _ttNeuro(list, inSahihayn){
 }
 // ссылки-проверки (turath bid==shamela id, page прямой). Внутри аппа «У нас» = наш ридер openBook.
 function _ttLinkRow(bid,page,mid,shnum,book,quote){
-  const w=document.createElement('div'); w.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:4px';
-  const mk=(txt,col,fn)=>{ const a=document.createElement('span'); a.textContent=txt; a.style.cssText='cursor:pointer;font-size:13px;color:'+col+';border:1px solid '+col+'66;border-radius:6px;padding:3px 9px'; a.onclick=(e)=>{e.stopPropagation();try{fn();}catch(_){}}; return a; };
-  // указ владельца С46: у КАЖДОГО вердикта виден ИСТОЧНИК — НАЗВАНИЕ КНИГИ (не «источник»/«Шамела») + лист.
-  // shamela.ws/turath адресуют по ВНУТРЕННЕМУ shamela-num (shnum, индекс7, найден по тексту цитаты — build_backfill_sources.py);
-  // page (индекс6) — печатная страница для нашего /book_page. Где листа нет — ссылка на книгу; موسوعة — на страницу равия.
+  const w=document.createElement('div'); w.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center';
+  const mk=(html,col,bg,bd,fn)=>{ const a=document.createElement('span'); a.innerHTML=html; a.style.cssText='cursor:'+(fn?'pointer':'default')+';font-size:12.5px;color:'+col+';border:1px solid '+bd+';background:'+bg+';border-radius:8px;padding:5px 11px;display:inline-flex;align-items:center;gap:5px'; if(fn) a.onclick=(e)=>{e.stopPropagation();try{fn();}catch(_){}}; return a; };
+  // указ владельца С46: у КАЖДОГО вердикта — ПЕРВОИСТОЧНИК (книга تهذيب الكمال + лист), переход в НАШ ридер с подсветкой цитаты,
+  // и кнопка Шамелы ФИРМЕННЫМ стилем (книга + страница), а не голое «الشاملة». Лист не выверен (page<=0) → книгу показываем, точный переход у нас придёт с локатором (#2).
   const bk=String(book||'').trim();
-  const pgok=(page!=null&&Number(page)>0);   // -1/0 = лист не выверен строго → «У нас» и точную страницу НЕ показываем (страж против врущей ссылки)
-  if(bid){ if(pgok){ w.appendChild(mk('📖 '+(bk||'الكتاب')+(page?(' · '+page):''),'#7fe3bf',()=>{ try{var mm=document.getElementById('narrModal'); if(mm)mm.style.display='none';}catch(_){} openBook(bid,page,false,quote); }));
-      w.appendChild(mk('📚 الشاملة','#19a89b',()=>openLink('https://shamela.ws/book/'+bid+(shnum?('/'+shnum):'')))); }
-    else { w.appendChild(mk('📚 الشاملة','#19a89b',()=>openLink('https://shamela.ws/book/'+bid))); } }
-  else if(bk){ const sp=document.createElement('span'); sp.textContent='📖 '+bk; sp.style.cssText='font-size:11px;color:#9aa7b5;border:1px solid #3a434d;border-radius:5px;padding:1px 7px'; w.appendChild(sp); }
+  const pgok=(page!=null&&Number(page)>0);
+  const pgTxt=pgok?(' · стр. '+page):'';
+  const bkTxt=bk?('<span dir="rtl" style="'+_AF+'">'+esc(bk)+'</span>'):'الكتاب';
+  if(bid){
+    if(pgok){ w.appendChild(mk('📖 Читать у нас · '+bkTxt+pgTxt,'#9be7c4','rgba(46,160,67,.10)','#2d6a45',()=>{ try{var mm=document.getElementById('narrModal'); if(mm)mm.style.display='none';}catch(_){} openBook(bid,page,false,quote); })); }
+    else { w.appendChild(mk('📖 '+bkTxt,'#9aa7b5','transparent','#3a434d',null)); }
+    w.appendChild(mk('📚 المكتبة الشاملة · '+bkTxt+pgTxt,'#f0d9a8','rgba(201,138,42,.12)','#5e4d23',()=>openLink('https://shamela.ws/book/'+bid+(shnum?('/'+shnum):''))));
+    if(!pgok){ const note=document.createElement('span'); note.textContent='точная стр. уточняется'; note.style.cssText='font-size:10.5px;color:#6e7b8a;align-self:center'; w.appendChild(note); }
+  }
+  else if(bk){ w.appendChild(mk('📖 '+bkTxt,'#9aa7b5','transparent','#3a434d',null)); }
   return w;
 }
 // #369 (заявка владельца «порядок критиков как sunnah, не бардак»): арабская карта критиков → год смерти (هـ) = хронология/авторитет. Свод сортируется по ней (ранние имамы первыми), а не по среднему баллу.
@@ -8767,7 +8771,7 @@ async function renderTestimoniesCard(mid, host){
     const scv=items.reduce((s,c)=>s+(_TT_SCORE[c[1]]||0),0); const vcol=scv>0?'#7ee08a':(scv<0?'#ff9b7a':'#9aa7b5');
     const row=document.createElement('div'); row.dataset.ttRow='1'; row.style.cssText='border-top:1px solid #20302a;padding-top:11px;margin-top:11px'; if(idx>=_TT_TOP) row.style.display='none';
     const yr=_yrOf(cr); const c0=items[0]; const ruv=((c0[9]&&String(c0[9]).trim())||_ruVerdict(terms));
-    row.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span style="font-size:14.5px;color:#dbe3eb">'+esc(_ruName(cr))+((_isMut(cr)&&_critOk(cr))?" <span style=\"font-size:10px;background:rgba(46,160,67,.16);color:#7ee08a;border:1px solid #2d6a45;border-radius:5px;padding:0 5px;cursor:help\" title=\"Один из муʿтабаров — его таусик/джарх засчитывается (нужно ≥2)\">✓ принят</span>":" <span style=\"font-size:10px;background:rgba(122,134,147,.12);color:#9aa7b5;border:1px solid #3a434d;border-radius:5px;padding:0 5px;cursor:help\" title=\"Не из 48 муʿтабаров — мнение справочное, в счёт таусика не идёт\">справочно</span>")+(yr?(' <span style="color:#7c8b9c;font-size:12.5px">ум. '+yr+' г.х.</span>'):'')+'</span><span dir="rtl" style="font-size:15.5px;'+_AF+';color:'+vcol+'">'+esc(terms.join('، '))+'</span></div>';
+    row.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span style="font-size:14.5px;color:#dbe3eb">'+esc(_ruName(cr))+((_isMut(cr)&&_critOk(cr))?" <span style=\"font-size:10px;background:rgba(46,160,67,.16);color:#7ee08a;border:1px solid #2d6a45;border-radius:5px;padding:0 5px;cursor:help\" title=\"Один из муʿтабаров — его таусик/джарх засчитывается (нужно ≥2)\">✓ принят</span>":" <span style=\"font-size:10px;background:rgba(122,134,147,.12);color:#9aa7b5;border:1px solid #3a434d;border-radius:5px;padding:0 5px;cursor:help\" title=\"Не из 48 муʿтабаров — мнение справочное, в счёт таусика не идёт\">справочно</span>")+(yr?(' <span style="color:#7c8b9c;font-size:12.5px">ум. '+yr+' г.х.</span>'):'')+'</span>'+(c0[3]?'':('<span dir="rtl" style="font-size:15.5px;'+_AF+';color:'+vcol+'">'+esc(terms.join('، '))+'</span>'))+'</div>';
     if(c0[3]){ const q=document.createElement('div'); q.dir='rtl'; q.style.cssText='font-size:18px;'+_AF+';color:#eaf2ea;border:1px solid #2d6a45;background:rgba(63,185,80,.07);border-radius:8px;padding:6px 10px;margin-top:6px;line-height:1.75'; var _mk=(scv>0?'rgba(126,224,138,.30);color:#d6ffe0':(scv<0?'rgba(248,113,113,.28);color:#ffd9cf':'rgba(122,134,147,.28);color:#e6edf3')); var _qh=esc(c0[3]); terms.forEach(function(t){ if(t){ var _te=esc(String(t).trim()); if(_te) _qh=_qh.split(_te).join('<mark style="background:'+_mk+';border-radius:3px;padding:0 3px;font-weight:600">'+_te+'</mark>'); } }); q.innerHTML=_qh; row.appendChild(q); }
     if(ruv){ const r=document.createElement('div'); r.style.cssText='font-size:13px;color:#9aa7b5;margin-top:4px'; r.textContent='≈ '+ruv; row.appendChild(r); }
     try{ row.appendChild(_ttLinkRow(c0[5],c0[6],mid,c0[7],c0[4],c0[3])); }catch(e){}
