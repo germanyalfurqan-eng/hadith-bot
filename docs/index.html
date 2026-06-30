@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v822</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v823</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v822';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v823';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4677,18 +4677,17 @@ async function openNarratorRijal(name){
   // даже если ИИ-свод недоступен/403/таймаут, оценки муʿтабаров видны.
   const _renderLocalTT=async()=>{ try{ const _v=await _narrLookup(name); if(_v!=null) await renderTestimoniesCard(_v, body); }catch(e){} };
   if(!BACKEND_URL){ body.innerHTML='<div class="hint">🧠 Свод ИИ — на сервере. Оценки критиков (локальные) — ниже.</div>'; await _renderLocalTT(); return; }
-  let j={}; const _ac=new AbortController(); const _to=setTimeout(()=>{try{_ac.abort();}catch(e){}},20000);   // #323-класс: карточка передатчика не виснет вечно при зависании бэкенда (вечный «Загружаю оценки…»)
-  try{ const r=await fetch(BACKEND_URL+'/narrator_rijal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,initData:INITDATA}), signal:_ac.signal}); clearTimeout(_to); j=await r.json().catch(()=>({})); if(r.status===403){ body.innerHTML='<div class="hint">'+((j&&j.message)||'функция пока не открыта')+'</div>'; await _renderLocalTT(); return; } }catch(e){ try{clearTimeout(_to);}catch(_t){} body.innerHTML='<div class="hint">'+((e&&e.name==='AbortError')?'⏳ ИИ-свод долго не отвечает':'🔧 ИИ-свод недоступен')+' — оценки критиков ниже.</div>'; await _renderLocalTT(); return; }
-  if(j.is_narrator===false){ body.innerHTML='<div class="hint">Похоже, это не имя передатчика. Это обычный поиск — ищи как искал. 🙂</div>'; await _renderLocalTT(); return; }
   body.innerHTML='';
-  // #360 «дублируется хрень»: «Оценки из 149 трудов» (renderNarrVerdicts) дублировали свод критиков ниже
-  // (renderTestimoniesCard — теперь с ОРИГИНАЛОМ слов + переводом вердикта + источником-книгой) → оставлен ОДИН свод.
-  const row=(lbl,val)=>val?('<div style="margin-top:5px"><span style="color:var(--hint)">'+lbl+':</span> '+esc(val)+'</div>'):'';
-  const card=document.createElement('div'); card.style.cssText='border:1px solid #6c5ce7;border-radius:12px;padding:11px;background:rgba(108,92,231,.08)';
-  card.innerHTML=(j.ar?('<div style="font-size:18px;'+_AF+';color:var(--mark);direction:rtl;text-align:right">'+esc(j.ar)+'</div>'):'')
-    +row('Эпоха',j.era)+row('Оценка',j.grade)+row('Учёные',j.scholars)+row('Где искать',j.where)
-    +'<div style="margin-top:6px;font-size:11px;color:var(--hint)">🧠 свод ИИ '+(j.cached?'(из базы)':'')+' — вспомогательно; проверяй по первоисточникам риджаль ниже.</div>';
-  body.appendChild(card);
+  // ⛔ ТРЕВОГА-фикс (С46, выговор владельца): свод ИИ БОЛЬШЕ НЕ грузится автоматом при клике на передатчика (тратил ключ DeepSeek на каждый клик). Только по явной кнопке.
+  if(BACKEND_URL){ const aiBtn=document.createElement('button'); aiBtn.className='mini'; aiBtn.textContent='🧠 Свод ИИ (по запросу — тратит ключ)';
+    aiBtn.style.cssText='width:100%;border:1px solid #6c5ce7;color:#d9ccff;background:rgba(108,92,231,.08);padding:9px;border-radius:10px;font-size:12.5px;cursor:pointer;margin-bottom:8px';
+    const aiOut=document.createElement('div');
+    aiBtn.onclick=async()=>{ aiBtn.disabled=true; aiOut.innerHTML='<div class="hint">🧠 …</div>';
+      const _ac=new AbortController(); const _to=setTimeout(()=>{try{_ac.abort();}catch(e){}},20000); let j={};
+      try{ const r=await fetch(BACKEND_URL+'/narrator_rijal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,initData:INITDATA}),signal:_ac.signal}); clearTimeout(_to); j=await r.json().catch(()=>({})); }catch(e){ aiOut.innerHTML='<div class="hint">🔧 ИИ-свод недоступен.</div>'; return; }
+      const row=(lbl,val)=>val?('<div style="margin-top:5px"><span style="color:var(--hint)">'+lbl+':</span> '+esc(val)+'</div>'):'';
+      aiOut.innerHTML='<div style="border:1px solid #6c5ce7;border-radius:12px;padding:11px;background:rgba(108,92,231,.08)">'+(j.ar?('<div style="font-size:18px;'+_AF+';color:var(--mark);direction:rtl;text-align:right">'+esc(j.ar)+'</div>'):'')+row('Эпоха',j.era)+row('Оценка',j.grade)+row('Учёные',j.scholars)+row('Где искать',j.where)+'<div style="margin-top:6px;font-size:11px;color:var(--hint)">🧠 свод ИИ — вспомогательно.</div></div>'; };
+    body.appendChild(aiBtn); body.appendChild(aiOut); }
   // 🧭 СВОД КРИТИКОВ + НЕЙРО-МУХАККИК (заявка владельца) — кто что сказал списком + авто-вывод + ссылки-проверки
   try{ const _tvid=await _narrLookup(name); if(_tvid!=null) await renderTestimoniesCard(_tvid, body); }catch(e){}
   // M475/TB-28: поколение (отметка صحابي/تابعي) + связи учитель↔ученик из تهذيب الكمال (по нашему id, R45)
