@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v818</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v819</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -703,7 +703,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v818';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v819';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8914,60 +8914,54 @@ async function showNarratorCardLocal(name, host){
   const _STOPNM={'وقيل':1,'ويقال':1,'يقال':1,'وقال':1,'قال':1,'او':1};
   const _hasVar = stripDiac(String(c[1]||'').trim()) !== stripDiac(_c1.trim());
   const _varQil = String(c[1]||'').trim().split(/\s+/).some(w=>!!_STOPNM[stripDiac(w)]);
-  let h='<div style="border:1px solid var(--border);border-radius:14px;padding:13px;margin:6px 0;background:rgba(255,255,255,.025);direction:rtl;text-align:right">'
-    +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between"><span style="font-weight:700;font-size:21px;color:#f0f6fc;line-height:1.2">'+esc(_hdrName)+'</span>'+_relBadge(c[5]||c[6])+'</div>'
-    +(_showFull?('<div style="font-size:13px;color:#d9ccff;margin-top:1px">'+esc(_c1)+'</div>'):'')
-    +(_hasVar?('<div class="narrAltT" style="font-size:11px;color:#9db0d6;cursor:pointer;margin-top:3px">▸ '+(_varQil?'другие варианты имени (وقيل…)':'имя полностью')+'</div><div class="narrAltB" style="display:none;font-size:12px;color:#c9bdf0;margin-top:2px;line-height:1.55">'+esc(c[1])+'</div>'):'');
+  // === ШАПКА v9 (новый макет, на живых данных) ===
+  let _flags=null; try{ _flags=(await loadNarrFlags())[String(id)]; }catch(e){}
+  let _isSah=false; try{ const _gb=_genBadge((c[5]||"")+" "+(c[6]||"")+" "+(c[7]||""), c[4]); if(_gb && _gb[0]==="صحابي") _isSah=true; }catch(e){}
+  if(!_isSah){ try{ const _cn=stripDiac(c[1]||"").trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc && (_cn===gc || _cn.startsWith(gc+" "))){ _isSah=true; break; } } }catch(e){} }
   let _wk=null; try{ _wk=(await loadNarrWiki())[String(id)]||null; }catch(e){}
   let _ruSh=''; try{ _ruSh=arNameRu(_hdrName,5); }catch(e){}
-  // #258: если у равия ВЫВЕРЕННАЯ статья Википедии — её НАЗВАНИЕ и есть правильное рус. имя (напр. «Катада ибн Диама»), показываем его, а не авто-транслит.
   if(_WIKI_NARR_OK && _wk && _wk.t && /[А-Яа-яЁё]/.test(_wk.t)) _ruSh=_wk.t;
-  try{ const _kunNorm=(s)=>String(s||'').replace(/^اب[يا] /,'ابو ');   // имя часто в родит./вин. падеже (أبي/أبا سعيد) → нормализуем ВЕДУЩУЮ кунью в أبو, чтобы ключ карты сматчился (не трогаем «بن ابي» внутри!)
-    const _cks=[canon(_hdrName||'').trim(), canon(_c1||'').trim()]; _cks.push(_kunNorm(_cks[0]), _kunNorm(_cks[1]));
-    for(const k of _cks){ if(_NARR_RU[k]){ _ruSh=_NARR_RU[k]; break; } } }catch(e){}   // #сподвижники: курированное рус-имя (Абу Хурайра и т.д.) поверх авто-транслита/вики
+  try{ const _kunNorm=(x)=>String(x||'').replace(/^اب[يا] /,'ابو '); const _cks=[canon(_hdrName||'').trim(), canon(_c1||'').trim()]; _cks.push(_kunNorm(_cks[0]), _kunNorm(_cks[1])); for(const k of _cks){ if(_NARR_RU[k]){ _ruSh=_NARR_RU[k]; break; } } }catch(e){}
   let _ruNm=''; try{ _ruNm=arNameRu(_c1,7); }catch(e){}
-  if(_ruSh) h+='<div style="direction:ltr;text-align:left;font-size:13px;color:#bcd0ff;margin-top:2px">≈ '+esc(_ruSh)+'</div>';
-  if(_ruNm&&_showFull&&_ruNm!==_ruSh) h+='<div style="direction:ltr;text-align:left;font-size:13px;color:#8fa3c7">полное: '+esc(_ruNm)+'</div>';
-  // ⭐ С38 (заявка владельца): СПОДВИЖНИКАМ — ЗОЛОТОЙ знак сахаба (приоритет над «رجال الشيخين»; الصحابة كلهم عدول)
-  // Определяем по РАНГУ/ТАБАКЕ (без имени!) + гарант-список ПО ПРЕФИКСУ имени — иначе «مالك بن أنس» ловил подстроку «أنس بن مالك» (ложный сахаба).
-  let _isSah=false;
-  try{ const _gb=_genBadge((c[5]||'')+' '+(c[6]||'')+' '+(c[7]||''), c[4]); if(_gb && _gb[0]==='صحابي') _isSah=true; }catch(e){}
-  if(!_isSah){ try{ const _cn=stripDiac(c[1]||'').trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc && (_cn===gc || _cn.startsWith(gc+' '))){ _isSah=true; break; } } }catch(e){} }
-  if(_isSah) h+='<div style="margin-top:4px"><span style="display:inline-block;font-size:12.5px;font-weight:800;color:#241a00;background:linear-gradient(90deg,#f3d97f,#e3b94f);border-radius:8px;padding:2px 11px;box-shadow:0 0 0 1px #b8902a,0 0 9px rgba(232,195,90,.45)" title="Сподвижник Пророка ﷺ (صحابي) — высшая степень, الصحابة كلهم عدول">⭐ صحابي · Сподвижник</span></div>';
-  try{ const fl=(await loadNarrFlags())[String(id)]; if(fl) h+='<div style="margin-top:3px">'+_flagBadge(fl, c[1])+'</div>'; }catch(e){}   // M386+M402 (тап → его хадисы в Сахихах)
-  // ⚠️ ТАДЛИС (заявка владельца): если равий — мудаллис, показать ЯВНО + источник-довод (تدليس критичен: عنعنة под вопросом). Детект из ранга Ибн Хаджара/Захаби/موسуعة.
-  try{ let _td=null; let _inSahT=false; try{ _inSahT=((await loadNarrFlags())[String(id)]==='bm'); }catch(e){}
-    try{ if(!window._MUDCACHE){ window._MUDCACHE=await fetch('mudallisin.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); } const _m=window._MUDCACHE[String(id)]; if(_m) _td={s:_m.s,q:_m.q,tier:_m.tier}; }catch(e){}   // приоритет — выверенный реестр мудаллисов (rabt + طبقات المدلسين)
-    if(!_td){ const _TDL=/يدلس|تدليس|مدلس|كثير التدليس/;   // фолбэк: текст ранга Ибн Хаджара/Захаби/موسуعة
-      if(_TDL.test(String(c[5]||''))) _td={s:'Ибн Хаджар · تقريب التهذيب', q:String(c[5])};
-      else if(_TDL.test(String(c[6]||''))) _td={s:'аз-Захаби · الكاشف', q:String(c[6])};
-      else if(_TDL.test(String(c[8]||''))){ const m=String(c[8]).match(/.{0,28}(?:يدلس|تدليس|مدلس).{0,44}/); _td={s:'موсуعة рواة الحديث (база Мактаба)', q:m?m[0].trim():'…يدلس…'}; } }
-    if(_td){ const _impl = _td.tier===2 ? 'Тадлис лёгкий (мартаба 2) — عنعنته принимается, особ. в Сахихайн.' : (_td.tier===3 ? 'Частый тадлис (мартаба 3) — его عنعنة НЕ принимается без явного تصريح بالسماع.' : (_td.tier>=4 ? 'Сильный тадлис (мартаба '+_td.tier+') — принимается только при явном سماع.' : (_inSahT?'В Сахихайн его передача принята муحаддиثами (тадлис лёгкий).':'Степень (مرتبة) тадлиса по «طبقات المدلسين» — уточняется.')));
-      h+='<div style="margin-top:6px;border:1px solid #c98a2a;border-radius:10px;padding:7px 10px;background:rgba(201,138,42,.13)">'
-      +'<div style="font-size:13.5px;font-weight:800;color:#f0b75a">⚠️ مُدَلِّس · мудаллис (تدليس)</div>'
-      +'<div style="font-size:11.5px;color:#e0c98f;margin-top:3px;direction:rtl;text-align:right">📌 довод — '+esc(_td.s)+': «'+esc(String(_td.q||'').slice(0,120))+'»</div>'
-      +'<div style="font-size:11px;color:var(--hint);margin-top:3px;direction:ltr;text-align:left">Передавал с تدليس (скрывал звено в иснаде). При عنعنة («عن/أنّ» без явного слышания) — осторожно. '+_impl+'</div></div>'; }
-  }catch(e){}
-  // Википедия НА КАЖДОЙ карточке (заявка владельца, «сто раз говорил»): выверенная ссылка ИЛИ поиск. Для сподвижников/известных статья однозначна; для прочих помечено «(поиск)» (#207-тёзки честно обозначены).
-  if(_WIKI_NARR_OK && _wk && _wk.u) h+='<div style="direction:ltr;text-align:left;margin-top:3px"><span class="nWiki" data-u="'+esc(_wk.u)+'" style="cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px"><b style="font-family:Georgia,serif">W</b> Википедия'+(_wk.l&&_wk.l!=='ru'?(' · '+esc(_wk.l)):'')+' ↗</span></div>';
-  else { const _ru=!!(_ruSh&&/[А-Яа-яЁё]/.test(_ruSh)); const _wq=encodeURIComponent(_ru?_ruSh:((c[1]||'').replace(/[ً-ْٰ]/g,'').split(' ').slice(0,4).join(' ')));
-    h+='<div style="direction:ltr;text-align:left;margin-top:3px"><span class="nWikiS" data-q="'+_wq+'" data-ru="'+(_ru?'1':'')+'" style="cursor:pointer;font-size:11px;color:#cfd6dc;border:1px dashed #72777d;border-radius:4px;padding:1px 7px" title="Поиск в Википедии (статья не выверена — у однофамильцев может отличаться)"><b style="font-family:Georgia,serif">W</b> Википедия (поиск) ↗</span></div>'; }
-  let _snSid=''; try{ _snSid=(await loadMid2Sid())[String(c[0])]||''; }catch(e){}   // #141
-  let _hc=0; try{ const _pp=await dzPart(c[0]); _hc=Array.isArray(_pp)?_pp.length:0; }catch(e){}   // РЕДИЗАЙН: счётчик хадисов (мест в разобранных цепях, как кнопка «по цепям») — метрика в шапку (dzPart = кэш-шард, дёшево)
-  h+='<div style="font-size:11px;margin:2px 0 7px">'+(((cfg.shLink||'wiki')!=='off')?('📖 <span class="shamNarr" data-id="'+c[0]+'" style="color:var(--link);cursor:pointer;text-decoration:underline dotted" title="Открыть эту карточку на сайте shamela.ws">موسوعة رواة الحديث (база Мактабы) ↗</span> · '):'')+(_snSid?('<span class="snNarr" data-u="https://sunnah.com/narrator/'+esc(_snSid)+'" style="color:#7fb0d8;cursor:pointer;text-decoration:underline dotted" title="Карточка передатчика на sunnah.com (у sunnah.com СВОЯ нумерация, не совпадает с № Мактабы)">'+'<img src="'+_SUN_LOGO+'" style="width:14px;height:14px;vertical-align:-2px;border-radius:3px"> sunnah.com #'+esc(_snSid)+' ↗</span> · '):'')+'<span class="ntOpen" data-id="'+c[0]+'" style="color:#5b87b5;cursor:pointer;font-weight:700" title="№ в موсوعة рواة الحديث (Мактаба). На sunnah.com у того же человека ДРУГОЙ номер — нумерации справочников не совпадают.">№ Мактабы '+c[0]+' 📋</span></div>'
-    +(()=>{ const g=[['الكنية',c[2]],['النسب',c[3]],['سنة الوفاة',c[4]?('~'+c[4]+'هـ'):''],['الطبقة',c[7]],['البلد · где жил',_nx&&_nx.r],['الرحلات · поездки',_nx&&_nx.t],['محل الوفاة · где умер',_nx&&_nx.d]].filter(x=>x[1]); return g.length?('<details style="margin:6px 0"><summary style="cursor:pointer;color:#9db0d6;font-size:12.5px;font-weight:600">📂 Все данные (кунья · нисба · поколение · город)</summary><div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:6px 0">'+g.map(x=>'<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:9px;padding:5px 9px"><div style="color:var(--hint);font-size:11px;margin-bottom:1px">'+x[0]+'</div><b style="font-size:13.5px;color:var(--text)">'+esc(x[1])+'</b></div>').join('')+'</div></details>'):''; })()
-    +(_hc>0?('<div style="margin:5px 0;direction:rtl"><span class="partCount" title="Показать эти хадисы — нажми" style="display:inline-block;cursor:pointer;background:rgba(46,107,155,.15);border:1px solid #2e6b9b;border-radius:8px;padding:3px 11px;font-size:12.5px"><b style="color:#bcd2ff">📜 '+_hc+'</b> <span style="color:var(--hint);font-size:11px">хадисов (мест в разобранных цепях) ↓</span></span></div>'):'')
-    +((c[5]||c[6])?('<details style="margin:5px 0"><summary style="cursor:pointer;color:#9db0d6;font-size:12px;font-weight:600">Ранги (своды Ибн Хаджара / аз-Захаби)</summary>'+rank('الرتبة عند ابن حجر',c[5])+rank('الرتبة عند الذهبي',c[6])+'</details>'):'')
-    +((c[5]||c[6])?'<div style="font-size:10.5px;color:var(--hint);margin-top:2px">↑ поздние своды — справочно (Ибн Хаджар и аз-Захаби НЕ из 48 мутабарунов); эталон — акваль 48 из 150 книг, разделы ниже (R38)</div>':'');
-  // 📜 биография-сводка по-русски (заявка: «первым делом общая признанная биография на арабском и русском»)
-  try{
-    const bio=[];
-    bio.push((_ruNm||'Этот равий')+' — передатчик хадисов'+(c[2]?(', кунья '+c[2]):'')+(c[3]?(', нисба '+c[3]):'')+(c[4]?('. Умер ~'+c[4]+' г.х.'):'.'));
-    if(c[7]) bio.push('Табака (поколение): '+c[7]+'.');
-    if(c[5]) bio.push('Оценка Ибн Хаджара: «'+c[5]+'».');
-    if(c[6]) bio.push('Оценка аз-Захаби: «'+c[6]+'».');
-    h+='<div style="direction:ltr;text-align:left;font-size:13px;color:var(--text);margin-top:7px;line-height:1.6;border-top:1px dashed var(--border);padding-top:6px">📜 '+esc(bio.join(' '))+'</div>';
-  }catch(e){}
+  let _td=null,_inSahT=false; try{ _inSahT=(_flags==='bm'); }catch(e){}
+  try{ if(!window._MUDCACHE){ window._MUDCACHE=await fetch('mudallisin.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); } const _m=window._MUDCACHE[String(id)]; if(_m) _td={s:_m.s,q:_m.q,tier:_m.tier}; }catch(e){}
+  if(!_td){ const _TDL=/يدلس|تدليس|مدلس|كثير التدليس/; if(_TDL.test(String(c[5]||''))) _td={s:'Ибн Хаджар · تقريب التهذيب',q:String(c[5])}; else if(_TDL.test(String(c[6]||''))) _td={s:'аз-Захаби · الكاشف',q:String(c[6])}; else if(_TDL.test(String(c[8]||''))){ const m=String(c[8]).match(/.{0,28}(?:يدلس|تدليس|مدلس).{0,44}/); _td={s:'موسوعة الرواة',q:m?m[0].trim():'…يدلس…'}; } }
+  const _impl = _td ? (_td.tier===2?'Тадлис лёгкий (мартаба 2) — عنعنته принимается, особ. в Сахихайн.':(_td.tier===3?'Частый тадлис (мартаба 3): عنعنة НЕ принимается без явного تصريح بالسماع.':(_td.tier>=4?'Сильный тадлис — только при явном سماع.':(_inSahT?'В Сахихайн принят (тадлис лёгкий).':'Степень تدليس уточняется по طبقات المدلسين.')))) : '';
+  let _snSid=''; try{ _snSid=(await loadMid2Sid())[String(c[0])]||''; }catch(e){}
+  let _hc=0; try{ const _pp=await dzPart(c[0]); _hc=Array.isArray(_pp)?_pp.length:0; }catch(e){}
+  const _rumz=(String(_hdrName||c[1]||'').trim()[0]||'؟')+'.';
+  const _genTxt=_isSah?'⭐ صحابي · Сподвижник':(c[7]?('الطبقة '+c[7]):'تابعي');
+  let h='<div style="border:1px solid #21342a;border-radius:18px;padding:15px;margin:6px 0;background:linear-gradient(180deg,rgba(46,160,67,.06),rgba(46,160,67,0))">'
+    +'<div style="display:flex;gap:13px;align-items:flex-start;flex-wrap:wrap">'
+      +'<div style="flex:none"><div style="width:62px;height:62px;border-radius:50%;border:2px solid #2ea043;background:#0f1712;display:flex;align-items:center;justify-content:center;font-size:21px;color:#cfeada;'+_AF+'">'+esc(_rumz)+'</div></div>'
+      +'<div style="flex:1;min-width:190px">'
+        +'<div dir="rtl" style="font-weight:700;font-size:23px;color:#f0f6fc;line-height:1.15">'+esc(_hdrName)+'</div>'
+        +(_ruSh?('<div style="font-size:13px;color:#bcd0ff;margin-top:2px">≈ '+esc(_ruSh)+'</div>'):'')
+        +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'
+          +'<span style="font-size:11px;color:#8593a2;background:#0e1319;border:1px solid var(--border);border-radius:6px;padding:2px 8px">Muslimoon #'+c[0]+'</span>'
+          +(_snSid?('<span style="font-size:11px;color:#7fb0d8;background:rgba(46,107,155,.08);border:1px solid #2a4a63;border-radius:6px;padding:2px 8px">sunnah #'+esc(_snSid)+'</span>'):'')
+        +'</div>'
+      +'</div>'
+      +'<div style="flex:none;text-align:right;min-width:115px">'+_relBadge(c[5]||c[6])
+        +(_td?('<div style="margin-top:6px"><span class="mudQ" title="مدلّس · '+esc((_impl||'').replace(/"/g,String.fromCharCode(39)))+' Довод: '+esc(String(_td.s||''))+'" style="font-size:11px;background:rgba(202,161,74,.13);border:1px solid #5e4d23;border-radius:14px;padding:2px 9px;color:#e6c578;cursor:help">⚠️ мудаллис ?</span></div>'):'')
+      +'</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:11px">'
+      +(c[2]?('<div style="background:#161b22;border:1px solid var(--border);border-radius:9px;padding:4px 11px"><div style="font-size:10px;color:#6e7b8a">КУНЬЯ</div><div dir="rtl" style="font-size:14px;'+_AF+'">'+esc(c[2])+'</div></div>'):'')
+      +(c[3]?('<div style="background:#161b22;border:1px solid var(--border);border-radius:9px;padding:4px 11px"><div style="font-size:10px;color:#6e7b8a">НИСБА</div><div dir="rtl" style="font-size:14px;'+_AF+'">'+esc(String(c[3]).split(' ').slice(0,2).join(' '))+'</div></div>'):'')
+    +'</div>'
+    +'<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">'
+      +'<span dir="rtl" style="font-size:12px;color:#cdd6e0;background:#161b22;border:1px solid var(--border);border-radius:8px;padding:4px 10px">'+esc(_genTxt)+'</span>'
+      +(c[4]?('<span style="font-size:12px;color:#cdd6e0;background:#161b22;border:1px solid var(--border);border-radius:8px;padding:4px 10px">🕊 ум. ~'+esc(String(c[4]))+' г.х.'+((_nx&&_nx.d)?(' · '+esc(_nx.d)):'')+'</span>'):'')
+      +((_nx&&_nx.r)?('<span style="font-size:12px;color:#cdd6e0;background:#161b22;border:1px solid var(--border);border-radius:8px;padding:4px 10px">📍 '+esc(_nx.r)+'</span>'):'')
+      +(_hc>0?('<span class="partCount" style="font-size:12px;color:#bcd2ff;background:rgba(46,107,155,.15);border:1px solid #2e6b9b;border-radius:8px;padding:4px 10px;cursor:pointer">📜 '+_hc+' хадисов ↓</span>'):'')
+    +'</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px">'
+      +((_WIKI_NARR_OK&&_wk&&_wk.u)?('<span class="nWiki" data-u="'+esc(_wk.u)+'" style="cursor:pointer;font-size:12px;color:#e9eef3;border:1px solid #3a434d;background:#1c2128;border-radius:9px;padding:5px 11px"><b style="font-family:Georgia,serif">W</b> Википедия</span>'):('<span class="nWikiS" data-q="'+encodeURIComponent((_ruSh&&/[А-Яа-яЁё]/.test(_ruSh))?_ruSh:((c[1]||'').replace(/[ً-ْٰ]/g,'').split(' ').slice(0,4).join(' ')))+'" data-ru="'+((_ruSh&&/[А-Яа-яЁё]/.test(_ruSh))?'1':'')+'" style="cursor:pointer;font-size:12px;color:#cfd6dc;border:1px dashed #3a434d;background:#1c2128;border-radius:9px;padding:5px 11px"><b style="font-family:Georgia,serif">W</b> Википедия</span>'))
+      +(_snSid?('<span class="snNarr" data-u="https://sunnah.com/narrator/'+esc(_snSid)+'" style="cursor:pointer;font-size:12px;color:#cdeede;border:1px solid #1c6e4a;background:rgba(22,160,90,.13);border-radius:9px;padding:5px 11px"><img src="'+_SUN_LOGO+'" style="width:15px;height:15px;vertical-align:-3px;border-radius:3px"> sunnah.com</span>'):'')
+      +'<span class="shamNarr" data-id="'+c[0]+'" dir="rtl" style="cursor:pointer;font-size:12px;color:#f0d9a8;border:1px solid #5e4d23;background:rgba(201,138,42,.10);border-radius:9px;padding:5px 11px">👤 موسوعة الرواة</span>'
+    +'</div>';
+  try{ const bio=[]; bio.push((_ruNm||'Этот равий')+' — передатчик хадисов'+(c[2]?(', кунья '+c[2]):'')+(c[3]?(', нисба '+c[3]):'')+(c[4]?('. Умер ~'+c[4]+' г.х.'):'.')); if(c[7]) bio.push('Табака: '+c[7]+'.'); if(c[5]) bio.push('Оценка Ибн Хаджара: «'+c[5]+'».'); if(c[6]) bio.push('Оценка аз-Захаби: «'+c[6]+'».'); h+='<div style="font-size:13px;color:var(--text);margin-top:11px;line-height:1.6;border-top:1px dashed var(--border);padding-top:8px">📜 '+esc(bio.join(' '))+'</div>'; }catch(e){}
   h+='</div>';
   host.insertAdjacentHTML('afterbegin', h);
   // 🧭 СВОД КРИТИКОВ + 🤖 НЕЙРО-МУХАККИК + ссылки-проверки — СРАЗУ под карточкой (заявка владельца: «нейромухакик где вывод? где ссылки на оценки на страницы?»)
@@ -9068,6 +9062,24 @@ function renderMosuaJarh(c, out){
   try{ enableArabusTap(jt); }catch(e){}
   out.appendChild(box);
 }
+let _nuancesCache=null;
+async function loadNuances(){ if(_nuancesCache) return _nuancesCache; try{ _nuancesCache=await fetch('narr_nuances.json?v='+APPVER).then(r=>r.ok?r.json():{}); }catch(e){ _nuancesCache={}; } return _nuancesCache; }
+async function renderNuances(mid, host){ if(mid==null) return; let nz=null; try{ nz=(await loadNuances())[String(mid)]; }catch(e){} if(!nz||!nz.length) return;
+  const sec=document.createElement('div'); sec.style.cssText='margin-top:13px;border:1px solid #5e4d23;border-radius:14px;overflow:hidden;background:rgba(202,161,74,.05)';
+  const hdr=document.createElement('div'); hdr.style.cssText='padding:11px 13px;background:rgba(202,161,74,.10);font-weight:600;color:#e6c578;font-size:14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer';
+  hdr.innerHTML='<span>🔎 Нюансы и условия приёма · دقائق الإسناد</span><span class="nuTg">▾</span>';
+  const bd=document.createElement('div'); bd.style.cssText='padding:8px 13px 13px';
+  nz.forEach(function(n){ const exc=(n.type==='tadlis_exc'); const card=document.createElement('div');
+    card.style.cssText='border:1px solid '+(exc?'#5e4d23':'var(--border)')+';border-radius:11px;padding:11px;margin-top:9px;background:'+(exc?'rgba(202,161,74,.06)':'rgba(255,255,255,.02)');
+    var h='<div style="font-size:15px;color:'+(exc?'#e6c578':'#cdd6e0')+';font-weight:600">'+(exc?'✅ ':'ⓘ ')+esc(n.title||'')+'</div>';
+    if(n.ar) h+='<div dir="rtl" style="font-size:16px;'+_AF+';color:#eaf2ea;border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-top:7px;line-height:1.85">'+esc(n.ar)+'</div>';
+    if(n.ru) h+='<div style="font-size:13px;color:#aeb9c4;margin-top:6px;line-height:1.55">≈ '+esc(n.ru)+'</div>';
+    if(n.src) h+='<div style="font-size:11.5px;color:var(--hint);margin-top:6px">📖 '+esc(n.src)+'</div>';
+    if(exc && n.accept_from) h+='<div style="font-size:11.5px;color:#7fe3bf;margin-top:7px;background:rgba(46,160,67,.07);border:1px solid #2d6a45;border-radius:8px;padding:6px 9px">🔗 Авто-правило для цепи: «عن» от этих шейхов → принимается (соединение); от других с «عن» → проверь سماع.</div>';
+    card.innerHTML=h; bd.appendChild(card); });
+  hdr.onclick=function(){ const op=bd.style.display!=='none'; bd.style.display=op?'none':'block'; hdr.querySelector('.nuTg').textContent=op?'▸':'▾'; };
+  sec.appendChild(hdr); sec.appendChild(bd); host.appendChild(sec);
+}
 async function showNarratorBio(name, out){
   out.style.display='block'; out.innerHTML='';
   out.dataset.noTT='1';   // 🔴 фикс дубля: свод критиков рендерит showNarratorBio ОДИН раз (ниже, после учители/ученики); showNarratorCardLocal свой свод пропускает по этому флагу
@@ -9119,6 +9131,7 @@ async function showNarratorBio(name, out){
   // ПОРЯДОК СЕКЦИЙ (указ владельца, очередь п.1): имя → 🤖 нейро-вывод + критики → учители/ученики → доп.источники.
   // 🧭 ЧИСТАЯ секция «Критические оценки» (свод критиков + нейро-вывод + ссылки) — как у sunnah.com (указ владельца: одна чистая, не каша). СНАЧАЛА (выше учителей/учеников).
   if(c){ try{ const _ttB=document.createElement('div'); out.appendChild(_ttB); await renderTestimoniesCard(c[0], _ttB); }catch(e){} }
+  if(c){ try{ await renderNuances(c[0], out); }catch(e){} }   // раздел Нюансы (тадлис-исключения)
   // 🔗 Учители↔ученики (تهذيب الكمال + наши цепи передачи). Р-37/Р-04: общий помощник _renderTlinkLinks. Клик → ре-рендер карточки. ПОСЛЕ свода критиков.
   if(c){ try{ await _renderTlinkLinks(c[0], out, (nm)=>{ out.innerHTML=''; const bx=document.createElement('div'); out.appendChild(bx); showNarratorBio(nm, bx); try{ out.scrollIntoView({block:'start',behavior:'smooth'}); }catch(_e){} }); }catch(e){} }
   // Доп.источники (Мактаба/149 трудов/по критикам/упоминания) — ВТОРИЧНО, свёрнуто (раньше была каша из 4 равных вкладок наверху).
