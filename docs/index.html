@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v881</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v882</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -713,7 +713,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v881';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v882';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8981,9 +8981,26 @@ async function renderTestimoniesCard(mid, host){
           const vb=document.createElement('div'); vb.style.cssText='margin-top:10px;background:rgba(224,121,106,.10);border:1px solid #6a3a2d;border-radius:9px;padding:9px 12px';
           vb.innerHTML='<div style="font-size:13px;color:#e0796a;font-weight:700">🚨 Сверка с sunnah.com: не хватает '+_missing.length+' оцен'+(_missing.length===1?'ки':(_missing.length<5?'ок':'ок'))+'</div>'
             +'<div style="font-size:12px;color:#e0b3a8;margin-top:4px">У sunnah.com есть оценка от критиков, которых нет в нашем своде:</div>'
-            +'<div style="font-size:13px;margin-top:5px;line-height:1.7" dir="rtl">'+_missing.slice(0,20).map(s=>esc(s)).join('، ')+(_missing.length>20?' …':'')+'</div>';
+            +'<div style="font-size:13px;margin-top:5px;line-height:1.7" dir="rtl">'+_missing.slice(0,20).map(s=>esc(s)).join('، ')+(_missing.length>20?' …':'')+'</div>'
+            // владелец 01.07.2026: кнопка «привести в соответствие» — подтянуть недостающие оценки sunnah.com С ТЕКСТАМИ прямо в карточку
+            +(isOwner?'<div id="_snPull_'+_sid+'" style="margin-top:8px"><span class="snPullBtn" data-sid="'+esc(String(_sid))+'" style="display:inline-block;cursor:pointer;font-size:12px;font-weight:600;color:#bff5d4;background:rgba(46,155,91,.14);border:1px solid #2e9b5b;border-radius:9px;padding:5px 12px">🔄 Привести в соответствие с sunnah.com (подтянуть '+_missing.length+' оцен'+(_missing.length<5?'ки':'ок')+')</span></div>':'');
           bd.appendChild(vb);
           try{ _appReport('СВЕРКА РАВИЯ: sid'+_sid+' (mid'+mid+') — недостаёт '+_missing.length+' критиков: '+_missing.slice(0,8).join(', '), 'сверка-равий-расхождение'); }catch(e){}
+          // обработчик кнопки владельца: загрузить sunverd_full (оценки С ЦИТАТАМИ) и показать недостающие критиков в карточке
+          if(isOwner){ try{ const _mc=new Set(_missing.map(s=>_mCanon(s))); const _btn=vb.querySelector('.snPullBtn');
+            if(_btn) _btn.onclick=async()=>{ _btn.textContent='⏳ Загружаю оценки sunnah.com…';
+              try{ if(!window._sunverdFull) window._sunverdFull={};
+                const _sh=+_sid%60;
+                if(window._sunverdFull[_sh]===undefined){ window._sunverdFull[_sh]=await fetch('./sunverd_full/'+_sh+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null); }
+                const _full=window._sunverdFull[_sh] ? (window._sunverdFull[_sh][String(_sid)]||[]) : [];
+                const _add=_full.filter(x=>_mc.has(_mCanon(x.s)));
+                const _box=document.createElement('div'); _box.style.cssText='margin-top:8px;border-top:1px dashed #6a3a2d;padding-top:8px';
+                _box.innerHTML='<div style="font-size:12px;color:#bff5d4;font-weight:600;margin-bottom:5px">🌐 Оценки sunnah.com ('+_add.length+') — приведено в соответствие:</div>'
+                  +_add.map(x=>{ const _ru=(typeof _critRu==="function"?_critRu(x.s):x.s)||x.s; return '<div style="margin:5px 0;padding:5px 8px;background:rgba(46,155,91,.07);border-radius:7px"><span style="font-size:13px;color:#dbe3eb">'+esc(String(_ru).replace(/<[^>]+>/g,""))+'</span> <span dir="rtl" style="font-size:14px;'+_AF+';color:#9fd3a8">'+esc(x.q||"")+'</span></div>'; }).join('');
+                _btn.parentNode.appendChild(_box); _btn.style.display='none';
+              }catch(e){ _btn.textContent='⚠️ Не удалось загрузить'; }
+            };
+          }catch(e){} }
         }
       }
     }
