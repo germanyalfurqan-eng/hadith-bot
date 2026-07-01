@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v861</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v862</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -705,7 +705,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v861';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v862';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -10067,8 +10067,26 @@ async function verifyNarr(card, place, text){
           _cidHtml+='<span class="vBackCode" data-bb="'+esc(_bi.bc)+'" title="По ОПОЗНАННЫМ передатчикам эта же цепочка встречается '+_bi.n+' раз. В режиме кодов раздроблена на '+_bi.v+' кодов — В ОСНОВНОМ НЕопознанными краткими звеньями (U-коды), форма передачи минимально. Тап — открыть этот хребет.'+_qn+'" style="cursor:pointer;font-size:11.5px;color:#bff5d4;border:1px solid #2e9b5b;border-radius:8px;padding:3px 10px;font-family:monospace">🧬 по передатчикам: '+_bi.n+_qm+' ↗</span>';
         } }catch(e){}
       } }catch(e){}
+    // 🤖 НЕЙРОТАХКИК — «обоснование»: почему цепь может быть под вопросом (владелец 01.07.2026, «объясняешь недостоверный например потому что амаш через ан»).
+    // Мудаллис + форма передачи 'عن' (без явного تصريح بالسماع типа حدثنا/سمعت/أخبرنا) = тадлис-риск: возможен пропущенный передатчик.
+    let _tdHtml='';
+    try{
+      if(!window._MUDCACHE){ window._MUDCACHE=await fetch('mudallisin.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); }
+      const _tdRisks=[];
+      for(let i=1;i<auth.length;i++){ const f=(forms[i-1]||'').trim();
+        if(f!=='عن') continue;   // явные формы (حدثنا/سمعت/أخبرنا/حدثني) — تصريح بالسماع, тадлис не грозит
+        const nm=auth[i-1][1], mid=auth[i-1][2]?String(auth[i-1][2]):null;
+        const md=mid?window._MUDCACHE[mid]:null;
+        if(md){ _tdRisks.push({nm:nm, tier:md.tier, q:md.q||'', to:auth[i][1]}); }
+      }
+      if(_tdRisks.length){
+        const _rows=_tdRisks.map(r=>{ const sev=r.tier>=4?'сильный тадлис':(r.tier===3?'частый тадлис':'лёгкий тадлис');
+          return '<div style="margin-top:4px"><span dir="rtl" style="'+_AF+'">'+esc(r.nm)+'</span> ← <b>عن</b> ← <span dir="rtl" style="'+_AF+'">'+esc(r.to)+'</span>: <span style="color:#e6c578">'+sev+'</span>'+(r.q?(' <span style="color:var(--hint)">('+esc(r.q.slice(0,90))+')</span>'):''); }).join('');
+        _tdHtml='<details style="margin-top:8px;border:1px solid #5e4d23;border-radius:9px;padding:7px 10px;background:rgba(202,161,74,.08)"><summary style="cursor:pointer;color:#e6c578;font-size:12px;font-weight:600">⚠️ Обоснование (нейротахкик) — тадлис-риск в цепи</summary><div style="font-size:12px;margin-top:6px;line-height:1.6">Передатчик — известный мудаллис, а форма передачи здесь «عن» (не «حدثنا/سمعت/أخبرنا» — явное указание на слышание). Значит возможен تدليس (пропущенное непрямое звено), пока не доказано иное:'+_rows+'</div></details>';
+      }
+    }catch(e){}
     // #93 (полезные функции таблицы цепей): копировать цепь целиком (передатчики + формы передачи + id)
-    h+='<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><span class="vCopyChain" style="cursor:pointer;font-size:11.5px;color:var(--link);border:1px solid var(--border);border-radius:8px;padding:3px 10px">📋 Копировать цепь</span>'+_cidHtml+'</div>';
+    h+='<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><span class="vCopyChain" style="cursor:pointer;font-size:11.5px;color:var(--link);border:1px solid var(--border);border-radius:8px;padding:3px 10px">📋 Копировать цепь</span>'+_cidHtml+'</div>'+_tdHtml;
     box.innerHTML=h;
     try{ const _cc=box.querySelector('.vCopyChain'); if(_cc) _cc.onclick=(e)=>{ e.stopPropagation();
       const _ct=auth.map((r,i)=>(i>0?(forms[i-1]?(' ← '+forms[i-1]+' ← '):' ← '):'')+r[1]+(r[2]?(' [id'+r[2]+']'):'')).join('');
