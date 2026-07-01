@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v872</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v873</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -713,7 +713,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v872';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v873';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -6594,7 +6594,7 @@ function highlightNarrRuInDiv(div, arNames, onClick){
   });
 }
 /* ===== БАЗА ПЕРЕДАТЧИКОВ (расшифрованная Мактаба, 18989 равиев) — карточка как в Шамиле ===== */
-let _narrNames=null, _narrNamesP=null, _narrShard={};
+let _narrNames=null, _narrNamesP=null, _narrShard={}, _narrShardP={};
 function loadNarrNames(){ if(_narrNames) return Promise.resolve(_narrNames); if(_narrNamesP) return _narrNamesP;
   _narrNamesP=fetchJSON('./narrators_names.json', 20000, {silent:true}).then(async j=>{ _narrNames=j||[];   // QA-свип: таймаут (индекс имён — узкое место подсветки; голый fetch висел)
     // M381: расширенный индекс форм (كنية/نسب: أبو مالك الأشعري، الحسن البصري…) — уникальные вливаются в общий
@@ -6604,8 +6604,15 @@ function loadNarrNames(){ if(_narrNames) return Promise.resolve(_narrNames); if(
     try{ const S=new Set(), F=new Set(); _narrNames.forEach(p=>{ const nm=p[0]||''; if(!nm) return; F.add(nm); const f=nm.split(' ')[0]; if(f&&f.length>1){ S.add(f); S.add(f.replace(/^ال/,'')); } }); window._narrKnownW=S; window._narrKnownF=F; }catch(e){}
     return _narrNames; }).catch(()=>{_narrNames=[];return _narrNames;}); return _narrNamesP; }
 function _narrCanon(s){ s=(s||'').replace(/[ً-ْـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه'); return s.replace(/\s+/g,' ').trim(); }
-let _shuhraMap=null, _guarMap=null;
-async function _loadShuhra(){ if(_shuhraMap===null){ try{ _shuhraMap=await fetchJSON('./narr_shuhra.json?v='+APPVER, 20000, {silent:true}); }catch(e){ _shuhraMap={}; } } return _shuhraMap; }   // QA-свип: таймаут (резолв имён не виснет)
+let _mudPromise=null;
+async function _loadMudallisin(){ if(window._MUDCACHE) return window._MUDCACHE;
+  if(!_mudPromise) _mudPromise=fetch('mudallisin.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({}));
+  return _mudPromise; }   // владелец 01.07.2026: тот же promise-кэш баг — mudallisin.json грузился 150+ раз параллельно
+let _shuhraMap=null, _guarMap=null, _shuhraPromise=null;
+async function _loadShuhra(){ if(_shuhraMap!==null) return _shuhraMap;
+  if(!_shuhraPromise) _shuhraPromise=fetchJSON('./narr_shuhra.json?v='+APPVER, 20000, {silent:true}).catch(()=>({}));
+  // владелец 01.07.2026 («грузилось долго»): без promise-кэша каждый передатчик на экране успевал запустить СВОЙ fetch до того, как первый резолвился — narr_shuhra.json грузился 80+ раз параллельно вместо одного. Теперь все зовущие ждут ОДИН и тот же промис.
+  _shuhraMap=await _shuhraPromise; return _shuhraMap; }   // QA-свип: таймаут (резолв имён не виснет)
 // #169/#170: ГАРАНТ-КАРТА канонических id (build_narr_guar.py из авторитетной na, доминирующий id на форму — namesake-safe).
 async function _loadGuar(){ if(_guarMap===null){ try{ _guarMap=await fetchJSON('./narr_guar.json?v='+APPVER, 20000, {silent:true}); }catch(e){ _guarMap={}; } } return _guarMap; }   // QA-свип: таймаут (гарант-карта тёзок не виснет)
 async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.length) return null; const cn=_narrCanon(name); if(cn.length<4) return null;
@@ -6621,7 +6628,7 @@ async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.lengt
     if(nm.indexOf(cn+' ')===0 && nm.length<prefLen){ pref=it[1]; prefLen=nm.length; }
     if(cn.indexOf(nm+' ')===0 && nm.length>coverLen && nm.indexOf(' ')>0){ cover=it[1]; coverLen=nm.length; } }
   return exact!=null?exact:(cover!=null?cover:pref); }
-async function _narrCard(id){ const b=Math.floor(id/100); if(!_narrShard[b]){ try{ _narrShard[b]=await (await fetch('./narr/'+b+'.json')).json(); }catch(e){ _narrShard[b]={}; } } return (_narrShard[b]||{})[String(id)]||null; }
+async function _narrCard(id){ const b=Math.floor(id/100); if(!_narrShard[b]){ if(!_narrShardP[b]) _narrShardP[b]=fetch('./narr/'+b+'.json').then(r=>r.json()).catch(()=>({})); _narrShard[b]=await _narrShardP[b]; } return (_narrShard[b]||{})[String(id)]||null; }
 // доп-поля карточки (البلد/الإقامة·الرحلات·محل الوفاة) из موسوعة الرواة — аналог sunnah.com «Lived in / Places». Шарды narrx (build_narrx.py).
 var _narrXShard={};
 async function _narrX(id){ const b=Math.floor(id/100); if(_narrXShard[b]===undefined){ try{ _narrXShard[b]=await (await fetch('./narrx/'+b+'.json?v='+APPVER)).json(); }catch(e){ _narrXShard[b]=null; } } return (_narrXShard[b]||{})[String(id)]||null; }
@@ -7289,10 +7296,14 @@ async function _isnadInfo(codes, forms){
 // U-коды отброшены → собирает варианты одной цепи вместе (реестр isnad/back_*.json, билдер build_backbone.py).
 function _backCode(codes){ const nums=(codes||[]).filter(x=>typeof x==='number'); if(nums.length<2) return null; return 'B'+_md5(nums.map(String).join('|')).slice(0,10); }
 var _backC={};
+var _backCP={};   // владелец 01.07.2026 («грузилось долго»): promise-кэш — без него один и тот же шард back_XX.json грузился по 2-3 раза параллельно
 async function _backRec(bc){
   if(!bc||!/^B[0-9a-fA-F]{6,}/.test(bc)) return null;
   const pref=bc.slice(1,3); let m=_backC[pref];
-  if(m===undefined){ try{ const r=await fetch('./isnad/back_'+pref+'.json?v='+APPVER); m=r.ok?await r.json():{}; }catch(e){ m={}; } _backC[pref]=m; }
+  if(m===undefined){
+    if(!_backCP[pref]) _backCP[pref]=fetch('./isnad/back_'+pref+'.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({}));
+    m=await _backCP[pref]; _backC[pref]=m;
+  }
   const rec=(m&&m[bc])||null;
   return rec?{bc, n:rec.n, v:rec.v, ids:rec.ids, ex:(rec.ex||[]), q:rec.q}:null;
 }
@@ -9102,7 +9113,7 @@ async function showNarratorCardLocal(name, host){
   try{ const _kunNorm=(x)=>String(x||'').replace(/^اب[يا] /,'ابو '); const _cks=[canon(_hdrName||'').trim(), canon(_c1||'').trim()]; _cks.push(_kunNorm(_cks[0]), _kunNorm(_cks[1])); for(const k of _cks){ if(_NARR_RU[k]){ _ruSh=_NARR_RU[k]; break; } } }catch(e){}
   let _ruNm=''; try{ _ruNm=arNameRu(_c1,7); }catch(e){}
   let _td=null,_inSahT=false; try{ _inSahT=(_flags==='bm'); }catch(e){}
-  try{ if(!window._MUDCACHE){ window._MUDCACHE=await fetch('mudallisin.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); } const _m=window._MUDCACHE[String(id)]; if(_m) _td={s:_m.s,q:_m.q,tier:_m.tier}; }catch(e){}
+  try{ window._MUDCACHE=await _loadMudallisin(); const _m=window._MUDCACHE[String(id)]; if(_m) _td={s:_m.s,q:_m.q,tier:_m.tier}; }catch(e){}
   if(!_td){ const _TDL=/يدلس|تدليس|مدلس|كثير التدليس/; if(_TDL.test(String(c[5]||''))) _td={s:'Ибн Хаджар · تقريب التهذيب',q:String(c[5])}; else if(_TDL.test(String(c[6]||''))) _td={s:'аз-Захаби · الكاشف',q:String(c[6])}; else if(_TDL.test(String(c[8]||''))){ const m=String(c[8]).match(/.{0,28}(?:يدلس|تدليس|مدلس).{0,44}/); _td={s:'موسوعة الرواة',q:m?m[0].trim():'…يدلس…'}; } }
   const _impl = _td ? (_td.tier===2?'Тадлис лёгкий (мартаба 2) — عنعنته принимается, особ. в Сахихайн.':(_td.tier===3?'Частый тадлис (мартаба 3): عنعنة НЕ принимается без явного تصريح بالسماع.':(_td.tier>=4?'Сильный тадлис — только при явном سماع.':(_inSahT?'В Сахихайн принят (тадлис лёгкий).':'Степень تدليس уточняется по طبقات المدلسين.')))) : '';
   let _snSid=''; try{ _snSid=(await loadMid2Sid())[String(c[0])]||''; }catch(e){}
@@ -9994,9 +10005,12 @@ function autoHighlightNarr(text, card, out, ref){
 // ===== НЕЗАВИСИМАЯ СИСТЕМА СВЕРКИ ПЕРЕДАТЧИКОВ (стратегич. заявка) =====
 // Эталон = цепь sunnah.com (= Мактаба): verify/<bid>_<num/500>.json {num:[[sid,имя,mid]]}. mid = id Мактабы (=наш id).
 // Сверяем: сколько передатчиков по эталону vs сколько подсветило ПРИЛОЖЕНИЕ (codif n). Расхождение (кол-во ИЛИ состав иснада) → 🚨 тревога + регистрация ошибки.
-let _verCache={};
+let _verCache={}, _verCacheP={};
 async function _verifyChain(bid,num){ const key=bid+'_'+Math.floor(+num/500);
-  if(!(key in _verCache)){ try{ const r=await fetch('./verify/'+key+'.json?v='+APPVER); _verCache[key]=r.ok?await r.json():null; }catch(e){ _verCache[key]=null; } }
+  if(!(key in _verCache)){
+    if(!_verCacheP[key]) _verCacheP[key]=fetch('./verify/'+key+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
+    _verCache[key]=await _verCacheP[key];   // владелец 01.07.2026 («грузилось долго»): promise-кэш — verify/*.json грузился по 16-30 раз параллельно на каждый хадис на экране
+  }
   const m=_verCache[key]; return m?(m[String(num)]||null):null; }
 // формы передачи между именами (для подписи в схеме): возвращает массив глаголов в порядке текста
 function _isnadForms(text){
@@ -10126,7 +10140,7 @@ async function verifyNarr(card, place, text){
     // Мудаллис + форма передачи 'عن' (без явного تصريح بالسماع типа حدثنا/سمعت/أخبرنا) = тадлис-риск: возможен пропущенный передатчик.
     let _tdHtml='';
     try{
-      if(!window._MUDCACHE){ window._MUDCACHE=await fetch('mudallisin.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); }
+      window._MUDCACHE=await _loadMudallisin();
       const _tdRisks=[];
       for(let i=1;i<auth.length;i++){ const f=(forms[i-1]||'').trim();
         if(f!=='عن') continue;   // явные формы (حدثنا/سمعت/أخبرنا/حدثني) — تصريح بالسماع, тадлис не грозит
