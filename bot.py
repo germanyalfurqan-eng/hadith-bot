@@ -1199,6 +1199,12 @@ def ask_neuro(prompt, system, max_tokens=2000):
             return gh + "\n\n⚡ *Модель:* 🆓 GitHub GPT-4o-mini — бесплатно"
     return ask_deepseek(prompt, system, max_tokens)
 
+def _neuroModelTag(txt):
+    """Какая модель реально ответила в ask_neuro()/ask_ai() — вытаскиваем из хвоста «⚡/💎 *Модель:* …».
+    Нужно, чтобы _notify_usage() не врал владельцу «DeepSeek, ключ потрачен», когда на деле ответил бесплатный Groq/Gemini."""
+    m = re.search(r'[⚡💎]\s*\*Модель:\*\s*([^\n]+)', txt or '')
+    return m.group(1).strip() if m else ''
+
 def ask_special(prompt, system=None):
     """Особые задачи: пробуем OpenAI (если есть ключ+деньги), иначе Gemini (бесплатный лимит). Возвращает (ответ, имя_модели)."""
     if OPENAI_API_KEY:
@@ -4675,7 +4681,7 @@ def isnad_ai(text):
 async def _api_serve(application=None):
     from aiohttp import web
     loop = asyncio.get_event_loop()
-    async def _notify_usage(user, feat, fresh, src, num, saved, q="", frag=""):
+    async def _notify_usage(user, feat, fresh, src, num, saved, q="", frag="", model=""):
         # зеркалим ВСЮ активность ИИ в рабочий канал-журнал (LOG_CHAT_ID) — и траты, и из базы.
         # M301 (по требованию владельца): кэш-вызовы НЕ глушим — показываем с тем же ПОДРОБНЫМ описанием
         # (что/где/запрос), чтобы видеть активность функции; разница только в метке 🆕 потрачено / ♻️ из базы.
@@ -4690,7 +4696,16 @@ async def _api_serve(application=None):
             who = f"[{_nm or uid}](tg://user?id={uid})"   # #312: кликабельно — имя (или id) → человек
         else:
             who = "аноним"
-        tag = "🆕 свежий (DeepSeek, ключ потрачен)" if fresh else "♻️ из базы (ключ НЕ потрачен)"
+        # #414/#420 (повтор-жалоба владельца, скрин 01.07): раньше ЖЁСТКО писали «DeepSeek, ключ потрачен» для
+        # ЛЮБОГО свежего ответа — даже когда реально ответил бесплатный Groq/Gemini. Теперь берём модель из ответа.
+        if not fresh:
+            tag = "♻️ из базы (ключ НЕ потрачен)"
+        elif model and ('🆓' in model or 'бесплатно' in model.lower()):
+            tag = f"🆕 свежий ({model}, ключ НЕ потрачен)"
+        elif model:
+            tag = f"🆕 свежий ({model})"
+        else:
+            tag = "🆕 свежий (DeepSeek, ключ потрачен)"   # фолбэк — модель не удалось определить из ответа
         # #272/«ссылка вкладки»: МЕСТО = кликабельная дип-ссылка ровно на карточку хадиса в приложении (m_ для Мухаймина, r_ для остальных)
         if src and num not in (None, ''):
             _sa = ('m_' + str(num)) if src == 'muhaymin' else ('r_' + str(src) + '_' + str(num))
@@ -4974,7 +4989,7 @@ async def _api_serve(application=None):
                 try: saved = {"new": True, "total": await loop.run_in_executor(None, neuro_put, nkey, result)}
                 except Exception: saved = None
             await loop.run_in_executor(None, usage_log, user, "нейро", True, len(meaning), "", "")
-            await _notify_usage(user, "нейро", True, "", "", saved, q=meaning)
+            await _notify_usage(user, "нейро", True, "", "", saved, q=meaning, model=_neuroModelTag(txt))
             out = dict(result); out['cached'] = False
             return _cors(web.json_response(out))
         except Exception as e:
@@ -5036,7 +5051,7 @@ async def _api_serve(application=None):
                     saved = {"new": True, "total": _tot, "what": f"книга «{q[:30]}» → {_ttl}"}
                 except Exception: saved = None
             await loop.run_in_executor(None, usage_log, user, "поиск книги", True, len(q), "", "")
-            await _notify_usage(user, "поиск книги", True, "", "", saved)
+            await _notify_usage(user, "поиск книги", True, "", "", saved, model=_neuroModelTag(txt))
             out = dict(result); out['cached'] = False
             return _cors(web.json_response(out))
         except Exception as e:
@@ -5139,7 +5154,7 @@ async def _api_serve(application=None):
                 try: saved = {"new": True, "total": await loop.run_in_executor(None, binfo_put, key, result)}
                 except Exception: saved = None
             await loop.run_in_executor(None, usage_log, user, "описание книги", True, len(title), "", "")
-            await _notify_usage(user, "описание книги", True, "", "", saved)
+            await _notify_usage(user, "описание книги", True, "", "", saved, model=_neuroModelTag(txt))
             out = dict(result); out['cached'] = False
             return _cors(web.json_response(out))
         except Exception as e:
@@ -5222,7 +5237,7 @@ async def _api_serve(application=None):
                     saved = {"new": True, "total": len(cache)}
                 except Exception: pass
             await loop.run_in_executor(None, usage_log, user, "разбор передатчика", True, len(name), "", "")
-            await _notify_usage(user, "разбор передатчика", True, "", "", saved)
+            await _notify_usage(user, "разбор передатчика", True, "", "", saved, model=_neuroModelTag(txt))
             out = dict(result); out['cached'] = False
             return _cors(web.json_response(out))
         except Exception as e:
@@ -5348,7 +5363,7 @@ async def _api_serve(application=None):
                 try: saved = {"new": True, "total": await loop.run_in_executor(None, binfo_put, key, result)}
                 except Exception: saved = None
             await loop.run_in_executor(None, usage_log, user, "биография автора", True, len(author), "", "")
-            await _notify_usage(user, "биография автора", True, "", "", saved)
+            await _notify_usage(user, "биография автора", True, "", "", saved, model=_neuroModelTag(txt))
             out = dict(result); out['cached'] = False
             return _cors(web.json_response(out))
         except Exception as e:
@@ -5482,6 +5497,45 @@ async def _api_serve(application=None):
                 pass
         return _cors(web.json_response({'ok': True}))
 
+    async def book_rag(r):
+        # RAG-поиск ВНУТРИ книги (указ владельца 01.07.2026, срочно): клиент уже нашёл отрывки книги
+        # (через существующий /api/maktaba, ограниченный этой книгой — retrieval), сюда шлёт вопрос+отрывки —
+        # ИИ отвечает СТРОГО по ним (generation), бесплатные модели первыми (ask_neuro), не выдумывает сверх текста.
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('neuro', user):
+            return _deny('neuro')
+        if not rate_ok('bookrag:' + _uid(user, r), 8, 60):
+            return _ratelimited()
+        _q = await _ai_quota(user, r)
+        if _q: return _q
+        try:
+            question = (d.get('q') or '').strip()[:400]
+            book_name = (d.get('book') or '').strip()[:200]
+            excerpts = d.get('excerpts') or []
+            if not question or not excerpts:
+                return _cors(web.json_response({'answer': '', 'error': 'no-input'}))
+            ctx = ""
+            for i, e in enumerate(excerpts[:8]):
+                txt = str((e or {}).get('text') or '')[:900]
+                loc = str((e or {}).get('loc') or '')
+                if txt:
+                    ctx += f"\n[Отрывок {i+1}{(' · ' + loc) if loc else ''}]\n{txt}\n"
+            if not ctx.strip():
+                return _cors(web.json_response({'answer': '', 'error': 'no-excerpts'}))
+            sysm = ("Ты отвечаешь на вопрос читателя СТРОГО по приведённым ниже отрывкам из книги"
+                    + (f' «{book_name}»' if book_name else "") + ". Не используй знания вне этих отрывков и не выдумывай. "
+                    "Если ответа в отрывках нет — честно скажи: «в найденных отрывках это не встретилось» — и не сочиняй. "
+                    "Отвечай по-русски, компактно (3-8 предложений), и ОБЯЗАТЕЛЬНО укажи номер отрывка(ов), на которые опираешься, вида «(отрывок N)».")
+            txt = await loop.run_in_executor(None, ask_neuro, f"Вопрос: {question}\n\nОтрывки:\n{ctx}", sysm) or ""
+            _rgModel = _neuroModelTag(txt)
+            answer = re.sub(r'\s*[⚡💎].*$', '', txt, flags=re.S).strip()
+            await loop.run_in_executor(None, usage_log, user, "RAG по книге", True, len(question), "", "")
+            await _notify_usage(user, "RAG по книге", True, "", "", None, q=question, model=_rgModel)
+            return _cors(web.json_response({'answer': answer}))
+        except Exception as e:
+            return _cors(web.json_response({'answer': '', 'error': str(e)}))
+
     async def explain(r):
         # M208: нейро-объяснение «простыми словами» (шарх/тафсир) хадиса/аята. Накопление в expl_<code>. Гейт = нейро.
         d = await _body(r)
@@ -5513,6 +5567,7 @@ async def _api_serve(application=None):
                     "Не пересказывай весь текст, без длинных предисловий и воды. НЕ выдумывай факты/хадисы; "
                     "если спорно — отметь одним словом. Только объяснение, коротко.")
             ex = await loop.run_in_executor(None, ask_neuro, "Источник: " + ref + "\n" + text, sysm)
+            _exModel = _neuroModelTag(ex or '')
             ex = re.sub(r'\s*⚡.*$', '', (ex or ''), flags=re.S).strip()
             if not ex:
                 return _cors(web.json_response({'explanation': '', 'error': 'no-ai'}))
@@ -5520,7 +5575,7 @@ async def _api_serve(application=None):
             if num not in (None, ''):
                 saved = await loop.run_in_executor(None, coll_add_translation, store_src, num, text, ex)
             await loop.run_in_executor(None, usage_log, user, "объяснение", True, len(text), source, str(num or ""))
-            await _notify_usage(user, "объяснение", True, source, num, saved)
+            await _notify_usage(user, "объяснение", True, source, num, saved, model=_exModel)
             return _cors(web.json_response({'explanation': ex, 'cached': False}))
         except Exception as e:
             return _cors(web.json_response({'explanation': '', 'error': str(e)}))
@@ -5694,7 +5749,7 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True, 'id': fid}))
 
     async def tashkeel(r):
-        # ИИ-огласовки (تشكيل) арабского текста; гейт — нейро (это DeepSeek)
+        # ИИ-огласовки (تشكيل) арабского текста; гейт — нейро (бесплатные первыми через ask_neuro)
         d = await _body(r)
         user = verify_init_data(d.get('initData'))
         if not feature_allowed('neuro', user):
@@ -5719,11 +5774,12 @@ async def _api_serve(application=None):
         sysm = ("Ты расставляешь огласовки (تشكيل) в арабском тексте. "
                 "Верни ТОТ ЖЕ текст с полной огласовкой. Без перевода, без пояснений, без кавычек — только огласованный текст.")
         out = await loop.run_in_executor(None, ask_neuro, text, sysm) or ""
+        _tkModel = _neuroModelTag(out)
         out = re.sub(r'\s*⚡.*$', '', out, flags=re.S).strip()
         if out and source and num not in (None, ''):
             await loop.run_in_executor(None, tashkeel_add, source, num, out)
         await loop.run_in_executor(None, usage_log, user, "огласовки", True, len(text), source, str(num or ""))
-        await _notify_usage(user, "огласовки", True, source, num, None)
+        await _notify_usage(user, "огласовки", True, source, num, None, model=_tkModel)
         return _cors(web.json_response({'text': out, 'cached': False}))
 
     async def searchlog(r):
@@ -5939,7 +5995,7 @@ async def _api_serve(application=None):
                   web.get('/api/takhrij', takhrij_read), web.post('/api/takhrij', takhrij_save),
                   web.get('/api/narrator', narrator), web.post('/api/narrator_ai', narrator_ai), web.post('/api/hit', hit),
                   web.get('/api/popular', popular), web.get('/api/arabus', arabus),
-                  web.post('/api/wordai', wordai), web.post('/api/explain', explain),
+                  web.post('/api/wordai', wordai), web.post('/api/explain', explain), web.post('/api/book_rag', book_rag),
                   web.post('/api/booksearch', booksearch),
                   web.post('/api/booktrans', booktrans), web.post('/api/bookinfo', bookinfo),
                   web.post('/api/authorinfo', authorinfo), web.get('/api/qaudio', qaudio),
