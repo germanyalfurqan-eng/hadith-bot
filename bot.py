@@ -5517,7 +5517,7 @@ async def _api_serve(application=None):
             if not question or not excerpts:
                 return _cors(web.json_response({'answer': '', 'error': 'no-input'}))
             ctx = ""
-            for i, e in enumerate(excerpts[:8]):
+            for i, e in enumerate(excerpts[:20]):   # #владелец 01.07.2026: было 8 — «RAG хуже простого поиска»; подняли ёмкость retrieval, подняли и сюда
                 txt = str((e or {}).get('text') or '')[:900]
                 loc = str((e or {}).get('loc') or '')
                 if txt:
