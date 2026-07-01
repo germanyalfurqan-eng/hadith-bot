@@ -4896,12 +4896,13 @@ async def _api_serve(application=None):
                 "Если уместно, в конце подскажи, что искать в приложении (слово/номер/тему)."
             )
             ans = await loop.run_in_executor(None, ask_ai, q, sysp, False, 900)
-            ans = (ans or '').strip()
+            _asModel = _neuroModelTag(ans or '')
+            ans = re.sub(r'\s*[⚡💎].*$', '', (ans or ''), flags=re.S).strip()
             out = {'answer': ans, 'cached': False}
             if ans and ans[0] not in '⚠❌⏸':
                 await loop.run_in_executor(None, neuro_put, akey, out)
-            await loop.run_in_executor(None, usage_log, user, "помощник", False, len(q), "", "")
-            await _notify_usage(user, "помощник", False, "", "", None, q=q)
+            await loop.run_in_executor(None, usage_log, user, "помощник", True, len(q), "", "")
+            await _notify_usage(user, "помощник", True, "", "", None, q=q, model=_asModel)   # #421-класс: раньше ВСЕГДА логировался как fresh=False — трата ИИ была невидима в учёте
             return _cors(web.json_response(out))
         except Exception as e:
             return _cors(web.json_response({'answer': '', 'error': str(e)[:120]}))
