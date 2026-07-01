@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v894</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v895</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -714,7 +714,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v894';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v895';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -10243,8 +10243,14 @@ async function verifyNarr(card, place, text){
       for(const c of lst){ const s=_TT_SCORE[c[1]]; if(s===undefined||s>=0) continue;
         if(!(_critOk(c[0])&&(_isMut(c[0])||_isMutasahil(c[0])))) continue;
         const rn=(typeof _critRu==='function'?String(_critRu(c[0])).replace(/<[^>]+>/g,'').split('(')[0].trim():c[0]);
-        if(seen.has(rn)) continue; seen.add(rn); who.push(rn+': «'+String(c[1]).slice(0,22)+'»'); if(who.length>=3) break; }
-      if(who.length) el.innerHTML=' <span style="color:#d8a5a0;font-size:10.5px">— сказали: '+esc(who.join(' · '))+'</span>';
+        if(seen.has(rn)) continue; seen.add(rn);
+        // владелец 02.07: «все ссылки кликабельны к первоисточникам» — имя критика → его карточка (труды/Мактаба/sunnah); цитата → карточка равия с полным сводом и ссылками на книгу-источник
+        who.push('<span class="nvCr" data-cr="'+esc(c[0])+'" style="cursor:pointer;text-decoration:underline dotted;color:#e8b8b0">'+esc(rn)+'</span>: <span class="nvCq" data-mid="'+el.dataset.mid+'" style="cursor:pointer" title="Тап — карточка равия: полный свод с указанием книги-первоисточника каждой цитаты">«'+esc(String(c[1]).slice(0,22))+'»</span>');
+        if(who.length>=3) break; }
+      if(who.length){ el.innerHTML=' <span style="color:#d8a5a0;font-size:10.5px">— сказали: '+who.join(' · ')+'</span>';
+        el.querySelectorAll('.nvCr').forEach(cr=>{ cr.onclick=(ev)=>{ ev.stopPropagation(); try{ openNarratorRijal(cr.dataset.cr); }catch(_e){} }; });
+        el.querySelectorAll('.nvCq').forEach(cq=>{ cq.onclick=async(ev)=>{ ev.stopPropagation(); try{ const c2=await _narrCard(+cq.dataset.mid); if(c2) openNarratorRijal(c2[1]); }catch(_e){} }; });
+      }
     }catch(_e){} }); }catch(e){}
     // владелец 02.07: «▸ развернуть — на каждого кто засвидетельствовал + доказать что слышали друг друга с доводом» (БЕТА)
     try{ const _ex=box.querySelector('.nvExpand'), _fl=box.querySelector('.nvFull');
@@ -10256,15 +10262,16 @@ async function verifyNarr(card, place, text){
           const NVD=await window._narrVerdP; const _VR={thiqa:['#7ee08a','сика — надёжен'],saduq:['#ffd479','садук — правдив'],mukhtalaf:['#f8a07a','мухталяф'],majhul_hal:['#e6c578','маджхуль аль-халь'],majhul:['#e6c578','маджхуль'],daif:['#ff8787','даиф'],matruk:['#ff8787','матрук']};
           for(let i=0;i<auth.length;i++){ const nm=auth[i][1], mid=auth[i][2]?String(auth[i][2]):null;
             const vd=mid?(NVD[mid]||'majhul'):null; const vr=vd?(_VR[vd]||['#9aa7b5',vd]):['#9aa7b5','не опознан'];
-            out+='<div style="margin-top:7px;border-top:1px dashed #3a3060;padding-top:5px"><span dir="rtl" style="'+_AF+';font-size:13.5px;color:#dbe3eb">'+esc(nm)+'</span> — <b style="color:'+vr[0]+'">'+vr[1]+'</b>';
+            out+='<div style="margin-top:7px;border-top:1px dashed #3a3060;padding-top:5px"><span class="nvCr" data-cr="'+esc(nm)+'" dir="rtl" style="'+_AF+';font-size:13.5px;color:#dbe3eb;cursor:pointer;text-decoration:underline dotted" title="Тап — карточка">'+esc(nm)+'</span> — <b style="color:'+vr[0]+'">'+vr[1]+'</b>';
             if(mid){ try{ const lst=await _testimGet(+mid);
               if(lst){ const pos=[],neg=[]; const sp=new Set(),sn=new Set();
+                const _crl=(cr,rn,col)=>'<span class="nvCr" data-cr="'+esc(cr)+'" style="cursor:pointer;text-decoration:underline dotted;color:'+col+'" title="Тап — карточка критика (его труды-первоисточники внутри)">'+esc(rn)+'</span>';   // владелец: все ссылки кликабельны к первоисточникам
                 for(const c of lst){ const s=_TT_SCORE[c[1]]; if(s===undefined) continue;
                   const rn=(typeof _critRu==='function'?String(_critRu(c[0])).replace(/<[^>]+>/g,'').split('(')[0].trim():c[0]);
-                  if(s>0&&_critOk(c[0])&&_isMut(c[0])&&!sp.has(rn)){ sp.add(rn); pos.push(rn); }
-                  else if(s<0&&_critOk(c[0])&&(_isMut(c[0])||_isMutasahil(c[0]))&&!sn.has(rn)){ sn.add(rn); neg.push(rn); } }
-                if(pos.length) out+='<div style="font-size:10.5px;color:#9fd3a8;margin-top:1px">✔ засвидетельствовали (таусик): '+esc(pos.slice(0,4).join(' · '))+(pos.length>=2?' — ≥2 муʿтабаров, ПР-1 выполнено':' — только 1, нужно 2')+'</div>';
-                if(neg.length) out+='<div style="font-size:10.5px;color:#ff9b9b;margin-top:1px">✖ джарх: '+esc(neg.slice(0,4).join(' · '))+'</div>';
+                  if(s>0&&_critOk(c[0])&&_isMut(c[0])&&!sp.has(rn)){ sp.add(rn); pos.push(_crl(c[0],rn,'#9fd3a8')); }
+                  else if(s<0&&_critOk(c[0])&&(_isMut(c[0])||_isMutasahil(c[0]))&&!sn.has(rn)){ sn.add(rn); neg.push(_crl(c[0],rn,'#ff9b9b')); } }
+                if(pos.length) out+='<div style="font-size:10.5px;color:#9fd3a8;margin-top:1px">✔ засвидетельствовали (таусик): '+pos.slice(0,4).join(' · ')+(pos.length>=2?' — ≥2 муʿтабаров, ПР-1 выполнено':' — только 1, нужно 2')+'</div>';
+                if(neg.length) out+='<div style="font-size:10.5px;color:#ff9b9b;margin-top:1px">✖ джарх: '+neg.slice(0,4).join(' · ')+'</div>';
                 if(!pos.length&&!neg.length) out+='<div style="font-size:10.5px;color:var(--hint)">свидетельств муʿтабаров в нашем своде нет</div>';
               } }catch(_e){} }
             // доказательство слышания со СЛЕДУЮЩИМ звеном (его шейх)
@@ -10282,6 +10289,7 @@ async function verifyNarr(card, place, text){
           out+='<div style="font-size:9.5px;color:var(--hint);margin-top:5px">БЕТА-разбор: свидетели из нашего свода критиков; слышание — форма передачи → تهذيب الكمال → наши цепи. Не заменяет слова учёных.</div>';
         }catch(_e){ out='<div class="hint">не удалось собрать разбор</div>'; }
         _fl.innerHTML=out;
+        _fl.querySelectorAll('.nvCr').forEach(cr=>{ cr.onclick=(ev)=>{ ev.stopPropagation(); try{ openNarratorRijal(cr.dataset.cr); }catch(_e){} }; });   // владелец: клик → карточка (внутри — первоисточники/Мактаба/sunnah)
       };
     }catch(e){}
     try{ const _cc=box.querySelector('.vCopyChain'); if(_cc) _cc.onclick=(e)=>{ e.stopPropagation();
