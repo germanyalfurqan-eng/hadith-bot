@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v889</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v890</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -714,7 +714,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v889';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v890';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -10195,9 +10195,26 @@ async function verifyNarr(card, place, text){
         _tdHtml='<details style="margin-top:8px;border:1px solid #5e4d23;border-radius:9px;padding:7px 10px;background:rgba(202,161,74,.08)"><summary style="cursor:pointer;color:#e6c578;font-size:12px;font-weight:600">⚠️ Обоснование (нейротахкик) — тадлис-риск в цепи</summary><div style="font-size:12px;margin-top:6px;line-height:1.6">Передатчик — известный мудаллис, а форма передачи здесь «عن» (не «حدثنا/سمعت/أخبرنا» — явное указание на слышание). Значит возможен تدليس (пропущенное непрямое звено), пока не доказано иное:'+_rows+'</div></details>';
       }
     }catch(e){}
+    // 🤖 СПЛОШНОЙ НЕЙРОТАХКИК (указ владельца 02.07.2026): предрасчитанный вердикт из neuro/<bid>_<seg>.json (176 423 хадиса, neuro_precompute.py по ПР-1..5)
+    let _nvHtml='';
+    try{
+      const _nk=place.bid+'_'+Math.floor(+place.num/500);
+      if(!window._neuroSh) window._neuroSh={};
+      if(window._neuroSh[_nk]===undefined){ window._neuroSh[_nk]=fetch('./neuro/'+_nk+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null); }
+      const _nsh=await window._neuroSh[_nk];
+      const _nv=_nsh?(_nsh[String(place.num)]||null):null;
+      if(_nv){
+        const NV={sahih_isnad:['🟢','иснад сахих (по нашим правилам)','#7ee08a'],hasan:['🟡','хасан (есть садук в цепи)','#ffd479'],mukhtalaf:['🟠','мухталяф (спорные звенья)','#f8a07a'],tadlis_risk:['🟠','тадлис-риск (мудаллис через عن)','#f8a07a'],majhul_link:['⚪','маджхуль-звено (тавсик не установлен)','#c8d0da'],daif:['🔴','даиф (слабое звено)','#ff9b7a'],daif_matruk:['🔴','даиф/матрук (отвергнутое звено)','#ff8787'],incomplete:['◻️','неполный расчёт (в цепи неопознанные звенья '+esc(_nv.cov||'')+')','#8a93a0']};
+        const _d=NV[_nv.v]||['❔',_nv.v,'#9aa7b5'];
+        _nvHtml='<div style="margin-top:8px;border:1px solid #3a3080;border-radius:9px;padding:7px 10px;background:rgba(108,92,231,.07)"><span style="font-size:12.5px;font-weight:700;color:'+_d[2]+'">🤖 Нейротахкик: '+_d[0]+' '+_d[1]+'</span>'
+          +((_nv.w&&_nv.w.length)?('<div style="font-size:11.5px;color:#c8b6a0;margin-top:3px">слабые звенья: '+_nv.w.map(x=>'<span class="nvWk" data-mid="'+x[0]+'" style="cursor:pointer;text-decoration:underline dotted">id'+x[0]+' ('+esc(x[1])+')</span>').join(' · ')+'</div>'):'')
+          +'<div style="font-size:10px;color:var(--hint);margin-top:3px">формула по нашим правилам ПР-1…5 (48 муʿтабаров · мутасахили только джарх · Табарани с подкреплением · тадлис по طبقات المدلسين) — не ИИ; сверяй со словами учёных</div></div>';
+      }
+    }catch(e){}
     // #93 (полезные функции таблицы цепей): копировать цепь целиком (передатчики + формы передачи + id)
-    h+='<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><span class="vCopyChain" style="cursor:pointer;font-size:11.5px;color:var(--link);border:1px solid var(--border);border-radius:8px;padding:3px 10px">📋 Копировать цепь</span>'+_cidHtml+'</div>'+_tdHtml;
+    h+='<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><span class="vCopyChain" style="cursor:pointer;font-size:11.5px;color:var(--link);border:1px solid var(--border);border-radius:8px;padding:3px 10px">📋 Копировать цепь</span>'+_cidHtml+'</div>'+_nvHtml+_tdHtml;
     box.innerHTML=h;
+    try{ box.querySelectorAll('.nvWk').forEach(el=>{ el.onclick=async(ev)=>{ ev.stopPropagation(); try{ const c=await _narrCard(+el.dataset.mid); if(c) openNarratorRijal(c[1]); }catch(_e){} }; }); }catch(e){}
     try{ const _cc=box.querySelector('.vCopyChain'); if(_cc) _cc.onclick=(e)=>{ e.stopPropagation();
       const _ct=auth.map((r,i)=>(i>0?(forms[i-1]?(' ← '+forms[i-1]+' ← '):' ← '):'')+r[1]+(r[2]?(' [id'+r[2]+']'):'')).join('');
       const _hdr='⛓ Цепь передатчиков'+((place&&place.num)?(' (хадис №'+place.num+')'):'')+':\n';
