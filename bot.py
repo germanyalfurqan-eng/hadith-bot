@@ -6285,6 +6285,31 @@ async def _app_channel_watcher(application):
                         _journal_save("backup_post → рабочий журнал + ЛС владельца")
             except Exception as e:
                 print("backup note post error:", e)
+            # ПРЕЦЕДЕНТ 01.07.2026 (владелец, ТРЕВОГА): при частых деплоях (несколько версий за <5 мин) старый механизм
+            # «сравни update_note.txt с последним запощенным» ТЕРЯЛ анонсы — если файл перезаписывался чаще, чем раз
+            # в 5 мин, промежуточные версии никогда не проверялись (видели только САМУЮ ПОСЛЕДНЮЮ на момент тика).
+            # Фикс: очередь update_notes_queue.json (список {id, note}, я ДОПИСЫВАЮ, не перезаписываю) + журнал
+            # посчитанных id (app_post_ids) — постим ВСЕ ещё не запощенные по очереди, ничего не теряется
+            # независимо от скорости деплоя. Старый одиночный update_note.txt НЕ трогаем (нужен «анонс»/докс-модалке).
+            try:
+                rq = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_notes_queue.json",
+                                  headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
+                queue = []
+                if rq.status_code == 200:
+                    queue = json.loads(base64.b64decode(rq.json().get("content", "")).decode("utf-8") or "[]")
+                if isinstance(queue, list) and queue:
+                    j = _journal_load()
+                    posted_ids = set(j.get("app_post_ids") or [])
+                    pending = [x for x in queue if isinstance(x, dict) and x.get("id") and x.get("note") and x["id"] not in posted_ids]
+                    for item in pending[:8]:   # предохранитель: не больше 8 постов за один тик (не заспамить канал разом)
+                        await _post_app_channel(application.bot, item["note"])
+                        posted_ids.add(item["id"])
+                        await asyncio.sleep(2)   # пауза между постами — не флудить Telegram API
+                    if pending:
+                        j["app_post_ids"] = list(posted_ids)[-500:]
+                        _journal_save(f"app_post → канал приложения (очередь, {len(pending[:8])} шт.)")
+            except Exception as e:
+                print("app channel queue watcher error:", e)
             note = ""
             try:
                 rr = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_note.txt",
