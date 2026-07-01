@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v854</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v855</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -675,6 +675,7 @@
       <b>⚠️ Сообщить об ошибке / замечание</b><button class="mini" id="fbClose">закрыть ✕</button>
     </div>
     <div class="hint" id="fbCtx"></div>
+    <div class="hint" style="font-size:11.5px;color:#8fd4a8;margin-top:2px">🤖 Уходит автоматизированному ИИ-разработчику (не человеку) — обрабатывается быстро, пиши прямо и коротко</div>
     <textarea id="fbText" placeholder="Что не так? Опиши ошибку или предложение…" style="width:100%;min-height:80px;margin-top:8px;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg);color:var(--text);font-size:15px;resize:vertical"></textarea>
     <div style="margin-top:8px;display:flex;align-items:center;gap:9px;flex-wrap:wrap">
       <label for="fbImg" class="mini" style="cursor:pointer;border:1px dashed var(--btn);color:var(--text);padding:8px 13px;border-radius:9px;font-size:13px">📷 Приложить скриншот <span style="color:var(--hint)">(по желанию)</span></label>
@@ -703,7 +704,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v854';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v855';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3338,6 +3339,51 @@ async function _bookLoad(){
     };
     bkP.querySelector('#bkFindGo').onclick=_bkFind;
     bkP.querySelector('#bkFindQ').onkeydown=(e)=>{ if(e.key==='Enter') _bkFind(); };
+    // 🤖 RAG-ВОПРОС ПО КНИГЕ (указ владельца 01.07.2026): вопрос своими словами → ищем отрывки В ЭТОЙ книге (тот же индекс, что «🔎 По книге») → ИИ отвечает СТРОГО по найденному (retrieval+generation), бесплатные модели первыми
+    const rbk=document.createElement('button'); rbk.className='mini'; rbk.textContent='🤖 RAG-вопрос ▾'; rbk.title='Задай вопрос своими словами — ИИ найдёт ответ в тексте ЭТОЙ книги';
+    rbk.style.cssText='padding:6px 12px;border-radius:9px;font-size:13px;border:1px solid #6c5ce7;color:#d9ccff;background:#2e1d4a';
+    let bkR=m.querySelector('#bookRagPanel');
+    if(!bkR){ bkR=document.createElement('div'); bkR.id='bookRagPanel'; bkR.style.cssText='display:none;margin:4px 0 6px;border:1px solid #6c5ce7;border-radius:10px;padding:8px';
+      bkR.innerHTML='<div style="display:flex;gap:6px;align-items:center"><input id="bkRagQ" type="search" placeholder="вопрос своими словами по этой книге…" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:14px"><button class="mini" id="bkRagGo" style="padding:7px 13px">Спросить</button></div><div id="bkRagOut" style="max-height:40vh;overflow:auto;margin-top:6px"></div>';
+      bkP.parentNode.insertBefore(bkR, bkP.nextSibling); }
+    rbk.onclick=()=>{ _press(rbk); const open=bkR.style.display!=='none'; bkR.style.display=open?'none':'block'; rbk.textContent='🤖 RAG-вопрос '+(open?'▾':'▴'); if(!open){ try{ bkR.querySelector('#bkRagQ').focus(); }catch(e){} } };
+    tgl.appendChild(rbk);
+    const _bkRag=async()=>{
+      const qv=(bkR.querySelector('#bkRagQ').value||'').trim(); const outR=bkR.querySelector('#bkRagOut');
+      if(!qv){ outR.innerHTML='<span class="hint">Напиши вопрос.</span>'; return; }
+      if(!BACKEND_URL){ outR.innerHTML='<span class="hint">Нет связи с сервером.</span>'; return; }
+      outR.innerHTML='<span class="hint">⏳ ищу отрывки в книге…</span>';
+      const isArabicQ=/[ء-ي]/.test(qv);
+      const searchTerms = isArabicQ ? qv : qv.split(/\s+/).filter(w=>w.length>=4).slice(0,4).join(' ');   // RU-вопрос → значимые слова (тот же приём, что «широкий поиск» в основном runSearch)
+      const excerpts=[]; let seenPid=new Set();
+      try{
+        for(let pgi=1; pgi<=6 && excerpts.length<8; pgi++){
+          const j=await bjson(BACKEND_URL+'/maktaba?q='+encodeURIComponent(searchTerms||qv)+'&page='+pgi+'&initData='+encodeURIComponent(INITDATA), 20000); const data=j.data||[];
+          if(!data.length) break;
+          for(const x of data){ if(String(x.book_id)!==String(_bookView.id)) continue; if(seenPid.has(x.page_id)) continue;
+            const sn=String(x.snip||'').replace(/<[^>]*>/g,''); if(!sn) continue;
+            seenPid.add(x.page_id);
+            excerpts.push({text:sn, loc:'т.'+(x.vol||'')+' стр.'+(x.page||''), pid:x.page_id});
+            if(excerpts.length>=8) break; }
+        }
+      }catch(e){}
+      if(!excerpts.length){ outR.innerHTML='<span class="hint">В этой книге не нашлось подходящих отрывков по этому вопросу — попробуй переформулировать (короче/другими словами).</span>'; return; }
+      outR.innerHTML='<span class="hint">🤖 ищу ответ в '+excerpts.length+' найденных отрывках…</span>';
+      try{
+        const rr=await fetch(BACKEND_URL+'/book_rag',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({q:qv, book:bnm, excerpts, initData:INITDATA})});
+        const jr=await rr.json().catch(()=>({}));
+        const ans=(jr&&jr.answer)||'';
+        outR.innerHTML = ans
+          ? ('<div style="border:1px solid #6c5ce7;border-radius:10px;padding:9px;background:rgba(108,92,231,.10);font-size:14px;line-height:1.7;white-space:pre-wrap">'+esc(ans)+'</div>'
+             +'<div class="hint" style="font-size:11px;margin-top:6px">📄 использованные отрывки (нажми — перейду на страницу):</div>'
+             +excerpts.map((e,i)=>'<div class="bkFr" data-pid="'+e.pid+'" style="cursor:pointer;border-bottom:1px solid var(--border);padding:5px 2px;direction:rtl;text-align:right"><span style="color:var(--link);font-size:11.5px">'+(i+1)+') 📄 '+esc(e.loc)+'</span><div style="font-size:12.5px;line-height:1.5;color:var(--hint);margin-top:1px">'+esc(e.text.slice(0,120))+'…</div></div>').join(''))
+          : '<span class="hint">Не удалось получить ответ — попробуй ещё раз.</span>';
+        outR.querySelectorAll('.bkFr').forEach(el=>el.onclick=()=>{ _bookView.pg=+el.dataset.pid||1; _bookView.want=null; _bookLoad(); });
+      }catch(e){ outR.innerHTML='<span class="hint">🔧 сервис недоступен — попробуй позже.</span>'; }
+    };
+    bkR.querySelector('#bkRagGo').onclick=_bkRag;
+    bkR.querySelector('#bkRagQ').onkeydown=(e)=>{ if(e.key==='Enter') _bkRag(); };
     // Arabus (тап слова)
     const ab=document.createElement('button'); ab.className='mini'; ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus'; ab.title='Тап по слову → корень/значения';
     ab.onclick=()=>{ _arabusOn=!_arabusOn; try{ loadRoots(); if(_arabusOn) loadArabusLocal(); }catch(e){} ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus'; tEl.style.cursor=_arabusOn?'pointer':'default'; toast(_arabusOn?'📕 Arabus ВКЛ — тапай слово':'Arabus выкл'); };
