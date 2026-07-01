@@ -337,8 +337,6 @@ LOG_CHAT_ID = -1003480426073
 GITHUB_REPO = "germanyalfurqan-eng/hadith-bot"
 ANNOUNCE_CHAT_ID = -1003982210885
 APP_CHANNEL_ID = -1003989206932   # @muslimoonapp — публичный канал приложения (обновления для подписчиков)
-_MUT48_LIST = "📋 48 муʿтабаров (эталонный список — по нему считается тасдик: ≥2 свидетельства двух из них):\n\n1. 'АбдуЛлаh ибн 'Аббас (ум. 619—687)\n2. 'Амир ибн Шарахиль аш-Шаъби (ум. ~641—723)\n3. Абу Са'ид аль-Хасан ибн абиль-Хасан аль-Басри (ум. 642—728)\n4. Мухаммад ибн Сирин (ум. 653—729)\n5. Макхуль ибн 'АбдуЛлаh аль-hузали\n6. Абу Бакр Мухаммад бну Муслим бну Шиhаб аз-Зуhри (ум. 678—742)\n7. Абу Бакр Аюб (Кайсан) бну аби Тамийм ас-Сахтияний (ум. ~696—748)\n8. 'Абдур-Рахман ибн 'Амр аль-Ауза'и (ум. 707—774)\n9. Малик ибн Анас (ум. 711—795)\n10. Суфьян ибн Са'ид ас-Саури (ум. 716—778)\n11. Суфьян ибн 'Уйайна (ум. 725—814)\n12. Абу Бистам Шуъба ибнуль-Хадджжадж (ум. 728—810)\n13. 'АбдуЛлаh ибнуль-Мубарак (ум. 736—797)\n14. Абу 'Умар Хафс ибн Гъийас ан-Наха'и аль-Куфи (ум. 739—816)\n15. Хаммад ибн Зайд ибн Дирhам (ум. ~?—~795)\n16. 'Абдур-Рахман ибн Маhди (ум. ~752—813)\n17. 'АбдуЛлаh ибн Уаhб (ум. 743—812)\n18. Уаки' ибнуль-Джаррах (ум. 746—812)\n19. Духайм 'Абдур-Рахман ибн Ибраhим ад-Димашкъи (ум. ?—859)\n20. Исма'иль ибн Ибраhим ибн 'Уляййа\n21. Мухаммад ибн 'АбдуЛлаh ибн Нумайр аль-hамдани\n22. Абу Ну'айм аль-Фадль ибн Дукайн 'Амр ибн Хаммад аль-Куфи (ум. 752—840)\n23. Абу Исхакъ Ибраhим аль-Фазари (ум. ?—796)\n24. Абу Камиль аль-Музаффар ибн Мудрик (ум. 757—822)\n25. Яхья ибн Са'ид аль-Къаттан (ум. 758—813)\n26. 'Амр ибн 'Али аль-Фалляс (ум. 765—844)\n27. Мухаммад ибн Идрис аш-Шафи'и (ум. 767—820)\n28. Абу 'Убайд аль-Къасим ибн Саллям (ум. 770—838)\n29. 'Али ибн 'АбдуЛлаh аль-Мадини (ум. 778—849)\n30. Исхакъ бну Ибраhим бну Раhууайh аль-Ханзали (ум. ~780—853)\n31. Абу 'АбдуЛлаh Ахмад ибн Мухаммад ибн Ханбаль (ум. 780—855)\n32. Абу Бакр 'АбдуЛлаh бнуз-Зубайр аль-Хумайди (ум. 781—834)\n33. Абу 'АбдуЛлаh Мухаммад ибн Яхья аз-Зуhли (ум. 788—872)\n34. Абу Мусhир 'Абдуль-Аъля ибн Мусhир ад-Димашкъи (ум. 789—868)\n35. Абу Хатим Мухаммад ибн Идрис ар-Рази (ум. 811—890)\n36. Абу Зураъа 'УбайдуЛлаh ибн 'Абдуль-Карим ар-Рази (ум. 815—878)\n37. Абу 'АбдуЛлаh Мухаммад ибн Исма'иль аль-Бухари (ум. 816—870)\n38. Муслим ибнуль-Хадджжадж (ум. 817—875)\n39. Абу Дауд Суляйман ибнуль-Аш'ас ас-Сиджистани (ум. 817—889)\n40. Абу 'Абдур-Рахман Ахмад ибн Шуъайб ан-Насаи (ум. 829—915)\n41. Абу Джаъфар Мухаммад ибн Джарир ат-Табари (ум. 839—923)\n42. Абу Джаъфар Ахмад ибн Мухаммад ат-Тахауи (ум. 853—933)\n43. Абу Мухаммад 'Абдур-Рахман ибн аби Хатим ар-Рази (ум. 854—938)\n44. Абу Джаъфар Мухаммад аль-'Уъкайли (ум. 858—934)\n45. Абу Курайб Мухаммад ибнуль-'Аля аль-Хамдани (ум. 862—?)\n46. Абуш-Шайх 'АбдуЛлаh аль-Асбаhани (ум. 887—979)\n47. Абуль-Фадль Мухаммад ибн 'Аммар аш-Шаhид (ум. ~894—929)\n48. Абуль-Хасан 'Али ибн 'Умар ад-Даракъутни (ум. 918—995)\n\n➕ Добавлен по вашему решению: Яхья ибн Ма'ин (يحيى بن معين).\n❗ Ибн Хиббан (ابن حبان) в список 48 НЕ входит → в приложении он теперь «справочно», не в счёт тасдика."   # С47 #411 — список 48 муʿтабаров
-
 
 GUIDE_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/bot_guide_tg.txt"
 MAIN_KB = ReplyKeyboardMarkup([["📖 Инструкция"]], resize_keyboard=True)
@@ -1183,6 +1181,24 @@ def ask_github(prompt, system=None, max_tokens=None):
     except Exception as e:
         return f"⚠️ GitHub Models недоступен: {e}"
 
+def ask_neuro(prompt, system, max_tokens=2000):
+    """Нейро-конвейер (поиск-подбор/огласовки/справки о равии/объяснения хадиса/книгозапрос) —
+    БЕСПЛАТНЫЕ ИИ ПЕРВЫМИ (указ владельца #379, подтверждён #414/#420: «почему тратишь DeepSeek,
+    есть бесплатные»), DeepSeek — только если Groq/Gemini/GitHub Models недоступны.
+    Тот же порядок, что в ask_ai(), но без owner-гейта DeepSeek (нейро и так под своим гейтом)."""
+    g = ask_groq(prompt, system, max_tokens)
+    if g and not str(g).startswith("⚠️"):
+        return g + "\n\n⚡ *Модель:* 🆓 Groq (Llama 3.3 70B) — бесплатно"
+    if GEMINI_API_KEY:
+        ga = ask_gemini(prompt, system)
+        if ga and not str(ga).startswith("⚠️"):
+            return ga + "\n\n⚡ *Модель:* 🆓 Gemini — бесплатно"
+    if GITHUB_MODELS_TOKEN:
+        gh = ask_github(prompt, system, max_tokens)
+        if gh and not str(gh).startswith("⚠️"):
+            return gh + "\n\n⚡ *Модель:* 🆓 GitHub GPT-4o-mini — бесплатно"
+    return ask_deepseek(prompt, system, max_tokens)
+
 def ask_special(prompt, system=None):
     """Особые задачи: пробуем OpenAI (если есть ключ+деньги), иначе Gemini (бесплатный лимит). Возвращает (ответ, имя_модели)."""
     if OPENAI_API_KEY:
@@ -1552,7 +1568,7 @@ def _yt_summarize(tr, brief):
     else:
         sysp = "Подробный пересказ+перевод видео на русский: по разделам, с тайм-кодами [мин:сек] в начале каждого блока."
         pr = "Подробный русский пересказ и перевод этого видео по субтитрам (с тайм-кодами по разделам):\n\n" + body
-    ans = ask_deepseek(pr, sysp, max_tokens=3000)
+    ans = ask_neuro(pr, sysp, max_tokens=3000)
     if not ans:
         try: ans = ask_gemini(pr, sysp)
         except Exception: ans = None
@@ -2097,10 +2113,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception: pass
         try: await context.bot.send_message(LOG_CHAT_ID, _m)
         except Exception: pass
-    if text.strip().lower() in ("мутабары","мутабарун","список мутабаров","список мутабарун","48 мутабаров","муътабары","муатабары"):
-        try: await update.message.reply_text(_MUT48_LIST)
-        except Exception: pass
-        return
     if is_owner(update) and text.lower() in ("ии вкл", "ии включи", "включи ии", "ai on"):
         _AI_KILL = False; _AI_KILL_MANUAL = False; _AI_CALLS.clear()
         await update.message.reply_text("✅ ИИ снова включён."); return
@@ -2192,7 +2204,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if last and last.get("vid") == _repv:
                 body = "\n".join(f"[{_fmt_ts(s)}] {t}" for s, t in last["tr"])[:45000]
                 pr = f"Вопрос по видео: {text}\n\nОтветь по-русски кратко и ОБЯЗАТЕЛЬНО укажи тайм-код [мин:сек], где это в видео.\n\nСубтитры:\n{body}"
-                a = ask_deepseek(pr, "Отвечай строго по субтитрам видео, всегда указывай тайм-код [мин:сек].", max_tokens=1000)
+                a = ask_neuro(pr, "Отвечай строго по субтитрам видео, всегда указывай тайм-код [мин:сек].", max_tokens=1000)
                 if not a:
                     try: a = ask_gemini(pr, "Отвечай по субтитрам, указывай тайм-код [мин:сек].")
                     except Exception: a = None
@@ -4648,7 +4660,7 @@ def isnad_ai(text):
     sysm = ("Извлеки из арабского хадиса ТОЛЬКО цепочку передатчиков (иснад) — имена передатчиков по порядку, "
             "как в тексте, до начала матна. По ОДНОМУ имени на строку, арабскими буквами. "
             "НЕ включай слова حدثنا/أخبرنا/أنبأنا/نا/ثنا/عن/قال/سمعت. Только имена людей. Если иснада нет — ничего.")
-    out = ask_deepseek((text or "")[:2000], sysm) or ""
+    out = ask_neuro((text or "")[:2000], sysm) or ""
     names = []
     for ln in out.splitlines():
         ln = re.sub(r'^[\d\.\-\)\s•]+', '', ln).strip()
@@ -4940,7 +4952,7 @@ async def _api_serve(application=None):
                     "в АЯТЫ дай 3-8 номеров аятов, СВЯЗАННЫХ С ТЕМОЙ ПО СМЫСЛУ — даже если само слово в них не встречается дословно (НЕ пиши «нет аятов по теме»). "
                     "Бери РЕАЛЬНЫЕ слова текста ДОСЛОВНО как в сборнике (не пересказ, не выдумывай фразу). Если это просто тема одним словом — дай также 3-5 арабских "
                     "ключевых слов в ФРАЗЫ. Выведи ТОЛЬКО эти 5 строк.")
-            txt = await loop.run_in_executor(None, ask_deepseek, "Запрос: " + meaning, sysm) or ""
+            txt = await loop.run_in_executor(None, ask_neuro, "Запрос: " + meaning, sysm) or ""
             def _grab(lbl):
                 m = re.search(lbl + r'\s*[:：]\s*(.+)', txt); return m.group(1).strip() if m else ''
             ayl, hadl, phl, fixl, notel = _grab('АЯТЫ'), _grab('ХАДИСЫ'), _grab('ФРАЗЫ'), _grab('ИСПРАВЛЕНО'), _grab('ЗАМЕТКА')
@@ -5004,7 +5016,7 @@ async def _api_serve(application=None):
                     "«альбани сильсиля» → АВТОР: الألباني / НАЗВАНИЕ: السلسلة الصحيحة ; السلسلة الضعيفة / КЛЮЧИ: السلسلة ; الصحيحة ; الضعيفة ; الألباني / РЕЖИМ: book / ЗАМЕТКА: шейх аль-Альбани — Сильсиля ас-Сахиха и ад-Даифа\n"
                     "«сахих бухари» → АВТОР: البخاري / НАЗВАНИЕ: صحيح البخاري ; الجامع الصحيح / КЛЮЧИ: صحيح البخاري ; الجامع الصحيح / РЕЖИМ: book / ЗАМЕТКА: сборник достоверных хадисов\n"
                     "Бери РЕАЛЬНЫЕ арабские названия/имена как в каталоге. Выведи ТОЛЬКО эти 5 строк.")
-            txt = await loop.run_in_executor(None, ask_deepseek, "Запрос: " + q, sysm) or ""
+            txt = await loop.run_in_executor(None, ask_neuro, "Запрос: " + q, sysm) or ""
             def _grab(lbl):
                 m = re.search(lbl + r'\s*[:：]\s*(.+)', txt); return m.group(1).strip() if m else ''
             naml, autl, keyl, model, notel = _grab('НАЗВАНИЕ'), _grab('АВТОР'), _grab('КЛЮЧИ'), _grab('РЕЖИМ'), _grab('ЗАМЕТКА')
@@ -5057,7 +5069,7 @@ async def _api_serve(application=None):
                         "<номер>| <русский перевод> || <тот же арабский, но С ОГЛАСОВКАМИ (تشكيل)>\n"
                         "Русский — кратко и понятно (можно транслитерацию известных названий: «Сахих аль-Бухари»). "
                         "Огласуй арабский правильно. Ничего лишнего, только строки по числу названий.")
-                txt = await loop.run_in_executor(None, ask_deepseek, numbered, sysm) or ""
+                txt = await loop.run_in_executor(None, ask_neuro, numbered, sysm) or ""
                 for line in txt.splitlines():
                     mm = re.match(r'\s*(\d{1,3})\s*[\|\.\)]\s*(.+)', line)
                     if not mm: continue
@@ -5109,7 +5121,7 @@ async def _api_serve(application=None):
                     "ВИКИ_АВТОР: <URL Википедии об авторе (ru.wikipedia.org или ar.wikipedia.org), если уверен; иначе ->\n"
                     "ВИКИ_КНИГА: <URL Википедии о книге, если уверен; иначе ->\n"
                     "Не выдумывай ссылки и факты — если не уверен, ставь -. Будь точен и лаконичен. Выведи ТОЛЬКО эти строки.")
-            txt = await loop.run_in_executor(None, ask_deepseek, f"Книга: {title}\nАвтор: {author}", sysm) or ""
+            txt = await loop.run_in_executor(None, ask_neuro, f"Книга: {title}\nАвтор: {author}", sysm) or ""
             def _grab(lbl):
                 m = re.search(lbl + r'\s*[:：]\s*(.+)', txt); return m.group(1).strip() if m else ''
             ru = _grab('НАЗВАНИЕ_РУ'); desc = _grab('ОПИСАНИЕ')
@@ -5156,7 +5168,7 @@ async def _api_serve(application=None):
                     "• сгруппируй по смыслу/источнику (короткими пунктами),\n"
                     "• подскажи, что выбрать под запрос и как уточнить поиск.\n"
                     "Без воды, маркированно. Не выдумывай того, чего нет в списке.")
-            txt = await loop.run_in_executor(None, ask_deepseek, "Запрос: " + q + "\nНайдено:\n" + numbered, sysm) or ""
+            txt = await loop.run_in_executor(None, ask_neuro, "Запрос: " + q + "\nНайдено:\n" + numbered, sysm) or ""
             await loop.run_in_executor(None, usage_log, user, "структурировать", True, len(q), "", "")
             return _cors(web.json_response({'text': txt.strip()[:2500]}))
         except Exception as e:
@@ -5192,7 +5204,7 @@ async def _api_serve(application=None):
                     "ЗАМЕТКА: <1 фраза по-русски>\n"
                     "Если это НЕ передатчик хадисов (а тема/слово) — выведи только: НЕ_ПЕРЕДАТЧИК\n"
                     "Будь точен, не выдумывай. Выведи только метки.")
-            txt = await loop.run_in_executor(None, ask_deepseek, "Передатчик: " + name, sysm) or ""
+            txt = await loop.run_in_executor(None, ask_neuro, "Передатчик: " + name, sysm) or ""
             if 'НЕ_ПЕРЕДАТЧИК' in txt or 'НЕ ПЕРЕДАТЧИК' in txt:
                 return _cors(web.json_response({'is_narrator': False}))
             def _grab(lbl):
@@ -5323,7 +5335,7 @@ async def _api_serve(application=None):
                     "ГОДЫ: <годы жизни / век по хиджре, если знаешь; иначе ->\n"
                     "ВИКИ: <URL статьи Википедии об авторе (ru или ar), если уверен; иначе ->\n"
                     "Не выдумывай ссылку. Выведи только эти 4 строки.")
-            txt = await loop.run_in_executor(None, ask_deepseek, "Автор: " + author, sysm) or ""
+            txt = await loop.run_in_executor(None, ask_neuro, "Автор: " + author, sysm) or ""
             def _grab(lbl):
                 m = re.search(lbl + r'\s*[:：]\s*(.+)', txt); return m.group(1).strip() if m else ''
             ru = _grab('ИМЯ_РУ'); bio = _grab('БИО'); years = _grab('ГОДЫ'); wiki = _grab('ВИКИ')
@@ -5376,7 +5388,7 @@ async def _api_serve(application=None):
                     "Пример: «لِكُلِّ» (контекст: لكل نبي دعوة) → ПЕРЕВОД: для каждого / КОРЕНЬ: كلل / "
                     "ГРАММ: предлог لـ + имя كل в род. падеже. Выведи ТОЛЬКО эти 3 строки.")
             prompt = "Слово: " + word + (("\nКорень (подсказка): " + root_hint) if root_hint else "") + (("\nКонтекст: " + ctx) if ctx else "")
-            txt = await loop.run_in_executor(None, ask_deepseek, prompt, sysm) or ""
+            txt = await loop.run_in_executor(None, ask_neuro, prompt, sysm) or ""
             def _g(lbl):
                 m = re.search(lbl + r'\s*[:：]\s*(.+)', txt); return m.group(1).strip() if m else ''
             ru = _g('ПЕРЕВОД')[:200]; root = _g('КОРЕНЬ')[:12]; gram = _g('ГРАММ')[:140]
@@ -5500,7 +5512,7 @@ async def _api_serve(application=None):
                     "главный смысл + польза/урок + краткий довод. ОБЯЗАТЕЛЬНО начни с источника (" + ref + "). "
                     "Не пересказывай весь текст, без длинных предисловий и воды. НЕ выдумывай факты/хадисы; "
                     "если спорно — отметь одним словом. Только объяснение, коротко.")
-            ex = await loop.run_in_executor(None, ask_deepseek, "Источник: " + ref + "\n" + text, sysm)
+            ex = await loop.run_in_executor(None, ask_neuro, "Источник: " + ref + "\n" + text, sysm)
             ex = re.sub(r'\s*⚡.*$', '', (ex or ''), flags=re.S).strip()
             if not ex:
                 return _cors(web.json_response({'explanation': '', 'error': 'no-ai'}))
@@ -5706,7 +5718,7 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'text': cached, 'cached': True}))
         sysm = ("Ты расставляешь огласовки (تشكيل) в арабском тексте. "
                 "Верни ТОТ ЖЕ текст с полной огласовкой. Без перевода, без пояснений, без кавычек — только огласованный текст.")
-        out = await loop.run_in_executor(None, ask_deepseek, text, sysm) or ""
+        out = await loop.run_in_executor(None, ask_neuro, text, sysm) or ""
         out = re.sub(r'\s*⚡.*$', '', out, flags=re.S).strip()
         if out and source and num not in (None, ''):
             await loop.run_in_executor(None, tashkeel_add, source, num, out)
@@ -5835,7 +5847,7 @@ async def _api_serve(application=None):
                 "словами имамов (ثقة/صدوق/ضعيف и т.п.) — КТО так оценил и в какой книге (تقريب التهذيب لابن حجر، "
                 "الجرح والتعديل لابن أبي حاتم، تهذيب الكمال للمزي). 4-7 строк, без воды. "
                 "В конце с новой строки: «⚠️ Справку собрал ИИ — сверяйте с первоисточниками (الجرح والتعديل، تقريب التهذيب).»")
-        bio = await loop.run_in_executor(None, ask_deepseek, "Передатчик хадисов: " + name, sysm) or ""
+        bio = await loop.run_in_executor(None, ask_neuro, "Передатчик хадисов: " + name, sysm) or ""
         bio = bio.strip()
         if bio and len(bio) > 15:
             await loop.run_in_executor(None, rijal_ai_put, name, bio)
