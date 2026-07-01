@@ -2552,7 +2552,15 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(f"⚠️ Похоже, ты это уже присылал — *заявка №{dup}*. Не дублирую.\n(Если всё же другое — допиши подробнее и пришли ещё раз.)", parse_mode="Markdown")
                 return
             chat_type = getattr(update.effective_chat, "type", "")
-            from_chat = " (из чата @jamaat_ru)" if chat_type in ("group", "supergroup") else ""
+            chat_id = getattr(update.effective_chat, "id", None)
+            # #425 (владелец 01.07.2026): было "любая группа = @jamaat_ru" — но рабочий чат уведомлений (LOG_CHAT_ID)
+            # ТОЖЕ группа/супергруппа → заявки оттуда ложно подписывались "(из чата @jamaat_ru)". Разводим по chat_id.
+            if chat_id == LOG_CHAT_ID:
+                from_chat = " (из рабочего чата уведомлений)"
+            elif chat_type in ("group", "supergroup"):
+                from_chat = " (из чата @jamaat_ru)"
+            else:
+                from_chat = ""
             rid = req_add((body or "(скрин)") + from_chat, img_flag, imgkey)
             # #245: дубль ВЛАДЕЛЬЦУ В ЛС — все заявки в переписке с ботом (если команда не из самой ЛС)
             try:
