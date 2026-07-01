@@ -206,7 +206,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v855</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v856</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -704,7 +704,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v855';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v856';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3304,19 +3304,35 @@ async function _bookLoad(){
     const aiPanel=document.createElement('div'); aiPanel.style.cssText='display:none;gap:6px;flex-wrap:wrap;justify-content:center';
     aiToggle.onclick=()=>{ _press(aiToggle); const open=aiPanel.style.display!=='none'; aiPanel.style.display=open?'none':'flex'; aiToggle.textContent='🧠 ИИ '+(open?'▾':'▴'); };
     tgl.appendChild(aiToggle); navEl.appendChild(aiPanel);
-    // 🔎 ПОИСК ПО ВСЕЙ КНИГЕ — ПАНЕЛЬ ВНУТРИ читалки (замечание: «где тут искать в книге и где номер вводить»)
-    const sbk=document.createElement('button'); sbk.className='mini'; sbk.textContent='🔎 По книге ▾'; sbk.title='Слова или № хадиса по всей этой книге — результаты списком прямо здесь';
+    // 🔎🤖 ЕДИНЫЙ ПОИСК ПО КНИГЕ — слово/№ (быстро, бесплатно) ИЛИ вопрос своими словами (смысловой RAG: ИИ переводит вопрос в арабские фразы → ищет → отвечает строго по найденному, с цитатой-источником)
+    // Р45 (владелец 01.07.2026): раньше было ДВЕ панели («По книге» + «RAG-вопрос») — занимали место и путали. Теперь ОДИН поиск: короткое слово/№ → быстрый бесплатный поиск; вопрос-предложение → сразу RAG (не находится простым совпадением слов).
+    const sbk=document.createElement('button'); sbk.className='mini'; sbk.textContent='🔎 Поиск по книге ▾'; sbk.title='Слово/№ — быстро; вопрос своими словами — ИИ найдёт по смыслу';
     sbk.style.cssText='padding:6px 12px;border-radius:9px;font-size:13px;border:1px solid #2e9b5b;color:#bff5d4';
     let bkP=m.querySelector('#bookFindPanel');
     if(!bkP){ bkP=document.createElement('div'); bkP.id='bookFindPanel'; bkP.style.cssText='display:none;margin:4px 0 6px;border:1px solid #2e9b5b;border-radius:10px;padding:8px';
-      bkP.innerHTML='<div style="display:flex;gap:6px;align-items:center"><input id="bkFindQ" type="search" placeholder="слово/фраза или № хадиса…" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:14px"><button class="mini" id="bkFindGo" style="padding:7px 13px">Найти</button></div><div id="bkFindOut" style="max-height:34vh;overflow:auto;margin-top:6px"></div>';
+      bkP.innerHTML='<div style="display:flex;gap:6px;align-items:center"><input id="bkFindQ" type="search" placeholder="слово/№ хадиса или вопрос своими словами…" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:14px"><button class="mini" id="bkFindGo" style="padding:7px 13px">Найти</button></div><div id="bkFindOut" style="max-height:40vh;overflow:auto;margin-top:6px"></div>';
       navEl.parentNode.insertBefore(bkP, tEl); }
-    sbk.onclick=()=>{ _press(sbk); const open=bkP.style.display!=='none'; bkP.style.display=open?'none':'block'; sbk.textContent='🔎 По книге '+(open?'▾':'▴'); if(!open){ try{ bkP.querySelector('#bkFindQ').focus(); }catch(e){} } };
+    const outB=bkP.querySelector('#bkFindOut');
+    let _bkLastResultsHtml='';   // #владелец: «назад к результатам» после перехода на страницу — без повторного поиска
+    const _bkShowChip=()=>{
+      let chip=m.querySelector('#bkBackChip');
+      if(!_bkLastResultsHtml){ if(chip) chip.remove(); return; }
+      if(!chip){ chip=document.createElement('div'); chip.id='bkBackChip'; chip.style.cssText='margin:4px 0 6px;text-align:center'; navEl.parentNode.insertBefore(chip, bkP); }
+      chip.innerHTML='<span style="cursor:pointer;display:inline-block;border:1px solid #2e9b5b;color:#bff5d4;border-radius:20px;padding:6px 14px;font-size:12.5px">◀ Вернуться к результатам поиска</span>';
+      chip.onclick=()=>{ outB.innerHTML=_bkLastResultsHtml; _bindResultClicks(); bkP.style.display='block'; sbk.textContent='🔎 Поиск по книге ▴'; chip.remove(); };
+    };
+    const _bindResultClicks=()=>{ outB.querySelectorAll('.bkFr').forEach(el=>el.onclick=()=>{ _bkLastResultsHtml=outB.innerHTML; _bookView.pg=+el.dataset.pid||1; _bookView.want=null; bkP.style.display='none'; sbk.textContent='🔎 Поиск по книге ▾'; _bookLoad(); setTimeout(_bkShowChip,200); }); };
+    sbk.onclick=()=>{ _press(sbk); const open=bkP.style.display!=='none'; bkP.style.display=open?'none':'block'; sbk.textContent='🔎 Поиск по книге '+(open?'▾':'▴'); if(!open){ try{ bkP.querySelector('#bkFindQ').focus(); }catch(e){} const chip=m.querySelector('#bkBackChip'); if(chip) chip.remove(); } };
     tgl.appendChild(sbk);
+    const _resHead=(title,color)=>'<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:5px;margin-bottom:6px"><b style="font-size:12.5px;color:'+color+'">'+title+'</b><span class="bkResX" style="cursor:pointer;color:#e07f7f;font-size:15px;padding:0 4px">✕</span></div>';
     const _bkFind=async()=>{
-      const qv=(bkP.querySelector('#bkFindQ').value||'').trim(); const outB=bkP.querySelector('#bkFindOut');
-      if(!qv){ outB.innerHTML='<span class="hint">Введи слово или № хадиса.</span>'; return; }
+      const qv=(bkP.querySelector('#bkFindQ').value||'').trim();
+      if(!qv){ outB.innerHTML='<span class="hint">Введи слово, № хадиса или вопрос.</span>'; return; }
       const isNum=/^[\d٠-٩]{1,5}$/.test(qv);
+      const isArabicQ=/[ء-ي]/.test(qv);
+      const wordCount=qv.trim().split(/\s+/).length;
+      const looksLikeQuestion = !isNum && ((!isArabicQ && wordCount>=3) || qv.length>28);   // короткое слово/№ → быстрый поиск; вопрос-предложение → сразу смысловой RAG (простое совпадение слов его не найдёт — замечание владельца)
+      if(looksLikeQuestion){ await _bkRagFlow(qv); return; }
       const qq=isNum? (_toArDigits(qv.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)))+' -') : qv;
       const markQ=isNum? new RegExp('(^|[^٠-٩])'+_toArDigits(qv.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)))+'\\s*[-–—]') : null;
       outB.innerHTML='<span class="hint">⏳ ищу в книге…</span>';
@@ -3333,57 +3349,74 @@ async function _bookLoad(){
             if(found>=25) break; }
         }
       }catch(e){}
-      outB.innerHTML=found? ('<div class="hint" style="font-size:11px;margin-bottom:4px">найдено в этой книге: '+found+' — нажми, перейду на страницу:</div>'+html)
-        : '<span class="hint">В этой книге не нашёл'+(isNum?' хадиса с таким №':'')+' (поиск через индекс Мактабы — глубокие страницы могли не попасть).</span>';
-      outB.querySelectorAll('.bkFr').forEach(el=>el.onclick=()=>{ _bookView.pg=+el.dataset.pid||1; _bookView.want=null; _bookLoad(); });
+      outB.innerHTML=_resHead('🔍 Результаты поиска в книге', '#bff5d4')
+        +(found? ('<div class="hint" style="font-size:11px;margin-bottom:4px">найдено: '+found+' — нажми, перейду на страницу:</div>'+html
+           +'<div style="text-align:center;margin-top:8px"><span class="bkTryAi" style="cursor:pointer;color:#d9ccff;font-size:12px;text-decoration:underline">🤖 Не то? Спросить ИИ по смыслу</span></div>')
+          : ('<span class="hint">В этой книге не нашёл'+(isNum?' хадиса с таким №':'')+' простым совпадением слов.</span>'
+             +'<div style="text-align:center;margin-top:8px"><button class="mini bkTryAi" style="padding:7px 14px;border:1px solid #6c5ce7;color:#d9ccff;background:#2e1d4a">🤖 Найти по смыслу (ИИ)</button></div>'));
+      _bindResultClicks();
+      outB.querySelector('.bkResX').onclick=()=>{ bkP.style.display='none'; sbk.textContent='🔎 Поиск по книге ▾'; };
+      const tryAi=outB.querySelector('.bkTryAi'); if(tryAi) tryAi.onclick=()=>_bkRagFlow(qv);
     };
-    bkP.querySelector('#bkFindGo').onclick=_bkFind;
-    bkP.querySelector('#bkFindQ').onkeydown=(e)=>{ if(e.key==='Enter') _bkFind(); };
-    // 🤖 RAG-ВОПРОС ПО КНИГЕ (указ владельца 01.07.2026): вопрос своими словами → ищем отрывки В ЭТОЙ книге (тот же индекс, что «🔎 По книге») → ИИ отвечает СТРОГО по найденному (retrieval+generation), бесплатные модели первыми
-    const rbk=document.createElement('button'); rbk.className='mini'; rbk.textContent='🤖 RAG-вопрос ▾'; rbk.title='Задай вопрос своими словами — ИИ найдёт ответ в тексте ЭТОЙ книги';
-    rbk.style.cssText='padding:6px 12px;border-radius:9px;font-size:13px;border:1px solid #6c5ce7;color:#d9ccff;background:#2e1d4a';
-    let bkR=m.querySelector('#bookRagPanel');
-    if(!bkR){ bkR=document.createElement('div'); bkR.id='bookRagPanel'; bkR.style.cssText='display:none;margin:4px 0 6px;border:1px solid #6c5ce7;border-radius:10px;padding:8px';
-      bkR.innerHTML='<div style="display:flex;gap:6px;align-items:center"><input id="bkRagQ" type="search" placeholder="вопрос своими словами по этой книге…" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:14px"><button class="mini" id="bkRagGo" style="padding:7px 13px">Спросить</button></div><div id="bkRagOut" style="max-height:40vh;overflow:auto;margin-top:6px"></div>';
-      bkP.parentNode.insertBefore(bkR, bkP.nextSibling); }
-    rbk.onclick=()=>{ _press(rbk); const open=bkR.style.display!=='none'; bkR.style.display=open?'none':'block'; rbk.textContent='🤖 RAG-вопрос '+(open?'▾':'▴'); if(!open){ try{ bkR.querySelector('#bkRagQ').focus(); }catch(e){} } };
-    tgl.appendChild(rbk);
-    const _bkRag=async()=>{
-      const qv=(bkR.querySelector('#bkRagQ').value||'').trim(); const outR=bkR.querySelector('#bkRagOut');
-      if(!qv){ outR.innerHTML='<span class="hint">Напиши вопрос.</span>'; return; }
-      if(!BACKEND_URL){ outR.innerHTML='<span class="hint">Нет связи с сервером.</span>'; return; }
-      outR.innerHTML='<span class="hint">⏳ ищу отрывки в книге…</span>';
+    // 🤖 Смысловой RAG: вопрос → (1) ИИ переводит в арабские фразы (переиспользуем /api/neuro, уже бесплатно-приоритетный) → (2) ищем эти фразы В ЭТОЙ книге (/api/maktaba) → (3) ИИ отвечает СТРОГО по найденным отрывкам (/api/book_rag), с цитатой номера отрывка
+    const _bkRagFlow=async(qv)=>{
+      if(!BACKEND_URL){ outB.innerHTML='<span class="hint">Нет связи с сервером.</span>'; return; }
+      outB.innerHTML=_resHead('🤖 Смысловой поиск (ИИ)', '#d9ccff')+'<span class="hint">⏳ понимаю вопрос…</span>';
+      outB.querySelector('.bkResX').onclick=()=>{ bkP.style.display='none'; sbk.textContent='🔎 Поиск по книге ▾'; };
       const isArabicQ=/[ء-ي]/.test(qv);
-      const searchTerms = isArabicQ ? qv : qv.split(/\s+/).filter(w=>w.length>=4).slice(0,4).join(' ');   // RU-вопрос → значимые слова (тот же приём, что «широкий поиск» в основном runSearch)
-      const excerpts=[]; let seenPid=new Set();
+      let searchAttempts=[qv]; let hadithGuesses=[];
+      if(!isArabicQ){
+        try{
+          const nr=await fetch(BACKEND_URL+'/neuro',{method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({meaning:qv, kind:'hadith', initData:INITDATA})});
+          const nj=await nr.json().catch(()=>({}));
+          if(nj&&nj.phrases&&nj.phrases.length) searchAttempts=nj.phrases.slice(0,5);
+          if(nj&&nj.hadiths&&nj.hadiths.length) hadithGuesses=nj.hadiths.slice(0,3);   // {src,num} — доп. сигнал для тяжёлых парафраз (кейворды не всегда совпадают с реальным текстом)
+        }catch(e){}
+      }
+      outB.querySelector('.hint').textContent='⏳ ищу отрывки в книге по смыслу…';
+      const excerpts=[]; const seenPid=new Set();
+      // Быстрая попытка: ИИ предположил конкретный №хадиса → проверим по мгновенному индексу f40c (один fetch, без дорогого бинарного поиска по листам)
       try{
-        for(let pgi=1; pgi<=6 && excerpts.length<8; pgi++){
-          const j=await bjson(BACKEND_URL+'/maktaba?q='+encodeURIComponent(searchTerms||qv)+'&page='+pgi+'&initData='+encodeURIComponent(INITDATA), 20000); const data=j.data||[];
-          if(!data.length) break;
-          for(const x of data){ if(String(x.book_id)!==String(_bookView.id)) continue; if(seenPid.has(x.page_id)) continue;
-            const sn=String(x.snip||'').replace(/<[^>]*>/g,''); if(!sn) continue;
-            seenPid.add(x.page_id);
-            excerpts.push({text:sn, loc:'т.'+(x.vol||'')+' стр.'+(x.page||''), pid:x.page_id});
-            if(excerpts.length>=8) break; }
+        for(const hg of hadithGuesses){ const n=parseInt(hg.num)||0; if(!n) continue;
+          try{ const r=await fetch('./f40c/'+_bookView.id+'_'+Math.floor(n/300)+'.json');
+            if(r.ok){ const mm=await r.json(); const it=mm[String(n)];
+              if(it&&it[0]){ const pj=await bjson(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+it[0]+'&initData='+encodeURIComponent(INITDATA), 15000);
+                const ptxt=String((pj&&pj.text)||'').replace(/<[^>]*>/g,'');
+                if(ptxt && !seenPid.has(it[0])){ seenPid.add(it[0]); excerpts.push({text:ptxt.slice(0,900), loc:'предположение ИИ: №'+n+' ('+(hg.src||'')+')', pid:it[0]}); } } }
+          }catch(e){}
         }
       }catch(e){}
-      if(!excerpts.length){ outR.innerHTML='<span class="hint">В этой книге не нашлось подходящих отрывков по этому вопросу — попробуй переформулировать (короче/другими словами).</span>'; return; }
-      outR.innerHTML='<span class="hint">🤖 ищу ответ в '+excerpts.length+' найденных отрывках…</span>';
+      try{
+        for(const term of searchAttempts){ if(excerpts.length>=8) break;
+          for(let pgi=1; pgi<=3 && excerpts.length<8; pgi++){
+            const j=await bjson(BACKEND_URL+'/maktaba?q='+encodeURIComponent(term)+'&page='+pgi+'&initData='+encodeURIComponent(INITDATA), 20000); const data=j.data||[];
+            if(!data.length) break;
+            for(const x of data){ if(String(x.book_id)!==String(_bookView.id)) continue; if(seenPid.has(x.page_id)) continue;
+              const sn=String(x.snip||'').replace(/<[^>]*>/g,''); if(!sn) continue;
+              seenPid.add(x.page_id);
+              excerpts.push({text:sn, loc:'т.'+(x.vol||'')+' стр.'+(x.page||''), pid:x.page_id});
+              if(excerpts.length>=8) break; }
+          }
+        }
+      }catch(e){}
+      if(!excerpts.length){ outB.innerHTML=_resHead('🤖 Смысловой поиск (ИИ)', '#d9ccff')+'<span class="hint">В этой книге не нашлось подходящих отрывков по этому вопросу — попробуй переформулировать.</span>'; outB.querySelector('.bkResX').onclick=()=>{ bkP.style.display='none'; sbk.textContent='🔎 Поиск по книге ▾'; }; return; }
+      outB.querySelector('.hint').textContent='🤖 ищу ответ в '+excerpts.length+' найденных отрывках…';
       try{
         const rr=await fetch(BACKEND_URL+'/book_rag',{method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({q:qv, book:bnm, excerpts, initData:INITDATA})});
         const jr=await rr.json().catch(()=>({}));
         const ans=(jr&&jr.answer)||'';
-        outR.innerHTML = ans
-          ? ('<div style="border:1px solid #6c5ce7;border-radius:10px;padding:9px;background:rgba(108,92,231,.10);font-size:14px;line-height:1.7;white-space:pre-wrap">'+esc(ans)+'</div>'
+        outB.innerHTML=_resHead('🤖 Смысловой поиск (ИИ)', '#d9ccff')
+          +(ans? ('<div style="border:1px solid #6c5ce7;border-radius:10px;padding:9px;background:rgba(108,92,231,.10);font-size:14px;line-height:1.7;white-space:pre-wrap">'+esc(ans)+'</div>'
              +'<div class="hint" style="font-size:11px;margin-top:6px">📄 использованные отрывки (нажми — перейду на страницу):</div>'
              +excerpts.map((e,i)=>'<div class="bkFr" data-pid="'+e.pid+'" style="cursor:pointer;border-bottom:1px solid var(--border);padding:5px 2px;direction:rtl;text-align:right"><span style="color:var(--link);font-size:11.5px">'+(i+1)+') 📄 '+esc(e.loc)+'</span><div style="font-size:12.5px;line-height:1.5;color:var(--hint);margin-top:1px">'+esc(e.text.slice(0,120))+'…</div></div>').join(''))
-          : '<span class="hint">Не удалось получить ответ — попробуй ещё раз.</span>';
-        outR.querySelectorAll('.bkFr').forEach(el=>el.onclick=()=>{ _bookView.pg=+el.dataset.pid||1; _bookView.want=null; _bookLoad(); });
-      }catch(e){ outR.innerHTML='<span class="hint">🔧 сервис недоступен — попробуй позже.</span>'; }
+            : '<span class="hint">Не удалось получить ответ — попробуй ещё раз.</span>');
+        outB.querySelector('.bkResX').onclick=()=>{ bkP.style.display='none'; sbk.textContent='🔎 Поиск по книге ▾'; };
+        _bindResultClicks();
+      }catch(e){ outB.innerHTML=_resHead('🤖 Смысловой поиск (ИИ)', '#d9ccff')+'<span class="hint">🔧 сервис недоступен — попробуй позже.</span>'; outB.querySelector('.bkResX').onclick=()=>{ bkP.style.display='none'; sbk.textContent='🔎 Поиск по книге ▾'; }; }
     };
-    bkR.querySelector('#bkRagGo').onclick=_bkRag;
-    bkR.querySelector('#bkRagQ').onkeydown=(e)=>{ if(e.key==='Enter') _bkRag(); };
+    bkP.querySelector('#bkFindGo').onclick=_bkFind;
+    bkP.querySelector('#bkFindQ').onkeydown=(e)=>{ if(e.key==='Enter') _bkFind(); };
     // Arabus (тап слова)
     const ab=document.createElement('button'); ab.className='mini'; ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus'; ab.title='Тап по слову → корень/значения';
     ab.onclick=()=>{ _arabusOn=!_arabusOn; try{ loadRoots(); if(_arabusOn) loadArabusLocal(); }catch(e){} ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus'; tEl.style.cursor=_arabusOn?'pointer':'default'; toast(_arabusOn?'📕 Arabus ВКЛ — тапай слово':'Arabus выкл'); };
