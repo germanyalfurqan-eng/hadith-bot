@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v875</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v876</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -713,7 +713,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v875';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v876';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8710,8 +8710,13 @@ function loadOurTafsir(){ if(_ourTaf) return Promise.resolve(_ourTaf); if(_ourTa
 let _jarhGl=null, _jarhGlP=null;
 function loadJarhGl(){ if(_jarhGl) return Promise.resolve(_jarhGl); if(_jarhGlP) return _jarhGlP;
   _jarhGlP=fetch('./jarh_glossary.json').then(r=>r.ok?r.json():{}).then(j=>{ _jarhGl=j||{}; return _jarhGl; }).catch(()=>{ _jarhGl={}; return _jarhGl; }); return _jarhGlP; }
+// владелец 01.07.2026 (скрин-заявка #289: карточка Ибн Умара — сподвижника! — клеила «≈ отвергаемый в хадисе»):
+// предлог «من» ложно матчил ключ «منكر الحديث» (тот начинается с «من») из-за fuzzy `x.indexOf(word)===0`.
+// Фикс: арабские предлоги/частицы — в стоп-лист; fuzzy-совпадение только для слов ≥3 букв (точное — для любой длины).
+const _JARH_STOP=new Set(['من','في','عن','علي','الي','او','و','ثم','قد','كان','هو','هي','هذا','هذه','الناس','بن','ابن','قال','وقال','له','به','لا','ما','ان','انه','مع','عند','بعد','قبل','حتي','او','بل','ثم']);
 function jarhExplain(word){ const g=_jarhGl||{}; word=(word||'').trim();
-  let k=g[word]?word:Object.keys(g).find(x=>x!=='note'&&(word.indexOf(x)===0||x.indexOf(word)===0));
+  if(!word || _JARH_STOP.has(stripDiac(word))) return null;
+  let k=g[word]?word:(word.length>=3?Object.keys(g).find(x=>x!=='note'&&(word.indexOf(x)===0||x.indexOf(word)===0)):null);
   if(!k) return null; const v=g[k]; return k+' — '+v.ru+(v.f?(' · '+v.f):'')+(v.n?(' · '+v.n):''); }
 // 📚 ГЛУБОКИЙ АНАЛИЗ: оценки равия (цитаты+квалификация) из 149 трудов риджаля (наш разбор → narrverd шарды)
 let _narrVerdShard={};
