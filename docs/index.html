@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v885</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v886</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -479,6 +479,7 @@
         <div class="row"><span>📜 Наука хадиса (мусталях) — правила достоверности</span><button class="go" id="hadScienceBtn" style="padding:5px 12px">Открыть</button></div>
         <div class="row"><span>📿 Наши разборы достоверности (наши мухаддисы)</span><button class="go" id="ourRazboryBtn" style="padding:5px 12px">Открыть</button></div>
         <div class="row"><span>📋 Таблица всех передатчиков (18 989 равиев)</span><button class="go" id="narrTblBtn" style="padding:5px 12px">Открыть</button></div>
+        <div class="row"><span>🟠 Таблица мудаллисов <span style="color:var(--hint);font-size:11px">(طبقات المدلسين Ибн Хаджара + ذكر المدلسين ан-Насаи)</span></span><button class="go" id="mudTblBtn" style="padding:5px 12px">Открыть</button></div>
         <!-- ⚖️ С39 закон «одна таблица»: 3 таблицы объединены в ОДНУ. База иснадов = клик по коду цепи C внутри неё; идентификация = её базовые колонки. Старые кнопки скрыты (элементы оставлены — их JS-обработчики безопасны). -->
         <div class="row" style="display:none"><span>📊 Таблица цепей передачи (база иснадов)</span><button class="go" id="chainTblBtn" style="padding:5px 12px">Открыть</button></div>
         <div class="row" style="display:none"><span>📒 Таблица всех хадисов (идентификация)</span><button class="go" id="hadTblBtn" style="padding:5px 12px">Открыть</button></div>
@@ -713,7 +714,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v885';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v886';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -11521,6 +11522,30 @@ var _rbr=document.getElementById('rootBrowBtn'); if(_rbr) _rbr.onclick=()=>{ doc
 var _hsb=document.getElementById('hadScienceBtn'); if(_hsb) _hsb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openHadithScience(); };
 var _orb=document.getElementById('ourRazboryBtn'); if(_orb) _orb.onclick=()=>{ try{ var s=document.getElementById('settingsModal'); if(s) s.style.display='none'; }catch(e){} try{ openOurRazbory(); }catch(e){} };   // 📿 #147
 var _ntb=document.getElementById('narrTblBtn'); if(_ntb) _ntb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openNarrTable(); }catch(e){} };
+// 🟠 ТАБЛИЦА МУДАЛЛИСОВ (указ владельца 02.07.2026): свод из أطبقات المدلسين (Ибн Хаджар) + ذكر المدلسين (ан-Насаи), билдер build_mudallisin_table.py, привязка к карточкам namesake-safe
+var _mtb=document.getElementById('mudTblBtn'); if(_mtb) _mtb.onclick=async()=>{ document.getElementById('menuModal').style.display='none';
+  let m=document.getElementById('mudTblModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='mudTblModal';
+    m.innerHTML='<div class="panel" style="max-width:680px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>🟠 Таблица мудаллисов</b><button class="mini" id="mudTblClose">закрыть ✕</button></div><div id="mudTblBody" style="max-height:76vh;overflow:auto"></div></div>';
+    document.body.appendChild(m); m.querySelector('#mudTblClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
+  m.style.display='flex'; const bd=m.querySelector('#mudTblBody'); bd.innerHTML='<div class="hint">Загружаю…</div>';
+  try{
+    const j=await (await fetch('./mudallisin_table.json?v='+APPVER)).json();
+    const T={1:'المرتبة الأولى — тадлис редчайший, عنعنة принимается',2:'المرتبة الثانية — имамы терпели их тадлис (Сахихайн)',3:'المرتبة الثالثة — عنعنة НЕ принимается без صرّح بالسماع',4:'المرتبة الرابعة — частый тадлис от слабых',5:'المرتبة الخامسة — сверх того ослаблены сами',9:'Без мартабы (список ан-Насаи и др.)'};
+    const linked=j.entries.filter(e=>e.mid).length;
+    let h='<div class="hint" style="margin-bottom:8px">📚 Источники: '+j.books.map(esc).join(' · ')+'<br>Всего: <b>'+j.entries.length+'</b> · привязано к карточкам: <b style="color:#7ee08a">'+linked+'</b> · не привязано (тёзки/нет карточки — честно): '+(j.entries.length-linked)+'</div>';
+    let cur=null;
+    j.entries.forEach(e=>{ const t=e.tier||9;
+      if(t!==cur){ cur=t; h+='<div style="margin:12px 0 6px;font-weight:700;font-size:13.5px;color:'+(t<=2?'#7ee08a':(t===3?'#ffd479':(t<=5?'#ff9b7a':'#9aa7b5')))+'">'+esc(T[t]||('мартаба '+t))+'</div>'; }
+      h+='<div class="mudTblRow" data-mid="'+(e.mid||'')+'" data-nm="'+esc(e.n)+'" style="display:flex;justify-content:space-between;gap:8px;align-items:center;border-top:1px solid var(--border);padding:7px 2px;cursor:'+(e.mid?'pointer':'default')+'">'
+        +'<span dir="rtl" style="font-size:15px;'+_AF+'">'+esc(e.n)+'</span>'
+        +'<span style="flex:none;font-size:10.5px;color:var(--hint)">'+e.src.map(s=>esc(String(s.b).split(' #')[0].split(' (')[0])).filter((v,i,a)=>a.indexOf(v)===i).join(' · ')+(e.mid?(' <span style="color:#7ee08a">→ карточка</span>'):' <span style="color:#8a6a3a">без привязки</span>')+'</span></div>';
+    });
+    bd.innerHTML=h;
+    bd.querySelectorAll('.mudTblRow').forEach(r=>{ if(r.dataset.mid) r.onclick=()=>{ try{ openNarratorRijal(r.dataset.nm); }catch(e){} }; });
+  }catch(e){ bd.innerHTML='<div class="hint">Не удалось загрузить таблицу.</div>'; }
+};
 var _ctb=document.getElementById('chainTblBtn'); if(_ctb) _ctb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openIsnadBase(); }catch(e){} };
 var _icb=document.getElementById('isnadCtorBtn'); if(_icb) _icb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openIsnadCtor(); }catch(e){} };   // M483 конструктор иснада
 var _htb=document.getElementById('hadTblBtn'); if(_htb) _htb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openHadithTable(); }catch(e){} };   // M449 таблица всех хадисов
