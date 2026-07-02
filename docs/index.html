@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v920</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v921</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v920';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v921';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7139,17 +7139,20 @@ function _isnNorm(s){ return String(s||'').replace(/[ً-ْـٰ]/g,'').replace(/[
 function _parseIsnad(raw){
   const toks=String(raw||'').split(/[\s،؛,.:؟!"«»()\[\]؛،‏‎]+/).map(x=>x.trim()).filter(Boolean);
   const REL=new Set(['ابيه','ابيها','امه','امها','جده','جدها','عمه','عمها','اخيه','ابي']);
-  const links=[]; let curForm=''; let curNames=[]; let post='';
+  const links=[]; let curForm=''; let curNames=[]; let post=''; let hadHa=false;
   const flush=()=>{ if(curNames.length){ const nm=curNames.join(' '); links.push({form:curForm, name:nm, rel:REL.has(_isnNorm(nm))}); } curNames=[]; };
   for(let i=0;i<toks.length;i++){ const nt=_isnNorm(toks[i]);
-    if(nt==='ح') continue;   // تحويل (переход к параллельной цепи)
+    // #156 (С50): «ح» (تحويل) = переход на ПАРАЛЛЕЛЬНЫЙ путь передачи (другой ряд рассказчиков к той же точке) —
+    // раньше молча пропускали и склеивали оба пути в ОДНУ ложную цепь. Теперь останавливаемся: конструктор строит
+    // только ПЕРВЫЙ путь (до «ح»), второй путь не примешивается (владелец разберёт его отдельным вставлением).
+    if(nt==='ح'){ hadHa=true; break; }
     if(_ISNAD_FORM_MAP[nt]!==undefined){ flush(); curForm=_ISNAD_FORM_MAP[nt]; continue; }
     curNames.push(toks[i]); }
   flush();
   // последнее «звено» = Пророк ﷺ → это marfu', его форма уходит «после последнего»
   if(links.length){ const last=links[links.length-1];
     if(/رسول|النبي|نبي|المصطفى|رسولالله/.test(_isnNorm(last.name).replace(/\s/g,''))){ post=last.form; links.pop(); } }
-  return {links, post};
+  return {links, post, hadHa};
 }
 function _isnadDetect(t){ if(!isArabic(t)||String(t).length<14) return false;
   const p=_parseIsnad(t);
@@ -7178,6 +7181,7 @@ function _isnadBox(){ let b=document.getElementById('isnadBox');
   return b; }
 async function openIsnadParse(text){ const p=_parseIsnad(text);
   if(p.links.length<2){ toast('Не похоже на иснад из нескольких передатчиков'); return; }
+  if(p.hadHa) toast('⚠️ Найден знак «ح» (переход на параллельный путь) — построен только ПЕРВЫЙ путь до него, второй путь НЕ примешан. Второй ряд передатчиков разбери отдельной вставкой.');
   const links=p.links.map(l=>({raw:l.name, form:l.form, rel:l.rel, cands:[], pick:null, _open:false}));
   window._isnadState={links, post:p.post};
   const box=_isnadBox(); box.style.display='block';
