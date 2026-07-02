@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v900</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v901</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -714,7 +714,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v900';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v901';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5888,7 +5888,9 @@ function cardAyah(d,groups){
       if(window._cardAuBtn&&window._cardAuBtn!==_pa) window._cardAuBtn.textContent='▶️';
       if(window._cardAuBtn===_pa){ window._cardAu=null; window._cardAuBtn=null; _pa.textContent='▶️'; return; }
       const u='https://everyayah.com/data/'+(cfg.reciter||'Hudhaify_128kbps')+'/'+String(v.s).padStart(3,'0')+String(v.a).padStart(3,'0')+'.mp3';
-      const au=new Audio(u); try{au.setAttribute('playsinline','');}catch(e){} window._cardAu=au; window._cardAuBtn=_pa; _pa.textContent='⏸';
+      const au=new Audio(u); try{au.setAttribute('playsinline','');}catch(e){} window._cardAu=au; window._cardAuBtn=_pa;
+      _pa.textContent='⏳';   // dfb#27 (владелец: «слушать грузит — не видно, думаешь глюк»): спиннер пока аудио грузится, ⏸ только когда реально заиграло
+      au.onplaying=()=>{ if(window._cardAuBtn===_pa) _pa.textContent='⏸'; };
       au.onended=()=>{ if(window._cardAuBtn===_pa){ _pa.textContent='▶️'; window._cardAu=null; window._cardAuBtn=null; } };
       au.onerror=()=>{ _pa.textContent='▶️'; if(window._cardAuBtn===_pa){ window._cardAu=null; window._cardAuBtn=null; } toast('Аудио аята недоступно'); };   // #QA: onerror тоже сбрасывает состояние
       au.play().catch(()=>{ _pa.textContent='▶️'; }); };
@@ -10767,8 +10769,11 @@ async function translitPhrase(query, live){
 // Фолбэк, когда словарь-подсказка (translitSuggest) пуста (слова нет в Коране/сиде). Дословный поиск при этом НЕ меняется
 // (конституция поиска) — это лишь ПРЕДЛОЖЕНИЕ-чип. Короткие гласные и/ы/е в письме опускаем; долгие а/я→ا, о/у/ю→و, э→ا; й→ي.
 // Диграфы: дж/дз/ж/ч→ج, ш/щ→ش, х→خ, ц→س. Мягкий/твёрдый знак — опускаем. Начальная краткая гласная → алиф (ислам→اسلام).
+// fb#3 (владелец: «Ибн Ляхиа нигде не ищет, хотя подсказка предлагает»): курированные ру→ар алиасы знаменитых форм — фонетика на них ломается
+const _RU2AR_FIX={'ляхиа':'لهيعة','ляхия':'لهيعة','лахиа':'لهيعة','лахия':'لهيعة','уяйна':'عيينة','уейна':'عيينة','джурайдж':'جريج','зухри':'زهري','аамаш':'أعمش','амаш':'أعمش','тави':'طاووس','тавус':'طاووس','саури':'ثوري','аузаи':'أوزاعي','лейс':'ليث','ляйс':'ليث','хушайм':'هشيم','вакиа':'وكيع','ваки':'وكيع'};
 function _ruToArWord(word){
   let s=String(word||'').toLowerCase().trim().replace(/ё/g,'е'); if(!/[а-я]/.test(s)) return '';
+  if(_RU2AR_FIX[s]) return _RU2AR_FIX[s];
   s=s.replace(/дж|дз/g,'ج').replace(/[жч]/g,'ج').replace(/[шщ]/g,'ش').replace(/х/g,'خ').replace(/ц/g,'س');
   const M={'а':'ا','я':'ا','о':'و','у':'و','ю':'و','э':'ا','й':'ي',
     'б':'ب','п':'ب','в':'و','ф':'ف','м':'م','н':'ن','л':'ل','р':'ر',
