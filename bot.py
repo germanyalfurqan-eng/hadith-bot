@@ -12,6 +12,7 @@ import threading
 import collections
 import subprocess
 import shutil
+import difflib
 import requests
 from datetime import datetime, timedelta
 from html import unescape
@@ -607,6 +608,15 @@ def parse_hadith_query(text):
         if text.startswith(ru):
             num = text.replace(ru, "").strip()
             if num.isdigit(): return en, int(num)
+        # #448: «5237 бухари» = «бухари 5237» — от перестановки мест слагаемых сумма не меняется
+        if text.endswith(" " + ru):
+            num = text[:-len(ru)].strip()
+            if num.isdigit(): return en, int(num)
+    # #448: то же для Мухаймина: «145 мухаймин»
+    for trigger in ("мухэймин", "мухаймин", "муршид"):
+        if text.endswith(" " + trigger):
+            num = text[:-len(trigger)].strip()
+            if num.isdigit(): return "riwayat", int(num)
     return None, None
 
 def parse_quran_query(text):
@@ -6298,7 +6308,14 @@ async def _app_channel_watcher(application):
             # в 5 мин, промежуточные версии никогда не проверялись (видели только САМУЮ ПОСЛЕДНЮЮ на момент тика).
             # Фикс: очередь update_notes_queue.json (список {id, note}, я ДОПИСЫВАЮ, не перезаписываю) + журнал
             # посчитанных id (app_post_ids) — постим ВСЕ ещё не запощенные по очереди, ничего не теряется
-            # независимо от скорости деплоя. Старый одиночный update_note.txt НЕ трогаем (нужен «анонс»/докс-модалке).
+            # независимо от скорости деплоя.
+            # 02.07.2026 (владелец поймал v905 И v906 ДВАЖДЫ в канале — «разберись нормально», не заплатками):
+            # СТАРЫЙ одиночный путь (сравнение корневого update_note.txt с app_post.note) УДАЛЁН целиком, а не
+            # заглушен доп.условием — он был АРХИТЕКТУРНО ИЗБЫТОЧЕН: 1) «анонс»-команда постит СИНХРОННО сама
+            # (owner_cmd, строка ~2586), watcher ей не нужен; 2) окно «Что нового» в аппе читает update_note.txt
+            # НАПРЯМУЮ с фронта (fetch), тоже не через watcher/journal. Единственный писатель app_post-очереди для
+            # @muslimoonapp — ОЧЕРЕДЬ выше. Два независимых пути к одному каналу = гарантированная гонка/дубль
+            # при любой задержке одного из GET-запросов к GitHub API — убрано насовсем, не патчем поверх.
             try:
                 rq = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_notes_queue.json",
                                   headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
@@ -6309,31 +6326,38 @@ async def _app_channel_watcher(application):
                     j = _journal_load()
                     posted_ids = set(j.get("app_post_ids") or [])
                     pending = [x for x in queue if isinstance(x, dict) and x.get("id") and x.get("note") and x["id"] not in posted_ids]
+                    # 02.07.2026 (владелец: «поставь индикатор повторных публикаций чтобы бил тревогу при схожести»):
+                    # ВТОРОЙ независимый рубеж защиты (первый — единственный путь постинга, см. выше). Перед КАЖДЫМ
+                    # постом сравниваем его текст с ПОСЛЕДНИМ реально запощенным (app_post.note) через difflib —
+                    # схожесть ≥0.90 (почти идентичный/дословно тот же текст) → пост ПРОПУСКАЕМ и бьём тревогу
+                    # (LOG_CHAT + OWNER_ID + запись в journal "dup_alerts"), вместо того чтобы молча продублировать.
+                    last_posted_note = (j.get("app_post") or {}).get("note", "")
+                    posted_now = 0
                     for item in pending[:8]:   # предохранитель: не больше 8 постов за один тик (не заспамить канал разом)
+                        sim = difflib.SequenceMatcher(None, (item["note"] or "").strip(), (last_posted_note or "").strip()).ratio() if last_posted_note else 0.0
+                        if sim >= 0.90:
+                            alerts = j.get("dup_alerts") or []
+                            alerts.append({"id": item["id"], "sim": round(sim, 3), "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
+                                           "note": (item["note"] or "")[:200]})
+                            j["dup_alerts"] = alerts[-100:]
+                            _atxt = f"🚨 ТРЕВОГА: пропущен похожий повторный пост в @muslimoonapp (схожесть {sim:.0%}) — id={item['id']}: {(item['note'] or '')[:160]}"
+                            try: await application.bot.send_message(LOG_CHAT_ID, _atxt)
+                            except Exception: pass
+                            try: await application.bot.send_message(OWNER_ID, _atxt)
+                            except Exception: pass
+                            posted_ids.add(item["id"])   # id считаем обработанным (не постим, но и не пытаемся снова каждый тик)
+                            continue
                         await _post_app_channel(application.bot, item["note"])
                         posted_ids.add(item["id"])
+                        last_posted_note = item["note"]
+                        posted_now += 1
                         await asyncio.sleep(2)   # пауза между постами — не флудить Telegram API
                     if pending:
                         j["app_post_ids"] = list(posted_ids)[-500:]
-                        _journal_save(f"app_post → канал приложения (очередь, {len(pending[:8])} шт.)")
+                        if posted_now: j["app_post"] = {"note": last_posted_note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+                        _journal_save(f"app_post → канал приложения (очередь, {posted_now} опубл. из {len(pending[:8])})")
             except Exception as e:
                 print("app channel queue watcher error:", e)
-            note = ""
-            try:
-                rr = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_note.txt",
-                                  headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
-                if rr.status_code == 200:
-                    note = base64.b64decode(rr.json().get("content", "")).decode("utf-8").strip()
-            except Exception:
-                note = ""
-            if not note:
-                continue
-            j = _journal_load()
-            last = (j.get("app_post") or {}).get("note", "")
-            if note != last:
-                await _post_app_channel(application.bot, note)   # ЗАКОН С31: скрин + анонс + сворачиваемая инструкция
-                j["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
-                _journal_save("app_post → канал приложения (авто-вотчер, 5 мин)")
         except Exception as e:
             print("app channel watcher error:", e)
 
