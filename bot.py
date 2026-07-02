@@ -798,6 +798,81 @@ async def narr_card_reply_text(query, ref):
     if sunnah_link: parts.append(f"🌐 sunnah.com: {sunnah_link}")
     return "\n".join(p for p in parts if p)
 
+# ВЫГОВОР 02.07.2026 (@jamaat_ru, Orthodox): «Мухэймине есть этот хадис?» — бот дал нерелевантную ссылку,
+# приложение-RAG на тот же вопрос выдало первые 4 хадиса Бухари (ГАЛЛЮЦИНАЦИЯ вместо честной проверки).
+# Фикс: НАСТОЯЩИЙ поиск по РЕАЛЬНОМУ тексту muhaymin.json (3307 записей, тот же файл, что грузит апп) —
+# честное да/нет с номером, БЕЗ ИИ-домысла (R37). ИИ тут вообще не нужен — это точный текстовый поиск.
+_MUHAYMIN_CACHE = {"data": None, "ts": 0}
+def _load_muhaymin():
+    import time as _t
+    if _MUHAYMIN_CACHE["data"] is not None and (_t.time() - _MUHAYMIN_CACHE["ts"]) < 3600:
+        return _MUHAYMIN_CACHE["data"]
+    try:
+        data = requests.get("https://germanyalfurqan-eng.github.io/hadith-bot/muhaymin.json", timeout=20).json()
+        _MUHAYMIN_CACHE.update({"data": data, "ts": _t.time()})
+        return data
+    except Exception:
+        return _MUHAYMIN_CACHE["data"]
+
+_AR_DIAC_RE = re.compile(r'[ً-ْٰـ]')
+def _canon_ar(s):
+    s = _AR_DIAC_RE.sub('', str(s or ''))
+    s = re.sub(r'[إأآا]', 'ا', s)
+    s = re.sub(r'[ىي]', 'ي', s)
+    s = re.sub(r'ة', 'ه', s)
+    s = re.sub(r'[،؛,\.:]', '', s)   # знаки препинания — рвут непрерывность подстроки, тоже убираем
+    return re.sub(r'\s+', ' ', s).strip()
+
+def parse_muhaymin_check(text):
+    """«мухэймине есть?» / «в мухэймине есть этот хадис» / «мухэймин есть ли» — с текстом хадиса ИЛИ реплаем.
+    ⚠️ Проверено тестом: написание «Мухаймин» (без «э», как в самом CLAUDE.md) сначала НЕ матчилось — добавлено."""
+    t = text.strip().lower()
+    MUH = r'мух[эеа]йм[иі]н[еа]?'
+    if re.search(MUH + r'\s*(есть|найдётся|найдется|есть ли|содержит)', t) or \
+       re.search(r'(есть|найдётся|найдется)\s+ли?\s+.{0,20}' + MUH, t):
+        return True
+    return False
+
+async def muhaymin_check_reply_text(hadith_text):
+    if not hadith_text or not re.search(r'[ء-ي]', hadith_text):
+        return "🔎 Не вижу арабского текста хадиса — пришли текст (или ответь этой командой на сообщение с текстом)."
+    data = _load_muhaymin()
+    if not data:
+        return "🔧 База Мухэймина сейчас недоступна, попробуй позже."
+    qc = _canon_ar(hadith_text)
+    # ⚠️ БАГ ПОЙМАН ТЕСТОМ ПЕРЕД ДЕПЛОЕМ: раньше фильтровал короткие слова (≥3 буквы) ИЗ фрагмента и склеивал
+    # оставшиеся — но убранные короткие слова (بن и т.п.) НИКУДА не делись из целевого текста → непрерывная
+    # подстрока рвалась, self-match (хадис против самого себя!) давал 0 совпадений. Теперь: длинные слова —
+    # только ЯКОРЬ (где искать), а сам фрагмент — СПЛОШНОЙ кусок ВСЕХ слов вокруг якоря (ничего не выкидываем).
+    allw = qc.split()
+    longw_idx = [i for i, w in enumerate(allw) if len(w) >= 4]
+    if len(longw_idx) < 4:
+        return "🔎 Нужен текст хадиса подлиннее (несколько значимых слов), чтобы искать надёжно."
+    anchor = longw_idx[len(longw_idx)//2]
+    lo, hi = max(0, anchor - 4), min(len(allw), anchor + 5)
+    frag = ' '.join(allw[lo:hi])
+    hits = []
+    for h in data:
+        for rv in (h.get('rv') or []):
+            ct = _canon_ar(rv.get('t') or '')
+            if frag and frag in ct:
+                hits.append((h.get('n'), h.get('b', ''), rv.get('t', '')[:150]))
+    if not hits:
+        # фолбэк: короче фрагмент (на случай печатных расхождений в 1-2 словах)
+        lo2, hi2 = max(0, anchor - 2), min(len(allw), anchor + 3)
+        frag2 = ' '.join(allw[lo2:hi2])
+        for h in data:
+            for rv in (h.get('rv') or []):
+                ct = _canon_ar(rv.get('t') or '')
+                if frag2 and frag2 in ct:
+                    hits.append((h.get('n'), h.get('b', ''), rv.get('t', '')[:150]))
+    if not hits:
+        return f"❌ Нет, не нашёл этот хадис в Мухэймине (проверил все {len(data)} номеров, честный текстовый поиск, не ИИ-догадка)."
+    n = hits[0][0]
+    link = f"https://t.me/muslimoontt_bot?startapp=m_{n}"
+    extra = f" (и ещё {len(hits)-1} совпадений)" if len(hits) > 1 else ""
+    return f"✅ Да, есть — аль-Мухэймин №{n}{extra}\n📱 {link}"
+
 def parse_tafsir_query(text):
     t = text.lower().strip()
     if t.startswith("тафсир "):
@@ -2972,6 +3047,22 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try: await update.message.reply_text("⚠️ Ассистент журнала споткнулся: " + str(e)[:140])
                 except Exception: pass
         return
+
+    # ВЫГОВОР 02.07.2026 (@jamaat_ru, Orthodox): «Мухэймине есть этот хадис?» БЕЗ «ботяра»-префикса, реплаем на
+    # СВОЁ ЖЕ предыдущее сообщение с текстом — бот молчал/отвечал не по теме. Триггер работает у ВСЕХ (не только
+    # владелец), независимо от «ботяра», без ИИ-домысла (честный текстовый поиск по muhaymin.json).
+    if text and not _ai_loop_guard(update, text) and parse_muhaymin_check(text) and feature_allowed('bot', tg_user_dict(update)):
+        if rate_ok('muhcheck:' + str(user_id), limit=6, window=120):
+            hadith_src = ''
+            if update.message.reply_to_message and (update.message.reply_to_message.text or update.message.reply_to_message.caption):
+                hadith_src = update.message.reply_to_message.text or update.message.reply_to_message.caption
+            else:
+                hadith_src = re.sub(r'мух[эе]йм[иі]н[еа]?.*$', '', text, flags=re.IGNORECASE).strip()
+                if not re.search(r'[ء-ي]', hadith_src): hadith_src = text  # запрос сам может содержать текст перед словом «мухэймин»
+            await update.message.reply_text("🔎 Ищу в Мухэймине...")
+            result = await muhaymin_check_reply_text(hadith_src)
+            await send_long(update, result)
+            return
 
     # ============ G9: «ботяра» для белого списка (не владелец) ============
     if user_id != OWNER_ID and text and not _ai_loop_guard(update, text) and not _AI_PUBLIC_OFF:  # 🔒 мастер-рубильник: ИИ не-владельцу ВЫКЛ
