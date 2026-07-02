@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v924</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v925</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v924';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v925';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -10336,7 +10336,10 @@ async function verifyNarr(card, place, text){
       }
     }catch(e){}
     // 🤖 СПЛОШНОЙ НЕЙРОТАХКИК (указ владельца 02.07.2026): предрасчитанный вердикт из neuro/<bid>_<seg>.json (176 423 хадиса, neuro_precompute.py по ПР-1..5)
+    // #453 (С50, повтор владельца «я же сказал бухари и муслим нейротахкики не нужен») — этот блок ДОБАВЛЕН 02.07, ПОЗЖЕ
+    // исключения _BM_BIDS (01.07) для блока тадлис-риска выше, и не получил то же исключение. Синхронизирую.
     let _nvHtml='';
+    if(!_BM_BIDS.includes(String(place.bid||'')))
     try{
       const _nk=place.bid+'_'+Math.floor(+place.num/500);
       if(!window._neuroSh) window._neuroSh={};
@@ -10349,9 +10352,11 @@ async function verifyNarr(card, place, text){
         // владелец 02.07 (5 замечаний): имена+рус+ссылки Мактаба/sunnah/🆔; ВСЕГДА «БЕТА»; «кто сказал матрук»; кнопка «развернуть разбор» — свидетели каждого + доказательство слышания пар
         const _WKRU={matruk:'матрук — отвергнут',daif:'даиф — слабый',majhul:'маджхуль — неизвестен',majhul_hal:'маджхуль аль-халь — тавсик не установлен',mukhtalaf:'мухталяф — спорный'};
         let _m2s={}; try{ _m2s=await loadMid2Sid(); }catch(e){}
-        const _lnks=(mid)=>{ const sid=_m2s[String(mid)]; return ' <span style="font-size:9.5px;direction:ltr;color:var(--hint)">(🆔'+mid+' · <a href="https://shamela.ws/narrator/'+mid+'" target="_blank" style="color:#9fd3a8">Мактаба↗</a>'+(sid&&String(sid).match(/^\d+$/)?(' · <a href="https://sunnah.com/narrator/'+sid+'" target="_blank" style="color:#7fb0d8">sunnah↗</a>'):'')+')</span>'; };
+        const _lnks=(mid)=>{ if(mid==null) return ''; const sid=_m2s[String(mid)]; return ' <span style="font-size:9.5px;direction:ltr;color:var(--hint)">(🆔'+mid+' · <a href="https://shamela.ws/narrator/'+mid+'" target="_blank" style="color:#9fd3a8">Мактаба↗</a>'+(sid&&String(sid).match(/^\d+$/)?(' · <a href="https://sunnah.com/narrator/'+sid+'" target="_blank" style="color:#7fb0d8">sunnah↗</a>'):'')+')</span>'; };
         const _ruOf=(ar)=>{ try{ const r=arNameRu(ar,4); return r&&r!==ar?(' <span style="color:#9fb6c8;font-size:11px">≈ '+esc(r)+'</span>'):''; }catch(e){ return ''; } };
-        const _wkRows=(_nv.w||[]).map(x=>{ const nm=x[2]||('id'+x[0]); return '<div style="margin-top:2px">• <span class="nvWk" data-mid="'+x[0]+'" dir="rtl" style="cursor:pointer;color:#ff8787;'+_AF+';font-size:13px;text-decoration:underline dotted">'+esc(nm)+'</span>'+_ruOf(nm)+' <span style="color:#ff9b9b">— '+esc(_WKRU[x[1]]||x[1])+'</span><span class="nvWho" data-mid="'+x[0]+'" data-neg="1"></span>'+_lnks(x[0])+'</div>'; }).join('');
+        // #454 (С50): x[0]===null → анонимный передатчик (رجل/امرأة) — не кликабелен, без id-ссылок (не выдаём мнимую карточку)
+        const _wkRows=(_nv.w||[]).map(x=>{ const nm=x[2]||('id'+x[0]); const isAnon=(x[0]==null);
+          return '<div style="margin-top:2px">• <span'+(isAnon?'':' class="nvWk" data-mid="'+x[0]+'"')+' dir="rtl" style="'+(isAnon?'color:#c8d0da;':'cursor:pointer;color:#ff8787;')+_AF+';font-size:13px;'+(isAnon?'':'text-decoration:underline dotted')+'">'+esc(nm)+'</span>'+(isAnon?'':_ruOf(nm))+' <span style="color:#ff9b9b">— '+esc(_WKRU[x[1]]||x[1])+'</span>'+(isAnon?'':('<span class="nvWho" data-mid="'+x[0]+'" data-neg="1"></span>'+_lnks(x[0])))+'</div>'; }).join('');
         const _tdRows2=(_nv.td||[]).map(x=>{ const nm=x[2]||('id'+x[0]); const sev=x[1]>=4?'сильный тадлис':(x[1]===3?'частый тадлис':'тадлис (мартаба уточняется)'); return '<div style="margin-top:2px">• <span class="nvWk" data-mid="'+x[0]+'" dir="rtl" style="cursor:pointer;color:#ffcf8a;'+_AF+';font-size:13px;text-decoration:underline dotted">'+esc(nm)+'</span>'+_ruOf(nm)+' <span style="color:#e6c578">— мудаллис ('+sev+') передаёт'+(x[3]?(' от <span dir="rtl" style="'+_AF+'">'+esc(x[3])+'</span>'):'')+' через «عن» — слышание не доказано</span>'+_lnks(x[0])+'</div>'; }).join('');
         _nvHtml='<div class="nvBox" style="margin-top:8px;border:1px solid #3a3080;border-radius:9px;padding:7px 10px;background:rgba(108,92,231,.07)"><span style="font-size:12.5px;font-weight:700;color:'+_d[2]+'">🤖 Нейротахкик <span style="font-size:9px;color:#b9a7ff;border:1px solid #6c5ce7;border-radius:5px;padding:0 5px;vertical-align:middle">БЕТА</span>: '+_d[0]+' '+_d[1]+'</span>'
           +(_wkRows?('<div style="font-size:11.5px;margin-top:4px"><b style="color:#ff9b9b;font-size:11px">Слабые звенья:</b>'+_wkRows+'</div>'):'')
