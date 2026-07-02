@@ -2802,9 +2802,23 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if replied.sender_chat:
             is_reply_to_channel = True
 
-    # ============ C32: УМНЫЙ АССИСТЕНТ ЖУРНАЛА — владелец пишет в LOG_CHAT свободным текстом (в т.ч. реплаем на отчёт, «Нету ее») ============
-    # Понимает контекст и реагирует (отвечает/эскалирует Claude). Только в журнале и только владелец. Команды уже обработаны выше (return).
-    if chat_id == LOG_CHAT_ID and user_id == OWNER_ID and text and not text.startswith('/') and not _ai_loop_guard(update, text):
+    # ============ C32: УМНЫЙ АССИСТЕНТ ЖУРНАЛА — владелец пишет в LOG_CHAT свободным текстом, ИЛИ реплаем
+    # на отчёт/тревогу бота В ЛИЧКЕ («это что?») ============
+    # 02.07.2026 (владелец: «обеспечь чтоб он понимал очем речь» — реплай «это что?» на тревогу-дубль в ЛИЧКЕ
+    # ушёл в ОБЩИЙ исламский ассистент, который не знал контекста). В LOG_CHAT — любой текст (как раньше, там
+    # всё по проекту). В личке — ТОЛЬКО если это реплай на сообщение САМОГО бота (is_reply_to_bot), иначе
+    # сломали бы обычные исламские вопросы владельца боту (они и дальше идут в общий ассистент).
+    # маркеры «это отчёт/тревога САМОГО бота» (worklog/backup/ошибка/заявка/дубль-детектор) — отличаем от
+    # обычного ответа бота на хадис/аят/поиск, куда реплай должен ПО-ПРЕЖНЕМУ идти в общий ИИ-ассистент (ботяра).
+    _REPORT_MARKERS = ("CLAUDE начал", "CLAUDE закончил", "CLAUDE остановился", "Заявка владельца",
+                        "НОВАЯ ОШИБКА", "Я сам заметил и ОСТАНОВИЛ", "БЭКАП Muslimoon", "МАНИФЕСТ О ПРОГРАММЕ")
+    _in_log = (chat_id == LOG_CHAT_ID)
+    _replied_is_report = False
+    if is_reply_to_bot and update.message.reply_to_message:
+        _rtxt = getattr(update.message.reply_to_message, "text", None) or getattr(update.message.reply_to_message, "caption", None) or ""
+        _replied_is_report = any(m in _rtxt for m in _REPORT_MARKERS)
+    _in_dm_reply = (chat_id == OWNER_ID and chat_type == "private" and _replied_is_report)
+    if (_in_log or _in_dm_reply) and user_id == OWNER_ID and text and not text.startswith('/') and not _ai_loop_guard(update, text):
         if rate_ok('jassist:' + str(user_id), limit=20, window=120):
             try:
                 await _journal_assistant(update, context, text)
@@ -6340,7 +6354,14 @@ async def _app_channel_watcher(application):
                             alerts.append({"id": item["id"], "sim": round(sim, 3), "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
                                            "note": (item["note"] or "")[:200]})
                             j["dup_alerts"] = alerts[-100:]
-                            _atxt = f"🚨 ТРЕВОГА: пропущен похожий повторный пост в @muslimoonapp (схожесть {sim:.0%}) — id={item['id']}: {(item['note'] or '')[:160]}"
+                            # 02.07.2026 (владелец: «обеспечь чтоб он понимал очем речь» — прошлый текст был
+                            # жаргоном id/схожесть%, владелец не понял и переспросил у ОБЩЕГО ИИ-ассистента,
+                            # который ответил не по теме). Текст теперь ЯСНЫЙ, без внутренних терминов,
+                            # объясняет ЧТО случилось + ЧТО делать (ничего) обычным языком.
+                            _atxt = ("✅ Я сам заметил и ОСТАНОВИЛ повторную публикацию в канал @muslimoonapp — "
+                                     "чуть не вышло ДВА одинаковых поста подряд про одно и то же обновление. "
+                                     "Это моя защита сработала как надо, действий от тебя не требуется.\n\n"
+                                     f"📋 Про какое обновление речь:\n{(item['note'] or '')[:250]}")
                             try: await application.bot.send_message(LOG_CHAT_ID, _atxt)
                             except Exception: pass
                             try: await application.bot.send_message(OWNER_ID, _atxt)
