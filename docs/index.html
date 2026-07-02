@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v901</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v902</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -714,7 +714,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v901';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v902';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3320,7 +3320,7 @@ async function _bookLoad(){
     sbk.style.cssText='padding:6px 12px;border-radius:9px;font-size:13px;border:1px solid #2e9b5b;color:#bff5d4';
     let bkP=m.querySelector('#bookFindPanel');
     if(!bkP){ bkP=document.createElement('div'); bkP.id='bookFindPanel'; bkP.style.cssText='display:none;margin:4px 0 6px;border:1px solid #2e9b5b;border-radius:10px;padding:8px';
-      bkP.innerHTML='<div style="display:flex;gap:6px;align-items:center"><input id="bkFindQ" type="search" placeholder="слово/№ хадиса или вопрос своими словами…" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:14px"><button class="mini" id="bkFindGo" style="padding:7px 13px">Найти</button></div><div id="bkFindOut" style="max-height:40vh;overflow:auto;margin-top:6px"></div>';
+      bkP.innerHTML='<div style="display:flex;gap:6px;align-items:center"><input id="bkFindQ" type="search" placeholder="слово или вопрос своими словами…" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:14px"><button class="mini" id="bkFindGo" style="padding:7px 13px">Найти</button></div><div style="display:flex;gap:6px;align-items:center;margin-top:6px"><input id="bkHnoQ" type="number" inputmode="numeric" min="1" placeholder="№ хадиса — мгновенный переход" style="flex:1;background:var(--bg);color:var(--text);border:1px solid #2e7d32;border-radius:8px;padding:7px 10px;font-size:14px"><button class="mini" id="bkHnoGo" style="padding:7px 13px;border:1px solid #2e7d32;color:#bff5d4">К №</button></div><div id="bkFindOut" style="max-height:40vh;overflow:auto;margin-top:6px"></div>';
       navEl.parentNode.insertBefore(bkP, tEl); }
     const outB=bkP.querySelector('#bkFindOut');
     let _bkLastResultsHtml='';   // #владелец: «назад к результатам» после перехода на страницу — без повторного поиска
@@ -3339,6 +3339,7 @@ async function _bookLoad(){
       const qv=(bkP.querySelector('#bkFindQ').value||'').trim();
       if(!qv){ outB.innerHTML='<span class="hint">Введи слово, № хадиса или вопрос.</span>'; return; }
       const isNum=/^[\d٠-٩]{1,5}$/.test(qv);
+      if(isNum){ const n=parseInt(qv.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)))||0; if(n>0){ bkP.style.display='none'; sbk.textContent='🔎 Поиск по книге ▾'; _bkJumpHno(n); return; } }   // #447: цифра = переход к № хадиса (f40c/бинарный), а не поиск цифры текстом
       const isArabicQ=/[ء-ي]/.test(qv);
       const wordCount=qv.trim().split(/\s+/).length;
       const looksLikeQuestion = !isNum && ((!isArabicQ && wordCount>=3) || qv.length>28);   // короткое слово/№ → быстрый поиск; вопрос-предложение → сразу смысловой RAG (простое совпадение слов его не найдёт — замечание владельца)
@@ -3428,6 +3429,10 @@ async function _bookLoad(){
     };
     bkP.querySelector('#bkFindGo').onclick=_bkFind;
     bkP.querySelector('#bkFindQ').onkeydown=(e)=>{ if(e.key==='Enter') _bkFind(); };
+    // #447: отдельное окно «№ хадиса» — мгновенный переход (f40c → бинарный поиск по маркерам печати)
+    const _hnoGo=()=>{ const n=parseInt(bkP.querySelector('#bkHnoQ').value)||0; if(n>0){ bkP.style.display='none'; sbk.textContent='🔎 Поиск по книге ▾'; _bkJumpHno(n); } else { toast('Введи номер хадиса цифрами'); } };
+    bkP.querySelector('#bkHnoGo').onclick=_hnoGo;
+    bkP.querySelector('#bkHnoQ').onkeydown=(e)=>{ if(e.key==='Enter') _hnoGo(); };
     // Arabus (тап слова)
     const ab=document.createElement('button'); ab.className='mini'; ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus'; ab.title='Тап по слову → корень/значения';
     ab.onclick=()=>{ _arabusOn=!_arabusOn; try{ loadRoots(); if(_arabusOn) loadArabusLocal(); }catch(e){} ab.textContent=_arabusOn?'📕 Arabus ✓':'📕 Arabus'; tEl.style.cursor=_arabusOn?'pointer':'default'; toast(_arabusOn?'📕 Arabus ВКЛ — тапай слово':'Arabus выкл'); };
