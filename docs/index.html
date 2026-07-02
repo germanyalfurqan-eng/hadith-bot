@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v911</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v912</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v911';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v912';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4835,6 +4835,28 @@ async function openNarratorRijal(name){
         mk(1727,'📘 صحيح مسلم', sah.m);
         body.appendChild(sb);
       }
+      // #313: 📊 ОХВАТ — в скольких хадисах/книгах участвует (точная dz-разметка иснадов, не текст-поиск)
+      try{ let part=null; try{ const _grp=await _aliasGroup(+_vid2); const _pp=await Promise.all(_grp.map(i=>dzPart(i).catch(()=>null))); part=_pp.filter(Boolean).flat(); }catch(e){ part=await dzPart(+_vid2); }   // M454: дубль-id того же человека — суммируем участие (как в режиме «Цепь»)
+        if(part && part.length){ try{ await loadBooksMap(); }catch(e){}
+          const byb={}; part.forEach(p=>{ const b=String(p[0]); (byb[b]=byb[b]||[]).push(p); });
+          const bids=Object.keys(byb).sort((a,b)=>byb[b].length-byb[a].length);
+          const cov=document.createElement('div'); cov.style.cssText='margin-top:9px';
+          cov.innerHTML='<span style="color:var(--hint);font-size:12px">📊 Охват по нашей разметке иснадов: <b style="color:var(--text)">'+part.length.toLocaleString('ru')+'</b> мест · <b style="color:var(--text)">'+bids.length+'</b> '+(bids.length===1?'книга':(bids.length<5?'книги':'книг'))+':</span>';
+          const wrap=document.createElement('div'); wrap.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:5px'; cov.appendChild(wrap);
+          const lst=document.createElement('div'); lst.style.cssText='margin-top:6px'; cov.appendChild(lst);
+          bids.slice(0,14).forEach(bid=>{ const arr=byb[bid]; const nm=bookName(bid)||('книга '+bid);
+            const chip=document.createElement('span'); chip.style.cssText='cursor:pointer;font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid var(--border);color:var(--text);background:rgba(255,255,255,.03)';
+            chip.innerHTML='<span dir="rtl">'+esc(nm)+'</span> · <b>'+arr.length+'</b>'; chip.title='Показать места в этой книге';
+            chip.onclick=()=>{ const open=chip.dataset.open==='1';
+              wrap.querySelectorAll('span[data-open]').forEach(c=>c.dataset.open='');
+              chip.dataset.open=open?'':'1'; lst.innerHTML='';
+              if(open) return;
+              lst.innerHTML='<div class="hint" style="font-size:11px;margin-bottom:3px"><span dir="rtl">'+esc(nm)+'</span> — мест '+arr.length+(arr.length>60?' (первые 60)':'')+':</div>';
+              arr.slice(0,60).forEach(p=>lst.appendChild(_dzPlaceRow(bid,p[1],p[2]))); };
+            wrap.appendChild(chip); });
+          if(bids.length>14){ const more=document.createElement('span'); more.style.cssText='font-size:11px;color:var(--hint);align-self:center'; more.textContent='… ещё '+(bids.length-14); wrap.appendChild(more); }
+          body.appendChild(cov);
+        } }catch(e){}
       await _renderTlinkLinks(_vid2, body, (nm)=>openNarratorRijal(nm));   // Р-37/Р-04: был дубль (старая горизонт. версия) — теперь общий помощник (счётчик передач + рус.имя)
     }
   }catch(e){}
