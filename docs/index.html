@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v921</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v922</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v921';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v922';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7885,9 +7885,14 @@ async function openHadithTable(){
       +'<span class="htV" data-v="'+v+'" title="Уникальная ВЕРСИЯ (точь-в-точь иснад+матн). Тап — все точные копии этой версии" style="cursor:pointer">версия <b style="color:#cdbcff">V'+v+'</b></span>'
       +'<span class="htU" data-u="'+u+'" title="Уникальный ХАДИС (по матну точь-в-точь). Тап — все ВЕТКИ" style="cursor:pointer">хадис <b style="color:#9fd3a8">U'+u+'</b></span>'+(su?('<span class="htS" data-s="'+su+'" title="УНИКАЛЬНЫЙ ХАДИС нашего тахриджа (Ф-17: один случай Пророка ﷺ, разные пути/формулировки). Тап — все версии по сборникам" style="cursor:pointer">🌿 хадис <b style="color:#9fd3a8">№'+su+'</b>'+(nv>1?(' · <b style="color:#9fd3a8">'+_ruVers(nv)+'</b>'):'')+'</span>'):'')+'</div>'+'<div class="htVerBox" style="display:none;margin-top:4px"></div>'
       +'<div class="htIds" style="margin-top:3px"></div>';
-    // id передатчиков из реестра цепи (ленив)
-    if(cid){ (async()=>{ try{ const rec=await _regRec(cid); if(rec&&rec.s){ const ids=rec.s.filter(x=>typeof x==='number');
-      d.querySelector('.htIds').innerHTML='<span style="font-size:11px;color:var(--hint)">id передатчиков: </span><span style="font-family:monospace;font-size:11px;color:#9fd3a8">'+(ids.length?ids.join(' · '):'—')+'</span>'; } }catch(e){} })(); }
+    // id передатчиков + ФОРМЫ ПЕРЕДАЧИ из реестра цепи (ленив). #183 (С50, «нет عن/حدثنا в таблице цепей»):
+    // rec.s содержит и числовые id, и U-коды нераспознанных коротких форм ВПЕРЕМЕШКУ — позиция в rec.s
+    // соответствует rec.f[i] (форма ПЕРЕД этим звеном), поэтому нельзя фильтровать id ДО сопоставления с формой.
+    if(cid){ (async()=>{ try{ const rec=await _regRec(cid); if(rec&&rec.s&&rec.f){
+      const parts=[]; for(let i=0;i<rec.s.length;i++){ const el=rec.s[i]; if(typeof el!=='number') continue;
+        const fLbl=(_ISNAD_FORM_LIST.find(x=>x[0]===rec.f[i])||[])[1]||rec.f[i]||'';
+        parts.push((fLbl?('<span style="color:#c9b8ff" title="форма передачи">'+esc(fLbl)+'</span> '):'')+'<b style="color:#9fd3a8">'+el+'</b>'); }
+      d.querySelector('.htIds').innerHTML='<span style="font-size:11px;color:var(--hint)">передатчики: </span><span dir="rtl" style="font-size:11.5px">'+(parts.length?parts.join(' <span style="color:var(--hint)">·</span> '):'—')+'</span>'; } }catch(e){} })(); }
     const _vEl=d.querySelector('.htV'); if(_vEl) _vEl.onclick=(e)=>{ e.stopPropagation(); q.value='v'+v; q.dispatchEvent(new Event('input')); };
     const _uEl=d.querySelector('.htU'); if(_uEl) _uEl.onclick=(e)=>{ e.stopPropagation(); q.value='u'+u; q.dispatchEvent(new Event('input')); };
     const _sEl=d.querySelector('.htS'); if(_sEl) _sEl.onclick=async(e)=>{ e.stopPropagation();   // M495: тап — версии уникального хадиса по сборникам (наш тахридж)
