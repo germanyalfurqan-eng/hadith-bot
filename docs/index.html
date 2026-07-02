@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v918</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v919</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v918';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v919';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1090,10 +1090,19 @@ function splitIsnad(text){
   const OPEN=['حدثنا','حدثني','حدثناه','اخبرنا','اخبرني','انبانا','انباني','ثنا','سمعت','حدثهم'];
   const startsIsnad = OPEN.some(o=>c[0]===o||c[0].indexOf(o)===0) || (c[0]==='عن' && words.length>=6);
   if(!startsIsnad) return [null,text];
-  // 2) граница матна: «قال/أن رسول الله | النبي»
-  for(let i=1;i<c.length;i++){ const w=c[i],p=c[i-1];
+  // 2) граница матна — ДВЕ формы, проверяем ПО ВОЗРАСТАНИЮ индекса (кто раньше встретился, тот и граница;
+  // раньше 2 проверялась отдельным неограниченным проходом по ВСЕМУ тексту и могла зацепить «ان رسول»/«قال رسول»
+  // ГЛУБОКО внутри матна — напр. в прямой речи Умара — раньше, чем короткую цепь. #191 (С50): объединено в один
+  // проход с окном (цепь передачи почти никогда не длиннее ~60 слов) — самый ранний маркер побеждает.
+  // 2а: «قال/أن رسول الله | النبي»  ·  2б: «имя، قال: <прямая речь передатчика>» (не قالا/قالوا — те продолжают цепь;
+  // не считается границей, если за «قال:» идёт очередной глагол передачи — «فلان قال: حدثنا …» продолжает цепь).
+  const CONT=['حدثنا','حدثني','حدثناه','اخبرنا','اخبرني','انبانا','انباني','ثنا','سمعت'];
+  const win=Math.min(60,c.length);
+  for(let i=1;i<win;i++){ const w=c[i],p=c[i-1];
     if((w.indexOf('رسول')===0||w.indexOf('النبي')===0)&&(p.indexOf('قال')===0||p.indexOf('ان')===0))
-      return [words.slice(0,i-1).join(' '), words.slice(i-1).join(' ')]; }
+      return [words.slice(0,i-1).join(' '), words.slice(i-1).join(' ')];
+    const bare=w.replace(/[:،,.؛]+$/,''); if(bare==='قال'){
+      const nxt=c[i+1]||''; if(!CONT.some(v=>nxt.indexOf(v)===0)) return [words.slice(0,i).join(' '), words.slice(i).join(' ')]; } }
   // 3) конец иснада по «صلى الله عليه وسلم» — но только если он в ПЕРВЫХ 60% (иначе это внутри матна)
   const lim=Math.floor(c.length*0.6);
   for(let i=0;i<lim;i++){ if(c[i].indexOf('وسلم')!==-1) return [words.slice(0,i+1).join(' '), words.slice(i+1).join(' ')]; }
