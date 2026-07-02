@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v923</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v924</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v923';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v924';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7081,8 +7081,14 @@ async function chainRunSeq(out){
   // собрать доступные формы по рёбрам (по ВСЕМ найденным, до фильтра)
   allRecs.forEach(rc=>{ if(!rc.f) return; const st=_alignStart(rc.s); if(st<0) return;
     for(let k=0;k<groups.length-1;k++){ const g=rc.f[st+k+1]||''; const cnt=rc.n||1; availForms[k][g]=(availForms[k][g]||0)+cnt; } });
-  // применить фильтр форм (между-рёбра + pre f[st] + post f[st+N] если цепь длиннее выбранной)
-  const recs=allRecs.filter(rc=>{ if(!anyForm) return true; if(!rc.f) return false; const st=_alignStart(rc.s); if(st<0) return false;
+  // #461/#462/#464 (С50, ПОЖАР владельца «ноль цепей не может быть»): корень — M511 (та же ночь): у 6 главных сборников
+  // (Бухари/Муслим/Абу Дауд/Тирмизи/Насаи/Ибн Маджа) ПОЧТИ У ВСЕХ записей реестра (~99%) НЕТ поля f (формы не извлечены
+  // при сборке). Фильтр формы «if(!rc.f) return false» тихо ВЫКИДЫВАЛ такие цепи целиком → частая пара показывала «0»,
+  // хотя реально цепь ЕСТЬ, просто её форма не размечена в реестре. Теперь: нет данных о форме → НЕ исключаем (не гадаем,
+  // но и не выбрасываем реальную находку), помечаем rc._fUnk=true — фронт покажет «форма не подтверждена» вместо тишины.
+  const recs=allRecs.filter(rc=>{ if(!anyForm) return true;
+    if(!rc.f){ rc._fUnk=true; return true; }
+    const st=_alignStart(rc.s); if(st<0){ rc._fUnk=true; return true; }
     if(preF && !_formMatch(rc.f[st]||'', preF)) return false;
     for(let k=0;k<wantForms.length;k++){ if(!wantForms[k]) continue; if(!_formMatch(rc.f[st+k+1]||'', wantForms[k])) return false; }
     if(postF){ const pp=st+groups.length; if(pp<rc.s.length && !_formMatch(rc.f[pp]||'', postF)) return false; }   // post фильтрует только если цепь продолжается ниже выбранной (иначе — пометка marfu', не ограничение)
@@ -7104,7 +7110,9 @@ async function chainRunSeq(out){
   const draw=()=>{ recs.slice(shown,shown+step).forEach(rc=>{
       const d=document.createElement('div'); d.style.cssText='padding:8px 2px;border-bottom:1px solid var(--border)';
       const tp=document.createElement('div'); tp.style.cssText='display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:5px';
-      tp.innerHTML='<span style="font-size:11.5px;color:var(--hint)"><b style="color:#bcd0ff;font-family:monospace">'+esc(rc.cid)+'</b></span><span style="font-size:12px;color:#9fd3a8;font-weight:700">📊 '+(rc.n||1)+' хадис'+_pluralHadith(rc.n||1)+'</span>';
+      tp.innerHTML='<span style="font-size:11.5px;color:var(--hint)"><b style="color:#bcd0ff;font-family:monospace">'+esc(rc.cid)+'</b></span>'
+        +(rc._fUnk&&anyForm?'<span title="У этого сборника формы передачи не размечены в реестре (M511) — цепь показана, но соответствие твоему фильтру формы НЕ подтверждено" style="font-size:10.5px;color:#e0b34a;border:1px solid #5e4d23;border-radius:6px;padding:1px 6px">⚠️ форма не подтверждена</span>':'')
+        +'<span style="font-size:12px;color:#9fd3a8;font-weight:700">📊 '+(rc.n||1)+' хадис'+_pluralHadith(rc.n||1)+'</span>';
       d.appendChild(tp);
       const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl'; d.appendChild(row);
       if(rc.s) _dzChips(rc.s, row, rc.f);
