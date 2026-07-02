@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v903</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v904</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -379,6 +379,7 @@
         <option value="system">Системный</option>
         <option value="kfgqpchafs">KFGQPC HAFS Uthmanic Script</option>
         <option value="uthmantaha">KFGQPC Uthman Taha Naskh</option>
+        <option value="kfgqpc">KFGQPC Sindhi Naskh (Усман Таха)</option>
         <option value="amiri">Amiri</option>
         <option value="scheherazade">Scheherazade</option>
         <option value="naskh">Noto Naskh</option>
@@ -386,6 +387,8 @@
         <option value="lateef">Lateef</option>
       </select></div>
     <div class="row" style="margin-top:-4px;padding-top:0"><span id="arFontStatus" style="font-size:11.5px;color:var(--hint);line-height:1.4"></span></div>
+    <div class="row" style="margin-top:-4px;padding-top:0"><button class="mini" id="arFontTestBtn" style="padding:6px 12px">🧪 Тест всех шрифтов</button></div>
+    <div id="arFontTestOut" style="display:none"></div>
     <div class="row" style="margin-top:-4px;padding-top:0;border-bottom:1px solid var(--border)"><span style="font-size:11px;color:var(--hint);line-height:1.45">ℹ️ Основные — <b>веб-шрифты</b>, рисуют арабский одинаково на любом устройстве (айфон/андроид/ПК). KFGQPC HAFS — официальный мусхафный.</span></div>
           <div class="row"><span>🌿 Тап по слову аята → корень + все места в Коране</span><div class="sw" id="wtSw"></div></div>
           <div class="row"><span>🔤 Учитывать пробел в поиске Корана <span style="color:var(--hint);font-size:11px">(точный поиск с пробелами; огласовки игнор)</span></span><div class="sw" id="qSpaceExactSw"></div></div>
@@ -714,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v903';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v904';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -11318,6 +11321,23 @@ if(cfg.fullscreen && _fsSupported()){ applyFullscreen(); }   // восстано
 var _gl=document.getElementById('glowSw'); if(_gl){ _gl.classList.toggle('on',!cfg.noLogoGlow); _gl.onclick=()=>{ cfg.noLogoGlow=!cfg.noLogoGlow; saveCfg(cfg); _gl.classList.toggle('on',!cfg.noLogoGlow); toast(cfg.noLogoGlow?'Свечение выключено':'✨ Свечение включено'); }; }
 var _th=document.getElementById('themeSel'); if(_th){ _th.value=cfg.theme||'dark'; _th.onchange=()=>{ cfg.theme=_th.value; saveCfg(cfg); applyTheme(); toast(cfg.theme==='light'?'Светлая тема ☀️':'Тёмная тема 🌙'); }; }
 var _arf=document.getElementById('arFontSel'); if(_arf){ _arf.value=cfg.arFont||'naskh'; _updArFontStatus(); _arf.onchange=()=>{ cfg.arFont=_arf.value; saveCfg(cfg); applyArFont(); _updArFontStatus(); toast('🔡 Шрифт арабского изменён'); }; }   // #51 · #138 дефолт naskh · #264/#256 индикатор наличия шрифта
+// #291/#329/#355/#295: аудит шрифтов — один аят С ОГЛАСОВКАМИ каждым шрифтом из списка + честная метка «загружен/фолбэк» (fontInstalled). Видно, какой шрифт битый и какой сейчас активен.
+var _arfT=document.getElementById('arFontTestBtn');
+if(_arfT){ _arfT.onclick=()=>{
+  const out=document.getElementById('arFontTestOut'); if(!out) return;
+  if(out.style.display!=='none'){ out.style.display='none'; _arfT.textContent='🧪 Тест всех шрифтов'; return; }
+  const AYA='بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ ﴿١﴾ الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ';
+  const names={system:'Системный (родной шрифт устройства)',kfgqpchafs:'KFGQPC HAFS Uthmanic',uthmantaha:'KFGQPC Uthman Taha Naskh',kfgqpc:'KFGQPC Sindhi Naskh',amiri:'Amiri',scheherazade:'Scheherazade',naskh:'Noto Naskh',sans:'Noto Sans Arabic',lateef:'Lateef'};
+  const run=()=>{ let h='';
+    for(const k in names){ const prim=_AR_PRIM[k]||'';
+      let ok=prim?fontInstalled(prim):true; if(!ok&&_AR_PRIM2[k]) ok=fontInstalled(_AR_PRIM2[k]);
+      const cur=(cfg.arFont||'naskh')===k?' · <b style="color:#7fd6a0">← сейчас выбран</b>':'';
+      h+='<div style="border-bottom:1px solid var(--border);padding:7px 2px"><div style="font-size:11.5px;color:'+(ok?'#7fd6a0':'#e6b800')+'">'+(ok?'✅':'⚠️ фолбэк')+' '+esc(names[k])+cur+'</div><div dir="rtl" style="font-family:'+(_AR_FONTS[k]||'serif').replace(/"/g,'&quot;')+';font-size:20px;line-height:2.1;text-align:right">'+AYA+'</div></div>'; }
+    out.innerHTML=h; out.style.display='block'; _arfT.textContent='🧪 Скрыть тест шрифтов'; };
+  // сначала ФОРСИРОВАННО загрузить каждый веб-шрифт (font-display:swap ленивый — без этого canvas мерит фолбэк и метки врут)
+  out.innerHTML='<div class="hint" style="padding:8px 2px">⏳ загружаю шрифты для честного теста…</div>'; out.style.display='block';
+  try{ Promise.all(Object.values(_AR_PRIM).filter(Boolean).map(f=>document.fonts.load('20px "'+f+'"','بسم الله الرحمن').catch(()=>[]))).then(run); }catch(e){ run(); }
+}; }
 var _uif=document.getElementById('uiFontSel'); if(_uif){ _uif.value=cfg.uiFont||'system'; _uif.onchange=()=>{ cfg.uiFont=_uif.value; saveCfg(cfg); applyUiFont(); toast('🔠 Шрифт интерфейса изменён'); }; }   // #81/#89
 var _rcw=document.getElementById('recentSw'); if(_rcw){ _rcw.classList.toggle('on',cfg.recent!==false); _rcw.onclick=()=>{ cfg.recent=(cfg.recent===false); saveCfg(cfg); _rcw.classList.toggle('on',cfg.recent!==false); if(cfg.recent===false) hideRecent(); }; }
 var _tjw=document.getElementById('tafJumpSw'); if(_tjw){ _tjw.classList.toggle('on',cfg.tafJump!==false); _tjw.onclick=()=>{ cfg.tafJump=(cfg.tafJump===false); saveCfg(cfg); _tjw.classList.toggle('on',cfg.tafJump!==false); }; }
