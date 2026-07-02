@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v908</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v909</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v908';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v909';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8889,22 +8889,27 @@ function _ttNeuro(list, inSahihayn){
 }
 // ссылки-проверки (turath bid==shamela id, page прямой). Внутри аппа «У нас» = наш ридер openBook.
 function _ttLinkRow(bid,page,mid,shnum,book,quote){
-  const w=document.createElement('div'); w.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center';
+  // владелец 02.07 («проработай дизайн как-то лучше»): было — название книги تهذيب الكمال ПОВТОРЯЛОСЬ в
+  // ОБЕИХ кнопках («تهذيب الكمال (открыть…)» + «المكتبة الشاملة · تهذيب الكمال») — дублирование, плюс
+  // русский текст в скобках прямо посреди арабской RTL-строки читался сбивчиво. Теперь: название книги — ОДНОЙ
+  // строкой-подписью сверху, кнопки — короткие ЯСНЫЕ действия («Читать у нас» / «Открыть в شاملة»).
+  const wrap=document.createElement('div'); wrap.style.cssText='margin-top:6px';
+  const w=document.createElement('div'); w.style.cssText='display:flex;gap:6px;flex-wrap:wrap;align-items:center';
   const mk=(html,col,bg,bd,fn)=>{ const a=document.createElement('span'); a.innerHTML=html; a.style.cssText='cursor:'+(fn?'pointer':'default')+';font-size:12.5px;color:'+col+';border:1px solid '+bd+';background:'+bg+';border-radius:8px;padding:5px 11px;display:inline-flex;align-items:center;gap:5px'; if(fn) a.onclick=(e)=>{e.stopPropagation();try{fn();}catch(_){}}; return a; };
   // указ владельца С46: у КАЖДОГО вердикта — ПЕРВОИСТОЧНИК (книга تهذيب الكمال + лист), переход в НАШ ридер с подсветкой цитаты,
   // и кнопка Шамелы ФИРМЕННЫМ стилем (книга + страница), а не голое «الشاملة». Лист не выверен (page<=0) → книгу показываем, точный переход у нас придёт с локатором (#2).
   const bk=String(book||'').trim();
   const pgok=(page!=null&&Number(page)>0);
-  const pgTxt=pgok?(' · стр. '+page):'';
   const bkTxt=bk?('<span dir="rtl" style="'+_AF+'">'+esc(bk)+'</span>'):'الكتاب';
+  if(bk){ const lbl=document.createElement('div'); lbl.style.cssText='font-size:11.5px;color:#8a97a6;margin-bottom:3px'; lbl.innerHTML='📖 '+bkTxt+(pgok?(' · стр. '+page):''); wrap.appendChild(lbl); }
   if(bid){
-    if(pgok){ w.appendChild(mk('📖 Читать у нас · '+bkTxt+pgTxt,'#9be7c4','rgba(46,160,67,.10)','#2d6a45',()=>{ try{var mm=document.getElementById('narrModal'); if(mm)mm.style.display='none';}catch(_){} openBook(bid,page,false,quote); })); }
-    else { w.appendChild(mk('📖 '+bkTxt+' (открыть · без точной стр.)','#9aa7b5','transparent','#3a434d',()=>{ try{var mm=document.getElementById('narrModal'); if(mm)mm.style.display='none';}catch(_){} openBook(bid); toast('Точная страница не выверена — найди цитату через «🔎 Поиск по книге» в читалке'); })); }   // #владелец 01.07.2026: кнопка выглядела кликабельной, но ничего не делала — теперь хотя бы открывает книгу
-    w.appendChild(mk('📚 المكتبة الشاملة · '+bkTxt+pgTxt,'#f0d9a8','rgba(201,138,42,.12)','#5e4d23',()=>openLink('https://shamela.ws/book/'+bid+(shnum?('/'+shnum):''))));
+    if(pgok){ w.appendChild(mk('📖 Читать у нас','#9be7c4','rgba(46,160,67,.10)','#2d6a45',()=>{ try{var mm=document.getElementById('narrModal'); if(mm)mm.style.display='none';}catch(_){} openBook(bid,page,false,quote); })); }
+    else { w.appendChild(mk('📖 Открыть книгу','#9aa7b5','transparent','#3a434d',()=>{ try{var mm=document.getElementById('narrModal'); if(mm)mm.style.display='none';}catch(_){} openBook(bid); toast('Точная страница не выверена — найди цитату через «🔎 Поиск по книге» в читалке'); })); }   // #владелец 01.07.2026: кнопка выглядела кликабельной, но ничего не делала — теперь хотя бы открывает книгу
+    w.appendChild(mk('📚 الشاملة','#f0d9a8','rgba(201,138,42,.12)','#5e4d23',()=>openLink('https://shamela.ws/book/'+bid+(shnum?('/'+shnum):''))));
     if(!pgok){ const note=document.createElement('span'); note.textContent='точная стр. уточняется'; note.style.cssText='font-size:10.5px;color:#6e7b8a;align-self:center'; w.appendChild(note); }
   }
-  else if(bk){ w.appendChild(mk('📖 '+bkTxt,'#9aa7b5','transparent','#3a434d',null)); }
-  return w;
+  wrap.appendChild(w);
+  return wrap;
 }
 // #369 (заявка владельца «порядок критиков как sunnah, не бардак»): арабская карта критиков → год смерти (هـ) = хронология/авторитет. Свод сортируется по ней (ранние имамы первыми), а не по среднему баллу.
 const _CRIT_AR_ORD={'يحيي بن معين':233,'ابن معين':233,'علي بن المديني':234,'ابن المديني':234,'احمد بن حنبل':241,'ابن حنبل':241,'عمرو بن علي':249,'الفلاس':249,'البخاري':256,'الجوزجاني':259,'العجلي':261,'مسلم':261,'ابو زرعة':264,'ابو زرعة الرازي':264,'ابو داود':275,'ابو داود السجستاني':275,'ابو حاتم':277,'ابو حاتم الرازي':277,'الترمذي':279,'البزار':292,'النسائي':303,'الساجي':307,'الطبري':310,'العقيلي':322,'ابن ابي حاتم':327,'ابن حبان':354,'ابن عدي':365,'الدارقطني':385,'ابن شاهين':385,'الحاكم':405,'ابن حزم':456,'ابن عبد البر':463,'الخطيب':463,'المزي':742,'الذهبي':748,'ابن حجر':852,'العسقلاني':852};
@@ -8958,7 +8963,10 @@ async function renderTestimoniesCard(mid, host){
       : (_isMuta && scv<0)
         ? " <span style=\"font-size:10px;background:rgba(248,160,122,.16);color:#f8a07a;border:1px solid #6a3a2d;border-radius:5px;padding:0 5px;cursor:help\" title=\"Мутасахиль (небрежен в похвале) — джарх ОТ него принимается, но его таусик НЕ считается (ПР-3)\">✓ джарх принят</span>"
         : " <span style=\"font-size:10px;background:rgba(122,134,147,.12);color:#9aa7b5;border:1px solid #3a434d;border-radius:5px;padding:0 5px;cursor:help\" title=\"Не из 48 муʿтабаров — мнение справочное, в счёт таусика не идёт\">справочно</span>";
-    row.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span class="critNameCl" style="font-size:14.5px;color:#dbe3eb;cursor:pointer;text-decoration:underline dotted" title="Открыть карточку этого учёного">'+esc(_ruName(cr))+((_ruName(cr)!==cr)?(' <span dir="rtl" style="font-size:13px;color:#8fa0b0;'+_AF+'">'+esc(cr)+'</span>'):'')+_badge+(yr?(' <span style="color:#7c8b9c;font-size:12.5px">ум. '+yr+' г.х.</span>'):'')+'</span>'+(c0[3]?'':('<span dir="rtl" style="font-size:15.5px;'+_AF+';color:'+vcol+'">'+esc(terms.join('، '))+'</span>'))+'</div>';
+    // владелец 02.07 («проработай дизайн как-то лучше»): было — ВЕСЬ блок (имя+араб.имя+значок+год) одним
+    // подчёркнутым span → визуально «всё подчёркнуто», значок и год выглядели как часть ссылки. Теперь
+    // подчёркнуто ТОЛЬКО имя (приглашение кликнуть), значок — своя пилюля, год — обычным серым текстом рядом.
+    row.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span class="critNameCl" style="font-size:14.5px;cursor:pointer" title="Открыть карточку этого учёного"><span style="color:#dbe3eb;text-decoration:underline dotted">'+esc(_ruName(cr))+((_ruName(cr)!==cr)?(' <span dir="rtl" style="font-size:13px;color:#8fa0b0;'+_AF+'">'+esc(cr)+'</span>'):'')+'</span>'+_badge+(yr?(' <span style="color:#7c8b9c;font-size:12.5px">ум. '+yr+' г.х.</span>'):'')+'</span>'+(c0[3]?'':('<span dir="rtl" style="font-size:15.5px;'+_AF+';color:'+vcol+'">'+esc(terms.join('، '))+'</span>'))+'</div>';
     try{ const _cnEl=row.querySelector('.critNameCl'); if(_cnEl) _cnEl.onclick=(e)=>{ e.stopPropagation(); try{ openNarratorRijal(cr); }catch(_e){} }; }catch(e){}   // #владелец 01.07.2026: имена критиков тоже кликабельны — своя биография/книги/вики
     if(c0[3]){ const q=document.createElement('div'); q.dir='rtl';
       // владелец 02.07 (скрин «джарх в зелёной рамке»): рамка/фон цитаты — ПО ПОЛЯРНОСТИ вердикта: джарх ВСЕГДА красным, таусик зелёным, нейтральное серым
