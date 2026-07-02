@@ -652,6 +652,152 @@ def parse_botyara(text):
     if t in ["ботяра", "botyara"]: return ""
     return None
 
+# #450 (заявка владельца 02.07.2026, @jamaat_ru): «ботяра дай карточку <равий>» → ссылка на нашу карточку +
+# sunnah.com + ИИ-описание СТРОГО ИЗ НАШИХ ДАННЫХ (не общий ИИ-домысел, R37 суверенность). Кэш индекса равиев
+# (~19к, 11 МБ) — тянем с Pages (публично, без токена) РАЗ в процесс, не на каждую команду.
+# ВАЖНО: name/kunya/nisba в narrators_index.json — ТОЛЬКО арабский, а владелец пишет по-русски → резолвим
+# через narr_ru.json (id→рус.транслитерация, 18989 записей, тот же реестр), потом по id берём арабские поля.
+_NARR_IDX_CACHE = {"idx": None, "mid2sid": None, "ru": None, "ts": 0}
+def _load_narr_index():
+    import time as _t
+    if _NARR_IDX_CACHE["idx"] is not None and (_t.time() - _NARR_IDX_CACHE["ts"]) < 3600:
+        return _NARR_IDX_CACHE["idx"], _NARR_IDX_CACHE["mid2sid"], _NARR_IDX_CACHE["ru"]
+    try:
+        idx = requests.get("https://germanyalfurqan-eng.github.io/hadith-bot/narrators_index.json", timeout=15).json()
+        m2s = requests.get("https://germanyalfurqan-eng.github.io/hadith-bot/mid2sid.json", timeout=15).json()
+        ru = requests.get("https://germanyalfurqan-eng.github.io/hadith-bot/narr_ru.json", timeout=15).json()
+        _NARR_IDX_CACHE.update({"idx": idx, "mid2sid": m2s, "ru": ru, "ts": _t.time()})
+        return idx, m2s, ru
+    except Exception:
+        return _NARR_IDX_CACHE["idx"], _NARR_IDX_CACHE["mid2sid"], _NARR_IDX_CACHE["ru"]
+
+def parse_narr_card_query(text):
+    """«дай карточку X» / «карточка X» — X может включать «из Муслима 1007» (справочный контекст, не для резолва)."""
+    t = text.strip()
+    m = re.match(r'^(?:дай\s+)?карточк[уи]\s+(.+)$', t, re.IGNORECASE)
+    if not m: return None
+    q = m.group(1).strip()
+    ref = ''
+    rm = re.search(r'\bиз\s+([а-яё]+\s*\d+)\s*$', q, re.IGNORECASE)
+    if rm:
+        ref = rm.group(1).strip()
+        q = q[:rm.start()].strip()
+    return (q, ref) if q else None
+
+def _canon_ru(s):
+    return re.sub(r'[^а-яё\s]', '', str(s or '').lower()).strip()
+
+def _word_match(qw, cw):
+    """Слово-к-слову с допуском русского падежа (Абдуллах/Абдуллаха/Абдуллахом — окончание меняется,
+    корень нет): совпадает точно ИЛИ одно — префикс другого с разницей длины ≤3 символа."""
+    if qw == cw: return True
+    if len(qw) < 3 or len(cw) < 3: return qw == cw
+    a, b = (qw, cw) if len(qw) <= len(cw) else (cw, qw)
+    return b.startswith(a) and (len(b) - len(a)) <= 3
+
+def _resolve_narrator_ru(ru, query, filled_by_id=None):
+    """Резолв по РУССКОЙ транслитерации (narr_ru.json, id→имя; owner пишет по-русски, база — арабская).
+    ⚠️ Известное ограничение (проверено тестами перед деплоем): узнаваемые ШУХРЫ-прозвища одним словом
+    («аль-Аъмаш» и т.п.) в этом индексе не всегда есть отдельной записью с primary-именем — только полные
+    имена/куньи находятся уверенно. Namesake-safe: ВСЕ слова запроса должны найти пару словом в имени (не
+    просто «где-то в строке подстрока» — иначе короткая куня матчится ВНУТРИ чужого длинного составного имени,
+    поймано тестом на «абу хатим ар-рази»). В арабских именах РЕАЛЬНО бывает несколько разных людей с ОДИНАКОВЫМ
+    именем (не путать с моей ошибкой) — при полном тае используем полноту карточки (filled_by_id) как proxy
+    известности/задокументированности (как в самом апп client _narrRow), это НЕ гадание — явный отрыв по данным."""
+    if not ru or not query: return None, []
+    qn = _canon_ru(query)
+    if not qn: return None, []
+    qwords = [w for w in qn.split() if w not in ('ибн', 'бин')]
+    if not qwords: return None, []
+    cands = []
+    for rid, full in ru.items():
+        for variant in str(full or '').split('/'):
+            v = _canon_ru(variant)
+            if not v: continue
+            cwords = [w for w in v.split() if w not in ('ибн', 'бин')]
+            if not cwords or len(cwords) > len(qwords) + 3:   # защита: не матчить внутри СИЛЬНО более длинного составного имени
+                continue
+            # УРОК ТЕСТА: «мешок слов» матчил «Анас ибн Малик» и на чужое «Сумама ибн Абдуллах ибн Анас ибн
+            # Малик» (правнук — имя ПРЕДКА законно внутри ЕГО СОБСТВЕННОЙ родословной, слова даже подряд) —
+            # подпоследовательность одна не спасает. Требуем совпадение С НАЧАЛА имени (старт ≤1 — 1 слово
+            # запаса на куню/приставку), а не где-то в середине чужой родословной.
+            ci = 0
+            start_pos = None
+            matched = 0
+            ordered = True
+            for qw in qwords:
+                found = False
+                while ci < len(cwords):
+                    if _word_match(qw, cwords[ci]):
+                        if start_pos is None: start_pos = ci
+                        found = True; matched += 1; ci += 1; break
+                    ci += 1
+                if not found: ordered = False; break
+            if ordered and start_pos is not None and start_pos <= 1:
+                score = 100 if matched == len(qwords) else 60
+                fld = (filled_by_id or {}).get(rid, 0)
+                cands.append((score, start_pos, fld, rid, full))
+                break
+    if not cands: return None, []
+    # ⚠️ УРОКИ ТЕСТОВ (перед деплоем, два подряд):
+    # 1) «короче имя = точнее» — ЛОЖНАЯ эвристика: «Мухаммад ибн Сирин» (id 5657, имя ДЛИННЕЕ — с куней деда)
+    #    проиграл короче звучащему тёзке-родственнику «Абдуллах ибн Мухаммад ибн Сирин» (id 12086).
+    # 2) start_pos=0 (совпадение С ПЕРВОГО слова кандидата — это ЕГО СОБСТВЕННОЕ имя) СИЛЬНО надёжнее, чем
+    #    start_pos=1 (запрос совпал лишь с ИМЕНЕМ ОТЦА внутри чьей-то ещё родословной — «Хафс ибн Анас ибн
+    #    Малик» ≠ «Анас ибн Малик», хоть и содержит эти слова). start_pos — ГЛАВНЫЙ критерий после score.
+    cands.sort(key=lambda x: (-x[0], x[1], -x[2]))  # score → start_pos (0 лучше) → полнее карточки
+    if len(cands) == 1: return cands[0][3], []
+    top, second = cands[0], cands[1]
+    if top[0] > second[0]: return top[3], []
+    if top[1] < second[1]: return top[3], []                # start_pos=0 (своё имя) бьёт start_pos=1 (имя отца в чужой родословной) — решающий сигнал
+    if top[2] >= second[2] + 3: return top[3], []            # тот же score/start_pos, но заметно полнее карточка — явный отрыв по документированности (не догадка)
+    return None, [(c[3], c[4]) for c in cands[:6]]
+
+async def narr_card_reply_text(query, ref):
+    idx, m2s, ru = _load_narr_index()
+    if not idx or not ru:
+        return "🔧 База передатчиков сейчас недоступна, попробуй позже."
+    cols = idx['cols']
+    filled_by_id = {str(row[0]): sum(1 for x in row[2:] if x) for row in idx['data']}
+    rid, ambiguous = _resolve_narrator_ru(ru, query, filled_by_id)
+    if not rid and not ambiguous:
+        return "🔎 Не нашёл такого передатчика в нашей базе (18 989 равиев). Проверь написание."
+    if ambiguous:
+        names = "\n".join(f"• {full}" for _rid, full in ambiguous)
+        return f"🤔 Нашёл несколько похожих под именем «{query}» — уточни, какой именно:\n{names}\n\n(Тёзок не угадываю — заявка П-05.)"
+    best = next((row for row in idx['data'] if str(row[cols.index('id')]) == str(rid)), None)
+    if not best:
+        return "🔎 Нашёл в русском указателе, но карточка не найдена в основной базе — сообщи разработчику."
+    nm, kunya, nisba, death = best[cols.index('name')], best[cols.index('kunya')], best[cols.index('nisba')], best[cols.index('death')]
+    rankH, rankD = best[cols.index('rankHajar')], best[cols.index('rankDhahabi')]
+    ru_nm = ru.get(str(rid), nm)
+    app_link = "https://t.me/muslimoontt_bot?startapp=n_" + rid
+    sid = (m2s or {}).get(rid)
+    sunnah_link = f"https://sunnah.com/narrator/{sid}" if sid else None
+    # ИИ ТОЛЬКО перефразирует НАШИ данные (R37: не домысливает) — если полей почти нет, обходимся без ИИ вовсе.
+    facts = []
+    if kunya: facts.append(f"куня: {kunya}")
+    if nisba: facts.append(f"нисба: {nisba}")
+    if death: facts.append(f"умер: {death} г.х.")
+    if rankH: facts.append(f"оценка Ибн Хаджара: {rankH}")
+    if rankD: facts.append(f"оценка аз-Захаби: {rankD}")
+    desc = ""
+    if facts:
+        sysm = ("Тебе дан СПИСОК ФАКТОВ о передатчике хадисов из нашей базы. Перескажи их связным текстом "
+                "на русском в 2-3 предложениях. СТРОГО ЗАПРЕЩЕНО добавлять любые сведения, которых нет в списке "
+                "(даты/оценки/эпоху из общих знаний) — только пересказ данных списка.")
+        try:
+            desc = await asyncio.get_event_loop().run_in_executor(None, ask_neuro, f"Передатчик: {nm}\nФакты: " + "; ".join(facts), sysm) or ""
+        except Exception:
+            desc = "; ".join(facts)
+    else:
+        desc = "(в нашей базе пока нет заполненных дополнительных полей по этому равию — только имя)"
+    parts = [f"👤 {ru_nm} — {nm}", desc.strip()]
+    if ref: parts.append(f"(контекст запроса: «{ref}» — не проверял, что это именно та цепь, сверь сам)")
+    parts.append(f"📱 Карточка в приложении: {app_link}")
+    if sunnah_link: parts.append(f"🌐 sunnah.com: {sunnah_link}")
+    return "\n".join(p for p in parts if p)
+
 def parse_tafsir_query(text):
     t = text.lower().strip()
     if t.startswith("тафсир "):
@@ -2840,6 +2986,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # жёсткие лимиты: на пользователя И на чат (анти-спам/анти-burn ключа)
             if (not rate_ok('bot:' + str(user_id), limit=4, window=120)) or (not rate_ok('botchat:' + str(chat_id), limit=6, window=120)):
                 return
+            # #450: «ботяра дай карточку X» — СТРУКТУРНЫЙ ответ (наши данные + ссылки), не общий ИИ-домысел
+            _nq = parse_narr_card_query(clean)
+            if _nq:
+                await update.message.reply_text("🔎 Ищу в базе передатчиков...")
+                result = await narr_card_reply_text(_nq[0], _nq[1])
+                await send_long(update, result)
+                await log_bot_ai(update, context)
+                return
             await update.message.reply_text("🤔 Думаю...")
             result = ask_ai_with_memory(clean)
             await send_long(update, result)
@@ -3384,6 +3538,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 clean = botyara_q if botyara_q else ""
             if not clean:
                 clean = "продолжи"
+            # #450: «ботяра дай карточку X» — СТРУКТУРНЫЙ ответ (наши данные + ссылки), не общий ИИ-домысел
+            _nq = parse_narr_card_query(clean)
+            if _nq:
+                await update.message.reply_text("🔎 Ищу в базе передатчиков...")
+                result = await narr_card_reply_text(_nq[0], _nq[1])
+                await send_long(update, result)
+                await log_bot_ai(update, context)
+                return
             await update.message.reply_text("🤔 Думаю...")
             result = ask_ai_with_memory(clean)
             await send_long(update, result)
