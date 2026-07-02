@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v926</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v927</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v926';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v927';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -10115,7 +10115,7 @@ async function _codifNarrPairs(rec, text){
     for(const cand of cands){ const cc=_norm(cand); if(cc.length<4) continue;
       let p=_ct.indexOf(' '+cc+' ',_cur); if(p<0) p=_ct.indexOf(' '+cc,_cur); if(p<0) p=_ct.indexOf(' '+cc);    // по порядку иснада, затем по всему тексту
       if(p>=0){ pick=cand; pos=p; break; } }
-    if(pick && !used.has(pick)){ used.add(pick); out.push([pick,String(id)]); if(pos>=0) _cur=Math.max(_cur,pos); }
+    if(pick && !used.has(pick)){ used.add(pick); out.push([pick,String(id),pos]); if(pos>=0) _cur=Math.max(_cur,pos); }
   }
   // С38 (указ «не пропускать передатчиков»): ДОБОР УВЕРЕННЫХ имён из ОТОБРАЖАЕМОГО текста — книги с разрежённым codif (Адаб Муфрад 14%, Зухд…).
   // Только специфичные: «X بن Y» (≥3 слова) ИЛИ кунья «أبو X» с ОДНОЗНАЧНЫМ _narrLookup → НЕ тёзка-гадание. Краткие (علي/يونس) пропускаем.
@@ -10133,11 +10133,21 @@ async function _codifNarrPairs(rec, text){
       if(_mid!=null && !_haveId.has(String(_mid))){
         let _c=null; try{ _c=await _narrCard(_mid); }catch(e){}
         const _disp=((_c&&_c[1])? String(_c[1]).split(/\s+/).slice(0,4).join(' ') : _s).replace(/\s+(?:بن|ابن)$/,'').trim();   // С38: ЧИСТОЕ имя из базы (не текст-слот с матн-хвостом موقوف); без висячего «بن»
-        out.push([_disp,String(_mid)]); _haveNm.push(_narrCanon(_disp)); _haveId.add(String(_mid));
+        // #473 (С50, «порядок передатчиков нарушаешь»): позиция для сортировки — ищем СЕГМЕНТ ТЕКСТА (_cs, реально
+        // встреченный в isnadSlots), а не _disp (каноничное имя типа «سليمان بن مهران», которого в тексте может не быть,
+        // если равий назван лакабом «الأعمش») — иначе позиция не найдётся и запись снова уедет в конец.
+        // ⚠️ запятая сразу после имени («حدثنا الأعمش، عن») рвёт пробельную границу ' cc ' — ищем ТАКЖЕ по «пунктуация-как-пробел» варианту.
+        const _ctP=_ct.replace(/[،,.:؛]/g,' ');
+        const _p1=_ct.indexOf(' '+_cs+' '), _p2=_ctP.indexOf(' '+_cs+' ');   // берём САМОЕ РАННЕЕ вхождение (запятая рядом с именем НЕ должна давать более позднюю ложную позицию)
+        let _fpos=(_p1>=0&&_p2>=0)?Math.min(_p1,_p2):(_p1>=0?_p1:_p2); if(_fpos<0) _fpos=_ct.indexOf(' '+_cs);
+        out.push([_disp,String(_mid),_fpos]); _haveNm.push(_narrCanon(_disp)); _haveId.add(String(_mid));
       }
     }
   }catch(e){}
-  return out;
+  // #473: показываем передатчиков В ПОРЯДКЕ ИХ ПОЯВЛЕНИЯ В ТЕКСТЕ (а не в порядке успеха/провала матчинга) —
+  // без позиции (-1, крайне редко) — в конец, стабильно относительно друг друга.
+  out.sort((a,b)=>{ const pa=a[2]==null?-1:a[2], pb=b[2]==null?-1:b[2]; if(pa<0&&pb<0) return 0; if(pa<0) return 1; if(pb<0) return -1; return pa-pb; });
+  return out.map(p=>[p[0],p[1]]);
 }
 async function _codifHighlight(text, card, out, place){
   // ПРАВИЛО синхронности (слово владельца): подсвечиваем РОВНО передатчиков таблицы — ни лишних, ни пропущенных.
