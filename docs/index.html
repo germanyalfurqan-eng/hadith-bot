@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v909</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v910</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v909';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v910';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -6381,10 +6381,29 @@ async function doTakhrij(text, ref, out, btn, force){
   const ttSec=mk(), muhSec=mk(), tkSec=mk();   // С39: TT первым (сверху); tkSec — только нота/пусто
   // 🔖 Тахридж от TT (تحقيق мухаккика из баз — al-Arnaut/أطراف). ЕДИНСТВЕННЫЙ доказанный источник.
   try{ await renderTTtakhrij(ref, ttSec); }catch(e){}
-  // наш указатель аль-Мухаймин — ТОЧНАЯ привязка по источнику+номеру (обратный индекс, не текст-поиск)
-  try{ await loadReverse(); if(reverse && ref && ref.source){ const mu=reverse[ref.source+' '+ref.num]||reverse[ref.source+' '+toAr(String(ref.num||''))];
-    if(mu&&mu.length){ const nums=[...new Set(mu.map(x=>String(x.m)))].join(', ');
-      muhSec.innerHTML='<div dir="ltr" style="border:1px solid var(--border);border-radius:8px;padding:5px 8px;margin-top:6px;font-size:13px;color:var(--hint)">📖 Также в нашем указателе аль-Мухаймин: № '+esc(nums)+' <span style="opacity:.7">(книга в обработке)</span></div>'; } } }catch(e){}
+  // наш указатель аль-Мухаймин — ТОЧНАЯ привязка по источнику+номеру (обратный индекс), а при промахе —
+  // fb#4 (владелец 02.07): честная ТЕКСТ-проверка (та же якорь-формула, что muhaymin_check в bot.py) + ЯВНЫЙ ответ в обе стороны
+  try{ await loadReverse(); let _muNums=null, _muHow='по метке автора';
+    if(reverse && ref && ref.source){ const mu=reverse[ref.source+' '+ref.num]||reverse[ref.source+' '+toAr(String(ref.num||''))];
+      if(mu&&mu.length) _muNums=[...new Set(mu.map(x=>String(x.m)))]; }
+    const _muhCn=(s)=>canon(String(s||'').replace(/[«»،؛,:.()\[\]"]/g,' '));   // пунктуация рвёт непрерывную подстроку (как _canon_ar в bot.py)
+    if(!_muNums && text){ try{ const base=await loadMuhaymin(true);
+      const allw=_muhCn(text).split(' ').filter(Boolean);
+      const longIdx=allw.map((w,i)=>w.length>=4?i:-1).filter(i=>i>=0);
+      if(longIdx.length>=4){ const anchor=longIdx[Math.floor(longIdx.length/2)];
+        const mkFrag=(r)=>allw.slice(Math.max(0,anchor-r),Math.min(allw.length,anchor+r+1)).join(' ');
+        if(!window._muhCanon){ window._muhCanon=base.map(h=>h.rv.map(r=>_muhCn(r.t))); }
+        const found=new Set();
+        for(const frag of [mkFrag(4), mkFrag(2)]){ if(!frag) continue;
+          for(let bi=0; bi<base.length; bi++){ const rvs=window._muhCanon[bi];
+            for(let ri=0; ri<rvs.length; ri++){ if(rvs[ri].indexOf(frag)>=0){ found.add(String(base[bi].n)); break; } } }
+          if(found.size) break; }
+        if(found.size){ _muNums=[...found]; _muHow='найден по тексту'; }
+        else _muNums=[];   // проверка состоялась, совпадений нет (null = проверить не смогли)
+      } }catch(e){} }
+    if(_muNums && _muNums.length){ muhSec.innerHTML='<div dir="ltr" style="border:1px solid var(--border);border-radius:8px;padding:5px 8px;margin-top:6px;font-size:13px;color:var(--hint)">📖 Также в нашем указателе аль-Мухаймин: № '+esc(_muNums.join(', '))+' <span style="opacity:.7">('+_muHow+')</span></div>'; }
+    else if(_muNums){ muhSec.innerHTML='<div dir="ltr" style="border:1px solid var(--border);border-radius:8px;padding:5px 8px;margin-top:6px;font-size:13px;color:var(--hint)">📖 В аль-Мухаймине этот хадис не приводится <span style="opacity:.7">(проверено по метке автора и по тексту)</span></div>'; }
+  }catch(e){}
   if(aborted()) return;
   // ⚖️ УКАЗ владельца (С39, выговор): тахридж — ТОЛЬКО доказанный ТТ (تحقيق мухаккика из баз).
   // Недоказанный матн-кластер M495 (совпадения по тексту) УБРАН отовсюду — давал ложные номера. Код ниже отключён.
