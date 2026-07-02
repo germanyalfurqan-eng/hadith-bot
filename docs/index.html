@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v922</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v923</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v922';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v923';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7497,9 +7497,23 @@ async function dzChainInto(host, bid, num){
         const idn=dispFromNa?codes.length:codes.filter(c=>typeof c==='number').length;
         const ci=document.createElement('div'); ci.style.cssText='margin-top:7px;font-size:11px;color:var(--hint);display:flex;gap:10px;align-items:center;flex-wrap:wrap';
         ci.innerHTML='<span title="Вечный код этой цепи передачи (M449) — одинаков у всех хадисов с этим иснадом">⛓ Код цепи: <b style="color:#bcd0ff;font-family:monospace;cursor:pointer;text-decoration:underline" onclick="openIsnadBase(\''+esc(info.cid)+'\')" title="Открыть таблицу цепей и найти эту цепь — где ещё встречается">'+esc(info.cid)+' ↗</b> <span class="ciCpy" title="Копировать код цепи" style="cursor:pointer">📋</span></span>'
-          +'<span title="Сколько звеньев цепи опознано по базе равиев (остальные — U-коды коротких форм, ждут дизамбигуации Э1.1)" style="color:'+(idn===codes.length?'#9fd3a8':'#e0b34a')+'">опознано '+idn+'/'+codes.length+'</span>';
+          +'<span title="Сколько звеньев цепи опознано по базе равиев (остальные — U-коды коротких форм, ждут дизамбигуации Э1.1)" style="color:'+(idn===codes.length?'#9fd3a8':'#e0b34a')+'">опознано '+idn+'/'+codes.length+'</span>'
+          +'<span class="ciCtor" title="Открыть ИМЕННО эту цепь в конструкторе иснада — подобрать похожие/связанные хадисы" style="cursor:pointer;color:#c9b8ff;text-decoration:underline">🧬 в конструктор</span>';
         box.appendChild(ci);
         try{ const _ciCp=ci.querySelector('.ciCpy'); if(_ciCp) _ciCp.onclick=(e)=>{ e.stopPropagation(); try{ navigator.clipboard.writeText(info.cid).catch(()=>{}); }catch(_e){} try{ toast('📋 Код цепи скопирован: '+info.cid); }catch(_e){} }; }catch(e){}   // #93 копирование кода цепи
+        // #384 (С50): «открыть цепь в конструкторе» — прокинуть ОПОЗНАННЫЕ звенья ЭТОЙ конкретной цепи в M483 (режим Цепь, порядок «строго»)
+        try{ const _ciCt=ci.querySelector('.ciCtor'); if(_ciCt) _ciCt.onclick=async(e)=>{ e.stopPropagation();
+          try{
+            const numCodes=codes.filter(c=>typeof c==='number').slice(0,5);
+            if(!numCodes.length){ toast('В этой цепи нет опознанных звеньев для конструктора'); return; }
+            const sel=[]; for(const id of numCodes){ try{ const c=await _narrCard(id); if(c&&c[1]) sel.push({id, nm:c[1]}); }catch(_e){} }
+            if(!sel.length){ toast('Не удалось получить имена звеньев'); return; }
+            window._chainSel=sel; window._chainMode='seq'; window._chainAdj=false;
+            if(typeof modes!=='undefined' && !modes.chain){ const chp=document.querySelector('.chip[data-mode="chain"]'); if(chp) chp.click(); else modes.chain=true; }
+            chainRender(); const qi=document.getElementById('q'); if(qi) qi.focus();
+            try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(_e){}
+            toast('🧬 '+sel.length+' звеньев этой цепи — в конструкторе. Продолжай подбор.');
+          }catch(_e){ toast('Не получилось открыть в конструкторе'); } }; }catch(e){}
         // M475: сводка подтверждённых классикой связей (تهذيب الكمال) среди смежных опознанных звеньев
         (async()=>{ try{ const s=await _dzLinkSummary(codes); if(s.total>0){
           const ls=document.createElement('span'); ls.style.color=(s.conf>0?'#6cc18a':'var(--hint)');
