@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v928</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v929</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v928';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v929';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8920,6 +8920,17 @@ async function _testimGet(mid){ const b=Math.floor(mid/100); if(_testimShard[b]=
 const _TT_SCORE={'ثقة':3,'ثبت':3,'حجة':3,'إمام':3,'حافظ':2,'متقن':2,'صدوق':1,'لا بأس به':1,'ليس به بأس':1,'صالح':1,'صالح الحديث':1,'مأمون':1,'حسن الحديث':1,'محله الصدق':1,'مستقيم الحديث':1,'شيخ':0,
  'لين':-1,'لين الحديث':-1,'ليس بالقوي':-1,'يخطئ':-1,'يهم':-1,'فيه نظر':-2,'ضعيف':-2,'ضعيف جدا':-3,'مضطرب':-2,'لا يحتج به':-2,'لا يصح حديثه':-2,'لا يتابع عليه':-1,'منكر':-2,'منكر الحديث':-3,'واه':-3,'ليس بشيء':-3,'ليس بثقة':-3,'ساقط':-3,'متروك':-4,'تركوه':-4,'ضعفوه':-2,
  'كذاب':-5,'يكذب':-5,'وضاع':-5,'متهم':-4,'مجهول':0,'مجهول الحال':0,'لا أعرفه':0,'لا شيء':-3,'ذكره في الثقات':1,'ذكره في الضعفاء والمتروكين':-2,'يضع':-5};
+// #471 (С50, «почему 1 свидетель если больше в карточке»): реальный вердикт критика часто НЕ короткая фраза-штамп из
+// _TT_SCORE, а полное предложение («ثبت، ومرة: مأمون» Ахмад про Нафиа, «أي حديث أوثق من حديث نافع» Ибн Уяйна) — точное
+// совпадение по словарю таких не находит → молча теряются (не тадиль, не джарх, ноль). Фолбэк: если точного совпадения
+// нет — ищем корневые слова-маркеры ГДЕ УГОДНО в тексте вердикта (первое найденное определяет знак/силу).
+const _TT_KW_POS=[['حجة',3],['ثبت',3],['ثقة',3],['إمام',3],['حافظ',2],['متقن',2],['صحيح',2],['لا يعرف له خطأ',2],['مأمون',1],['صدوق',1],['صالح',1],['أوثق',2],['لا بأس',1]];
+const _TT_KW_NEG=[['كذاب',-5],['وضاع',-5],['يكذب',-5],['متروك',-4],['متهم',-4],['منكر',-2],['ضعيف',-2],['واه',-3],['ليس بثقة',-3],['ليس بشيء',-3],['لا يحتج',-2],['مضطرب',-2]];
+function _ttScore(verdict){ const v=String(verdict||'').trim(); if(!v) return undefined;
+  if(_TT_SCORE[v]!==undefined) return _TT_SCORE[v];
+  for(const [kw,sc] of _TT_KW_NEG){ if(v.indexOf(kw)>=0) return sc; }   // джарх-маркер важнее (безопасный крен — не переоценить надёжность)
+  for(const [kw,sc] of _TT_KW_POS){ if(v.indexOf(kw)>=0) return sc; }
+  return undefined; }
 // ПОЗДНИЕ суммаризаторы (НЕ из 48 муʿтабаров — их таʿдиль не засчитывается за свидетельство توثиق)
 const _MUT_LATE=new Set(['ابن حجر العسقلاني','ابن حجر','الذهبي','ابن عساكر','مسلمة بن قاسم','ابن الجوزي','المزي','ابن الملقن','مغلطاي','ابن عبد البر']);
 // ⚖️ С47 (заявка #411, указ владельца): мутабар = ТОЛЬКО один из 48 эталонных + Ибн Маʿин (добавлен владельцем). Позитивный набор, не негативный фильтр — иначе Ибн Хиббан/Ибн Ади/аль-Иджли ложно считались мутабаром.
@@ -8948,7 +8959,7 @@ const _TABARANI=_mCanon('الطبراني');
 // 1 таʿдиль توثиق НЕ устанавливает. Исключение: НЕТ джарха + Сахихайн (Бухари+Муслим) = 2 свидетельства.
 function _ttNeuro(list, inSahihayn){
   const tadil=new Set(), jarh=new Set(); let jah=0, posCnt=0, negCnt=0, severe=false, tabaraniTadil=false;
-  list.forEach(c=>{ const s=_TT_SCORE[c[1]]; if(s===undefined) return;
+  list.forEach(c=>{ const s=_ttScore(c[1]); if(s===undefined) return;
     const ok=_critOk(c[0]) && _isMut(c[0]);   // реальный РАННИЙ муʿтабар (мусор/поздние не считаются)
     const isMutasahil=_critOk(c[0]) && _isMutasahil(c[0]);   // ПР-3: не из 48, но джарх от них принимается
     const isTabarani=_critOk(c[0]) && _mCanon(c[0])===_TABARANI;   // ПР-4: таусик только с подкреплением
@@ -9023,7 +9034,7 @@ async function renderTestimoniesCard(mid, host){
   const neuro=_ttNeuro(list, _inSah);
   const byc={}; const order=[];
   list.forEach(c=>{ const k=(c[0]||'').trim(); if(!k||k==='—'||k==='-') return; if(!byc[k]){byc[k]=[];order.push(k);} byc[k].push(c); });
-  order.sort((a,b)=>{ const ma=(_isMut(a)&&_critOk(a))?0:1, mb=(_isMut(b)&&_critOk(b))?0:1; if(ma!==mb) return ma-mb;   /* заявка #8: муътабары (48) первыми */ const xa=_critAuth(a), xb=_critAuth(b); if(xa!==xb) return xa-xb; const oa=_critArOrd(a), ob=_critArOrd(b); if(oa!==ob) return oa-ob; const sc=arr=>arr.reduce((s,c)=>s+(_TT_SCORE[c[1]]||0),0)/arr.length; return sc(byc[b])-sc(byc[a]); });
+  order.sort((a,b)=>{ const ma=(_isMut(a)&&_critOk(a))?0:1, mb=(_isMut(b)&&_critOk(b))?0:1; if(ma!==mb) return ma-mb;   /* заявка #8: муътабары (48) первыми */ const xa=_critAuth(a), xb=_critAuth(b); if(xa!==xb) return xa-xb; const oa=_critArOrd(a), ob=_critArOrd(b); if(oa!==ob) return oa-ob; const sc=arr=>arr.reduce((s,c)=>s+(_ttScore(c[1])||0),0)/arr.length; return sc(byc[b])-sc(byc[a]); });
   const _early=[], _late=[]; order.forEach(cr=>{ (_critAuth(cr)>=900?_late:_early).push(cr); });
   const sec=document.createElement('div'); sec.style.cssText='margin-top:13px;border:1px solid #36703d;border-radius:12px;overflow:hidden;background:#0f1712';
   const hdr=document.createElement('div'); hdr.style.cssText='padding:12px 13px;background:rgba(63,185,80,.08);display:flex;justify-content:space-between;align-items:center;cursor:pointer';
@@ -9039,7 +9050,7 @@ async function renderTestimoniesCard(mid, host){
   const _TT_TOP=6;
   const _emap={}, _eord=[]; _early.forEach(cr=>{ const key=_ruName(cr); if(!_emap[key]){_emap[key]={ar:cr,items:[]}; _eord.push(key);} byc[cr].forEach(it=>_emap[key].items.push(it)); });
   _eord.forEach((key,idx)=>{ const cr=_emap[key].ar; const items=_emap[key].items; const terms=[...new Set(items.map(c=>c[1]))];
-    let scv=items.reduce((s,c)=>s+(_TT_SCORE[c[1]]||0),0);
+    let scv=items.reduce((s,c)=>s+(_ttScore(c[1])||0),0);
     // владелец 02.07: длинные цитаты (sunnah/تهذيب) не в точном словаре _TT_SCORE → полярность по паттернам, чтобы джарх был КРАСНЫМ
     if(scv===0){ const _qt=stripDiac(fold(terms.join(' '))); if(/متروك|كذاب|وضاع|ضعيف|منكر|ليس بشيء|متهم|واه|ساقط|يخطي|غفله|لين|تركوه|لا يكتب/.test(_qt)) scv=-1; else if(/ثقه|ثبت|حجه|حافظ|صدوق|لا باس|مامون|صالح|متقن/.test(_qt)) scv=1; }
     const vcol=scv>0?'#7ee08a':(scv<0?'#ff9b7a':'#9aa7b5');
@@ -10389,7 +10400,7 @@ async function verifyNarr(card, place, text){
     try{ box.querySelectorAll('.nvWho').forEach(async el=>{ try{
       const lst=await _testimGet(+el.dataset.mid); if(!lst) return;
       const who=[]; const seen=new Set();
-      for(const c of lst){ const s=_TT_SCORE[c[1]]; if(s===undefined||s>=0) continue;
+      for(const c of lst){ const s=_ttScore(c[1]); if(s===undefined||s>=0) continue;
         if(!(_critOk(c[0])&&(_isMut(c[0])||_isMutasahil(c[0])))) continue;
         const rn=(typeof _critRu==='function'?String(_critRu(c[0])).replace(/<[^>]+>/g,'').split('(')[0].trim():c[0]);
         if(seen.has(rn)) continue; seen.add(rn);
@@ -10418,7 +10429,7 @@ async function verifyNarr(card, place, text){
             if(mid){ try{ const lst=await _testimGet(+mid);
               if(lst){ const pos=[],neg=[]; const sp=new Set(),sn=new Set();
                 const _crl=(cr,rn,col)=>'<span class="nvCr" data-cr="'+esc(cr)+'" style="cursor:pointer;text-decoration:underline dotted;color:'+col+'">'+esc(rn)+'</span>';
-                for(const c of lst){ const s=_TT_SCORE[c[1]]; if(s===undefined) continue;
+                for(const c of lst){ const s=_ttScore(c[1]); if(s===undefined) continue;
                   const rn=(typeof _critRu==='function'?String(_critRu(c[0])).replace(/<[^>]+>/g,'').split('(')[0].trim():c[0]);
                   if(s>0&&_critOk(c[0])&&_isMut(c[0])&&!sp.has(rn)){ sp.add(rn); pos.push(_crl(c[0],rn,'#9fd3a8')); }
                   else if(s<0&&_critOk(c[0])&&(_isMut(c[0])||_isMutasahil(c[0]))&&!sn.has(rn)){ sn.add(rn); neg.push(_crl(c[0],rn,'#ff9b9b')); } }
