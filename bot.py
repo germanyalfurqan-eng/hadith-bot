@@ -663,9 +663,13 @@ def _load_narr_index():
     if _NARR_IDX_CACHE["idx"] is not None and (_t.time() - _NARR_IDX_CACHE["ts"]) < 3600:
         return _NARR_IDX_CACHE["idx"], _NARR_IDX_CACHE["mid2sid"], _NARR_IDX_CACHE["ru"]
     try:
-        idx = requests.get("https://germanyalfurqan-eng.github.io/hadith-bot/narrators_index.json", timeout=15).json()
-        m2s = requests.get("https://germanyalfurqan-eng.github.io/hadith-bot/mid2sid.json", timeout=15).json()
-        ru = requests.get("https://germanyalfurqan-eng.github.io/hadith-bot/narr_ru.json", timeout=15).json()
+        # raw.githubusercontent, НЕ Pages CDN: проверено (02.07) — Pages может отставать от коммита на десятки
+        # минут (narr_ru.json только что закоммичен, germanyalfurqan-eng.github.io всё ещё 404), raw отдаёт
+        # содержимое коммита СРАЗУ. Для свежедобавленных файлов это критично, для остальных — тоже безопаснее.
+        _RAW = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/docs/"
+        idx = requests.get(_RAW + "narrators_index.json", timeout=15).json()
+        m2s = requests.get(_RAW + "mid2sid.json", timeout=15).json()
+        ru = requests.get(_RAW + "narr_ru.json", timeout=15).json()
         _NARR_IDX_CACHE.update({"idx": idx, "mid2sid": m2s, "ru": ru, "ts": _t.time()})
         return idx, m2s, ru
     except Exception:
@@ -808,7 +812,7 @@ def _load_muhaymin():
     if _MUHAYMIN_CACHE["data"] is not None and (_t.time() - _MUHAYMIN_CACHE["ts"]) < 3600:
         return _MUHAYMIN_CACHE["data"]
     try:
-        data = requests.get("https://germanyalfurqan-eng.github.io/hadith-bot/muhaymin.json", timeout=20).json()
+        data = requests.get("https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/docs/muhaymin.json", timeout=20).json()   # raw, не Pages — см. комментарий у _load_narr_index
         _MUHAYMIN_CACHE.update({"data": data, "ts": _t.time()})
         return data
     except Exception:
