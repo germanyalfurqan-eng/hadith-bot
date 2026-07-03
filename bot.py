@@ -2606,7 +2606,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text in ("📖 Инструкция", "инструкция", "путеводитель", "гайд", "/guide"):
         await send_long(update, get_guide())
         return
-    if is_owner(update) and text.strip().lower() in ("анонс", "обновление", "релиз"):
+    if is_owner(update) and text.strip().lower() in ("обновление", "релиз"):
+        # БАГ (обнаружен 03.07.2026, В-15): раньше сюда попадало и слово "анонс" — это ПЕРЕХВАТЫВАЛО его
+        # раньше настоящего обработчика @muslimoonapp (ниже, «АНОНС в канал приложения вручную»), который
+        # никогда не срабатывал. ANNOUNCE_CHAT_ID/release_notes.txt больше нигде в коде не используются —
+        # мёртвый канал. "анонс" убран отсюда, чтобы дойти до правильного обработчика.
         try:
             r = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/release_notes.txt", timeout=8)
             note = r.text if r.status_code == 200 else "Нет release_notes.txt"
