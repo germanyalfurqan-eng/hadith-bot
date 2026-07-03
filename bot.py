@@ -1993,14 +1993,17 @@ def _claude_bridge_owner(update):
     return uid == OWNER_ID or (OWNER_ID2 and uid == OWNER_ID2)
 
 def _claude_bridge_scope(update):
-    """Где работает мост: ТОЛЬКО канал (пост — админ, доверяем) ИЛИ личка владельца (оба аккаунта).
-    #ВАЖНО (владелец 03.07.2026, прямым текстом): «клод — сверхсекретный вызов только от меня», ограничен
-    НАРОЧНО каналом+личкой — group/jamaat_ru СОЗНАТЕЛЬНО исключены (там 1108 участников, не должно палиться).
-    Ранее ошибочно добавлял group/supergroup, приняв тест владельца за баг — откатил обратно по прямому уточнению."""
+    """Где работает мост «Клод»: канал (пост — админ, доверяем) ИЛИ личка/группа — но ТОЛЬКО когда пишет ИМЕННО
+    владелец (оба личных аккаунта). #ФИНАЛЬНОЕ уточнение владельца 03.07.2026: «клод тоже в джамаате для меня
+    только, ништячок и клод — исключительно для меня» — то есть группа jamaat_ru РАЗРЕШЕНА, но триггер сработает
+    ТОЛЬКО от id владельца (_claude_bridge_owner) — 1108 остальных участников группы написать «клод ...» не смогут
+    ничего вызвать, это и есть их «секретность», а не запрет самого чата целиком."""
     if update.channel_post:
         return True
     ct = getattr(update.effective_chat, "type", "")
-    return ct == "private" and _claude_bridge_owner(update)
+    if ct in ("private", "group", "supergroup"):
+        return _claude_bridge_owner(update)
+    return False
 
 async def _claude_dispatch(update, context):
     if not _claude_bridge_scope(update):
