@@ -1949,6 +1949,78 @@ async def _nisht_dispatch(update, context):
         return True
     return False
 
+# ===== 🧑‍💻 МОСТ «КЛОД» (владелец 03.07.2026, С52): обращение к Claude Code прямо из канала Muslim Live / личек владельца =====
+# Бот сам НЕ отвечает за Клода (нет живого API-доступа отсюда к сессии Claude Code) — только ①принимает и подтверждает
+# обращение (data/claude_inbox.json), ②доставляет ответы Клода (data/claude_replies.json), когда Клод их туда положит,
+# при следующем сообщении в ТОМ ЖЕ чате (без JobQueue — она не в зависимостях, не рискуем пересборкой Railway).
+CLAUDE_INBOX_FILE = "claude_inbox.json"
+CLAUDE_REPLIES_FILE = "claude_replies.json"
+OWNER_ID2 = int(os.environ.get("OWNER_ID2", "0") or "0")   # второй личный аккаунт владельца — задать в Railway env, когда узнаем id
+
+def _claude_bridge_owner(update):
+    uid = update.effective_user.id if update.effective_user else 0
+    return uid == OWNER_ID or (OWNER_ID2 and uid == OWNER_ID2)
+
+def _claude_bridge_scope(update):
+    """Где работает мост: канал (любой пост — постить может только админ, доверяем) ИЛИ личка владельца (оба аккаунта)."""
+    if update.channel_post:
+        return True
+    ct = getattr(update.effective_chat, "type", "")
+    return ct == "private" and _claude_bridge_owner(update)
+
+async def _claude_dispatch(update, context):
+    if not _claude_bridge_scope(update):
+        return False
+    msg = update.effective_message
+    if not msg:
+        return False
+    text = (msg.text or msg.caption or "").strip()
+    m = re.match(r'^клод\b[:,]?\s*(.*)$', text, re.I | re.S) if text else None
+    if not m or not m.group(1).strip():
+        return False
+    body = m.group(1).strip()
+    chat = update.effective_chat
+    entry_id = "?"
+    try:
+        arr = _data_get(CLAUDE_INBOX_FILE, []) or []
+        entry_id = len(arr) + 1
+        arr.append({"id": entry_id, "d": _now_msk(), "chat_id": chat.id,
+                     "chat_title": getattr(chat, "title", None) or "личка",
+                     "from": (update.effective_user.full_name if update.effective_user else "канал"),
+                     "text": body, "delivered": False})
+        _data_put(CLAUDE_INBOX_FILE, arr, f"клод-обращение #{entry_id}")
+    except Exception:
+        pass
+    try:
+        await msg.reply_text(f"📨 Передано Клоду (#{entry_id}): «{body[:200]}»\nОтветит здесь, когда проверит очередь.")
+    except Exception:
+        pass
+    return True
+
+async def _claude_deliver_replies(update, context):
+    """Проверяет, нет ли для ЭТОГО чата свежих ответов Клода (data/claude_replies.json) — доставляет и помечает."""
+    if not _claude_bridge_scope(update):
+        return
+    chat = update.effective_chat
+    if not chat:
+        return
+    try:
+        arr = _data_get(CLAUDE_REPLIES_FILE, []) or []
+        pending = [r for r in arr if r.get("chat_id") == chat.id and not r.get("delivered")]
+        if not pending:
+            return
+        changed = False
+        for r in pending:
+            try:
+                await context.bot.send_message(chat.id, "🧑‍💻 Клод: " + str(r.get("text", ""))[:3500])
+                r["delivered"] = True; changed = True
+            except Exception:
+                pass
+        if changed:
+            _data_put(CLAUDE_REPLIES_FILE, arr, "клод-ответы доставлены")
+    except Exception:
+        pass
+
 # ===== 🧩 RAG-АССИСТЕНТ: оперативный поиск по ядру (41 первоисточник + 81 риджаль) на HF Space =====
 # Команды (владелец в ЛС + чат @jamaat_ru): «раг <запрос>» (по всему ядру) ·
 #   «найди в <источник>: <запрос>» (скоуп) · «раг в <источник>: <запрос>».
@@ -2342,13 +2414,24 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # может только админ, поэтому отдельная owner-проверка тут не нужна — сам факт поста уже доверенный.
         if update.channel_post:
             try:
-                await _nisht_dispatch(update, context)
+                if await _nisht_dispatch(update, context):
+                    return
+                await _claude_deliver_replies(update, context)
+                await _claude_dispatch(update, context)
             except Exception:
                 pass
         return
 
     text = update.message.text or ""
     text = text.strip()
+
+    # 🧑‍💻 МОСТ «КЛОД» (канал Muslim Live уже выше; тут — личка владельца, оба аккаунта)
+    try:
+        await _claude_deliver_replies(update, context)
+        if await _claude_dispatch(update, context):
+            return
+    except Exception:
+        pass
 
     # 📥 СКРИН-ЗАЯВКА владельца: фото с подписью «заявка ...»/«замечание ...» → запись с номером + архив в рабочий журнал (LOG)
     try:
