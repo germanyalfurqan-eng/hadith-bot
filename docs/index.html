@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v954</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v955</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v954';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v955';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7506,7 +7506,12 @@ function _dzChips(codes, row, forms, uResolved, numOverride){
     const ovr=(numOverride[i]!=null);   // числовой id перекрыт авторитетным (по сверке)
     const rid=ovr?Number(numOverride[i]):((typeof c==='number')?c:(uResolved[c]!=null?Number(uResolved[c]):null));   // #1/#4/#6: U-код/чужой id опознан через na/сверку (همام→6739, خالد 16274→1768)
     if(rid!=null){ b.textContent='#'+rid+' ✓'; b.style.color='#9fd3a8'; b.title='опознан — id базы '+rid+(typeof c==='number'?'':' (по сверке sunnah.com)');
-      _narrCard(rid).then(v=>{ if(v&&v[1]) b.textContent=v[1].split(' ').slice(0,3).join(' ')+' ·#'+rid; }).catch(()=>{});
+      _narrCard(rid).then(v=>{ if(v&&v[1]) b.textContent=v[1].split(' ').slice(0,3).join(' ')+' ·#'+rid;
+        // владелец 03.07: «в цепях всегда везде выделяй сподвижников явно золотым»
+        try{ const _gb=_genBadge((v[5]||'')+' '+(v[6]||'')+' '+(v[7]||''), v[4]); let _sah=_gb&&_gb[0]==='صحابي';
+          if(!_sah){ const _cn=stripDiac(v[1]||'').trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc&&(_cn===gc||_cn.startsWith(gc+' '))){ _sah=true; break; } } }
+          if(_sah){ b.style.color='#e8c35a'; b.style.borderColor='#e8c35a'; b.style.background='rgba(232,195,90,.16)'; b.title+=' · ⭐ сподвижник'; }
+        }catch(e){} }).catch(()=>{});
       b.onclick=()=>{ _narrCard(rid).then(v=>{ if(v&&v[1]) openNarratorRijal(v[1]); else toast('карточка не нашлась'); }).catch(()=>{}); };
     } else { b.textContent=String(c).slice(0,8); b.style.color='#ffce63'; b.title='не отождествлён — наш U-код (тап: карточка формы)';
       dzUReg(c).then(u=>{ if(u&&u[0]) b.textContent=u[0].split(' ').slice(0,3).join(' ')+' ؟'; }).catch(()=>{});
@@ -8392,7 +8397,17 @@ function _shuhraOf(name, extRow){
 // поколение: صحابي — ТОЛЬКО доказанное рангом (слово владельца: «сахабство должно быть доказано»);
 // по году смерти — СПОРНАЯ отметка с «؟» (разногласие возможно: сахаби/таби'и/маджхуль — смотреть свидетельства, M450)
 // M475: гарантированный список известнейших сахабов (явное упоминание — нет regex-зависимости)
-const _GUARANTEED_SAHABA=new Set(['أبو هريرة','أبو هريرة عبد الرحمن','عبد الرحمن أبي هريرة','ابن عباس','عبد الله بن عباس','عائشة بنت أبي بكر','عائشة','أم المؤمنين عائشة','جابر بن عبد الله','عمر بن الخطاب','علي بن أبي طالب','عثمان بن عفان','أبو بكر الصديق','أبو بكر','عبد الله بن عمر','جابر','أنس بن مالك','أنس','ابن مسعود','عبد الله بن مسعود','سعد بن أبي وقاص','الزبير بن العوام','عبد الرحمن بن عوف','طلحة بن عبيد الله','سعيد بن زيد','خديجة','أم سلمة','حفصة','زينب','أم حبيبة','ميمونة','أم المؤمنين ميمونة']);
+// владелец 03.07 (косвенно поймано при добавлении золота в цепях): ГОЛЫЕ однословные записи ('أنس','جابر','عائشة',
+// 'أبو بكر') ловили ЧУЖИХ людей по правилу «имя начинается с X + пробел» — напр. «أنس بن عياض» (ثقة, ум.200г,
+// СОВСЕМ не сподвижник) начинается с «أنس » и ложно золотился как «أنس بن مالك». Убраны опасные голые формы —
+// полные однозначные («أنس بن مالك», «عائشة بنت أبي بكر» и т.п.) уже покрывают реальных сподвижников безопасно.
+const _GUARANTEED_SAHABA=new Set(['أبو هريرة','أبو هريرة عبد الرحمن','عبد الرحمن أبي هريرة','ابن عباس','عبد الله بن عباس','عائشة بنت أبي بكر','أم المؤمنين عائشة','جابر بن عبد الله','عمر بن الخطاب','علي بن أبي طالب','عثمان بن عفان','أبو بكر الصديق','عبد الله بن عمر','أنس بن مالك','ابن مسعود','عبد الله بن مسعود','سعد بن أبي وقاص','الزبير بن العوام','عبد الرحمن بن عوف','طلحة بن عبيد الله','سعيد بن زيد','خديجة','أم سلمة','حفصة','زينب','أم حبيبة','ميمونة','أم المؤمنين ميمونة']);
+// владелец 03.07: «в цепях всегда везде выделяй сподвижников явно золотым» — тот же критерий сахабства (карточка
+// равия 9410-9411), переиспользуется в диаграммах цепи (verifyNarr) без дублирования логики.
+async function _isSahById(mid){ if(mid==null) return false; try{ const c=await _narrCard(+mid); if(!c) return false;
+  const _gb=_genBadge((c[5]||'')+' '+(c[6]||'')+' '+(c[7]||''), c[4]); if(_gb && _gb[0]==='صحابي') return true;
+  const _cn=stripDiac(c[1]||'').trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc && (_cn===gc || _cn.startsWith(gc+' '))) return true; }
+  return false; }catch(e){ return false; } }
 function _genBadge(rk, death){
   const rkStr=String(rk||'');
   // M475: проверка гарантированного списка знаменитых сахабов (явное имя — имеет приоритет)
@@ -10466,6 +10481,8 @@ async function verifyNarr(card, place, text){
     // сподвижнику/Пророку ﷺ, последний элемент auth[]) → №auth.length = ближе к собирателю (auth[0]). Нейротахкик
     // ниже ссылается на ЭТИ номера вместо повтора длинных имён — легче сопоставить звено цепи со «слабым звеном».
     const _lnkNum={}; auth.forEach((r,i)=>{ const mid=r[2]?String(r[2]):null; if(mid) _lnkNum[mid]=auth.length-i; });
+    // владелец 03.07: «в цепях всегда везде выделяй сподвижников явно золотым» — предзагрузка статуса ДО рендера (forEach ниже синхронный)
+    const _sahFlags=await Promise.all(auth.map(r=>_isSahById(r[2])));
     h+='<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:5px;direction:rtl;line-height:1.9">';
     auth.forEach((r,i)=>{ const nm=r[1], mid=r[2]?String(r[2]):null; const ok=idMode?ourSet.has(mid):true;
       if(i>0 && forms[i-1]) h+='<span style="color:var(--hint);font-size:11px;font-family:\'Traditional Arabic\',serif">←'+esc(forms[i-1])+'←</span>';
@@ -10474,8 +10491,10 @@ async function verifyNarr(card, place, text){
       let _bc=idMode?(ok?'#3a8a5a':'#e0796a'):'#6c5ce7', _bg=idMode?(ok?'rgba(58,138,90,.12)':'rgba(224,121,106,.12)'):'rgba(108,92,231,.10)', _vtag='';
       if(_vd==='daif'||_vd==='matruk'){ _bc='#A32D2D'; _bg='rgba(226,75,74,.14)'; _vtag=' <span style="color:#ff8787;font-size:9.5px;direction:ltr;font-weight:700">'+(_vd==='matruk'?'матрук':'даиф')+'</span>'; }
       else if(_vd==='majhul'||_vd==='majhul_hal'){ _bc='#8a6a3a'; _bg='rgba(202,161,74,.10)'; _vtag=' <span style="color:#e6c578;font-size:9.5px;direction:ltr">маджхуль</span>'; }
+      const _isSahHere=_sahFlags[i]; if(_isSahHere){ _bc='#e8c35a'; _bg='rgba(232,195,90,.16)'; }   // золотой — сподвижник, приоритет выше остальных цветов
       const _numTag=' <span style="color:var(--hint);font-size:9px;direction:ltr;opacity:.75" title="номер звена в цепи (①=ближе к сподвижнику/Пророку ﷺ)">№'+(auth.length-i)+'</span>';
-      h+='<span class="vChip"'+(mid?(' data-mid="'+esc(mid)+'"'):'')+' style="'+(mid?'cursor:pointer;':'')+'border:1px solid '+_bc+';border-radius:8px;padding:2px 7px;background:'+_bg+'"'+(mid?(' title="Карточка в Мактабе: shamela.ws/narrator/'+esc(mid)+'"'):'')+'><span style="font-family:\'Traditional Arabic\',serif">'+esc(nm)+'</span>'+(mid?(' <span style="color:var(--hint);font-size:10px;direction:ltr">'+(idMode?(ok?'✓':'✗'):'👤')+' id'+esc(mid)+' ↗</span>'):(idMode?' <span style="color:#e0796a;font-size:10px;direction:ltr" title="sunnah.com опознал, наш мост — ещё нет">؟ не опознан</span>':''))+_vtag+_numTag+'</span>';
+      const _sahTag=_isSahHere?' <span style="color:#e8c35a;font-size:9.5px;direction:ltr">⭐ сподвижник</span>':'';
+      h+='<span class="vChip"'+(mid?(' data-mid="'+esc(mid)+'"'):'')+' style="'+(mid?'cursor:pointer;':'')+'border:1px solid '+_bc+';border-radius:8px;padding:2px 7px;background:'+_bg+'"'+(mid?(' title="Карточка в Мактабе: shamela.ws/narrator/'+esc(mid)+'"'):'')+'><span style="font-family:\'Traditional Arabic\',serif">'+esc(nm)+'</span>'+(mid?(' <span style="color:var(--hint);font-size:10px;direction:ltr">'+(idMode?(ok?'✓':'✗'):'👤')+' id'+esc(mid)+' ↗</span>'):(idMode?' <span style="color:#e0796a;font-size:10px;direction:ltr" title="sunnah.com опознал, наш мост — ещё нет">؟ не опознан</span>':''))+_vtag+_sahTag+_numTag+'</span>';
     });
     h+='</div>';
     // #182: ЯВНЫЙ компактный СПИСОК передатчиков с id ВНИЗУ (повтор Бухари 415) — клик по id → карточка Мактабы
@@ -10817,7 +10836,10 @@ async function doTranslateAyah(s,a,out,btn,ed){
 const TAFSIR_CDN='https://cdn.jsdelivr.net/gh/spa5k/tafsir_api@main/tafsir/';
 function openTafsir(s,a){ const m=document.getElementById('tafsirModal'); const body=document.getElementById('tafsirBody'); const ttl=document.getElementById('tafsirTitle');
   if(ttl) ttl.textContent=_faIsBasmalaHdr(s,a)?'📖 Тафсир · басмаля (сура '+s+')':('📖 Тафсир · аят '+s+':'+_faDispA(s,a));
-  if(m){ m.style.zIndex='10007'; m.style.display='flex'; }   // TB-12: тафсир открывался ПОД модалом читалки Корана («кнопка не жмётся»)
+  // владелец 03.07: «тафсир открыл, он открылся за аятом и не видно ничего» — карточка аята (ayahCardModal) висит на
+  // z-index:10020, тафсир был на 10007 (ниже) → буквально прятался ЗА карточкой. z-index:10025 — выше карточки аята
+  // и читалки Корана (TB-12), тафсир теперь всегда самый верхний слой (он всегда конечная точка «углубления»).
+  if(m){ m.style.zIndex='10025'; m.style.display='flex'; }
   doTafsir(s,a,body,null); }
 const TAFSIRS=[
   {key:'ibnkathir',nm:'Ибн Касир',ar:'ar-tafsir-ibn-kathir',ru:'ru-tafsir-ibne-kahtir'},
@@ -11941,11 +11963,13 @@ function updateFloatTools(){ try{ const w=document.getElementById('floatTools');
   fsCtrls.appendChild(plus); fsCtrls.appendChild(lbl); fsCtrls.appendChild(minus);
   fsTog.onclick=()=>{ if(fsCtrls.style.display==='flex'){ _fsCollapse(); } else { fsCtrls.style.display='flex'; fsTog.style.borderColor='var(--btn)'; fsTog.style.color='var(--btn)'; _fsPoke(); } };
   fsGroup.appendChild(fsCtrls); fsGroup.appendChild(fsTog);
-  const up=mkf('▲',()=>{ const sc=_activeScroller(); if(sc){ sc.scrollTo({top:0,behavior:'smooth'}); } else { window.scrollTo({top:0,behavior:'smooth'}); } },'Наверх','floatUp');
+  // владелец 03.07 («семечка, человек не поймёт что это стрелка»): маленький глиф ▲/▼ (16px) в круге читался как
+  // невнятное пятно, не как стрелка — заменил на однозначные emoji-стрелки (как везде в приложении: 📖/🔊 и т.п.).
+  const up=mkf('⬆️',()=>{ const sc=_activeScroller(); if(sc){ sc.scrollTo({top:0,behavior:'smooth'}); } else { window.scrollTo({top:0,behavior:'smooth'}); } },'Наверх','floatUp');
   up.style.display='none';
   // #devfeedback («не хватает крутилки верх-вниз») + владелец 01.07.2026 («заходит одно на другое» — было 2 системы, теперь одна):
   // «▼ вниз» — В ТОЙ ЖЕ группе floatTools, тем же _activeScroller() (учитывает открытую читалку/модалку, не только окно).
-  const down=mkf('▼',()=>{ const sc=_activeScroller(); if(sc){ sc.scrollTo({top:sc.scrollHeight,behavior:'smooth'}); } else { window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'}); } },'Вниз','floatDown');
+  const down=mkf('⬇️',()=>{ const sc=_activeScroller(); if(sc){ sc.scrollTo({top:sc.scrollHeight,behavior:'smooth'}); } else { window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'}); } },'Вниз','floatDown');
   down.style.display='none';
   wrap.appendChild(fsGroup); wrap.appendChild(up); wrap.appendChild(down);
   document.body.appendChild(wrap); applyFontScale();
