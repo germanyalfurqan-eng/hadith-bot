@@ -1985,6 +1985,7 @@ async def _nisht_dispatch(update, context):
 # при следующем сообщении в ТОМ ЖЕ чате (без JobQueue — она не в зависимостях, не рискуем пересборкой Railway).
 CLAUDE_INBOX_FILE = "claude_inbox.json"
 CLAUDE_REPLIES_FILE = "claude_replies.json"
+CLAUDE_STATUS_FILE = "claude_status.json"   # «Клод взялся за заявку X» — публикуются в LOG_CHAT по таймеру (JobQueue), не ждут активности в чате
 OWNER_ID2 = int(os.environ.get("OWNER_ID2", "0") or "0")   # второй личный аккаунт владельца — задать в Railway env, когда узнаем id
 JAMAAT_RU_CHAT_ID = int(os.environ.get("JAMAAT_RU_CHAT_ID", "-1001925828112") or "-1001925828112")   # id группы JAMAAT MUSLIMIN — подтверждён владельцем 03.07.2026 (из журнала LOG_CHAT), Railway env может переопределить
 
@@ -2017,27 +2018,28 @@ async def _claude_dispatch(update, context):
         return False
     body = m.group(1).strip()
     chat = update.effective_chat
-    entry_id = "?"
+    entry_id = "?"; queue_pos = "?"; when = _now_msk()
+    _where = getattr(chat, "title", None) or "личка"
     try:
         arr = _data_get(CLAUDE_INBOX_FILE, []) or []
         entry_id = len(arr) + 1
-        arr.append({"id": entry_id, "d": _now_msk(), "chat_id": chat.id,
-                     "chat_title": getattr(chat, "title", None) or "личка",
+        arr.append({"id": entry_id, "d": when, "chat_id": chat.id, "chat_title": _where,
                      "from": (update.effective_user.full_name if update.effective_user else "канал"),
-                     "text": body, "delivered": False})
+                     "text": body, "delivered": False, "answered": False})
+        queue_pos = sum(1 for x in arr if not x.get("answered"))   # сколько ещё не отвечено, включая это
         _data_put(CLAUDE_INBOX_FILE, arr, f"клод-обращение #{entry_id}")
     except Exception:
         pass
     try:
-        await msg.reply_text(f"📨 Передано Клоду (#{entry_id}): «{body[:200]}»\nОтветит здесь, когда проверит очередь.")
+        await msg.reply_text(f"📨 Передано Клоду — обращение #{entry_id} из чата «{_where}», время {when}, "
+                              f"место в очереди (неотвеченных): {queue_pos}\n«{body[:200]}»\nОтветит здесь, когда проверит очередь.")
     except Exception:
         pass
     # #ЖУРНАЛ (владелец 03.07.2026): «Клод нигде не должен отвечать кроме меня — но КАЖДОЕ обращение
     # должно приходить в рабочий журнал (LOG_CHAT_ID), точно так же, как приходят траты DeepSeek — кто/что/когда».
     try:
         if application:
-            _where = getattr(chat, "title", None) or "личка"
-            await application.bot.send_message(LOG_CHAT_ID, f"🧑‍💻 #клод обращение #{entry_id}: {_where} — «{body[:200]}»")
+            await application.bot.send_message(LOG_CHAT_ID, f"🧑‍💻 #клод обращение #{entry_id}: {_where}, {when}, в очереди {queue_pos} — «{body[:200]}»")
     except Exception:
         pass
     return True
@@ -2068,6 +2070,43 @@ async def _claude_deliver_replies(update, context):
                 pass
         if changed:
             _data_put(CLAUDE_REPLIES_FILE, arr, "клод-ответы доставлены")
+    except Exception:
+        pass
+
+async def _claude_timer_poll(context: ContextTypes.DEFAULT_TYPE):
+    """JobQueue-таймер (владелец 03.07.2026: «оперативно» — не ждать активности в чате): раз в ~40 сек
+    ①доставляет ЛЮБЫЕ неотправленные claude_replies.json (не только когда владелец сам что-то пишет в тот же чат),
+    ②публикует claude_status.json («Клод взялся за заявку X, ETA такой-то») в LOG_CHAT_ID."""
+    try:
+        arr = _data_get(CLAUDE_REPLIES_FILE, []) or []
+        pending = [r for r in arr if not r.get("delivered")]
+        changed = False
+        for r in pending:
+            try:
+                await context.bot.send_message(r["chat_id"], "🧑‍💻 Клод: " + str(r.get("text", ""))[:3500])
+                r["delivered"] = True; changed = True
+                try:
+                    await context.bot.send_message(LOG_CHAT_ID, f"🧑‍💻 #клод ответ доставлен (таймер): «{str(r.get('text',''))[:150]}»")
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        if changed:
+            _data_put(CLAUDE_REPLIES_FILE, arr, "клод-ответы доставлены (таймер)")
+    except Exception:
+        pass
+    try:
+        st = _data_get(CLAUDE_STATUS_FILE, []) or []
+        pend2 = [s for s in st if not s.get("posted")]
+        changed2 = False
+        for s in pend2:
+            try:
+                await context.bot.send_message(LOG_CHAT_ID, str(s.get("text", ""))[:3500])
+                s["posted"] = True; changed2 = True
+            except Exception:
+                pass
+        if changed2:
+            _data_put(CLAUDE_STATUS_FILE, st, "клод-статусы опубликованы")
     except Exception:
         pass
 
@@ -6626,6 +6665,11 @@ async def _setup(application):
         await _req_imgs_export(application)
     except Exception:
         pass
+    try:
+        if application.job_queue:
+            application.job_queue.run_repeating(_claude_timer_poll, interval=40, first=15)   # owner: «оперативно» — не ждать активности в чате
+    except Exception as e:
+        print("claude job_queue setup failed:", e)
     try:
         from telegram import MenuButtonWebApp, WebAppInfo
         btn = MenuButtonWebApp(text="𝗠𝗨𝗦𝗟𝗜𝗠𝗢𝗢𝗡-𝗔𝗣𝗣", web_app=WebAppInfo(url=WEBAPP_URL))   # имя кнопки приложения — вариант владельца
