@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v940</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v941</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v940';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v941';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -9083,10 +9083,13 @@ async function renderTestimoniesCard(mid, host){
     const row=document.createElement('div'); row.dataset.ttRow='1'; row.style.cssText='border-top:1px solid #20302a;padding-top:11px;margin-top:11px'; if(idx>=_TT_TOP) row.style.display='none';
     const yr=_yrOf(cr); const c0=items[0]; const ruv=((c0[9]&&String(c0[9]).trim())||_ruVerdict(terms));
     const _isMuta=_isMutasahil(cr)&&_critOk(cr);   // ПР-3: мутасахиль — джарх принят, таусик нет
+    // #490 (владелец): зелёная «✓ принят» одинаково висела и на таусике, и на джархе от муʿтабара — звучит как «признан надёжным» (таусик), путает. Джарх теперь своя красная отметка «⚠ джарх принят».
     const _badge=(_isMut(cr)&&_critOk(cr))
-      ? " <span style=\"font-size:10px;background:rgba(46,160,67,.16);color:#7ee08a;border:1px solid #2d6a45;border-radius:5px;padding:0 5px;cursor:help\" title=\"Один из муʿтабаров — его таусик/джарх засчитывается (нужно ≥2)\">✓ принят</span>"
+      ? (scv<0
+        ? " <span style=\"font-size:10px;background:rgba(226,75,74,.16);color:#ff9b9b;border:1px solid #a33;border-radius:5px;padding:0 5px;cursor:help\" title=\"Один из муʿтабаров — его ДЖАРХ (порицание) засчитывается (нужно ≥2)\">⚠ джарх принят</span>"
+        : " <span style=\"font-size:10px;background:rgba(46,160,67,.16);color:#7ee08a;border:1px solid #2d6a45;border-radius:5px;padding:0 5px;cursor:help\" title=\"Один из муʿтабаров — его таусик засчитывается (нужно ≥2)\">✓ принят</span>")
       : (_isMuta && scv<0)
-        ? " <span style=\"font-size:10px;background:rgba(248,160,122,.16);color:#f8a07a;border:1px solid #6a3a2d;border-radius:5px;padding:0 5px;cursor:help\" title=\"Мутасахиль (небрежен в похвале) — джарх ОТ него принимается, но его таусик НЕ считается (ПР-3)\">✓ джарх принят</span>"
+        ? " <span style=\"font-size:10px;background:rgba(226,75,74,.16);color:#ff9b9b;border:1px solid #a33;border-radius:5px;padding:0 5px;cursor:help\" title=\"Мутасахиль (небрежен в похвале) — джарх ОТ него принимается, но его таусик НЕ считается (ПР-3)\">⚠ джарх принят</span>"
         : " <span style=\"font-size:10px;background:rgba(122,134,147,.12);color:#9aa7b5;border:1px solid #3a434d;border-radius:5px;padding:0 5px;cursor:help\" title=\"Не из 48 муʿтабаров — мнение справочное, в счёт таусика не идёт\">справочно</span>";
     // владелец 02.07 («проработай дизайн как-то лучше»): было — ВЕСЬ блок (имя+араб.имя+значок+год) одним
     // подчёркнутым span → визуально «всё подчёркнуто», значок и год выглядели как часть ссылки. Теперь
@@ -9293,9 +9296,28 @@ async function showNarratorCardLocal(name, host){
   // владелец 02.07 (скрин «وَعَنْ نَافِعٍ» в шапке): корпусные огласовки иногда захватывают глагол передачи и родительный падеж цепи.
   // Шапка = ИМЯ в именительном: срезаем ведущие глаголы (وعن/عن/حدثنا…) и меняем хвостовой танвин-кяср на танвин-дамм (نَافِعٍ→نَافِعٌ).
   if(_voc){ _voc=_voc.replace(/^[وَفَ]{0,2}\s*(?:وَ?عَ?نْ?|حَ?دَّ?ثَ?نَ?ا|أَ?خْ?بَ?رَ?نَ?ا|قَ?الَ?|سَ?مِ?عْ?تُ?)\s+/,'').trim();
-    if(/ٍ$/.test(_voc)) _voc=_voc.replace(/ٍ$/,'ٌ');
-    if(/ةَ$/.test(_voc)) _voc=_voc.replace(/ةَ$/,'ةُ');   // диптоты на ة после عن (عِكْرِمَةَ→عِكْرِمَةُ)
-    if(/ِ$/.test(_voc)) _voc=_voc.replace(/ِ$/,'ُ'); }
+    // #487 (владелец: «анас ибн малик — неузнаваем»): конструкция «Имя1 بن/ابن Имя2» — корпус хранит ВСЮ фразу в родительном
+    // (как после «عن»: أَنَسِ بْنِ مَالِكٍ). Шапка — именительный, но родительный нужен ТОЛЬКО у Имя1+بن (подлежащее),
+    // Имя2 (مضاف إليه при بن) ОСТАЁТСЯ в родительном — это грамматически верно и трогать его нельзя. Старый код чинил
+    // ПОСЛЕДНЕЕ слово (давая заведомо неверное «أَنَسِ بْنِ مَالِكٌ» — родительный+родительный+именительный вперемешку).
+    // шухра-форма БЕЗ имени перед «ибн» (сама фраза — «Ибн Умар»): чинить нужно САМО بن/ابن, второе имя (مضاф إليه) не трогать.
+    const _foldW=(w)=>String(w||'').replace(/[ً-ْٰ]/g,'');
+    const _nomFix=(w)=>{
+      if(/ِو$/.test(w)) return w.replace(/ِو$/,'ُو');
+      if(/ٍو$/.test(w)) return w.replace(/ٍو$/,'ٌو');
+      if(/ٍ$/.test(w)) return w.replace(/ٍ$/,'ٌ');
+      if(/ةَ$/.test(w)) return w.replace(/ةَ$/,'ةُ');
+      if(/ِ$/.test(w)) return w.replace(/ِ$/,'ُ');
+      return w; };
+    const _parts=_voc.split(/\s+/);
+    if(_parts.length){
+      let i=0;
+      if(_parts.length>1 && _foldW(_parts[0])==='عبد') i=1;   // «عبد الله/الرحمن/…» — عبد сам مضاف, имя Аллаха (i) не трогаем
+      _parts[0]=_nomFix(_parts[0]);
+      const j=i+1;
+      if(_parts.length>j && /^(بن|ابن)$/.test(_foldW(_parts[j]))) _parts[j]=_nomFix(_parts[j]);   // بن сразу за подлежащим согласуется с ним
+      _voc=_parts.join(' ');
+    } }
   const _hdrName = _voc || (_shDiff?_sh:c[1]);
   const _showFull = stripDiac(_hdrName)!==stripDiac(c[1]||'');
   const _cleanFull=(nm)=>{ const ws=String(nm||'').trim().split(/\s+/); const st={'وقيل':1,'ويقال':1,'يقال':1,'وقال':1,'قال':1,'او':1}; const o=[]; for(const w of ws){ if(st[stripDiac(w)]) break; o.push(w); if(o.length>=9) break; } return o.join(' ')||nm; };   // #сподвижники (приказ С40): имя забито вариантами «عبد الرحمن بن صخر وقيل عبد الله بن غنم وقيل…» → обрезаем по первому وقيل/ويقال/قال, иначе транслит давал «...Вкил...»
@@ -9329,7 +9351,11 @@ async function showNarratorCardLocal(name, host){
   const _genTxt=_isSah?'⭐ صحابي · Сподвижник':(c[7]?('الطبقة '+c[7]):'تابعي');
   let h='<div style="border:1px solid #21342a;border-radius:18px;padding:15px;margin:6px 0;background:linear-gradient(180deg,rgba(46,160,67,.06),rgba(46,160,67,0))">'
     +'<div style="display:flex;gap:13px;align-items:flex-start;flex-wrap:wrap">'
-      +'<div style="flex:none"><div style="width:62px;height:62px;border-radius:50%;border:2px solid #2ea043;background:#0f1712;display:flex;align-items:center;justify-content:center;font-size:30px;color:#cfeada;overflow:hidden">'+_avHtml+'</div></div>'
+      +'<div style="flex:none"><div style="position:relative;width:62px;height:62px">'
+        +'<div style="width:62px;height:62px;border-radius:50%;border:2px solid #2ea043;background:#0f1712;display:flex;align-items:center;justify-content:center;font-size:30px;color:#cfeada;overflow:hidden">'+_avHtml+'</div>'
+        // #472 (владелец, «сто раз просил Википедия в круг передатчика»): значок W — прямо НА кружке аватара (угол), кликабелен. Кнопка выше (у ID) осталась — не убираем то, что уже работает.
+        +((_WIKI_NARR_OK&&_wk&&_wk.u)?('<span class="nWikiAv" data-u="'+esc(_wk.u)+'" title="Википедия" style="position:absolute;right:-4px;bottom:-4px;width:20px;height:20px;border-radius:50%;background:#1c2128;border:1.5px solid #3a434d;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:Georgia,serif;font-size:11px;font-weight:700;color:#e9eef3">W</span>'):'')
+      +'</div></div>'
       +'<div style="flex:1;min-width:190px">'
         +'<div dir="rtl" style="font-weight:700;font-size:23px;color:#f0f6fc;line-height:1.15;'+_AF+'">'+esc(_hdrName)+'</div>'
         +(_ruSh?('<div style="font-size:13px;color:#bcd0ff;margin-top:2px">≈ '+esc(_ruSh)+(_ruShVer?'':' <span title="Автоматическая транслитерация с арабского — ещё НЕ выверена вручную, возможны неточности" style="font-size:9.5px;color:#c9a24a;border:1px solid #5e4d23;border-radius:6px;padding:0 5px;cursor:help;vertical-align:middle">авто ⚠</span>')+'</div>'):'')
@@ -9393,9 +9419,12 @@ async function showNarratorCardLocal(name, host){
     const tro=document.createElement('div'); tro.className='tr-out'; tro.style.cssText='display:none;margin-top:6px;direction:ltr;text-align:left';
     const mk=(t,fn)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=t; b.style.cssText='font-size:12px;padding:4px 9px'; b.onclick=fn; return b; };
     // #252 (владелец «зачем тут кнопка перевести — просто с переводом делай»): кнопка «Перевод (ИИ)» убрана — рус.перевод (биография + ≈транслит + ≈ранги) уже показан ИНЛАЙН в карточке.
-    tl.appendChild(mk('📕 Arabus', ()=>{ _arabusOn=true; try{ loadRoots(); loadArabusLocal(); enableArabusTap(hdr); }catch(e){} hdr.style.cursor='pointer'; toast('📕 Arabus — тапай слово в шапке'); }));
+    // #492 (владелец: «арабус тут вообще не в тему, почему именно так»): голая надпись «Arabus» без пояснения выглядела
+    // случайной кнопкой без связи с текстом биографии выше. Подпись теперь объясняет ДЕЙСТВИЕ (разбор слов текста).
+    tl.appendChild(mk('📕 Разбор слов (Arabus)', ()=>{ _arabusOn=true; try{ loadRoots(); loadArabusLocal(); enableArabusTap(hdr); }catch(e){} hdr.style.cursor='pointer'; toast('📕 Arabus включён — тапай любое арабское слово в тексте выше'); }));
     hdr.appendChild(tl); hdr.appendChild(tro);
     hdr.querySelectorAll('.nWiki').forEach(b=>b.onclick=()=>{ try{ openLink(b.dataset.u); }catch(e){} });   // M385 ⑤
+    hdr.querySelectorAll('.nWikiAv').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); try{ openLink(b.dataset.u); }catch(_e){} });   // #472: значок на кружке аватара
     hdr.querySelectorAll('.nWikiS').forEach(b=>b.onclick=()=>{ try{ const ru=b.dataset.ru==='1'; openLink('https://'+(ru?'ru':'ar')+'.wikipedia.org/w/index.php?search='+b.dataset.q); }catch(e){} });   // С38: Википедия-поиск (рус.имя→ru-вики, иначе ar-вики)
   }catch(e){}
   return c;   // джарх-моусуа рендерится ОТДЕЛЬНЫМ разделом ПОСЛЕ наших книг
