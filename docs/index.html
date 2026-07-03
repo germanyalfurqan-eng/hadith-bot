@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v931</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v932</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v931';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v932';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8293,11 +8293,22 @@ function _shuhraOf(name, extRow){
   const first=(/^(عبد|عبيد)$/.test(nw[0])&&nw[1])?(nw[0]+' '+nw[1]):nw[0];      // составное первое имя НЕ рвать («عبد الهاشمي» — мусор)
   // ЗАКОН ИМЕНИ: если выбранная нисба РОДОВАЯ/географ. (البصري…), а в имени есть чистый патроним-дед «X بن جد» (جد≠часть كنية «أبي X») — он узнаваемее (Ибн Сирин «محمد بن سيرين», не «محمد البصري»).
   { const _l=nw[nw.length-1], _lN=_l.replace(/[أإآ]/g,'ا'), _p=nw[nw.length-2]||'';
+    let _bn0=0; for(const _w of nw) if(_w==='بن') _bn0++;
+    // #487 (С50, «Анас ибн Малик неузнаваем»): у длинной родословной (много «بن» подряд, напр. أنس بن مالك بن
+    // النضر بن ضمضم...بن النجار — 10 звеньев) ПОСЛЕДНЕЕ слово — это ИМЯ ДАЛЬНЕГО ПРЕДКА, а не нисба, даже если
+    // оно начинается на «ال» (النجار). Правило ① доверяем ТОЛЬКО при короткой родословной (≤2 «بن») — иначе
+    // ложно принимает имя предка за различающую нисбу и ломает узнаваемость самых известных сподвижников.
     // ① последний токен имени = РАЗЛИЧАЮЩАЯ нисба (ال…, не родовая) → она и есть шухра (يحيى القطان, سفيان الثوري)
-    if(/^ال/.test(_l) && _l.length>=4 && !_shGen[_lN] && !_shStopT[_l]) return first+' '+_l;
-    // ② нисба родовая/географ. (البصري…), но есть чистый патроним-дед «X بن جد» (جд≠часть كنية أبي X) → патроним (محمد بن سيرين)
-    const _nisN=(nis||'').replace(/[أإآ]/g,'ا'); let _bn=0; for(const _w of nw) if(_w==='بن') _bn++;
-    if(nis && _shGen[_nisN] && _bn===1 && nw.length>=3 && _l.length>=3 && !/^ال/.test(_l) && !_shStopT[_l] && !/^(أبي|ابي|أبو|ابو|أم|ام)$/.test(_p)) return first+' بن '+_l; }
+    if(_bn0<=2 && /^ال/.test(_l) && _l.length>=4 && !_shGen[_lN] && !_shStopT[_l]) return first+' '+_l;
+    // #487 (С50, «Анас ибн Малик неузнаваем»): ② нисба родовая/географ. (البصري…) — узнаваемый патроним «Имя بн ОТЕЦ».
+    // Два случая: (а) نw[2] — обычное имя отца → берём его (работает на ЛЮБОЙ длине родословной, «أنس بن مالك بن...»);
+    // (б) نw[2] — начало куньи отца («بن أبي عمرة سиرين» — Ибн Сирин) и родословная короткая (بn0===1) → берём ПОСЛЕДНЕЕ
+    // слово перед нисбой (реальное имя, данное после куньи отца), как раньше — не ломаем этот выверенный случай.
+    const _nisN=(nis||'').replace(/[أإآ]/g,'ا'); const _f2=nw[2]||''; const _f2isKun=/^(أبي|ابي|أبو|ابو|أم|ام)$/.test(_f2);
+    if(nis && _shGen[_nisN] && nw[1]==='بن'){
+      if(!_f2isKun && _bn0>=1 && _f2.length>=3 && !/^ال/.test(_f2) && !_shStopT[_f2]) return first+' بن '+_f2;
+      if(_f2isKun && _bn0===1 && _l.length>=3 && !/^ال/.test(_l) && !_shStopT[_l] && !/^(أبي|ابي|أبو|ابو|أم|ام)$/.test(_p)) return first+' بن '+_l;
+    } }
   if(nis && nis!==nw[nw.length-1]) return first+' '+nis;
   if(nw[2]==='بن'&&nw.length>=4) return nw.slice(0,4).join(' ');   // «عبد الرحمن بن مهدي» целиком, не обрубок
   // фоллбэк «имя بن ОТЕЦ»: отец бывает СОСТАВНЫМ (أبي خالد / عبد الأعلى / عبيد الله) — не рубить на 3 слова.
