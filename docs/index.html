@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v957</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v958</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v957';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v958';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4840,11 +4840,13 @@ async function openNarratorRijal(name){
   // (пропускаем, если showNarratorCardLocal уже отрендерил «Оценки учёных» сам — иначе дубль секции)
   if(!_cardShown){ try{ const _tvid=await _narrLookup(name); if(_tvid!=null) await renderTestimoniesCard(_tvid, body); }catch(e){} }
   // M475/TB-28: поколение (отметка صحابي/تابعي) + связи учитель↔ученик из تهذيب الكمال (по нашему id, R45)
+  let _isSahForRj=false;   // ТРЕВОГА-фикс (владелец 04.07.2026: «оценки критиков на Ибн Умара — несуществующие») — сподвижники (صحابة عدول) НЕ подлежат джарх-ва-тадилю
   try{
     const _vid2=await _narrLookup(name);
     if(_vid2!=null){
       const cc=await _narrCard(_vid2);
       if(cc){ const gb=_genBadge(cc[5]||'', cc[4]);
+        _isSahForRj=!!(gb && gb[0]==='صحابي');
         if(gb){ const gp=document.createElement('div'); gp.style.cssText='margin-top:9px';
           gp.innerHTML='<span style="color:var(--hint);font-size:12px">Поколение:</span> <span style="display:inline-block;padding:3px 11px;border-radius:20px;border:1px solid '+gb[1]+';color:'+gb[1]+';font-size:12.5px" dir="rtl" title="'+esc(gb[2]||'')+'">'+(gb[3]||esc(gb[0]))+'</span>';
           body.appendChild(gp);
@@ -4898,6 +4900,7 @@ async function openNarratorRijal(name){
       await _renderTlinkLinks(_vid2, body, (nm)=>openNarratorRijal(nm));   // Р-37/Р-04: был дубль (старая горизонт. версия) — теперь общий помощник (счётчик передач + рус.имя)
     }
   }catch(e){}
+  if(!_isSahForRj){ try{ const _cn=stripDiac(name||'').trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc && (_cn===gc || _cn.startsWith(gc+' '))){ _isSahForRj=true; break; } } }catch(e){} }
   // 📚 НЕЙРОМУХАДДИС: что сказали критики по 150 трудам риджаля (turath, точные места джарх/тадиль)
   const rjBtn=document.createElement('button'); rjBtn.className='mini'; rjBtn.textContent='📚 Что сказали критики (по 150 трудам риджаля)';
   rjBtn.style.cssText='margin-top:11px;width:100%;border:1px solid #2e9b5b;color:#bff5d4;background:#173d30;padding:10px;border-radius:10px;font-size:13.5px;font-weight:700;cursor:pointer';
@@ -4919,6 +4922,11 @@ async function openNarratorRijal(name){
         rjOut.appendChild(c); });
       rjBtn.disabled=false; rjBtn.textContent='📚 Обновить поиск по трудам риджаля';
     }catch(e){ rjOut.innerHTML='<div class="hint">🔧 сервис недоступен — попробуй позже.</div>'; rjBtn.disabled=false; } };
+  if(_isSahForRj){   // ТРЕВОГА-фикс (владелец 04.07.2026): сподвижники (الصحابة عدول) НЕ подлежат джарх-ва-тадилю — поиск «критиков» по имени сахабы в трудах риджаля даёт левые совпадения (человек упомянут в чужой биографии), а не реальную оценку. Кнопку не показываем вовсе.
+    const sahNote=document.createElement('div'); sahNote.style.cssText='margin-top:11px;font-size:13px;line-height:1.6;border:1px solid #e8c35a;border-radius:10px;padding:10px;background:rgba(232,195,90,.08);color:var(--text)';
+    sahNote.innerHTML='⭐ <b>الصحابة عدول</b> — сподвижники надёжны по единогласному иджма учёных, критика (джарх-ва-тадиль) к ним не применяется. Поэтому раздел «Что сказали критики» здесь не показываем — это могло бы вводить в заблуждение случайными совпадениями имени в чужих биографиях.';
+    body.appendChild(sahNote);
+  } else {
   body.appendChild(rjBtn); body.appendChild(rjOut);
   const note=document.createElement('div'); note.style.cssText='margin-top:10px;font-size:13px;line-height:1.5';
   note.innerHTML='📜 По нашему правилу надёжность передатчика должна быть письменно засвидетельствована одним из <b>48 мутабарун</b>. <span class="goHad" style="color:var(--link);cursor:pointer;text-decoration:underline">список + труды риджаль</span>';
@@ -4932,6 +4940,7 @@ async function openNarratorRijal(name){
     _rijal.critics.slice(0,8).forEach(cr=>{ (cr.books||[]).slice(0,3).forEach(bk=>{ const a=document.createElement('div'); a.style.cssText='font-size:13px;color:var(--link);cursor:pointer;direction:rtl;text-align:right;padding:2px 0'; a.textContent='• '+bk.title+' — '+cr.name;
       a.onclick=()=>{ const t=String(bk.turath||''); if(/^\d+$/.test(t)){ m.style.display='none'; openBook(t); } else if(t.indexOf('author/')===0){ openLink('https://app.turath.io/'+t); } }; rj.appendChild(a); }); });
     body.appendChild(rj); }
+  }
 }
 async function maybeNarratorChip(q){ try{
   if(tab!=='hadith') return; const res=document.getElementById('res'); if(!res) return;
@@ -9151,7 +9160,17 @@ function _critArOrd(n){ let s=''; try{ s=stripDiac(fold(String(n||''))).replace(
   for(const k in _CRIT_AR_ORD_F){ if(s.indexOf(k)>=0||k.indexOf(s)>=0) return _CRIT_AR_ORD_F[k]; }   // вариант имени (с куньей/нисбой), ключи сложены как s
   return 9999; }   // неизвестный критик — в конец
 async function renderTestimoniesCard(mid, host){
-  if(mid==null) return; let list=null; try{ list=await _testimGet(+mid); }catch(e){}
+  if(mid==null) return;
+  // ТРЕВОГА-фикс (владелец 04.07.2026, скрин Ибн Умара: «оценки критиков несуществующие, все карточки не совпадают
+  // с сунна.ком»): сподвижники (الصحابة عدول) единогласно надёжны по иджма — формула туثيق/джарх/«N из 48 муʿтабаров»
+  // к ним НЕ применяется, даже если в базе случайно нашлись какие-то биографические цитаты. Общая точка входа —
+  // фиксит ЛЮБУЮ карточку равия, где вызывается этот рендер (поиск/цепь/чат/openNarratorRijal).
+  try{ if(await _isSahById(+mid)){
+    const sahNote=document.createElement('div'); sahNote.style.cssText='margin-top:13px;font-size:13px;line-height:1.6;border:1px solid #e8c35a;border-radius:12px;padding:11px 13px;background:rgba(232,195,90,.08);color:var(--text)';
+    sahNote.innerHTML='⭐ <b>الصحابة عدول</b> — сподвижники надёжны по единогласному иджма учёных, формула «туثиق/джарх/N из 48 муʿтабаров» к ним не применяется. Оценки джарх-ва-тадиль здесь намеренно не показываем.';
+    host.appendChild(sahNote); return;
+  } }catch(e){}
+  let list=null; try{ list=await _testimGet(+mid); }catch(e){}
   if(!list || !list.length) return;
   try{ await loadJarhGl(); }catch(e){}
   let _inSah=false; try{ const _fl=(await loadNarrFlags())[String(mid)]; _inSah=(_fl==='bm'); }catch(e){}
