@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v950</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v951</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v950';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v951';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1003,6 +1003,10 @@ function fold(s){ return s.replace(/[إأآٱ]/g,'ا').replace(/[ىئ]/g,'ي').r
   // M228: усманская орфография (ا пишется как و) — صلوة/زكوة/حيوة/مشكوة → صلاة/زكاة... (после ة→ه)
   .replace(/صلوه/g,'صلاه').replace(/زكوه/g,'زكاه').replace(/حيوه/g,'حياه').replace(/مشكوه/g,'مشكاه').replace(/غدوه/g,'غداه'); }
 function canon(s){ return fold(stripDiac(s)).replace(/\s+/g,' ').trim(); }
+// #442 (владелец, скрин: одинокая «P» в тексте хадиса Ибн Маджи №656): «другие печати» берут СЫРОЙ сниппет прямо
+// с бэкенда (/api/maktaba), только срезая HTML-теги — БЕЗ очистки от «P»+control-байт (маркер матн↔сноска издателя
+// из сырого Мактаба-дампа; наши curated-издания это уже режут в extract_clean41_v2.py, сюда та же логика не попадала).
+function _cleanMaktabaSnip(s){ s=String(s||''); const m=s.match(/P[\x00-\x1f]/); return (m?s.slice(0,m.index):s).trim(); }
 function foldOnly(s){ return fold(stripDiac(s||'')); }   // M309: убираем огласовки, но ПРОБЕЛЫ сохраняем (точный поиск с пробелами)
 function stem(w){ let x=w;
   x=x.replace(/^(وال|فال|بال|كال|ال|و|ف|ب|ك|ل|س)/,'');
@@ -3367,7 +3371,7 @@ async function _bookLoad(){
           const j=await bjson(BACKEND_URL+'/maktaba?q='+encodeURIComponent(qq)+'&page='+pgi+'&initData='+encodeURIComponent(INITDATA), 20000); const data=j.data||[];
           if(!data.length) break;
           for(const x of data){ if(String(x.book_id)!==String(_bookView.id)) continue;
-            const sn=String(x.snip||'').replace(/<[^>]*>/g,'');
+            const sn=_cleanMaktabaSnip(String(x.snip||'').replace(/<[^>]*>/g,''));
             if(markQ && !markQ.test(sn)) continue;
             found++;
             html+='<div class="bkFr" data-pid="'+x.page_id+'" style="cursor:pointer;border-bottom:1px solid var(--border);padding:6px 2px;direction:rtl;text-align:right"><span style="color:var(--link);font-size:12px">📄 т.'+esc(String(x.vol||''))+' стр.'+esc(String(x.page||''))+'</span><div style="font-size:13.5px;line-height:1.7;margin-top:2px">'+esc(sn.slice(0,150))+'…</div></div>';
@@ -3418,7 +3422,7 @@ async function _bookLoad(){
             const j=await bjson(BACKEND_URL+'/maktaba?q='+encodeURIComponent(term)+'&page='+pgi+'&initData='+encodeURIComponent(INITDATA), 20000); const data=j.data||[];
             if(!data.length) break;
             for(const x of data){ if(String(x.book_id)!==String(_bookView.id)) continue; if(seenPid.has(x.page_id)) continue;
-              const sn=String(x.snip||'').replace(/<[^>]*>/g,''); if(!sn) continue;
+              const sn=_cleanMaktabaSnip(String(x.snip||'').replace(/<[^>]*>/g,'')); if(!sn) continue;
               seenPid.add(x.page_id);
               excerpts.push({text:sn, loc:'т.'+(x.vol||'')+' стр.'+(x.page||''), pid:x.page_id});
               if(excerpts.length>=_RAG_CAP) break; }
@@ -3889,7 +3893,7 @@ async function maktabaByNum(seq, n){
         for(const x of data){
           const bid=String(x.book_id||''); if(!bid||seen.has(bid)) continue;
           if(missing.indexOf(bid)<0) continue;   // старый бэкенд вернёт общий поиск — берём ТОЛЬКО недостающие первоисточники
-          const sn=String(x.snip||'').replace(/<[^>]*>/g,'');
+          const sn=_cleanMaktabaSnip(String(x.snip||'').replace(/<[^>]*>/g,''));
           if(!mark.test(sn)) continue;
           seen.add(bid); add++; shown++; shownF++; if(SRC_OF[bid]) srcSet.add(SRC_OF[bid]);
           (topSlots.get(bid)||listTop).appendChild(row(x, sn, true));
@@ -3915,7 +3919,7 @@ async function maktabaByNum(seq, n){
           const bid=String(x.book_id||''); if(!bid||seen.has(bid)) continue;
           if(_scopeIds && _scopeIds.size && !_scopeIds.has(bid)) continue;   // 🎯 рамка уважается
           if(allow && !allow.has(bid)) continue;   // 🎯 выбранные чипы сборников уважаются
-          const sn=String(x.snip||'').replace(/<[^>]*>/g,'');
+          const sn=_cleanMaktabaSnip(String(x.snip||'').replace(/<[^>]*>/g,''));
           if(!mark.test(sn)) continue;   // «300» из сноски/даты/URL — не маркер хадиса
           seen.add(bid); add++; shown++;
           const cc=_bid2code[bid];
