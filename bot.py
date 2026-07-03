@@ -2046,7 +2046,14 @@ async def _audio_cut_dispatch(update, context):
     st = await msg.reply_text("✂️ Вырезаю фрагмент, расшифровываю и делаю конспект… (может занять минуту-другую)")
     src = cut_path = None
     try:
-        f = await fobj.get_file()
+        try:
+            f = await fobj.get_file()
+        except Exception as e:
+            if "too big" in str(e).lower() or "file is too big" in str(e).lower():
+                await st.edit_text("❌ Файл больше 20 МБ — обычный Bot API не даёт его скачать (ограничение Telegram, не наше). "
+                                    "Для длинных записей (часовой эфир) нужен локальный Bot API сервер — это отдельная задача на будущее, скажи если нужно поднять.")
+                return True
+            raise
         ext = ".ogg" if rep.voice else (".mp4" if rep.video else ".mp3")
         src = f"/tmp/cutsrc_{f.file_id}{ext}"
         await f.download_to_drive(src)
