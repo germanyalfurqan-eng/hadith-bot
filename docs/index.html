@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v953</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v954</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v953';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v954';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1006,12 +1006,17 @@ function canon(s){ return fold(stripDiac(s)).replace(/\s+/g,' ').trim(); }
 // #442 (владелец, скрин: одинокая «P» в тексте хадиса Ибн Маджи №656): «другие печати» берут СЫРОЙ сниппет прямо
 // с бэкенда (/api/maktaba), только срезая HTML-теги — БЕЗ очистки от «P»+control-байт (маркер матн↔сноска издателя
 // из сырого Мактаба-дампа; наши curated-издания это уже режут в extract_clean41_v2.py, сюда та же логика не попадала).
-function _cleanMaktabaSnip(s){ s=String(s||''); const m=s.match(/P[\x00-\x1f]/); return (m?s.slice(0,m.index):s).trim(); }
+function _cleanMaktabaSnip(s){ s=String(s||''); const m=s.match(/P[\x00-\x1f]/); s=(m?s.slice(0,m.index):s).trim();
+  // владелец 03.07 («тут че за скобки?»): сниппет — ОКНО вокруг найденного слова из полного текста книги, поэтому
+  // иногда начинается/заканчивается на ОДИНОКУЮ скобку без пары (пара осталась ЗА окном) — режем, выглядит мусором.
+  return s.replace(/^[)۔۞﴿）]\s*/,'').replace(/\s*[(﴾（]$/,''); }
 // владелец (03.07.2026): в аль-Фатихе басмаля (a=1) — спорный вопрос среди учёных, считаем её НЕ пронумерованным
 // аятом; «первый аят» — это «الحمد لله رب العالمين» (реально хранится под a=2). ТОЛЬКО отображаемый номер —
 // данные/ключи (избранное, share, аудио, тафсир) НЕ трогаем, чтобы не сломать уже сохранённое у людей.
 function _faDispA(s,a){ return (+s===1 && +a>=2) ? (+a-1) : +a; }   // 2..7 → «аят 1..6»; a=1 (басмаля) — вызывать не для неё
 function _faIsBasmalaHdr(s,a){ return +s===1 && +a===1; }   // true → номер вообще не показываем
+// владелец 03.07: «для поиска и ссылок» — набранный/расшаренный «1:N» должен найти РЕАЛЬНЫЙ аят N+1 (аль-Хамд=1..6→2..7)
+function _faQueryA(s,a){ return (+s===1 && +a>=1) ? (+a+1) : +a; }
 function foldOnly(s){ return fold(stripDiac(s||'')); }   // M309: убираем огласовки, но ПРОБЕЛЫ сохраняем (точный поиск с пробелами)
 function stem(w){ let x=w;
   x=x.replace(/^(وال|فال|بال|كال|ال|و|ف|ب|ك|ل|س)/,'');
@@ -3676,7 +3681,7 @@ function maktabaCard(x){
   head.title='Открыть книгу на этой странице'; head.onclick=()=>{ try{ openBook(bid, pid); }catch(e){} };
   card.appendChild(head);
   const ar=document.createElement('div'); ar.className='ar'; ar.style.fontSize='17px';
-  const snip=(x.snip||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim();
+  const snip=_cleanMaktabaSnip((x.snip||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim());
   ar.innerHTML=esc(snip); card.appendChild(ar);
   try{ enableArabusTap(ar); if(_arabusOn) ar.style.cursor='pointer'; }catch(e){}
   const open=document.createElement('button'); open.className='mini'; open.textContent='📖 Открыть в книге →'; open.style.cssText='margin-top:8px;border:1px solid var(--btn);color:var(--btn);background:transparent;padding:6px 12px;border-radius:9px;font-size:13px;font-weight:600';
@@ -4908,7 +4913,7 @@ async function openNarratorRijal(name){
       data.forEach(x=>{ const c=document.createElement('div'); c.className='card'; c.style.cssText='margin-bottom:7px';
         const loc=(x.vol?('т.'+x.vol+' '):'')+(x.page!=null?('стр. '+x.page):'');
         c.innerHTML='<div class="rjH" style="font-size:12.5px;color:var(--link);direction:rtl;text-align:right;font-weight:600;cursor:pointer">📖 '+esc(x.book_name||'')+(x.critic?(' <span style="color:#bff5d4">· '+esc(_critRu(x.critic))+'</span>'):'')+(loc?(' <span style="color:var(--hint);font-weight:400">· '+esc(loc)+'</span>'):'')+'</div>'
-          +'<div class="ar" style="font-size:16px;margin-top:5px;line-height:1.9">'+esc((x.snip||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim())+'</div>';
+          +'<div class="ar" style="font-size:16px;margin-top:5px;line-height:1.9">'+esc(_cleanMaktabaSnip((x.snip||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim()))+'</div>';
         c.querySelector('.rjH').onclick=()=>{ try{ openBook(x.book_id, x.page_id||x.page||1); }catch(e){} };
         try{ enableArabusTap(c.querySelector('.ar')); if(_arabusOn) c.querySelector('.ar').style.cursor='pointer'; }catch(e){}
         rjOut.appendChild(c); });
@@ -5801,8 +5806,9 @@ async function _qrLoad(){
     } else { ar.innerHTML=esc(_vtext)+_numMark; }
     try{ enableArabusTap(ar); if(_arabusOn) ar.style.cursor='pointer'; }catch(e){}
     blk.appendChild(ar);
-    const t=ru[s+':'+v.a]; if(t){ const rd=document.createElement('div'); rd.style.cssText='font-size:13.5px;color:var(--hint);margin-top:8px;padding-top:7px;border-top:1px solid rgba(255,255,255,.06);line-height:1.55'; rd.textContent=v.a+'. '+(ru2?'[Кулиев] ':'')+t; blk.appendChild(rd); }
-    if(ru2){ const t2=ru2[s+':'+v.a]; if(t2){ const rd2=document.createElement('div'); rd2.style.cssText='font-size:13.5px;color:#bcd0ff;margin-top:5px;line-height:1.55'; rd2.textContent=v.a+'. [Абу Адель] '+t2; blk.appendChild(rd2); } }
+    const _numPfx=(s===1)?'':(v.a+'. ');   // владелец 03.07: в читалке Фатихи номера не писать вообще (спорный вопрос — не берём ничью сторону)
+    const t=ru[s+':'+v.a]; if(t){ const rd=document.createElement('div'); rd.style.cssText='font-size:13.5px;color:var(--hint);margin-top:8px;padding-top:7px;border-top:1px solid rgba(255,255,255,.06);line-height:1.55'; rd.textContent=_numPfx+(ru2?'[Кулиев] ':'')+t; blk.appendChild(rd); }
+    if(ru2){ const t2=ru2[s+':'+v.a]; if(t2){ const rd2=document.createElement('div'); rd2.style.cssText='font-size:13.5px;color:#bcd0ff;margin-top:5px;line-height:1.55'; rd2.textContent=_numPfx+'[Абу Адель] '+t2; blk.appendChild(rd2); } }
     // M166+: ▶️ аудио (Alafasy) + 🛠 все инструменты на этот аят (перевод/объяснить/тафсир/Arabus/где ещё)
     const ctl=document.createElement('div'); ctl.style.cssText='margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
     const au=document.createElement('button'); au.className='qrPlay'; au.textContent='▶'; au.title='Слушать (дальше читает подряд) · ещё раз — пауза';
@@ -10456,6 +10462,10 @@ async function verifyNarr(card, place, text){
     h+='<div style="margin-top:8px;color:var(--hint);font-size:10.5px;direction:ltr">⛓ Цепь передатчиков (иснад) — справа налево, как в хадисе; стрелка ←عن← это форма передачи между двумя передатчиками:</div>';   // #186: русская легенда (что за арабские строки внизу)
     // владелец 02.07 (скрин «если слабое — рисуй красным, а не будто маджхуль ничего страшного»): чип цепи КРАСИТСЯ по вердикту нейротахкика
     let _NVD={}; try{ if(!window._narrVerdP) window._narrVerdP=fetch('./narr_verdicts.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); _NVD=await window._narrVerdP; }catch(e){}
+    // владелец 03.07 («каша все вместе, нумеруй звенья первый сподвижник и далее»): №1 = самый ранний (ближе к
+    // сподвижнику/Пророку ﷺ, последний элемент auth[]) → №auth.length = ближе к собирателю (auth[0]). Нейротахкик
+    // ниже ссылается на ЭТИ номера вместо повтора длинных имён — легче сопоставить звено цепи со «слабым звеном».
+    const _lnkNum={}; auth.forEach((r,i)=>{ const mid=r[2]?String(r[2]):null; if(mid) _lnkNum[mid]=auth.length-i; });
     h+='<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:5px;direction:rtl;line-height:1.9">';
     auth.forEach((r,i)=>{ const nm=r[1], mid=r[2]?String(r[2]):null; const ok=idMode?ourSet.has(mid):true;
       if(i>0 && forms[i-1]) h+='<span style="color:var(--hint);font-size:11px;font-family:\'Traditional Arabic\',serif">←'+esc(forms[i-1])+'←</span>';
@@ -10464,7 +10474,8 @@ async function verifyNarr(card, place, text){
       let _bc=idMode?(ok?'#3a8a5a':'#e0796a'):'#6c5ce7', _bg=idMode?(ok?'rgba(58,138,90,.12)':'rgba(224,121,106,.12)'):'rgba(108,92,231,.10)', _vtag='';
       if(_vd==='daif'||_vd==='matruk'){ _bc='#A32D2D'; _bg='rgba(226,75,74,.14)'; _vtag=' <span style="color:#ff8787;font-size:9.5px;direction:ltr;font-weight:700">'+(_vd==='matruk'?'матрук':'даиф')+'</span>'; }
       else if(_vd==='majhul'||_vd==='majhul_hal'){ _bc='#8a6a3a'; _bg='rgba(202,161,74,.10)'; _vtag=' <span style="color:#e6c578;font-size:9.5px;direction:ltr">маджхуль</span>'; }
-      h+='<span class="vChip"'+(mid?(' data-mid="'+esc(mid)+'"'):'')+' style="'+(mid?'cursor:pointer;':'')+'border:1px solid '+_bc+';border-radius:8px;padding:2px 7px;background:'+_bg+'"'+(mid?(' title="Карточка в Мактабе: shamela.ws/narrator/'+esc(mid)+'"'):'')+'><span style="font-family:\'Traditional Arabic\',serif">'+esc(nm)+'</span>'+(mid?(' <span style="color:var(--hint);font-size:10px;direction:ltr">'+(idMode?(ok?'✓':'✗'):'👤')+' id'+esc(mid)+' ↗</span>'):(idMode?' <span style="color:#e0796a;font-size:10px;direction:ltr" title="sunnah.com опознал, наш мост — ещё нет">؟ не опознан</span>':''))+_vtag+'</span>';
+      const _numTag=' <span style="color:var(--hint);font-size:9px;direction:ltr;opacity:.75" title="номер звена в цепи (①=ближе к сподвижнику/Пророку ﷺ)">№'+(auth.length-i)+'</span>';
+      h+='<span class="vChip"'+(mid?(' data-mid="'+esc(mid)+'"'):'')+' style="'+(mid?'cursor:pointer;':'')+'border:1px solid '+_bc+';border-radius:8px;padding:2px 7px;background:'+_bg+'"'+(mid?(' title="Карточка в Мактабе: shamela.ws/narrator/'+esc(mid)+'"'):'')+'><span style="font-family:\'Traditional Arabic\',serif">'+esc(nm)+'</span>'+(mid?(' <span style="color:var(--hint);font-size:10px;direction:ltr">'+(idMode?(ok?'✓':'✗'):'👤')+' id'+esc(mid)+' ↗</span>'):(idMode?' <span style="color:#e0796a;font-size:10px;direction:ltr" title="sunnah.com опознал, наш мост — ещё нет">؟ не опознан</span>':''))+_vtag+_numTag+'</span>';
     });
     h+='</div>';
     // #182: ЯВНЫЙ компактный СПИСОК передатчиков с id ВНИЗУ (повтор Бухари 415) — клик по id → карточка Мактабы
@@ -10538,9 +10549,11 @@ async function verifyNarr(card, place, text){
         const _lnks=(mid)=>{ if(mid==null) return ''; const sid=_m2s[String(mid)]; return ' <span style="font-size:9.5px;direction:ltr;color:var(--hint)">(🆔'+mid+' · <a href="https://shamela.ws/narrator/'+mid+'" target="_blank" style="color:#9fd3a8">Мактаба↗</a>'+(sid&&String(sid).match(/^\d+$/)?(' · <a href="https://sunnah.com/narrator/'+sid+'" target="_blank" style="color:#7fb0d8">sunnah↗</a>'):'')+')</span>'; };
         const _ruOf=(ar)=>{ try{ const r=arNameRu(ar,4); return r&&r!==ar?(' <span style="color:#9fb6c8;font-size:11px">≈ '+esc(r)+'</span>'):''; }catch(e){ return ''; } };
         // #454 (С50): x[0]===null → анонимный передатчик (رجل/امرأة) — не кликабелен, без id-ссылок (не выдаём мнимую карточку)
+        // владелец 03.07: «разделяй абзацы номерами передатчиков, а то каша» — ссылаемся на №звена из диаграммы цепи выше (_lnkNum), не только на имя.
+        const _numB=(mid)=>{ const n=mid?_lnkNum[String(mid)]:null; return n?('<b style="color:#bcd0ff;font-family:monospace">№'+n+'</b> '):''; };
         const _wkRows=(_nv.w||[]).map(x=>{ const nm=x[2]||('id'+x[0]); const isAnon=(x[0]==null);
-          return '<div style="margin-top:2px">• <span'+(isAnon?'':' class="nvWk" data-mid="'+x[0]+'"')+' dir="rtl" style="'+(isAnon?'color:#c8d0da;':'cursor:pointer;color:#ff8787;')+_AF+';font-size:13px;'+(isAnon?'':'text-decoration:underline dotted')+'">'+esc(nm)+'</span>'+(isAnon?'':_ruOf(nm))+' <span style="color:#ff9b9b">— '+esc(_WKRU[x[1]]||x[1])+'</span>'+(isAnon?'':('<span class="nvWho" data-mid="'+x[0]+'" data-neg="1"></span>'+_lnks(x[0])))+'</div>'; }).join('');
-        const _tdRows2=(_nv.td||[]).map(x=>{ const nm=x[2]||('id'+x[0]); const sev=x[1]>=4?'сильный тадлис':(x[1]===3?'частый тадлис':'тадлис (мартаба уточняется)'); return '<div style="margin-top:2px">• <span class="nvWk" data-mid="'+x[0]+'" dir="rtl" style="cursor:pointer;color:#ffcf8a;'+_AF+';font-size:13px;text-decoration:underline dotted">'+esc(nm)+'</span>'+_ruOf(nm)+' <span style="color:#e6c578">— мудаллис ('+sev+') передаёт'+(x[3]?(' от <span dir="rtl" style="'+_AF+'">'+esc(x[3])+'</span>'):'')+' через «عن» — слышание не доказано</span>'+_lnks(x[0])+'</div>'; }).join('');
+          return '<div style="margin-top:2px">• '+_numB(x[0])+'<span'+(isAnon?'':' class="nvWk" data-mid="'+x[0]+'"')+' dir="rtl" style="'+(isAnon?'color:#c8d0da;':'cursor:pointer;color:#ff8787;')+_AF+';font-size:13px;'+(isAnon?'':'text-decoration:underline dotted')+'">'+esc(nm)+'</span>'+(isAnon?'':_ruOf(nm))+' <span style="color:#ff9b9b">— '+esc(_WKRU[x[1]]||x[1])+'</span>'+(isAnon?'':('<span class="nvWho" data-mid="'+x[0]+'" data-neg="1"></span>'+_lnks(x[0])))+'</div>'; }).join('');
+        const _tdRows2=(_nv.td||[]).map(x=>{ const nm=x[2]||('id'+x[0]); const sev=x[1]>=4?'сильный тадлис':(x[1]===3?'частый тадлис':'тадлис (мартаба уточняется)'); return '<div style="margin-top:2px">• '+_numB(x[0])+'<span class="nvWk" data-mid="'+x[0]+'" dir="rtl" style="cursor:pointer;color:#ffcf8a;'+_AF+';font-size:13px;text-decoration:underline dotted">'+esc(nm)+'</span>'+_ruOf(nm)+' <span style="color:#e6c578">— мудаллис ('+sev+') передаёт'+(x[3]?(' от <span dir="rtl" style="'+_AF+'">'+esc(x[3])+'</span>'):'')+' через «عن» — слышание не доказано</span>'+_lnks(x[0])+'</div>'; }).join('');
         _nvHtml='<div class="nvBox" style="margin-top:8px;border:1px solid #3a3080;border-radius:9px;padding:7px 10px;background:rgba(108,92,231,.07)"><span style="font-size:12.5px;font-weight:700;color:'+_d[2]+'">🤖 Нейротахкик <span style="font-size:9px;color:#b9a7ff;border:1px solid #6c5ce7;border-radius:5px;padding:0 5px;vertical-align:middle">БЕТА</span>: '+_d[0]+' '+_d[1]+'</span>'
           +(_wkRows?('<div style="font-size:11.5px;margin-top:4px"><b style="color:#ff9b9b;font-size:11px">Слабые звенья:</b>'+_wkRows+'</div>'):'')
           +(_tdRows2?('<div style="font-size:11.5px;margin-top:4px"><b style="color:#e6c578;font-size:11px">Тадлис-риск:</b>'+_tdRows2+'</div>'):'')
@@ -10597,7 +10610,7 @@ async function verifyNarr(card, place, text){
             // карточка-звено
             out+='<div style="border:1px solid '+vr[0]+'33;border-left:3px solid '+vr[0]+';border-radius:9px;padding:6px 10px;background:rgba(255,255,255,.015)">'
               +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
-                +'<span class="nvCr" data-cr="'+esc(nm)+'" dir="rtl" style="'+_AF+';font-size:14px;color:#e8eef4;cursor:pointer">'+esc(nm)+'</span>'
+                +'<span dir="rtl" style="display:flex;align-items:center;gap:6px"><b style="color:var(--hint);font-size:10px;font-family:monospace" title="номер звена в цепи">№'+(auth.length-i)+'</b><span class="nvCr" data-cr="'+esc(nm)+'" dir="rtl" style="'+_AF+';font-size:14px;color:#e8eef4;cursor:pointer">'+esc(nm)+'</span></span>'
                 +'<span style="flex:none;font-size:10.5px;font-weight:700;color:'+vr[0]+';border:1px solid '+vr[0]+'55;border-radius:10px;padding:1px 8px;white-space:nowrap">'+vr[1].split(' — ')[0]+'</span>'
               +'</div>'
               +((posN||negN)?('<div class="nvCritTg" style="cursor:pointer;font-size:10px;color:#8fa0b0;margin-top:3px">▸ свидетели: '+(posN?('<span style="color:#9fd3a8">'+posN+'✔</span>'):'')+(posN&&negN?' · ':'')+(negN?('<span style="color:#ff9b9b">'+negN+'✖</span>'):'')+'</div>'+critHtml):'<div style="font-size:10px;color:var(--hint);margin-top:3px">свидетельств в своде нет</div>');
