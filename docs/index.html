@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v951</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v952</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v951';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v952';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1492,7 +1492,20 @@ async function loadExtra(code){ if(_local[code])return _local[code]; const e=EXT
 async function loadQuran(){ if(quran)return quran;
   try{ if(!(typeof modes!=='undefined'&&(modes.narr||modes.chain))) setStatus('Загружаю Коран…'); }catch(e){}   // в режимах равиев фоновая загрузка молчит («зачем при поиске передатчика грузить Коран»)
   let j; try{ j=await cachedFetchJSON(QURAN_URL, 60000); }catch(e){ try{ j=await cachedFetchJSON(QURAN_URL, 60000); }catch(e2){ try{ setStatus('Не удалось загрузить Коран — проверь сеть'); }catch(_){} throw e2; } }   // A-135: Cache Storage (повтор мгновенно) + 60с + 2 попытки (1.5МБ рвался за 30с на медленной мобиле)
-  quran=j.map(v=>{ const raw=(v.text||'').replace(/﻿/g,'').replace(/\s+/g,' ').trim();
+  const _qRaws=j.map(v=>(v.text||'').replace(/﻿/g,'').replace(/\s+/g,' ').trim());
+  // владелец (03.07.2026, срочно): «бисмилля не часть аятов!!!» — в исходнике (Tanzil Uthmani) басмаля вклеена
+  // в текст 1-го аята КАЖДОЙ суры (кроме ат-Тауба №9, где её нет) — расходится со «готовым переводом» (Кулиев её
+  // туда не кладёт) и вводит в заблуждение, что это часть аята. Аль-Фатиха (№1) — ИСКЛЮЧЕНИЕ: там басмаля и есть
+  // настоящий 1-й аят (иджма учёных), не трогаем. Эталон басмали берём ИЗ ЖЕ ДАННЫХ (сура 1 аят 1), без ретайпа
+  // арабского текста руками — надёжнее против опечаток/иных литер (ٱ vs ا).
+  const _qB1=_qRaws[0];
+  const _qI95=j.findIndex(v=>v.s===95&&v.a===1);
+  const _qB2=_qI95>=0?_qRaws[_qI95].slice(0,_qB1.length+1):'';   // орфографич. вариант с шаддой (сура 95/97 в этом издании)
+  quran=j.map((v,i)=>{ let raw=_qRaws[i];
+    if(v.s!==1 && v.s!==9){
+      if(raw.slice(0,_qB1.length)===_qB1) raw=raw.slice(_qB1.length).trim();
+      else if(_qB2 && raw.slice(0,_qB2.length)===_qB2) raw=raw.slice(_qB2.length).trim();
+    }
     return {s:v.s,a:v.a,text:raw,norm:''}; }); return quran; }
 let quranRu=null;
 async function loadQuranRu(){
