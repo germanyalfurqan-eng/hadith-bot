@@ -1664,11 +1664,15 @@ def _chunk_by_paras(text, maxlen=1200):
         chunks.append(cur)
     return chunks
 
-def translate_matn(arabic, src="", owner=False, force=False):
+def translate_matn(arabic, src="", owner=False, force=False, model_out=None):
     """Перевод матна на русский с накопительным кэшем (оригинал+перевод+источник).
     force=True — переперевести заново (минуя кэш). Длинные тексты переводим ПО АБЗАЦАМ, иначе free-модель
     часто возвращает арабский оригинал вместо перевода. Битый арабский кэш игнорируем и переводим заново.
-    M177: для тафсира (src.startswith('tafsir')) пытаемся структурировать ИИ по темам перед переводом."""
+    M177: для тафсира (src.startswith('tafsir')) пытаемся структурировать ИИ по темам перед переводом.
+    model_out: если передан список — тревога-фикс (владелец, 04.07.2026): раньше ask_ai() отвечал бесплатной
+    моделью, но тег «⚡ Модель» вырезался ЗДЕСЬ и терялся НАВСЕГДА — вызывающий код (API-эндпоинт перевода)
+    не мог узнать, кто реально ответил, и ПО УМОЛЧАНИЮ рапортовал «DeepSeek, ключ потрачен» даже когда
+    реально отвечал бесплатный Groq/Gemini. Теперь реальное имя модели кладём сюда (последний успешный вызов)."""
     global _trans_dirty
     if not arabic or len(arabic) < 5:
         return ""
@@ -1698,6 +1702,10 @@ def translate_matn(arabic, src="", owner=False, force=False):
         r = ask_ai("Переведи на русский:\n" + t, sysmsg, owner=owner, max_tokens=4000)
         if not r or r.startswith("❌") or r.startswith("⏸"):
             return None
+        if model_out is not None:
+            _mt = _neuroModelTag(r)
+            if _mt:
+                model_out.append(_mt)
         return re.sub(r"\n*⚡ \*Модель:.*$", "", r, flags=re.S).strip()
     if len(arabic) > 1400:
         parts = []
@@ -6393,14 +6401,15 @@ async def _api_serve(application=None):
                 await _notify_usage(user, "перевод", False, source, num, None, frag=(stored.get('ru') or text))   # ♻️ из базы, ключ НЕ потрачен
                 return _cors(web.json_response({'translation': stored['ru'], 'cached': True}))
             # 2) нет в базе (или force) → переводим заново и копим (перезаписываем оборванный)
-            tr = await loop.run_in_executor(None, translate_matn, text, source, True, force)   # P0-2: source ('jarh_*'/'tafsir_*') → джарх-аварный промт в translate_matn
+            _model_used = []   # тревога 04.07.2026: узнать РЕАЛЬНУЮ модель, а не рапортовать «DeepSeek» по умолчанию
+            tr = await loop.run_in_executor(None, lambda: translate_matn(text, source, True, force, _model_used))   # P0-2: source ('jarh_*'/'tafsir_*') → джарх-аварный промт в translate_matn
             tr = re.sub(r'\s*⚡.*$', '', (tr or ''), flags=re.S).strip()
             saved = None
             if tr and source and num not in (None, ''):
                 saved = await loop.run_in_executor(None, coll_add_translation, source, num, text, tr)
             if tr:   # #348: не списывать ключ и не слать «потрачено», если перевод реально не удался (tr пустой)
                 await loop.run_in_executor(None, usage_log, user, "перевод", True, len(text), source, str(num or ""))
-                await _notify_usage(user, "перевод", True, source, num, saved, frag=(tr or text))
+                await _notify_usage(user, "перевод", True, source, num, saved, frag=(tr or text), model=(_model_used[-1] if _model_used else ""))
             return _cors(web.json_response({'translation': tr, 'cached': False}))
         except Exception as e:
             return _cors(web.json_response({'translation': '', 'error': str(e)}))
