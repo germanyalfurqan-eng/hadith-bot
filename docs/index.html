@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v941</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v942</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v941';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v942';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4893,7 +4893,10 @@ async function openNarratorRijal(name){
   body.appendChild(rjBtn); body.appendChild(rjOut);
   const note=document.createElement('div'); note.style.cssText='margin-top:10px;font-size:13px;line-height:1.5';
   note.innerHTML='📜 По нашему правилу надёжность передатчика должна быть письменно засвидетельствована одним из <b>48 мутабарун</b>. <span class="goHad" style="color:var(--link);cursor:pointer;text-decoration:underline">список + труды риджаль</span>';
-  note.querySelector('.goHad').onclick=()=>{ m.style.display='none'; openHadithScience(); }; body.appendChild(note);
+  // владелец («перенёс на список книг, назад вернуться некуда»): раньше карточка передатчика ПРЯТАЛАСЬ (display:none)
+  // перед открытием «Наука хадиса» — при закрытии того экрана некуда было возвращаться. Теперь карточка НЕ прячется,
+  // просто временно перекрывается (openHadithScience сам ставит z-index выше) — закрыл «✕» и снова видна карточка равия.
+  note.querySelector('.goHad').onclick=()=>{ openHadithScience(true); }; body.appendChild(note);
   try{ if(!_rijal) await fetch('./hadith/rijal_books.json').then(r=>r.json()).then(d=>_rijal=d).catch(()=>{}); }catch(e){}
   if(_rijal && _rijal.critics){ const rj=document.createElement('div'); rj.style.cssText='margin-top:10px';
     rj.innerHTML='<div style="font-weight:700;margin:6px 0">📚 Где читать (труды риджаль):</div>';
@@ -4966,14 +4969,16 @@ function ensureStructureBtn(){ const res=document.getElementById('res'); if(!res
 }
 // === 📜 Наука хадиса (мусталях): правила достоверности + 48 мутабарун + труды риджаль ===
 let _hadRule=null, _rijal=null;
-async function openHadithScience(){
+async function openHadithScience(_overNarr){
   let m=document.getElementById('hadModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='hadModal';
     m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 12px;padding:14px 16px 11px;border-bottom:1px solid var(--border)"><b style="font-size:15px">📜 Наука хадиса · мусталях</b><button class="mini" id="hadClose" style="flex:none">закрыть ✕</button></div><div id="hadBody" style="max-height:74vh;overflow:auto"></div></div>';
     document.body.appendChild(m); m.querySelector('#hadClose').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
   }
-  m.style.zIndex='10002'; m.style.display='flex';
+  // владелец («перенёс на список книг, назад некуда») — если открыт ИЗ карточки передатчика (narrModal, z-index 10003),
+  // становимся ВЫШЕ нужно, а не прячем ту карточку: закрыл этот экран — карточка равия снова видна как была.
+  m.style.zIndex=_overNarr?'10004':'10002'; m.style.display='flex';
   const body=m.querySelector('#hadBody'); body.innerHTML='<div class="hint">Загружаю…</div>';
   try{ if(!_hadRule) _hadRule=await (await fetch('./hadith/rule_01_tawthiq_critics.json?'+Date.now())).json(); }catch(e){ body.innerHTML='<div class="hint">Не удалось загрузить правила.</div>'; return; }
   try{ if(!_rijal) _rijal=await (await fetch('./hadith/rijal_books.json?'+Date.now())).json(); }catch(e){}
@@ -6519,8 +6524,21 @@ function _keepNarr(nm){ const t=(nm||'').trim();
 // Подсветить передатчиков ПРЯМО в тексте иснада (клик по имени → биография). Безопасно: ходим по текстовым узлам.
 function highlightNarratorsInDiv(ad, names, onClick, idMap){
   if(ad.dataset.narrOn) return; ad.dataset.narrOn='1';
+  // #скрин владельца (Тирмизи 741): «علي» (Али, id19070) подсвечивался и в «عَلَيْهِ»/«عَلَى» — два разных бага:
+  // ① «عَلَيْهِ» — регекс продолжал матчить внутрь более длинного слова (нет границы конца слова) → добавлен ⛔ concat-lookahead,
+  //   как уже стоит в highlightRelationalInDiv (#REL_FORMS) для этого же класса бага, но тут его не было.
+  // ② «عَلَى» (голый предлог «на/над») — это НЕ продолжение слова, а ОТДЕЛЬНОЕ слово, канонически СОВПАДАЮЩЕЕ с «علي»
+  //   (ى→ي в fold()) — тот самый частый арабский омограф Али/«на». Текст у нас с огласовками: предлог всегда фатха
+  //   под ل («عَلَى»), имя Али — никогда (كسرة/ضمة/تنوين: عَلِيّ/عَلِيٍّ/عَلِيٌّ). Для голого كандидата «علي» (без بن/كунья —
+  //   макс. риск омографа) требуем НЕ-фатху под средней буквой.
   const pats=names.map(nm=>{ const c=canon(nm); if(!c) return null;
-    try{ return {nm, re:new RegExp([...c].map(ch=> ch===' ' ? '[\\s'+DIAC+']+' : letterClass(ch)+'['+DIAC+']*').join(''))}; }catch(e){ return null; } }).filter(Boolean);
+    try{
+      let body=[...c].map((ch,i)=> ch===' ' ? '[\\s'+DIAC+']+' : (
+        // «علي» голый (без بن/куньи) — 2-я буква ل НЕ должна нести фатху (иначе это предлог «على»,омограф после fold)
+        (c==='علي' && i===1) ? 'ل(?!\\u064E)['+DIAC+']*' : letterClass(ch)+'['+DIAC+']*'
+      )).join('');
+      return {nm, re:new RegExp(body+'(?!['+DIAC+']*[ء-ي])')};
+    }catch(e){ return null; } }).filter(Boolean);
   const walker=document.createTreeWalker(ad, NodeFilter.SHOW_TEXT, null); const nodes=[];
   while(walker.nextNode()) nodes.push(walker.currentNode);
   nodes.forEach(node=>{ const txt=node.nodeValue; const ms=[];
@@ -9389,7 +9407,15 @@ async function showNarratorCardLocal(name, host){
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px">'
       +'<span class="shamNarr" data-id="'+c[0]+'" dir="rtl" style="cursor:pointer;font-size:12px;color:#f0d9a8;border:1px solid #5e4d23;background:rgba(201,138,42,.10);border-radius:9px;padding:5px 11px">👤 موسوعة الرواة</span>'
     +'</div>';
-  try{ const bio=[]; bio.push((_ruNm||'Этот равий')+' — передатчик хадисов'+(c[2]?(', кунья '+c[2]):'')+(c[3]?(', нисба '+c[3]):'')+(c[4]?('. Умер ~'+c[4]+' г.х.'):'.')); if(c[7]) bio.push('Табака: '+c[7]+'.'); if(c[5]) bio.push('Оценка Ибн Хаджара: «'+c[5]+'».'); if(c[6]) bio.push('Оценка аз-Захаби: «'+c[6]+'».'); h+='<div style="font-size:15.5px;color:var(--text);margin-top:11px;line-height:1.9;border-top:1px dashed var(--border);padding-top:8px;font-family:var(--arFont,\'Noto Naskh Arabic\'),\'Amiri\',-apple-system,system-ui,\'Segoe UI\',sans-serif">📜 '+esc(bio.join(' '))+'</div>'; }catch(e){}
+  // владелец («шрифты разные, некрасиво»): биография была ОДНИМ div на смешанный рус+араб текст с ОДНИМ font-family
+  // на весь блок — браузер сам подбирал шрифт под кириллицу внутри (то Amiri, то системный, по вкусу браузера).
+  // Теперь арабские вставки (кунья/нисба/цитаты оценок) — в СВОЁМ span с _AF, остальной (русский) текст — в UI-шрифте (наследует body).
+  try{ const _arSpan=(s)=>'<span dir="rtl" style="'+_AF+'">'+esc(s)+'</span>';
+    const bio=[]; bio.push(esc(_ruNm||'Этот равий')+' — передатчик хадисов'+(c[2]?(', кунья '+_arSpan(c[2])):'')+(c[3]?(', нисба '+_arSpan(c[3])):'')+(c[4]?('. Умер ~'+esc(String(c[4]))+' г.х.'):'.'));
+    if(c[7]) bio.push('Табака: '+_arSpan(c[7])+'.');
+    if(c[5]) bio.push('Оценка Ибн Хаджара: «'+_arSpan(c[5])+'».');
+    if(c[6]) bio.push('Оценка аз-Захаби: «'+_arSpan(c[6])+'».');
+    h+='<div style="font-size:15.5px;color:var(--text);margin-top:11px;line-height:1.9;border-top:1px dashed var(--border);padding-top:8px;font-family:var(--uiFont,-apple-system,\'Segoe UI\',Roboto,sans-serif)">📜 '+bio.join(' ')+'</div>'; }catch(e){}
   h+='</div>';
   host.insertAdjacentHTML('afterbegin', h);
   // 🧭 СВОД КРИТИКОВ + 🤖 НЕЙРО-МУХАККИК + ссылки-проверки — СРАЗУ под карточкой (заявка владельца: «нейромухакик где вывод? где ссылки на оценки на страницы?»)
@@ -9414,15 +9440,9 @@ async function showNarratorCardLocal(name, host){
   // M367 (заявка по скрину: «где тут перевод на русский и где огласовки»): инструменты у САМОЙ шапки биографии
   try{
     const hdr=host.firstElementChild;
-    const sum=[c[1], c[2]?('الكنية: '+c[2]):'', c[3]?('النسب: '+c[3]):'', c[7]?('الطبقة: '+c[7]):'', c[5]?('قال ابن حجر: '+c[5]):'', c[6]?('قال الذهبي: '+c[6]):''].filter(Boolean).join('. ');
-    const tl=document.createElement('div'); tl.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;direction:ltr';
-    const tro=document.createElement('div'); tro.className='tr-out'; tro.style.cssText='display:none;margin-top:6px;direction:ltr;text-align:left';
-    const mk=(t,fn)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=t; b.style.cssText='font-size:12px;padding:4px 9px'; b.onclick=fn; return b; };
-    // #252 (владелец «зачем тут кнопка перевести — просто с переводом делай»): кнопка «Перевод (ИИ)» убрана — рус.перевод (биография + ≈транслит + ≈ранги) уже показан ИНЛАЙН в карточке.
-    // #492 (владелец: «арабус тут вообще не в тему, почему именно так»): голая надпись «Arabus» без пояснения выглядела
-    // случайной кнопкой без связи с текстом биографии выше. Подпись теперь объясняет ДЕЙСТВИЕ (разбор слов текста).
-    tl.appendChild(mk('📕 Разбор слов (Arabus)', ()=>{ _arabusOn=true; try{ loadRoots(); loadArabusLocal(); enableArabusTap(hdr); }catch(e){} hdr.style.cursor='pointer'; toast('📕 Arabus включён — тапай любое арабское слово в тексте выше'); }));
-    hdr.appendChild(tl); hdr.appendChild(tro);
+    // #252: кнопка «Перевод (ИИ)» убрана — рус.перевод (биография + ≈транслит + ≈ранги) уже показан ИНЛАЙН в карточке.
+    // #492/повтор (владелец, «арабус тут зачем, сказал сто раз»): кнопка Arabus в карточке РАВИЯ убрана насовсем —
+    // не по месту здесь (это инструмент читалки книг/хадисов, к биографии передатчика отношения не имеет).
     hdr.querySelectorAll('.nWiki').forEach(b=>b.onclick=()=>{ try{ openLink(b.dataset.u); }catch(e){} });   // M385 ⑤
     hdr.querySelectorAll('.nWikiAv').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); try{ openLink(b.dataset.u); }catch(_e){} });   // #472: значок на кружке аватара
     hdr.querySelectorAll('.nWikiS').forEach(b=>b.onclick=()=>{ try{ const ru=b.dataset.ru==='1'; openLink('https://'+(ru?'ru':'ar')+'.wikipedia.org/w/index.php?search='+b.dataset.q); }catch(e){} });   // С38: Википедия-поиск (рус.имя→ru-вики, иначе ar-вики)
