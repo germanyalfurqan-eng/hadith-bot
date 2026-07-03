@@ -1986,7 +1986,7 @@ async def _nisht_dispatch(update, context):
 CLAUDE_INBOX_FILE = "claude_inbox.json"
 CLAUDE_REPLIES_FILE = "claude_replies.json"
 OWNER_ID2 = int(os.environ.get("OWNER_ID2", "0") or "0")   # второй личный аккаунт владельца — задать в Railway env, когда узнаем id
-JAMAAT_RU_CHAT_ID = int(os.environ.get("JAMAAT_RU_CHAT_ID", "0") or "0")   # id группы JAMAAT MUSLIMIN — узнать командой «ид чата» в самой группе, задать в Railway env
+JAMAAT_RU_CHAT_ID = int(os.environ.get("JAMAAT_RU_CHAT_ID", "-1001925828112") or "-1001925828112")   # id группы JAMAAT MUSLIMIN — подтверждён владельцем 03.07.2026 (из журнала LOG_CHAT), Railway env может переопределить
 
 def _claude_bridge_owner(update):
     uid = update.effective_user.id if update.effective_user else 0
