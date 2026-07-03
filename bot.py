@@ -1883,13 +1883,13 @@ async def _nisht_extract_one(msg):
 def _nisht_strip_model_tag(ans):
     return re.split(r'\n\n[⚡💎🆓🧠]\s*\*?Модель', ans or "")[0].strip()
 
-async def _nisht_finish(update, context, messages, comment):
+async def _nisht_finish(reply_msg, chat_id, context, messages, comment):
     texts = []
     for m in messages:
         tx, src = await _nisht_extract_one(m)
         if tx: texts.append(f"[{src}]\n{tx}")
     if not texts:
-        await update.message.reply_text("❌ Не смог извлечь содержимое — ни текста, ни аудио/видео, ни ссылки не нашёл.")
+        await reply_msg.reply_text("❌ Не смог извлечь содержимое — ни текста, ни аудио/видео, ни ссылки не нашёл.")
         return
     raw = "\n\n---\n\n".join(texts)[:20000]
     sysp = ("Ты — редактор исламского Telegram-канала. Из присланного материала (текст/расшифровка аудио или видео/статья по ссылке) "
@@ -1900,19 +1900,54 @@ async def _nisht_finish(update, context, messages, comment):
     if comment: pr += f"\n\nПояснение автора (что выделить/учесть): {comment}"
     ans = ask_ai(pr, sysp, owner=True, max_tokens=1200)
     if not ans:
-        await update.message.reply_text("❌ ИИ не смог обработать (все модели сейчас недоступны). Попробуй позже.")
+        await reply_msg.reply_text("❌ ИИ не смог обработать (все модели сейчас недоступны). Попробуй позже.")
         return
     post = "💎 " + _nisht_strip_model_tag(ans) + "\n\n_🤖 пост подготовлен ботом Muslimoon — первое время проверяется вручную_"
     try:
-        await context.bot.send_message(update.effective_chat.id, post, parse_mode="Markdown")
+        await context.bot.send_message(chat_id, post, parse_mode="Markdown")
     except Exception:
-        await context.bot.send_message(update.effective_chat.id, re.sub(r'[*_`]', '', post))
+        await context.bot.send_message(chat_id, re.sub(r'[*_`]', '', post))
     try:
         arr = _data_get("nishtyaki.json", []) or []
-        arr.append({"id": len(arr) + 1, "d": _now_msk(), "raw": raw[:4000], "post": ans, "chat": update.effective_chat.id, "comment": comment})
+        arr.append({"id": len(arr) + 1, "d": _now_msk(), "raw": raw[:4000], "post": ans, "chat": chat_id, "comment": comment})
         _data_put("nishtyaki.json", arr, f"ништячок #{len(arr)}")
     except Exception:
         pass
+
+async def _nisht_dispatch(update, context):
+    """Общий разбор команды «ништячок» — работает и для обычных сообщений (update.message: группы/лички),
+    и для ПРЯМЫХ ПОСТОВ В КАНАЛЕ (update.channel_post) — там update.message == None, обычный handle() их не видит вообще.
+    Возвращает True, если сообщение было ништячок-командой (или частью буфера) и обработано."""
+    msg = update.effective_message
+    if not msg:
+        return False
+    chat_id = update.effective_chat.id
+    text = (msg.text or msg.caption or "").strip()
+    _nm = re.match(r'^ништячок\b\s*(.*)$', text, re.I | re.S) if text else None
+    if _nm:
+        _nrest = _nm.group(1).strip().lower()
+        if _nrest in ("начало", "старт", "start"):
+            _NISHT_BUF[chat_id] = []
+            await msg.reply_text("🟢 Собираю ништячок — присылай/пересылай сообщения по одному, в конце напиши «ништячок конец».")
+            return True
+        if _nrest in ("конец", "стоп", "финиш", "end", "готово"):
+            _items = _NISHT_BUF.pop(chat_id, [])
+            if not _items:
+                await msg.reply_text("⚠️ Нечего собирать — не было «ништячок начало» или сообщений после него.")
+                return True
+            await msg.reply_text(f"🔍 Собрал {len(_items)} сообщений — извлекаю пользу (ИИ)…")
+            await _nisht_finish(msg, chat_id, context, _items, "")
+            return True
+        if msg.reply_to_message:
+            await msg.reply_text("🔍 Извлекаю пользу (ништячок)…")
+            await _nisht_finish(msg, chat_id, context, [msg.reply_to_message], _nrest)
+            return True
+        await msg.reply_text("ℹ️ Ответь (reply) командой «ништячок» на сообщение с пользой (можно + комментарий-пояснение), либо «ништячок начало» → пришли несколько сообщений → «ништячок конец».")
+        return True
+    if chat_id in _NISHT_BUF and (msg.text or msg.caption or msg.audio or msg.voice or msg.video or msg.photo or msg.document or msg.forward_origin):
+        _NISHT_BUF[chat_id].append(msg)
+        return True
+    return False
 
 # ===== 🧩 RAG-АССИСТЕНТ: оперативный поиск по ядру (41 первоисточник + 81 риджаль) на HF Space =====
 # Команды (владелец в ЛС + чат @jamaat_ru): «раг <запрос>» (по всему ядру) ·
@@ -2302,6 +2337,14 @@ def _rag_access_cmd(text):
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
+        # ⭐ НИШТЯЧОК прямо В КАНАЛЕ (Muslim Live и т.п.): это update.channel_post, а не update.message —
+        # весь остальной handle() такие апдейты не видит вообще (падает на этой же строке). Постить в канал
+        # может только админ, поэтому отдельная owner-проверка тут не нужна — сам факт поста уже доверенный.
+        if update.channel_post:
+            try:
+                await _nisht_dispatch(update, context)
+            except Exception:
+                pass
         return
 
     text = update.message.text or ""
@@ -3197,31 +3240,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_forward = update.message.forward_origin is not None
 
         # ============ НИШТЯЧОК (владелец 03.07.2026, С52): вытащить пользу из текста/видео/ссылки/аудио и оформить пост ============
-        # «ништячок» (reply) → извлечь пользу из ОДНОГО сообщения. «ништячок <комментарий>» → + пояснение для ИИ.
-        # «ништячок начало» / «ништячок конец» → собрать НЕСКОЛЬКО сообщений подряд (без reply) и обработать все разом.
-        _nm = re.match(r'^ништячок\b\s*(.*)$', (text or '').strip(), re.I | re.S) if text else None
-        if _nm:
-            _nrest = _nm.group(1).strip().lower()
-            if _nrest in ("начало", "старт", "start"):
-                _NISHT_BUF[chat_id] = []
-                await update.message.reply_text("🟢 Собираю ништячок — присылай/пересылай сообщения по одному, в конце напиши «ништячок конец».")
-                return
-            if _nrest in ("конец", "стоп", "финиш", "end", "готово"):
-                _items = _NISHT_BUF.pop(chat_id, [])
-                if not _items:
-                    await update.message.reply_text("⚠️ Нечего собирать — не было «ништячок начало» или сообщений после него.")
-                    return
-                await update.message.reply_text(f"🔍 Собрал {len(_items)} сообщений — извлекаю пользу (ИИ)…")
-                await _nisht_finish(update, context, _items, "")
-                return
-            if update.message.reply_to_message:
-                await update.message.reply_text("🔍 Извлекаю пользу (ништячок)…")
-                await _nisht_finish(update, context, [update.message.reply_to_message], _nrest)
-                return
-            await update.message.reply_text("ℹ️ Ответь (reply) командой «ништячок» на сообщение с пользой (можно + комментарий-пояснение), либо «ништячок начало» → пришли несколько сообщений → «ништячок конец».")
-            return
-        if chat_id in _NISHT_BUF and (has_media or is_forward or (text or "").strip()):
-            _NISHT_BUF[chat_id].append(update.message)
+        if await _nisht_dispatch(update, context):
             return
 
         if text and parse_registry_command(text) == "add_media":
