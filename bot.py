@@ -3580,12 +3580,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("🔎 Ищу в базе передатчиков...")
                 result = await narr_card_reply_text(_nq[0], _nq[1])
                 await send_long(update, result)
-                await log_bot_ai(update, context)
+                await log_bot_ai(update, context, ai_text="structured")
                 return
             await update.message.reply_text("🤔 Думаю...")
             result = ask_ai_with_memory(clean)
             await send_long(update, result)
-            await log_bot_ai(update, context)
+            await log_bot_ai(update, context, ai_text=result)
             return
 
     # ============ G9: доступ к боту (Бухари 333, мухэймин, искать…) — по умолчанию ВСЕМ ============
@@ -4098,7 +4098,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("🤔 Думаю...")
                 result = ask_ai_with_memory(text)
                 await send_long(update, result)
-                await log_bot_ai(update, context)
+                await log_bot_ai(update, context, ai_text=result)
                 return
 
         # В чате/канале: отвечаем ТОЛЬКО если есть "ботяра" или ответ боту
@@ -4117,7 +4117,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("🤔 Думаю...")
                 result = ask_ai_with_memory(clean)
                 await send_long(update, result)
-                await log_bot_ai(update, context)
+                await log_bot_ai(update, context, ai_text=result)
                 return
 
         # AI на "ботяра" в группах (#284: при выключенном групповом ИИ в группе — НЕ запускаем ботяру; в личке работает)
@@ -4136,12 +4136,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("🔎 Ищу в базе передатчиков...")
                 result = await narr_card_reply_text(_nq[0], _nq[1])
                 await send_long(update, result)
-                await log_bot_ai(update, context)
+                await log_bot_ai(update, context, ai_text="structured")
                 return
             await update.message.reply_text("🤔 Думаю...")
             result = ask_ai_with_memory(clean)
             await send_long(update, result)
-            await log_bot_ai(update, context)
+            await log_bot_ai(update, context, ai_text=result)
             return
 
         # Перевод
@@ -5142,9 +5142,12 @@ def usage_log(user, feat, fresh, length=0, src="", num=""):
     u["recent"] = u["recent"][:300]
     _journal_save(f"журнал: {feat} {name} ({'свежий' if fresh else 'из базы'})")
 
-async def log_bot_ai(update, context, feat="ботяра"):
+async def log_bot_ai(update, context, feat="ботяра", ai_text=""):
     """Расход ИИ из самого бота (ботяра/группы) → в journal.json + зеркало в LOG-канал.
-    Раньше это НЕ логировалось → трата в группах была не видна (ЗАМЕЧАНИЯ #13)."""
+    Раньше это НЕ логировалось → трата в группах была не видна (ЗАМЕЧАНИЯ #13).
+    ai_text: ТРЕВОГА-фикс (владелец, 04.07.2026) — раньше ЖЁСТКО писали «DeepSeek, ключ потрачен» для
+    ЛЮБОГО ответа, даже структурного (не ИИ) или отвеченного бесплатной моделью. Теперь тег модели
+    берём из реального текста ответа (тот же принцип, что и в _notify_usage())."""
     try:
         user = tg_user_dict(update)
         try:
@@ -5174,8 +5177,17 @@ async def log_bot_ai(update, context, feat="ботяра"):
             except Exception:
                 link = ""
             where = (f" · в [{title}]({link})" if link else f" · в «{title}»") + f" ({ch.type}, id={ch.id})"
+        _bmodel = _neuroModelTag(ai_text)
+        if ai_text == "structured":
+            tag = "🗂 структурный ответ (наши данные, не ИИ — ключ НЕ потрачен)"
+        elif _bmodel and ('🆓' in _bmodel or 'бесплатно' in _bmodel.lower()):
+            tag = f"🆕 свежий ({_bmodel}, ключ НЕ потрачен)"
+        elif _bmodel:
+            tag = f"🆕 свежий ({_bmodel})"
+        else:
+            tag = "🆕 свежий (DeepSeek, ключ потрачен)"   # фолбэк — модель не удалось определить из ответа
         await context.bot.send_message(LOG_CHAT_ID,
-            f"#ии #ботяра 🤖 {feat}: 👤 {who}{where} — 🆕 свежий (DeepSeek, ключ потрачен)\n⛔ забанить: `бан {(update.effective_user.id if update.effective_user else '')}`" + (f" · `бан {ch.id}`" if (ch and getattr(ch,'type','')!='private') else ""),
+            f"#ии #ботяра 🤖 {feat}: 👤 {who}{where} — {tag}\n⛔ забанить: `бан {(update.effective_user.id if update.effective_user else '')}`" + (f" · `бан {ch.id}`" if (ch and getattr(ch,'type','')!='private') else ""),
             parse_mode="Markdown", disable_web_page_preview=True)
     except Exception:
         pass
