@@ -6398,8 +6398,9 @@ async def _api_serve(application=None):
             saved = None
             if tr and source and num not in (None, ''):
                 saved = await loop.run_in_executor(None, coll_add_translation, source, num, text, tr)
-            await loop.run_in_executor(None, usage_log, user, "перевод", True, len(text), source, str(num or ""))
-            await _notify_usage(user, "перевод", True, source, num, saved, frag=(tr or text))
+            if tr:   # #348: не списывать ключ и не слать «потрачено», если перевод реально не удался (tr пустой)
+                await loop.run_in_executor(None, usage_log, user, "перевод", True, len(text), source, str(num or ""))
+                await _notify_usage(user, "перевод", True, source, num, saved, frag=(tr or text))
             return _cors(web.json_response({'translation': tr, 'cached': False}))
         except Exception as e:
             return _cors(web.json_response({'translation': '', 'error': str(e)}))
