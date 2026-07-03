@@ -1834,6 +1834,9 @@ def _tts_mp3(text):
 # оформить структурированным постом (ИИ, бесплатные→DeepSeek как везде) и отправить в тот же чат/канал (напр. Muslim Live).
 # Пока ПЕРВАЯ версия — владелец/Claude проверяют результаты вручную, промпт будет дорабатываться по фидбеку.
 _NISHT_BUF = {}   # chat_id -> [Message, ...] между «ништячок начало» и «ништячок конец»
+NISHT_DRAFT_MARK = "🔍 ЧЕРНОВИК ништячка"   # владелец 03.07.2026: черновик в jamaat_ru перед публикацией в Muslim Live (анти-ложное-срабатывание)
+NISHT_DRAFTS_FILE = "nishtyaki_drafts.json"
+MUSLIM_LIVE_CHAT = "@muslimlive"   # https://t.me/muslimlive — публикация по @username, бот должен быть админом там
 
 async def _nisht_extract_one(msg):
     """Достаёт (текст, описание_источника) из ОДНОГО телеграм-сообщения любого типа. (None, None) если нечего взять."""
@@ -1922,6 +1925,27 @@ async def _nisht_finish(reply_msg, chat_id, context, messages, comment):
         footer += f" · [источник]({src_link})"
     footer += "\n_первое время проверяется вручную владельцем/Клодом_"
     post = "💎 " + clean + footer
+
+    # #ЧЕРНОВИК (владелец 03.07.2026): «как исключить ложное срабатывание? может сначала пост ответом слать,
+    # а если норм — отвечаю "в муслим лайв", если ложное — просто удаляю». Работает ТОЛЬКО для jamaat_ru
+    # (в канале Muslim Live и в личке ништячок публикуется сразу — там ложное срабатывание не так критично).
+    if JAMAAT_RU_CHAT_ID and chat_id == JAMAAT_RU_CHAT_ID:
+        draft_text = (f"{NISHT_DRAFT_MARK}\n\n{post}\n\n———\n"
+                      f"👉 Если ОК — ответь на это сообщение «в муслим лайв» (или «да») — опубликую в Muslim Live.\n"
+                      f"👉 Если ЛОЖНОЕ срабатывание — просто удали это сообщение, ничего дальше не произойдёт.")
+        try:
+            sent = await context.bot.send_message(chat_id, draft_text, parse_mode="Markdown")
+        except Exception:
+            sent = await context.bot.send_message(chat_id, re.sub(r'[*_`\[\]()]', '', draft_text))
+        try:
+            arr = _data_get(NISHT_DRAFTS_FILE, []) or []
+            arr.append({"id": len(arr) + 1, "d": _now_msk(), "chat_id": chat_id, "draft_message_id": getattr(sent, 'message_id', None),
+                        "post": post, "raw": raw[:4000], "model": model_name, "src_link": src_link, "comment": comment, "published": False})
+            _data_put(NISHT_DRAFTS_FILE, arr, f"черновик ништячка #{len(arr)}")
+        except Exception:
+            pass
+        return
+
     try:
         sent = await context.bot.send_message(chat_id, post, parse_mode="Markdown")
     except Exception:
@@ -1940,6 +1964,134 @@ async def _nisht_finish(reply_msg, chat_id, context, messages, comment):
             await context.bot.forward_message(JAMAAT_RU_CHAT_ID, chat_id, sent.message_id)
     except Exception:
         pass
+
+async def _nisht_confirm_dispatch(update, context):
+    """Реплай на черновик ништячка (NISHT_DRAFT_MARK) со словом подтверждения → публикует в Muslim Live (@muslimlive)."""
+    if not is_owner(update):
+        return False
+    msg = update.effective_message
+    if not msg or not msg.reply_to_message:
+        return False
+    rt = msg.reply_to_message
+    if not (rt.text or rt.caption or '').startswith(NISHT_DRAFT_MARK):
+        return False
+    text = (msg.text or '').strip().lower()
+    if text not in ("в муслим лайв", "муслим лайв", "да", "ок", "отправить", "публикуй", "опубликуй"):
+        return False
+    try:
+        arr = _data_get(NISHT_DRAFTS_FILE, []) or []
+        draft = next((d for d in arr if d.get("draft_message_id") == rt.message_id and not d.get("published")), None)
+        if not draft:
+            await msg.reply_text("⚠️ Не нашёл этот черновик (может, уже опубликован или устарел).")
+            return True
+        try:
+            sent = await context.bot.send_message(MUSLIM_LIVE_CHAT, draft["post"], parse_mode="Markdown")
+        except Exception:
+            sent = await context.bot.send_message(MUSLIM_LIVE_CHAT, re.sub(r'[*_`\[\]()]', '', draft["post"]))
+        draft["published"] = True
+        _data_put(NISHT_DRAFTS_FILE, arr, f"черновик #{draft['id']} опубликован")
+        try:
+            arr2 = _data_get("nishtyaki.json", []) or []
+            arr2.append({"id": len(arr2) + 1, "d": _now_msk(), "raw": draft.get("raw", ""), "post": draft["post"], "chat": "Muslim Live (из черновика jamaat_ru)",
+                        "comment": draft.get("comment", ""), "model": draft.get("model", ""), "src_link": draft.get("src_link"), "post_message_id": getattr(sent, 'message_id', None)})
+            _data_put("nishtyaki.json", arr2, "ништячок из черновика")
+        except Exception:
+            pass
+        await msg.reply_text("✅ Опубликовано в Muslim Live.")
+    except Exception as e:
+        await msg.reply_text(f"❌ Не смог опубликовать: {str(e)[:150]}")
+    return True
+
+# ===== ✂️ ВЫРЕЗАТЬ ФРАГМЕНТ + КОНСПЕКТ + ПЕРЕСКАЗ (владелец 03.07.2026): реплай на аудио/видео —
+# «вырежи <начало> по <конец|конец>» → режет сегмент, точная расшифровка (Whisper) файлом .md + грамотный
+# пересказ с доводами/источниками (файлом .md, если длинный). =====
+_CUT_RE = re.compile(r'^вырежи\s+(?:с\s+)?([\d:\.\s]+?)\s*(?:по|до|[-—])\s*(конец|[\d:\.\s]+)\s*$', re.I)
+
+def _parse_hms(s):
+    """'1:57:00' / '1 57 00' / '57:00' / '95' → секунды. None если не разобрал."""
+    s = (s or '').strip().replace('.', ':')
+    parts = [p for p in re.split(r'[:\s]+', s) if p]
+    try:
+        parts = [int(p) for p in parts]
+    except Exception:
+        return None
+    if not parts:
+        return None
+    if len(parts) == 3: h, m, sec = parts
+    elif len(parts) == 2: h = 0; m, sec = parts
+    elif len(parts) == 1: h = 0; m = 0; sec = parts[0]
+    else: return None
+    return h * 3600 + m * 60 + sec
+
+async def _audio_cut_dispatch(update, context):
+    if not is_owner(update):
+        return False
+    msg = update.effective_message
+    if not msg or not msg.reply_to_message:
+        return False
+    text = (msg.text or '').strip()
+    m = _CUT_RE.match(text)
+    if not m:
+        return False
+    rep = msg.reply_to_message
+    fobj = rep.audio or rep.voice or rep.video or (rep.document if (rep.document and (rep.document.mime_type or '').startswith(('audio', 'video'))) else None)
+    if not fobj:
+        await msg.reply_text("❌ Ответь этой командой (реплаем) на аудио/видео сообщение.")
+        return True
+    start_s = _parse_hms(m.group(1))
+    end_raw = m.group(2).strip().lower()
+    if start_s is None:
+        await msg.reply_text("❌ Не разобрал начало отрезка — формат «1:57:00» или «1 57 00».")
+        return True
+    st = await msg.reply_text("✂️ Вырезаю фрагмент, расшифровываю и делаю конспект… (может занять минуту-другую)")
+    src = cut_path = None
+    try:
+        f = await fobj.get_file()
+        ext = ".ogg" if rep.voice else (".mp4" if rep.video else ".mp3")
+        src = f"/tmp/cutsrc_{f.file_id}{ext}"
+        await f.download_to_drive(src)
+        from pydub import AudioSegment
+        audio = AudioSegment.from_file(src)
+        end_s = (len(audio) / 1000.0) if end_raw in ("конец", "до конца", "end") else _parse_hms(end_raw)
+        if end_s is None:
+            await st.edit_text("❌ Не разобрал конец отрезка — формат «1:57:00», «конец» или «до конца».")
+            return True
+        seg = audio[max(0, start_s * 1000):int(end_s * 1000)]
+        if len(seg) < 500:
+            await st.edit_text("❌ Получился пустой/слишком короткий отрезок — проверь тайм-коды.")
+            return True
+        cut_path = f"/tmp/cutseg_{f.file_id}.mp3"
+        seg.export(cut_path, format="mp3")
+        txt = await asyncio.get_event_loop().run_in_executor(None, transcribe_audio, cut_path)
+        if not txt or not txt.strip():
+            await st.edit_text("❌ Не удалось расшифровать вырезанный фрагмент (нужен OPENAI_API_KEY/Whisper).")
+            return True
+        sysp = ("Ты — редактор конспектов лекций по науке хадиса на русском. Дай грамотный пересказ своими словами "
+                "по присланной расшифровке, ОБЯЗАТЕЛЬНО указывая доводы/источники/имена учёных и хадисы/аяты, если они упоминались "
+                "(с номерами и сборниками, если названы). Не выдумывай ссылки, которых не было в тексте.")
+        retell = ask_ai(f"Расшифровка фрагмента:\n\n{txt}", sysp, owner=True, max_tokens=1800) or ""
+        retell_clean = _nisht_strip_model_tag(retell) if retell else "(ИИ недоступен — только конспект ниже)"
+        from io import BytesIO
+        label = f"{m.group(1).strip()}–{m.group(2).strip()}"
+        conspect_md = f"# Точный конспект фрагмента ({label})\n\n{txt}\n"
+        bio1 = BytesIO(conspect_md.encode("utf-8")); bio1.name = "конспект.md"
+        await context.bot.send_document(update.effective_chat.id, document=bio1, caption=f"📝 Точная расшифровка ({label})")
+        if len(retell_clean) > 3500:
+            bio2 = BytesIO((f"# Пересказ фрагмента ({label})\n\n" + retell_clean).encode("utf-8")); bio2.name = "пересказ.md"
+            await context.bot.send_document(update.effective_chat.id, document=bio2, caption="🧠 Грамотный пересказ с доводами")
+        else:
+            await context.bot.send_message(update.effective_chat.id, "🧠 Пересказ:\n\n" + retell_clean)
+        await st.edit_text(f"✅ Готово: конспект+пересказ фрагмента {label}.")
+    except Exception as e:
+        try: await st.edit_text(f"❌ Ошибка: {str(e)[:200]}")
+        except Exception: await msg.reply_text(f"❌ Ошибка: {str(e)[:200]}")
+    finally:
+        for p in (src, cut_path):
+            try:
+                if p: os.remove(p)
+            except Exception:
+                pass
+    return True
 
 async def _nisht_dispatch(update, context):
     """Общий разбор команды «ништячок» — работает для ПРЯМЫХ ПОСТОВ В КАНАЛЕ (update.channel_post, Muslim Live),
@@ -2524,6 +2676,20 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await _claude_deliver_replies(update, context)
         if await _claude_dispatch(update, context):
+            return
+    except Exception:
+        pass
+
+    # 🔍 Подтверждение черновика ништячка («в муслим лайв»/«да» реплаем на черновик) — публикует в @muslimlive
+    try:
+        if await _nisht_confirm_dispatch(update, context):
+            return
+    except Exception:
+        pass
+
+    # ✂️ «вырежи <начало> по <конец>» реплаем на аудио/видео — вырезать+расшифровать+пересказать
+    try:
+        if await _audio_cut_dispatch(update, context):
             return
     except Exception:
         pass
