@@ -1915,9 +1915,12 @@ async def _nisht_finish(reply_msg, chat_id, context, messages, comment):
         pass
 
 async def _nisht_dispatch(update, context):
-    """Общий разбор команды «ништячок» — работает и для обычных сообщений (update.message: группы/лички),
-    и для ПРЯМЫХ ПОСТОВ В КАНАЛЕ (update.channel_post) — там update.message == None, обычный handle() их не видит вообще.
+    """Общий разбор команды «ништячок» — работает для ПРЯМЫХ ПОСТОВ В КАНАЛЕ (update.channel_post, Muslim Live)
+    и личных сообщений владельца (оба аккаунта). #ВАЖНО (владелец 03.07.2026): «ништячок» — как и «клод» — НАРОЧНО
+    не работает в группах (jamaat_ru) — не для широкой аудитории. _claude_bridge_scope делает ровно эту проверку.
     Возвращает True, если сообщение было ништячок-командой (или частью буфера) и обработано."""
+    if not _claude_bridge_scope(update):
+        return False
     msg = update.effective_message
     if not msg:
         return False
@@ -1962,15 +1965,14 @@ def _claude_bridge_owner(update):
     return uid == OWNER_ID or (OWNER_ID2 and uid == OWNER_ID2)
 
 def _claude_bridge_scope(update):
-    """Где работает мост: канал (любой пост — постить может только админ, доверяем) ИЛИ личка/группа владельца (оба аккаунта).
-    #БАГ 03.07.2026: изначально забыл группы (jamaat_ru) — «клод на связи» в JAMAAT MUSLIMIN не сработал вообще, т.к. ct
-    был "group"/"supergroup", не "private" и не channel_post → scope возвращал False молча. Добавлены group/supergroup."""
+    """Где работает мост: ТОЛЬКО канал (пост — админ, доверяем) ИЛИ личка владельца (оба аккаунта).
+    #ВАЖНО (владелец 03.07.2026, прямым текстом): «клод — сверхсекретный вызов только от меня», ограничен
+    НАРОЧНО каналом+личкой — group/jamaat_ru СОЗНАТЕЛЬНО исключены (там 1108 участников, не должно палиться).
+    Ранее ошибочно добавлял group/supergroup, приняв тест владельца за баг — откатил обратно по прямому уточнению."""
     if update.channel_post:
         return True
     ct = getattr(update.effective_chat, "type", "")
-    if ct in ("private", "group", "supergroup"):
-        return _claude_bridge_owner(update)
-    return False
+    return ct == "private" and _claude_bridge_owner(update)
 
 async def _claude_dispatch(update, context):
     if not _claude_bridge_scope(update):
