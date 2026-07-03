@@ -1883,6 +1883,16 @@ async def _nisht_extract_one(msg):
 def _nisht_strip_model_tag(ans):
     return re.split(r'\n\n[⚡💎🆓🧠]\s*\*?Модель', ans or "")[0].strip()
 
+def _tg_msg_link(chat_id, message_id):
+    """Ссылка на исходное сообщение (внутренний формат t.me/c/... — работает у тех, кто уже в чате)."""
+    try:
+        cid = str(chat_id)
+        if cid.startswith('-100') and message_id:
+            return f"https://t.me/c/{cid[4:]}/{message_id}"
+    except Exception:
+        pass
+    return None
+
 async def _nisht_finish(reply_msg, chat_id, context, messages, comment):
     texts = []
     for m in messages:
@@ -1895,6 +1905,8 @@ async def _nisht_finish(reply_msg, chat_id, context, messages, comment):
     sysp = ("Ты — редактор исламского Telegram-канала. Из присланного материала (текст/расшифровка аудио или видео/статья по ссылке) "
             "извлеки САМУЮ ПОЛЕЗНУЮ суть и оформи КРАСИВЫМ структурированным постом на русском: короткий цепляющий заголовок эмодзи+текст, "
             "затем суть по пунктам или связным абзацем (100-150 слов), без искажения смысла и без отсебятины от себя. "
+            "ВАЖНО: если в материале упоминаются конкретные хадисы/аяты/доводы учёных как источник мысли — ОБЯЗАТЕЛЬНО сохрани их "
+            "(название сборника, номер, имя автора/учёного) в посте, не пересказывай своими словами без ссылки на первоисточник. "
             "Если материал явно неточен в вероубеждении/фикхе — не выдавай это как истину, отметь честно, что не проверено. Пиши уважительно.")
     pr = f"Материал:\n\n{raw}"
     if comment: pr += f"\n\nПояснение автора (что выделить/учесть): {comment}"
@@ -1902,14 +1914,22 @@ async def _nisht_finish(reply_msg, chat_id, context, messages, comment):
     if not ans:
         await reply_msg.reply_text("❌ ИИ не смог обработать (все модели сейчас недоступны). Попробуй позже.")
         return
-    post = "💎 " + _nisht_strip_model_tag(ans) + "\n\n_🤖 пост подготовлен ботом Muslimoon — первое время проверяется вручную_"
+    model_name = _neuroModelTag(ans) or 'DeepSeek'
+    clean = _nisht_strip_model_tag(ans)
+    src_link = _tg_msg_link(chat_id, getattr(reply_msg, 'message_id', None))
+    footer = f"\n\n— 🤖 составлено ботом Muslimoon (модель: {model_name}) · {_now_msk()}"
+    if src_link:
+        footer += f" · [источник]({src_link})"
+    footer += "\n_первое время проверяется вручную владельцем/Клодом_"
+    post = "💎 " + clean + footer
     try:
-        await context.bot.send_message(chat_id, post, parse_mode="Markdown")
+        sent = await context.bot.send_message(chat_id, post, parse_mode="Markdown")
     except Exception:
-        await context.bot.send_message(chat_id, re.sub(r'[*_`]', '', post))
+        sent = await context.bot.send_message(chat_id, re.sub(r'[*_`\[\]()]', '', post))
     try:
         arr = _data_get("nishtyaki.json", []) or []
-        arr.append({"id": len(arr) + 1, "d": _now_msk(), "raw": raw[:4000], "post": ans, "chat": chat_id, "comment": comment})
+        arr.append({"id": len(arr) + 1, "d": _now_msk(), "raw": raw[:4000], "post": ans, "chat": chat_id, "comment": comment,
+                    "model": model_name, "src_link": src_link, "post_message_id": getattr(sent, 'message_id', None)})
         _data_put("nishtyaki.json", arr, f"ништячок #{len(arr)}")
     except Exception:
         pass
@@ -2001,6 +2021,14 @@ async def _claude_dispatch(update, context):
         await msg.reply_text(f"📨 Передано Клоду (#{entry_id}): «{body[:200]}»\nОтветит здесь, когда проверит очередь.")
     except Exception:
         pass
+    # #ЖУРНАЛ (владелец 03.07.2026): «Клод нигде не должен отвечать кроме меня — но КАЖДОЕ обращение
+    # должно приходить в рабочий журнал (LOG_CHAT_ID), точно так же, как приходят траты DeepSeek — кто/что/когда».
+    try:
+        if application:
+            _where = getattr(chat, "title", None) or "личка"
+            await application.bot.send_message(LOG_CHAT_ID, f"🧑‍💻 #клод обращение #{entry_id}: {_where} — «{body[:200]}»")
+    except Exception:
+        pass
     return True
 
 async def _claude_deliver_replies(update, context):
@@ -2020,6 +2048,11 @@ async def _claude_deliver_replies(update, context):
             try:
                 await context.bot.send_message(chat.id, "🧑‍💻 Клод: " + str(r.get("text", ""))[:3500])
                 r["delivered"] = True; changed = True
+                try:
+                    if application:
+                        await application.bot.send_message(LOG_CHAT_ID, f"🧑‍💻 #клод ответ доставлен в {getattr(chat,'title',None) or 'личку'}: «{str(r.get('text',''))[:150]}»")
+                except Exception:
+                    pass
             except Exception:
                 pass
         if changed:
