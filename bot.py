@@ -1962,11 +1962,15 @@ def _claude_bridge_owner(update):
     return uid == OWNER_ID or (OWNER_ID2 and uid == OWNER_ID2)
 
 def _claude_bridge_scope(update):
-    """Где работает мост: канал (любой пост — постить может только админ, доверяем) ИЛИ личка владельца (оба аккаунта)."""
+    """Где работает мост: канал (любой пост — постить может только админ, доверяем) ИЛИ личка/группа владельца (оба аккаунта).
+    #БАГ 03.07.2026: изначально забыл группы (jamaat_ru) — «клод на связи» в JAMAAT MUSLIMIN не сработал вообще, т.к. ct
+    был "group"/"supergroup", не "private" и не channel_post → scope возвращал False молча. Добавлены group/supergroup."""
     if update.channel_post:
         return True
     ct = getattr(update.effective_chat, "type", "")
-    return ct == "private" and _claude_bridge_owner(update)
+    if ct in ("private", "group", "supergroup"):
+        return _claude_bridge_owner(update)
+    return False
 
 async def _claude_dispatch(update, context):
     if not _claude_bridge_scope(update):
