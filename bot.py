@@ -5727,6 +5727,13 @@ async def _api_serve(application=None):
             _GROUP_AI_OFF = (not d['set']); _save_ai_gate()   # ФИКС: персист — переживёт рестарт/деплой
         return _cors(web.json_response({'on': (not _GROUP_AI_OFF)}))
 
+    def _neuroResultFrag(res):
+        # #502 (владелец: «в логе нейро не указан результат»): короткая сводка, ЧТО реально подобрал ИИ — раньше
+        # в журнал шёл только запрос (q), сам ответ был не виден.
+        if not res: return ""
+        parts = list((res.get('hadiths') or [])[:2]) + list((res.get('phrases') or [])[:2]) + list((res.get('quran') or [])[:1])
+        return ' · '.join(str(p) for p in parts if p)[:150]
+
     async def neuro(r):
         d = await _body(r)
         user = verify_init_data(d.get('initData'))
@@ -5749,7 +5756,7 @@ async def _api_serve(application=None):
                 if isinstance(cached, list):   # старый формат (только фразы)
                     cached = {'phrases': cached, 'quran': [], 'note': '', 'fixed': ''}
                 await loop.run_in_executor(None, usage_log, user, "нейро", False, len(meaning), "", "")
-                await _notify_usage(user, "нейро", False, "", "", None, q=meaning)
+                await _notify_usage(user, "нейро", False, "", "", None, q=meaning, frag=_neuroResultFrag(cached))   # #502: в журнале теперь виден и РЕЗУЛЬТАТ, не только запрос
                 out = dict(cached); out['cached'] = True
                 return _cors(web.json_response(out))
             # 2) УМНЫЙ ИИ-поиск: понять смысл (исправить опечатки), дать НОМЕР аята и/или характерную арабскую фразу
@@ -5799,7 +5806,7 @@ async def _api_serve(application=None):
                 try: saved = {"new": True, "total": await loop.run_in_executor(None, neuro_put, nkey, result)}
                 except Exception: saved = None
             await loop.run_in_executor(None, usage_log, user, "нейро", True, len(meaning), "", "")
-            await _notify_usage(user, "нейро", True, "", "", saved, q=meaning, model=_neuroModelTag(txt))
+            await _notify_usage(user, "нейро", True, "", "", saved, q=meaning, model=_neuroModelTag(txt), frag=_neuroResultFrag(result))   # #502: в журнале теперь виден и РЕЗУЛЬТАТ, не только запрос
             out = dict(result); out['cached'] = False
             return _cors(web.json_response(out))
         except Exception as e:
