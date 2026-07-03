@@ -5517,7 +5517,7 @@ async def _api_serve(application=None):
         else:
             extra = ""
         ftag = {"перевод": "#перевод", "нейро": "#нейро", "огласовки": "#огласовки"}.get(feat, "#" + re.sub(r"\s+", "", feat))
-        _qs = (" · 🔎 «" + str(q)[:70] + "»") if q else ""   # M301: ЗА ЧТО потрачено (текст запроса)
+        _qs = (" · 🔎 «" + re.sub(r"[*_`\[\]()]", "", str(q))[:70] + "»") if q else ""   # M301: ЗА ЧТО потрачено (текст запроса) · #501: непарный _/* в чужом тексте рвал Markdown-ссылку ВСЕГО сообщения (та же чистка, что уже была у _fr/_nm)
         _fr = (" · 📝 «" + re.sub(r"[*_`\[\]()]", "", str(frag))[:90] + "…»") if frag else ""   # #312: фрагмент потраченного текста
         try:
             await application.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} 🤖 {feat}: {who}{loc} — {tag}{extra}{_qs}{_fr}", parse_mode="Markdown", disable_web_page_preview=True)
