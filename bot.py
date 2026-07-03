@@ -1933,6 +1933,13 @@ async def _nisht_finish(reply_msg, chat_id, context, messages, comment):
         _data_put("nishtyaki.json", arr, f"ништячок #{len(arr)}")
     except Exception:
         pass
+    # #ПЕРЕСЫЛКА (владелец 03.07.2026): пост из Muslim Live → форвардом в JAMAAT MUSLIMIN (jamaat_ru).
+    # Работает ТОЛЬКО если пост создан в Muslim Live (не в личке/другом чате) и известен id группы (JAMAAT_RU_CHAT_ID).
+    try:
+        if JAMAAT_RU_CHAT_ID and chat_id != JAMAAT_RU_CHAT_ID and getattr(sent, 'message_id', None):
+            await context.bot.forward_message(JAMAAT_RU_CHAT_ID, chat_id, sent.message_id)
+    except Exception:
+        pass
 
 async def _nisht_dispatch(update, context):
     """Общий разбор команды «ништячок» — работает для ПРЯМЫХ ПОСТОВ В КАНАЛЕ (update.channel_post, Muslim Live)
@@ -1979,6 +1986,7 @@ async def _nisht_dispatch(update, context):
 CLAUDE_INBOX_FILE = "claude_inbox.json"
 CLAUDE_REPLIES_FILE = "claude_replies.json"
 OWNER_ID2 = int(os.environ.get("OWNER_ID2", "0") or "0")   # второй личный аккаунт владельца — задать в Railway env, когда узнаем id
+JAMAAT_RU_CHAT_ID = int(os.environ.get("JAMAAT_RU_CHAT_ID", "0") or "0")   # id группы JAMAAT MUSLIMIN — узнать командой «ид чата» в самой группе, задать в Railway env
 
 def _claude_bridge_owner(update):
     uid = update.effective_user.id if update.effective_user else 0
@@ -2463,6 +2471,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text or ""
     text = text.strip()
+
+    # 🆔 диагностика: «ид чата» (владелец, любой чат) — узнать числовой chat_id, напр. чтобы настроить кросс-пост ништячка в jamaat_ru
+    if is_owner(update) and text.lower().strip() in ("ид чата", "id чата", "chat id", "ид группы"):
+        ch = update.effective_chat
+        await update.message.reply_text(f"🆔 id этого чата: `{ch.id}`\nНазвание: {getattr(ch,'title',None) or getattr(ch,'first_name','—')}\nТип: {ch.type}", parse_mode="Markdown")
+        return
 
     # 🧑‍💻 МОСТ «КЛОД» (канал Muslim Live уже выше; тут — личка владельца, оба аккаунта)
     try:
