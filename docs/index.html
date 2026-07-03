@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v948</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v949</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v948';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v949';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -6737,7 +6737,14 @@ function ii378(d,_,m,f,r,i,n){return cmn378(m^(_|~f),d,_,r,i,n)}
 function sa378(d,_){var m=(65535&d)+(65535&_);return(d>>16)+(_>>16)+(m>>16)<<16|65535&m}
 function rol378(d,_){return d<<_|d>>>32-_}
 let _dzBC={}, _dzUC={}, _dzUNC={}, _dzNC={};
-async function _dzFetch(cc,key,url){ if(!(key in cc)){ try{ const r=await fetch(url); cc[key]=r.ok?await r.json():null; }catch(e){ cc[key]=null; } } return cc[key]; }
+// #497 (владелец, «долго зависает при поиске»): та же гонка promise-кэша, что в _verifyChain/_testimGet — синхронная
+// проверка `key in cc` ДО await пропускала параллельные карточки одного поиска в тот же ещё-не-загруженный шард,
+// каждая слала свой fetch (замерено: dz/b25794_* грузился по 3-9 раз за один поиск). Промис хранится В ТОМ ЖЕ cc
+// под ключом-префиксом, второй и далее вызовы ждут ТОТ ЖЕ fetch вместо нового.
+async function _dzFetch(cc,key,url){ if(!(key in cc)){ const pk='__p_'+key;
+    if(!cc[pk]) cc[pk]=fetch(url).then(r=>r.ok?r.json():null).catch(()=>null);
+    cc[key]=await cc[pk];
+  } return cc[key]; }
 async function _dzRec(bid,num){ const k=String(bid)+'_'+Math.floor(+num/500); const m=await _dzFetch(_dzBC,k,'./dz/b'+k+'.json?v='+APPVER); return (m&&m[String(num)])||null; }   // С41: ?v= — после verify-фикса цепей отдаём свежий dz, не старый кэш
 // Э-И2: запись хадиса теперь {s:[коды], f:[формы передачи]}; старый формат — просто [коды]. dzChain отдаёт SEQ (совместимость).
 async function dzChain(bid,num){ const r=await _dzRec(bid,num); return r? (Array.isArray(r)?r:(r.s||null)) : null; }
@@ -7382,12 +7389,12 @@ var _md5=(function(){
 // Э-И2: cid РАЗЛИЧАЕТ формы передачи (как в Python-билдере: seq + '#' + forms) — «через عن» ≠ «через حدثنا»
 function _chainCid(codes, forms){ const fc=(forms||[]).map(f=>(_FORM_CLASS[f]!==undefined?_FORM_CLASS[f]:f)); return 'C'+_md5(codes.map(String).join('|')+'#'+fc.join('|')).slice(0,10); }
 function _pluralHadith(n){ n=Math.abs(n)%100; var n1=n%10; if(n>10&&n<20) return 'ов'; if(n1>1&&n1<5) return 'а'; if(n1===1) return ''; return 'ов'; }
-var _isnRegC={};
+var _isnRegC={}, _isnRegCP={};   // #497 (владелец, «долго зависает»): _isnRegCP — promise-кэш, та же гонка что в _dzFetch/_testimGet
 async function _isnadInfo(codes, forms){
   if(!codes||codes.length<2) return null;
   const cid=_chainCid(codes, forms), pref=cid.slice(1,3);
   let m=_isnRegC[pref];
-  if(m===undefined){ try{ const r=await fetch('./isnad/reg_'+pref+'.json'); m=r.ok?await r.json():{}; }catch(e){ m={}; } _isnRegC[pref]=m; }
+  if(m===undefined){ if(!_isnRegCP[pref]) _isnRegCP[pref]=fetch('./isnad/reg_'+pref+'.json').then(r=>r.ok?r.json():{}).catch(()=>({})); m=await _isnRegCP[pref]; _isnRegC[pref]=m; }
   const rec=(m&&m[cid])||null;
   return {cid, n:(rec?rec.n:1), ex:(rec?rec.ex:[])};
 }
@@ -7416,11 +7423,11 @@ function _qBadge(q){
   return '';
 }
 // M475: связи учитель↔ученик из تهذيب الكمال (эталон аль-Мизи) — для метки подтверждённых смежностей цепи
-var _tlinkCache={};
+var _tlinkCache={}, _tlinkCacheP={};   // #497 (владелец, «долго зависает»): promise-кэш, та же гонка что в остальных шардах
 async function _tlinkGet(id){
   const b=((id%100)+100)%100;
   let m=_tlinkCache[b];
-  if(m===undefined){ try{ const r=await fetch('./tlink/'+b+'.json'); m=r.ok?await r.json():{}; }catch(e){ m={}; } _tlinkCache[b]=m; }
+  if(m===undefined){ if(!_tlinkCacheP[b]) _tlinkCacheP[b]=fetch('./tlink/'+b+'.json').then(r=>r.ok?r.json():{}).catch(()=>({})); m=await _tlinkCacheP[b]; _tlinkCache[b]=m; }
   return m[String(id)]||null;
 }
 // число передач (рёбер) между равием и соседями — из narr_edges (посчитано по цепям codif)
@@ -7866,7 +7873,12 @@ async function openHTableV2(slug){
       let all=pick2(); let added=all.slice(start,start+80);
       while(added.length<80 && (m._seg||0)<60){ m._seg=(m._seg||0)+1; const nx=await _htbLoad(sg,m._seg); if(!nx) break; sh=Object.assign({},sh,nx); m._sh=sh; all=pick2(); added=all.slice(start,start+80); }
       for(const num of added){ list.appendChild(await rowV2(sg,num)); } addMore(sg); }; list.appendChild(more); }
-    async function _codifNa(bid,num){ if(!bid) return []; const seg=Math.floor(parseInt(num,10)/500); /* ФИКС: codif по 500, не 1000 → цепь №≥500 была пустой */ const k='cf_'+bid+'_'+seg; if(!(k in _htbSh)){ try{ const r=await fetch('./codif/'+bid+'_'+seg+'.json?v='+APPVER); _htbSh[k]=r.ok?await r.json():null; }catch(e){ _htbSh[k]=null; } } const sh=_htbSh[k]; return (sh&&sh[num]&&sh[num].na)||[]; }
+    // #497 (владелец, «долго зависает»): promise-кэш — та же гонка, что в _testimGet/_dzFetch (замерено: codif/9647_0.json грузился 9 раз за один поиск).
+    async function _codifNa(bid,num){ if(!bid) return []; const seg=Math.floor(parseInt(num,10)/500); /* ФИКС: codif по 500, не 1000 → цепь №≥500 была пустой */ const k='cf_'+bid+'_'+seg;
+      if(!(k in _htbSh)){ const pk='__p_'+k;
+        if(!_htbSh[pk]) _htbSh[pk]=fetch('./codif/'+bid+'_'+seg+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
+        _htbSh[k]=await _htbSh[pk];
+      } const sh=_htbSh[k]; return (sh&&sh[num]&&sh[num].na)||[]; }
   async function rowV2(sg,num,g){
     const seg=Math.floor(parseInt(num,10)/1000); const sh=await _htbLoad(sg,seg)||{}; const e=sh[num]||{};
     const d=document.createElement('div'); d.className='htbRow'; d.dataset.slug=sg; d.dataset.num=String(num); d.style.cssText='padding:8px 4px;border-bottom:1px solid var(--border);font-size:12.5px';
@@ -7995,7 +8007,7 @@ async function _pchGet(a,b){
 async function _regRec(cid){
   const pref=cid.slice(1,3);
   let m=_isnRegC[pref];
-  if(m===undefined){ try{ const r=await fetch('./isnad/reg_'+pref+'.json'); m=r.ok?await r.json():{}; }catch(e){ m={}; } _isnRegC[pref]=m; }
+  if(m===undefined){ if(!_isnRegCP[pref]) _isnRegCP[pref]=fetch('./isnad/reg_'+pref+'.json').then(r=>r.ok?r.json():{}).catch(()=>({})); m=await _isnRegCP[pref]; _isnRegC[pref]=m; }
   return (m&&m[cid])||null;
 }
 function openIsnadCtor(){   // ярлык меню «Поиск по иснаду»: тот же режим Цепь, порядок = «строго (конструкция)»
@@ -8956,8 +8968,15 @@ async function renderNarrVerdicts(id, host){
 }
 // ====== СВИДЕТЕЛЬСТВА КРИТИКОВ → КАРТОЧКА РАВИЯ (заявка владельца): кто что сказал + нейро-вывод + ссылки-проверки ======
 // Данные: build_testimonies_app.py → miniapp/testimonies/<mid//100>.json = {mid:[[критик,термин,kind,текст,книга,bid,page],...]}
-let _testimShard={};
-async function _testimGet(mid){ const b=Math.floor(mid/100); if(_testimShard[b]===undefined){ try{ _testimShard[b]=await (await fetch('./testimonies/'+b+'.json?v='+APPVER)).json(); }catch(e){ _testimShard[b]=null; } } return (_testimShard[b]||{})[String(mid)]||null; }
+let _testimShard={}, _testimShardP={};
+// #497 (владелец, «долго зависает при поиске»): та же гонка, что уже чинили в _verifyChain («грузилось долго,
+// verify/*.json по 16-30 раз параллельно») — синхронная проверка `undefined` ДО завершения await пропускала МНОГО
+// параллельных карточек одного и того же поиска в один и тот же ещё-не-загруженный шард → каждая слала свой fetch
+// (замерено: testimonies/32.json грузился 6+ раз за один поиск). Promise-кэш — второй и далее вызовы ждут ТОТ ЖЕ fetch.
+async function _testimGet(mid){ const b=Math.floor(mid/100);
+  if(!_testimShardP[b]) _testimShardP[b]=fetch('./testimonies/'+b+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(_testimShard[b]===undefined) _testimShard[b]=await _testimShardP[b];
+  return (_testimShard[b]||{})[String(mid)]||null; }
 // баллы термина (детерминированно — НЕ ИИ, П-07): таʿдиль>0, джарх<0, джахаля=0
 const _TT_SCORE={'ثقة':3,'ثبت':3,'حجة':3,'إمام':3,'حافظ':2,'متقن':2,'صدوق':1,'لا بأس به':1,'ليس به بأس':1,'صالح':1,'صالح الحديث':1,'مأمون':1,'حسن الحديث':1,'محله الصدق':1,'مستقيم الحديث':1,'شيخ':0,
  'لين':-1,'لين الحديث':-1,'ليس بالقوي':-1,'يخطئ':-1,'يهم':-1,'فيه نظر':-2,'ضعيف':-2,'ضعيف جدا':-3,'مضطرب':-2,'لا يحتج به':-2,'لا يصح حديثه':-2,'لا يتابع عليه':-1,'منكر':-2,'منكر الحديث':-3,'واه':-3,'ليس بشيء':-3,'ليس بثقة':-3,'ساقط':-3,'متروك':-4,'تركوه':-4,'ضعفوه':-2,
@@ -10156,8 +10175,14 @@ async function _applyIdfix(shard){
             if(ng==null){ const w=cn.split(' '); for(let L=w.length-1; L>=1 && ng==null; L--){ ng=g[w.slice(0,L).join(' ')]; } }
             if(ng!=null && String(ng)!==id) pr[1]=String(ng); } } } } }catch(e){}
   return shard; }
+let _codifCacheP={};
+// #497 (владелец, «долго зависает»): promise-кэш — та же гонка (карточки одного поиска, попавшие в один ещё-не-
+// загруженный сегмент codif, слали дубли-fetch каждая; замерено: codif/1729_0.json грузился ~8 раз за один поиск).
 async function codifChain(bid,num){ const key=bid+'_'+Math.floor(+num/500);
-  if(!(key in _codifCache)){ try{ const r=await fetch('./codif/'+key+'.json?v='+APPVER); let m=r.ok?await r.json():null; if(m) m=await _applyIdfix(m); _codifCache[key]=m; }catch(e){ _codifCache[key]=null; } }
+  if(!(key in _codifCache)){
+    if(!_codifCacheP[key]) _codifCacheP[key]=fetch('./codif/'+key+'.json?v='+APPVER).then(async r=>{ let m=r.ok?await r.json():null; if(m) m=await _applyIdfix(m); return m; }).catch(()=>null);
+    _codifCache[key]=await _codifCacheP[key];
+  }
   const m=_codifCache[key]; return m?(m[String(num)]||null):null; }
 // слаг сборника (h-карточка) → bid кодификации. Только издания, где № совпадает с нашей таблицей (иначе пропускаем → фолбэк).
 const _SLUG2BID={bukhari:'1681',muslim:'1727',abudawud:'1726',nasai:'829',ibnmajah:'1198',ahmad:'25794',malik:'28107',tirmidhi:'7895'};   // #242/В-01: + abudawud 1726; СВЕРКА не-мостовых: + tirmidhi 7895 (verify∩codif 90% — нумерация совпадает; Дарими 21795 НЕ добавлен — 8% рассинхрон нумерации, нужен ре-бридж)
