@@ -213,7 +213,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v952</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v953</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v952';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v953';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1007,6 +1007,11 @@ function canon(s){ return fold(stripDiac(s)).replace(/\s+/g,' ').trim(); }
 // с бэкенда (/api/maktaba), только срезая HTML-теги — БЕЗ очистки от «P»+control-байт (маркер матн↔сноска издателя
 // из сырого Мактаба-дампа; наши curated-издания это уже режут в extract_clean41_v2.py, сюда та же логика не попадала).
 function _cleanMaktabaSnip(s){ s=String(s||''); const m=s.match(/P[\x00-\x1f]/); return (m?s.slice(0,m.index):s).trim(); }
+// владелец (03.07.2026): в аль-Фатихе басмаля (a=1) — спорный вопрос среди учёных, считаем её НЕ пронумерованным
+// аятом; «первый аят» — это «الحمد لله رب العالمين» (реально хранится под a=2). ТОЛЬКО отображаемый номер —
+// данные/ключи (избранное, share, аудио, тафсир) НЕ трогаем, чтобы не сломать уже сохранённое у людей.
+function _faDispA(s,a){ return (+s===1 && +a>=2) ? (+a-1) : +a; }   // 2..7 → «аят 1..6»; a=1 (басмаля) — вызывать не для неё
+function _faIsBasmalaHdr(s,a){ return +s===1 && +a===1; }   // true → номер вообще не показываем
 function foldOnly(s){ return fold(stripDiac(s||'')); }   // M309: убираем огласовки, но ПРОБЕЛЫ сохраняем (точный поиск с пробелами)
 function stem(w){ let x=w;
   x=x.replace(/^(وال|فال|بال|كال|ال|و|ف|ب|ك|ل|س)/,'');
@@ -3752,9 +3757,9 @@ async function maktabaByNum(seq, n){
     const wrap=document.createElement('div'); wrap.className='canonStd';
     const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:11px;margin:2px 0 3px;color:#7fb3ff'; lbl.textContent='⚡ наше издание (стандартная нумерация) — мгновенно';
     wrap.appendChild(lbl); wrap.appendChild(cardHadith({code:code, h:hh}, []));   // M379: UI-код канона (ibnmajah → ابن ماجه), данные грузились по ec
-    // 🧬 M378b: цепочка по кодам Э1.1 — печать канона в dz-шардах (Муватты 1699 в dz нет — блок просто не появится)
-    const _dzb={bukhari:'1681',muslim:'1727',abudawud:'1726',tirmidhi:'1435',nasai:'829',ibnmajah:'1198',ahmad:'25794'}[code];
-    if(_dzb){ try{ dzChainInto(wrap, _dzb, n); }catch(e){} }
+    // владелец (03.07.2026): «дублируешь сверху и снизу цепь» — этот повторный dzChainInto() был ЛИШНИМ: cardHadith()
+    // САМА уже вызывает dzChainInto ВНУТРИ карточки (_cardHadithOne, тем же bid/num) — тут получался буквальный дубль
+    // всего блока «Цепочка передатчиков». Убрано (было: const _dzb={...}[code]; if(_dzb) dzChainInto(wrap,_dzb,n)).
     canonSlots[code].insertBefore(wrap, canonSlots[code].firstChild);
     const _sb=canonSlots[code].__edBtn; if(_sb && !_sb.__open) canonSlots[code].querySelectorAll('.canonEd').forEach(c=>c.style.display='none');
     shown++; shownF++; if(SRC_OF_CODE[code]) srcSet.add(SRC_OF_CODE[code]); _headTxt(' · ищу ещё…');
@@ -5937,7 +5942,7 @@ function cardAyah(d,groups){
   const {v}=d; const card=document.createElement('div');card.className='card';
   // шапка СВЕРХУ арабского: № суры:аят + название (предложение пользователя)
   const hd=document.createElement('div'); hd.style.cssText='font-size:12.5px;color:var(--link);margin-bottom:5px;font-weight:600;cursor:pointer'; hd.title='Открыть суру для чтения';
-  hd.textContent='📖 Сура '+v.s+' · '+(SURA_RU[v.s]||SURA_NAMES[v.s-1]||'')+' · аят '+v.a;
+  hd.textContent='📖 Сура '+v.s+' · '+(SURA_RU[v.s]||SURA_NAMES[v.s-1]||'')+(_faIsBasmalaHdr(v.s,v.a)?'':(' · аят '+_faDispA(v.s,v.a)));
   hd.onclick=()=>openQuranReader(v.s, v.a); card.appendChild(hd);
   const ar=document.createElement('div');ar.className='ar';
   if(cfg.wordTap!==false){ loadRoots(); ar.innerHTML=qWordsHTML(v.text,groups,d._root);
@@ -10798,7 +10803,7 @@ async function doTranslateAyah(s,a,out,btn,ed){
 /* ===== ТАФСИР аятов — готовые ayah-индексы (источник учёных). Принцип: ОРИГИНАЛ (ар) + кнопка Перевод (готовый рус где есть). ===== */
 const TAFSIR_CDN='https://cdn.jsdelivr.net/gh/spa5k/tafsir_api@main/tafsir/';
 function openTafsir(s,a){ const m=document.getElementById('tafsirModal'); const body=document.getElementById('tafsirBody'); const ttl=document.getElementById('tafsirTitle');
-  if(ttl) ttl.textContent='📖 Тафсир · аят '+s+':'+a;
+  if(ttl) ttl.textContent=_faIsBasmalaHdr(s,a)?'📖 Тафсир · басмаля (сура '+s+')':('📖 Тафсир · аят '+s+':'+_faDispA(s,a));
   if(m){ m.style.zIndex='10007'; m.style.display='flex'; }   // TB-12: тафсир открывался ПОД модалом читалки Корана («кнопка не жмётся»)
   doTafsir(s,a,body,null); }
 const TAFSIRS=[
