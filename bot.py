@@ -3582,6 +3582,18 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await send_long(update, result)
                 await log_bot_ai(update, context, ai_text="structured")
                 return
+            # #356 (владелец: «ботяра переведи не работает» из чата): раньше «ботяра переведи текст» у ОБЫЧНОГО
+            # пользователя уходило в общий ask_ai_with_memory (не гарантированный перевод) — ветка parse_translate
+            # была подключена ТОЛЬКО у владельца/его канала (строка ~4148). Теперь тот же путь доступен и здесь.
+            _tr = parse_translate(clean)
+            if _tr is not None:
+                _tr_text = _tr if _tr != "REPLY" else ((update.message.reply_to_message.text if update.message.reply_to_message else None))
+                if _tr_text:
+                    await update.message.reply_text("🔄 Перевожу...")
+                    result = ask_ai(f"Переведи на русский:\n{_tr_text}", "Ты — переводчик.")
+                    await send_long(update, result)
+                    await log_bot_ai(update, context, ai_text=result)
+                    return
             await update.message.reply_text("🤔 Думаю...")
             result = ask_ai_with_memory(clean)
             await send_long(update, result)
@@ -4114,6 +4126,16 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     clean = f"{clean}\n\nСообщение на которое я отвечаю:\n{quoted}" if clean else f"Прокомментируй это сообщение:\n{quoted}"
                 if not clean:
                     clean = "продолжи"
+                # #356: та же проверка на перевод, что и в личке — «ботяра переведи текст» в группе теперь тоже переводит
+                _tr = parse_translate(clean)
+                if _tr is not None:
+                    _tr_text = _tr if _tr != "REPLY" else ((update.message.reply_to_message.text if update.message.reply_to_message else None))
+                    if _tr_text:
+                        await update.message.reply_text("🔄 Перевожу...")
+                        result = ask_ai(f"Переведи на русский:\n{_tr_text}", "Ты — переводчик.")
+                        await send_long(update, result)
+                        await log_bot_ai(update, context, ai_text=result)
+                        return
                 await update.message.reply_text("🤔 Думаю...")
                 result = ask_ai_with_memory(clean)
                 await send_long(update, result)
@@ -4138,6 +4160,16 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await send_long(update, result)
                 await log_bot_ai(update, context, ai_text="structured")
                 return
+            # #356: та же проверка на перевод — «ботяра переведи текст» теперь переводит и здесь
+            _tr = parse_translate(clean)
+            if _tr is not None:
+                _tr_text = _tr if _tr != "REPLY" else ((update.message.reply_to_message.text if update.message.reply_to_message else None))
+                if _tr_text:
+                    await update.message.reply_text("🔄 Перевожу...")
+                    result = ask_ai(f"Переведи на русский:\n{_tr_text}", "Ты — переводчик.")
+                    await send_long(update, result)
+                    await log_bot_ai(update, context, ai_text=result)
+                    return
             await update.message.reply_text("🤔 Думаю...")
             result = ask_ai_with_memory(clean)
             await send_long(update, result)
@@ -7158,16 +7190,24 @@ async def _app_channel_watcher(application):
                             try: await application.bot.send_message(OWNER_ID, _atxt)
                             except Exception: pass
                             posted_ids.add(item["id"])   # id считаем обработанным (не постим, но и не пытаемся снова каждый тик)
+                            j["app_post_ids"] = list(posted_ids)[-500:]
+                            _journal_save(f"app_post → пропущен как дубль (id {item['id']})")   # тот же фикс гонки — коммитим сразу
                             continue
                         await _post_app_channel(application.bot, item["note"])
                         posted_ids.add(item["id"])
                         last_posted_note = item["note"]
                         posted_now += 1
-                        await asyncio.sleep(2)   # пауза между постами — не флудить Telegram API
-                    if pending:
+                        # ТРЕВОГА-фикс (владелец 04.07.2026: «v957 дважды, v958 раньше v957 — порядок и дубли»):
+                        # раньше posted_ids сохранялся В ЖУРНАЛ ОДИН РАЗ, ПОСЛЕ всего цикла (до 8 постов). При
+                        # редеплое Railway (старый инстанс ещё не убит, новый уже поднялся) оба параллельно читают
+                        # СТАРЫЙ (ещё не обновлённый) journal.json → оба считают одни и те же id непощенными →
+                        # дубли + гонка порядка между двумя процессами. Теперь коммитим posted_ids СРАЗУ после
+                        # КАЖДОГО поста — окно гонки схлопывается с «до 8 постов» до «один пост», и следующий тик
+                        # (свой или чужого инстанса) увидит уже актуальный journal.json.
                         j["app_post_ids"] = list(posted_ids)[-500:]
-                        if posted_now: j["app_post"] = {"note": last_posted_note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
-                        _journal_save(f"app_post → канал приложения (очередь, {posted_now} опубл. из {len(pending[:8])})")
+                        j["app_post"] = {"note": last_posted_note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+                        _journal_save(f"app_post → канал приложения (id {item['id']})")
+                        await asyncio.sleep(2)   # пауза между постами — не флудить Telegram API
             except Exception as e:
                 print("app channel queue watcher error:", e)
         except Exception as e:
