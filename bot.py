@@ -1830,6 +1830,90 @@ def _tts_mp3(text):
     except Exception:
         return None
 
+# ===== 💎 НИШТЯЧОК (владелец 03.07.2026, С52): вытащить пользу из текста/видео(YouTube)/ссылки/аудио-видео-сообщения,
+# оформить структурированным постом (ИИ, бесплатные→DeepSeek как везде) и отправить в тот же чат/канал (напр. Muslim Live).
+# Пока ПЕРВАЯ версия — владелец/Claude проверяют результаты вручную, промпт будет дорабатываться по фидбеку.
+_NISHT_BUF = {}   # chat_id -> [Message, ...] между «ништячок начало» и «ништячок конец»
+
+async def _nisht_extract_one(msg):
+    """Достаёт (текст, описание_источника) из ОДНОГО телеграм-сообщения любого типа. (None, None) если нечего взять."""
+    t = (msg.text or msg.caption or "").strip()
+    vid = _yt_id(t) if t else None
+    if vid:
+        tr = _yt_transcript(vid)
+        if tr:
+            body = "\n".join(f"[{_fmt_ts(s)}] {tx}" for s, tx in tr)[:12000]
+            return body, f"YouTube ({t.strip()[:80]})"
+    fobj = msg.audio or msg.voice or msg.video or (msg.document if (msg.document and (msg.document.mime_type or "").startswith(("audio", "video"))) else None)
+    if fobj:
+        try:
+            f = await fobj.get_file()
+            ext = ".ogg"
+            ok_ext = (".flac", ".m4a", ".mp3", ".mp4", ".mpeg", ".mpga", ".oga", ".ogg", ".wav", ".webm")
+            if msg.voice: ext = ".ogg"
+            elif msg.video: ext = ".mp4"
+            elif msg.audio: ext = os.path.splitext(getattr(msg.audio, "file_name", "") or "")[1] or ("." + (getattr(msg.audio, "mime_type", "") or "").split("/")[-1])
+            elif msg.document: ext = os.path.splitext(getattr(msg.document, "file_name", "") or "")[1] or ".ogg"
+            if (ext or "").lower() not in ok_ext: ext = ".ogg"
+            src = f"/tmp/nisht_{f.file_id}{ext}"
+            await f.download_to_drive(src)
+            txt = await asyncio.get_event_loop().run_in_executor(None, transcribe_audio, src)
+            try: os.remove(src)
+            except Exception: pass
+            if txt and txt.strip():
+                return txt.strip(), "аудио/видео (расшифровка Whisper)" + (f": {t}" if t else "")
+        except Exception:
+            pass
+    m = re.search(r'https?://\S+', t) if t else None
+    if m and not vid:
+        try:
+            page = requests.get(m.group(0), headers={"User-Agent": "Mozilla/5.0"}, timeout=15).text
+            page = re.sub(r'<script[^>]*>.*?</script>', ' ', page, flags=re.S | re.I)
+            page = re.sub(r'<style[^>]*>.*?</style>', ' ', page, flags=re.S | re.I)
+            page = re.sub(r'<[^>]+>', ' ', page)
+            import html as _htmlmod
+            page = re.sub(r'\s+', ' ', _htmlmod.unescape(page)).strip()[:12000]
+            if page: return page, f"страница ({m.group(0)[:80]})"
+        except Exception:
+            pass
+    if t:
+        return t, "текст"
+    return None, None
+
+def _nisht_strip_model_tag(ans):
+    return re.split(r'\n\n[⚡💎🆓🧠]\s*\*?Модель', ans or "")[0].strip()
+
+async def _nisht_finish(update, context, messages, comment):
+    texts = []
+    for m in messages:
+        tx, src = await _nisht_extract_one(m)
+        if tx: texts.append(f"[{src}]\n{tx}")
+    if not texts:
+        await update.message.reply_text("❌ Не смог извлечь содержимое — ни текста, ни аудио/видео, ни ссылки не нашёл.")
+        return
+    raw = "\n\n---\n\n".join(texts)[:20000]
+    sysp = ("Ты — редактор исламского Telegram-канала. Из присланного материала (текст/расшифровка аудио или видео/статья по ссылке) "
+            "извлеки САМУЮ ПОЛЕЗНУЮ суть и оформи КРАСИВЫМ структурированным постом на русском: короткий цепляющий заголовок эмодзи+текст, "
+            "затем суть по пунктам или связным абзацем (100-150 слов), без искажения смысла и без отсебятины от себя. "
+            "Если материал явно неточен в вероубеждении/фикхе — не выдавай это как истину, отметь честно, что не проверено. Пиши уважительно.")
+    pr = f"Материал:\n\n{raw}"
+    if comment: pr += f"\n\nПояснение автора (что выделить/учесть): {comment}"
+    ans = ask_ai(pr, sysp, owner=True, max_tokens=1200)
+    if not ans:
+        await update.message.reply_text("❌ ИИ не смог обработать (все модели сейчас недоступны). Попробуй позже.")
+        return
+    post = "💎 " + _nisht_strip_model_tag(ans) + "\n\n_🤖 пост подготовлен ботом Muslimoon — первое время проверяется вручную_"
+    try:
+        await context.bot.send_message(update.effective_chat.id, post, parse_mode="Markdown")
+    except Exception:
+        await context.bot.send_message(update.effective_chat.id, re.sub(r'[*_`]', '', post))
+    try:
+        arr = _data_get("nishtyaki.json", []) or []
+        arr.append({"id": len(arr) + 1, "d": _now_msk(), "raw": raw[:4000], "post": ans, "chat": update.effective_chat.id, "comment": comment})
+        _data_put("nishtyaki.json", arr, f"ништячок #{len(arr)}")
+    except Exception:
+        pass
+
 # ===== 🧩 RAG-АССИСТЕНТ: оперативный поиск по ядру (41 первоисточник + 81 риджаль) на HF Space =====
 # Команды (владелец в ЛС + чат @jamaat_ru): «раг <запрос>» (по всему ядру) ·
 #   «найди в <источник>: <запрос>» (скоуп) · «раг в <источник>: <запрос>».
@@ -3111,6 +3195,34 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_owner(update):
         has_media = update.message.audio or update.message.voice or update.message.video or update.message.photo or update.message.document
         is_forward = update.message.forward_origin is not None
+
+        # ============ НИШТЯЧОК (владелец 03.07.2026, С52): вытащить пользу из текста/видео/ссылки/аудио и оформить пост ============
+        # «ништячок» (reply) → извлечь пользу из ОДНОГО сообщения. «ништячок <комментарий>» → + пояснение для ИИ.
+        # «ништячок начало» / «ништячок конец» → собрать НЕСКОЛЬКО сообщений подряд (без reply) и обработать все разом.
+        _nm = re.match(r'^ништячок\b\s*(.*)$', (text or '').strip(), re.I | re.S) if text else None
+        if _nm:
+            _nrest = _nm.group(1).strip().lower()
+            if _nrest in ("начало", "старт", "start"):
+                _NISHT_BUF[chat_id] = []
+                await update.message.reply_text("🟢 Собираю ништячок — присылай/пересылай сообщения по одному, в конце напиши «ништячок конец».")
+                return
+            if _nrest in ("конец", "стоп", "финиш", "end", "готово"):
+                _items = _NISHT_BUF.pop(chat_id, [])
+                if not _items:
+                    await update.message.reply_text("⚠️ Нечего собирать — не было «ништячок начало» или сообщений после него.")
+                    return
+                await update.message.reply_text(f"🔍 Собрал {len(_items)} сообщений — извлекаю пользу (ИИ)…")
+                await _nisht_finish(update, context, _items, "")
+                return
+            if update.message.reply_to_message:
+                await update.message.reply_text("🔍 Извлекаю пользу (ништячок)…")
+                await _nisht_finish(update, context, [update.message.reply_to_message], _nrest)
+                return
+            await update.message.reply_text("ℹ️ Ответь (reply) командой «ништячок» на сообщение с пользой (можно + комментарий-пояснение), либо «ништячок начало» → пришли несколько сообщений → «ништячок конец».")
+            return
+        if chat_id in _NISHT_BUF and (has_media or is_forward or (text or "").strip()):
+            _NISHT_BUF[chat_id].append(update.message)
+            return
 
         if text and parse_registry_command(text) == "add_media":
             if update.message.reply_to_message:
