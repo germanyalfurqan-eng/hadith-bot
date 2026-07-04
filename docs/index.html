@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v981';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v982';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1931,6 +1931,15 @@ function updateTranslitSugg(){
   if(modes.narr||modes.chain||modes.any){ box.style.display='none'; box.innerHTML=''; return; }   // 👤/⛓/🌐: транслит-чип хадисов («هشيما» при «хишам») тут не к месту — есть свои подсказки
   // показываем только для НЕ-арабского ТЕКСТОВОГО запроса (не число, не сура:аят, есть буквы)
   if(!v || v.length<2 || isArabic(v) || /^\d/.test(v) || /[٠-٩]/.test(v) || !/[a-zа-яё]/i.test(v)){ box.style.display='none'; box.innerHTML=''; return; }
+  // #426: >4 слов — человек ОПИСЫВАЕТ смысл, а не транскрибирует арабское; пословные арабские чипы тут = бред.
+  if(v.split(/\s+/).length>4 && !modes.ai){
+    box.innerHTML='';
+    const ab=document.createElement('span'); ab.className='chip';
+    ab.style.cssText='cursor:pointer;font-size:13px;background:#3a2d5e;border-color:#6c5ce7;color:#e0d7ff;display:inline-block';
+    ab.textContent='🧠 Длинный запрос — включить поиск ПО СМЫСЛУ (ИИ)?';
+    ab.onclick=()=>{ modes.ai=true; const ac=document.querySelector('.chip[data-mode="ai"]'); if(ac) ac.classList.add('on'); box.style.display='none'; box.innerHTML=''; runSearch(true); };
+    box.appendChild(ab); box.style.display='block'; return;
+  }
   clearTimeout(_tlT);
   _tlT=setTimeout(async()=>{
     if(((document.getElementById('q').value||'').trim())!==v) return;   // успел поменяться
@@ -2584,7 +2593,8 @@ async function runSearch(explicit){
     // на вкладке Хадисы аяты НЕ показываем результатом — только лёгкая подсказка «также в Коране»
     let quranHint=''; if(tab==='hadith' && sr.quran && sr.quran.length){ quranHint=' · 💡 в Коране: '+sr.quran.slice(0,4).join(', '); }
     // ③ иначе — характерная фраза(ы): транслит + наш словарь (гарант знаменитых) + фразы ИИ
-    let local=[], lphrase=''; try{ local=await translitSuggest(shown); lphrase=await translitPhrase(shown); }catch(e){}
+    const _qW=shown.trim().split(/\s+/).length;   // #426: >4 слов = описание смысла — пословный транслит в фразы НЕ мержим
+    let local=[], lphrase=''; try{ if(_qW<=4){ local=await translitSuggest(shown); lphrase=await translitPhrase(shown); } }catch(e){}
     const merged=[]; if(lphrase) merged.push(lphrase); local.forEach(w=>{ if(!merged.includes(w)) merged.push(w); });
     try{ neuroLocal(shown).forEach(p=>{ if(!merged.includes(p)) merged.push(p); }); }catch(e){}
     (sr.phrases||[]).forEach(p=>{ if(!merged.includes(p)) merged.push(p); });
@@ -4180,21 +4190,30 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
   try{ ourMaterialBadge(code, (h.num||h.n), meta, card); }catch(e){}   // M52: отметка «от Muslimoon»
   if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp){ sp.style.cursor='pointer'; sp.onclick=()=>openReader(code,String(h.num)); } }
   // #234/#237: у Муслима буквы риваятов sunnah.com (654a/654b…) ПРЯМО рядом с номером — кликабельно. Буквы авторитетные из muslim_riw.json (1879 номеров с риваятами).
-  if(code==='muslim' && !riwNo){ (async()=>{ try{ const rw=await loadMuslimRiw(); const _bn=String(h.num).replace(/[^0-9]/g,''); const lets=rw&&rw[_bn];
+  if(code==='muslim'){ (async()=>{ try{ const rw=await loadMuslimRiw(); const _bn=String(h.num).replace(/[^0-9]/g,''); const lets=rw&&rw[_bn];
     if(lets && lets.length){ const sp=meta.querySelector('.src'); if(sp){ const rs=document.createElement('span');
       rs.style.cssText='font-size:10.5px;color:var(--link);margin-inline-start:6px;cursor:pointer;white-space:nowrap';
-      rs.textContent='· sunnah.com '+lets.map(L=>_bn+L).join('·'); rs.title='Риваяты этого хадиса на sunnah.com — нажми (откроется '+_bn+lets[0]+')';
-      rs.onclick=(e)=>{ try{e.stopPropagation();}catch(_e){} try{ openLink('https://sunnah.com/muslim:'+_bn+lets[0]); }catch(_e2){} };
+      const _myL=riwNo?(lets[riwNo-1]||lets[0]):lets[0];   // M496: риваят-карточка (⚬) → ТОЧНАЯ буква по позиции (#234)
+      rs.textContent=riwNo?('· код sunnah.com: '+_bn+_myL):('· sunnah.com '+lets.map(L=>_bn+L).join('·'));
+      rs.title=riwNo?('Код этого риваята на sunnah.com — нажми (откроется '+_bn+_myL+')'):('Риваяты этого хадиса на sunnah.com — нажми (откроется '+_bn+_myL+')');
+      rs.onclick=(e)=>{ try{e.stopPropagation();}catch(_e){} try{ openLink('https://sunnah.com/muslim:'+_bn+_myL); }catch(_e2){} };
       sp.insertAdjacentElement('afterend', rs); } } }catch(e){} })(); }
-  if(code==='muslim' && !riwNo){ (async()=>{ try{ const nm=await _muslimNums(h.num); if(nm){ const sp=meta.querySelector('.src');
+  if(code==='muslim' && riwNo<=1){ (async()=>{ try{ const nm=await _muslimNums(h.num); if(nm){ const sp=meta.querySelector('.src');   // M496: ⓘ и на риваятных (1-й риваят)
     if(sp){ const ex=document.createElement('span'); ex.style.cssText='font-size:10px;color:var(--hint);margin:0 6px 0 8px;white-space:nowrap;opacity:.8';
       ex.title='Основной номер хадиса — №'+h.num+' (нумерация Абд аль-Баки, эталон учёных). Дополнительно для справки: сквозной номер по всей книге и номер хадиса внутри раздела — не путать с основным.';
       ex.textContent='ⓘ сквозной '+nm[0]+' · в разделе '+nm[1]; sp.parentNode.insertBefore(ex, sp.nextSibling); } } }catch(e){} })(); }
+  // M496: имя равия (сахаби = последний в иснаде ЭТОГО текста/риваята) — 👤 кликабельно → карточка передатчика
+  try{ const _nms=isnadNarrators(text).filter(_keepNarr); const _rw=_nms.length?_nms[_nms.length-1]:null;
+    if(_rw){ const rb=document.createElement('span'); rb.className='src';
+      rb.style.cssText='cursor:pointer;color:var(--link);white-space:nowrap';
+      rb.textContent='👤 '+_rw; rb.title='Равий хадиса — открыть карточку передатчика';
+      rb.onclick=(e)=>{ try{e.stopPropagation();}catch(_e){} try{ openNarratorRijal(_rw); }catch(_e2){} };
+      meta.appendChild(rb); } }catch(e){}
   const _fk = riwNo ? ('h|'+code+'|'+h.num+'#'+riwNo) : ('h|'+code+'|'+h.num);
   const _lab = arOf(code)+' №'+h.num+(riwNo?(' (риваят '+riwNo+')'):'');
   addTr(meta,card,text,null,{k:_fk,type:'h',coll:arOf(code),label:_lab,text:(text||'').slice(0,200),_riwNo:riwNo,_riwTot:riwTot}); card.appendChild(meta);
   // #350/#384: «ещё хадисы с этой цепью» — та же цепочка+код цепи (⛓, openIsnadBase), что уже была ТОЛЬКО в M314-номерном поиске; теперь на КАЖДОЙ обычной карточке хадиса (текстовый/книга+номер поиск).
-  try{ if(!riwNo){ const _dzb=(COLL_BIDS[code]&&COLL_BIDS[code][0])||EXTRA_BIDS[code]; if(_dzb) dzChainLazy(card, _dzb, h.num); } }catch(e){}
+  try{ if(riwNo<=1){ const _dzb=(COLL_BIDS[code]&&COLL_BIDS[code][0])||EXTRA_BIDS[code]; if(_dzb) dzChainLazy(card, _dzb, h.num); } }catch(e){}   // M496: ⛓ цепь и на риваятных (1-й риваят)
   return card;   // #234: позиция риваята → точная буква sunnah.com
 }
 function cardMuh(d,groups){
@@ -11274,12 +11293,16 @@ function _tokTop(v, token, n, live){
   const exact=[]; const ex=v.get(ph);
   if(ex){ for(const e of ex.entries()){ if(live && e[1]<1000 && ph.length<3) continue; exact.push(e); } }
   let ranked;
-  if(exact.length){ exact.sort((a,b)=>b[1]-a[1]); ranked=exact; }
+  const _MIN_SIM=0.72;   // #426/#435: порог фонетического сходства для НЕточных матчей — «лучший любой» больше не показываем
+  if(exact.length){ exact.sort((a,b)=>b[1]-a[1]); ranked=exact; }   // точный класс = сходство 1.0
   else if(ph.length>=3){ const approx=[];   // ed1 только при совпадении ПЕРВОЙ согласной (халифату→خليفة да, терпение→ربنا нет)
-    for(const [k,m] of v){ if(k!==ph && k[0]===ph[0] && Math.abs(k.length-ph.length)<=1 && _ed1(k,ph)){ for(const e of m.entries()){ if(live && e[1]<1000) continue; approx.push(e); } } }
+    for(const [k,m] of v){ if(k!==ph && k[0]===ph[0] && Math.abs(k.length-ph.length)<=1 && _ed1(k,ph)){
+      const sim=1-1/Math.max(k.length,ph.length);   // ed1 = ровно 1 правка → сходство 1-1/len класса
+      if(sim<_MIN_SIM) continue;   // 3-согласные натяжки (sim 0.67) — главный источник «бреда» — отсекаются
+      for(const e of m.entries()){ if(live && e[1]<1000) continue; approx.push(e); } } }
     approx.sort((a,b)=>b[1]-a[1]); ranked=approx;
   } else ranked=[];
-  return ranked.slice(0,n).map(e=>e[0]);
+  return ranked.slice(0,Math.min(n,3)).map(e=>e[0]);   // #426: жёсткий кэп — не более 3 кандидатов с токена
 }
 // #181: РАСКЛАДКА — ввод чужой раскладкой (rfnflf на англ. = катада) → понять как Яндекс. Карта QWERTY→ЙЦУКЕН (r=к!).
 const _QW2CYR={q:'й',w:'ц',e:'у',r:'к',t:'е',y:'н',u:'г',i:'ш',o:'щ',p:'з','[':'х',']':'ъ',a:'ф',s:'ы',d:'в',f:'а',g:'п',h:'р',j:'о',k:'л',l:'д',';':'ж',"'":'э',z:'я',x:'ч',c:'с',v:'м',b:'и',n:'т',m:'ь',',':'б','.':'ю','/':'.','`':'ё'};
@@ -11306,8 +11329,8 @@ async function translitSuggest(query, live){
   const toks=(query||'').toLowerCase().split(/[\s,.;:!?()"'«»\/\-+|]+/).filter(t=>t.length>=2 && /[a-zа-яё]/i.test(t) && !_ruThemeWord(t));
   if(!toks.length) return [];
   const out=[]; const seen=new Set();
-  for(const t of toks){ for(const w of _tokTop(v,t,3,live)){ if(seen.has(w)) continue; seen.add(w); out.push(w); if(out.length>=6) break; } if(out.length>=6) break; }
-  return out.slice(0,6);
+  for(const t of toks){ for(const w of _tokTop(v,t,2,live)){ if(seen.has(w)) continue; seen.add(w); out.push(w); if(out.length>=3) break; } if(out.length>=3) break; }   // #426: ≤2 на токен, ≤3 всего (было 3/6)
+  return out.slice(0,3);
 }
 // ФРАЗА целиком: для 2+ слов — лучшее арабское на каждый токен, склеенное. '' если хоть одно слово не опознано.
 async function translitPhrase(query, live){
@@ -12429,7 +12452,16 @@ function _readRender(){
   document.getElementById('readPos').textContent='№'+(h.num!==undefined?h.num:(_readIdx+1))+'  ('+(_readIdx+1)+' из '+_readArr.length+')';
   const body=document.getElementById('readBody'); body.innerHTML='';
   const sg=_groups;                 // #311: в читалке СОХРАНЯЕМ подсветку искомого слова (зашёл из поиска → sg непуст; из меню/новый поиск → []) — тот же hl(), Arabus не затронут
-  try{ body.appendChild(cardHadith({code:_readCode,h,noNav:true},sg||[])); }catch(e){ const d=document.createElement('div');d.className='ar';d.innerHTML=esc(h.text||'');body.appendChild(d); }
+  try{ body.appendChild(cardHadith({code:_readCode,h,noNav:true},sg||[])); }
+  catch(e){   // M496: сбой полной карточки → НЕ голый текст, а мини-карточка с addTr
+    try{ console.warn('reader-card fail', _readCode, h&&h.num, e); }catch(_e){}
+    const card=document.createElement('div'); card.className='card';
+    String(h.text||'').split('⚬').map(s=>s.trim()).filter(Boolean).forEach(t=>{ const d=document.createElement('div'); d.className='ar'; try{ d.innerHTML=hl(t,sg||[]); }catch(_e2){ d.innerHTML=esc(t); } card.appendChild(d); });
+    const meta=document.createElement('div'); meta.className='meta';
+    try{ meta.innerHTML='<span class="src">'+vocOf(_readCode)+' · №'+(h.num!==undefined?h.num:(_readIdx+1))+'</span>'; }catch(_e3){}
+    try{ addTr(meta,card,h.text||'',null,{k:'h|'+_readCode+'|'+h.num,type:'h',coll:arOf(_readCode),label:arOf(_readCode)+' №'+h.num,text:String(h.text||'').slice(0,200)}); }catch(_e4){}
+    card.appendChild(meta); body.appendChild(card);
+  }
 }
 // Р-07: _prefetchTranslate удалён (был отключён `return;`, дёргался вызовом — мёртвый код; авто-перевод запрещён, только по кнопке).
 async function _readOpen(code,fromNum){
