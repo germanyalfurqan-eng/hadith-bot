@@ -623,6 +623,11 @@
       <div class="ah"><div><div class="at">🧪 Единая читалка (M313)</div><div class="ad">Новый единый ридер, этап 2/5: тест на Бухари. Старые читалки не тронуты.</div></div>
         <button class="go" id="urDevBtn" style="padding:6px 12px" onclick="try{openUnifiedReader('bukhari')}catch(e){toast('UR: '+e.message)}">Открыть</button> <button class="go" id="urDevBook" style="padding:6px 12px" onclick="try{openUnifiedBook(prompt('id книги Мактабы','1')||1,1)}catch(e){toast('UR: '+e.message)}">Книга</button></div>
     </div>
+    <!-- #300 этап 2: карта мест передатчиков (тест из кабинета) -->
+    <div class="accf">
+      <div class="ah"><div><div class="at">🗺 Карта передатчиков (#300)</div><div class="ad">28 городов, 12923 равия по residence/нисбе. Тап города → список → карточка.</div></div>
+        <button class="go" id="mpDevBtn" style="padding:6px 12px" onclick="try{openNarrMap()}catch(e){toast('MP: '+e.message)}">Открыть</button></div>
+    </div>
     <!-- M428: ЕДИНЫЙ журнал заявок (бот TB + апп TA + чат M) из req_status.json — синхронизирован с деплоями -->
     <div class="accf">
       <div class="ah"><div><div class="at">📋 Журнал заявок (полный)</div><div class="ad">Все коды: M (чат) · TB (бот) · TA (апп). Статусы, причины, сроки — обновляется с каждым деплоем.</div></div>
@@ -723,7 +728,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v998';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v999';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -12971,6 +12976,127 @@ function openUnifiedReader(code, fromNum){
   else{ try{toast('Читалка не инициализирована');}catch(e){} }
 }
 
+</script>
+
+<!-- #300: интерактивная карта мест передатчиков (этап 2). Драфт Хермеса + надзор-фиксы С56: без :root, арабские ключи, narrOpen. -->
+<style id="mpStyles">
+.mp-modal{position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg);z-index:10008;display:none;flex-direction:column}
+.mp-modal.active{display:flex}
+.mp-header{padding:12px 15px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,.08);color:var(--text);flex-shrink:0}
+.mp-close-btn{background:none;border:1px solid rgba(255,255,255,.15);color:var(--text);padding:5px 12px;border-radius:8px;cursor:pointer}
+.mp-map-container{flex:1;position:relative;overflow:hidden;background:radial-gradient(circle at center,#1a2030 0%,#0b0e16 100%);touch-action:none}
+.mp-svg{width:100%;height:100%;display:block}
+.mp-node{fill:#d4af37;stroke:#0b0e16;stroke-width:2px;cursor:pointer}
+.mp-node-label{fill:var(--text);font-size:13px;pointer-events:none;text-anchor:middle}
+.mp-node-count{fill:#0b0e16;font-size:10.5px;font-weight:bold;pointer-events:none;text-anchor:middle}
+.mp-line{stroke:rgba(255,255,255,.18);stroke-width:1px;stroke-dasharray:4 4;pointer-events:none}
+.mp-controls{position:absolute;bottom:18px;right:14px;display:flex;flex-direction:column;gap:6px}
+.mp-btn{background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.2);color:var(--text);width:36px;height:36px;border-radius:9px;font-size:18px;cursor:pointer}
+.mp-panel{max-height:42vh;background:var(--bg);border-top:1px solid #d4af37;overflow-y:auto;padding:12px 15px;display:none;flex-shrink:0}
+.mp-panel.active{display:block}
+.mp-panel-title{color:#d4af37;font-size:16px;font-weight:700;margin-bottom:8px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:5px;display:flex;justify-content:space-between;align-items:center}
+.mp-list-item{padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;display:flex;justify-content:space-between;gap:8px}
+.mp-list-item:active{opacity:.7}
+.mp-list-meta{color:var(--hint);font-size:11.5px;flex-shrink:0}
+.mp-more-btn{margin-top:10px;width:100%;padding:11px;background:rgba(255,255,255,.07);color:var(--text);border:1px solid rgba(255,255,255,.14);border-radius:9px;cursor:pointer;font-size:14px}
+</style>
+<script id="mpScript">
+// #300: карта мест передатчиков — узлы-города, тап → список равиев, тап равия → карточка (narrOpen)
+(function(){
+  var COORDS={
+    'مكة المكرمة':[280,520],'المدينة المنورة':[250,450],'اليمن':[300,585],'اليمامة':[400,520],
+    'مصر':[120,330],'الإسكندرية':[90,290],'بيت المقدس':[215,330],'الرملة':[195,350],
+    'دمشق':[270,255],'الشام':[250,222],'حمص':[290,210],'حماة':[300,188],'حران':[355,140],'الرقة':[385,168],'المصيصة':[320,118],
+    'الموصل':[455,150],'سر من رأى':[492,238],'بغداد':[500,290],'المدائن':[525,312],'واسط':[520,362],'الكوفة':[465,372],'البصرة':[545,432],'العراق':[565,330],
+    'الري':[645,200],'نيسابور':[692,242],'أصبهان':[622,305],'خراسان':[722,198],'مرو':[745,168]};
+  var state={data:null,scale:1,px:0,py:0,drag:null,city:null,shown:0,list:[]};
+  var el=null;
+  function init(){
+    if(el) return;
+    var m=document.createElement('div'); m.id='mpModal'; m.className='mp-modal';
+    m.innerHTML='<div class="mp-header"><b>🗺 Карта передатчиков</b><button class="mp-close-btn" id="mpClose">✕</button></div>'
+      +'<div class="mp-map-container" id="mpMapC"><svg id="mpSvg" class="mp-svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">'
+      +'<g id="mpTG"><path d="M 250,450 Q 350,410 465,372 T 645,200" class="mp-line"/><path d="M 280,520 L 250,450" class="mp-line"/><path d="M 465,372 Q 480,320 500,290" class="mp-line"/><path d="M 500,290 Q 570,240 692,242" class="mp-line"/><path d="M 270,255 Q 380,270 500,290" class="mp-line"/><g id="mpNodes"></g></g></svg>'
+      +'<div class="mp-controls"><button class="mp-btn" id="mpZin">+</button><button class="mp-btn" id="mpZout">−</button></div></div>'
+      +'<div class="mp-panel" id="mpPanel"><div class="mp-panel-title"><span id="mpPT"></span><button class="mp-close-btn" id="mpPClose" style="font-size:12px;padding:3px 9px">свернуть</button></div><div id="mpPL"></div><button class="mp-more-btn" id="mpMore" style="display:none">⬇ ещё 30</button></div>';
+    document.body.appendChild(m); el=m;
+    m.querySelector('#mpClose').onclick=function(){ m.classList.remove('active'); };
+    m.querySelector('#mpPClose').onclick=function(){ document.getElementById('mpPanel').classList.remove('active'); };
+    m.querySelector('#mpZin').onclick=function(){ zoom(1.25); };
+    m.querySelector('#mpZout').onclick=function(){ zoom(0.8); };
+    m.querySelector('#mpMore').onclick=more;
+    var c=m.querySelector('#mpMapC');
+    c.addEventListener('touchstart',function(e){ if(e.touches.length===1){ state.drag={x:e.touches[0].clientX,y:e.touches[0].clientY}; } },{passive:true});
+    c.addEventListener('touchmove',function(e){ if(!state.drag||e.touches.length!==1) return; var t=e.touches[0];
+      state.px+=(t.clientX-state.drag.x)*(800/c.clientWidth)/state.scale; state.py+=(t.clientY-state.drag.y)*(600/c.clientHeight)/state.scale;
+      state.drag={x:t.clientX,y:t.clientY}; apply(); },{passive:true});
+    c.addEventListener('touchend',function(){ state.drag=null; },{passive:true});
+    c.addEventListener('mousedown',function(e){ state.drag={x:e.clientX,y:e.clientY}; });
+    c.addEventListener('mousemove',function(e){ if(!state.drag) return; state.px+=(e.clientX-state.drag.x)/state.scale; state.py+=(e.clientY-state.drag.y)/state.scale; state.drag={x:e.clientX,y:e.clientY}; apply(); });
+    c.addEventListener('mouseup',function(){ state.drag=null; });
+    c.addEventListener('mouseleave',function(){ state.drag=null; });
+  }
+  function zoom(f){ state.scale=Math.max(0.5,Math.min(4,state.scale*f)); apply(); }
+  function apply(){ var g=document.getElementById('mpTG'); if(g) g.setAttribute('transform','scale('+state.scale+') translate('+state.px+' '+state.py+')'); }
+  function svgEl(n){ return document.createElementNS('http://www.w3.org/2000/svg',n); }
+  function render(){
+    var g=document.getElementById('mpNodes'); g.innerHTML='';
+    var others=[];
+    Object.keys(state.data).sort(function(a,b){ return state.data[b].count-state.data[a].count; }).forEach(function(k){
+      var v=state.data[k], xy=COORDS[k];
+      if(!xy||v.count<30){ others.push(k); return; }
+      var r=Math.sqrt(v.count)/2+6;
+      var ci=svgEl('circle'); ci.setAttribute('cx',xy[0]); ci.setAttribute('cy',xy[1]); ci.setAttribute('r',r); ci.setAttribute('class','mp-node');
+      ci.addEventListener('click',function(){ openCity(k); });
+      var la=svgEl('text'); la.setAttribute('x',xy[0]); la.setAttribute('y',xy[1]+r+14); la.setAttribute('class','mp-node-label'); la.textContent=v.ru;
+      var ct=svgEl('text'); ct.setAttribute('x',xy[0]); ct.setAttribute('y',xy[1]+4); ct.setAttribute('class','mp-node-count'); ct.textContent=v.count;
+      g.appendChild(ci); g.appendChild(la); g.appendChild(ct);
+    });
+    if(others.length){
+      var ox=735,oy=555;
+      var oc=svgEl('circle'); oc.setAttribute('cx',ox); oc.setAttribute('cy',oy); oc.setAttribute('r',16); oc.setAttribute('class','mp-node'); oc.style.fill='#8a8f9d';
+      oc.addEventListener('click',function(){ openOthers(others); });
+      var ol=svgEl('text'); ol.setAttribute('x',ox); ol.setAttribute('y',oy+30); ol.setAttribute('class','mp-node-label'); ol.textContent='Прочие ('+others.length+')';
+      g.appendChild(oc); g.appendChild(ol);
+    }
+  }
+  function row(shuhra, meta){
+    var it=document.createElement('div'); it.className='mp-list-item';
+    var a=document.createElement('span'); a.textContent=shuhra; a.style.direction='rtl';
+    var b=document.createElement('span'); b.className='mp-list-meta'; b.textContent=meta||'';
+    it.appendChild(a); it.appendChild(b);
+    it.onclick=function(){ try{ if(typeof narrOpen==='function'){ el.classList.remove('active'); narrOpen(shuhra); } else toast('Карточка недоступна'); }catch(e){ try{toast('Ошибка карточки');}catch(_){} } };
+    return it;
+  }
+  function openCity(k){
+    var v=state.data[k]; state.city=k; state.shown=0; state.list=v.narrators||[];
+    document.getElementById('mpPT').textContent=v.ru+' · '+v.count;
+    document.getElementById('mpPL').innerHTML='';
+    document.getElementById('mpPanel').classList.add('active');
+    more();
+  }
+  function openOthers(keys){
+    state.city='__others'; state.shown=0; state.list=[];
+    keys.forEach(function(k){ (state.data[k].narrators||[]).forEach(function(n){ state.list.push({shuhra:n.shuhra,tabaqa:(state.data[k].ru||'')+(n.tabaqa?(' · '+n.tabaqa):'')}); }); });
+    document.getElementById('mpPT').textContent='Прочие города · '+state.list.length;
+    document.getElementById('mpPL').innerHTML='';
+    document.getElementById('mpPanel').classList.add('active');
+    more();
+  }
+  function more(){
+    var pl=document.getElementById('mpPL');
+    state.list.slice(state.shown,state.shown+30).forEach(function(n){ pl.appendChild(row(n.shuhra,n.tabaqa)); });
+    state.shown=Math.min(state.shown+30,state.list.length);
+    document.getElementById('mpMore').style.display=(state.shown<state.list.length)?'block':'none';
+  }
+  window.openNarrMap=function(){
+    init(); el.classList.add('active');
+    if(state.data){ return; }
+    fetch('./map300_cities.json').then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(function(j){ state.data=j; render(); })
+      .catch(function(e){ try{toast('Карта: не удалось загрузить данные');}catch(_){} });
+  };
+})();
 </script>
 
 </body>
