@@ -3290,6 +3290,38 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await update.message.reply_text(f"Не нашёл заявку №{rid}.")
             return
+        # ===== #505 (владелец 04.07.2026): заметки джамаата — «JM <текст>» ТОЛЬКО владельцем и ТОЛЬКО в @jamaat_ru =====
+        # Структурно копим (дата+нумерация), «список заметок»/«заметки JM» — выдать всё, .md-файлом если длинно.
+        if (_tl.startswith("jm ") or _tl.startswith("jm\n")) and is_owner(update) and getattr(update.effective_chat, "id", None) == JAMAAT_RU_CHAT_ID:
+            _jm_body = text.strip()[2:].strip()
+            if not _jm_body:
+                await update.message.reply_text("✍️ Напиши: JM <текст заметки>")
+                return
+            _jm = _data_get("jamaat_notes.json", []) or []
+            _jm_id = (max([n.get("id", 0) for n in _jm]) if _jm else 0) + 1
+            _jm.append({"id": _jm_id, "d": _now_msk(), "t": _jm_body})
+            _data_put("jamaat_notes.json", _jm, f"JM-заметка #{_jm_id}")
+            await update.message.reply_text(f"📝 Заметка JM #{_jm_id} записана ({_now_msk()}).")
+            return
+        if _tl in ("список заметок", "заметки jm", "jm список", "список jm") and is_owner(update) and getattr(update.effective_chat, "id", None) == JAMAAT_RU_CHAT_ID:
+            _jm = _data_get("jamaat_notes.json", []) or []
+            if not _jm:
+                await update.message.reply_text("Заметок JM пока нет. Пиши: JM <текст>")
+                return
+            _lines = [f"{n.get('id')}. [{n.get('d','')}] {n.get('t','')}" for n in _jm]
+            _md = "# Заметки джамаата (JM)\n\n" + "\n\n".join(_lines) + "\n"
+            if len(_md) > 3500:
+                import tempfile
+                _fp = tempfile.NamedTemporaryFile(suffix=".md", delete=False, mode="w", encoding="utf-8")
+                _fp.write(_md); _fp.close()
+                try:
+                    await update.message.reply_document(open(_fp.name, "rb"), filename="jamaat_notes.md", caption=f"📝 Заметок JM: {len(_jm)}")
+                finally:
+                    try: os.remove(_fp.name)
+                    except Exception: pass
+            else:
+                await update.message.reply_text("📝 *Заметки JM:*\n\n" + "\n".join(_lines), parse_mode="Markdown")
+            return
         # ===== Добавить заявку: «заявка <текст>» / «замечание <текст>» (+ подсказка о дубле) =====
         if _tl.startswith("заявка ") or _tl.startswith("замечание ") or _tl == "заявка" or _tl == "замечание":
             body = text.strip()[6:].strip() if _tl.startswith("заявк") or _tl == "заявка" else text.strip()[9:].strip()
