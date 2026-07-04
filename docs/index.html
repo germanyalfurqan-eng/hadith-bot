@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v991';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v992';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -12703,5 +12703,153 @@ boot();
 try{ setTimeout(()=>{ try{ loadCatalog(); }catch(e){} try{ loadNarrNames(); }catch(e){} try{ loadBookTr(); }catch(e){} }, 3500); }catch(e){}
 try{ document.documentElement.setAttribute('data-jsok', (typeof APPVER!=='undefined')?APPVER:'noappver'); }catch(e){}
 </script>
+<!-- M313 Этап 1: каркас единой читалки UnifiedReader (черновик Хермеса + надзор-фиксы С56). Старые читалки НЕ тронуты. -->
+<style id="urStyles">
+.ur-modal{position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg);color:var(--text);z-index:10010;display:flex;flex-direction:column;overflow:hidden}
+.ur-modal.hidden{display:none}
+.ur-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(0,0,0,.2);border-bottom:1px solid rgba(255,255,255,.05);flex-shrink:0}
+.ur-back-btn{background:none;border:none;color:var(--text);font-size:24px;padding:0;cursor:pointer;margin-right:12px}
+.ur-title{flex-grow:1;font-weight:600;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.ur-page-indicator{font-size:14px;color:var(--hint);margin-left:12px;cursor:pointer;min-width:40px;text-align:right}
+.ur-content{flex-grow:1;overflow-y:auto;padding:16px;-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+.ur-item{margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.05)}
+.ur-item:last-child{border-bottom:none}
+.ur-arabic{font-size:calc(24px * var(--ur-font-scale,1));line-height:1.9;text-align:right;direction:rtl;margin-bottom:12px;font-family:'Kitab',KFGQPC,'Traditional Arabic',serif}
+.ur-translation{font-size:16px;line-height:1.5;color:var(--text);white-space:pre-wrap}
+.ur-translation.hidden{display:none}
+.ur-toolbar{display:flex;justify-content:space-around;align-items:center;padding:10px 8px;background:rgba(0,0,0,.3);border-top:1px solid rgba(255,255,255,.05);flex-shrink:0}
+.ur-tool-btn{background:none;border:none;color:var(--text);font-size:15px;padding:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;min-width:38px;height:38px;border-radius:50%}
+.ur-tool-btn:active{background:rgba(255,255,255,.1)}
+.ur-modal.ur-theme-sepia{background:#2c241b;color:#e6d5c3}
+.ur-modal.ur-theme-sepia .ur-arabic{color:#fff}
+.ur-modal.ur-theme-amoled{background:#000;color:#fff}
+.ur-skeleton{background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(255,255,255,.1) 50%,rgba(255,255,255,.05) 75%);background-size:200% 100%;animation:ur-shimmer 1.5s infinite;border-radius:4px;height:60px;margin-bottom:12px}
+@keyframes ur-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.ur-jump-modal{position:absolute;top:56px;right:16px;background:var(--bg);border:1px solid var(--hint);padding:10px;border-radius:8px;z-index:10020;display:none}
+.ur-jump-modal.show{display:block}
+.ur-jump-input{background:transparent;border:none;color:var(--text);font-size:16px;width:80px;text-align:center;outline:none}
+</style>
+<script id="urScript">
+// M313 Этап 1: UnifiedReader (UR) — каркас единой читалки. Адаптеры источников подключаются этапами 2-5.
+(function(){
+  var state={adapter:null,items:[],currentIndex:0};
+  var dom=null;
+  var UR={};
+  function _cfgFont(){ try{ return Math.max(0.8,Math.min(2.0,parseFloat(cfg.urFontScale)||1)); }catch(e){ return 1; } }
+  function _cfgTheme(){ try{ return cfg.urTheme||'dark'; }catch(e){ return 'dark'; } }
+  function _cfgTrans(){ try{ return cfg.urTrans!==false; }catch(e){ return true; } }
+  UR.init=function(){
+    if(dom) return;
+    var m=document.createElement('div');
+    m.id='urModal'; m.className='ur-modal hidden';
+    m.innerHTML='<div class="ur-header">'
+      +'<button class="ur-back-btn" id="urBackBtn" title="Назад">←</button>'
+      +'<div class="ur-title" id="urTitle">Читалка</div>'
+      +'<div class="ur-page-indicator" id="urPageInd">–</div></div>'
+      +'<div class="ur-content" id="urContent"></div>'
+      +'<div class="ur-toolbar" id="urToolbar">'
+      +'<button class="ur-tool-btn" id="urBtnMinus" title="Меньше шрифт">A−</button>'
+      +'<button class="ur-tool-btn" id="urBtnPlus" title="Больше шрифт">A+</button>'
+      +'<button class="ur-tool-btn" id="urBtnTheme" title="Тема">🌗</button>'
+      +'<button class="ur-tool-btn" id="urBtnTrans" title="Перевод">📖</button>'
+      +'<button class="ur-tool-btn" id="urBtnCopy" title="Копировать">📋</button>'
+      +'<button class="ur-tool-btn" id="urBtnShare" title="Поделиться">🔗</button>'
+      +'<div id="urDynamicTools" style="display:flex;gap:6px"></div></div>'
+      +'<div class="ur-jump-modal" id="urJumpModal"><input type="number" class="ur-jump-input" id="urJumpInput" placeholder="№"></div>';
+    document.body.appendChild(m);
+    dom={modal:m,content:m.querySelector('#urContent'),title:m.querySelector('#urTitle'),
+      pageInd:m.querySelector('#urPageInd'),jumpModal:m.querySelector('#urJumpModal'),
+      jumpInput:m.querySelector('#urJumpInput'),dynamicTools:m.querySelector('#urDynamicTools')};
+    m.querySelector('#urBackBtn').onclick=function(){ UR.close(); };
+    m.querySelector('#urBtnMinus').onclick=function(){ UR.changeFont(-0.1); };
+    m.querySelector('#urBtnPlus').onclick=function(){ UR.changeFont(0.1); };
+    m.querySelector('#urBtnTheme').onclick=function(){ UR.cycleTheme(); };
+    m.querySelector('#urBtnTrans').onclick=function(){ UR.toggleTranslation(); };
+    m.querySelector('#urBtnCopy').onclick=function(){ UR.copyAll(); };
+    m.querySelector('#urBtnShare').onclick=function(){ UR.shareAll(); };
+    dom.pageInd.onclick=function(ev){ ev.stopPropagation(); UR.showJump(); };
+    dom.jumpInput.onkeydown=function(e){ if(e.key==='Enter') UR.jumpTo(parseInt(dom.jumpInput.value,10)); };
+    m.addEventListener('click',function(e){ if(dom.jumpModal.classList.contains('show') && !dom.jumpModal.contains(e.target) && e.target!==dom.pageInd) dom.jumpModal.classList.remove('show'); });
+    UR.applyConfig();
+  };
+  UR.open=function(adapter,params){
+    if(!adapter||typeof adapter.fetch!=='function'){ try{toast('Читалка: адаптер некорректен');}catch(e){} return; }
+    UR.init();
+    state.adapter=adapter; state.items=[]; state.currentIndex=0;
+    dom.title.textContent=adapter.title||'Читалка';
+    dom.pageInd.textContent='–';
+    dom.dynamicTools.innerHTML='';
+    if(adapter.tools&&adapter.tools.forEach) adapter.tools.forEach(function(t){ UR.registerTool(t); });
+    dom.modal.classList.remove('hidden');
+    UR.renderLoading();
+    Promise.resolve().then(function(){ return adapter.fetch(params||{}); }).then(function(items){
+      state.items=items||[]; UR.render(state.items); UR.applyConfig();
+    }).catch(function(err){
+      try{console.error('UR fetch:',err);}catch(e){}
+      dom.content.innerHTML='<div style="text-align:center;padding:24px;color:var(--hint)">Не удалось загрузить. Проверьте сеть и попробуйте ещё раз.</div>';
+    });
+  };
+  UR.close=function(){ if(!dom) return; dom.modal.classList.add('hidden'); dom.jumpModal.classList.remove('show'); };
+  UR.render=function(items){
+    dom.content.innerHTML='';
+    if(!items||!items.length){ dom.content.innerHTML='<div style="padding:24px;text-align:center;color:var(--hint)">Пусто</div>'; UR.updateInd(); return; }
+    var frag=document.createDocumentFragment();
+    items.forEach(function(it,i){
+      var el=document.createElement('div'); el.className='ur-item'; el.setAttribute('data-ur-i',i);
+      var ar=document.createElement('div'); ar.className='ur-arabic'; ar.textContent=it.arabic||'';
+      el.appendChild(ar);
+      if(it.translation){ var tr=document.createElement('div'); tr.className='ur-translation'; tr.textContent=it.translation; el.appendChild(tr); }
+      frag.appendChild(el);
+    });
+    dom.content.appendChild(frag);
+    UR.updateInd();
+  };
+  UR.renderLoading=function(){ dom.content.innerHTML=''; for(var i=0;i<5;i++){ var s=document.createElement('div'); s.className='ur-skeleton'; dom.content.appendChild(s); } };
+  UR.changeFont=function(d){ var v=Math.max(0.8,Math.min(2.0,_cfgFont()+d)); try{ cfg.urFontScale=v; saveCfg(cfg); }catch(e){} UR.applyConfig(); };
+  UR.cycleTheme=function(){ var th=['dark','sepia','amoled']; var n=th[(th.indexOf(_cfgTheme())+1)%th.length]; try{ cfg.urTheme=n; saveCfg(cfg); }catch(e){} UR.applyConfig(); try{toast(n==='dark'?'🌑 Тёмная':n==='sepia'?'📜 Сепия':'⚫ AMOLED');}catch(e){} };
+  UR.toggleTranslation=function(){ try{ cfg.urTrans=(cfg.urTrans===false); saveCfg(cfg); }catch(e){} UR.applyConfig(); };
+  UR.copyAll=function(){
+    if(!state.items.length) return;
+    var t=state.items.map(function(it){ return (it.arabic||'')+(it.translation?'\n'+it.translation:''); }).join('\n\n');
+    try{ if(navigator.clipboard){ navigator.clipboard.writeText(t).then(function(){ try{toast('📋 Скопировано');}catch(e){} }); } }catch(e){}
+  };
+  UR.shareAll=function(){
+    if(!state.items.length) return;
+    var t=state.items.map(function(it){ return it.arabic||''; }).join('\n\n');
+    try{ if(navigator.share){ navigator.share({title:'Muslimoon',text:t}).catch(function(){}); } else if(window.tg&&tg.openTelegramLink){ tg.openTelegramLink('https://t.me/share/url?url=&text='+encodeURIComponent(t.slice(0,3000))); } }catch(e){}
+  };
+  UR.showJump=function(){ dom.jumpInput.value=''; dom.jumpModal.classList.add('show'); try{dom.jumpInput.focus();}catch(e){} };
+  UR.jumpTo=function(num){
+    dom.jumpModal.classList.remove('show');
+    if(isNaN(num)) return;
+    var el=null;
+    for(var i=0;i<state.items.length;i++){
+      var md=state.items[i].metadata||{};
+      if(String(md.number)===String(num)||i+1===num){ el=dom.content.querySelector('[data-ur-i="'+i+'"]'); state.currentIndex=i; break; }
+    }
+    if(el){ el.scrollIntoView({behavior:'smooth',block:'start'}); UR.updateInd(); }
+    else{ try{toast('№'+num+' не найден');}catch(e){} }
+  };
+  UR.updateInd=function(){ dom.pageInd.textContent=state.items.length?((state.currentIndex+1)+'/'+state.items.length):'–'; };
+  UR.applyConfig=function(){
+    if(!dom) return;
+    document.documentElement.style.setProperty('--ur-font-scale',_cfgFont());
+    dom.modal.classList.remove('ur-theme-sepia','ur-theme-amoled');
+    var th=_cfgTheme();
+    if(th==='sepia') dom.modal.classList.add('ur-theme-sepia');
+    if(th==='amoled') dom.modal.classList.add('ur-theme-amoled');
+    var show=_cfgTrans();
+    var els=dom.content.querySelectorAll('.ur-translation');
+    for(var i=0;i<els.length;i++){ els[i].classList.toggle('hidden',!show); }
+  };
+  UR.registerTool=function(t){
+    var b=document.createElement('button'); b.className='ur-tool-btn';
+    b.innerHTML=t.icon||'⚙️'; b.title=t.title||''; b.onclick=t.onClick||function(){};
+    dom.dynamicTools.appendChild(b);
+  };
+  window.UR=UR;
+})();
+</script>
+
 </body>
 </html>
