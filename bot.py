@@ -4628,6 +4628,64 @@ def _data_put(path, obj, message):
     except Exception:
         return False
 
+def _data_atomic_mutate(path, mutate_fn, message, retries=4):
+    """ГОНКА ДВУХ RAILWAY-ИНСТАНСОВ (04.07.2026, владелец поймал v962 запощенным 3-4 раза подряд в @muslimoonapp):
+    _data_put() читал sha ОДИН раз и писал без ретрая — если параллельный инстанс (redeploy держит старый+новый
+    живыми одновременно) успевал закоммитить МЕЖДУ нашим GET и PUT, наш PUT падал 409 (устаревший sha) и МОЛЧА
+    терялся (_data_put просто возвращал False, вызывающий код это не проверял) — отметка «уже запощено» не
+    сохранялась, следующий тик видел «not posted» и постил СНОВА.
+    Фикс: атомарный GET-мутировать-PUT с ретраем НА СВЕЖИХ данных при 409 — mutate_fn получает АКТУАЛЬНОЕ
+    состояние (не наш возможно устаревший локальный кэш) и возвращает новое; при конфликте курс. вокруг retries раз."""
+    if not GITHUB_TOKEN or not _ensure_data_branch():
+        return False, None
+    api = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
+    h = {"Authorization": f"token {GITHUB_TOKEN}"}
+    for _ in range(retries):
+        try:
+            r = requests.get(api + "?ref=data", headers=h, timeout=8)
+            sha = r.json().get("sha", "") if r.status_code == 200 else ""
+            obj = json.loads(base64.b64decode(r.json().get("content", "")).decode("utf-8")) if r.status_code == 200 else {}
+        except Exception:
+            obj, sha = {}, ""
+        obj = mutate_fn(obj)
+        try:
+            content = json.dumps(obj, ensure_ascii=False, indent=1)
+            b64 = base64.b64encode(content.encode("utf-8")).decode()
+            payload = {"message": message, "content": b64, "branch": "data"}
+            if sha:
+                payload["sha"] = sha
+            rp = requests.put(api, headers=h, json=payload, timeout=12)
+            if rp.status_code in (200, 201):
+                return True, obj
+            if rp.status_code == 409:
+                continue
+            return False, obj
+        except Exception:
+            continue
+    return False, None
+
+def _channel_claim_id(item_id):
+    """Атомарно «застолбить» id заметки ПЕРЕД постом в канал (см. _data_atomic_mutate) — возвращает True,
+    только если ИМЕННО этот вызов первым добавил id (значит имеет право постить); если id уже там (другой
+    инстанс успел раньше) — возвращает False, постить НЕЛЬЗЯ (иначе дубль)."""
+    claimed = {"ok": False}
+    def _mutate(obj):
+        obj = obj or {}
+        ids = set(obj.get("app_post_ids") or [])
+        if item_id in ids:
+            claimed["ok"] = False
+        else:
+            claimed["ok"] = True
+            ids.add(item_id)
+            obj["app_post_ids"] = list(ids)[-500:]
+        return obj
+    ok, newobj = _data_atomic_mutate("journal.json", _mutate, f"app_post claim (id {item_id})")
+    if ok and newobj is not None:
+        global _journal_cache
+        if _journal_cache is not None:
+            _journal_cache["app_post_ids"] = newobj.get("app_post_ids", [])
+    return ok and claimed["ok"]
+
 def verify_init_data(init_data, max_age=86400):
     """Проверить Telegram WebApp initData (HMAC по TOKEN). Вернуть dict user или None."""
     if not init_data or not TOKEN:
@@ -7172,12 +7230,23 @@ async def _app_channel_watcher(application):
                     last_posted_note = (j.get("app_post") or {}).get("note", "")
                     posted_now = 0
                     for item in pending[:8]:   # предохранитель: не больше 8 постов за один тик (не заспамить канал разом)
+                        # 04.07.2026 (владелец поймал v962 запощенным 3-4 раза): ЗАСТОЛБИТЬ id АТОМАРНО (с ретраем
+                        # на свежих данных) ДО поста/алерта — если проиграли гонку (другой Railway-инстанс уже
+                        # застолбил этот же id), просто пропускаем, НИЧЕГО не постим и не алертим повторно.
+                        if not _channel_claim_id(item["id"]):
+                            continue
                         sim = difflib.SequenceMatcher(None, (item["note"] or "").strip(), (last_posted_note or "").strip()).ratio() if last_posted_note else 0.0
                         if sim >= 0.90:
-                            alerts = j.get("dup_alerts") or []
-                            alerts.append({"id": item["id"], "sim": round(sim, 3), "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
-                                           "note": (item["note"] or "")[:200]})
-                            j["dup_alerts"] = alerts[-100:]
+                            def _mk_alert(obj, _item=item, _sim=sim):
+                                obj = obj or {}
+                                alerts = obj.get("dup_alerts") or []
+                                alerts.append({"id": _item["id"], "sim": round(_sim, 3), "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
+                                               "note": (_item["note"] or "")[:200]})
+                                obj["dup_alerts"] = alerts[-100:]
+                                return obj
+                            _ok_a, _newj_a = _data_atomic_mutate("journal.json", _mk_alert, f"app_post → пропущен как дубль (id {item['id']})")
+                            if _ok_a and _newj_a is not None and _journal_cache is not None:
+                                _journal_cache["dup_alerts"] = _newj_a.get("dup_alerts", [])
                             # 02.07.2026 (владелец: «обеспечь чтоб он понимал очем речь» — прошлый текст был
                             # жаргоном id/схожесть%, владелец не понял и переспросил у ОБЩЕГО ИИ-ассистента,
                             # который ответил не по теме). Текст теперь ЯСНЫЙ, без внутренних терминов,
@@ -7190,24 +7259,19 @@ async def _app_channel_watcher(application):
                             except Exception: pass
                             try: await application.bot.send_message(OWNER_ID, _atxt)
                             except Exception: pass
-                            posted_ids.add(item["id"])   # id считаем обработанным (не постим, но и не пытаемся снова каждый тик)
-                            j["app_post_ids"] = list(posted_ids)[-500:]
-                            _journal_save(f"app_post → пропущен как дубль (id {item['id']})")   # тот же фикс гонки — коммитим сразу
                             continue
                         await _post_app_channel(application.bot, item["note"])
-                        posted_ids.add(item["id"])
                         last_posted_note = item["note"]
                         posted_now += 1
-                        # ТРЕВОГА-фикс (владелец 04.07.2026: «v957 дважды, v958 раньше v957 — порядок и дубли»):
-                        # раньше posted_ids сохранялся В ЖУРНАЛ ОДИН РАЗ, ПОСЛЕ всего цикла (до 8 постов). При
-                        # редеплое Railway (старый инстанс ещё не убит, новый уже поднялся) оба параллельно читают
-                        # СТАРЫЙ (ещё не обновлённый) journal.json → оба считают одни и те же id непощенными →
-                        # дубли + гонка порядка между двумя процессами. Теперь коммитим posted_ids СРАЗУ после
-                        # КАЖДОГО поста — окно гонки схлопывается с «до 8 постов» до «один пост», и следующий тик
-                        # (свой или чужого инстанса) увидит уже актуальный journal.json.
-                        j["app_post_ids"] = list(posted_ids)[-500:]
-                        j["app_post"] = {"note": last_posted_note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
-                        _journal_save(f"app_post → канал приложения (id {item['id']})")
+                        # ⚠️ Claim (app_post_ids) уже закоммичен АТОМАРНО выше, ДО поста — здесь только обновляем
+                        # app_post (последняя запощенная заметка, для след. similarity-проверки), тоже атомарно.
+                        def _mk_lastpost(obj, _note=last_posted_note):
+                            obj = obj or {}
+                            obj["app_post"] = {"note": _note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+                            return obj
+                        _ok_p, _newj_p = _data_atomic_mutate("journal.json", _mk_lastpost, f"app_post → канал приложения (id {item['id']})")
+                        if _ok_p and _newj_p is not None and _journal_cache is not None:
+                            _journal_cache["app_post"] = _newj_p.get("app_post", {})
                         await asyncio.sleep(2)   # пауза между постами — не флудить Telegram API
             except Exception as e:
                 print("app channel queue watcher error:", e)
