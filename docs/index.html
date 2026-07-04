@@ -722,7 +722,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v993';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v994';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -12737,7 +12737,7 @@ try{ document.documentElement.setAttribute('data-jsok', (typeof APPVER!=='undefi
 <script id="urScript">
 // M313 Этап 1: UnifiedReader (UR) — каркас единой читалки. Адаптеры источников подключаются этапами 2-5.
 (function(){
-  var state={adapter:null,items:[],currentIndex:0};
+  var state={adapter:null,items:[],currentIndex:0,isLoading:false};
   var dom=null;
   var UR={};
   function _cfgFont(){ try{ return Math.max(0.8,Math.min(2.0,parseFloat(cfg.urFontScale)||1)); }catch(e){ return 1; } }
@@ -12799,14 +12799,9 @@ try{ document.documentElement.setAttribute('data-jsok', (typeof APPVER!=='undefi
     dom.content.innerHTML='';
     if(!items||!items.length){ dom.content.innerHTML='<div style="padding:24px;text-align:center;color:var(--hint)">Пусто</div>'; UR.updateInd(); return; }
     var frag=document.createDocumentFragment();
-    items.forEach(function(it,i){
-      var el=document.createElement('div'); el.className='ur-item'; el.setAttribute('data-ur-i',i);
-      var ar=document.createElement('div'); ar.className='ur-arabic'; ar.textContent=it.arabic||'';
-      el.appendChild(ar);
-      if(it.translation){ var tr=document.createElement('div'); tr.className='ur-translation'; tr.textContent=it.translation; el.appendChild(tr); }
-      frag.appendChild(el);
-    });
+    items.forEach(function(it,i){ frag.appendChild(UR._buildItem(it,i)); });
     dom.content.appendChild(frag);
+    UR._moreBtn();
     UR.updateInd();
   };
   UR.renderLoading=function(){ dom.content.innerHTML=''; for(var i=0;i<5;i++){ var s=document.createElement('div'); s.className='ur-skeleton'; dom.content.appendChild(s); } };
@@ -12835,6 +12830,39 @@ try{ document.documentElement.setAttribute('data-jsok', (typeof APPVER!=='undefi
     if(el){ el.scrollIntoView({behavior:'smooth',block:'start'}); UR.updateInd(); }
     else{ try{toast('№'+num+' не найден');}catch(e){} }
   };
+  UR._buildItem=function(it,i){
+    var el=document.createElement('div'); el.className='ur-item'; el.setAttribute('data-ur-i',i);
+    var ar=document.createElement('div'); ar.className='ur-arabic'; ar.textContent=it.arabic||'';
+    el.appendChild(ar);
+    if(it.translation){ var tr=document.createElement('div'); tr.className='ur-translation'; tr.textContent=it.translation; el.appendChild(tr); }
+    return el;
+  };
+  UR._moreBtn=function(){
+    var old=dom.content.querySelector('#urMoreBtn'); if(old) old.remove();
+    var a=state.adapter;
+    if(!a||typeof a.more!=='function'||!(typeof a.hasMore==='function'&&a.hasMore())) return;
+    var b=document.createElement('button'); b.id='urMoreBtn';
+    b.style.cssText='display:block;width:100%;margin:14px 0 4px;padding:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:var(--text);font-size:15px;cursor:pointer';
+    b.textContent='\u2B07 ещё 30';
+    b.onclick=function(){ UR.loadMore(); };
+    dom.content.appendChild(b);
+  };
+  UR.loadMore=function(){
+    if(state.isLoading||!state.adapter||typeof state.adapter.more!=='function') return;
+    state.isLoading=true;
+    var b=dom.content.querySelector('#urMoreBtn'); if(b){ b.textContent='Загрузка…'; b.disabled=true; }
+    Promise.resolve(state.adapter.more()).then(function(newItems){
+      state.isLoading=false; newItems=newItems||[];
+      if(!newItems.length){ if(b){ b.textContent='Конец сборника'; b.disabled=true; } return; }
+      var base=state.items.length;
+      var frag=document.createDocumentFragment();
+      newItems.forEach(function(it,i){ frag.appendChild(UR._buildItem(it,base+i)); });
+      if(b) b.remove();
+      dom.content.appendChild(frag);
+      state.items=state.items.concat(newItems);
+      UR._moreBtn(); UR.updateInd(); UR.applyConfig();
+    }).catch(function(){ state.isLoading=false; if(b){ b.textContent='\u2B07 ещё 30'; b.disabled=false; } });
+  };
   UR.updateInd=function(){ dom.pageInd.textContent=state.items.length?((state.currentIndex+1)+'/'+state.items.length):'–'; };
   UR.applyConfig=function(){
     if(!dom) return;
@@ -12859,21 +12887,31 @@ try{ document.documentElement.setAttribute('data-jsok', (typeof APPVER!=='undefi
 function makeHadithAdapter(code){
   var title; try{ title=vocOf(code); }catch(e){ title=code; }
   function _store(){ return (typeof cache!=='undefined'&&cache)?cache:{}; }
-  function _process(items, fromNum){
-    if(!items||!items.length) return [];
-    var startIndex=0;
-    if(fromNum!==null){ for(var i=0;i<items.length;i++){ if(items[i].num==fromNum){ startIndex=i; break; } } }
-    return items.slice(startIndex,startIndex+30).map(function(item){
-      return { id:code+'_'+item.num, type:'hadith', arabic:item.text||item.ar||'', translation:item.ru||null,
-        metadata:{ sourceName:title, number:item.num } };
-    });
+  var _arr=null, _cursor=0;
+  function _map(item){
+    return { id:code+'_'+item.num, type:'hadith', arabic:item.text||item.ar||'', translation:item.ru||null,
+      metadata:{ sourceName:title, number:item.num } };
   }
-  return { title:title, fetch:function(params){
-    params=params||{};
-    var fromNum=parseInt(params.fromNum,10); if(isNaN(fromNum)) fromNum=null;
-    // штатный загрузчик приложения (кэш, зеркала, Муслим-Баки) — не изобретаем свой fetch
-    return Promise.resolve(loadCollection(code)).then(function(arr){ return _process(arr||[],fromNum); });
-  } };
+  return { title:title,
+    fetch:function(params){
+      params=params||{};
+      var fromNum=parseInt(params.fromNum,10); if(isNaN(fromNum)) fromNum=null;
+      // штатный загрузчик приложения (кэш, зеркала, Муслим-Баки) — не изобретаем свой fetch
+      return Promise.resolve(loadCollection(code)).then(function(arr){
+        _arr=arr||[];
+        var startIndex=0;
+        if(fromNum!==null){ for(var i=0;i<_arr.length;i++){ if(_arr[i].num==fromNum){ startIndex=i; break; } } }
+        var w=_arr.slice(startIndex,startIndex+30);
+        _cursor=startIndex+w.length;
+        return w.map(_map);
+      });
+    },
+    more:function(){
+      if(!_arr) return Promise.resolve([]);
+      var w=_arr.slice(_cursor,_cursor+30); _cursor+=w.length;
+      return Promise.resolve(w.map(_map));
+    },
+    hasMore:function(){ return !!_arr && _cursor<_arr.length; } };
 }
 function openUnifiedReader(code, fromNum){
   if(window.UR&&window.UR.open){ window.UR.open(makeHadithAdapter(code), {fromNum:fromNum}); }
