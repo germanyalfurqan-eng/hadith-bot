@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v973';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v974';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8858,12 +8858,25 @@ async function narrOpen(nm){
       const list=document.createElement('div'); bx.appendChild(list);
       let shown=0; const step=30;
       const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:7px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px';
+      // M479: сниппет ЦЕНТРИРУЕТСЯ на реальном вхождении имени равия (поиск без огласовок с маппингом позиций),
+      // подсветка <mark> только на настоящем полном имени — раньше жёлтый блок рисовался на обрывке среза slice(0,220)
+      const _hlName=(nm||'').split(' ').slice(0,2).join(' ');
+      const _partSnip=(t)=>{ try{
+          const map=[]; let bare='';
+          for(let i=0;i<t.length;i++){ const c=t[i]; if(!/[ً-ْٰـ]/.test(c)){ bare+=c; map.push(i); } }
+          const nb=_hlName.replace(/[ً-ْٰـ]/g,'');
+          const k=nb?bare.indexOf(nb):-1;
+          if(k<0) return {html: esc('…'+t.replace(/\s+/g,' ').trim().slice(0,220)+'…')};
+          const s0=map[k], e0=map[Math.min(k+nb.length,map.length-1)]+1;
+          const from=Math.max(0,s0-90), to=Math.min(t.length,e0+110);
+          return {html:(from>0?'…':'')+esc(t.slice(from,s0))+'<mark>'+esc(t.slice(s0,e0))+'</mark>'+esc(t.slice(e0,to))+(to<t.length?'…':'')};
+        }catch(e){ return {html: esc('…'+String(t).slice(0,220)+'…')}; } };
       const _mkRow=(p)=>{ const card=document.createElement('div'); card.style.cssText='border-bottom:1px solid var(--border);padding:5px 0;margin-bottom:2px';
           const mt=document.createElement('div'); mt.className='ar'; mt.style.cssText='direction:rtl;text-align:right;font-size:16px;line-height:1.95;color:var(--text)'; card.appendChild(mt);
           card.appendChild(_dzPlaceRow(p[0],p[1],p[2]));
           try{ const _bid=String(p[0]); const code=(typeof _BID2READ!=='undefined'&&_BID2READ[_bid])||(typeof _BID2SLUG!=='undefined'&&_BID2SLUG[_bid]);
-            if(code){ getOne(code,p[1]).then(h=>{ if(h&&h.text){ let _t=h.text.replace(/\s+/g,' ').trim(); mt.textContent='…'+_t.slice(0,220)+(_t.length>220?'…':''); } else mt.remove(); }).catch(()=>{mt.remove();}); }
-            else if(p[2] && typeof BACKEND_URL!=='undefined' && BACKEND_URL){ mt.textContent='⏳…'; bjson(BACKEND_URL+'/book_page?id='+_bid+'&pg='+p[2]+'&initData='+encodeURIComponent(INITDATA),15000).then(j=>{ if(j&&j.text){ let _t=String(j.text).replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim(); if(_t){ mt.textContent='…'+_t.slice(0,220)+(_t.length>220?'…':''); } else mt.remove(); } else mt.remove(); }).catch(()=>{mt.remove();}); }
+            if(code){ getOne(code,p[1]).then(h=>{ if(h&&h.text){ let _t=h.text.replace(/\s+/g,' ').trim(); mt.innerHTML=_partSnip(_t).html; } else mt.remove(); }).catch(()=>{mt.remove();}); }
+            else if(p[2] && typeof BACKEND_URL!=='undefined' && BACKEND_URL){ mt.textContent='⏳…'; bjson(BACKEND_URL+'/book_page?id='+_bid+'&pg='+p[2]+'&initData='+encodeURIComponent(INITDATA),15000).then(j=>{ if(j&&j.text){ let _t=String(j.text).replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim(); if(_t){ mt.innerHTML=_partSnip(_t).html; } else mt.remove(); } else mt.remove(); }).catch(()=>{mt.remove();}); }
             else { mt.remove(); }
           }catch(e){}
           return card; };
