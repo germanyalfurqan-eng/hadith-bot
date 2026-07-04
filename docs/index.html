@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v988';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v989';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7726,7 +7726,14 @@ function _dzChips(codes, row, forms, uResolved, numOverride){
       // #515 (владелец: «что за надписи абдуллах ибн?????? — что делать?»): жёлтый чип = КРАТКАЯ ФОРМА имени из иснада,
       // точная личность уточняется — поясняем прямо в чипе по-русски, а не голым «؟»
       b.title='Краткая форма имени в иснаде (так написал автор книги) — точная личность уточняется. Нажми: карточка формы с кандидатами.';
-      dzUReg(c).then(u=>{ if(u&&u[0]) b.innerHTML=esc(u[0].split(' ').slice(0,3).join(' '))+' <span style="font-size:9px;color:var(--hint)">краткая форма·тап</span>'; }).catch(()=>{});
+      // Хермес-ревью v989: ОДИН вызов dzUReg (было два — двойной фетч и гонка title/innerHTML)
+      dzUReg(c).then(u=>{ if(!u||!u[0]) return;
+        b.innerHTML=esc(u[0].split(' ').slice(0,3).join(' '))+' <span style="font-size:9px;color:var(--hint)">краткая форма·тап</span>';
+        // #494-хвост: 4 БЕЗОПАСНО отождествлённые формы (аудит С55) — подсказка-кандидат, ДАННЫЕ не трогаем
+        try{ const _SAFE494={'ابن ابي نجيح':3558,'ابي سعيد الخدري':2313,'الاعرج':2511,'ابي الزناد':3645};
+          const _k=stripDiac(String(u[0])).trim();
+          for(const f in _SAFE494){ if(_k===f||_k.indexOf(f)===0){ b.title+=' Вероятный кандидат: #'+_SAFE494[f]+' (аудит С55, ждёт подтверждения владельца).'; b.style.borderColor='#8a7433'; break; } } }catch(e){}
+      }).catch(()=>{});
       b.onclick=()=>openUCard(c);
     }
     row.appendChild(b);
@@ -9770,8 +9777,10 @@ async function showNarratorCardLocal(name, host){
   const _varQil = String(c[1]||'').trim().split(/\s+/).some(w=>!!_STOPNM[stripDiac(w)]);
   // === ШАПКА v9 (новый макет, на живых данных) ===
   let _flags=null; try{ _flags=(await loadNarrFlags())[String(id)]; }catch(e){}
-  let _isSah=false; try{ const _gb=_genBadge((c[5]||"")+" "+(c[6]||"")+" "+(c[7]||""), c[4]); if(_gb && _gb[0]==="صحابي") _isSah=true; }catch(e){}
-  if(!_isSah){ try{ const _cn=stripDiac(c[1]||"").trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc && (_cn===gc || _cn.startsWith(gc+" "))){ _isSah=true; break; } } }catch(e){} }
+  let _isSah=false, _sahWhy='';   // #511: источник статуса — показываем по клику на бейдже
+  try{ const _gb=_genBadge((c[5]||"")+" "+(c[6]||"")+" "+(c[7]||""), c[4]); if(_gb && _gb[0]==="صحابي"){ _isSah=true; _sahWhy=_gb[2]||'';
+    try{ const _rkAll=(c[5]||"")+" "+(c[6]||"")+" "+(c[7]||""); const _mm=_rkAll.match(/.{0,25}(صحاب|صحبة|بدري|شهد بدرا|من المهاجرين|من الأنصار|زوج النبي|أم المؤمنين|له رؤية).{0,30}/); if(_mm) _sahWhy+=' — из ранга критиков: «'+_mm[0].trim()+'»'; }catch(_e){} } }catch(e){}
+  if(!_isSah){ try{ const _cn=stripDiac(c[1]||"").trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc && (_cn===gc || _cn.startsWith(gc+" "))){ _isSah=true; _sahWhy='гарантированный список знаменитых сподвижников (M475) — имя совпало с «'+g+'»'; break; } } }catch(e){} }
   let _wk=null; try{ _wk=(await loadNarrWiki())[String(id)]||null; }catch(e){}
   // #439 (владелец: «отметь каждое непроверенное имя что это неточный перевод»): транслит выверен ТОЛЬКО если из
   // Википедии или курированной карты _NARR_RU; голый arNameRu — авто, помечаем «авто ⚠».
@@ -9831,7 +9840,7 @@ async function showNarratorCardLocal(name, host){
       // владелец («сподвижники должны ЯРЧЕ выделяться, золотой знак прям бросается в глаза»): раньше صحابي была
       // ОБЫЧНОЙ серой пилюлей — той же, что у табиинов. Теперь для сахаба — отдельный золотой стиль (градиент+тень).
       +(_isSah
-        ? ('<span dir="rtl" style="font-size:13.5px;font-weight:700;color:#3a2a05;background:linear-gradient(135deg,#ffd76a,#e8b632);border:1px solid #c9962b;border-radius:8px;padding:5px 12px;box-shadow:0 0 10px rgba(232,182,50,.45);'+_AF+'">'+esc(_genTxt)+'</span>')
+        ? ('<span dir="rtl" id="sahBadge" title="Откуда известно, что сподвижник — нажми" style="cursor:pointer;font-size:13.5px;font-weight:700;color:#3a2a05;background:linear-gradient(135deg,#ffd76a,#e8b632);border:1px solid #c9962b;border-radius:8px;padding:5px 12px;box-shadow:0 0 10px rgba(232,182,50,.45);'+_AF+'">'+esc(_genTxt)+' ⓘ</span>')
         : ('<span dir="rtl" style="font-size:12.5px;color:#cdd6e0;background:#161b22;border:1px solid var(--border);border-radius:8px;padding:4px 10px;'+_AF+'">'+esc(_genTxt)+'</span>'))
       +(c[4]?('<span style="font-size:12px;color:#cdd6e0;background:#161b22;border:1px solid var(--border);border-radius:8px;padding:4px 10px">🕊 ум. ~'+esc(String(c[4]))+' г.х.'+((_nx&&_nx.d)?(' · '+esc(_nx.d)):'')+'</span>'):'')
       +((_nx&&_nx.r)?('<span style="font-size:12px;color:#cdd6e0;background:#161b22;border:1px solid var(--border);border-radius:8px;padding:4px 10px;'+_AF+'">📍 '+esc(_nx.r)+'</span>'):'')
@@ -9878,6 +9887,13 @@ async function showNarratorCardLocal(name, host){
     // не по месту здесь (это инструмент читалки книг/хадисов, к биографии передатчика отношения не имеет).
     hdr.querySelectorAll('.nWiki').forEach(b=>b.onclick=()=>{ try{ openLink(b.dataset.u); }catch(e){} });   // M385 ⑤
     hdr.querySelectorAll('.nWikiAv').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); try{ openLink(b.dataset.u); }catch(_e){} });   // #472: значок на кружке аватара
+    try{ const _sb=hdr.querySelector('#sahBadge'); if(_sb) _sb.onclick=(e)=>{ e.stopPropagation();
+      let _ex=hdr.querySelector('#sahWhy');
+      if(_ex){ _ex.remove(); return; }
+      _ex=document.createElement('div'); _ex.id='sahWhy';
+      _ex.style.cssText='margin-top:6px;padding:8px 11px;border:1px solid #c9962b;border-radius:9px;background:rgba(232,182,50,.09);font-size:12.5px;line-height:1.7;direction:rtl;text-align:right;color:var(--text)';
+      _ex.innerHTML='⭐ <b>Откуда статус «сподвижник»:</b> '+esc(_sahWhy||'по совокупности данных базы')+'<div style="font-size:11px;color:var(--hint);margin-top:3px">Полные свидетельства критиков — в своде ниже на карточке (#511).</div>';
+      _sb.parentNode.insertBefore(_ex,_sb.nextSibling); }; }catch(e){}   // #511: источник статуса по клику
     hdr.querySelectorAll('.nWikiS').forEach(b=>b.onclick=()=>{ try{ const ru=b.dataset.ru==='1'; openLink('https://'+(ru?'ru':'ar')+'.wikipedia.org/w/index.php?search='+b.dataset.q); }catch(e){} });   // С38: Википедия-поиск (рус.имя→ru-вики, иначе ar-вики)
   }catch(e){}
   return c;   // джарх-моусуа рендерится ОТДЕЛЬНЫМ разделом ПОСЛЕ наших книг
