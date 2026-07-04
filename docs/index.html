@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v971';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v972';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -11320,6 +11320,13 @@ function setTrBase(tr,e,src){ tr.textContent='♻️ Перевод'; const idx=
 const RU_TITLE={bukhari:'Сахих аль-Бухари',muslim:'Сахих Муслим',abudawud:'Сунан Абу Дауд',tirmidhi:'Сунан ат-Тирмизи',ibnmajah:'Сунан Ибн Маджа',nasai:'Сунан ан-Насаи',malik:'аль-Муватта (Малик)',ahmad:'Муснад Ахмада',muhaymin:'аль-Мухаймин',muqbil:'аль-Мукбиль · ас-Сахих'};
 function ruTitle(code){ return RU_TITLE[code]||((COLLECTIONS.find(c=>c.code===code)||{}).ru)||((EXTRA_MAP[code]||{}).ru)||code; }
 function trHead(ref){ return (ref&&ref.source)?('<div style="color:var(--link);font-size:12px;margin-bottom:3px">📖 '+esc(ruTitle(ref.source))+(ref.num?(' №'+esc(''+ref.num)):'')+'</div>'):''; }   // QA-свип(XSS): ref.num в esc (вставляется в innerHTML; String() — esc падает на числе)
+// M280: грубая сверка арабского текста (снятие огласовок + 3-граммы) — не подставлять чужой готовый перевод при битой fw-карте
+function arSimilar(a,b){ const clean=s=>s.normalize('NFC').replace(/[ً-ْٰ]/g,'').replace(/\s+/g,' ').trim();
+  const ca=clean(a),cb=clean(b); if(ca===cb) return true;
+  const tri=s=>{ const t=[]; for(let i=0;i<=s.length-3;i++) t.push(s.substring(i,i+3)); return new Set(t); };
+  const sa=tri(ca),sb=tri(cb); if(!sa.size&&!sb.size) return true; if(!sa.size||!sb.size) return false;
+  let common=0; for(const t of sa) if(sb.has(t)) common++;
+  return (common/Math.max(sa.size,sb.size))>=0.55; }
 async function doTranslate(text,out,btn,ref,force){
   const _silent=ref&&ref.silent;   // #159-фикс: префетч-режим — подавить пользовательские тосты на путях ошибки
   const orig=btn.textContent, origStyle=btn.style.cssText; btn.disabled=true; btn.textContent='⏳…';
@@ -11330,9 +11337,17 @@ async function doTranslate(text,out,btn,ref,force){
   if(ref && READY_RU.indexOf(ref.source)!==-1 && (ref.num||ref.num===0)){
     let rnum=String(ref.num).replace(/#.*/,'');   // срезать #риваят (987#1→987) — иначе готовый перевод не находился у риваят-карточек → падало на ИИ
     if(ref.source==='muslim'){ const mm=(cache['muslim']||[]).find(h=>String(h.num)===rnum); rnum=(mm&&mm.fw)?mm.fw:null; }  // Муслим: Абд аль-Баки→fawazahmed0 для готового перевода
-    if(rnum!=null){ try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-'+ref.source+'/'+rnum+'.min.json')).json();
+    if(rnum!=null){ try{
+      // M280: карта fw частично битая — сверяем ara-muslim/{fw} с нашим арабским ДО показа готового рус.перевода
+      if(ref.source==='muslim'){ try{
+        const aj=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-muslim/'+rnum+'.min.json')).json();
+        const at=(aj.hadiths||[])[0]&&(aj.hadiths||[])[0].arabicnumber!==undefined?(aj.hadiths||[])[0].text:(aj.hadiths||[])[0]&&(aj.hadiths||[])[0].text;
+        if(at && text && !arSimilar(at, text)) rnum=null;   // fw указывает не на тот риваят — не подставляем чужой перевод
+      }catch(e){} }
+      if(rnum!=null){ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/rus-'+ref.source+'/'+rnum+'.min.json')).json();
       const h=(j.hadiths||[])[0];
       if(h && h.text){ const rt=cleanRu(h.text); out.innerHTML=trHead(ref)+lbl('📘 Перевод (готовый, профессиональный):')+esc(rt); out.dataset.tr=rt; out.style.display='block'; restore(); return; }
+      }
     }catch(e){} }
   }
   if(!BACKEND_URL){ if(!_silent) toast('Перевод заработает после подключения сервера (DeepSeek)'); restore(); return; }
