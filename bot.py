@@ -3301,6 +3301,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         if _tr: _txt = (_txt + "\n" + _tr).strip()
                         try: os.remove(_p)
                         except Exception: pass
+                    if not _txt:   # Hermes-ревью #410: молчаливый пропуск медиа без текста путал счётчик "не поймано" — честный плейсхолдер
+                        if _m.photo: _txt = "[фото без подписи]"
+                        elif _m.video: _txt = "[видео без подписи]"
+                        elif _m.document: _txt = "[файл без подписи]"
                     try: await context.bot.delete_message(LOG_CHAT_ID, _m.message_id)
                     except Exception: pass
                     if _txt: _texts.append(_txt)
