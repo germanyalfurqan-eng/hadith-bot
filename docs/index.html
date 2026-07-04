@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v990';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v991';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1993,7 +1993,7 @@ function _renderBookSugg(hits, v){
   hdr.onclick=()=>{ _bsCollapsed=!_bsCollapsed; _renderBookSugg(hits, v); };
   box.appendChild(hdr);
   if(_bsCollapsed) return;   // свёрнуто — показываем только заголовок-пилюлю (ясно, что это и что свёрнуто)
-  hits.slice(0,4).forEach(b=>{ const c=document.createElement('span'); c.className='chip'; c.style.cssText='cursor:pointer;direction:rtl;font-size:13px'; c.textContent=b.n; c.title=(b.a||'')+(b.c?(' · '+b.c):''); c.onclick=()=>{ box.style.display='none'; openBook(b.i); }; box.appendChild(c); });
+  hits.slice(0,4).forEach(b=>{ const c=document.createElement('span'); c.className='chip'; c.style.cssText='cursor:pointer;direction:rtl;font-size:13px'; c.textContent=b.n; c.title=(b.a||'')+(b.c?(' · '+b.c):''); c.onclick=()=>{ box.style.display='none'; try{ const p=JSON.parse(localStorage.getItem('bk_pop')||'{}'); p[String(b.i)]=(p[String(b.i)]||0)+1; localStorage.setItem('bk_pop',JSON.stringify(p)); }catch(e){} openBook(b.i); }; box.appendChild(c); });   // M190: счётчик выбора
   if(n>4){ const more=document.createElement('span'); more.className='chip'; more.style.cssText='cursor:pointer;font-size:12px;color:var(--link);border:1px solid var(--link)'; more.textContent='📚 Показать все '+n+' книг →'; more.title='Открыть каталог со ВСЕМИ '+n+' книгами, в названии которых есть «'+v+'»'; more.onclick=()=>{ box.style.display='none'; openCatalog(v); }; box.appendChild(more); }
   const x=document.createElement('span'); x.className='chip'; x.style.cssText='cursor:pointer;font-size:12px;color:var(--hint)'; x.textContent='✕'; x.title='Скрыть эти подсказки книг'; x.onclick=()=>{ _bsClosedQ=v; box.style.display='none'; box.innerHTML=''; }; box.appendChild(x);
 }
@@ -2048,6 +2048,8 @@ function updateBookSugg(){
         if(qs.length){ hits=cat.filter((b,i)=>qs.every(s=>window._catSkel[i].indexOf(s)!==-1)); if(hits.length>40) hits=[]; }   // кап: скелет-фолбэк — для ТОЧНЫХ догадок названия (табарани→25 книг). Десятки+ совпадений = шум подстроки, а не «книги с таким названием» (стоп #«232 книги» на имени равия)
       }
     }
+    // M190: персональная популярность — книги, которые юзер чаще ОТКРЫВАЛ из подсказок, всплывают выше
+    try{ const _pop=JSON.parse(localStorage.getItem('bk_pop')||'{}'); if(hits.length>1) hits.sort((a,b)=>(_pop[String(b.i)]||0)-(_pop[String(a.i)]||0)); }catch(e){}
     const srcHits=_srcSuggMatch(v);   // M24: сборники-источники под этот ввод
     if((!hits.length && !srcHits.length) || _bsClosedQ===v){ box.style.display='none'; box.innerHTML=''; return; }
     if(hits.length) _renderBookSugg(hits, v); else { box.style.display='flex'; box.innerHTML=''; }
@@ -12697,6 +12699,8 @@ async function boot(){
 }
 boot();
 // healthcheck/П-01: маркер «главный инлайн-скрипт распарсился и дошёл до конца» (нет дубликата let/const/SyntaxError, чего esprima не ловит). Читается headless-сторожем healthcheck.py → если маркера нет = скрипт упал на парсе.
+// #303/#320: ТЁПЛЫЙ СТАРТ — прогрев тяжёлых словарей в простое после загрузки (первый поиск/подсказки «сразу видят», без холодного пустого прогона)
+try{ setTimeout(()=>{ try{ loadCatalog(); }catch(e){} try{ loadNarrNames(); }catch(e){} try{ loadBookTr(); }catch(e){} }, 3500); }catch(e){}
 try{ document.documentElement.setAttribute('data-jsok', (typeof APPVER!=='undefined')?APPVER:'noappver'); }catch(e){}
 </script>
 </body>
