@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v985';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v986';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4760,10 +4760,17 @@ async function _bookInfo(b,out,btn){
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }
   if(btn.dataset.shown==='1'){ out.style.display='none'; btn.dataset.shown=''; return; }
   out.style.display='block'; out.innerHTML='<span class="hint">ℹ️ Загружаю описание…</span>'; btn.dataset.shown='1';
+  // Паритет #33: ИЗДАТЕЛЬСКИЕ данные (المؤلف/المحقق/الناشر/الطبعة) из turath — ПЕРЕД ИИ-справкой; фолбэк тихий до редеплоя
+  try{ const bm=await bjson(BACKEND_URL+'/book_meta?id='+b.i+'&initData='+encodeURIComponent(INITDATA), 15000);
+    if(bm&&bm.info){ const pub=document.createElement('div');
+      pub.style.cssText='direction:rtl;text-align:right;font-size:12.5px;line-height:1.8;border-bottom:1px dashed var(--border);padding-bottom:6px;margin-bottom:6px;white-space:pre-line;color:var(--text)';
+      pub.textContent=bm.info; out.innerHTML=''; out.appendChild(pub);
+      const aiw=document.createElement('div'); aiw.innerHTML='<span class="hint">ℹ️ Загружаю описание…</span>'; out.appendChild(aiw); out._aiw=aiw; } }catch(e){}
   try{ const r=await fetch(BACKEND_URL+'/bookinfo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:b.n,author:b.a||'',initData:INITDATA})});
     const j=await r.json().catch(()=>({}));
-    if(r.status===403){ out.innerHTML='<span class="hint">'+((j&&j.message)||'функция пока не открыта')+'</span>'; return; }
-    if(!j.desc){ out.innerHTML='<span class="hint">Не удалось получить описание.</span>'; return; }
+    const _tgt=out._aiw||out;   // паритет #33: издательский блок сверху не затираем
+    if(r.status===403){ _tgt.innerHTML='<span class="hint">'+((j&&j.message)||'функция пока не открыта')+'</span>'; return; }
+    if(!j.desc){ _tgt.innerHTML='<span class="hint">Не удалось получить описание.</span>'; return; }
     const row=(lbl,val)=>val?('<div style="margin-top:3px"><span style="color:var(--hint)">'+lbl+':</span> '+esc(val)+'</div>'):'';
     let html=(j.ru?('<b>'+esc(j.ru)+'</b>'):'')
       +row('Автор',j.author)+row('Составлена',j.composed)
@@ -4773,7 +4780,7 @@ async function _bookInfo(b,out,btn){
     if(j.wiki_book) links.push('<a href="'+_safeHref(j.wiki_book)+'" target="_blank" style="color:var(--link)">📘 Википедия: книга</a>');
     if(links.length) html+='<div style="margin-top:6px">'+links.join(' · ')+'</div>';
     html+='<div style="margin-top:5px;font-size:11px;color:var(--hint)">🧠 справку дал ИИ '+(j.cached?'(из базы)':'')+' — возможны неточности</div>';
-    out.innerHTML=html;
+    _tgt.innerHTML=html;
   }catch(e){ out.innerHTML='<span class="hint">🔧 сервис недоступен</span>'; }
 }
 // книги автора + биография (страница автора, как в Мактаба)
