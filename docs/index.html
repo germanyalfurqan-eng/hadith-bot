@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v980';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v981';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2800,6 +2800,7 @@ async function runSearch(explicit){
           nb.textContent='👤 Искали ПЕРЕДАТЧИКА? Открыть в режиме «Передатчик»';
           nb.onclick=()=>{ try{hap('light');}catch(e){} modes.narr=true; const nc=document.querySelector('.chip[data-mode="narr"]'); if(nc) nc.classList.add('on'); document.getElementById('q').value=qn0; runSearch(true); };
           res.appendChild(nb); } }catch(e){}
+      try{ addRu2ArBtn(res, shown); }catch(e){}   // #404 патч ②: ru→ar транслит-кандидаты и здесь
       addNotFoundBtn(res, shown); }   // M173: не затирать баннер; +«сообщите нам»
   }
   // Поиск по ВСЕЙ библиотеке: наши книги выше (если нашлись), ниже — остальной корпус (sunnah.one). Только при явном «Найти»/Enter.
@@ -4115,7 +4116,16 @@ async function appendMaktaba(seq, q, primary){
     // БЕЗ авто-дедупа (R16): один хадис в разных книгах показываем везде; уникальность — фильтр-кнопки.
     if(!data.length){
       if(_scopeIds){ sec.textContent='🎯 В выбранных книгах на этой странице совпадений нет.'; try{ res.appendChild(sec); }catch(e){} try{ res.appendChild(maktabaMoreBtn(seq,q,{page:(j.page||1)})); }catch(e){} return; }   // M1-QA: показываем само сообщение, не только кнопку
-      sec.textContent='🤷 По Мактабе точного совпадения нет. Попробуй характерную фразу из матна.'; try{ res.appendChild(sec); }catch(e){} try{ maktabaSunnahBtn(res,seq,q); addNotFoundBtn(res,q); }catch(e){} return; }
+      sec.textContent='🤷 По Мактабе точного совпадения нет. Попробуй характерную фразу из матна.'; try{ res.appendChild(sec); }catch(e){}
+      // #404: русский смысловой запрос тонул в wideWill-ветке — M423-кнопка ИИ сюда не доходила. Дублируем ЗДЕСЬ: ноль и в первоисточниках, и по Мактабе.
+      try{ if(!modes.ai && q && !isArabic(q) && /[а-яё]/i.test(q) && q.trim().split(/\s+/).length>=3){
+        const ab=document.createElement('button');
+        ab.style.cssText='display:block;width:100%;max-width:520px;margin:10px auto;padding:13px;border-radius:12px;border:1px solid #6c5ce7;color:#e0d7ff;background:linear-gradient(135deg,rgba(108,92,231,.30),rgba(58,45,94,.25));font-size:14.5px;font-weight:700;cursor:pointer';
+        ab.textContent='🧠 Похоже, ты описал СМЫСЛ хадиса — искать по смыслу (ИИ)?';
+        ab.onclick=()=>{ try{hap('light');}catch(e){} modes.ai=true; const ac=document.querySelector('.chip[data-mode="ai"]'); if(ac) ac.classList.add('on'); runSearch(true); };
+        res.appendChild(ab); } }catch(e){}
+      try{ addRu2ArBtn(res, q); }catch(e){}   // #404 патч ②: ru→ar кандидаты из обратного словаря
+      try{ maktabaSunnahBtn(res,seq,q); addNotFoundBtn(res,q); }catch(e){} return; }
     await loadBooksMap();
     let fsrc=data.slice(0,fn), rest=data.slice(fn);
     if(strictWords){ fsrc=_snipMarkInexact(fsrc.filter(x=>_snipHasAll(x.snip,strictWords)),strictWords); rest=_snipMarkInexact(rest.filter(x=>_snipHasAll(x.snip,strictWords)),strictWords); }   // #334: пометить частичные
@@ -8691,6 +8701,28 @@ const _AR2RU={'عبد الله':'Абдуллах','عبد الرحمن':'Абд
 const _AR2RU_CH={'ب':'б','ت':'т','ث':'с','ج':'дж','ح':'х','خ':'х','د':'д','ذ':'з','ر':'р','ز':'з','س':'с','ش':'ш','ص':'с','ض':'д','ط':'т','ظ':'з','غ':'г','ف':'ф','ق':'к','ك':'к','ل':'л','م':'м','ن':'н','ه':'х'};
 // #422/#439: расширенный словарь транслита (батч-ИИ по всем словам имён равиев) — тихо подгружаем на старте; до загрузки работает старый фолбэк
 try{ fetch('./ar2ru_ext.json?v='+(typeof APPVER!=='undefined'?APPVER:'')).then(r=>r.ok?r.json():null).then(j=>{ if(j) window._AR2RU_EXT=j; }).catch(()=>{}); }catch(e){}
+// #404 патч ②: ОБРАТНЫЙ словарь ru→ar (ar2ru_ext 7079 слов + встроенный _AR2RU). Ловит русские ТРАНСЛИТ-слова при нуле. Индекс ленивый.
+let _RU2AR=null;
+function _ru2arIndex(){ if(_RU2AR) return _RU2AR; _RU2AR={};
+  const feed=src=>{ if(!src) return; for(const ar in src){ let ru=String(src[ar]||'').toLowerCase().trim();
+    const bare=ru.replace(/^а(?:ль|[бтсдрзшн])-/,'');
+    for(const k of (bare!==ru?[ru,bare]:[ru])){ if(k.length>=3){ (_RU2AR[k]=_RU2AR[k]||[]).push(ar); } } } };
+  feed(window._AR2RU_EXT); feed(typeof _AR2RU!=='undefined'?_AR2RU:null);
+  return _RU2AR; }
+function _ru2arCands(q){ const idx=_ru2arIndex(); const out=[]; const seen=new Set();
+  for(const w0 of String(q||'').toLowerCase().split(/[\s.,;:!?()"'«»\/]+/)){
+    const w=w0.replace(/^(?:аль|ал|ан|ас|ат|аш|ар|аз|ад)-/,'');
+    if(w.length<3) continue; const hits=idx[w0]||idx[w]; if(!hits) continue;
+    for(const a of hits.slice(0,2)){ if(!seen.has(a)){ seen.add(a); out.push(a); } } }
+  return out.slice(0,6); }
+function addRu2ArBtn(res, q){ try{
+  if(!q || isArabic(q) || !/[а-яё]/i.test(q)) return; const cands=_ru2arCands(q); if(!cands.length) return;
+  const b=document.createElement('button');
+  b.style.cssText='display:block;width:100%;max-width:520px;margin:8px auto;padding:12px;border-radius:12px;border:1px solid #2ea06a;color:#c8f5dd;background:rgba(46,160,106,.14);font-size:13.5px;font-weight:700;cursor:pointer';
+  b.innerHTML='🔁 Слова похожи на транслит — искать арабские написания (≈ по словарю): <span dir="rtl" style="font-size:15px">'+esc(cands.join(' · '))+'</span>';
+  b.title='Обратный транслит-словарь (ar2ru_ext): кандидаты приблизительные, это НЕ перевод смысла';
+  b.onclick=()=>{ try{hap('light');}catch(e){} const qi=document.getElementById('q'); qi.value=cands.join(' | '); runSearch(true); toast('🔁 Ищу арабских кандидатов (обратный словарь)'); };
+  res.appendChild(b); }catch(e){} }
 function _arWordRu(w0){
   // #владелец 01.07.2026 («Салах» вместо «Салих»): огласованные имена (صَالِحٍ) не матчились со словарём (ключи БЕЗ огласовок,
   // ниже уже был _fold для хамзы/алифа, но НЕ для огласовок) → ломаный фонетич.фолбэк. Снимаем огласовки СРАЗУ, до всего.
