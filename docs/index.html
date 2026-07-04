@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v966';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v967';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1186,6 +1186,20 @@ document.addEventListener('click', async e=>{ const a=e.target&&e.target.closest
     if(sa){ try{ document.querySelectorAll('.modal').forEach(m=>{ if(m.id!=='qrModal' && m.style.display && m.style.display!=='none') m.style.display='none'; }); }catch(_e){}
       openQuranReader(sa.s, sa.a); try{toast('📖 Коран '+sa.s+':'+sa.a);}catch(_t){} }
     else { try{toast('Аят не распознан в Коране');}catch(_t){} } }catch(_e){} });
+// #352/#353 (владелец): выделяешь часть слова/фразы в тексте хадиса мышью/пальцем → в буфер попадает
+// "мусор" (невидимые RTL-marks/ZWJ и лишние пробелы на границах <mark>/<span> подсветки передатчиков/матна).
+// Чистим ТОЛЬКО буфер обмена (не сам рендер — чтобы не тронуть поиск/сверку, которые полагаются на разметку).
+document.addEventListener('copy', e=>{
+  try{
+    const sel = document.getSelection();
+    if(!sel || !sel.toString()) return;
+    const anchor = sel.anchorNode && sel.anchorNode.parentElement && sel.anchorNode.parentElement.closest('.ar');
+    if(!anchor) return;   // трогаем буфер только когда выделение внутри арабского текста хадиса/аята
+    let t = sel.toString();
+    t = t.replace(/[​-‏‪-‮⁠-⁤﻿؜]/g,'').replace(/[ \t]+/g,' ').trim();
+    if(t) { e.clipboardData.setData('text/plain', t); e.preventDefault(); }
+  }catch(err){}
+});
 /* ===== копирование ===== */
 function copyText(t){ try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(()=>toast('Скопировано ✓'),()=>_fbCopy(t)); } else _fbCopy(t); }catch(e){ _fbCopy(t); } }
 function cleanRu(t){ return (t||'').replace(/\\[rn]/g,' ').replace(/[\r\n]+/g,' ').replace(/\s+/g,' ').trim(); }   // убираем литеральные "\n" и мусор в готовых переводах
@@ -5250,7 +5264,12 @@ async function openCatalog(q0){   // q0 (опц.) — начальный зап�
       const _pid=String(b.i); const pick=document.createElement('button'); pick.className='mini catPickEl';   // #249: «+ в поиск» скрыт в режиме ЧТЕНИЯ (по умолч.), виден в режиме поиска по сборникам
       const _setPick=()=>{ const on=_pickIds.has(_pid); pick.textContent=on?'− убрать':'➕ в поиск'; pick.style.cssText='font-size:12px;padding:4px 11px;cursor:pointer;'+(on?'color:#ff9b7a;border-color:#b3502e':''); };
       pick.onclick=(e)=>{ e.stopPropagation(); if(_pickIds.has(_pid)){ _pickIds.delete(_pid); } else { _pickIds.add(_pid); } _setPick(); _renderPickBar(); try{_buildSecPick();}catch(_e){} }; _setPick();
-      tools.appendChild(pick); tools.appendChild(info); tools.appendChild(fav); it.appendChild(main); it.appendChild(tools); it.appendChild(iout); return it; };
+      tools.appendChild(pick); tools.appendChild(info); tools.appendChild(fav); it.appendChild(main); it.appendChild(tools); it.appendChild(iout);
+      // #460 (владелец): «список книг — нету смысла, если открытая не выделена» — метка «сейчас открыта», если книга совпадает с текущей читалкой
+      try{ if(window._bookView && String(window._bookView.id)===String(b.i)){ it.style.background='rgba(46,155,91,.10)'; it.style.borderLeft='3px solid #2e9b5b'; it.style.paddingLeft='7px';
+        const _openTag=document.createElement('div'); _openTag.style.cssText='font-size:11px;color:#7ee2a8;font-weight:700;margin-bottom:3px'; _openTag.textContent='📖 сейчас открыта';
+        it.insertBefore(_openTag, it.firstChild); } }catch(_e){}
+      return it; };
     let _lastHead='', _lastSearch=false, _catShown=0; const _CAT_PAGE=80;
     // #3 дорисовать следующую порцию строк (бесконечная подгрузка по всей базе — порциями, оптимально по скорости)
     const _catAppendRows=()=>{ const list=m.querySelector('#catList'); if(!list) return;
