@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v972';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v973';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2515,6 +2515,14 @@ async function runSearch(explicit){
   if(!q){ toast('Введите запрос'); return; }
   q=q.replace(/[​-‏‪-‮﻿⁦-⁩]/g,'');   // M438: НЕВИДИМКИ из копипасты Шамелы (ZWNJ и пр.) ломали матч — «в Мактабе находится, у нас нет»
   q=q.replace(/[،؛؟,;!]+/g,' ').replace(/\s+/g,' ').trim();   // M283: убрать пунктуацию (запятая прилипала к слову и ломала строгий матч)
+  // M131: чистка вставки — URL, telegram-ссылки, маркеры оформления (звёздочки/подчёркивания markdown, эмодзи-буллеты) не должны попадать в матч
+  { const q0=q;
+    q=q.replace(/https?:\/\/\S+|t\.me\/\S+|www\.\S+/gi,' ')
+       .replace(/[*_~`|>#]{1,}/g,' ')
+       .replace(/[•●▪◦–—-]{2,}/g,' ')
+       .replace(/\s+/g,' ').trim();
+    if(!q && q0){ q=q0; }   // вставка была ТОЛЬКО ссылкой — оставить как есть (пусть сработает цитатный/прочий разбор)
+  }
   window._layoutFixInfo=null; if(!window._noLayoutFix){ const _qLF=_layoutFix(q); if(_qLF!==q){ window._layoutFixInfo={orig:q, fixed:_qLF}; q=_qLF; } } window._noLayoutFix=false;   // #181: чужая раскладка (rfnflf→катада) → конверт + Яндекс-баннер «искать оригинал» при рендере (R45)
   // M439: ЦИТАТНЫЙ ФОРМАТ ШАМЕЛЫ — «Название книги» (том/стр): «фраза» → найти книгу и ОТКРЫТЬ на этой странице
   try{
