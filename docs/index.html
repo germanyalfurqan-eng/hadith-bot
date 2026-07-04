@@ -728,7 +728,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1004';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v1005';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -12352,7 +12352,10 @@ function _miniSync(){ try{
 }catch(e){} }
 setInterval(_miniSync, 800);
 // контейнер прокрутки, который сейчас «в фокусе» (открытая читалка или общая выдача)
-function _activeScroller(){ const ids=['qrBody','bookText','catList','res']; for(const id of ids){ const el=document.getElementById(id); if(el){ const m=el.closest('.modal'); if(m){ if(m.style.display&&m.style.display!=='none') return el; } else if(el.children.length) return el; } } return null; }
+function _activeScroller(){ const ids=['qrBody','bookText','readBody','urContent','catList','res'];   // №522: читалка хадисов и единая читалка тоже скроллеры
+  for(const id of ids){ const el=document.getElementById(id); if(!el) continue;
+    if(el.offsetParent===null) continue;   // скрытый контейнер (закрытая модалка любого типа) — не скроллер
+    const m=el.closest('.modal'); if(m){ if(m.style.display&&m.style.display!=='none') return el; } else if(el.children.length) return el; } return null; }
 function _hasText(){ // A+/A− в читалках (Коран/книга) И на экране результатов (#1 «шрифт маленький»: applyFontScale уже зумит #res)
   if(_visModals().some(m=>['qrModal','bookModal'].includes(m.id))) return true;
   if(_visModals().length) return false;   // открыт другой модал — не мешаем
@@ -12361,15 +12364,15 @@ function updateFloatTools(){ try{ const w=document.getElementById('floatTools');
   // #498 (владелец: «кнопка шрифта настройки перекрывает кнопку найти»): плавающий «Aa» — position:fixed поверх
   // ВСЕЙ страницы (z-index:240), а панель поиска по книге (#bookFindPanel, кнопка «Найти») — обычный контент читалки;
   // когда панель поиска открыта, прячем плавающий «Aa», чтобы он гарантированно не перекрывал кнопку «Найти».
-  try{ const _bkP=document.getElementById('bookFindPanel'); if(_bkP && _bkP.style.display==='block'){ w.style.display='none'; return; } }catch(_e){}
-  // #514 (владелец: «я же ПРОСИЛ — шрифт-кнопка перекрывает кнопку найти»): класс-фикс вместо точечного —
-  // при ЛЮБОМ открытом модале плавающий Aa/▲▼ прячем целиком: у читалок свои кнопки шрифта (А−/А+), а поверх
-  // модальных «Найти»/«К №»/полей ввода плавашка только мешает.
-  try{ const _mOpen=[...document.querySelectorAll('.modal')].some(m=>m.style.display==='flex'); if(_mOpen){ w.style.display='none'; return; } }catch(_e){}
+  // №522 (бот, 05.07 «кто убрал стрелку — отчитайся»): #514 прятал ВЕСЬ floatTools в модалах, хотя «Найти»
+  // перекрывал только Aa. Теперь в модалах прячем ТОЛЬКО Aa, а стрелки ⬆⬇ живут (скроллер модала учтён).
+  let _hideAa=false;
+  try{ const _bkP=document.getElementById('bookFindPanel'); if(_bkP && _bkP.style.display==='block') _hideAa=true; }catch(_e){}
+  try{ if(!_hideAa){ _hideAa=[...document.querySelectorAll('.modal')].some(m=>m.style.display==='flex'); } }catch(_e){}
   const sizeGrp=document.getElementById('fsGroup'); const up=document.getElementById('floatUp'); const down=document.getElementById('floatDown');
   // #240 (откат ③): шрифт/«наверх» ВСЕГДА СПРАВА (крутилка возвращена влево, как было — перекрытия нет). Раньше в Коране уезжали влево из-за крутилки-справа.
   try{ w.style.right='10px'; w.style.left='auto'; }catch(e){}
-  const showSize=_hasText(); if(sizeGrp) sizeGrp.style.display=showSize?'flex':'none';
+  const showSize=_hasText() && !_hideAa; if(sizeGrp) sizeGrp.style.display=showSize?'flex':'none';
   if(!showSize){ const c=document.getElementById('fsCtrls'); if(c) c.style.display='none'; const tg=document.getElementById('fsToggle'); if(tg){ tg.style.borderColor='var(--border)'; tg.style.color='var(--text)'; } }   // #75: скрыли — сворачиваем разворот
   // ▲ только когда реально есть куда прокручивать вверх; ▼ только когда есть куда вниз (и не у самого конца)
   const sc=_activeScroller(); let canUp=false, canDown=false;
