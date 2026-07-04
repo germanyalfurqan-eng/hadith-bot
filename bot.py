@@ -1742,7 +1742,14 @@ async def send_long(update, text, parse_mode=None):
             else:
                 await update.message.reply_text(chunk)
         except Exception:
-            await update.message.reply_text(chunk)   # фолбэк без разметки
+            # #B-004 («Can't parse entities», 32 повтора): разметка где-то не экранирована (& / <) —
+            # фолбэк шлёт БЕЗ parse_mode (Telegram не парсит теги в plain text, ошибка невозможна),
+            # но сам фолбэк тоже был не защищён — второе исключение (флуд-контроль и т.п.) улетало
+            # в глобальный _on_error необработанным. Теперь ловим и его.
+            try:
+                await update.message.reply_text(chunk)
+            except Exception:
+                pass
 
 async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -4290,10 +4297,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not res:
             await update.message.reply_text("❌ Не найдено в موسوعة رواة الحديث. Попробуй другое написание.")
             return
-        msg = f"🧑‍🏫 <b>Передатчики «{query}»</b> (موسوعة رواة الحديث):\n\n"
+        msg = f"🧑‍🏫 <b>Передатчики «{_esc_mark(query)}»</b> (موسوعة رواة الحديث):\n\n"
         for i, t in enumerate(res, 1):
-            title = t["title"].replace("<", "").replace(">", "")
-            msg += f'{i}. <a href="{t["url"]}">{title}</a>\n'
+            title = _esc_mark(t["title"])
+            url = (t["url"] or "").replace("&", "&amp;")
+            msg += f'{i}. <a href="{url}">{title}</a>\n'
         msg += "\n👉 Нажми имя — откроется полная ترجمة: جرح وتعديل, что сказали учёные, источники."
         await send_long(update, msg, "HTML")
         return
