@@ -722,7 +722,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v994';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v995';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -12887,9 +12887,20 @@ try{ document.documentElement.setAttribute('data-jsok', (typeof APPVER!=='undefi
 function makeHadithAdapter(code){
   var title; try{ title=vocOf(code); }catch(e){ title=code; }
   function _store(){ return (typeof cache!=='undefined'&&cache)?cache:{}; }
-  var _arr=null, _cursor=0;
-  function _map(item){
-    return { id:code+'_'+item.num, type:'hadith', arabic:item.text||item.ar||'', translation:item.ru||null,
+  var _arr=null, _cursor=0, _ruMapP=null;
+  // переводы: карта num→ru для ЭТОГО сборника из hadith_ru.json (13МБ, грузим тихо, не роняем читалку)
+  function _ruMap(){
+    if(_ruMapP) return _ruMapP;
+    _ruMapP=Promise.resolve().then(function(){ return loadHadithRu(true); }).then(function(arr){
+      var m={}; (arr||[]).forEach(function(x){ if(String(x.s)===String(code)) m[String(x.n)]=x.t; }); return m;
+    }).catch(function(){ return {}; });
+    return _ruMapP;
+  }
+  // первый показ не ждёт 13МБ дольше 2.5с — арабский сразу, переводы догонят на «ещё 30»
+  function _ruQuick(){ return Promise.race([_ruMap(), new Promise(function(r){ setTimeout(function(){ r({}); },2500); })]); }
+  function _map(item, rm){
+    var ru=(rm&&rm[String(item.num)])||item.ru||null;
+    return { id:code+'_'+item.num, type:'hadith', arabic:item.text||item.ar||'', translation:ru,
       metadata:{ sourceName:title, number:item.num } };
   }
   return { title:title,
@@ -12903,13 +12914,13 @@ function makeHadithAdapter(code){
         if(fromNum!==null){ for(var i=0;i<_arr.length;i++){ if(_arr[i].num==fromNum){ startIndex=i; break; } } }
         var w=_arr.slice(startIndex,startIndex+30);
         _cursor=startIndex+w.length;
-        return w.map(_map);
+        return _ruQuick().then(function(rm){ return w.map(function(it){ return _map(it,rm); }); });
       });
     },
     more:function(){
       if(!_arr) return Promise.resolve([]);
       var w=_arr.slice(_cursor,_cursor+30); _cursor+=w.length;
-      return Promise.resolve(w.map(_map));
+      return _ruQuick().then(function(rm){ return w.map(function(it){ return _map(it,rm); }); });
     },
     hasMore:function(){ return !!_arr && _cursor<_arr.length; } };
 }
