@@ -620,7 +620,7 @@
     <!-- M313 этап 2: тест-вход единой читалки (только кабинет, пока идёт миграция) -->
     <div class="accf">
       <div class="ah"><div><div class="at">🧪 Единая читалка (M313)</div><div class="ad">Новый единый ридер, этап 2/5: тест на Бухари. Старые читалки не тронуты.</div></div>
-        <button class="go" id="urDevBtn" style="padding:6px 12px" onclick="try{openUnifiedReader('bukhari')}catch(e){toast('UR: '+e.message)}">Открыть</button></div>
+        <button class="go" id="urDevBtn" style="padding:6px 12px" onclick="try{openUnifiedReader('bukhari')}catch(e){toast('UR: '+e.message)}">Открыть</button> <button class="go" id="urDevBook" style="padding:6px 12px" onclick="try{openUnifiedBook(prompt('id книги Мактабы','1')||1,1)}catch(e){toast('UR: '+e.message)}">Книга</button></div>
     </div>
     <!-- M428: ЕДИНЫЙ журнал заявок (бот TB + апп TA + чат M) из req_status.json — синхронизирован с деплоями -->
     <div class="accf">
@@ -722,7 +722,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v996';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v997';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -12935,6 +12935,35 @@ function makeHadithAdapter(code){
     },
     hasMore:function(){ return !!_arr && _cursor<_arr.length; } };
 }
+
+// M313 этап 4: адаптер книг Мактабы (turath через бэкенд) — драфт Хермеса, надзор: bjson-таймаут, срез HTML-тегов
+function makeBookAdapter(bookId, startPg){
+  var _id=String(bookId||'').replace(/[^0-9]/g,''); if(!_id) return null;
+  var _pg=parseInt(startPg,10); if(isNaN(_pg)||_pg<1) _pg=1;
+  var _title=''; try{ _title=bookName(_id)||('\u0643\u062a\u0627\u0628 '+_id); }catch(e){ _title='\u0643\u062a\u0627\u0628 '+_id; }
+  var _ended=false, _next=_pg;
+  function _clean(s){ return String(s||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim(); }
+  function _page(pg){
+    var u=BACKEND_URL+'/book_page?id='+_id+'&pg='+pg+'&initData='+encodeURIComponent(INITDATA);
+    var pr=(typeof bjson==='function')?bjson(u,25000):fetch(u).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
+    return Promise.resolve(pr).then(function(j){
+      var txt=_clean(j&&j.text);
+      if(!txt){ _ended=true; return []; }
+      return [{ id:'bk'+_id+'_'+pg, type:'book', arabic:txt, translation:null,
+        metadata:{ sourceName:_title, number:pg } }];
+    }).catch(function(e){ _ended=true; try{toast('\u041a\u043d\u0438\u0433\u0430: \u043e\u0448\u0438\u0431\u043a\u0430 \u0441\u0435\u0442\u0438');}catch(_){} return []; });
+  }
+  return { title:_title,
+    fetch:function(){ _next=_pg; return _page(_next).then(function(it){ if(it.length) _next++; return it; }); },
+    more:function(){ return _page(_next).then(function(it){ if(it.length) _next++; return it; }); },
+    hasMore:function(){ return !_ended; } };
+}
+function openUnifiedBook(bookId, pg){
+  var a=makeBookAdapter(bookId, pg);
+  if(!a){ try{toast('\u041d\u0435\u0442 id \u043a\u043d\u0438\u0433\u0438');}catch(e){} return; }
+  if(window.UR&&window.UR.open) window.UR.open(a, {});
+}
+
 function openUnifiedReader(code, fromNum){
   if(window.UR&&window.UR.open){ window.UR.open(makeHadithAdapter(code), {fromNum:fromNum}); }
   else{ try{toast('Читалка не инициализирована');}catch(e){} }
