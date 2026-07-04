@@ -222,7 +222,7 @@
       <div class="gear" id="favHdr" style="display:block" title="⭐ Избранное / закладки">⭐</div>
       <div class="gear" id="setBtn" style="display:block" title="⚙️ Настройки (перевод Корана, огласовки, иснад, тема)">⚙️</div>
       <div class="gear" id="menuBtn" style="display:block" title="☰ Ещё — дополнительные функции и сервисы">☰</div>
-      <div class="gear" id="devBtn" style="display:none" title="🛠 Кабинет разработчика (доступы, журналы, баланс)">🛠</div>
+      <div class="gear" id="devBtn" style="display:none;cursor:pointer;position:relative;z-index:30" title="🛠 Кабинет владельца: доступы, журналы, баланс, статистика (виден только тебе)">🛠</div>
     </div>
   </div>
   <div class="sub" id="sub">поиск по хадисам и аятам</div>
@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v977';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v978';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7601,8 +7601,11 @@ function _dzChips(codes, row, forms, uResolved, numOverride){
           if(_sah){ b.style.color='#e8c35a'; b.style.borderColor='#e8c35a'; b.style.background='rgba(232,195,90,.16)'; b.title+=' · ⭐ сподвижник'; }
         }catch(e){} }).catch(()=>{});
       b.onclick=()=>{ _narrCard(rid).then(v=>{ if(v&&v[1]) openNarratorRijal(v[1]); else toast('карточка не нашлась'); }).catch(()=>{}); };
-    } else { b.textContent=String(c).slice(0,8); b.style.color='#ffce63'; b.title='не отождествлён — наш U-код (тап: карточка формы)';
-      dzUReg(c).then(u=>{ if(u&&u[0]) b.textContent=u[0].split(' ').slice(0,3).join(' ')+' ؟'; }).catch(()=>{});
+    } else { b.textContent=String(c).slice(0,8); b.style.color='#ffce63';
+      // #515 (владелец: «что за надписи абдуллах ибн?????? — что делать?»): жёлтый чип = КРАТКАЯ ФОРМА имени из иснада,
+      // точная личность уточняется — поясняем прямо в чипе по-русски, а не голым «؟»
+      b.title='Краткая форма имени в иснаде (так написал автор книги) — точная личность уточняется. Нажми: карточка формы с кандидатами.';
+      dzUReg(c).then(u=>{ if(u&&u[0]) b.innerHTML=esc(u[0].split(' ').slice(0,3).join(' '))+' <span style="font-size:9px;color:var(--hint)">краткая форма·тап</span>'; }).catch(()=>{});
       b.onclick=()=>openUCard(c);
     }
     row.appendChild(b);
@@ -12109,6 +12112,10 @@ function updateFloatTools(){ try{ const w=document.getElementById('floatTools');
   // ВСЕЙ страницы (z-index:240), а панель поиска по книге (#bookFindPanel, кнопка «Найти») — обычный контент читалки;
   // когда панель поиска открыта, прячем плавающий «Aa», чтобы он гарантированно не перекрывал кнопку «Найти».
   try{ const _bkP=document.getElementById('bookFindPanel'); if(_bkP && _bkP.style.display==='block'){ w.style.display='none'; return; } }catch(_e){}
+  // #514 (владелец: «я же ПРОСИЛ — шрифт-кнопка перекрывает кнопку найти»): класс-фикс вместо точечного —
+  // при ЛЮБОМ открытом модале плавающий Aa/▲▼ прячем целиком: у читалок свои кнопки шрифта (А−/А+), а поверх
+  // модальных «Найти»/«К №»/полей ввода плавашка только мешает.
+  try{ const _mOpen=[...document.querySelectorAll('.modal')].some(m=>m.style.display==='flex'); if(_mOpen){ w.style.display='none'; return; } }catch(_e){}
   const sizeGrp=document.getElementById('fsGroup'); const up=document.getElementById('floatUp'); const down=document.getElementById('floatDown');
   // #240 (откат ③): шрифт/«наверх» ВСЕГДА СПРАВА (крутилка возвращена влево, как было — перекрытия нет). Раньше в Коране уезжали влево из-за крутилки-справа.
   try{ w.style.right='10px'; w.style.left='auto'; }catch(e){}
