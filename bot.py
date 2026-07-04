@@ -1273,6 +1273,25 @@ def ai_note_call():
         return False
     return True
 
+DEEPSEEK_SPEND_FILE = "data/deepseek_spend.json"
+DEEPSEEK_PRICES = (0.27, 1.10)   # USD за 1M токенов (вход, выход) — приблизительно, стандартный (не кэш) тариф deepseek-chat
+def _record_deepseek_spend(prompt, pin, pout):
+    """M301: детальный учёт DeepSeek (за каждую копейку — какой запрос/токены/стоимость), тем же паттерном что _record_gpt_spend
+    для OpenAI (тот уже был, этого для DeepSeek — основного платного ИИ бота — не было вообще, реальный пробел).
+    Пишем ТОЛЬКО в файл (без сообщения в лог на каждый вызов — владелец просил не флудить)."""
+    pi, po = DEEPSEEK_PRICES
+    cost = (int(pin or 0) / 1e6) * pi + (int(pout or 0) / 1e6) * po
+    rec = {"t": _now_msk(), "q": (prompt or "")[:200], "in": int(pin or 0), "out": int(pout or 0), "cost": round(cost, 6)}
+    try:
+        os.makedirs("data", exist_ok=True)
+        hist = json.load(open(DEEPSEEK_SPEND_FILE, encoding="utf-8")) if os.path.exists(DEEPSEEK_SPEND_FILE) else {"total": 0.0, "calls": 0, "log": []}
+        hist["total"] = round(float(hist.get("total", 0.0)) + cost, 6)
+        hist["calls"] = int(hist.get("calls", 0)) + 1
+        hist["log"] = (hist.get("log", []) + [rec])[-500:]
+        json.dump(hist, open(DEEPSEEK_SPEND_FILE, "w", encoding="utf-8"), ensure_ascii=False)
+    except Exception:
+        pass
+
 def ask_deepseek(prompt, system, max_tokens=2000):
     """Личный ответ владельцу через DeepSeek API. max_tokens — потолок длины ответа
     (для перевода длинных хадисов поднимаем, иначе текст обрывается на полуслове)."""
@@ -1288,8 +1307,14 @@ def ask_deepseek(prompt, system, max_tokens=2000):
                   "max_tokens": max_tokens},
             timeout=90)
         if r.status_code == 200:
-            ответ = r.json()["choices"][0]["message"]["content"]
+            j = r.json()
+            ответ = j["choices"][0]["message"]["content"]
             ответ = ответ.replace("\n\n\n", "\n\n")
+            try:
+                u = j.get("usage") or {}
+                _record_deepseek_spend(prompt, u.get("prompt_tokens"), u.get("completion_tokens"))
+            except Exception:
+                pass
             return f"{ответ}\n\n⚡ *Модель:* 🐬 DeepSeek"
     except Exception:
         pass
@@ -4294,6 +4319,13 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             query = ar or tr_name
         await update.message.reply_text(f"🧑‍🏫 Ищу передатчиков «{query}»...")
         res = search_transmitters(query, 8)
+        # feedback #3 (25.06.2026, «ابن لهيعة» не ищется): hawramani.com — внешний поиск, не наш индекс,
+        # и он чувствителен к орфографии ة/ه (напр. в наших данных передатчик записан «لهيعه», а
+        # стандартное написание — «لهيعة»). Наш собственный canon() в мини-аппе это уже фолдит,
+        # здесь — та же логика ретраем: не нашли как есть → пробуем оба варианта конца слова.
+        if not res and re.search(r"[ةه]$", query):
+            _alt = (query[:-1] + ("ه" if query[-1] == "ة" else "ة"))
+            res = search_transmitters(_alt, 8)
         if not res:
             await update.message.reply_text("❌ Не найдено в موسوعة رواة الحديث. Попробуй другое написание.")
             return
@@ -6654,11 +6686,27 @@ async def _api_serve(application=None):
             'calls': int(gpt_data.get('calls', 0)),
             'last': (gpt_data.get('log') or [{}])[-1] if gpt_data.get('log') else {},
         }
+        # M301: DeepSeek (основной платный ИИ бота) — накопленный расход из deepseek_spend.json (тот же паттерн, что и GPT выше)
+        ds_data = {}
+        try:
+            if os.path.exists(DEEPSEEK_SPEND_FILE):
+                ds_data = json.load(open(DEEPSEEK_SPEND_FILE, encoding="utf-8"))
+        except Exception:
+            ds_data = {}
+        deepseek_info = {
+            'enabled': bool(DEEPSEEK_API_KEY),
+            'model': DEEPSEEK_MODEL,
+            'spent': round(float(ds_data.get('total', 0.0)), 4),
+            'calls': int(ds_data.get('calls', 0)),
+            'last': (ds_data.get('log') or [{}])[-1] if ds_data.get('log') else {},
+            'recent': (ds_data.get('log') or [])[-25:],
+        }
         # Gemini — бесплатный лимит Google (биллинга нет); показываем статус/модель
         gemini_info = {'enabled': bool(GEMINI_API_KEY), 'model': GEMINI_MODEL, 'free': True}
         return _cors(web.json_response({
             'balance': b,
             'gpt': gpt_info,
+            'deepseek_spend': deepseek_info,
             'gemini': gemini_info,
             'usage': {'totals': j.get('usage', {}).get('totals', {}), 'recent': (j.get('usage', {}).get('recent') or [])[:25]},
             'translations': {'totals': j.get('translations', {}).get('totals', {}), 'recent': (j.get('translations', {}).get('recent') or [])[:25]},
