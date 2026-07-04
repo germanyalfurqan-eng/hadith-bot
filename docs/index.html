@@ -728,7 +728,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1006';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v1007';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -9157,7 +9157,7 @@ async function narrOpen(nm){
     cc.onclick=async()=>{ cc.disabled=true;
       try{ const id=await _narrLookup(nm); if(id==null){ cc.textContent='код не найден'; return; }
         window._chainSel=window._chainSel||[];
-        if(!window._chainSel.some(x=>x.id===id)){ const c=await _narrCard(id); window._chainSel.push({id, nm:(c&&c[1])||nm}); }
+        if(!window._chainSel.some(x=>x.id===id)){ const c=await _narrCard(id); let _nm=(c&&c[1])||nm; _nm=String(_nm).split(' ').slice(0,4).join(' '); window._chainSel.push({id, nm:_nm}); }   // владелец 05.07: короткое имя, не простыня
         if(typeof modes!=='undefined' && !modes.chain){ const chp=document.querySelector('.chip[data-mode="chain"]'); if(chp) chp.click(); else modes.chain=true; }
         chainRender(); try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(_e){}
         toast('⛓ Передатчик в конструкторе ('+window._chainSel.length+') — добавь ещё или ищи цепи');
@@ -10894,7 +10894,7 @@ async function verifyNarr(card, place, text){
     const _authText = !idMode && _abbrevRiw && ['1681','1727','829','1726','1198'].indexOf(String(place.bid))>=0;
     const _bc = idMode ? (alarm?'#e0796a':(softGap?'#d8a85a':'#3a8a5a')) : (_authText?'#3a8a5a':'#3a4a66'); const _bg = idMode ? (alarm?'rgba(224,121,106,.10)':(softGap?'rgba(216,168,90,.10)':'rgba(58,138,90,.08)')) : (_authText?'rgba(58,138,90,.08)':'rgba(90,120,170,.08)');
     box.style.cssText='margin-top:9px;border-radius:10px;padding:9px 11px;font-size:12px;border:1px solid '+_bc+';background:'+_bg+';';
-    const _hdr = !idMode ? (_authText?'🟢 Цепь этого риваята · текст = sunnah.com (передатчики подлинные)':'🔵 Сверка по базе Мактабы (передатчики опознаны по тексту)') : (alarm?'🔴 СВЕРКА: РАСХОЖДЕНИЕ с sunnah.com':(softGap?('🟡 Сверка: почти совпадает — '+gapList.length+' равия'+(gapList.length===1?'':'/-ев')+' мост не привязал по краткой форме'):'🟢 Сверка: совпадает с sunnah.com'));   // С38: жёлтый «почти»; #386: 🟢 для доп.риваята verify-сборника
+    const _hdr = !idMode ? (_authText?'🟢 Цепь этого риваята · текст = sunnah.com (передатчики подлинные)':'🔵 Сверка по базе Мактабы (передатчики опознаны по тексту)') : (alarm?'🔴 СВЕРКА: РАСХОЖДЕНИЕ с sunnah.com':(softGap?('🟡 Сверка: почти совпадает — '+gapList.length+' равия'+(gapList.length===1?'':'/-ев')+' мост не привязал по краткой форме'):'🟢 Сверка: звенья согласованы с sunnah.com (число и мост; пер-именная сверка — в рутине)'));   // владелец 05.07: не писать «совпадает», пока имена не сверены поимённо   // С38: жёлтый «почти»; #386: 🟢 для доп.риваята verify-сборника
     const _hcol = !idMode ? (_authText?'#7fd3a0':'#6fb0e0') : (alarm?'#e0796a':(softGap?'#e0c07a':'#7fd3a0'));
     let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b style="color:'+_hcol+'">'+_hdr+'</b>'
       +'<span style="color:var(--hint)">'+(idMode?('эталон ('+srcLbl+'): <b>'+authCount+'</b> · '):'')+'приложение: <b style="color:'+(cntMis&&idMode?'#e0796a':'inherit')+'">'+ourCount+'</b></span></div>';
@@ -10918,11 +10918,13 @@ async function verifyNarr(card, place, text){
       let _bc=idMode?(ok?'#3a8a5a':'#e0796a'):'#6c5ce7', _bg=idMode?(ok?'rgba(58,138,90,.12)':'rgba(224,121,106,.12)'):'rgba(108,92,231,.10)', _vtag='';
       if(_vd==='daif'||_vd==='matruk'){ _bc='#A32D2D'; _bg='rgba(226,75,74,.14)'; _vtag=' <span style="color:#ff8787;font-size:9.5px;direction:ltr;font-weight:700">'+(_vd==='matruk'?'матрук':'даиф')+'</span>'; }
       else if(_vd==='majhul'||_vd==='majhul_hal'){ _bc='#8a6a3a'; _bg='rgba(202,161,74,.10)'; _vtag=' <span style="color:#e6c578;font-size:9.5px;direction:ltr">маджхуль</span>'; }
-      // ФОРМУЛА владельца (05.07, скрин аль-Хумейди в Бухари №1): сподвижник НЕ стоит в первых 1-2 звеньях
-      // от собирателя длинной цепи (auth[0..1] при длине ≥4) — такое «сахабство» = тёзка/битый мост, НЕ золотим.
-      const _sahSuspect=_sahFlags[i] && i<2 && auth.length>=4;
-      const _isSahHere=_sahFlags[i] && !_sahSuspect; if(_isSahHere){ _bc='#e8c35a'; _bg='rgba(232,195,90,.16)'; }   // золотой — сподвижник, приоритет выше остальных цветов
-      if(_sahSuspect){ try{ console.warn('sahabi-suspect у собирателя:', mid, nm); }catch(e){} }
+      // ФОРМУЛА владельца 2.0 (05.07, скрины аль-Хумейди и Кайса): «сподвижник» НЕ на последнем звене —
+      // подозрение, требуется ДОП-ОСНОВАНИЕ: золотим только если звено ПОСЛЕДНЕЕ (у Пророка ﷺ)
+      // ИЛИ вердикт sahabi выверен рутиной сверки (narr_verdicts + довод мутабара). Голый ранго-детект — не основание.
+      const _sahBasis=(i===auth.length-1) || ((mid&&_NVD[mid])==='sahabi');
+      const _sahSuspect=_sahFlags[i] && !_sahBasis;
+      const _isSahHere=_sahFlags[i] && _sahBasis; if(_isSahHere){ _bc='#e8c35a'; _bg='rgba(232,195,90,.16)'; }   // золотой — сподвижник, приоритет выше остальных цветов
+      if(_sahSuspect){ try{ console.warn('sahabi без основания (не последнее звено, вердикта нет):', mid, nm); }catch(e){} }
       const _numTag=' <span style="color:var(--hint);font-size:9px;direction:ltr;opacity:.75" title="номер звена в цепи (①=ближе к сподвижнику/Пророку ﷺ)">№'+(auth.length-i)+'</span>';
       const _sahTag=_isSahHere?' <span style="color:#e8c35a;font-size:9.5px;direction:ltr">⭐ сподвижник</span>':'';
       h+='<span class="vChip"'+(mid?(' data-mid="'+esc(mid)+'"'):'')+' style="'+(mid?'cursor:pointer;':'')+'border:1px solid '+_bc+';border-radius:8px;padding:2px 7px;background:'+_bg+'"'+(mid?(' title="Карточка в Мактабе: shamela.ws/narrator/'+esc(mid)+'"'):'')+'><span style="font-family:\'Traditional Arabic\',serif">'+esc(nm)+'</span>'+(mid?(' <span style="color:var(--hint);font-size:10px;direction:ltr">'+(idMode?(ok?'✓':'✗'):'👤')+' id'+esc(mid)+' ↗</span>'):(idMode?' <span style="color:#e0796a;font-size:10px;direction:ltr" title="sunnah.com опознал, наш мост — ещё нет">؟ не опознан</span>':''))+_vtag+_sahTag+_numTag+'</span>';
