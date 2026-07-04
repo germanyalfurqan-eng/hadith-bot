@@ -415,6 +415,7 @@
     </details>
     <details class="setSec"><summary>🔎 Поиск · 4</summary>
           <div class="row"><span>🎯 Строгий поиск: только где есть ВСЕ слова <span style="color:var(--hint);font-size:11px">(выкл → покажет и близкие)</span></span><div class="sw" id="strictSw"></div></div>
+          <div class="row"><span>🧪 Единая читалка (бета) <span style="color:var(--hint);font-size:11px">(M313: метка 📖 у хадиса откроет новый единый ридер)</span></span><div class="sw" id="urBetaSw"></div></div>
           <div class="row"><span>🎯 Подсветка слов поиска (когда в поле фокус)</span><div class="sw" id="qHlSw"></div></div>
           <div class="row"><span>🕐 Недавние поиски (показывать при пустом поле)</span><div class="sw" id="recentSw"></div></div>
           <div class="row"><span>🔥 Популярное (что чаще ищут, при пустом поле)</span><div class="sw" id="popSw"></div></div>
@@ -722,7 +723,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v997';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v998';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1583,7 +1584,7 @@ function cardHadithRu(d){ const card=document.createElement('div');card.classNam
   const canRead = isReadable(d.s);   // M102: клик по источнику → читалка на этом хадисе
   meta.innerHTML='<span class="src'+(canRead?' srcnav" style="cursor:pointer" title="Открыть в читалке на этом хадисе">📖 ':'">')+vocOf(d.s)+' · №'+d.n+'</span>';   // #37: с огласовками
   { const _rl=_ruSrcLine(d.s); if(_rl) meta.innerHTML+='<span class="srcru" style="display:block;width:100%;font-size:11.5px;color:var(--hint);margin-top:1px;direction:ltr;text-align:left">'+esc(_rl)+'</span>'; }   // #37: рус. название + автор
-  if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp) sp.onclick=()=>openReader(d.s,String(d.n)); }
+  if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp) sp.onclick=()=>{ if(cfg.urBeta){ try{ openUnifiedReader(d.s,String(d.n)); return; }catch(e){} } openReader(d.s,String(d.n)); }; }
   try{ ourHukmBadge(d.s, d.n, meta, card); }catch(e){}   // #309/аудит: достоверность·разбор·материал и в рус-карточке (единообразие с обычной/Мухэймин)
   try{ razboryBadge(d.s, d.n, meta, card); }catch(e){}
   try{ ourMaterialBadge(d.s, d.n, meta, card); }catch(e){}
@@ -4279,7 +4280,7 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
   try{ ourHukmBadge(code, (h.num||h.n), meta, card); }catch(e){}
   try{ razboryBadge(code, (h.num||h.n), meta, card); }catch(e){}   // обратная связь: «📿 наш разбор» если хадис разбирали на канале
   try{ ourMaterialBadge(code, (h.num||h.n), meta, card); }catch(e){}   // M52: отметка «от Muslimoon»
-  if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp){ sp.style.cursor='pointer'; sp.onclick=()=>openReader(code,String(h.num)); } }
+  if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp){ sp.style.cursor='pointer'; sp.onclick=()=>{ if(cfg.urBeta){ try{ openUnifiedReader(code,String(h.num)); return; }catch(e){} } openReader(code,String(h.num)); }; } }
   // #234/#237: у Муслима буквы риваятов sunnah.com (654a/654b…) ПРЯМО рядом с номером — кликабельно. Буквы авторитетные из muslim_riw.json (1879 номеров с риваятами).
   if(code==='muslim'){ (async()=>{ try{ const rw=await loadMuslimRiw(); const _bn=String(h.num).replace(/[^0-9]/g,''); const lets=rw&&rw[_bn];
     if(lets && lets.length){ const sp=meta.querySelector('.src'); if(sp){ const rs=document.createElement('span');
@@ -12066,6 +12067,7 @@ var _tjw=document.getElementById('tafJumpSw'); if(_tjw){ _tjw.classList.toggle('
 var _qan=document.getElementById('qrAutoNextSw'); if(_qan){ _qan.classList.toggle('on',cfg.qrAutoNext!==false); _qan.onclick=()=>{ cfg.qrAutoNext=(cfg.qrAutoNext===false); saveCfg(cfg); _qan.classList.toggle('on',cfg.qrAutoNext!==false); }; }   // M275: тумблер авто-перехода чтеца Корана
 var _qts=document.getElementById('qrThumbSw'); if(_qts){ _qts.classList.toggle('on',cfg.qrThumb!==false); _qts.onclick=()=>{ cfg.qrThumb=(cfg.qrThumb===false); saveCfg(cfg); _qts.classList.toggle('on',cfg.qrThumb!==false); try{_qrThumbSync();}catch(e){} }; }   // #46: тумблер крутилки прокрутки Корана
 var _qsw=document.getElementById('qrSwipeSw'); if(_qsw){ _qsw.classList.toggle('on',cfg.qrSwipe!==false); _qsw.onclick=()=>{ cfg.qrSwipe=(cfg.qrSwipe===false); saveCfg(cfg); _qsw.classList.toggle('on',cfg.qrSwipe!==false); }; }   // #69: тумблер свайпа смены суры
+var _urb=document.getElementById('urBetaSw'); if(_urb){ _urb.classList.toggle('on',!!cfg.urBeta); _urb.onclick=()=>{ cfg.urBeta=!cfg.urBeta; saveCfg(cfg); _urb.classList.toggle('on',!!cfg.urBeta); toast(cfg.urBeta?'🧪 Единая читалка ВКЛ — метка 📖 ведёт в новый ридер':'Единая читалка выкл — старый ридер'); }; }   // M313-тумблер
 var _str=document.getElementById('strictSw'); if(_str){ _str.classList.toggle('on',cfg.strictSearch!==false); _str.onclick=()=>{ cfg.strictSearch=(cfg.strictSearch===false); saveCfg(cfg); _str.classList.toggle('on',cfg.strictSearch!==false); toast(cfg.strictSearch!==false?'🎯 Строгий поиск ВКЛ — только все слова':'Строгий поиск ВЫКЛ — покажет и близкие'); }; }   // M283-тумблер
 var _hpw=document.getElementById('hapticSw'); if(_hpw){ _hpw.classList.toggle('on',cfg.haptic!==false); _hpw.onclick=()=>{ cfg.haptic=(cfg.haptic===false); saveCfg(cfg); _hpw.classList.toggle('on',cfg.haptic!==false); if(cfg.haptic!==false){ _hapErr=0; hap('light'); } }; }
 var _mkw=document.getElementById('maktabaSw'); if(_mkw){ _mkw.classList.toggle('on',cfg.maktabaBtn!==false); _mkw.onclick=()=>{ cfg.maktabaBtn=(cfg.maktabaBtn===false); saveCfg(cfg); _mkw.classList.toggle('on',cfg.maktabaBtn!==false); }; }
