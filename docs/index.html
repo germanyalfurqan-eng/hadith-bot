@@ -722,7 +722,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v995';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v996';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -12775,6 +12775,13 @@ try{ document.documentElement.setAttribute('data-jsok', (typeof APPVER!=='undefi
     dom.pageInd.onclick=function(ev){ ev.stopPropagation(); UR.showJump(); };
     dom.jumpInput.onkeydown=function(e){ if(e.key==='Enter') UR.jumpTo(parseInt(dom.jumpInput.value,10)); };
     m.addEventListener('click',function(e){ if(dom.jumpModal.classList.contains('show') && !dom.jumpModal.contains(e.target) && e.target!==dom.pageInd) dom.jumpModal.classList.remove('show'); });
+    // тап по карточке = сделать её текущей для счётчика (не мешая выделению текста)
+    dom.content.addEventListener('click',function(e){
+      try{ if(String((window.getSelection&&window.getSelection())||'').trim()) return; }catch(_e){}
+      var itemEl=e.target&&e.target.closest?e.target.closest('.ur-item'):null; if(!itemEl) return;
+      var idx=parseInt(itemEl.getAttribute('data-ur-i'),10);
+      if(!isNaN(idx)){ state.currentIndex=idx; UR.updateInd(); }
+    });
     UR.applyConfig();
   };
   UR.open=function(adapter,params){
@@ -12832,6 +12839,10 @@ try{ document.documentElement.setAttribute('data-jsok', (typeof APPVER!=='undefi
   };
   UR._buildItem=function(it,i){
     var el=document.createElement('div'); el.className='ur-item'; el.setAttribute('data-ur-i',i);
+    var numEl=document.createElement('div'); numEl.className='ur-numline';
+    numEl.style.cssText='font-size:12.5px;color:var(--hint);margin-bottom:4px;-webkit-user-select:none;user-select:none';
+    numEl.textContent='\u2116 '+((it.metadata&&it.metadata.number)||'');
+    el.appendChild(numEl);
     var ar=document.createElement('div'); ar.className='ur-arabic'; ar.textContent=it.arabic||'';
     el.appendChild(ar);
     if(it.translation){ var tr=document.createElement('div'); tr.className='ur-translation'; tr.textContent=it.translation; el.appendChild(tr); }
