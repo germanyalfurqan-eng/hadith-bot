@@ -3274,6 +3274,55 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _data_put("razbory.json", store, f"razbory {_a}-{_b} (#147)")
             await update.message.reply_text(f"✅ Разборы {_a}–{_b}: сохранено {_done} (аудио расшифровано {_aud}), пропущено/ошибок {_fail}. Всего в базе: {len(store)}. → data/razbory.json. Claude внесёт вердикты в our_hukm.json.")
             return
+        # ===== #410 (владелец 30.06.2026): «саммари <ссылка t.me/jamaat_ru/N>» — поймать диалог (текст+аудио) и выдать саммари.
+        # Та же схема, что #147 «разбор N»: форвард по message_id (работает ТОЛЬКО если бот участник чата и в чате
+        # НЕ включена «защита контента» — иначе Telegram отклонит forward даже боту-участнику; тогда единственный
+        # путь — владелец форвардит сообщение(я) боту вручную, как уже принято в #147). До 15 ссылок за раз.
+        if _tl.startswith("саммари ") and is_owner(update):
+            _links = re.findall(r'https?://t\.me/([A-Za-z0-9_]+)/(\d+)', text)
+            if not _links:
+                await update.message.reply_text("📎 #410 саммари диалога.\nФормат: «саммари <ссылка на сообщение t.me/чат/N>» (можно несколько ссылок подряд — поймаю каждое сообщение). Работает, только если бот состоит в этом чате и там не включена защита контента — иначе перешли мне сообщения вручную.")
+                return
+            _links = _links[:15]
+            await update.message.reply_text(f"📥 Ловлю {len(_links)} сообщени{'е' if len(_links)==1 else 'й'}…")
+            _texts = []; _fail = 0
+            for _un, _mid_s in _links:
+                _mid = int(_mid_s)
+                try:
+                    _m = await context.bot.forward_message(LOG_CHAT_ID, "@" + _un, _mid)
+                    _txt = (_m.text or _m.caption or "").strip()
+                    if (_m.voice or _m.audio) and len(_txt) < 40:
+                        _media = _m.voice or _m.audio
+                        _f = await _media.get_file()
+                        _ext = ".ogg" if _m.voice else ".mp3"
+                        _p = f"/tmp/summary_{_mid}{_ext}"
+                        await _f.download_to_drive(_p)
+                        _tr = transcribe_audio(_p)
+                        if _tr: _txt = (_txt + "\n" + _tr).strip()
+                        try: os.remove(_p)
+                        except Exception: pass
+                    try: await context.bot.delete_message(LOG_CHAT_ID, _m.message_id)
+                    except Exception: pass
+                    if _txt: _texts.append(_txt)
+                    else: _fail += 1
+                except Exception:
+                    _fail += 1
+            if not _texts:
+                await update.message.reply_text(f"❌ Не поймал ни одного сообщения ({_fail} из {len(_links)}). Похоже, форвард из этого чата заблокирован (защита контента) или бот не в нём — перешли мне эти сообщения вручную реплаем, распознаю так же.")
+                return
+            _raw = "\n\n---\n\n".join(_texts)[:16000]
+            _ans = ask_ai("Сделай краткое саммари этого диалога/переписки (100-200 слов, по-русски, по сути, без искажений):\n\n" + _raw,
+                          "Ты — помощник, который кратко и точно суммаризирует диалоги.", owner=True, max_tokens=700)
+            if not _ans:
+                await update.message.reply_text("❌ ИИ сейчас недоступен для саммари. Текст поймал (" + str(len(_texts)) + " сообщ.), попробуй позже ещё раз командой «саммари» с теми же ссылками.")
+                return
+            _fail_note = f" (не поймано {_fail})" if _fail else ""
+            _sumtxt = f"📋 *Саммари* ({len(_texts)} сообщ.{_fail_note}):\n\n{_ans}"
+            try:
+                await update.message.reply_text(_sumtxt, parse_mode="Markdown")
+            except Exception:   # спецсимвол в тексте диалога/ответе ИИ мог сломать Markdown — фолбэк без разметки
+                await update.message.reply_text(re.sub(r'[*_`\[\]()]', '', _sumtxt))
+            return
         # ===== Закрыть заявку: «заявка done <№>» / «заявка готово <№>» =====
         if _tl.startswith("заявка done ") or _tl.startswith("заявка готово "):
             try:
