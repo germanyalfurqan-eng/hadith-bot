@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v982';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v983';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1998,6 +1998,27 @@ function _renderBookSugg(hits, v){
   const x=document.createElement('span'); x.className='chip'; x.style.cssText='cursor:pointer;font-size:12px;color:var(--hint)'; x.textContent='✕'; x.title='Скрыть эти подсказки книг'; x.onclick=()=>{ _bsClosedQ=v; box.style.display='none'; box.innerHTML=''; }; box.appendChild(x);
 }
 function collapseBookSugg(){ _bsCollapsed=true; const box=document.getElementById('bookSugg'); if(box && box.style.display!=='none' && _bsLastHits.length){ _renderBookSugg(_bsLastHits, _bsLastV); } }   // ставим флаг безусловно — отложенный рендер тоже свернётся
+// M24: автоподбор СБОРНИКА-ИСТОЧНИКА по вводу («бухар» → чип «➕ Бухари — искать в нём»)
+function _srcSuggMatch(v){
+  const lv=v.toLowerCase().replace(/ё/g,'е'); if(lv.length<3) return [];
+  const out=[];
+  COLLECTIONS.forEach(c=>{ if(c.ru.toLowerCase().replace(/ё/g,'е').indexOf(lv)!==-1 || (c.ar&&v.length>=2&&c.ar.indexOf(v)!==-1)) out.push({kind:'col',code:c.code,label:c.ru,on:selCols.has(c.code)}); });
+  EXTRA.forEach(e=>{ if(e.soon) return;
+    if(((e.ru+' '+e.short+' '+(e.kw||'')).toLowerCase().replace(/ё/g,'е')).indexOf(lv)!==-1 || (e.ar&&e.ar.indexOf(v)!==-1))
+      out.push({kind:'extra',code:e.code,label:e.short,on:selExtra.has(e.code)}); });
+  return out.slice(0,5);
+}
+function _renderSrcSugg(srcHits, box){
+  if(!srcHits.length) return;
+  srcHits.forEach(s=>{ const c=document.createElement('span'); c.className='chip';
+    c.style.cssText='cursor:pointer;font-size:12px;border:1px solid #2e9b5b;color:#bff5d4;background:rgba(46,155,91,.10)';
+    c.textContent=(s.on?'✓ ':'➕ ')+s.label+(s.on?' — в поиске':' — искать в нём');
+    c.title=s.on?'Нажми — убрать сборник из области поиска':'Нажми — добавить сборник в область поиска (как чип-плюс)';
+    c.onclick=()=>{ if(s.kind==='col'){ selCols.has(s.code)?selCols.delete(s.code):selCols.add(s.code); }
+      else { selExtra.has(s.code)?selExtra.delete(s.code):selExtra.add(s.code); try{ updateExtraSel(); }catch(e){} }
+      try{ hap('light'); }catch(e){} renderCols(); updateBookSugg(); };
+    box.appendChild(c); });
+}
 function updateBookSugg(){
   const box=document.getElementById('bookSugg'); if(!box) return;
   const v=(document.getElementById('q').value||'').trim();
@@ -2027,8 +2048,10 @@ function updateBookSugg(){
         if(qs.length){ hits=cat.filter((b,i)=>qs.every(s=>window._catSkel[i].indexOf(s)!==-1)); if(hits.length>40) hits=[]; }   // кап: скелет-фолбэк — для ТОЧНЫХ догадок названия (табарани→25 книг). Десятки+ совпадений = шум подстроки, а не «книги с таким названием» (стоп #«232 книги» на имени равия)
       }
     }
-    if(!hits.length || _bsClosedQ===v){ box.style.display='none'; box.innerHTML=''; return; }
-    _renderBookSugg(hits, v);
+    const srcHits=_srcSuggMatch(v);   // M24: сборники-источники под этот ввод
+    if((!hits.length && !srcHits.length) || _bsClosedQ===v){ box.style.display='none'; box.innerHTML=''; return; }
+    if(hits.length) _renderBookSugg(hits, v); else { box.style.display='flex'; box.innerHTML=''; }
+    _renderSrcSugg(srcHits, box);
   }, 240);
 }
 document.getElementById('q').addEventListener('input', updateBookSugg);
@@ -2614,7 +2637,7 @@ async function runSearch(explicit){
   const groups=parseQuery(q); _groups=groups; if(!groups.length){ toast('Пустой запрос'); return; }
   // M189: термины для оценки релевантности (слова запроса); ИИ-поиск → сразу по релевантности (лучшие вперёд)
   try{ _lastQueryTerms=[...new Set(groups.flat().filter(x=>!x.neg).flatMap(x=>canon(x.t).split(/\s+/)).filter(w=>w.length>=3))]; if(aiPhrases) relMode=true; }catch(e){}
-  try{ localStorage.setItem('muslimoon_state',JSON.stringify({tab,q:shown,cols:[...selCols]})); }catch(e){}
+  try{ localStorage.setItem('muslimoon_state',JSON.stringify({tab,q:shown,cols:[...selCols],ts:Date.now()})); }catch(e){}   // M35: ts — для чипа «↩ вернуться» при быстром возврате
   try{ _actPush({t:'q', q:shown, tab:tab}); }catch(e){}   // M462: история действий
   const numMode=/^\d{1,7}$/.test(q);
   const rootMode = modes.root && !numMode;
@@ -12539,7 +12562,18 @@ async function boot(){
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab && st.tab!=='hadith'){ var _bt=document.querySelector('.tab[data-tab="'+st.tab+'"]'); if(_bt && _bt.offsetParent!==null) _bt.click(); }   // QA-low: восстановить любую видимую вкладку (была только quran; hadith=дефолт; trending только если виден)
         (st.cols||[]).forEach(c=>selCols.add(c));
-        if(st.q) document.getElementById('q').value=st.q; }
+        if(st.q) document.getElementById('q').value=st.q;
+        // M35: вернулся < 2ч после поиска → чип «вернуться к результатам» (сам поиск НЕ перезапускаем — только по клику)
+        if(st.q && st.ts && (Date.now()-st.ts) < 2*3600*1000){
+          const _res=document.getElementById('res');
+          if(_res && !_res.children.length){
+            const ch=document.createElement('div'); ch.id='resumeChip';
+            ch.style.cssText='cursor:pointer;border:1px solid var(--btn);border-radius:12px;padding:9px 12px;margin:8px 0;color:var(--link);font-size:13px;background:rgba(108,92,231,.07)';
+            ch.innerHTML='↩ Вернуться к последнему поиску: «'+esc(st.q.slice(0,60))+'» <span style="float:inline-end;color:var(--hint);cursor:pointer" id="resumeChipX">✕</span>';
+            ch.onclick=(ev)=>{ if(ev.target&&ev.target.id==='resumeChipX'){ ch.remove(); return; } ch.remove(); runSearch(true); };
+            _res.appendChild(ch);
+          }
+        } }
     }catch(e){}
     renderCols();
     // M463: пришли по share-ссылке #go=… → воспроизвести то же место у получателя
