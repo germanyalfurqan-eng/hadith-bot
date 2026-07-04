@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v965';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v966';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3826,7 +3826,7 @@ async function maktabaByNum(seq, n){
     card.appendChild(meta);
     if(it[0]){ const ob=document.createElement('span'); ob.style.cssText='display:inline-block;margin-top:6px;color:var(--link);cursor:pointer;font-weight:700;font-size:13.5px';   // #48: убрано подчёркивание — было непостоянно (та же книга вверху без подчёркивания); цвет ссылки достаточно
       ob.textContent='📖 '+bn+' №'+n; ob.title='Открыть '+bn+' №'+n+' в книге (лист '+it[0]+')'; ob.onclick=()=>{ try{ openBook(bid, it[0]); }catch(e){} }; card.appendChild(ob); }   // R45: «Книга №» активная ссылка как везде (не «открыть в книге»)
-    try{ dzChainInto(card, bid, n); }catch(e){}   // 🧬 M378b: цепочка по кодам Э1.1
+    try{ dzChainLazy(card, bid, n); }catch(e){}   // 🧬 M378b: цепочка по кодам Э1.1 (#335: лениво+через гейт)
     try{ enableArabusTap(ar); }catch(e){}
     wrap.appendChild(lbl); wrap.appendChild(card);
     if(isAux){ restHdr.style.display='block'; list.appendChild(wrap); shown++; }   // M407: сборники — в нижнюю зону, в счётчик первоисточников НЕ идут
@@ -4134,7 +4134,7 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
   const _lab = arOf(code)+' №'+h.num+(riwNo?(' (риваят '+riwNo+')'):'');
   addTr(meta,card,text,null,{k:_fk,type:'h',coll:arOf(code),label:_lab,text:(text||'').slice(0,200),_riwNo:riwNo,_riwTot:riwTot}); card.appendChild(meta);
   // #350/#384: «ещё хадисы с этой цепью» — та же цепочка+код цепи (⛓, openIsnadBase), что уже была ТОЛЬКО в M314-номерном поиске; теперь на КАЖДОЙ обычной карточке хадиса (текстовый/книга+номер поиск).
-  try{ if(!riwNo){ const _dzb=(COLL_BIDS[code]&&COLL_BIDS[code][0])||EXTRA_BIDS[code]; if(_dzb) dzChainInto(card, _dzb, h.num); } }catch(e){}
+  try{ if(!riwNo){ const _dzb=(COLL_BIDS[code]&&COLL_BIDS[code][0])||EXTRA_BIDS[code]; if(_dzb) dzChainLazy(card, _dzb, h.num); } }catch(e){}
   return card;   // #234: позиция риваята → точная буква sunnah.com
 }
 function cardMuh(d,groups){
@@ -7558,6 +7558,24 @@ function _dzChips(codes, row, forms, uResolved, numOverride){
       row.appendChild(sep);
     }
   });
+}
+// #335: широкий поиск по номеру плодит десятки-сотни карточек одновременно — КАЖДАЯ дёргает dzChainInto,
+// а та внутри бьёт ~5-8 отдельных fetch (codif/verify/isnad/narr/testimonies…). Без лимита это сотни
+// параллельных запросов разом → главный поток встаёт на 45+ сек. Решение: (1) глобальный семафор —
+// не больше _DZ_MAX цепей считается одновременно, остальные ждут очереди; (2) IntersectionObserver —
+// карточка вне экрана вообще не встаёт в очередь, пока не появится в вьюпорте (lazy, rootMargin 400px).
+const _DZ_MAX=6; let _dzActive=0; const _dzQueue=[];
+function _dzGate(fn){
+  return new Promise((resolve)=>{
+    const run=async()=>{ _dzActive++; try{ await fn(); }finally{ _dzActive--; resolve(); if(_dzQueue.length){ const nx=_dzQueue.shift(); nx(); } } };
+    if(_dzActive<_DZ_MAX) run(); else _dzQueue.push(run);
+  });
+}
+function dzChainLazy(host, bid, num){
+  try{
+    const io=new IntersectionObserver(es=>{ es.forEach(en=>{ if(en.isIntersecting){ io.disconnect(); _dzGate(()=>dzChainInto(host,bid,num)); } }); },{rootMargin:'400px'});
+    io.observe(host);
+  }catch(e){ _dzGate(()=>dzChainInto(host,bid,num)); }   // без IO (старый браузер) — хотя бы гейт
 }
 async function dzChainInto(host, bid, num){
   try{
