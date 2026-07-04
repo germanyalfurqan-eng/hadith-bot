@@ -3319,7 +3319,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 04.07.2026 (владелец поймал v963 дважды): АТОМАРНАЯ проверка-и-захват ПЕРЕД постом — если
             # автоматическая очередь (update_notes_queue.json) уже запостила ЭТОТ ЖЕ текст (напр. только что),
             # ручная «анонс» больше НЕ дублирует его молча.
-            if not _channel_claim_note(note):
+            if not _channel_claim(note):
                 await update.message.reply_text("⏸ Это обновление уже было опубликовано в @muslimoonapp только что (текст совпадает с последним постом) — повторно НЕ отправляю, чтобы не дублировать.")
                 return
             try:
@@ -4668,54 +4668,46 @@ def _data_atomic_mutate(path, mutate_fn, message, retries=4):
             continue
     return False, None
 
-def _channel_claim_id(item_id):
-    """Атомарно «застолбить» id заметки ПЕРЕД постом в канал (см. _data_atomic_mutate) — возвращает True,
-    только если ИМЕННО этот вызов первым добавил id (значит имеет право постить); если id уже там (другой
-    инстанс успел раньше) — возвращает False, постить НЕЛЬЗЯ (иначе дубль)."""
-    claimed = {"ok": False}
-    def _mutate(obj):
-        obj = obj or {}
-        ids = set(obj.get("app_post_ids") or [])
-        if item_id in ids:
-            claimed["ok"] = False
-        else:
-            claimed["ok"] = True
-            ids.add(item_id)
-            obj["app_post_ids"] = list(ids)[-500:]
-        return obj
-    ok, newobj = _data_atomic_mutate("journal.json", _mutate, f"app_post claim (id {item_id})")
-    if ok and newobj is not None:
-        global _journal_cache
-        if _journal_cache is not None:
-            _journal_cache["app_post_ids"] = newobj.get("app_post_ids", [])
-    return ok and claimed["ok"]
-
-def _channel_claim_note(note, threshold=0.90):
-    """ТРЕТИЙ и ЧЕТВЁРТЫЙ путь постинга в @muslimoonapp (04.07.2026, владелец поймал v963 запощенным ДВАЖДЫ):
-    команда «анонс» (owner_cmd) и рестарт-чек бота (_setup) КАЖДЫЙ звали _post_app_channel НАПРЯМУЮ, без
-    единой проверки на дубль — только очередь (update_notes_queue.json→_channel_claim_id) была защищена.
-    Итог: очередь честно запостила v963 ОДИН раз (id застолблен), а ручная/рестарт-проверка почти сразу
-    следом запостила ТОТ ЖЕ текст ВТОРОЙ раз, ничего не зная про уже случившийся пост.
-    Фикс: ЕДИНАЯ атомарная проверка-и-захват для ЛЮБОГО пути постинга (кроме очереди — там свой id-claim,
-    более строгий) — сравнивает note с ПОСЛЕДНИМ реально запощенным (свежий фетч, не локальный кэш) по
-    difflib; если похоже (>=threshold) — возвращает False (НЕ постить, дубль); иначе атомарно обновляет
-    app_post на этот note (закрывая гонку) и возвращает True (можно постить)."""
+def _channel_claim(note, item_id=None, threshold=0.90):
+    """ЕДИНЫЙ атомарный шлюз для ЛЮБОГО из 3 путей постинга в @muslimoonapp (очередь/«анонс»/рестарт-чек).
+    04.07.2026: владелец поймал дубли ЧЕТЫРЕ РАЗА подряд (v962×3, v963×3, v965×2), несмотря на ДВА
+    предыдущих фикса — потому что те фиксы использовали РАЗНЫЕ, НЕ координирующиеся друг с другом
+    механизмы: очередь застолбливала `app_post_ids` СРАЗУ, а `app_post.note` (текст) обновляла только
+    ПОСЛЕ медленного сетевого вызова _post_app_channel; «анонс»/рестарт проверяли ТОЛЬКО app_post.note.
+    Между «id застолблен» и «app_post.note обновлён» было ОКНО (время самого Telegram-запроса!), в
+    которое другой путь видел ещё СТАРЫЙ app_post.note → решал «не дубль» → тоже постил.
+    Фикс: ОДНА атомарная GET-мутировать-PUT операция (см. _data_atomic_mutate) для ЛЮБОГО пути —
+    проверяет id (если дан) И схожесть note С ОДНИМ И ТЕМ ЖЕ свежим fetch, и если пройдено — СРАЗУ,
+    ДО реального поста в Telegram, обновляет И app_post_ids (если id дан), И app_post.note ВМЕСТЕ.
+    Любой другой путь, вызвавший это же в ту же секунду, увидит уже обновлённое состояние — окна
+    гонки больше нет ни в каком месте между вызовами. Возвращает True, только если ИМЕННО этот вызов
+    получил право постить."""
     result = {"ok": False}
     def _mutate(obj):
         obj = obj or {}
+        if item_id:
+            ids = set(obj.get("app_post_ids") or [])
+            if item_id in ids:
+                result["ok"] = False
+                return obj
         last = (obj.get("app_post") or {}).get("note", "")
         sim = difflib.SequenceMatcher(None, (note or "").strip(), (last or "").strip()).ratio() if last else 0.0
         if sim >= threshold:
             result["ok"] = False
-        else:
-            result["ok"] = True
-            obj["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+            return obj
+        result["ok"] = True
+        obj["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+        if item_id:
+            ids = set(obj.get("app_post_ids") or [])
+            ids.add(item_id)
+            obj["app_post_ids"] = list(ids)[-500:]
         return obj
-    ok, newobj = _data_atomic_mutate("journal.json", _mutate, "app_post claim (note-similarity)")
+    ok, newobj = _data_atomic_mutate("journal.json", _mutate, f"app_post claim ({item_id or 'note'})")
     if ok and newobj is not None:
         global _journal_cache
         if _journal_cache is not None:
-            _journal_cache["app_post"] = newobj.get("app_post", {})
+            if "app_post_ids" in newobj: _journal_cache["app_post_ids"] = newobj["app_post_ids"]
+            if "app_post" in newobj: _journal_cache["app_post"] = newobj["app_post"]
     return ok and result["ok"]
 
 def verify_init_data(init_data, max_age=86400):
@@ -7044,11 +7036,9 @@ async def _setup(application):
         except Exception:
             pass
         # Публичный канал @muslimoonapp: постим, только если note НОВЫЙ. Ошибку — В LOG (чтобы видеть, ПОЧЕМУ молчит).
-        # 04.07.2026 (владелец поймал v963 дважды): АТОМАРНАЯ проверка-и-захват вместо голого сравнения строк —
-        # при частых редеплоях (несколько Railway-инстансов вперемешку) это сравнение читало СВОЙ возможно
-        # устаревший локальный `j`, и рестарт-инстанс постил ТО ЖЕ САМОЕ, что уже успела запостить очередь
-        # (update_notes_queue.json→_channel_claim_id) секундами/минутами раньше.
-        if note and _channel_claim_note(note):
+        # 04.07.2026 (владелец поймал дубли 4 раза подряд): ЕДИНЫЙ атомарный _channel_claim() (см. его docstring) —
+        # тот же самый шлюз, что и у очереди/«анонс», окно гонки между путями закрыто полностью.
+        if note and _channel_claim(note):
                 try:
                     await _post_app_channel(application.bot, note)   # ЗАКОН С31: скрин + анонс + сворачиваемая инструкция
                 except Exception as e:
@@ -7254,56 +7244,42 @@ async def _app_channel_watcher(application):
                     j = _journal_load()
                     posted_ids = set(j.get("app_post_ids") or [])
                     pending = [x for x in queue if isinstance(x, dict) and x.get("id") and x.get("note") and x["id"] not in posted_ids]
-                    # 02.07.2026 (владелец: «поставь индикатор повторных публикаций чтобы бил тревогу при схожести»):
-                    # ВТОРОЙ независимый рубеж защиты (первый — единственный путь постинга, см. выше). Перед КАЖДЫМ
-                    # постом сравниваем его текст с ПОСЛЕДНИМ реально запощенным (app_post.note) через difflib —
-                    # схожесть ≥0.90 (почти идентичный/дословно тот же текст) → пост ПРОПУСКАЕМ и бьём тревогу
-                    # (LOG_CHAT + OWNER_ID + запись в journal "dup_alerts"), вместо того чтобы молча продублировать.
-                    last_posted_note = (j.get("app_post") or {}).get("note", "")
                     posted_now = 0
                     for item in pending[:8]:   # предохранитель: не больше 8 постов за один тик (не заспамить канал разом)
-                        # 04.07.2026 (владелец поймал v962 запощенным 3-4 раза): ЗАСТОЛБИТЬ id АТОМАРНО (с ретраем
-                        # на свежих данных) ДО поста/алерта — если проиграли гонку (другой Railway-инстанс уже
-                        # застолбил этот же id), просто пропускаем, НИЧЕГО не постим и не алертим повторно.
-                        if not _channel_claim_id(item["id"]):
+                        # 04.07.2026 (владелец поймал дубли ЧЕТЫРЕ РАЗА, несмотря на 2 предыдущих фикса —
+                        # см. docstring _channel_claim): ОДИН атомарный вызов делает id-claim И note-claim
+                        # ВМЕСТЕ, ДО поста — закрывает окно гонки с «анонс»/рестарт-чеком полностью.
+                        if not _channel_claim(item["note"], item_id=item["id"]):
+                            # False значит ЛИБО id уже был занят (другой инстанс очереди), ЛИБО текст похож
+                            # на уже запощенный (кто-то другой путь — анонс/рестарт — успел раньше). В обоих
+                            # случаях — тихо пропускаем сам пост, но если это была РЕАЛЬНАЯ похожая заметка
+                            # (не просто гонка id), даём знать владельцу по-человечески, не жаргоном.
+                            last_posted_note = (_journal_cache or {}).get("app_post", {}).get("note", "") if _journal_cache else ""
+                            sim = difflib.SequenceMatcher(None, (item["note"] or "").strip(), (last_posted_note or "").strip()).ratio() if last_posted_note else 0.0
+                            if sim >= 0.90 and item["id"] not in (set(_journal_cache.get("app_post_ids") or []) if _journal_cache else set()):
+                                def _mk_alert(obj, _item=item, _sim=sim):
+                                    obj = obj or {}
+                                    alerts = obj.get("dup_alerts") or []
+                                    alerts.append({"id": _item["id"], "sim": round(_sim, 3), "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
+                                                   "note": (_item["note"] or "")[:200]})
+                                    obj["dup_alerts"] = alerts[-100:]
+                                    return obj
+                                _ok_a, _newj_a = _data_atomic_mutate("journal.json", _mk_alert, f"app_post → пропущен как дубль (id {item['id']})")
+                                if _ok_a and _newj_a is not None and _journal_cache is not None:
+                                    _journal_cache["dup_alerts"] = _newj_a.get("dup_alerts", [])
+                                _atxt = ("✅ Я сам заметил и ОСТАНОВИЛ повторную публикацию в канал @muslimoonapp — "
+                                         "чуть не вышло ДВА одинаковых поста подряд про одно и то же обновление. "
+                                         "Это моя защита сработала как надо, действий от тебя не требуется.\n\n"
+                                         f"📋 Про какое обновление речь:\n{(item['note'] or '')[:250]}")
+                                try: await application.bot.send_message(LOG_CHAT_ID, _atxt)
+                                except Exception: pass
+                                try: await application.bot.send_message(OWNER_ID, _atxt)
+                                except Exception: pass
                             continue
-                        sim = difflib.SequenceMatcher(None, (item["note"] or "").strip(), (last_posted_note or "").strip()).ratio() if last_posted_note else 0.0
-                        if sim >= 0.90:
-                            def _mk_alert(obj, _item=item, _sim=sim):
-                                obj = obj or {}
-                                alerts = obj.get("dup_alerts") or []
-                                alerts.append({"id": _item["id"], "sim": round(_sim, 3), "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
-                                               "note": (_item["note"] or "")[:200]})
-                                obj["dup_alerts"] = alerts[-100:]
-                                return obj
-                            _ok_a, _newj_a = _data_atomic_mutate("journal.json", _mk_alert, f"app_post → пропущен как дубль (id {item['id']})")
-                            if _ok_a and _newj_a is not None and _journal_cache is not None:
-                                _journal_cache["dup_alerts"] = _newj_a.get("dup_alerts", [])
-                            # 02.07.2026 (владелец: «обеспечь чтоб он понимал очем речь» — прошлый текст был
-                            # жаргоном id/схожесть%, владелец не понял и переспросил у ОБЩЕГО ИИ-ассистента,
-                            # который ответил не по теме). Текст теперь ЯСНЫЙ, без внутренних терминов,
-                            # объясняет ЧТО случилось + ЧТО делать (ничего) обычным языком.
-                            _atxt = ("✅ Я сам заметил и ОСТАНОВИЛ повторную публикацию в канал @muslimoonapp — "
-                                     "чуть не вышло ДВА одинаковых поста подряд про одно и то же обновление. "
-                                     "Это моя защита сработала как надо, действий от тебя не требуется.\n\n"
-                                     f"📋 Про какое обновление речь:\n{(item['note'] or '')[:250]}")
-                            try: await application.bot.send_message(LOG_CHAT_ID, _atxt)
-                            except Exception: pass
-                            try: await application.bot.send_message(OWNER_ID, _atxt)
-                            except Exception: pass
-                            continue
+                        # Claim (и app_post_ids, и app_post.note) уже закоммичен АТОМАРНО ВМЕСТЕ выше, ДО поста —
+                        # здесь только сам реальный вызов Telegram API, ничего больше писать в journal не нужно.
                         await _post_app_channel(application.bot, item["note"])
-                        last_posted_note = item["note"]
                         posted_now += 1
-                        # ⚠️ Claim (app_post_ids) уже закоммичен АТОМАРНО выше, ДО поста — здесь только обновляем
-                        # app_post (последняя запощенная заметка, для след. similarity-проверки), тоже атомарно.
-                        def _mk_lastpost(obj, _note=last_posted_note):
-                            obj = obj or {}
-                            obj["app_post"] = {"note": _note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
-                            return obj
-                        _ok_p, _newj_p = _data_atomic_mutate("journal.json", _mk_lastpost, f"app_post → канал приложения (id {item['id']})")
-                        if _ok_p and _newj_p is not None and _journal_cache is not None:
-                            _journal_cache["app_post"] = _newj_p.get("app_post", {})
                         await asyncio.sleep(2)   # пауза между постами — не флудить Telegram API
             except Exception as e:
                 print("app channel queue watcher error:", e)
