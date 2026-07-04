@@ -728,7 +728,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v999';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v1000';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8683,7 +8683,12 @@ function _shuhraOf(name, extRow){
 const _GUARANTEED_SAHABA=new Set(['أبو هريرة','أبو هريرة عبد الرحمن','عبد الرحمن أبي هريرة','ابن عباس','عبد الله بن عباس','عائشة بنت أبي بكر','أم المؤمنين عائشة','جابر بن عبد الله','عمر بن الخطاب','علي بن أبي طالب','عثمان بن عفان','أبو بكر الصديق','عبد الله بن عمر','أنس بن مالك','ابن مسعود','عبد الله بن مسعود','سعد بن أبي وقاص','الزبير بن العوام','عبد الرحمن بن عوف','طلحة بن عبيد الله','سعيد بن زيد','خديجة','أم سلمة','حفصة','زينب','أم حبيبة','ميمونة','أم المؤمنين ميمونة']);
 // владелец 03.07: «в цепях всегда везде выделяй сподвижников явно золотым» — тот же критерий сахабства (карточка
 // равия 9410-9411), переиспользуется в диаграммах цепи (verifyNarr) без дублирования логики.
-async function _isSahById(mid){ if(mid==null) return false; try{ const c=await _narrCard(+mid); if(!c) return false;
+async function _isSahById(mid){ if(mid==null) return false; try{
+  // С56 (нюанс владельца): вердикт sahabi из рутины сверки с sunnah.com (345 сподвижников, у которых
+  // в Такрибе нет слова صحابي — напр. «تأخر إسلامه» у 3222) — довод в narr_sahabi_dalil.json
+  try{ if(!window._narrVerdP) window._narrVerdP=fetch('./narr_verdicts.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({}));
+    const _nv=await window._narrVerdP; if(_nv && _nv[String(mid)]==='sahabi') return true; }catch(e){}
+  const c=await _narrCard(+mid); if(!c) return false;
   const _gb=_genBadge((c[5]||'')+' '+(c[6]||'')+' '+(c[7]||''), c[4]); if(_gb && _gb[0]==='صحابي') return true;
   const _cn=stripDiac(c[1]||'').trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc && (_cn===gc || _cn.startsWith(gc+' '))) return true; }
   return false; }catch(e){ return false; } }
@@ -9040,8 +9045,8 @@ async function narrOpen(nm){
   // поиск по тексту имени демонтирован во ВТОРИЧНУЮ кнопку-фолбэк ниже («ещё: по тексту имени»). Логика обеих сохранена.
   const shortNm=nm.split(' ').slice(0,3).join(' ');
   // 🧬 M378b: ТОЧНОЕ участие по кодам Э1.1 (штудированные иснады 33 печатей, включая короткие формы — это не текст-поиск)
-  const cb=document.createElement('button'); cb.className='go'; cb.style.cssText='width:100%;padding:10px;margin-bottom:4px;font-size:14px';
-  cb.textContent='📚 Участие в хадисах (полное)';   // M501: одна кнопка, фильтры внутри
+  const cb=document.createElement('button'); cb.className='go'; cb.style.cssText='flex:1.5;padding:9px 6px;font-size:12.5px;border-radius:10px';
+  cb.textContent='📚 Хадисы (все)';   // M501: одна кнопка, фильтры внутри; С56: чип в общем ряду (скрин владельца «непонятный кусок»)
   cb.onclick=async()=>{ cb.disabled=true; cb.textContent='⏳ беру коды…';
     try{
       const id=await _narrLookup(nm);
@@ -9114,16 +9119,17 @@ async function narrOpen(nm){
         if(_grp) drawGrouped(); else { list.innerHTML=''; shown=0; draw(); } };
       tTgl.onclick=()=>{ _narrBypass=true; const q=document.getElementById('q'); q.value='"'+shortNm+'"'; hideNarrSugg(); runSearch(true); };
       more.onclick=draw; draw(); bx.appendChild(more);
-      cb.parentNode.insertBefore(bx, cb);
+      tt.parentNode.insertBefore(bx, tt);   // С56: панель раскрывается над рядом чипов, не внутри него
       try{ loadBooksMap(); }catch(e){}
     }catch(e){ cb.textContent='🔧 не вышло — попробуй ещё раз'; cb.disabled=false; }
   };
-  box.appendChild(cb);
+
   // владелец: «сначала КАРТОЧКА, потом хадисы кнопкой» — авто-раскрытие убрано; кнопка «Хадисы с его участием» переехала ПОД карточку (см. box.insertBefore(out,...) ниже)
   // #9/ревизия владельца: ОДНА кнопка «Хадисы, которые он передаёт» (по иснадам, ловит короткие формы);
   // текстовый поиск по имени теперь ФОЛБЭК ВНУТРИ неё (если цепь-код не найден) — не отдельная кнопка (не путать).
   // M412: учителя/ученики по штудированным парам (dz-цепочки) → отфильтрованная таблица
   const tt=document.createElement('div'); tt.style.cssText='display:flex;gap:7px;margin-bottom:8px';
+  tt.appendChild(cb);   // С56: «Хадисы (все)» — первый чип ряда
   const mkTS=(lbl,key)=>{ const b=document.createElement('button'); b.className='mini'; b.style.cssText='flex:1;padding:8px;border:1px solid var(--border);border-radius:10px;font-size:12.5px'; b.textContent=lbl;
     b.onclick=async()=>{ b.disabled=true;
       try{ const id=await _narrLookup(nm); if(id==null){ b.textContent='код не найден'; return; }
@@ -9133,15 +9139,15 @@ async function narrOpen(nm){
         b.disabled=false;
       }catch(e){ b.textContent='🔧'; } };
     return b; };
-  tt.appendChild(mkTS('👨‍🏫 Его учителя','t')); tt.appendChild(mkTS('👨‍🎓 Его ученики','s'));
+  tt.appendChild(mkTS('👨‍🏫 Учителя','t')); tt.appendChild(mkTS('👨‍🎓 Ученики','s'));
   box.appendChild(tt);
   const out=document.createElement('div'); out.dataset.noPartBtns='1'; out.dataset.noClose='1';   // P0-4: «✕ свернуть» внутри showNarratorBio лишний (есть «← Назад»); P0-5: дубль учителей/учеников не строить (кнопки уже есть выше)
   box.appendChild(out);
   await showNarratorBio(nm, out);
   // владелец «сначала карточка, потом хадисы»: переносим контент карточки (имя/оценки/био = out) ВЫШЕ кнопок участия (cb/hb/tt), сразу под «← Назад»
-  try{ box.insertBefore(out, cb);
+  try{ box.insertBefore(out, tt);
     const cap=document.createElement('div'); cap.style.cssText='font-size:13px;font-weight:700;color:#c9b8ff;margin:10px 0 4px;border-top:1px solid var(--border);padding-top:9px';
-    cap.textContent='📚 Его хадисы (участие в иснадах):'; box.insertBefore(cap, cb);
+    cap.textContent='🔗 Участие и связи'; box.insertBefore(cap, tt);
   }catch(e){}
   try{ window.scrollTo({top:res.offsetTop-8,behavior:'smooth'}); }catch(e){}
 }
@@ -9582,7 +9588,24 @@ async function renderTestimoniesCard(mid, host){
       try{ const _cnEl=rr.querySelector('.critNameCl'); if(_cnEl) _cnEl.onclick=(e)=>{ e.stopPropagation(); try{ openNarratorRijal(cr); }catch(_e){} }; }catch(e){}
       lb.appendChild(rr);
     }); bd.appendChild(lb); }
-  if(neuro){ const nb=document.createElement('div'); nb.style.cssText='margin-top:12px;background:rgba(46,107,155,.12);border:1px solid #2a5577;border-radius:9px;padding:10px 12px';
+  // С56 (скрин владельца «непонятный кусок» + закон «сахабство доводом»): сподвижнику шкала надёжности НЕ показывается —
+  // джарх/тадиль к сахабам неприменим; вместо неё статус со свидетельством мутабара (narr_sahabi_dalil / Такриб).
+  let _sahHere=false; try{ _sahHere=await _isSahById(mid); }catch(e){}
+  if(neuro && _sahHere){
+    const sb=document.createElement('div'); sb.style.cssText='margin-top:12px;background:rgba(232,195,90,.10);border:1px solid #8a7433;border-radius:9px;padding:10px 12px';
+    sb.innerHTML='<div style="font-size:14px;color:#e8c35a;font-weight:700">⭐ صحابي — сподвижник</div>'
+      +'<div style="font-size:12px;color:#aab6c2;margin-top:3px">Джарх и та\u02bfдиль к сподвижникам не применяются. Статус — по свидетельству му\u02bfтабаров:</div>'
+      +'<div id="sahDalil" style="font-size:12.5px;color:#d9e2ec;margin-top:5px;direction:rtl;text-align:right"></div>';
+    bd.appendChild(sb);
+    try{
+      if(!window._sahDalilP) window._sahDalilP=fetch('./narr_sahabi_dalil.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      const _dal=(await window._sahDalilP)[String(mid)];
+      const _el=sb.querySelector('#sahDalil');
+      if(_dal&&_dal.length){ _el.innerHTML=_dal.map(d=>'<div style="margin-top:2px">• <b style="color:#c9b8ff">'+esc(d.src)+'</b>: '+esc(d.txt)+'</div>').join(''); }
+      else { _el.innerHTML='<span style="color:var(--hint);font-size:11.5px">свидетельство — в оценках критиков выше (تقريب/الإصابة)</span>'; }
+    }catch(e){}
+  }
+  else if(neuro){ const nb=document.createElement('div'); nb.style.cssText='margin-top:12px;background:rgba(46,107,155,.12);border:1px solid #2a5577;border-radius:9px;padding:10px 12px';
     var _pos=neuro.nT||0,_neg=neuro.nJ||0,_st=3;
     if(_neg===0){_st=_pos>=2?5:(_pos===1?4:3);} else if(_pos>_neg){_st=4;} else if(_pos===_neg){_st=3;} else if(_pos>0){_st=2;} else {_st=1;}
     if(neuro.sahihayn) _st=Math.max(_st,4);
@@ -9591,10 +9614,10 @@ async function renderTestimoniesCard(mid, host){
     var _contra=(_pos>0&&_neg>0)?('<div style="font-size:12px;color:#ffd479;margin-top:3px">⚖️ Мнения расходятся: <b style="color:#7fe3bf">'+_pos+'</b> за надёжность · <b style="color:#ff9b7a">'+_neg+'</b> с критикой</div>'):'';
     nb.innerHTML='<div style="font-size:13.5px;color:'+neuro.col+';font-weight:600">'+neuro.em+' Итог: '+esc(neuro.v)+'</div>'
       +'<div style="font-size:17px;color:'+_scol+';margin-top:2px;letter-spacing:2px">'+_starStr+' <span style="font-size:11.5px;color:#8593a2;letter-spacing:0">'+_st+'/5 надёжность</span></div>'
-      +'<div style="font-size:12.5px;color:#aab6c2;margin-top:3px">✅ توثيق муʿтабаров: <b style="color:'+(neuro.nT>=2?'#7fe3bf':'#ffd479')+'">'+neuro.nT+'</b> из 48'+(neuro.sahihayn?' · 📗📘 в Сахихайн':'')+' · 🔴 джарх: <b style="color:#ff9b7a">'+neuro.nJ+'</b>'+(neuro.jah?(' · ⚪ джахаля '+neuro.jah):'')+' · нетто: <b style="color:'+((neuro.nT-neuro.nJ)>=2?'#7ee08a':'#ffd479')+'">'+(neuro.nT-neuro.nJ)+'</b> (нужно ≥2)'+'</div>'
+      +'<div style="font-size:12.5px;color:#aab6c2;margin-top:3px">✅ Подтверждений (توثيق): <b style="color:'+(neuro.nT>=2?'#7fe3bf':'#ffd479')+'">'+neuro.nT+'</b> из 48'+(neuro.sahihayn?' · 📗📘 в Сахихайн':'')+' · 🔴 Критика (джарх): <b style="color:#ff9b7a">'+neuro.nJ+'</b>'+(neuro.jah?(' · ⚪ джахаля '+neuro.jah):'')+'</div>'
       +_contra
       +(neuro.note?('<div style="font-size:12px;color:#ffd479;margin-top:3px">ⓘ '+esc(neuro.note)+'</div>'):'')
-      +'<details style="margin-top:5px"><summary style="font-size:11.5px;color:#7c8b9c;cursor:pointer">ⓘ как считается надёжность</summary><div style="font-size:11px;color:var(--hint);margin-top:4px;line-height:1.5">⚖️ تصديق = 2 свидетельства из 48 муʿтабаров (1 — не توثيق). Сахихайн без джарха = 2. Поздние (Ибн Хаджар/Захаби) — не свидетельство. 🤖 Формула, не ИИ — проверь по ссылкам.</div></details>';
+      +'<details style="margin-top:5px"><summary style="font-size:11.5px;color:#7c8b9c;cursor:pointer">ⓘ как считается надёжность</summary><div style="font-size:11px;color:var(--hint);margin-top:4px;line-height:1.5">⚖️ Нужно ≥2 подтверждений (нетто = подтверждения − критика). تصديق = 2 свидетельства из 48 муʿтабаров (1 — не توثيق). Сахихайн без джарха = 2. Поздние (Ибн Хаджар/Захаби) — не свидетельство. 🤖 Формула, не ИИ — проверь по ссылкам.</div></details>';
     bd.appendChild(nb); }
   // 🚨 СВЕРКА С SUNNAH.COM (заявка #430, указ владельца 01.07.2026): «если критик оценку дал у sunnah.com, но не у нас — тревога».
   // sunverd/N.json — свой краул полного списка جميع الآراء (не только итоговый grade), см. crawl_narrator_verdicts.py.
