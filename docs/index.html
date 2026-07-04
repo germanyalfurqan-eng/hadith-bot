@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v974';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v975';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8179,8 +8179,18 @@ async function openNarrTable(opts){
   if(opts.focusId!=null){ try{ setTimeout(()=>{ try{ const fr=m.querySelector('#ntFocusRow'); if(fr) fr.scrollIntoView({block:'center'}); else toast('Открыта общая таблица (18 989) — листай или фильтруй сверху'); }catch(e){} }, 300); }catch(e){} }
   const bar=m.querySelector('#ntBar'), list=m.querySelector('#ntList'), info=m.querySelector('#ntInfo');
   m.querySelector('#ntTitle').textContent=opts.title||('📋 Таблица передатчиков ('+all.length+')');
-  info.textContent=opts.filterIds?'Сортировка по числу совместных звеньев в штудированных иснадах (наши коды Э1.1).'
-    :'Все равии базы موسوعة رواة الحديث. Сортируй и листай; тап по строке — карточка. Места рождения/смерти появятся с датасетом M361b.';
+  // M505 (З-19): легенда значков панели — раскрываемая, чтобы не «простыня»
+  info.innerHTML=esc(opts.filterIds?'Сортировка по числу совместных звеньев в штудированных иснадах (наши коды Э1.1).'
+    :'Все равии базы موسوعة رواة الحديث. Сортируй и листай; тап по строке — карточка.')
+    +' <span id="ntLgd" style="color:var(--link);cursor:pointer;font-weight:600">ⓘ значки</span>'
+    +'<span id="ntLgdBody" style="display:none;margin-top:5px;padding:7px 9px;border:1px solid var(--border);border-radius:9px;line-height:1.75">'
+    +'<b>#N</b> — наш код равия (Э1.1) · <b style="color:#9fd3a8">×N</b> — совместных звеньев с этим равием в иснадах · '
+    +'👨‍🏫/👨‍🎓 — показать его учителей/учеников · <b style="font-family:Georgia,serif">W</b> — Википедия · '
+    +'<b style="font-family:Georgia,serif">ش</b> — карточка на موسوعة رواة · '
+    +'<span style="color:#4eb573">зелёный ранг</span> — ثقة/حافظ, <span style="color:#e8c35a">жёлтый</span> — صحابي, <span style="color:#e07f7f">красный</span> — ضعيف/متروك · '
+    +'<b>وفاة ~N هـ</b> — год смерти по хиджре</span>';
+  { const lg=info.querySelector('#ntLgd'), lb=info.querySelector('#ntLgdBody');
+    if(lg&&lb) lg.onclick=()=>{ const on=lb.style.display==='none'; lb.style.display=on?'block':'none'; lg.textContent=on?'ⓘ скрыть':'ⓘ значки'; }; }
   const SORTS=opts.filterIds?[['cnt','🔗 по связям'],['id','#№'],['alpha','🔤'],['death','وفاة'],['fame','🏆']]
     :[['id','#№'],['alpha','🔤 алфавит'],['death','وفاة год'],['fame','🏆 известность']];
   bar.innerHTML='<input id="ntQ" placeholder="фильтр: имя или #номер" style="flex:1;min-width:150px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13.5px" value="'+esc(st.q)+'">'
@@ -8239,7 +8249,11 @@ async function openNarrTable(opts){
     more.style.display=st.shown>=cur.length?'none':'block';
     // №9: автоподгрузка при прокрутке — листается само, без постоянных нажатий
     try{ if(more._io) more._io.disconnect(); if(st.shown<cur.length){ more._io=new IntersectionObserver(es=>{ es.forEach(x=>{ if(x.isIntersecting){ more._io.disconnect(); draw(false); } }); },{root:list,rootMargin:'250px'}); more._io.observe(more); } }catch(e){}
-    info.textContent=(cnt?'🔗 связей: '+cur.length+' · ':'всего: '+cur.length+' · ')+(opts.filterIds?'сорт по совместным звеньям':'тап по строке — карточка равия');
+    // M505: счётчик обновляем БЕЗ затирания легенды (легенда живёт в #ntLgd/#ntLgdBody)
+    { const cntTxt=(cnt?'🔗 связей: '+cur.length+' · ':'всего: '+cur.length+' · ')+(opts.filterIds?'сорт по совместным звеньям':'тап по строке — карточка равия');
+      let cs=info.querySelector('#ntCnt');
+      if(cs){ cs.textContent=cntTxt+' '; }
+      else { cs=document.createElement('span'); cs.id='ntCnt'; cs.textContent=cntTxt+' '; info.insertBefore(cs, info.firstChild); } }
   };
   bar.querySelectorAll('.ntS').forEach(s=>s.onclick=()=>{ st.sort=s.dataset.k; paint(); draw(true); });
   const qi=bar.querySelector('#ntQ'); let qt; qi.oninput=()=>{ clearTimeout(qt); qt=setTimeout(async()=>{ st.q=qi.value;
