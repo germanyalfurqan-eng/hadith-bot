@@ -3328,6 +3328,22 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 await update.message.reply_text("❌ Не вышло: " + str(e)[:200])
             return
+        # ===== УДАЛИТЬ ПОСТ ИЗ @muslimoonapp вручную (04.07.2026, владелец поймал дубли, «удали сам, доступ есть»)
+        # У бота НЕТ сохранённого message_id прошлых постов (_post_app_channel их не хранил) — программно
+        # найти и удалить СТАРЫЕ конкретные дубли нельзя. Рабочий путь: владелец ПЕРЕСЫЛАЕТ пост из канала
+        # боту в личку → ОТВЕЧАЕТ на пересланное сообщение словом «удали дубль» → бот берёт настоящий
+        # chat_id/message_id канала из forward-метаданных пересланного сообщения и удаляет ИМЕННО его.
+        if _tl in ("удали дубль", "удали пост", "удали из канала"):
+            rep = update.message.reply_to_message
+            if rep and rep.forward_from_chat and rep.forward_from_message_id:
+                try:
+                    await context.bot.delete_message(rep.forward_from_chat.id, rep.forward_from_message_id)
+                    await update.message.reply_text(f"✅ Удалил сообщение из канала (id {rep.forward_from_message_id}).")
+                except Exception as e:
+                    await update.message.reply_text("❌ Не удалось удалить: " + str(e)[:200] + "\nПроверь: бот админ канала с правом «Удаление сообщений»?")
+            else:
+                await update.message.reply_text("Перешли мне (форвардом) сам пост из @muslimoonapp, потом ОТВЕТЬ на пересланное сообщение словами «удали дубль».")
+            return
         if _tl in ("ошибки", "журнал ошибок", "errors"):
             errs = _data_get("errors.json", []) or []
             open_errs = [e for e in errs if not e.get('fixed')]
