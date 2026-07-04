@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v969';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v970';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8842,20 +8842,38 @@ async function narrOpen(nm){
       const lb=document.createElement('div'); lb.className='hint'; lb.style.cssText='font-size:12px;margin:2px 0 4px';
       lb.textContent='📚 Хадисы с его участием — '+places.length+(places.length>=400?'+ (первые 400)':'')+' · нажми строку → откроется хадис:';
       bx.appendChild(lb);
+      // M478 (владелец): «структурирование по книгам — функция тоже должна быть» — тумблер группировки
+      // по сборникам (как в основном поиске «Сгруппировать по сборникам»), переиспользует УЖЕ загруженные places (без доп. запросов).
+      let _grp=false;
+      const gTgl=document.createElement('span'); gTgl.style.cssText='display:inline-block;cursor:pointer;font-size:11.5px;padding:3px 10px;border-radius:8px;border:1px solid var(--border);color:var(--hint);margin-bottom:6px';
+      gTgl.textContent='📚 Сгруппировать по сборникам'; bx.appendChild(gTgl);
       const list=document.createElement('div'); bx.appendChild(list);
       let shown=0; const step=30;
       const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:7px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px';
-      const draw=()=>{ places.slice(shown,shown+step).forEach(p=>{
-          const card=document.createElement('div'); card.style.cssText='border-bottom:1px solid var(--border);padding:5px 0;margin-bottom:2px';
+      const _mkRow=(p)=>{ const card=document.createElement('div'); card.style.cssText='border-bottom:1px solid var(--border);padding:5px 0;margin-bottom:2px';
           const mt=document.createElement('div'); mt.className='ar'; mt.style.cssText='direction:rtl;text-align:right;font-size:16px;line-height:1.95;color:var(--text)'; card.appendChild(mt);
-          card.appendChild(_dzPlaceRow(p[0],p[1],p[2])); list.appendChild(card);
+          card.appendChild(_dzPlaceRow(p[0],p[1],p[2]));
           try{ const _bid=String(p[0]); const code=(typeof _BID2READ!=='undefined'&&_BID2READ[_bid])||(typeof _BID2SLUG!=='undefined'&&_BID2SLUG[_bid]);
             if(code){ getOne(code,p[1]).then(h=>{ if(h&&h.text){ let _t=h.text.replace(/\s+/g,' ').trim(); mt.textContent='…'+_t.slice(0,220)+(_t.length>220?'…':''); } else mt.remove(); }).catch(()=>{mt.remove();}); }
             else if(p[2] && typeof BACKEND_URL!=='undefined' && BACKEND_URL){ mt.textContent='⏳…'; bjson(BACKEND_URL+'/book_page?id='+_bid+'&pg='+p[2]+'&initData='+encodeURIComponent(INITDATA),15000).then(j=>{ if(j&&j.text){ let _t=String(j.text).replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim(); if(_t){ mt.textContent='…'+_t.slice(0,220)+(_t.length>220?'…':''); } else mt.remove(); } else mt.remove(); }).catch(()=>{mt.remove();}); }
             else { mt.remove(); }
           }catch(e){}
-        }); shown=Math.min(places.length,shown+step);
+          return card; };
+      const draw=()=>{ places.slice(shown,shown+step).forEach(p=>list.appendChild(_mkRow(p)));
+        shown=Math.min(places.length,shown+step);
         more.textContent='⬇️ Показать ещё ниже ('+(places.length-shown)+')'; more.style.display=shown>=places.length?'none':''; };
+      const drawGrouped=()=>{ list.innerHTML='';
+        const groups={}; const order=[];
+        places.forEach(p=>{ const bid=String(p[0]); if(!groups[bid]){ groups[bid]=[]; order.push(bid); } groups[bid].push(p); });
+        order.forEach(bid=>{ const bn=(typeof bookName==='function'&&bookName(bid))||('книга №'+bid);
+          const h=document.createElement('div'); h.className='hint'; h.style.cssText='font-size:12px;font-weight:700;color:#7fb3ff;margin:10px 0 4px;direction:rtl;text-align:right';
+          h.textContent='📖 '+bn+' ('+groups[bid].length+')'; list.appendChild(h);
+          groups[bid].forEach(p=>list.appendChild(_mkRow(p))); }); };
+      gTgl.onclick=()=>{ _grp=!_grp;
+        gTgl.textContent=(_grp?'☑':'📚')+' Сгруппировать по сборникам';
+        gTgl.style.background=_grp?'var(--btn)':''; gTgl.style.color=_grp?'#fff':'var(--hint)'; gTgl.style.borderColor=_grp?'var(--btn)':'var(--border)';
+        more.style.display=_grp?'none':(shown>=places.length?'none':'');
+        if(_grp) drawGrouped(); else { list.innerHTML=''; shown=0; draw(); } };
       more.onclick=draw; draw(); bx.appendChild(more);
       cb.parentNode.insertBefore(bx, cb);
       try{ loadBooksMap(); }catch(e){}
