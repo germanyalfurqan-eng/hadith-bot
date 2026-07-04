@@ -6328,7 +6328,11 @@ async def _api_serve(application=None):
                 return _cors(web.json_response({'ok': False, 'rate': True}))
             cur = _data_get("errors.json", []) or []
             if not isinstance(cur, list): cur = []
-            key = (msg + '|' + where + '|' + ver)[:200]
+            # M350 (владелец: «журнал ошибок шумит» — CDN-фолбэк штатный, но сыпался по 9-10 записей): ключ дедупа
+            # включал ver (версию аппа) → КАЖДЫЙ деплой давал НОВУЮ запись для той же самой штатной ошибки
+            # (191 запись A-серии, в основном дубли CDN-фолбэка под разными версиями). ver уже отдельно хранится
+            # в last_ver при повторе (строка ниже) — в самом ключе дедупа он не нужен.
+            key = (msg + '|' + where)[:200]
             existing = None
             for e in cur:
                 if e.get('key') == key: existing = e; break
