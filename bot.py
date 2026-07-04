@@ -4242,8 +4242,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         else:
             direct_url = f"https://corpus.quran.com/qurandictionary.jsp?q={arabic_root}"
+            _qclean = re.sub(r'[*_`\[\]()]', '', query)   # #297/#465: та же чистка — сырой ввод рвал Markdown
             await update.message.reply_text(
-                f"📖 *Корень:* {query} → {arabic_root}\n\n"
+                f"📖 *Корень:* {_qclean} → {arabic_root}\n\n"
                 f"🔗 [Попробовать открыть в Corpus Quran]({direct_url})\n\n"
                 f"💡 Если страница не открылась — корень не найден в базе.",
                 parse_mode="Markdown",
@@ -4335,7 +4336,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not results:
             await update.message.reply_text("❌ Ничего не найдено.")
             return
-        msg = f"🔍 *«{sq}»*\n\n"
+        msg = f"🔍 *«{re.sub(r'[*_`\[\]()]', '', sq)}»*\n\n"   # #297/#465: непарный _/* в сыром поисковом запросе рвал Markdown всего сообщения (тот же класс, что #501)
         for i, r in enumerate(results, 1):
             msg += f"*{i}.* {r['text'][:300]}\n"
             if r.get('rawi'): msg += f"👤 {r['rawi']}\n"
