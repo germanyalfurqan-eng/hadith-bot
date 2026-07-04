@@ -3316,10 +3316,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not note:
                 await update.message.reply_text("Пусто. Напиши: анонс <текст обновления>")
                 return
+            # 04.07.2026 (владелец поймал v963 дважды): АТОМАРНАЯ проверка-и-захват ПЕРЕД постом — если
+            # автоматическая очередь (update_notes_queue.json) уже запостила ЭТОТ ЖЕ текст (напр. только что),
+            # ручная «анонс» больше НЕ дублирует его молча.
+            if not _channel_claim_note(note):
+                await update.message.reply_text("⏸ Это обновление уже было опубликовано в @muslimoonapp только что (текст совпадает с последним постом) — повторно НЕ отправляю, чтобы не дублировать.")
+                return
             try:
                 await _post_app_channel(context.bot, note)   # ЗАКОН С31: скрин + анонс + сворачиваемая инструкция
-                j = _journal_load(); j["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
-                _journal_save("анонс → канал приложения (вручную)")
                 await update.message.reply_text("✅ Опубликовал в канал @muslimoonapp.")
             except Exception as e:
                 await update.message.reply_text("❌ Не вышло: " + str(e)[:200])
@@ -4685,6 +4689,34 @@ def _channel_claim_id(item_id):
         if _journal_cache is not None:
             _journal_cache["app_post_ids"] = newobj.get("app_post_ids", [])
     return ok and claimed["ok"]
+
+def _channel_claim_note(note, threshold=0.90):
+    """ТРЕТИЙ и ЧЕТВЁРТЫЙ путь постинга в @muslimoonapp (04.07.2026, владелец поймал v963 запощенным ДВАЖДЫ):
+    команда «анонс» (owner_cmd) и рестарт-чек бота (_setup) КАЖДЫЙ звали _post_app_channel НАПРЯМУЮ, без
+    единой проверки на дубль — только очередь (update_notes_queue.json→_channel_claim_id) была защищена.
+    Итог: очередь честно запостила v963 ОДИН раз (id застолблен), а ручная/рестарт-проверка почти сразу
+    следом запостила ТОТ ЖЕ текст ВТОРОЙ раз, ничего не зная про уже случившийся пост.
+    Фикс: ЕДИНАЯ атомарная проверка-и-захват для ЛЮБОГО пути постинга (кроме очереди — там свой id-claim,
+    более строгий) — сравнивает note с ПОСЛЕДНИМ реально запощенным (свежий фетч, не локальный кэш) по
+    difflib; если похоже (>=threshold) — возвращает False (НЕ постить, дубль); иначе атомарно обновляет
+    app_post на этот note (закрывая гонку) и возвращает True (можно постить)."""
+    result = {"ok": False}
+    def _mutate(obj):
+        obj = obj or {}
+        last = (obj.get("app_post") or {}).get("note", "")
+        sim = difflib.SequenceMatcher(None, (note or "").strip(), (last or "").strip()).ratio() if last else 0.0
+        if sim >= threshold:
+            result["ok"] = False
+        else:
+            result["ok"] = True
+            obj["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+        return obj
+    ok, newobj = _data_atomic_mutate("journal.json", _mutate, "app_post claim (note-similarity)")
+    if ok and newobj is not None:
+        global _journal_cache
+        if _journal_cache is not None:
+            _journal_cache["app_post"] = newobj.get("app_post", {})
+    return ok and result["ok"]
 
 def verify_init_data(init_data, max_age=86400):
     """Проверить Telegram WebApp initData (HMAC по TOKEN). Вернуть dict user или None."""
@@ -7012,13 +7044,13 @@ async def _setup(application):
         except Exception:
             pass
         # Публичный канал @muslimoonapp: постим, только если note НОВЫЙ. Ошибку — В LOG (чтобы видеть, ПОЧЕМУ молчит).
-        if note:
-            last = (j.get("app_post") or {}).get("note", "")
-            if note != last:
+        # 04.07.2026 (владелец поймал v963 дважды): АТОМАРНАЯ проверка-и-захват вместо голого сравнения строк —
+        # при частых редеплоях (несколько Railway-инстансов вперемешку) это сравнение читало СВОЙ возможно
+        # устаревший локальный `j`, и рестарт-инстанс постил ТО ЖЕ САМОЕ, что уже успела запостить очередь
+        # (update_notes_queue.json→_channel_claim_id) секундами/минутами раньше.
+        if note and _channel_claim_note(note):
                 try:
                     await _post_app_channel(application.bot, note)   # ЗАКОН С31: скрин + анонс + сворачиваемая инструкция
-                    j["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
-                    _journal_save("app_post → канал приложения")
                 except Exception as e:
                     try:
                         await application.bot.send_message(LOG_CHAT_ID, f"⚠️ Не смог запостить обновление в @muslimoonapp (APP_CHANNEL_ID={APP_CHANNEL_ID}): {e}\nПроверь: бот добавлен АДМИНОМ канала с правом «Публикация сообщений»?")
