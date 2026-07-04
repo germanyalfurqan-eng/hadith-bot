@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v983';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v984';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -8223,6 +8223,13 @@ function loadNarrTable(){ if(_narrTbl) return Promise.resolve(_narrTbl); if(_nar
   _narrTblP=fetch('./narr_table.json').then(r=>r.ok?r.json():[]).then(a=>{ _narrTbl=a||[]; return _narrTbl; }).catch(()=>{ _narrTbl=[]; return _narrTbl; }); return _narrTblP; }
 let _dzNPC={};
 async function dzNP(id){ const sh=Math.floor(id/200); const m=await _dzFetch(_dzNPC,sh,'./np/'+sh+'.json?v='+APPVER); return (m&&m[String(id)])||null; }
+// M504: ясное имя равия для шапки таблицы — шухра (لقب из lakab_map, если есть) + рус-транскрипция
+async function _ntTitleName(id, nm){
+  let shu=''; try{ const lk=await loadLakab(); const e=lk&&lk[String(id)]; if(e&&e[0]) shu=e[0]; }catch(e){}
+  const base=shu||String(nm||'').split(' ').slice(0,4).join(' ');
+  let ru=''; try{ ru=arNameRu(base,4)||''; }catch(e){}
+  return base+(ru?(' / '+ru):'');
+}
 async function openNarrTable(opts){
   opts=opts||{};
   let m=document.getElementById('ntModal');
@@ -8236,6 +8243,7 @@ async function openNarrTable(opts){
   m.style.zIndex='10005'; m.style.display='flex';
   const all=await loadNarrTable();
   try{ await loadNarrVoc(); }catch(e){}   // TB-11: огласованные имена (M361c) в строках, где уже готовы
+  try{ await loadNarrFlags(); }catch(e){}   // M504: флаги رجال البخاري/مسلم для фильтра «только الصحيحين»
   try{ await loadNarrWiki(); }catch(e){}  // M467: вики-ссылки равиев (ru→en→ar) прямо в строках
   const st={q:'', sort:opts.filterIds?'cnt':'id', shown:0};   // #11: НЕ загонять #focusId в фильтр (показывало 1 строку → «таблица пустая»); открываем ВСЮ таблицу, искомого подсвечиваем
   if(opts.focusId!=null){ try{ setTimeout(()=>{ try{ const fr=m.querySelector('#ntFocusRow'); if(fr) fr.scrollIntoView({block:'center'}); else toast('Открыта общая таблица (18 989) — листай или фильтруй сверху'); }catch(e){} }, 300); }catch(e){} }
@@ -8256,13 +8264,15 @@ async function openNarrTable(opts){
   const SORTS=opts.filterIds?[['cnt','🔗 по связям'],['id','#№'],['alpha','🔤'],['death','وفاة'],['fame','🏆']]
     :[['id','#№'],['alpha','🔤 алфавит'],['death','وفاة год'],['fame','🏆 известность']];
   bar.innerHTML='<input id="ntQ" placeholder="фильтр: имя или #номер" style="flex:1;min-width:150px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13.5px" value="'+esc(st.q)+'">'
-    +SORTS.map(s=>'<span class="ntS" data-k="'+s[0]+'" style="cursor:pointer;font-size:11.5px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);color:var(--hint)">'+s[1]+'</span>').join('');
+    +SORTS.map(s=>'<span class="ntS" data-k="'+s[0]+'" style="cursor:pointer;font-size:11.5px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);color:var(--hint)">'+s[1]+'</span>').join('')
+    +'<span id="ntSah" title="Только равии, встреченные в наших штудированных иснадах Бухари/Муслима (M386)" style="cursor:pointer;font-size:11.5px;padding:4px 10px;border-radius:8px;border:1px solid #2e9b5b;color:#bff5d4">📗 رجال الصحيحين</span>';
   const cnt=opts.filterIds||null;
   const paint=()=>{ bar.querySelectorAll('.ntS').forEach(s=>{ const on=s.dataset.k===st.sort;
     s.style.background=on?'var(--btn)':''; s.style.color=on?'#fff':'var(--hint)'; s.style.borderColor=on?'var(--btn)':'var(--border)'; }); };
   let _ruIds=null;   // #18: id-set из narrCandidates для русского запроса
   const rows=()=>{ let v=all;
     if(cnt) v=v.filter(r=>cnt.has(r[0]));
+    if(st.sah) v=v.filter(r=>_narrFlags&&_narrFlags[String(r[0])]);   // M504: رجال обоих Сахихов
     const q=(st.q||'').trim();
     if(q){ const mId=q.match(/^#?(\d{1,5})$/); if(mId) v=v.filter(r=>String(r[0]).indexOf(mId[1])===0);
       else if(/[а-яё]/i.test(q)){ v = _ruIds ? v.filter(r=>_ruIds.has(r[0])) : v; }   // #18: русский ввод («Амаш») — фильтр по id из скелет-матча
@@ -8300,7 +8310,7 @@ async function openNarrTable(opts){
       d.querySelectorAll('.ntT').forEach(t=>t.onclick=async(e)=>{ e.stopPropagation();   // M467: фильтр «от кого/кому» прямо из таблицы
         try{ const np=await dzNP(+t.dataset.id); const arr=(np&&np[t.dataset.k])||[];
           if(!arr.length){ toast('Пар в штудированных иснадах пока нет'); return; }
-          openNarrTable({title:(t.dataset.k==='t'?'👨‍🏫 Учителя: ':'👨‍🎓 Ученики: ')+String(t.dataset.nm||'').split(' ').slice(0,3).join(' '), filterIds:new Map(arr)});
+          openNarrTable({title:(t.dataset.k==='t'?'👨‍🏫 Учителя: ':'👨‍🎓 Ученики: ')+await _ntTitleName(+t.dataset.id, t.dataset.nm||''), filterIds:new Map(arr)});   // M504
         }catch(_e){} });
       list.appendChild(d); });
     let more=m.querySelector('#ntMore');
@@ -8317,6 +8327,8 @@ async function openNarrTable(opts){
       if(cs){ cs.textContent=cntTxt+' '; }
       else { cs=document.createElement('span'); cs.id='ntCnt'; cs.textContent=cntTxt+' '; info.insertBefore(cs, info.firstChild); } }
   };
+  const sB=bar.querySelector('#ntSah'); if(sB) sB.onclick=()=>{ st.sah=!st.sah;
+    sB.style.background=st.sah?'#2e9b5b':''; sB.style.color=st.sah?'#fff':'#bff5d4'; draw(true); };   // M504
   bar.querySelectorAll('.ntS').forEach(s=>s.onclick=()=>{ st.sort=s.dataset.k; paint(); draw(true); });
   const qi=bar.querySelector('#ntQ'); let qt; qi.oninput=()=>{ clearTimeout(qt); qt=setTimeout(async()=>{ st.q=qi.value;
     const q=(st.q||'').trim();
@@ -8941,12 +8953,12 @@ async function narrOpen(nm){
   const shortNm=nm.split(' ').slice(0,3).join(' ');
   // 🧬 M378b: ТОЧНОЕ участие по кодам Э1.1 (штудированные иснады 33 печатей, включая короткие формы — это не текст-поиск)
   const cb=document.createElement('button'); cb.className='go'; cb.style.cssText='width:100%;padding:10px;margin-bottom:4px;font-size:14px';
-  cb.textContent='📚 Хадисы, которые он передаёт';
+  cb.textContent='📚 Участие в хадисах (полное)';   // M501: одна кнопка, фильтры внутри
   cb.onclick=async()=>{ cb.disabled=true; cb.textContent='⏳ беру коды…';
     try{
       const id=await _narrLookup(nm);
       if(id==null){ _narrBypass=true; const q=document.getElementById('q'); q.value='"'+shortNm+'"'; hideNarrSugg(); runSearch(true); return; }   // фолбэк: цепь-код не найден → поиск по тексту имени (одна кнопка)
-      const places=await dzPart(id);
+      let places=await dzPart(id); const places0=places;   // M501: places0 = полный список для сброса фильтров
       if(!places||!places.length){ _narrBypass=true; const q=document.getElementById('q'); q.value='"'+shortNm+'"'; hideNarrSugg(); runSearch(true); return; }
       try{ await loadBooksMap(); }catch(e){}   // M403: названия печатей ДО рендера (было «книга №1198»)
       try{ await loadBookTr(); }catch(e){}
@@ -8960,6 +8972,11 @@ async function narrOpen(nm){
       let _grp=false;
       const gTgl=document.createElement('span'); gTgl.style.cssText='display:inline-block;cursor:pointer;font-size:11.5px;padding:3px 10px;border-radius:8px;border:1px solid var(--border);color:var(--hint);margin-bottom:6px';
       gTgl.textContent='📚 Сгруппировать по сборникам'; bx.appendChild(gTgl);
+      // M501: фильтры ВНУТРИ панели (владелец: одна кнопка, фильтры внутри)
+      const sTgl=document.createElement('span'); sTgl.style.cssText=gTgl.style.cssText; sTgl.style.marginInlineStart='6px';
+      sTgl.textContent='📗 только الصحيحين'; bx.appendChild(sTgl);
+      const tTgl=document.createElement('span'); tTgl.style.cssText=sTgl.style.cssText;
+      tTgl.textContent='🔎 по тексту имени'; tTgl.title='Текст-поиск, где равий назван целиком (ловит места вне разобранных иснадов)'; bx.appendChild(tTgl);
       const list=document.createElement('div'); bx.appendChild(list);
       let shown=0; const step=30;
       const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:7px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px';
@@ -9001,6 +9018,13 @@ async function narrOpen(nm){
         gTgl.style.background=_grp?'var(--btn)':''; gTgl.style.color=_grp?'#fff':'var(--hint)'; gTgl.style.borderColor=_grp?'var(--btn)':'var(--border)';
         more.style.display=_grp?'none':(shown>=places.length?'none':'');
         if(_grp) drawGrouped(); else { list.innerHTML=''; shown=0; draw(); } };
+      let _sah=false; const _SAHBIDS=new Set(['1681','1727','711']);   // M501: Бухари/Муслим(+тур.печать)
+      sTgl.onclick=()=>{ _sah=!_sah;
+        sTgl.style.background=_sah?'var(--btn)':''; sTgl.style.color=_sah?'#fff':'var(--hint)'; sTgl.style.borderColor=_sah?'var(--btn)':'var(--border)';
+        places=_sah?places0.filter(p=>_SAHBIDS.has(String(p[0]))):places0;
+        lb.textContent='📚 Хадисы с его участием — '+places.length+(_sah?' (только الصحيحين)':(places.length>=400?'+ (первые 400)':''))+' · нажми строку → откроется хадис:';
+        if(_grp) drawGrouped(); else { list.innerHTML=''; shown=0; draw(); } };
+      tTgl.onclick=()=>{ _narrBypass=true; const q=document.getElementById('q'); q.value='"'+shortNm+'"'; hideNarrSugg(); runSearch(true); };
       more.onclick=draw; draw(); bx.appendChild(more);
       cb.parentNode.insertBefore(bx, cb);
       try{ loadBooksMap(); }catch(e){}
@@ -9017,7 +9041,7 @@ async function narrOpen(nm){
       try{ const id=await _narrLookup(nm); if(id==null){ b.textContent='код не найден'; return; }
         const np=await dzNP(id); const arr=np&&np[key];
         if(!arr||!arr.length){ b.textContent=lbl+' — пока нет (Э1.1)'; return; }
-        openNarrTable({title:(key==='t'?'👨‍🏫 Учителя: ':'👨‍🎓 Ученики: ')+nm.split(' ').slice(0,3).join(' '), filterIds:new Map(arr)});
+        openNarrTable({title:(key==='t'?'👨‍🏫 Учителя: ':'👨‍🎓 Ученики: ')+await _ntTitleName(id, nm), filterIds:new Map(arr)});   // M504: ясное имя
         b.disabled=false;
       }catch(e){ b.textContent='🔧'; } };
     return b; };
