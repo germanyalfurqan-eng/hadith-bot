@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v975';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v976';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3702,6 +3702,10 @@ function maktabaCard(x){
   head.innerHTML='📖 '+esc(nm)+(au?(' <span style="color:var(--hint);font-weight:400;font-size:12px">· '+esc(au)+'</span>'):'')+(loc?(' <span style="color:var(--hint);font-weight:400;font-size:12px">· '+esc(loc)+'</span>'):'');
   head.title='Открыть книгу на этой странице'; head.onclick=()=>{ try{ openBook(bid, pid); }catch(e){} };
   card.appendChild(head);
+  // #334: печати разнятся (ويدع/ويترك) — частичное совпадение (≥60% слов, но не все) честно помечаем бейджем
+  if(x._inexact){ const bx=document.createElement('div');
+    bx.style.cssText='display:inline-block;font-size:10.5px;color:#e8c35a;border:1px solid #8a7433;border-radius:6px;padding:1px 8px;margin-bottom:5px';
+    bx.textContent='≈ неточное совпадение (не все слова — возможно, разночтение печати)'; card.appendChild(bx); }
   const ar=document.createElement('div'); ar.className='ar'; ar.style.fontSize='17px';
   const snip=_cleanMaktabaSnip((x.snip||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim());
   ar.innerHTML=esc(snip); card.appendChild(ar);
@@ -4005,7 +4009,7 @@ function maktabaMoreBtn(seq,q,st,strictWords){
     try{ const j=await bjson(BACKEND_URL+'/maktaba?q='+encodeURIComponent(q)+'&page='+((st.page||1)+1)+'&initData='+encodeURIComponent(INITDATA), 20000);
       if(seq!==_seq) return; const data=j.data||[];
       if(!data.length){ b.textContent='Больше нет'; b.disabled=true; return; }
-      const view = strictWords ? data.filter(x=>_snipHasAll(x.snip,strictWords)) : data;
+      const view = strictWords ? _snipMarkInexact(data.filter(x=>_snipHasAll(x.snip,strictWords)),strictWords) : data;   // #334: пометить частичные
       view.forEach(x=>wrap.parentNode.insertBefore(maktabaCard(x),wrap));
       st.page=j.page||((st.page||1)+1); b.disabled=false; b.textContent='⬇️ Ещё из Мактабы'+(strictWords?' (строго)':''); observe();   // M284: непрерывная фоновая догрузка по скроллу
     }catch(e){ b.disabled=false; b.textContent='⬇️ Ещё'; observe(); } };
@@ -4044,7 +4048,9 @@ function _matnSig(t){ try{ return canon(String(t||'').replace(/<\/?mark>/g,'')).
 function _shownLocalMatn(){ const s=new Set(); try{ (typeof _results!=='undefined'?_results:[]).forEach(d=>{ const t=(d&&d.h&&(d.h.text||(d.h.rv&&d.h.rv.map(r=>r.t||'').join(' '))))||''; const g=_matnSig(t); if(g) s.add(g); }); }catch(e){} return s; }
 // M283: значимые слова запроса (без приставок و/ف/ب/ك/ل/ال, длиной ≥3) — для строгого «все слова присутствуют»
 function _strictQWords(q){ return canon((q||'').replace(/[،؛؟,;!.:"'»«()\[\]]/g,' ')).split(' ').map(w=>w.replace(/^(و|ف|ب|ك|ل)/,'').replace(/^ال/,'')).filter(w=>w.length>=3); }
-function _snipHasAll(snip, words){ if(!words||!words.length) return true; const c=canon(String(snip||'').replace(/<[^>]*>/g,'')); const hit=words.filter(w=>c.indexOf(w)!==-1).length; return hit>=Math.max(2, Math.ceil(words.length*0.6)); }   // #поиск: ~60% слов (а не ВСЕ) — авто-фолбэк Мактабы показывает частичные совпадения как «Любой текст» (реальный текст Табарани «يؤخذ من قوله ويدع غير» = 4/6 слов запроса → теперь проходит). Короткие запросы (≤3 слов) остаются строгими (≥2).
+function _snipHasAll(snip, words){ if(!words||!words.length) return true; const c=canon(String(snip||'').replace(/<[^>]*>/g,'')); const hit=words.filter(w=>c.indexOf(w)!==-1).length; return hit>=Math.max(2, Math.ceil(words.length*0.6)); }
+// #334: полное ли совпадение (все слова) — для честного бейджа «≈ неточное» на карточке частичного матча
+function _snipMarkInexact(arr, words){ if(!words||!words.length) return arr; arr.forEach(x=>{ try{ const c=canon(String(x.snip||'').replace(/<[^>]*>/g,'')); x._inexact=!words.every(w=>c.indexOf(w)!==-1); }catch(e){} }); return arr; }   // #поиск: ~60% слов (а не ВСЕ) — авто-фолбэк Мактабы показывает частичные совпадения как «Любой текст» (реальный текст Табарани «يؤخذ من قوله ويدع غير» = 4/6 слов запроса → теперь проходит). Короткие запросы (≤3 слов) остаются строгими (≥2).
 // 🎯 SCOPE ПОИСКА: искать ТОЛЬКО в выбранных книгах (напр. риджаль-149) — фильтр результатов Мактабы по book_id.
 let _scopeIds=null, _scopeName='';
 function setSearchScope(ids, name){ _scopeIds=(ids&&ids.size)?ids:null; _scopeName=name||''; renderScopeChip(); try{ renderCols(); }catch(e){}   // 🎯 чипы сборников подсвечиваются
@@ -4112,7 +4118,7 @@ async function appendMaktaba(seq, q, primary){
       sec.textContent='🤷 По Мактабе точного совпадения нет. Попробуй характерную фразу из матна.'; try{ res.appendChild(sec); }catch(e){} try{ maktabaSunnahBtn(res,seq,q); addNotFoundBtn(res,q); }catch(e){} return; }
     await loadBooksMap();
     let fsrc=data.slice(0,fn), rest=data.slice(fn);
-    if(strictWords){ fsrc=fsrc.filter(x=>_snipHasAll(x.snip,strictWords)); rest=rest.filter(x=>_snipHasAll(x.snip,strictWords)); }
+    if(strictWords){ fsrc=_snipMarkInexact(fsrc.filter(x=>_snipHasAll(x.snip,strictWords)),strictWords); rest=_snipMarkInexact(rest.filter(x=>_snipHasAll(x.snip,strictWords)),strictWords); }   // #334: пометить частичные
     const view=fsrc.concat(rest); const hid=data.length-view.length;
     const strictNote = strictWords ? (' · 🎯 строго: все слова'+(hid>0?(' (частичных скрыто '+hid+')'):'')) : '';
     sec.textContent=(_scopeIds?('🎯 '+_scopeName+' · найдено на странице: '+view.length+(j.count?(' (~'+(j.count||0).toLocaleString('ru')+' во всей Мактабе)'):'')+' (листай — добираю ещё)'):('📚 Поиск по всей Мактабе · показано '+view.length+(j.count>view.length?(' из ~'+(j.count||0).toLocaleString('ru')):'')+(fsrc.length?' · ⭐ первоисточники сверху':'')))+strictNote;   // M166c: общий счёт в Мактабе
