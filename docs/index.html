@@ -617,6 +617,11 @@
       <div class="ah"><div><div class="at">📤 Кнопка «Поделиться местом»</div><div class="ad">Ссылка ведёт на github-адрес сайта. Скрой кнопку у себя, когда показываешь экран.</div></div>
         <button class="go" id="shareTgl" style="padding:6px 12px" onclick="toggleShareHdr()">…</button></div>
     </div>
+    <!-- M313 этап 2: тест-вход единой читалки (только кабинет, пока идёт миграция) -->
+    <div class="accf">
+      <div class="ah"><div><div class="at">🧪 Единая читалка (M313)</div><div class="ad">Новый единый ридер, этап 2/5: тест на Бухари. Старые читалки не тронуты.</div></div>
+        <button class="go" id="urDevBtn" style="padding:6px 12px" onclick="try{openUnifiedReader('bukhari')}catch(e){toast('UR: '+e.message)}">Открыть</button></div>
+    </div>
     <!-- M428: ЕДИНЫЙ журнал заявок (бот TB + апп TA + чат M) из req_status.json — синхронизирован с деплоями -->
     <div class="accf">
       <div class="ah"><div><div class="at">📋 Журнал заявок (полный)</div><div class="ad">Все коды: M (чат) · TB (бот) · TA (апп). Статусы, причины, сроки — обновляется с каждым деплоем.</div></div>
@@ -717,7 +722,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v992';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v993';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -12849,6 +12854,32 @@ try{ document.documentElement.setAttribute('data-jsok', (typeof APPVER!=='undefi
   };
   window.UR=UR;
 })();
+
+// M313 этап 2: адаптер сборников хадисов для UnifiedReader (драфт Хермеса, надзор-фикс: cache/vocOf лексические, не window.*)
+function makeHadithAdapter(code){
+  var title; try{ title=vocOf(code); }catch(e){ title=code; }
+  function _store(){ return (typeof cache!=='undefined'&&cache)?cache:{}; }
+  function _process(items, fromNum){
+    if(!items||!items.length) return [];
+    var startIndex=0;
+    if(fromNum!==null){ for(var i=0;i<items.length;i++){ if(items[i].num==fromNum){ startIndex=i; break; } } }
+    return items.slice(startIndex,startIndex+30).map(function(item){
+      return { id:code+'_'+item.num, type:'hadith', arabic:item.text||item.ar||'', translation:item.ru||null,
+        metadata:{ sourceName:title, number:item.num } };
+    });
+  }
+  return { title:title, fetch:function(params){
+    params=params||{};
+    var fromNum=parseInt(params.fromNum,10); if(isNaN(fromNum)) fromNum=null;
+    // штатный загрузчик приложения (кэш, зеркала, Муслим-Баки) — не изобретаем свой fetch
+    return Promise.resolve(loadCollection(code)).then(function(arr){ return _process(arr||[],fromNum); });
+  } };
+}
+function openUnifiedReader(code, fromNum){
+  if(window.UR&&window.UR.open){ window.UR.open(makeHadithAdapter(code), {fromNum:fromNum}); }
+  else{ try{toast('Читалка не инициализирована');}catch(e){} }
+}
+
 </script>
 
 </body>
