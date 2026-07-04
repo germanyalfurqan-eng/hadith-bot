@@ -717,7 +717,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v986';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v987';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -2893,6 +2893,15 @@ let groupSrc=false, uniqMode=false, relMode=false;   // M203 uniq · M189 relMod
 let _lastQueryTerms=[];   // термины запроса (для оценки релевантности)
 function srcKeyOf(d){ return d.type==='m'?'аль-Мухаймин':(d.type==='hr'?arOf(d.s):(d.type==='q'?('Сура '+d.v.s+(SURA_RU[d.v.s]?(' · '+SURA_RU[d.v.s]):'')):arOf(d.code))); }
 function _relScore(d){ if(!_lastQueryTerms.length) return 0; const t=canon(_matnText(d)); let s=0; for(const w of _lastQueryTerms){ if(w && t.indexOf(w)!==-1) s++; } return s; }
+// Паритет #33: ПОИСК-В-НАЙДЕННОМ — клиентский фильтр по уже показанным карточкам (скрывает непроходящие)
+function resFilterEl(){ const w=document.createElement('span'); w.id='resFilter'; w.style.cssText='display:inline-block;margin:2px 8px 8px 0';
+  const i=document.createElement('input'); i.type='search'; i.placeholder='🔎 в найденном…';
+  i.style.cssText='background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:4px 10px;font-size:12.5px;width:150px';
+  i.oninput=()=>{ const q=canon((i.value||'').trim()); const res=document.getElementById('res'); if(!res) return;
+    res.querySelectorAll('.card').forEach(c=>{ if(!q){ c.style.display=''; return; }
+      const tx=canon(c.textContent||''); c.style.display=tx.indexOf(q)!==-1?'':'none'; });
+    i.style.borderColor=q?'var(--btn)':'var(--border)'; };
+  w.appendChild(i); return w; }
 function relToggleEl(){ const t=document.createElement('div'); t.id='relToggle';
   t.style.cssText='display:inline-block;margin:2px 0 8px 8px;font-size:13px;color:var(--link);cursor:pointer;user-select:none;border:1px solid '+(relMode?'#2f7be6':'var(--border)')+';border-radius:12px;padding:3px 10px';
   t.textContent=relMode?'🎯 По релевантности (вкл)':'🎯 По релевантности';
@@ -2936,7 +2945,8 @@ function ensureMoreBtn(seq){
 }
 function ensureRelToggle(){ const res=document.getElementById('res'); if(!res.firstChild||document.getElementById('relToggle')||!_results.length||!_lastQueryTerms.length) return;
   const anchor=document.getElementById('uniqToggle')||document.getElementById('shareBtn')||document.getElementById('grpToggle');
-  if(anchor&&anchor.parentNode) anchor.parentNode.insertBefore(relToggleEl(), anchor.nextSibling); else res.insertBefore(relToggleEl(), res.children[1]||null); }
+  if(anchor&&anchor.parentNode) anchor.parentNode.insertBefore(relToggleEl(), anchor.nextSibling); else res.insertBefore(relToggleEl(), res.children[1]||null);
+  try{ if(!document.getElementById('resFilter')){ const rt=document.getElementById('relToggle'); if(rt&&rt.parentNode) rt.parentNode.insertBefore(resFilterEl(), rt); } }catch(e){} }
 function _matnText(d){ return d.type==='hr'?(d.ru||''):((d.h&&d.h.text)||(d.v&&d.v.text)||''); }
 // ХАДИС = матн (хвост текста, после иснада): разные иснады одного матна свернуть в ОДИН хадис
 function _hadKey(d){ const w=canon(_matnText(d)).replace(/\s+/g,' ').trim().split(' ').filter(Boolean); return (w.length>14?w.slice(-14):w).join(' '); }
@@ -3024,7 +3034,7 @@ function renderResultsView(){
   if(uniqMode){ const dd=dedupResults(list, uniqMode); list=dd.list; hid=dd.hidden; }
   const cnt='найдено: '+_results.length+(relMode?' · по релевантности':'')+(uniqMode?(' · '+(uniqMode==='version'?'уникальных версий':'уникальных хадисов')+' '+list.length+(hid?(' · свёрнуто '+hid):'')+(uniqMode==='hadith'?' · основная версия':'')):'');
   res.appendChild(info((groupSrc?('📚 Сгруппировано по '+(tab==='quran'?'сурам':'сборникам')+' · '):'')+cnt));
-  res.appendChild(grpToggleEl()); res.appendChild(uniqToggleEl()); res.appendChild(relToggleEl());
+  res.appendChild(grpToggleEl()); res.appendChild(uniqToggleEl()); res.appendChild(relToggleEl()); try{ if(!document.getElementById('resFilter')) res.appendChild(resFilterEl()); }catch(e){}
   // #346: лента — первые 200 сразу, остальные подгружаются по скроллу (раньше жёстко обрезалось на 400 → 401+ были недостижимы)
   if(!groupSrc){ const FIRST=Math.min(200,list.length);
     for(let i=0;i<FIRST;i++) res.appendChild(makeCard(list[i]));
@@ -3337,6 +3347,9 @@ async function _bookLoad(){
         +'<div id="bookExtrasTop"></div><div id="bookMain" style="direction:rtl;text-align:right"></div><div id="bookExtrasBottom"></div>'
         +'<button id="bookNextAdd" style="'+_addBtnCss+';margin:8px 0 0">⬇️ Показать следующую страницу ниже</button>';
       const mainEl=tEl.querySelector('#bookMain');
+      // Паритет #33: СНОСКИ Шамелы (хвост после линии _____) — в читалке НЕ удаляем (как _cleanShamela в карточках),
+      // а отделяем в сворачиваемый блок «حاشية» — матн чистый, сноски по тапу
+      let _foot=''; { const _fi=clean.search(/_{5,}/); if(_fi>=0){ _foot=clean.slice(_fi).replace(/^_+\s*/,'').trim(); clean=clean.slice(0,_fi).trim(); } }
       // TB: ОТДЕЛИТЬ колофон-источник (… - ط … جـ N (ص: M)) от текста хадиса — в явное примечание, не часть хадиса
       let _body=clean, _colo='';
       const _cm=clean.match(/([^\n]*?[-–—]\s*ط\s+\S[^\n]*?\(ص\s*[:：]\s*[\d٠-٩\/]+\)[^\n]*|[^\n]*?جـ?\s*[\d٠-٩]+\s*\(ص\s*[:：]\s*[\d٠-٩\/]+\)[^\n]*)\s*$/);
@@ -3352,6 +3365,13 @@ async function _bookLoad(){
         _html+=(hnum?'<div style="color:var(--mark);font-weight:700;margin-bottom:3px">'+esc(hnum)+'</div>':'')+'<div>'+esc(txt)+'</div><div style="height:6px"></div>';
       }
       mainEl.innerHTML=_html.replace(/\n+/g,'<br>');
+      if(_foot){ // Паритет #33: сворачиваемый блок сносок
+        const fb=document.createElement('div'); fb.style.cssText='margin-top:10px;border-top:1px dashed var(--border);padding-top:6px';
+        const ft=document.createElement('div'); ft.style.cssText='cursor:pointer;font-size:12px;color:var(--hint);user-select:none';
+        ft.textContent='▾ حاشية · сноски страницы ('+Math.min(999,_foot.length)+' симв.)';
+        const fc=document.createElement('div'); fc.style.cssText='display:none;font-size:13.5px;line-height:1.9;color:var(--hint);margin-top:5px;white-space:pre-line'; fc.textContent=_foot;
+        ft.onclick=()=>{ const on=fc.style.display==='none'; fc.style.display=on?'block':'none'; ft.textContent=(on?'▴':'▾')+' حاشية · сноски страницы'; };
+        fb.appendChild(ft); fb.appendChild(fc); mainEl.appendChild(fb); }
       // TB: ВЫДЕЛИТЬ передатчиков в тексте читалки (как в карточках хадиса) — тап → карточка равия
       try{ const _nms=isnadNarrators(_body).filter(_keepNarr); if(_nms.length) highlightNarratorsInDiv(mainEl, _nms, nm=>{ try{ openNarratorRijal(nm); }catch(e){} }); }catch(e){}
       if(_colo){ const _cf=document.createElement('div'); _cf.style.cssText='direction:rtl;text-align:left;font-size:11px;color:var(--hint);margin-top:9px;padding-top:6px;border-top:1px dashed var(--border)'; _cf.textContent='📄 '+_colo; mainEl.appendChild(_cf); }
