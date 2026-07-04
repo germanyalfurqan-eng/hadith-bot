@@ -728,7 +728,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1003';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v1004';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -9051,7 +9051,12 @@ async function narrOpen(nm){
     try{
       const id=await _narrLookup(nm);
       if(id==null){ _narrBypass=true; const q=document.getElementById('q'); q.value='"'+shortNm+'"'; hideNarrSugg(); runSearch(true); return; }   // фолбэк: цепь-код не найден → поиск по тексту имени (одна кнопка)
-      let places=await dzPart(id); const places0=places;   // M501: places0 = полный список для сброса фильтров
+      let places=await dzPart(id);
+      // №527 (бот, 05.07): канонический приоритет — Бухари → Муслим → Абу Дауд → Тирмизи → Насаи → Ибн Маджа → Малик → Ахмад, остальные после
+      try{ const _ord={'bukhari':0,'muslim':1,'abudawud':2,'tirmidhi':3,'nasai':4,'ibnmajah':5,'ibnmaja':5,'malik':6,'ahmad':7};
+        const _rk=(p)=>{ const c=(typeof _BID2READ!=='undefined'&&_BID2READ[String(p[0])])||(typeof _BID2SLUG!=='undefined'&&_BID2SLUG[String(p[0])])||''; return (c in _ord)?_ord[c]:99; };
+        places=places.slice().sort((a,b)=>_rk(a)-_rk(b)); }catch(e){}
+      const places0=places;   // M501: places0 = полный список для сброса фильтров
       if(!places||!places.length){ _narrBypass=true; const q=document.getElementById('q'); q.value='"'+shortNm+'"'; hideNarrSugg(); runSearch(true); return; }
       try{ await loadBooksMap(); }catch(e){}   // M403: названия печатей ДО рендера (было «книга №1198»)
       try{ await loadBookTr(); }catch(e){}
