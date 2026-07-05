@@ -6164,6 +6164,29 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'ok': ok, 'model': OPENAI_MODEL, 'seconds': dt, 'reply': str(resp)[:300]}))
         except Exception as e:
             return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}))
+    async def claude_notify(r):
+        """#claude-notify-05.07 (владелец: «мне не важно как, просто скинь мне в личку то, что я попросил»):
+        Клод шлёт себе сообщение в личку владельца через бота — токен НЕ передаётся Клоду, он остаётся
+        внутри Railway; авторизация тем же BACKUP_SECRET, что и /api/backup_push."""
+        if not application:
+            return _cors(web.json_response({'error': 'no_app'}, status=503))
+        if not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled', 'message': 'BACKUP_SECRET не задан в env Railway'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            return _cors(web.json_response({'error': 'bad_json'}, status=400))
+        secret = str(body.get('secret', '')).strip()
+        text = str(body.get('text', '')).strip()
+        if not secret or secret != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        if not text:
+            return _cors(web.json_response({'error': 'no_text'}, status=400))
+        try:
+            await application.bot.send_message(OWNER_ID, ("🤖 #клод_сказал\n" + text)[:4000])
+            return _cors(web.json_response({'ok': True}))
+        except Exception as e:
+            return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}), status=500)
     async def opt(r): return _cors(web.Response(text=''))
     async def worklog(r):
         # #62/#63/#165: триггер уведомления владельцу о работе Claude над заявкой (Claude дёргает curl).
@@ -7408,7 +7431,7 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'error': str(e)[:160]}, status=500))
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
