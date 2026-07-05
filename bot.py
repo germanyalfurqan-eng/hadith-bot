@@ -4669,6 +4669,13 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ru = translate_matn(r.get("text", ""), src=vf, owner=True)
                 if ru:
                     body += f"\n🌍 {ru}\n"
+                # #285 (владелец: «научи подтягивать оригинал хадиса — ссылку на карточку соответствующего первоисточника»):
+                # у версии есть парсуемый код+номер первоисточника (verified_from/restored_from) → даём тот же
+                # deep-link формат r_{code}_{num}, что и в прямом поиске по номеру (#269, строка 4746-4747).
+                _vfp = vf.split()
+                if len(_vfp) >= 2 and _vfp[1].isdigit() and _vfp[0].isalpha():
+                    _vfcode = {"ahmad_local": "ahmad"}.get(_vfp[0], _vfp[0])
+                    body += f"\n📲 Открыть карточку первоисточника: https://t.me/muslimoontt_bot?startapp=r_{_vfcode}_{_vfp[1]}"
                 await send_long(update, body)
             flush_trans()
         else:
