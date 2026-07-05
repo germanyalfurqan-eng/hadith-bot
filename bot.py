@@ -412,6 +412,9 @@ GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 # 🆓 GitHub Models (GPT-4o и др. бесплатно для разработчиков). Токен с правом Models. Фолбэк на GITHUB_TOKEN.
 GITHUB_MODELS_TOKEN = os.environ.get("GITHUB_MODELS_TOKEN", "") or GITHUB_TOKEN
+# 🆓 NVIDIA NIM (build.nvidia.com) — бесплатный тир, добавлен владельцем 05.07.2026 в Railway (аккаунт "germany", ОТДЕЛЬНЫЙ от Хермеса).
+NVIDIA_NIM_API_KEY = os.environ.get("NVIDIA_NIM_API_KEY", "")
+NVIDIA_NIM_MODEL = os.environ.get("NVIDIA_NIM_MODEL", "meta/llama-3.1-70b-instruct")
 GITHUB_MODELS_MODEL = os.environ.get("GITHUB_MODELS_MODEL", "openai/gpt-4o-mini")
 BACKUP_SECRET = os.environ.get("BACKUP_SECRET", "")   # #259/#261: общий секрет для приёма локального бэкапа (ps1 -> /api/backup_push -> журнал/ЛС)
 OWNER_ID = 131827895
@@ -1526,6 +1529,25 @@ def ask_github(prompt, system=None, max_tokens=None):
     except Exception as e:
         return f"⚠️ GitHub Models недоступен: {e}"
 
+def ask_nvidia_nim(prompt, system=None, max_tokens=None):
+    """🆓 NVIDIA NIM (build.nvidia.com) — бесплатный тир, OpenAI-совместимо. Ключ NVIDIA_NIM_API_KEY на Railway (аккаунт germany)."""
+    if not NVIDIA_NIM_API_KEY:
+        return None
+    try:
+        msgs = []
+        if system: msgs.append({"role": "system", "content": system})
+        msgs.append({"role": "user", "content": prompt})
+        r = requests.post(
+            "https://integrate.api.nvidia.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {NVIDIA_NIM_API_KEY}", "Content-Type": "application/json"},
+            json={"model": NVIDIA_NIM_MODEL, "messages": msgs, "max_tokens": max_tokens or 1500, "temperature": 0.3},
+            timeout=60)
+        if r.status_code == 200:
+            return r.json()["choices"][0]["message"]["content"].strip()
+        return f"⚠️ NVIDIA NIM код {r.status_code}: {r.text[:150]}"
+    except Exception as e:
+        return f"⚠️ NVIDIA NIM недоступен: {e}"
+
 def ask_neuro(prompt, system, max_tokens=2000):
     """Нейро-конвейер (поиск-подбор/огласовки/справки о равии/объяснения хадиса/книгозапрос) —
     БЕСПЛАТНЫЕ ИИ ПЕРВЫМИ (указ владельца #379, подтверждён #414/#420: «почему тратишь DeepSeek,
@@ -1596,6 +1618,10 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None):
         _gh = ask_github(prompt, system, max_tokens)
         if _gh and not str(_gh).startswith("⚠️"):
             return _gh + "\n\n⚡ *Модель:* 🆓 GitHub GPT-4o-mini — бесплатно\n" + _ai_left()
+    if NVIDIA_NIM_API_KEY:                       # 3.5) NVIDIA NIM (free, добавлен 05.07.2026) — до OpenRouter-цикла (тот перебирает 5 моделей подряд, дольше)
+        _nv = ask_nvidia_nim(prompt, system, max_tokens)
+        if _nv and not str(_nv).startswith("⚠️"):
+            return _nv + "\n\n⚡ *Модель:* 🆓 NVIDIA NIM — бесплатно\n" + _ai_left()
     модели = [
         "meta-llama/llama-3.3-70b-instruct:free",
         "deepseek/deepseek-r1:free",
@@ -6054,7 +6080,19 @@ async def _api_serve(application=None):
     def _uid(user, r):
         return str(user.get('id')) if user else ('ip:' + (r.remote or '?'))
 
-    async def health(r): return _cors(web.json_response({'ok': True, 'ai': {'groq': bool(GROQ_API_KEY), 'gemini': bool(GEMINI_API_KEY), 'openrouter': bool(OPENROUTER_API_KEY), 'deepseek': bool(DEEPSEEK_API_KEY)}}))   # индикатор какие ИИ-ключи в env (без значений; диагностик-вызовы ИИ убраны — риск абуза)
+    async def health(r): return _cors(web.json_response({'ok': True, 'ai': {'groq': bool(GROQ_API_KEY), 'gemini': bool(GEMINI_API_KEY), 'openrouter': bool(OPENROUTER_API_KEY), 'deepseek': bool(DEEPSEEK_API_KEY), 'nvidia_nim': bool(NVIDIA_NIM_API_KEY)}}))   # индикатор какие ИИ-ключи в env (без значений; диагностик-вызовы ИИ убраны — риск абуза)
+    async def nvidia_test(r):
+        """#NVIDIA-NIM-05.07: живая диагностика без раскрытия ключа — только пройден/нет + модель + текст ошибки."""
+        if not NVIDIA_NIM_API_KEY:
+            return _cors(web.json_response({'ok': False, 'error': 'NVIDIA_NIM_API_KEY не задан в Railway env'}))
+        try:
+            t0 = time.time()
+            resp = ask_nvidia_nim("ответь одним словом: тест", "Ты тестовый ассистент.", max_tokens=20)
+            dt = round(time.time() - t0, 2)
+            ok = bool(resp) and not str(resp).startswith("⚠️")
+            return _cors(web.json_response({'ok': ok, 'model': NVIDIA_NIM_MODEL, 'seconds': dt, 'reply': str(resp)[:300]}))
+        except Exception as e:
+            return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}))
     async def opt(r): return _cors(web.Response(text=''))
     async def worklog(r):
         # #62/#63/#165: триггер уведомления владельцу о работе Claude над заявкой (Claude дёргает curl).
@@ -7299,7 +7337,7 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'error': str(e)[:160]}, status=500))
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
