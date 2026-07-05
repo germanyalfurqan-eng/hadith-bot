@@ -6082,17 +6082,39 @@ async def _api_serve(application=None):
 
     async def health(r): return _cors(web.json_response({'ok': True, 'ai': {'groq': bool(GROQ_API_KEY), 'gemini': bool(GEMINI_API_KEY), 'openrouter': bool(OPENROUTER_API_KEY), 'deepseek': bool(DEEPSEEK_API_KEY), 'nvidia_nim': bool(NVIDIA_NIM_API_KEY)}}))   # индикатор какие ИИ-ключи в env (без значений; диагностик-вызовы ИИ убраны — риск абуза)
     async def nvidia_test(r):
-        """#NVIDIA-NIM-05.07: живая диагностика без раскрытия ключа — только пройден/нет + модель + текст ошибки."""
+        """#NVIDIA-NIM-05.07: живая диагностика без раскрытия ключа — пройден/нет + модель + ЗАГОЛОВКИ ЛИМИТОВ + список доступных моделей."""
         if not NVIDIA_NIM_API_KEY:
             return _cors(web.json_response({'ok': False, 'error': 'NVIDIA_NIM_API_KEY не задан в Railway env'}))
+        out = {}
         try:
             t0 = time.time()
-            resp = ask_nvidia_nim("ответь одним словом: тест", "Ты тестовый ассистент.", max_tokens=20)
+            msgs = [{"role": "system", "content": "Ты тестовый ассистент."}, {"role": "user", "content": "ответь одним словом: тест"}]
+            rr = requests.post(
+                "https://integrate.api.nvidia.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {NVIDIA_NIM_API_KEY}", "Content-Type": "application/json"},
+                json={"model": NVIDIA_NIM_MODEL, "messages": msgs, "max_tokens": 20, "temperature": 0.3},
+                timeout=60)
             dt = round(time.time() - t0, 2)
-            ok = bool(resp) and not str(resp).startswith("⚠️")
-            return _cors(web.json_response({'ok': ok, 'model': NVIDIA_NIM_MODEL, 'seconds': dt, 'reply': str(resp)[:300]}))
+            ok = rr.status_code == 200
+            reply = rr.json()["choices"][0]["message"]["content"].strip() if ok else rr.text[:300]
+            # заголовки лимитов (стандарт OpenAI-совместимых API — не все провайдеры их шлют)
+            rl = {k: v for k, v in rr.headers.items() if 'ratelimit' in k.lower() or 'remaining' in k.lower() or 'limit' in k.lower()}
+            out.update({'ok': ok, 'model': NVIDIA_NIM_MODEL, 'seconds': dt, 'reply': str(reply)[:300], 'rate_limit_headers': rl})
         except Exception as e:
-            return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}))
+            out['ok'] = False
+            out['error'] = str(e)[:300]
+        try:
+            mr = requests.get("https://integrate.api.nvidia.com/v1/models",
+                               headers={"Authorization": f"Bearer {NVIDIA_NIM_API_KEY}"}, timeout=20)
+            if mr.status_code == 200:
+                ids = [m.get('id') for m in mr.json().get('data', [])]
+                out['models_available_count'] = len(ids)
+                out['models_sample'] = ids[:30]
+            else:
+                out['models_error'] = f"{mr.status_code}: {mr.text[:200]}"
+        except Exception as e:
+            out['models_error'] = str(e)[:200]
+        return _cors(web.json_response(out))
     async def gpt_test(r):
         """#GPT-05.07 (владелец: «проверь боевой OPENAI_API_KEY в Railway Muslimoon, деньги были»): живая диагностика без раскрытия ключа."""
         if not OPENAI_API_KEY:
