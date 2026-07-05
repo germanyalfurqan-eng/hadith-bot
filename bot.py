@@ -6180,6 +6180,18 @@ async def _api_serve(application=None):
         text = str(body.get('text', '')).strip()
         if not secret or secret != (BACKUP_SECRET or '').strip():
             return _cors(web.json_response({'error': 'auth'}, status=403))
+        b64 = str(body.get('file_b64', '') or '')
+        fname = str(body.get('filename', 'файл.md') or 'файл.md')
+        caption = str(body.get('caption', '') or '')
+        if b64:
+            try:
+                import io as _io
+                data = base64.b64decode(b64)
+                bio = _io.BytesIO(data); bio.name = fname
+                await application.bot.send_document(OWNER_ID, document=bio, filename=fname, caption=("🤖 #клод_сказал\n" + caption)[:1024] if caption else None)
+                return _cors(web.json_response({'ok': True, 'sent': 'file', 'size': len(data)}))
+            except Exception as e:
+                return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}), status=500)
         if not text:
             return _cors(web.json_response({'error': 'no_text'}, status=400))
         try:
