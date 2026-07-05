@@ -1590,13 +1590,28 @@ def ask_special(prompt, system=None):
     return None, None
 
 # 📊 счётчик ИИ-вызовов за день (для подписи «сколько осталось» — указ владельца)
-_AI_DAY = {'d': '', 'n': 0}
+# ГРАБЛЯ 05.07 (владелец заметил «лимит будто сбрасывается постоянно»): счётчик жил ТОЛЬКО в памяти процесса —
+# каждый рестарт/редеплой Railway (а их за сессию бывает много) обнулял его среди дня. Теперь персистентно
+# через _data_get/_data_put (ветка data), с ленивой загрузкой при первом тике и батч-сохранением раз в 10 вызовов.
+_AI_DAY = {'d': '', 'n': 0, '_loaded': False}
 _AI_FREE_DAILY = 2500   # суммарный беспл. лимит/день (Groq+Gemini+OpenRouter, ориентир)
+AI_DAY_FILE = "ai_daily_count.json"
 def _ai_tick():
+    if not _AI_DAY['_loaded']:
+        try:
+            saved = _data_get(AI_DAY_FILE, None)
+            if saved and saved.get('d') == datetime.now().strftime('%Y-%m-%d'):
+                _AI_DAY['d'] = saved['d']; _AI_DAY['n'] = saved.get('n', 0)
+        except Exception:
+            pass
+        _AI_DAY['_loaded'] = True
     t = datetime.now().strftime('%Y-%m-%d')
     if _AI_DAY['d'] != t:
         _AI_DAY['d'] = t; _AI_DAY['n'] = 0
     _AI_DAY['n'] += 1
+    if _AI_DAY['n'] % 10 == 0:   # батч — не коммитить в git на КАЖДЫЙ вызов
+        try: _data_put(AI_DAY_FILE, {'d': _AI_DAY['d'], 'n': _AI_DAY['n']}, f"ИИ-счётчик дня: {_AI_DAY['n']}")
+        except Exception: pass
 def _ai_left():
     n = _AI_DAY['n']
     return "📊 осталось ~%d из ~%d беспл. ИИ-ответов/день" % (max(0, _AI_FREE_DAILY - n), _AI_FREE_DAILY)
@@ -1670,11 +1685,16 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None):
                 continue
         except:
             continue
-    # 4) 💎 DeepSeek (ПЛАТНЫЙ) — только владельцу ИЛИ «дипсик всем вкл» (_AI_PUBLIC_OFF=False), И не при killswitch. Бесплатные выше молчат.
+    # 4) 💎 DeepSeek (ПЛАТНЫЙ, дешевле GPT) — только владельцу ИЛИ «дипсик всем вкл» (_AI_PUBLIC_OFF=False), И не при killswitch. Бесплатные выше молчат.
     if not ai_kill_active() and (owner or not _AI_PUBLIC_OFF) and DEEPSEEK_API_KEY:
         d = ask_deepseek(prompt, system, max_tokens or 2000)
         if d is not None and not str(d).startswith("⚠️"):
             return d + "\n\n💎 *Модель:* DeepSeek (платный — бесплатные были недоступны)\n" + _ai_left()
+    # 5) 💰 GPT (ПЛАТНЫЙ, общее правило владельца 05.07: после DeepSeek — GPT) — только если DeepSeek недоступен/не потянул
+    if not ai_kill_active() and (owner or not _AI_PUBLIC_OFF) and OPENAI_API_KEY:
+        gp = ask_gpt(prompt, system, max_tokens or 900)
+        if gp is not None and not str(gp).startswith("⚠️"):
+            return gp + f"\n\n💰 *Модель:* GPT {OPENAI_MODEL} (платный — DeepSeek недоступен)\n" + _ai_left()
     return None
 
 def ask_ai_with_memory(prompt, owner=True):
