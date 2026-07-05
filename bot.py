@@ -6134,6 +6134,23 @@ async def _api_serve(application=None):
                 out['models_error'] = f"{mr.status_code}: {mr.text[:200]}"
         except Exception as e:
             out['models_error'] = str(e)[:200]
+        # #NVIDIA-multi-05.07 (владелец: «странно если доступна только 1 модель») — реально пробуем разные модели каталога
+        _sample_models = ["meta/llama-3.1-70b-instruct", "meta/llama-3.1-405b-instruct", "meta/codellama-70b",
+                           "google/gemma-2-2b-it", "deepseek-ai/deepseek-coder-6.7b-instruct", "mistralai/mixtral-8x7b-instruct-v0.1",
+                           "microsoft/phi-3-mini-4k-instruct", "qwen/qwen2.5-7b-instruct", "nvidia/nemotron-4-340b-instruct",
+                           "ibm/granite-3.0-8b-instruct"]
+        multi = []
+        for m in _sample_models:
+            try:
+                t1 = time.time()
+                rr2 = requests.post("https://integrate.api.nvidia.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {NVIDIA_NIM_API_KEY}", "Content-Type": "application/json"},
+                    json={"model": m, "messages": [{"role": "user", "content": "тест"}], "max_tokens": 10}, timeout=30)
+                multi.append({'model': m, 'ok': rr2.status_code == 200, 'code': rr2.status_code,
+                              'seconds': round(time.time() - t1, 2), 'err': (rr2.text[:120] if rr2.status_code != 200 else '')})
+            except Exception as e:
+                multi.append({'model': m, 'ok': False, 'code': None, 'err': str(e)[:120]})
+        out['multi_model_test'] = multi
         return _cors(web.json_response(out))
     async def gpt_test(r):
         """#GPT-05.07 (владелец: «проверь боевой OPENAI_API_KEY в Railway Muslimoon, деньги были»): живая диагностика без раскрытия ключа."""
