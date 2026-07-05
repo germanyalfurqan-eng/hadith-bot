@@ -6093,6 +6093,18 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'ok': ok, 'model': NVIDIA_NIM_MODEL, 'seconds': dt, 'reply': str(resp)[:300]}))
         except Exception as e:
             return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}))
+    async def gpt_test(r):
+        """#GPT-05.07 (владелец: «проверь боевой OPENAI_API_KEY в Railway Muslimoon, деньги были»): живая диагностика без раскрытия ключа."""
+        if not OPENAI_API_KEY:
+            return _cors(web.json_response({'ok': False, 'error': 'OPENAI_API_KEY не задан в Railway env'}))
+        try:
+            t0 = time.time()
+            resp = ask_gpt("ответь одним словом: тест", "Ты тестовый ассистент.", max_tokens=20)
+            dt = round(time.time() - t0, 2)
+            ok = bool(resp) and not str(resp).startswith("⚠️")
+            return _cors(web.json_response({'ok': ok, 'model': OPENAI_MODEL, 'seconds': dt, 'reply': str(resp)[:300]}))
+        except Exception as e:
+            return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}))
     async def opt(r): return _cors(web.Response(text=''))
     async def worklog(r):
         # #62/#63/#165: триггер уведомления владельцу о работе Claude над заявкой (Claude дёргает curl).
@@ -7337,7 +7349,7 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'error': str(e)[:160]}, status=500))
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
