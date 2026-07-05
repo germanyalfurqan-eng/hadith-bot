@@ -275,6 +275,88 @@ def parse_source_query(text):
                 return code, int(num)
     return None, None
 
+# ===== #324 («А'зоми 1»): «<название книги из каталога Мактабы> <номер>» → deep-link кнопка в мини-апп =====
+# Книги ВНЕ 8 канона (и вне SOURCE_TRIGGERS) резолвим по каталогу Мактабы (docs/catalog.json, ~8.6к книг,
+# i = turath id для токена b_<id>_<стр>). Название владелец пишет русской транслитерацией («азоми») —
+# арабские названия/авторов транслитерируем в русский скелет и матчим difflib'ом (top-3 кандидата кнопками).
+_AR2RU_MAP = {
+    "ا": "а", "أ": "а", "إ": "и", "آ": "а", "ى": "а", "ء": "", "ئ": "", "ؤ": "у",
+    "ب": "б", "ت": "т", "ة": "а", "ث": "с", "ج": "дж", "ح": "х", "خ": "х",
+    "د": "д", "ذ": "з", "ر": "р", "ز": "з", "س": "с", "ش": "ш", "ص": "с",
+    "ض": "д", "ط": "т", "ظ": "з", "ع": "", "غ": "г", "ف": "ф", "ق": "к",
+    "ك": "к", "ل": "л", "م": "м", "ن": "н", "ه": "х", "و": "у", "ي": "и",
+}
+def _ar2ru_translit(w):
+    """Арабское слово → русский транслит-скелет (без огласовок и артикля): الأعظمي → «азми»."""
+    w = re.sub(r"[ً-ْٰـ]", "", w or "")   # огласовки/татвиль
+    w = re.sub(r"^(وال|بال|فال|كال|لل|ال)", "", w)             # артикль/приставки
+    return "".join(_AR2RU_MAP.get(ch, "") for ch in w)
+
+_CATALOG_RU_CACHE = {"items": None, "ts": 0}
+def _load_catalog_ru():
+    """Каталог Мактабы + транслит-слова названия/автора. Кэш на процесс (6 ч), raw.githubusercontent (не Pages — тот отстаёт)."""
+    import time as _t
+    if _CATALOG_RU_CACHE["items"] is not None and (_t.time() - _CATALOG_RU_CACHE["ts"]) < 6 * 3600:
+        return _CATALOG_RU_CACHE["items"]
+    try:
+        cat = requests.get("https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/docs/catalog.json",
+                           timeout=25).json()
+        items = []
+        for b in cat:
+            words = set()
+            for fld in (b.get("n", ""), b.get("a", "")):
+                for w in str(fld).split():
+                    rw = _ar2ru_translit(w)
+                    if len(rw) >= 3:
+                        words.add(rw)
+            if words:
+                items.append((int(b.get("i") or 0), b.get("n", ""), b.get("a", ""), tuple(words)))
+        _CATALOG_RU_CACHE.update({"items": items, "ts": _t.time()})
+    except Exception:
+        pass
+    return _CATALOG_RU_CACHE["items"]
+
+# частые слова, которые НЕ название книги — не гонять по ним фуззи-матч (ловили бы «коран 2», «страница 5»)
+_CAT_STOPWORDS = {"коран", "сура", "аят", "хадис", "книга", "глава", "страница", "стр", "том", "заявка",
+                  "замечание", "случайный", "передатчик", "тафсир", "корень", "мухаймин", "мухэймин", "муршид"}
+def _catalog_match(name_ru):
+    """Русское название → top-3 кандидата из каталога: [(score, turath_id, name_ar, author_ar)]."""
+    import difflib
+    qws = []
+    for w in re.split(r"[\s]+", (name_ru or "").lower()):
+        w = w.strip("'`ʼ’«»\"-").replace("ъ", "").replace("'", "").replace("ʼ", "").replace("’", "").replace("`", "").replace("ь", "").replace("ё", "е")
+        if len(w) < 3 or w in _CAT_STOPWORDS:
+            continue
+        # артикль (аль-/ас-/аз-…) — как ВАРИАНТ, не безусловная срезка: иначе «азоми» калечился в «оми»
+        variants = {w, w.replace("-", "")}
+        _mart = re.match(r"^(аль|ал|ас|аш|ад|ат|ан|аз|ар)-?(.{3,})$", w)
+        if _mart:
+            variants.add(_mart.group(2))
+        qws.append(variants)
+    if not qws:
+        return []
+    items = _load_catalog_ru()
+    if not items:
+        return []
+    scored = []
+    for bid, nm, au, words in items:
+        tot = 0.0
+        for qvars in qws:
+            best = 0.0
+            for q in qvars:
+                for rw in words:
+                    if abs(len(rw) - len(q)) > 3:
+                        continue
+                    r = difflib.SequenceMatcher(None, q, rw).ratio()   # слова короткие — autojunk тут не мешает
+                    if r > best:
+                        best = r
+            tot += best
+        sc = tot / len(qws)
+        if sc >= 0.66:
+            scored.append((sc, bid, nm, au))
+    scored.sort(key=lambda x: -x[0])
+    return scored[:3]
+
 def _clean_chapter(t):
     """Привести арабский заголовок главы к читаемому виду."""
     t = (t or "").replace("للاا", "الله")
@@ -2757,7 +2839,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid} ({_now_msk()}): {(body or '(скрин)')[:300]}")
             except Exception:
                 pass
-            await update.message.reply_text(f"📥 Заявка #{rid} со скрином записана ✅ (уникальный № — ищи в журнале командой «заявки»).")
+            await update.message.reply_text(f"📥 Заявка #{rid} со скрином записана ✅ · 🤖 бот (уникальный № — ищи в журнале командой «заявки»).")   # M287
             return
     except Exception:
         pass
@@ -3343,10 +3425,13 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await update.message.reply_text(f"Не нашёл заявку №{rid}.")
             return
-        # ===== #505 (владелец 04.07.2026): заметки джамаата — «JM <текст>» ТОЛЬКО владельцем и ТОЛЬКО в @jamaat_ru =====
-        # Структурно копим (дата+нумерация), «список заметок»/«заметки JM» — выдать всё, .md-файлом если длинно.
-        if (_tl.startswith("jm ") or _tl.startswith("jm\n")) and is_owner(update) and getattr(update.effective_chat, "id", None) == JAMAAT_RU_CHAT_ID:
-            _jm_body = text.strip()[2:].strip()
+        # ===== #505 (владелец 04.07.2026): заметки джамаата — «JM <текст>» / «джм <текст>» ТОЛЬКО владельцем,
+        # в @jamaat_ru И в личке владельца. Структурно копим (дата+нумерация),
+        # «список заметок»/«заметки JM»/«джм список» — выдать всё, .md-файлом если длинно.
+        _jm_here = is_owner(update) and (getattr(update.effective_chat, "id", None) == JAMAAT_RU_CHAT_ID
+                                         or getattr(update.effective_chat, "type", "") == "private")
+        if (_tl.startswith(("jm ", "jm\n", "джм ", "джм\n"))) and _jm_here and _tl not in ("джм список", "jm список"):
+            _jm_body = text.strip()[(3 if _tl.startswith("джм") else 2):].strip()
             if not _jm_body:
                 await update.message.reply_text("✍️ Напиши: JM <текст заметки>")
                 return
@@ -3354,9 +3439,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _jm_id = (max([n.get("id", 0) for n in _jm]) if _jm else 0) + 1
             _jm.append({"id": _jm_id, "d": _now_msk(), "t": _jm_body})
             _data_put("jamaat_notes.json", _jm, f"JM-заметка #{_jm_id}")
-            await update.message.reply_text(f"📝 Заметка JM #{_jm_id} записана ({_now_msk()}).")
+            await update.message.reply_text(
+                f"📒 *Заметка JM-{_jm_id} сохранена* · {_now_msk()}\n"
+                f"———————————\n"
+                f"{_jm_body[:400]}\n"
+                f"———————————\n"
+                f"_Все заметки: «джм список»_", parse_mode="Markdown")
             return
-        if _tl in ("список заметок", "заметки jm", "jm список", "список jm") and is_owner(update) and getattr(update.effective_chat, "id", None) == JAMAAT_RU_CHAT_ID:
+        if _tl in ("список заметок", "заметки jm", "jm список", "список jm", "джм список", "список джм") and _jm_here:
             _jm = _data_get("jamaat_notes.json", []) or []
             if not _jm:
                 await update.message.reply_text("Заметок JM пока нет. Пиши: JM <текст>")
@@ -3416,7 +3506,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if update.effective_chat.id not in (LOG_CHAT_ID, OWNER_ID):   # #41/#90: НЕ дублировать эхо в тот же чат
                     await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid}{from_chat} ({_now_msk()}):\n{body[:1500]}")
             except Exception: pass
-            await update.message.reply_text(f"📥 *Заявка #{rid}* записана ✅{from_chat} ({_now_msk()})\nПродублировал тебе в ЛС с ботом. Журнал — командой «заявки».", parse_mode="Markdown")
+            await update.message.reply_text(f"📥 *Заявка #{rid}* записана ✅{from_chat} · 🤖 бот ({_now_msk()})\nПродублировал тебе в ЛС с ботом. Журнал — командой «заявки».", parse_mode="Markdown")   # M287: показываем место приёма
             return
         # ===== АНОНС в канал приложения вручную ===== «анонс» = текущий update_note.txt; «анонс <текст>» = свой
         if _tl == "анонс" or _tl.startswith("анонс ") or _tl.startswith("анонс\n"):
@@ -4000,7 +4090,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _rest = re.sub(r'^\s*(бахни\s*)?(mp3|мп3|улучши\w*|почисти\w*|конверт\w*|студий\w*|auphonic)\b[\s:.\-—]*', '', text, flags=re.IGNORECASE).strip()
                 if _rest and not re.search(r'["«»“‘\']|исполнител|описани|artist|performer|comment', _rest, re.IGNORECASE):
                     _t_meta = _rest[:150]
-            _title  = _t_meta or (getattr(_rep.audio, 'title', None) if _rep.audio else None) or (datetime.utcnow()+timedelta(hours=3)).strftime("%d.%m.%Y %H:%M")
+            _title  = _t_meta or (getattr(_rep.audio, 'title', None) if _rep.audio else None) or _now_msk()   # M302: время в заголовке mp3 — строго МСК (единая _now_msk, сервер Railway живёт в UTC)
             _artist = _a_meta or (getattr(_rep.audio, 'performer', None) if _rep.audio else None) \
                       or (_rep.sender_chat.title if _rep.sender_chat else (_rep.from_user.full_name if _rep.from_user else "Muslimoon"))
             _comment = _c_meta or ""
@@ -4112,7 +4202,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             if update.effective_chat.id != LOG_CHAT_ID:
                                 await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца (голосом) #{rid} ({_now_msk()}):\n{txt[:1500]}")
                         except Exception: pass
-                        await update.message.reply_text(f"📥 *Заявка #{rid}* записана ✅ ({_now_msk()})", parse_mode="Markdown")
+                        await update.message.reply_text(f"📥 *Заявка #{rid}* записана ✅ · 🤖 бот ({_now_msk()})", parse_mode="Markdown")   # M287
                 elif t_lower in ["нет", "не надо", "отмена", "no"]:
                     pending_edits.pop(chat_id)
                     await update.message.reply_text("❌ Отмена. Пришли голос снова или напиши текстом.")
@@ -4625,8 +4715,13 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if collection == "muslim":
                     hint = ("\nℹ️ У Муслима нумерация источника местами пустая/нестандартная "
                             "(مقدمة и т.п.). Надёжнее искать по тексту: «сунна <часть хадиса>».")
+                # #354 (слово владельца): честная формулировка — не «пусто в источнике» огульно,
+                # а «в НАШЕЙ базе не найден» + возможные причины + совет искать по тексту
                 await update.message.reply_text(
-                    f"❌ {NAMES.get(collection, collection)} №{number} не найден (пусто в источнике).{hint}")
+                    f"❌ {NAMES.get(collection, collection)} №{number} — в нашей базе не найден.\n"
+                    f"Возможные причины: номер за пределами издания ИЛИ пробел в наших данных "
+                    f"(сообщи — проверим и добьём).\n"
+                    f"💡 Попробуй поиск по тексту: «{NAMES.get(collection, collection)} <часть хадиса>».{hint}")
                 return
             similar = search_similar_hadith(ar) if collection != "ahmad_local" else []
             msg = f"📖 {NAMES.get(collection, collection)}, №{number}\n\n"
@@ -4652,6 +4747,29 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg += f"\n\n📲 Открыть карточку в приложении: https://t.me/muslimoontt_bot?startapp={_sa269}"
 
             await send_long(update, msg)
+            return
+
+    # ============ #324: «<книга из каталога> <номер>» (вне 8 канона) → кнопка-ссылка в мини-апп ============
+    # Сюда доходим ТОЛЬКО если канон/первоисточники/Коран выше не подошли. «азоми 1» → транслит-матч по
+    # каталогу Мактабы → top-3 кандидата кнопками с deep-link b_<turath_id>_<номер> (мини-апп откроет книгу).
+    _m324 = re.match(r"^([а-яё][а-яё'`ʼ’\s\-]{2,40}?)\s+(\d{1,5})$", text.lower().strip())
+    if _m324:
+        try:
+            _c324 = _catalog_match(_m324.group(1))
+        except Exception:
+            _c324 = []
+        # в группах отвечаем только при УВЕРЕННОМ матче (≥0.8) — чтобы не спамить на случайные «слово 123»
+        if _c324 and (getattr(update.effective_chat, "type", "") == "private" or _c324[0][0] >= 0.8):
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup   # локальный импорт — как в «закреп» (стр. ~3231)
+            _n324 = _m324.group(2)
+            _kb324 = []
+            for _sc, _bid, _nm, _au in _c324:
+                _lbl = ("📖 " + _nm[:38] + (" — " + _au.split()[-1] if _au else ""))[:60]
+                _kb324.append([InlineKeyboardButton(_lbl, url=f"https://t.me/muslimoontt_bot?startapp=b_{_bid}_{_n324}")])
+            await update.message.reply_text(
+                f"📚 Нашёл в каталоге Мактабы — открыть №{_n324} в приложении:"
+                + ("" if len(_c324) == 1 else "\n(если не та книга — выбери из кандидатов)"),
+                reply_markup=InlineKeyboardMarkup(_kb324))
             return
 
     # ============ #124: ТЕМАТИЧЕСКИЙ РУССКИЙ ЗАПРОС (без «хадис о») — ПОСЛЕДНИЙ ФОЛБЭК по смыслу ============
@@ -5080,12 +5198,19 @@ def feedback_add(user, ctx, txt, has_img=False):
 def _now_msk():
     """Точное московское время (сервер Railway в UTC; МСК = UTC+3). Для всех заявок — по требованию владельца."""
     return (datetime.utcnow() + timedelta(hours=3)).strftime("%d.%m.%Y %H:%M МСК")
-def req_add(txt, img_flag=False, imgkey=""):
-    """Заявка/замечание ВЛАДЕЛЬЦА → нумерованный журнал requests[] (отдельно от пользовательских feedback[])."""
+def req_add(txt, img_flag=False, imgkey="", src="🤖 бот"):
+    """Заявка/замечание ВЛАДЕЛЬЦА → нумерованный журнал requests[] (отдельно от пользовательских feedback[]).
+    M286: номер ПРОДОЛЖАЕТ сквозной ряд #NNN — берём max(счётчик, максимальный id в журнале), чтобы
+    нумерация НИКОГДА не откатывалась к №1 (даже если req_seq потерялся при пересборке журнала).
+    M287: src — место приёма заявки («🤖 бот» / «📱 апп»), пишется в запись и показывается в подтверждении."""
     j = _journal_load()
-    j["req_seq"] = j.get("req_seq", 0) + 1
+    try:
+        _max_id = max((int(r.get("id", 0) or 0) for r in j.get("requests", [])), default=0)
+    except Exception:
+        _max_id = 0
+    j["req_seq"] = max(j.get("req_seq", 0), _max_id) + 1
     rid = j["req_seq"]
-    j.setdefault("requests", []).insert(0, {"id": rid, "d": _now_msk(),
+    j.setdefault("requests", []).insert(0, {"id": rid, "d": _now_msk(), "src": src,
                                             "t": (txt or "")[:1500], "img": bool(img_flag), "imgkey": imgkey, "done": False})
     j["requests"] = j["requests"][:1000]
     _journal_save(f"заявка #{rid}")
@@ -5712,6 +5837,50 @@ def turath_page_buf(book_id, pg):
         threading.Thread(target=_warm, daemon=True).start()
     except Exception:
         pass
+    return res
+
+# TOC: полное оглавление книги (جدول المحتويات) из files.turath.io/books-v3/<id>.json — там indexes.headings
+# [{title,level,page}], где page = тот же pg, что у /page (проверено на 1727/1681). Ключи в books-v3
+# обфусцированы (арабские огласовки) → ищем список заголовков СТРУКТУРНО (list[dict] с title+page).
+# Файл большой (9–11 МБ) → качаем раз, отдаём только headings (десятки КБ), LRU-кэш готовых TOC в памяти.
+_TOC_CACHE = {}
+_TOC_ORDER = []
+def turath_toc(book_id):
+    bid = re.sub(r'[^0-9]', '', str(book_id or ''))[:8]
+    if not bid:
+        return {}
+    if bid in _TOC_CACHE:
+        return _TOC_CACHE[bid]
+    heads = []
+    try:
+        r = requests.get('https://files.turath.io/books-v3/%s.json' % bid,
+                         headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://app.turath.io/'}, timeout=90)
+        if r.status_code == 200:
+            j = r.json()
+            raw = None
+            for v in j.values():
+                if isinstance(v, dict):
+                    for v2 in v.values():
+                        if isinstance(v2, list) and v2 and isinstance(v2[0], dict) and 'title' in v2[0] and 'page' in v2[0]:
+                            raw = v2
+                            break
+                if raw:
+                    break
+            for h in (raw or []):
+                try:
+                    heads.append({'t': str(h.get('title') or '')[:300],
+                                  'l': int(h.get('level') or 1),
+                                  'p': int(h.get('page') or 1)})
+                except Exception:
+                    continue
+    except Exception as e:
+        return {'err': str(e), 'headings': []}
+    res = {'headings': heads}
+    if heads:   # пустой результат не кэшируем (мог быть сбой сети)
+        _TOC_CACHE[bid] = res
+        _TOC_ORDER.append(bid)
+        while len(_TOC_ORDER) > 60:
+            _TOC_CACHE.pop(_TOC_ORDER.pop(0), None)
     return res
 
 # M201: ИИ-проверка цепочки передатчиков (иснада) — извлечь полный список имён. Кэш data/isnad_ai.json.
@@ -6487,6 +6656,7 @@ async def _api_serve(application=None):
                     "ГРАММ: предлог لـ + имя كل в род. падеже. Выведи ТОЛЬКО эти 3 строки.")
             prompt = "Слово: " + word + (("\nКорень (подсказка): " + root_hint) if root_hint else "") + (("\nКонтекст: " + ctx) if ctx else "")
             txt = await loop.run_in_executor(None, ask_neuro, prompt, sysm) or ""
+            _model_tag = _neuroModelTag(txt) or '?'   # владелец (05.07): в КАЖДОМ ИИ-уведомлении обязана быть модель, не только у DeepSeek
             def _g(lbl):
                 m = re.search(lbl + r'\s*[:：]\s*(.+)', txt); return m.group(1).strip() if m else ''
             ru = _g('ПЕРЕВОД')[:200]; root = _g('КОРЕНЬ')[:12]; gram = _g('ГРАММ')[:140]
@@ -6504,6 +6674,7 @@ async def _api_serve(application=None):
                         OWNER_ID,
                         f"#ии #слово 🔤 ИИ-перевод слова: *{word}*\nПеревод: {ru}\nКорень (ИИ): {root}\n"
                         + (f"Контекст: {ctx}\n" if ctx else "") + f"Кто: {who} · всего слов: {total}\n"
+                        f"⚡ *Модель:* {_model_tag}\n"   # владелец 05.07 (выговор): модель обязана быть в КАЖДОМ ИИ-уведомлении
                         "⚠️ Сверь ИИ↔Arabus: если ИИ ошибся — напиши «слово <слово> = <верный перевод>».",
                         parse_mode="Markdown", disable_web_page_preview=True)
                 except Exception:
@@ -6538,6 +6709,41 @@ async def _api_serve(application=None):
         if not rate_ok('bookpage:' + _uid(user, r), 60, 60):
             return _ratelimited()
         res = await loop.run_in_executor(None, turath_page_buf, r.query.get('id'), r.query.get('pg') or '1')   # M366: LRU+prefetch
+        return _cors(web.json_response(res))
+
+    async def book_meta(r):
+        # Паритет #33 (S-фикс): издательские данные книги (المؤلف/المحقق/الناشر/الطبعة/عدد الأجزاء)
+        # из api.turath.io/book?id= (meta.info — готовый текстовый блок, ~1КБ; CORS у turath закрыт → прокси).
+        user = verify_init_data(r.headers.get('X-Init-Data') or r.query.get('initData'))
+        if not feature_allowed('app', user):
+            return _deny('app')
+        if not rate_ok('bookmeta:' + _uid(user, r), 30, 60):
+            return _ratelimited()
+        def _fetch(bid):
+            bid = re.sub(r'[^0-9]', '', str(bid or ''))[:8]
+            if not bid:
+                return {}
+            try:
+                rr = requests.get('https://api.turath.io/book?id=%s' % bid,
+                                  headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)
+                if rr.status_code == 200:
+                    m = (rr.json() or {}).get('meta') or {}
+                    return {'info': str(m.get('info') or '')[:4000], 'name': m.get('name'), 'printed': m.get('printed')}
+            except Exception as e:
+                return {'err': str(e)}
+            return {}
+        res = await loop.run_in_executor(None, _fetch, r.query.get('id'))
+        return _cors(web.json_response(res))
+
+    async def book_toc(r):
+        # TOC: полное оглавление книги для читалки (кнопка 📑). Гейт/рейт-лимит как у book_page,
+        # но жёстче (20/мин): первый запрос по книге тянет с turath файл 9–11 МБ.
+        user = verify_init_data(r.headers.get('X-Init-Data') or r.query.get('initData'))
+        if not feature_allowed('app', user):
+            return _deny('app')
+        if not rate_ok('booktoc:' + _uid(user, r), 20, 60):
+            return _ratelimited()
+        res = await loop.run_in_executor(None, turath_toc, r.query.get('id'))
         return _cors(web.json_response(res))
 
     async def devfeedback(r):
@@ -7102,7 +7308,7 @@ async def _api_serve(application=None):
                   web.post('/api/authorinfo', authorinfo), web.get('/api/qaudio', qaudio),
                   web.post('/api/errlog', errlog), web.post('/api/narrator_rijal', narrator_rijal),
                   web.post('/api/structure', structure_results),
-                  web.get('/api/book_page', book_page), web.post('/api/isnad_ai', isnad_ai_h),
+                  web.get('/api/book_page', book_page), web.get('/api/book_toc', book_toc), web.get('/api/book_meta', book_meta), web.post('/api/isnad_ai', isnad_ai_h),
                   web.post('/api/devfeedback', devfeedback), web.post('/api/worklog', worklog),
                   web.post('/api/backup_push', backup_push),
                   web.options('/api/{t:.*}', opt)])
@@ -7431,7 +7637,18 @@ async def _app_channel_watcher(application):
                                                    "note": (_item["note"] or "")[:200]})
                                     obj["dup_alerts"] = alerts[-100:]
                                     return obj
-                                _ok_a, _newj_a = _data_atomic_mutate("journal.json", _mk_alert, f"app_post → пропущен как дубль (id {item['id']})")
+                                # П-С56-2 (скрин владельца 02:25: алерт каждые 5 мин ВЕЧНО): пропущенный как дубль id
+                                # ОБЯЗАН помечаться обработанным — иначе на следующем тике он снова pending и снова алерт.
+                                def _mk_alert2(obj, _item=item, _sim=sim, _base=_mk_alert):
+                                    obj = _base(obj)
+                                    ids = obj.get("app_post_ids") or []
+                                    if _item["id"] not in ids:
+                                        ids.append(_item["id"])
+                                    obj["app_post_ids"] = ids
+                                    return obj
+                                _ok_a, _newj_a = _data_atomic_mutate("journal.json", _mk_alert2, f"app_post → пропущен как дубль, id {item['id']} помечен")
+                                if _ok_a and _newj_a is not None and _journal_cache is not None:
+                                    _journal_cache["app_post_ids"] = _newj_a.get("app_post_ids", [])
                                 if _ok_a and _newj_a is not None and _journal_cache is not None:
                                     _journal_cache["dup_alerts"] = _newj_a.get("dup_alerts", [])
                                 _atxt = ("✅ Я сам заметил и ОСТАНОВИЛ повторную публикацию в канал @muslimoonapp — "
@@ -7494,6 +7711,32 @@ except Exception as _e:
 app.add_handler(CommandHandler("start", start_cmd))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
+# ===== TB-9: уведомление владельцу о ЗАКРЕПЕ в группе/канале, где сидит бот =====
+# Сервисное сообщение о закрепе НЕ ловится TEXT/media-фильтрами выше — отдельный хендлер на StatusUpdate.PINNED_MESSAGE.
+async def handle_pinned(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        msg = update.effective_message
+        pm = getattr(msg, "pinned_message", None) if msg else None
+        if not pm:
+            return
+        ch = update.effective_chat
+        if getattr(ch, "type", "") == "private":
+            return   # закреп в личке с ботом владельцу не интересен
+        title = getattr(ch, "title", None) or (("@" + ch.username) if getattr(ch, "username", None) else str(ch.id))
+        body = (pm.text or pm.caption or "").strip() or "(медиа/без текста)"
+        if getattr(ch, "username", None):
+            link = f"https://t.me/{ch.username}/{pm.message_id}"
+        else:   # приватная группа/канал: t.me/c/<внутренний id без -100>/<msg_id>
+            _cid = str(ch.id)
+            _cid = _cid[4:] if _cid.startswith("-100") else _cid.lstrip("-")
+            link = f"https://t.me/c/{_cid}/{pm.message_id}"
+        await context.bot.send_message(
+            OWNER_ID,
+            f"📌 Закреп в «{title}»: {body[:100]}{'…' if len(body) > 100 else ''}\nСсылка: {link}",
+            disable_web_page_preview=True)
+    except Exception:
+        pass
+app.add_handler(MessageHandler(filters.StatusUpdate.PINNED_MESSAGE, handle_pinned))
 app.add_handler(ChatMemberHandler(track_member, ChatMemberHandler.CHAT_MEMBER))
 _seen_chats = set()
 async def _chat_seen(update, context):
