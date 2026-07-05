@@ -413,7 +413,7 @@ GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 # 🆓 GitHub Models (GPT-4o и др. бесплатно для разработчиков). Токен с правом Models. Фолбэк на GITHUB_TOKEN.
 GITHUB_MODELS_TOKEN = os.environ.get("GITHUB_MODELS_TOKEN", "") or GITHUB_TOKEN
 # 🆓 NVIDIA NIM (build.nvidia.com) — бесплатный тир, добавлен владельцем 05.07.2026 в Railway (аккаунт "germany", ОТДЕЛЬНЫЙ от Хермеса).
-NVIDIA_NIM_API_KEY = os.environ.get("NVIDIA_NIM_API_KEY", "")
+NVIDIA_NIM_API_KEY = os.environ.get("NVIDIA_NIM_API_KEY") or os.environ.get("NVIDIANIM_API_KEY") or ""   # владелец назвал переменную в Railway БЕЗ подчёркивания (NVIDIANIM_API_KEY) — читаем оба варианта
 NVIDIA_NIM_MODEL = os.environ.get("NVIDIA_NIM_MODEL", "meta/llama-3.1-70b-instruct")
 GITHUB_MODELS_MODEL = os.environ.get("GITHUB_MODELS_MODEL", "openai/gpt-4o-mini")
 BACKUP_SECRET = os.environ.get("BACKUP_SECRET", "")   # #259/#261: общий секрет для приёма локального бэкапа (ps1 -> /api/backup_push -> журнал/ЛС)
