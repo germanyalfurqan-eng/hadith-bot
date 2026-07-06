@@ -129,8 +129,9 @@
   @font-face{font-family:'Noto Naskh Arabic';font-style:normal;font-weight:500;font-display:swap;src:local('Noto Naskh Arabic Medium'),url('./fonts/notonaskh-500.woff2') format('woff2')}
   @font-face{font-family:'Noto Naskh Arabic';font-style:normal;font-weight:700;font-display:swap;src:local('Noto Naskh Arabic Bold'),url('./fonts/notonaskh-700.woff2') format('woff2')}
   .ar{font-size:calc(19px * var(--txtScale,1));line-height:2;direction:rtl;text-align:right;font-family:var(--arFont,"Noto Naskh Arabic","Amiri",serif);user-select:text;-webkit-user-select:text;-moz-user-select:text;-webkit-touch-callout:default;overflow-wrap:break-word;word-break:break-word}   /* #184: длинная арабская строка без пробелов не вываливается за экран · #302/#325: webkit-префиксы+touch-callout — iOS Telegram WebView выделял текст только с ними */
-  .mkp-isnad{font-size:.8em;line-height:1.85;color:var(--hint);opacity:.95;border-inline-start:2px solid rgba(122,162,255,.35);padding-inline-start:8px;margin-bottom:6px}   /* С57: иснад из разметки — мельче/приглушённо; матн остаётся крупным .ar */
+  .mkp-isnad{font-size:1em;line-height:2;color:var(--hint);border-inline-start:2px solid rgba(122,162,255,.35);padding-inline-start:8px;margin-bottom:6px}   /* С57: иснад из разметки — мельче/приглушённо; матн остаётся крупным .ar */
   .mkp-matn{}
+  .mkp-sharh{font-size:.78em;line-height:1.7;color:var(--hint);opacity:.75;margin-top:6px;border-top:1px dashed var(--border);padding-top:4px}
   /* #302/#325: явно разрешить выделение текста хадиса/перевода/слов внутри карточки (iOS WebView по умолчанию режет) */
   #res .card, #res .ar, .ar .qw, .ru, .cnote, .trbox, #bookText, #bookMain{ -webkit-user-select:text; user-select:text; -webkit-touch-callout:default }   /* #412: читалка книг (#bookText/#bookMain) не входила в список — в iOS Telegram WebView текст там не выделялся */
   /* #77: комментарий составителя (قال أبو عيسى/قال أبو داود) — НЕ часть хадиса: абзац с отступом, приглушённый цвет, отбивка */
@@ -735,7 +736,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1017';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v1018';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4334,18 +4335,28 @@ async function _applyIsnadMatn(ar, code, num, text){
     const isn=text.slice(0,idx), matn=text.slice(idx);
     const g=ar._mkpGroups||null;
     const H=(t)=>{ try{ return hl(t,g); }catch(e){ try{ return esc(t); }catch(e2){ return t; } } };
+    let matnCore=matn, sharhTail='';
+    if(rec.sharh||slug==='muslim'){ const m=matn.match(/^([\s\S]*["»][.،؛]?)\s*(\([\s\S]+)$/); if(m && m[2].length<matn.length*0.6){ matnCore=m[1]; sharhTail=m[2]; } }
     ar.innerHTML='<div class="mkp-isnad" title="Иснад — цепочка передатчиков">'+H(isn)+'</div>'
-      +'<div class="mkp-matn">'+H(matn)+'</div>';
+      +'<div class="mkp-matn">'+H(matnCore)+'</div>'
+      +(sharhTail?('<div class="mkp-sharh" title="Пояснение издания (шарх) — не текст хадиса">'+H(sharhTail)+'</div>'):'');
     _styleCollectorNote(ar);
   }catch(e){}
 }
+// С57 (владелец, Муслим 2363): в данных баки в хвосте записи сидят заголовок СЛЕДУЮЩЕЙ главы и шарх-пояснение.
+function _cleanMuslimTail(t){ try{
+  t=String(t||'');
+  t=t.replace(/[‌\s]*\d+\s*-\s*بَ?اب[^"«»]*$/,'').trim();   // хвост-заголовок следующей главы
+  return t;
+}catch(e){ return t; } }
 function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
-  try{ text=_cleanShamela(text); }catch(e){}   // владелец 05.07 (Дарими №10): издательские хвосты [ب ١٠، د ١٠…] не показываем в карточке
+  try{ text=_cleanShamela(text); }catch(e){}
+  if(code==='muslim'){ try{ text=_cleanMuslimTail(text); }catch(e){} }   // владелец 05.07 (Дарими №10): издательские хвосты [ب ١٠، د ١٠…] не показываем в карточке
   const card=document.createElement('div');card.className='card';
   const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(text,groups);_styleCollectorNote(ar);card.appendChild(ar);
   ar._mkpGroups=groups; try{ _applyIsnadMatn(ar,code,(h.num||h.n),text); }catch(e){}   // С57: иснад мельче / матн крупно из ночной разметки
   const meta=document.createElement('div');meta.className='meta';
-  const canRead = !noNav && isReadable(code);
+  const canRead = isReadable(code);   // С57 (владелец: «почему муслим-книга не нажимается»): клик в читалку разрешён всегда, noNav глушил его в цепи/конструкторе
   const _riwL = riwNo ? (' · <b style="color:#9fd3a8">риваят '+riwNo+'/'+riwTot+'</b>') : '';
   meta.innerHTML='<span class="src'+(canRead?' srcnav':'')+'"'+(canRead?' title="Открыть в читалке на этом хадисе">📖 ':'>')+vocOf(code)+' · №'+h.num+'</span>'+_riwL;   // #37: название С ОГЛАСОВКАМИ
   meta.innerHTML+=authBadge(code, h.grade, (h.num||h.n));
@@ -6879,7 +6890,7 @@ function highlightNarratorsInDiv(ad, names, onClick, idMap){
       // работает в режиме «Цепь» (_dzChips) — асинхронно, не блокируя рендер (span уже показан обычным стилем).
       if(_mid) _narrCard(+_mid).then(v=>{ if(!v) return;
         try{ const _gb=_genBadge((v[5]||'')+' '+(v[6]||'')+' '+(v[7]||''), v[4]); let _sah=_gb&&_gb[0]==='صحابي';
-          if(!_sah){ const _cn=stripDiac(v[1]||'').trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc&&(_cn===gc||_cn.startsWith(gc+' '))){ _sah=true; break; } } }
+          if(!_sah && !(parseInt(v[4],10)>110)){ const _cn=stripDiac(v[1]||'').trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc&&(_cn===gc||_cn.startsWith(gc+' '))){ _sah=true; break; } } }   // С57: год смерти >110 гх = НЕ сподвижник (Хумейди ت219 ловился префиксом «عبد الله بن الزبير»)
           if(_sah){ span.style.color='#3a2a05'; span.style.background='linear-gradient(135deg,#ffd76a,#e8b632)'; span.style.boxShadow='0 0 0 1px #c9962b'; span.title+=' · ⭐ сподвижник'; }
         }catch(_e){} });
       // #139: id передатчика БОЛЬШЕ НЕ дописываем в матн (загромождало текст) — id показываем ВНИЗУ, в блоке «Сверка»/списке передатчиков. (отмена #130)
@@ -7787,6 +7798,11 @@ async function _dzLinkSummary(codes){
 }
 // чипы звеньев цепи (опознан #id зелёным → карточка равия · U-код жёлтым «форма ؟» → карточка формы) — единый рендер (R45)
 // между двумя опознанными соседями — коннектор: ✓ если их связь учитель→ученик подтверждена تهذيب الكمال (M475)
+// С57 (#457-класс, «сто раз про обрыв на بن»): сокращение имени БЕЗ висящего соединителя
+function _nmShort(nm,n){ n=n||3; const w=String(nm||'').trim().split(/\s+/); if(w.length<=n) return w.join(' ');
+  let k=n; const HANG=/^(بن|ابن|أبي|ابي|بنت|أبو|ابو|عبد)$/;
+  while(k<w.length && HANG.test(stripDiac(w[k-1]))) k++;
+  return w.slice(0,k).join(' ')+(k<w.length?'…':''); }
 function _dzChips(codes, row, forms, uResolved, numOverride){
   uResolved=uResolved||{}; numOverride=numOverride||{};
   const arr=codes.slice(0,16);
@@ -7796,10 +7812,10 @@ function _dzChips(codes, row, forms, uResolved, numOverride){
     const ovr=(numOverride[i]!=null);   // числовой id перекрыт авторитетным (по сверке)
     const rid=ovr?Number(numOverride[i]):((typeof c==='number')?c:(uResolved[c]!=null?Number(uResolved[c]):null));   // #1/#4/#6: U-код/чужой id опознан через na/сверку (همام→6739, خالد 16274→1768)
     if(rid!=null){ b.textContent='#'+rid+' ✓'; b.style.color='#9fd3a8'; b.title='опознан — id базы '+rid+(typeof c==='number'?'':' (по сверке sunnah.com)');
-      _narrCard(rid).then(v=>{ if(v&&v[1]) b.textContent=v[1].split(' ').slice(0,3).join(' ')+' ·#'+rid;
+      _narrCard(rid).then(v=>{ if(v&&v[1]) b.textContent=_nmShort(v[1],3)+' ·#'+rid;
         // владелец 03.07: «в цепях всегда везде выделяй сподвижников явно золотым»
         try{ const _gb=_genBadge((v[5]||'')+' '+(v[6]||'')+' '+(v[7]||''), v[4]); let _sah=_gb&&_gb[0]==='صحابي';
-          if(!_sah){ const _cn=stripDiac(v[1]||'').trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc&&(_cn===gc||_cn.startsWith(gc+' '))){ _sah=true; break; } } }
+          if(!_sah && !(parseInt(v[4],10)>110)){ const _cn=stripDiac(v[1]||'').trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc&&(_cn===gc||_cn.startsWith(gc+' '))){ _sah=true; break; } } }   // С57: год смерти >110 гх = НЕ сподвижник (Хумейди ت219 ловился префиксом «عبد الله بن الزبير»)
           if(_sah){ b.style.color='#e8c35a'; b.style.borderColor='#e8c35a'; b.style.background='rgba(232,195,90,.16)'; b.title+=' · ⭐ сподвижник'; }
         }catch(e){} }).catch(()=>{});
       b.onclick=()=>{ _narrCard(rid).then(v=>{ if(v&&v[1]) openNarratorRijal(v[1]); else toast('карточка не нашлась'); }).catch(()=>{}); };
@@ -7809,7 +7825,7 @@ function _dzChips(codes, row, forms, uResolved, numOverride){
       b.title='Краткая форма имени в иснаде (так написал автор книги) — точная личность уточняется. Нажми: карточка формы с кандидатами.';
       // Хермес-ревью v989: ОДИН вызов dzUReg (было два — двойной фетч и гонка title/innerHTML)
       dzUReg(c).then(u=>{ if(!u||!u[0]) return;
-        b.innerHTML=esc(u[0].split(' ').slice(0,3).join(' '))+' <span style="font-size:9px;color:var(--hint)">краткая форма·тап</span>';
+        b.innerHTML=esc(_nmShort(u[0],3))+' <span style="font-size:9px;color:var(--hint)">краткая форма·тап</span>';
         // #494-хвост: 4 БЕЗОПАСНО отождествлённые формы (аудит С55) — подсказка-кандидат, ДАННЫЕ не трогаем
         try{ const _SAFE494={'ابن ابي نجيح':3558,'ابي سعيد الخدري':2313,'الاعرج':2511,'ابي الزناد':3645};
           const _k=stripDiac(String(u[0])).trim();
