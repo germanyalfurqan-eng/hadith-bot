@@ -129,6 +129,8 @@
   @font-face{font-family:'Noto Naskh Arabic';font-style:normal;font-weight:500;font-display:swap;src:local('Noto Naskh Arabic Medium'),url('./fonts/notonaskh-500.woff2') format('woff2')}
   @font-face{font-family:'Noto Naskh Arabic';font-style:normal;font-weight:700;font-display:swap;src:local('Noto Naskh Arabic Bold'),url('./fonts/notonaskh-700.woff2') format('woff2')}
   .ar{font-size:calc(19px * var(--txtScale,1));line-height:2;direction:rtl;text-align:right;font-family:var(--arFont,"Noto Naskh Arabic","Amiri",serif);user-select:text;-webkit-user-select:text;-moz-user-select:text;-webkit-touch-callout:default;overflow-wrap:break-word;word-break:break-word}   /* #184: длинная арабская строка без пробелов не вываливается за экран · #302/#325: webkit-префиксы+touch-callout — iOS Telegram WebView выделял текст только с ними */
+  .mkp-isnad{font-size:.8em;line-height:1.85;color:var(--hint);opacity:.95;border-inline-start:2px solid rgba(122,162,255,.35);padding-inline-start:8px;margin-bottom:6px}   /* С57: иснад из разметки — мельче/приглушённо; матн остаётся крупным .ar */
+  .mkp-matn{}
   /* #302/#325: явно разрешить выделение текста хадиса/перевода/слов внутри карточки (iOS WebView по умолчанию режет) */
   #res .card, #res .ar, .ar .qw, .ru, .cnote, .trbox, #bookText, #bookMain{ -webkit-user-select:text; user-select:text; -webkit-touch-callout:default }   /* #412: читалка книг (#bookText/#bookMain) не входила в список — в iOS Telegram WebView текст там не выделялся */
   /* #77: комментарий составителя (قال أبو عيسى/قال أبو داود) — НЕ часть хадиса: абзац с отступом, приглушённый цвет, отбивка */
@@ -733,7 +735,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1016';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v1017';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -4295,10 +4297,53 @@ function _styleCollectorNote(ad){
     ad.innerHTML = html.slice(0,m.index) + '<span class="cnote">' + html.slice(m.index) + '</span>';
   }catch(e){}
 }
+// ===== С57: интеграция ночной разметки иснад/матн (miniapp/markup/, 42k хадисов 9 книг) =====
+// Иснад — мельче и приглушённо, матн — крупно. Граница переносится fold-поиском (Ф-стыковка:
+// жёсткое сравнение 0-7%, fold 100% — орфография хамз/алифов различается между изданиями).
+const _MKP_CACHE={};
+const _MKP_BOOKS={bukhari:1,muslim:1,abudawud:1,nasai:1,ibnmajah:1,ibnmaja:1,tirmidhi:1,malik:1,darimi:1,ibnhibban:1};
+async function _mkpShard(slug,seg){
+  const key=slug+'_'+seg;
+  if(_MKP_CACHE[key]!==undefined) return _MKP_CACHE[key];
+  try{ _MKP_CACHE[key]=await cachedFetchJSON('markup/'+key+'.json',60000,{silent:true}); }
+  catch(e){ _MKP_CACHE[key]=null; }
+  return _MKP_CACHE[key];
+}
+function _mkpFold(s){ // как fold() интеграции: снять огласовки + унификация букв, только арабские буквы
+  s=(s||'').replace(/[ؐ-ًؚ-ٰٟۖ-ۭـ]/g,'');
+  s=s.replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/ء/g,'');
+  return s.replace(/[^ء-ي]/g,'');
+}
+function _mkpSplitIdx(text, matnText){ // индекс начала матна в тексте карточки (fold-проекция)
+  const probe=_mkpFold(matnText).slice(0,28); if(probe.length<12) return -1;
+  const ft=[]; const map=[];   // fold(text) + карта позиций fold→text
+  for(let i=0;i<text.length;i++){ const f=_mkpFold(text[i]); if(f){ ft.push(f); map.push(i); } }
+  const idx=ft.join('').indexOf(probe);
+  return idx>0? map[idx] : -1;
+}
+async function _applyIsnadMatn(ar, code, num, text){
+  try{
+    const slug=(code==='ibnmaja')?'ibnmajah':code;
+    if(!_MKP_BOOKS[slug]) return;
+    const bn=String(num).replace(/[^0-9]/g,''); if(!bn) return;
+    const shard=await _mkpShard(slug, Math.floor(parseInt(bn,10)/1000)); if(!shard) return;
+    const rec=shard[bn]; if(!rec||!rec.full||!rec.matn_text) return;
+    const idx=_mkpSplitIdx(text, rec.matn_text);
+    if(idx<20 || idx>text.length-15) return;   // граница должна быть внутри текста, не по краям
+    if(!ar.isConnected && !ar.parentNode) return;
+    const isn=text.slice(0,idx), matn=text.slice(idx);
+    const g=ar._mkpGroups||null;
+    const H=(t)=>{ try{ return hl(t,g); }catch(e){ try{ return esc(t); }catch(e2){ return t; } } };
+    ar.innerHTML='<div class="mkp-isnad" title="Иснад — цепочка передатчиков">'+H(isn)+'</div>'
+      +'<div class="mkp-matn">'+H(matn)+'</div>';
+    _styleCollectorNote(ar);
+  }catch(e){}
+}
 function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
   try{ text=_cleanShamela(text); }catch(e){}   // владелец 05.07 (Дарими №10): издательские хвосты [ب ١٠، د ١٠…] не показываем в карточке
   const card=document.createElement('div');card.className='card';
   const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(text,groups);_styleCollectorNote(ar);card.appendChild(ar);
+  ar._mkpGroups=groups; try{ _applyIsnadMatn(ar,code,(h.num||h.n),text); }catch(e){}   // С57: иснад мельче / матн крупно из ночной разметки
   const meta=document.createElement('div');meta.className='meta';
   const canRead = !noNav && isReadable(code);
   const _riwL = riwNo ? (' · <b style="color:#9fd3a8">риваят '+riwNo+'/'+riwTot+'</b>') : '';
