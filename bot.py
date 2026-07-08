@@ -5008,13 +5008,24 @@ def _channel_claim(note, item_id=None, threshold=0.90):
             if item_id in ids:
                 result["ok"] = False
                 return obj
-        last = (obj.get("app_post") or {}).get("note", "")
-        sim = difflib.SequenceMatcher(None, (note or "").strip(), (last or "").strip()).ratio() if last else 0.0
-        if sim >= threshold:
-            result["ok"] = False
-            return obj
+        # ROOT-ФИКС дублей (08.07.2026, С58, владелец поймал посты-близнецы 867≡870): сверяем НЕ с ОДНИМ
+        # последним постом, а с ОКНОМ последних ~50 (app_post_notes). Старый баг: между «нота A запощена»
+        # и «после A запощена B» app_post.note становился B — и любой путь с нотой A (напр. рестарт-чек
+        # _setup, читающий update_note.txt) видел sim(A,B)<0.90 → «не дубль» → постил A ПОВТОРНО. Окно закрывает.
+        recent = list(obj.get("app_post_notes") or [])
+        legacy_last = (obj.get("app_post") or {}).get("note", "")
+        if legacy_last and legacy_last not in recent:
+            recent.append(legacy_last)
+        cand = (note or "").strip()
+        for prev in recent:
+            if cand and difflib.SequenceMatcher(None, cand, (prev or "").strip()).ratio() >= threshold:
+                result["ok"] = False
+                return obj
         result["ok"] = True
         obj["app_post"] = {"note": note, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+        _notes = obj.get("app_post_notes") or []
+        _notes.append(note)
+        obj["app_post_notes"] = _notes[-50:]
         if item_id:
             ids = set(obj.get("app_post_ids") or [])
             ids.add(item_id)
@@ -7559,17 +7570,13 @@ async def _setup(application):
                 _journal_save("journal_note → LOG")
         except Exception:
             pass
-        # Публичный канал @muslimoonapp: постим, только если note НОВЫЙ. Ошибку — В LOG (чтобы видеть, ПОЧЕМУ молчит).
-        # 04.07.2026 (владелец поймал дубли 4 раза подряд): ЕДИНЫЙ атомарный _channel_claim() (см. его docstring) —
-        # тот же самый шлюз, что и у очереди/«анонс», окно гонки между путями закрыто полностью.
-        if note and _channel_claim(note):
-                try:
-                    await _post_app_channel(application.bot, note)   # ЗАКОН С31: скрин + анонс + сворачиваемая инструкция
-                except Exception as e:
-                    try:
-                        await application.bot.send_message(LOG_CHAT_ID, f"⚠️ Не смог запостить обновление в @muslimoonapp (APP_CHANNEL_ID={APP_CHANNEL_ID}): {e}\nПроверь: бот добавлен АДМИНОМ канала с правом «Публикация сообщений»?")
-                    except Exception:
-                        pass
+        # 08.07.2026 (С58): РЕСТАРТ-ЧЕК В КАНАЛ УДАЛЁН (владелец поймал посты-близнецы 867≡870).
+        # Он постил update_note.txt в @muslimoonapp при КАЖДОМ рестарте Railway (редеплой = любой пуш) и был
+        # ВТОРЫМ, НЕзависимым от очереди писателем в канал: если после его ноты очередь успевала запостить
+        # ДРУГУЮ, сверка-с-одним-последним промахивалась и нота уходила ПОВТОРНО (через пару позиций — 867/870).
+        # Теперь канал наполняет ТОЛЬКО очередь (_app_channel_watcher ниже) + ручной «анонс», оба через единый
+        # _channel_claim с ОКНОМ дедупа. update_note.txt остаётся лишь для модалки «что нового» во фронте (fetch),
+        # напрямую в канал он больше НЕ постится — единственный путь в @muslimoonapp это update_notes_queue.json.
     except Exception as e:
         print("deploy notify block failed:", e)
     # Авто-вотчер канала @muslimoonapp: фронт-деплои (GitHub Pages) НЕ рестартят Railway,
