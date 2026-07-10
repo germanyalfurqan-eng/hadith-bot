@@ -737,7 +737,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1027';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v1028';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -10983,8 +10983,24 @@ async function verifyNarr(card, place, text){
         authMids=null; srcLbl='по тексту + база равиев Мактабы'; idMode=false;
       }
     }
+    // ЧЕСТНАЯ СВЕРКА (владелец 10.07, Муслим 666: «сверка показывает совпадение, хотя подсветок НЕТ — нонсенс»):
+    // «приложение» = то, что РЕАЛЬНО подсвечено в тексте (.nhl в DOM карточки), а не данные codif.
+    // Подсветка вставляется асинхронно (setTimeout) — до 4 попыток с паузой; так и не появилась → честный 0 → красный.
+    try{
+      let _domHit=false;
+      for(let _t=0;_t<4;_t++){
+        const _sp=[...card.querySelectorAll('.ar .nhl')];
+        if(_sp.length){
+          ourMids=[...new Set(_sp.map(s=>s.dataset.id).filter(Boolean))];
+          ourNames=[...new Set(_sp.map(s=>s.dataset.nm).filter(Boolean))];
+          _domHit=true; break;
+        }
+        await new Promise(r=>setTimeout(r,400+_t*300));
+      }
+      if(!_domHit){ ourMids=[]; ourNames=[]; }   // выделений нет вовсе → «приложение: 0», тревога честная
+    }catch(e){}
     const ourSet=new Set(ourMids);
-    const ourCount = ourMids.length || ourNames.length;   // #132: фактически подсвечено (codif ИЛИ текст), не ложный 0
+    const ourCount = ourMids.length || ourNames.length;   // #132 → 10.07: фактически подсвечено В DOM (не данные)
     const authCount = recNa ? (recNa.length + gapList.length) : (idMode ? authMids.length : auth.length);
     const missing = recNa ? gapList.map(g=> g[1]!=null?String(g[1]):('؟'+g[0]))
                           : (idMode ? authMids.filter(m=>!ourSet.has(m)) : []);
@@ -10993,8 +11009,15 @@ async function verifyNarr(card, place, text){
     const cntMis = authCount!==ourCount;
     // С38 (заявка «бардак красным на каждом хадисе»): для recNa остаток gap = ПРОБЕЛ МОСТА (равий есть у sunnah, у нас id краткой формой не привязан) — это НЕ противоречие текста. → ЖЁЛТЫЙ «почти», НЕ красный «РАСХОЖДЕНИЕ».
     const softGap = !!recNa && gapList.length>0;
-    const _nameMis = (recNa && _vMis && !_vMis.ok) ? _vMis : null;
-    const alarm = recNa ? !!_nameMis : (idMode && (cntMis || missing.length>0 || extra.length>0));   // красный: для recNa — ПЕР-ID расхождение с эталоном verify (диагноз Хермеса 05.07), иначе счёт/лишние id
+    let _nameMis = (recNa && _vMis && !_vMis.ok) ? _vMis : null;
+    // 10.07 (владелец): ДОБАВОЧНО сверяем ФАКТ ЭКРАНА — реально подсвеченные id (DOM) против эталона.
+    // Данные могут совпадать (na==verify), но если на экране подсвечено НЕ то/ничего — это тоже РАСХОЖДЕНИЕ.
+    if(recNa && !_nameMis && authMids && authMids.length){
+      const _mD=authMids.filter(m=>!ourSet.has(String(m)));
+      const _eD=ourMids.filter(m=>authMids.indexOf(String(m))<0);
+      if(_mD.length||_eD.length) _nameMis={missV:_mD,extraR:_eD,vCount:authMids.length,dom:true};
+    }
+    const alarm = recNa ? !!_nameMis : (idMode && (cntMis || missing.length>0 || extra.length>0));   // красный: пер-ID расхождение данных ИЛИ экрана с эталоном
     // 🚨 УКАЗ владельца (28.06): КАЖДЫЙ раз когда в приложении открывается хадис с КРАСНЫМ расхождением sunnah.com — уведомить владельца в журнал/ЛС (через /errlog: дедуп per-хадис+версия → не спам, кап 12/сессия). Чтобы расхождения не оставались незамеченными.
     if(alarm && idMode && String(place.bid)!=='21795'){ try{ const _vmsg='СВЕРКА РАСХОЖДЕНИЕ с sunnah.com: bid'+place.bid+' №'+place.num+' — эталон '+authCount+', опознано '+ourCount+(missing.length?(', НЕ опознано '+missing.length):'')+(extra.length?(', лишних id '+extra.length+' ['+extra.slice(0,6).join(',')+']'):''); _appReport(_vmsg, 'сверка-расхождение'); }catch(_e){} }   // A-174/177/182/188/189: Дарими (21795) — ИЗВЕСТНЫЙ рассинхрон нумерации эталона (нужен ре-бридж) → в журнал ошибок не спамим, визуальная сверка остаётся
     // #119/#111 (З-09): ДЕТЕКТОР УСЕЧЁННОГО ТЕКСТА. Показанный текст без маркеров иснада (حدثنا/أخبرنا/عن) и начинается с матна (قال رسول/النبي) → иснад отсутствует в показе. Флагуем ТОЛЬКО при авторитетном эталоне, где краул подтверждает наличие иснада ≥2 (иначе риск ложного флага на хадисах, где автор НАМЕРЕННО дал только матн — CLAUDE.md п.4).
@@ -11006,7 +11029,7 @@ async function verifyNarr(card, place, text){
     const _authText = !idMode && _abbrevRiw && ['1681','1727','829','1726','1198'].indexOf(String(place.bid))>=0;
     const _bc = idMode ? (alarm?'#e0796a':(softGap?'#d8a85a':'#3a8a5a')) : (_authText?'#3a8a5a':'#3a4a66'); const _bg = idMode ? (alarm?'rgba(224,121,106,.10)':(softGap?'rgba(216,168,90,.10)':'rgba(58,138,90,.08)')) : (_authText?'rgba(58,138,90,.08)':'rgba(90,120,170,.08)');
     box.style.cssText='margin-top:9px;border-radius:10px;padding:9px 11px;font-size:12px;border:1px solid '+_bc+';background:'+_bg+';';
-    const _hdr = !idMode ? (_authText?'🟢 Цепь этого риваята · текст = sunnah.com (передатчики подлинные)':'🔵 Сверка по базе Мактабы (передатчики опознаны по тексту)') : (alarm?('🔴 СВЕРКА: РАСХОЖДЕНИЕ с sunnah.com'+(_nameMis?(' — пер-id: эталон '+_nameMis.vCount+', у нас лишних '+_nameMis.extraR.length+', не хватает '+_nameMis.missV.length):'')):(softGap?('🟡 Сверка: почти совпадает — '+gapList.length+' равия'+(gapList.length===1?'':'/-ев')+' мост не привязал по краткой форме'):((recNa&&_vMis&&_vMis.ok)?'🟢 Сверка: пер-id совпадает с эталоном sunnah.com':'🟢 Сверка: звенья согласованы (число и мост)')));   // фикс по диагнозу Хермеса 05.07
+    const _hdr = !idMode ? (_authText?'🟢 Цепь этого риваята · текст = sunnah.com (передатчики подлинные)':'🔵 Сверка по базе Мактабы (передатчики опознаны по тексту)') : (alarm?('🔴 СВЕРКА: РАСХОЖДЕНИЕ с sunnah.com'+(_nameMis?(' — '+(_nameMis.dom?'НА ЭКРАНЕ':'пер-id')+': эталон '+_nameMis.vCount+', у нас лишних '+_nameMis.extraR.length+', не хватает '+_nameMis.missV.length+(_nameMis.dom?' (подсветка в тексте не совпала с эталоном)':'')):'')):(softGap?('🟡 Сверка: почти совпадает — '+gapList.length+' равия'+(gapList.length===1?'':'/-ев')+' мост не привязал по краткой форме'):((recNa&&_vMis&&_vMis.ok)?'🟢 Сверка: пер-id совпадает с эталоном sunnah.com':'🟢 Сверка: звенья согласованы (число и мост)')));   // фикс по диагнозу Хермеса 05.07
     const _hcol = !idMode ? (_authText?'#7fd3a0':'#6fb0e0') : (alarm?'#e0796a':(softGap?'#e0c07a':'#7fd3a0'));
     let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b style="color:'+_hcol+'">'+_hdr+'</b>'
       +'<span style="color:var(--hint)">'+(idMode?('эталон ('+srcLbl+'): <b>'+authCount+'</b> · '):'')+'приложение: <b style="color:'+(cntMis&&idMode?'#e0796a':'inherit')+'">'+ourCount+'</b></span></div>';
