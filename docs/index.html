@@ -737,7 +737,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1022';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v1023';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5068,8 +5068,8 @@ async function _renderTlinkLinks(id, host, onPick){
   return true;
 }
 function _cleanNarrName(nm){ const ws=String(nm||"").trim().split(/ +/); const st={"وقيل":1,"ويقال":1,"يقال":1,"وقال":1,"قال":1,"او":1}; const o=[]; for(const w of ws){ if(st[stripDiac(w)]) break; o.push(w); if(o.length>=9) break; } return o.join(" ")||nm; }
-async function openNarratorRijal(name){
-  if(!name) return;
+async function openNarratorRijal(name, forceId){
+  if(!name && forceId==null) return;
   let m=document.getElementById('narrModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='narrModal';
     m.innerHTML='<div class="panel" style="max-width:640px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 12px;padding:14px 16px 11px;border-bottom:1px solid var(--border)"><b id="narrTitle" style="font-size:15px">👤 Разбор передатчика</b><button class="mini" id="narrClose" style="flex:none">закрыть ✕</button></div><div id="narrBody" style="max-height:74vh;overflow:auto"></div></div>';
@@ -5085,10 +5085,10 @@ async function openNarratorRijal(name){
   // полная карточка, что в режиме «Передатчик»/таблице) рендерится ПЕРВОЙ, она сама включает и «Оценки» (ниже flag noTT не ставим — она их покажет сама).
   let _cardShown=false;
   body.innerHTML='';   // #владелец 01.07.2026 («уродство» — «Загружаю карточку…» висело НИЖЕ готовой карточки): showNarratorCardLocal вставляет через insertAdjacentHTML('afterbegin') — ДОПОЛНЯЕТ body, не заменяет; плейсхолдер надо убрать САМИМ до вставки
-  try{ const _rc=await showNarratorCardLocal(name, body); if(_rc) _cardShown=true; }catch(e){}
+  try{ const _rc=await showNarratorCardLocal(name, body, forceId); if(_rc) _cardShown=true; }catch(e){}
   if(!_cardShown){   // фолбэк на старое поведение — если полная карточка не построилась (имя не резолвится), хотя бы «Оценки» локально
     body.innerHTML='<div class="hint">📜 Загружаю оценки учёных…</div>';
-    try{ const _v=await _narrLookup(name); if(_v!=null){ body.innerHTML=''; await renderTestimoniesCard(_v, body); } else body.innerHTML='<div class="hint">Не удалось опознать передатчика точно.</div>'; }catch(e){ body.innerHTML='<div class="hint">Не удалось опознать передатчика точно.</div>'; }
+    try{ let _v=(forceId!=null&&forceId!=='')?String(forceId):await _narrLookup(name); if(_v!=null){ body.innerHTML=''; await renderTestimoniesCard(_v, body); } else body.innerHTML='<div class="hint">Не удалось опознать передатчика точно.</div>'; }catch(e){ body.innerHTML='<div class="hint">Не удалось опознать передатчика точно.</div>'; }
   }
   if(!BACKEND_URL) return;
   // ⛔ ТРЕВОГА-фикс (С46, выговор владельца): свод ИИ БОЛЬШЕ НЕ грузится автоматом при клике на передатчика (тратил ключ DeepSeek на каждый клик). Только по явной кнопке.
@@ -7819,7 +7819,7 @@ function _dzChips(codes, row, forms, uResolved, numOverride){
           if(!_sah && !(parseInt(v[4],10)>110)){ const _cn=stripDiac(v[1]||'').trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc&&(_cn===gc||_cn.startsWith(gc+' '))){ _sah=true; break; } } }   // С57: год смерти >110 гх = НЕ сподвижник (Хумейди ت219 ловился префиксом «عبد الله بن الزبير»)
           if(_sah){ b.style.color='#e8c35a'; b.style.borderColor='#e8c35a'; b.style.background='rgba(232,195,90,.16)'; b.title+=' · ⭐ сподвижник'; }
         }catch(e){} }).catch(()=>{});
-      b.onclick=()=>{ _narrCard(rid).then(v=>{ if(v&&v[1]) openNarratorRijal(v[1]); else toast('карточка не нашлась'); }).catch(()=>{}); };
+      b.onclick=()=>{ _narrCard(rid).then(v=>{ if(v&&v[1]) openNarratorRijal(v[1], rid); else openNarratorRijal('', rid); }).catch(()=>{ openNarratorRijal('', rid); }); };
     } else { b.textContent=String(c).slice(0,8); b.style.color='#ffce63';
       // #515 (владелец: «что за надписи абдуллах ибн?????? — что делать?»): жёлтый чип = КРАТКАЯ ФОРМА имени из иснада,
       // точная личность уточняется — поясняем прямо в чипе по-русски, а не голым «؟»
@@ -9866,8 +9866,11 @@ function _relBadge(rank){ const t=fold(stripDiac(String(rank||''))); if(!t) retu
   if(!cat) return '';
   return '<span title="Сводная категория достоверности по рангу: '+esc(t.slice(0,50))+'" style="font-size:12px;font-weight:700;color:'+cat[1]+';background:'+cat[2]+';border:1px solid '+cat[3]+';border-radius:8px;padding:2px 10px;white-space:nowrap;direction:ltr">● '+cat[0]+'</span>'; }
 const _SUN_LOGO="data:image/png;base64,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";
-async function showNarratorCardLocal(name, host){
-  let id=null; try{ id=await _narrLookup(name); }catch(e){} if(id==null) return null;
+async function showNarratorCardLocal(name, host, forceId){
+  // forceId (клик по цепи/подсветке — id уже известен): открываем карточку ПО ID напрямую,
+  // минуя _narrLookup(name) — иначе короткие имена (سمي=3 буквы) «не опознавались», хотя карточка ЕСТЬ.
+  let id=(forceId!=null&&forceId!=='')?String(forceId):null;
+  if(id==null){ try{ id=await _narrLookup(name); }catch(e){} } if(id==null) return null;
   const c=await _narrCard(id); if(!c) return null;   // [id,name,kunya,nisba,death,rankHajar,rankDhahabi,tabaqa,jarh]
   try{ await loadJarhGl(); }catch(e){}   // #164: глоссарий джарха — для рус.перевода положений (ранги по-русски)
   // #164: положение (ранг) по-русски — каждое слово ранга через глоссарий джарха (соответствие на русском)
@@ -10867,7 +10870,7 @@ async function _codifHighlight(text, card, out, place){
     if(names.length){
       setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
         highlightNarratorsInDiv(ad, names, async nm=>{ const id=f2id[nm]; out.style.display='block'; let c=null; try{ c=await _narrCard(id); }catch(e){}
-          openNarratorRijal((c&&c[1])||nm); }, f2id);   /* не рвём карточку хадиса — равий открывается модалкой (как в поиске), указ владельца */ }
+          openNarratorRijal((c&&c[1])||nm, id); }, f2id);   /* id-first: короткие имена (سمي) тоже открывают карточку */ }
         try{ highlightRelationalInDiv(ad); }catch(e){} }); }catch(e){} }, 0);
       return true;
     }
@@ -11115,7 +11118,7 @@ async function verifyNarr(card, place, text){
     // #93 (полезные функции таблицы цепей): копировать цепь целиком (передатчики + формы передачи + id)
     h+='<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><span class="vCopyChain" style="cursor:pointer;font-size:11.5px;color:var(--link);border:1px solid var(--border);border-radius:8px;padding:3px 10px">📋 Копировать цепь</span>'+_cidHtml+'</div>'+_nvHtml+_tdHtml;
     box.innerHTML=h;
-    try{ box.querySelectorAll('.nvWk').forEach(el=>{ el.onclick=async(ev)=>{ ev.stopPropagation(); try{ const c=await _narrCard(+el.dataset.mid); if(c) openNarratorRijal(c[1]); }catch(_e){} }; }); }catch(e){}
+    try{ box.querySelectorAll('.nvWk').forEach(el=>{ el.onclick=async(ev)=>{ ev.stopPropagation(); try{ const _m=+el.dataset.mid; const c=await _narrCard(_m); openNarratorRijal((c&&c[1])||'', _m); }catch(_e){} }; }); }catch(e){}
     // владелец 02.07: «пишешь матрук — но КТО сказал?» — асинхронно дописываем имена критиков-свидетелей джарха в строку
     try{ box.querySelectorAll('.nvWho').forEach(async el=>{ try{
       const lst=await _testimGet(+el.dataset.mid); if(!lst) return;
@@ -11129,7 +11132,7 @@ async function verifyNarr(card, place, text){
         if(who.length>=3) break; }
       if(who.length){ el.innerHTML=' <span style="color:#d8a5a0;font-size:10.5px">— сказали: '+who.join(' · ')+'</span>';
         el.querySelectorAll('.nvCr').forEach(cr=>{ cr.onclick=(ev)=>{ ev.stopPropagation(); try{ openNarratorRijal(cr.dataset.cr); }catch(_e){} }; });
-        el.querySelectorAll('.nvCq').forEach(cq=>{ cq.onclick=async(ev)=>{ ev.stopPropagation(); try{ const c2=await _narrCard(+cq.dataset.mid); if(c2) openNarratorRijal(c2[1]); }catch(_e){} }; });
+        el.querySelectorAll('.nvCq').forEach(cq=>{ cq.onclick=async(ev)=>{ ev.stopPropagation(); try{ const _m2=+cq.dataset.mid; const c2=await _narrCard(_m2); openNarratorRijal((c2&&c2[1])||'', _m2); }catch(_e){} }; });
       }
     }catch(_e){} }); }catch(e){}
     // владелец 02.07: «▸ развернуть — на каждого кто засвидетельствовал + доказать что слышали друг друга с доводом» (БЕТА)
@@ -12166,7 +12169,7 @@ function runDeepLink(){ const g=_deepLinkToken(); if(!g) return; const p=g.split
       const _a=await loadMuhaymin(); const _h=_a.find(x=>String(x.n)===String(p[1])); const _res=document.getElementById('res');
       if(_h&&_res){ _res.innerHTML=''; _groups=[]; _res.appendChild(makeCard({type:'m',h:_h})); } }catch(e){} })(); }
     else if(t==='raz' && p[1]){ try{ openOurRazbory(); setTimeout(()=>{ try{ const el=document.getElementById('raz_'+String(p[1]).replace(/[^a-zA-Z0-9_-]/g,'')); if(el){ el.style.display='block'; const hd=el.previousElementSibling; if(hd){ const ar=hd.querySelector('.razArrow'); if(ar) ar.textContent='▲'; } el.scrollIntoView({block:'center'}); } }catch(e){} }, 900); }catch(e){} }   // З-30: ссылка на разбор
-    else if(t==='n' && p[1]){ (async()=>{ try{ const c=await _narrCard(p[1]); if(c&&c[1]) openNarratorRijal(c[1]); }catch(e){} })(); }   // #246: карточка передатчика по mid (n_3889) — для дип-ссылки со скрина карточки
+    else if(t==='n' && p[1]){ (async()=>{ try{ const c=await _narrCard(p[1]); openNarratorRijal((c&&c[1])||'', p[1]); }catch(e){} })(); }   // #246: карточка передатчика по mid (n_3889) — для дип-ссылки со скрина карточки
     else if(t==='cat') openCatalog();
   }catch(e){} }, 650); }
 try{ runDeepLink(); }catch(e){}
@@ -12600,7 +12603,7 @@ var _mtb=document.getElementById('mudTblBtn'); if(_mtb) _mtb.onclick=async()=>{ 
         +'</span></div>';
     });
     bd.innerHTML=h;
-    bd.querySelectorAll('.mudTblRow').forEach(r=>{ if(r.dataset.mid) r.onclick=()=>{ try{ openNarratorRijal(r.dataset.nm); }catch(e){} }; });
+    bd.querySelectorAll('.mudTblRow').forEach(r=>{ if(r.dataset.mid) r.onclick=()=>{ try{ openNarratorRijal(r.dataset.nm, r.dataset.mid); }catch(e){} }; });
   }catch(e){ bd.innerHTML='<div class="hint">Не удалось загрузить таблицу.</div>'; }
 };
 var _ctb=document.getElementById('chainTblBtn'); if(_ctb) _ctb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openIsnadBase(); }catch(e){} };
