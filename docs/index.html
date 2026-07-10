@@ -737,7 +737,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1029';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v1030';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -5091,6 +5091,9 @@ async function openNarratorRijal(name, forceId){
     try{ let _v=(forceId!=null&&forceId!=='')?String(forceId):await _narrLookup(name); if(_v!=null){ body.innerHTML=''; await renderTestimoniesCard(_v, body); } else body.innerHTML='<div class="hint">Не удалось опознать передатчика точно.</div>'; }catch(e){ body.innerHTML='<div class="hint">Не удалось опознать передатчика точно.</div>'; }
   }
   if(!BACKEND_URL) return;
+  // 10.07 (владелец, Абу Хурайра: «какой-то свод ИИ непонятный — зачем он тут?»): у СПОДВИЖНИКА джарх-ва-тадиль
+  // не применяется (الصحابة عدول) — ИИ-свод оценок для сахаба бессмыслен и путает. Кнопку не показываем.
+  try{ if(body.querySelector('#sahBadge')) return; }catch(e){}
   // ⛔ ТРЕВОГА-фикс (С46, выговор владельца): свод ИИ БОЛЬШЕ НЕ грузится автоматом при клике на передатчика (тратил ключ DeepSeek на каждый клик). Только по явной кнопке.
   if(BACKEND_URL){ const aiBtn=document.createElement('button'); aiBtn.className='mini'; aiBtn.textContent='🧠 Свод ИИ (по запросу — тратит ключ)';
     aiBtn.style.cssText='width:100%;border:1px solid #6c5ce7;color:#d9ccff;background:rgba(108,92,231,.08);padding:9px;border-radius:10px;font-size:12.5px;cursor:pointer;margin-bottom:8px';
@@ -10898,10 +10901,15 @@ async function _codifHighlight(text, card, out, place){
     // #160/#158: при наличии авторитетной na подсвечиваем ТОЛЬКО её (= строгий стандарт sunnah.com). Эвристический n НЕ добавляем —
     // он тащил мусор-матн (напр. «الله ما كذبني #484» в Бухари 5590) и тёзка-дубли с неверными id. na — полная цепь, добивка не нужна.
     if(names.length){
-      setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{ if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
+      setTimeout(()=>{ try{ [...card.querySelectorAll('.ar')].forEach(ad=>{
+        // 10.07 (владелец, Муслим 666 «приложение: 0»): ГОНКА — текст-путь (11282) успевал ПЕРВЫМ с пустым
+        // результатом и ставил narrOn → авторитетная na-подсветка блокировалась гвардом. Авторитет na ВЫИГРЫВАЕТ:
+        // если флаг стоит, но реальных выделений (.nhl) нет — откатываем и подсвечиваем заново по na.
+        if(ad.dataset.narrOn && !ad.querySelector('.nhl')){ try{ if(ad.dataset.narrOrig!==undefined) ad.innerHTML=ad.dataset.narrOrig; delete ad.dataset.narrOn; }catch(_e){} }
+        if(!ad.dataset.narrOn){ if(ad.dataset.narrOrig===undefined) ad.dataset.narrOrig=ad.innerHTML;
         highlightNarratorsInDiv(ad, names, async nm=>{ const id=f2id[nm]; out.style.display='block'; let c=null; try{ c=await _narrCard(id); }catch(e){}
           openNarratorRijal((c&&c[1])||nm, id); }, f2id);   /* id-first: короткие имена (سمي) тоже открывают карточку */ }
-        try{ highlightRelationalInDiv(ad); }catch(e){} }); }catch(e){} }, 0);
+        try{ highlightRelationalInDiv(ad); }catch(e){} }); }catch(e){} }, 60);   // 60мс: пусть ранний пустой прогон закончится ДО нас — мы перекрываем
       return true;
     }
   }
