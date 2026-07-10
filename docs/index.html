@@ -737,7 +737,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1028';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v1029';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7054,6 +7054,9 @@ function _narrDispName(id, fallback){ const d=_ndCache&&_ndCache[String(id)]; if
 let _nsCache=null,_nsP=null;
 async function _narrSun(id){ if(id==null) return null; if(!_nsCache){ if(!_nsP) _nsP=fetch('./narr_sun.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); _nsCache=await _nsP; } return _nsCache[String(id)]||null; }
 const _SUNCOL_RU={'al-Bukhari':'Бухари','Muslim':'Муслим','Abu Dawud':'Абу Дауд','al-Tirmidhi':'Тирмизи',"al-Nasa'i":'Насаи','Ibn Majah':'Ибн Маджа','Ahmad':'Ахмад','Malik':'Малик','al-Darimi':'Дарими'};
+// narrbio/<id/100>.json (из موسوعة الرواة rabt): id→{rel: родственные связи (мавля кого/отец кого), dp: место смерти} — РЕАЛЬНАЯ биография, не дубль чипов
+var _nbShard={}, _nbShardP={};
+async function _narrBio(id){ if(id==null) return null; const b=Math.floor(id/100); if(_nbShard[b]===undefined){ if(!_nbShardP[b]) _nbShardP[b]=fetch('./narrbio/'+b+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null); _nbShard[b]=await _nbShardP[b]; } return (_nbShard[b]||{})[String(id)]||null; }
 // доп-поля карточки (البلد/الإقامة·الرحلات·محل الوفاة) из موسوعة الرواة — аналог sunnah.com «Lived in / Places». Шарды narrx (build_narrx.py).
 var _narrXShard={};
 async function _narrX(id){ const b=Math.floor(id/100); if(_narrXShard[b]===undefined){ try{ _narrXShard[b]=await (await fetch('./narrx/'+b+'.json?v='+APPVER)).json(); }catch(e){ _narrXShard[b]=null; } } return (_narrXShard[b]||{})[String(id)]||null; }
@@ -9926,6 +9929,15 @@ async function showNarratorCardLocal(name, host, forceId){
     } }
   const _hdrName = _voc || (_shDiff?_sh:c[1]);
   const _showFull = stripDiac(_hdrName)!==stripDiac(c[1]||'');
+  // 10.07 (владелец, سمي): заголовок как на sunnah.com — «سمي القرشي», а «سُمَىٌّ مَوْلَى أَبِي بَكْرٍ» подписью в скобках
+  let _hdrMain=_hdrName, _hdrSub='';
+  try{ const _dsp=await _narrDisp(id); const _da=(_dsp&&_dsp.ar)||'';
+    if(_da){ const _GEN2={'المدني':1,'الكوفي':1,'البصري':1,'المكي':1,'الشامي':1,'اليماني':1,'المصري':1,'مولاهم':1,'الحافظ':1};
+      let _n1=''; try{ _n1=String(((_sun&&_sun.ns)||c[3]||'')).split(/[،,\s]+/).filter(x=>x&&!_GEN2[x])[0]||''; }catch(_e){}
+      _hdrMain=_da+((_n1&&_da.indexOf(_n1)<0&&_da.split(' ').length<=3)?(' '+_n1):'');
+      if(stripDiac(_hdrName)!==stripDiac(_hdrMain)) _hdrSub=_hdrName;
+    }
+  }catch(e){}
   const _cleanFull=(nm)=>{ const ws=String(nm||'').trim().split(/\s+/); const st={'وقيل':1,'ويقال':1,'يقال':1,'وقال':1,'قال':1,'او':1}; const o=[]; for(const w of ws){ if(st[stripDiac(w)]) break; o.push(w); if(o.length>=9) break; } return o.join(' ')||nm; };   // #сподвижники (приказ С40): имя забито вариантами «عبد الرحمن بن صخر وقيل عبد الله بن غنم وقيل…» → обрезаем по первому وقيل/ويقال/قال, иначе транслит давал «...Вкил...»
   const _c1=_cleanFull(c[1]);   // чистое полное имя для показа и транслита
   // #сподвижники (С40): варианты «وقيل …», обрезанные из шапки, НЕ теряем — в сворачиваемый блок «другие варианты имени»
@@ -9965,7 +9977,9 @@ async function showNarratorCardLocal(name, host, forceId){
         +((_WIKI_NARR_OK&&_wk&&_wk.u)?('<span class="nWikiAv" data-u="'+esc(_wk.u)+'" title="Википедия" style="position:absolute;right:-4px;bottom:-4px;width:20px;height:20px;border-radius:50%;background:#1c2128;border:1.5px solid #3a434d;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:Georgia,serif;font-size:11px;font-weight:700;color:#e9eef3">W</span>'):'')
       +'</div></div>'
       +'<div style="flex:1;min-width:190px">'
-        +'<div dir="rtl" style="font-weight:700;font-size:23px;color:#f0f6fc;line-height:1.15;'+_AF+'">'+esc(_hdrName)+'</div>'
+        // 10.07 (владелец, эталон sunnah.com «سمي القرشي (سمي مولى أبي بكر)»): главный заголовок = канон.имя + различающая нисба, полная форма (мавля и т.п.) — подписью в скобках
+        +'<div dir="rtl" style="font-weight:700;font-size:23px;color:#f0f6fc;line-height:1.15;'+_AF+'">'+esc(_hdrMain)+'</div>'
+        +(_hdrSub?('<div dir="rtl" style="font-size:13px;color:#8fa3b8;margin-top:1px;'+_AF+'">('+esc(_hdrSub)+')</div>'):'')
         +(_ruSh?('<div style="font-size:13px;color:#bcd0ff;margin-top:2px">≈ '+esc(_ruSh)+(_ruShVer?'':' <span title="Автоматическая транслитерация с арабского — ещё НЕ выверена вручную, возможны неточности" style="font-size:9.5px;color:#c9a24a;border:1px solid #5e4d23;border-radius:6px;padding:0 5px;cursor:help;vertical-align:middle">авто ⚠</span>')+'</div>'):'')
         +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'
           +'<span class="ourId" title="Наш внутренний номер равия — нажми, чтобы скопировать" style="cursor:pointer;font-size:13px;font-weight:700;color:#7fe0a8;background:rgba(46,160,67,.16);border:1px solid #2ea043;border-radius:7px;padding:2px 10px;letter-spacing:.2px">🆔 наш №'+c[0]+'</span>'   // #владелец 01.07.2026: не писать «Muslimoon» — просто наш номер
@@ -10008,12 +10022,17 @@ async function showNarratorCardLocal(name, host, forceId){
   // владелец («шрифты разные, некрасиво»): биография была ОДНИМ div на смешанный рус+араб текст с ОДНИМ font-family
   // на весь блок — браузер сам подбирал шрифт под кириллицу внутри (то Amiri, то системный, по вкусу браузера).
   // Теперь арабские вставки (кунья/нисба/цитаты оценок) — в СВОЁМ span с _AF, остальной (русский) текст — в UI-шрифте (наследует body).
+  // 10.07 (владелец: «в чём смысл блока ТУПО повторять кунью/нисбу/год/табаку/оценку — они уже в чипах выше?»):
+  // био-блок теперь несёт ТОЛЬКО факты, которых НЕТ в чипах: родственные связи (мавля кого / отец кого — из موسوعة الرواة),
+  // место смерти, путешествия/место жизни (رحلات из موسوعة). Дубли полей удалены. Нет фактов — блока нет вовсе.
   try{ const _arSpan=(s)=>'<span dir="rtl" style="'+_AF+'">'+esc(s)+'</span>';
-    const bio=[]; bio.push(esc(_ruNm||'Этот равий')+' — передатчик хадисов'+(c[2]?(', кунья '+_arSpan(c[2])):'')+(c[3]?(', нисба '+_arSpan(c[3])):'')+(c[4]?('. Умер ~'+esc(String(c[4]))+' г.х.'):'.'));
-    if(c[7]) bio.push('Табака: '+_arSpan(c[7])+'.');
-    if(c[5]) bio.push('Оценка Ибн Хаджара: «'+_arSpan(c[5])+'».');
-    if(c[6]) bio.push('Оценка аз-Захаби: «'+_arSpan(c[6])+'».');
-    h+='<div style="font-size:15.5px;color:var(--text);margin-top:11px;line-height:1.9;border-top:1px dashed var(--border);padding-top:8px;font-family:var(--uiFont,-apple-system,\'Segoe UI\',Roboto,sans-serif)">📜 '+bio.join(' ')+'</div>'; }catch(e){}
+    let _nb=null; try{ _nb=await _narrBio(id); }catch(_e){}
+    const bio=[];
+    if(_nb&&_nb.rel) bio.push('🧬 Связи: '+_arSpan(_nb.rel)+'.');
+    if(_nb&&_nb.dp) bio.push('🕊 Место смерти: '+_arSpan(_nb.dp)+'.');
+    if(_nx&&_nx.t) bio.push('🐪 Жил/путешествовал: '+_arSpan(_nx.t)+'.');
+    else if(_nx&&_nx.r) bio.push('🐪 Рихляты: '+_arSpan(_nx.r)+'.');
+    if(bio.length) h+='<div style="font-size:14.5px;color:var(--text);margin-top:11px;line-height:1.9;border-top:1px dashed var(--border);padding-top:8px;font-family:var(--uiFont,-apple-system,\'Segoe UI\',Roboto,sans-serif)">📜 '+bio.join(' ')+'</div>'; }catch(e){}
   h+='</div>';
   host.insertAdjacentHTML('afterbegin', h);
   // 🧭 СВОД КРИТИКОВ + 🤖 НЕЙРО-МУХАККИК + ссылки-проверки — СРАЗУ под карточкой (заявка владельца: «нейромухакик где вывод? где ссылки на оценки на страницы?»)
