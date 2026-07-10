@@ -737,7 +737,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1030';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v1031';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -10987,7 +10987,7 @@ async function verifyNarr(card, place, text){
       // сверка сравнивала codif.na сам с собой (вечный зелёный). Теперь ПЕР-ID сверка с настоящим эталоном.
       try{ const vRows=await _verifyChain(place.bid, place.num);
         if(vRows&&vRows.length){
-          const vM=[...new Set(vRows.filter(r=>r[2]!=null).map(r=>String(r[2])))];
+          const vM=[...new Set(vRows.filter(r=>r[2]!=null&&r[2]!=='?').map(r=>String(r[2])))];   // 10.07: '?' (мост не разрешил) — НЕ эталонный id, не «не хватает» (ложный красный Муслим 565)
           const rM=new Set(authMids.map(String));
           const missV=vM.filter(m=>!rM.has(m));
           const extraR=[...rM].filter(m=>vM.indexOf(m)<0);
@@ -11024,7 +11024,14 @@ async function verifyNarr(card, place, text){
         }
         await new Promise(r=>setTimeout(r,400+_t*300));
       }
-      if(!_domHit){ ourMids=[]; ourNames=[]; }   // выделений нет вовсе → «приложение: 0», тревога честная
+      if(!_domHit){
+        // 10.07 САМОЛЕЧЕНИЕ (час владельца): подсветка не отрисовалась (гонка/сбой) → принудительно перерисовать по codif/na и перечитать
+        try{ await _codifHighlight(text, card, {style:{display:''}}, place); }catch(_e){}
+        await new Promise(r=>setTimeout(r,900));
+        const _sp2=[...card.querySelectorAll('.ar .nhl')];
+        if(_sp2.length){ ourMids=[...new Set(_sp2.map(s=>s.dataset.id).filter(Boolean))]; ourNames=[...new Set(_sp2.map(s=>s.dataset.nm).filter(Boolean))]; _domHit=true; }
+        else { ourMids=[]; ourNames=[]; }   // и после самолечения пусто → «приложение: 0», тревога честная
+      }
     }catch(e){}
     const ourSet=new Set(ourMids);
     const ourCount = ourMids.length || ourNames.length;   // #132 → 10.07: фактически подсвечено В DOM (не данные)
