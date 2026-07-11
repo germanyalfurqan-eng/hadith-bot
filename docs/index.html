@@ -738,7 +738,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1043';
+const APPVER = 'v1044';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -11085,7 +11085,13 @@ async function verifyNarr(card, place, text){
     // 10.07 (владелец): ДОБАВОЧНО сверяем ФАКТ ЭКРАНА — реально подсвеченные id (DOM) против эталона.
     // Данные могут совпадать (na==verify), но если на экране подсвечено НЕ то/ничего — это тоже РАСХОЖДЕНИЕ.
     if(recNa && !_nameMis && authMids && authMids.length){
-      const _mD=authMids.filter(m=>!ourSet.has(String(m)));
+      // A-011 (Бухари 2238): реляционное звено эталона («أَبِي» = мой отец) красится ОТДЕЛЬНЫМ механизмом (.relNarr, без data-id)
+      // — DOM-подсчёт по .nhl его не видел → ложный красный «3 из 4». Покрытые relNarr реляционные — считаем опознанными.
+      const _relCov=(()=>{ try{ return card.querySelectorAll('.ar .relNarr').length; }catch(e){ return 0; } })();
+      const _isRel=(nm)=>/^و?(?:ابي|ابيه|ابا|جده|جدي|امه|امي|عمه|خاله)$/.test(stripDiac(String(nm||'')).replace(/[أإآ]/g,'ا').replace(/ـ/g,'').trim());
+      const _mD=authMids.filter(m=>{ if(ourSet.has(String(m))) return false;
+        if(_relCov){ const _r=(recNa||[]).concat(gapList||[]).find(p=>String(p[1])===String(m)); if(_r&&_isRel(_r[0])) return false; }
+        return true; });
       const _eD=ourMids.filter(m=>authMids.indexOf(String(m))<0);
       if(_mD.length||_eD.length) _nameMis={missV:_mD,extraR:_eD,vCount:authMids.length,dom:true};
     }
