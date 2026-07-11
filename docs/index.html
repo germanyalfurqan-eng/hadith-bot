@@ -737,7 +737,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1034';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v1035';   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -7057,6 +7057,10 @@ function _narrDispName(id, fallback){ const d=_ndCache&&_ndCache[String(id)]; if
 let _nsCache=null,_nsP=null;
 async function _narrSun(id){ if(id==null) return null; if(!_nsCache){ if(!_nsP) _nsP=fetch('./narr_sun.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); _nsCache=await _nsP; } return _nsCache[String(id)]||null; }
 const _SUNCOL_RU={'al-Bukhari':'Бухари','Muslim':'Муслим','Abu Dawud':'Абу Дауд','al-Tirmidhi':'Тирмизи',"al-Nasa'i":'Насаи','Ibn Majah':'Ибн Маджа','Ahmad':'Ахмад','Malik':'Малик','al-Darimi':'Дарими'};
+// УКАЗ 11.07.2026: отметки «будет доделано» — каждая недоделка несёт ясную заметку в своём месте приложения (dev_notes.json)
+let _dnCache=null,_dnP=null;
+async function _devNote(key){ if(!_dnCache){ if(!_dnP) _dnP=fetch('./dev_notes.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); _dnCache=await _dnP; } const d=_dnCache[key]; return d&&d.note?d:null; }
+function _devNoteHtml(d){ return d?('<div style="margin-top:7px;font-size:11.5px;color:#c9b98a;border:1px dashed #6b5c33;border-radius:9px;padding:6px 10px;line-height:1.55">🔧 <b>В работе:</b> '+esc(d.note)+(d.since?(' <span style="color:#8a7d5a">· в очереди с '+esc(d.since)+'</span>'):'')+'</div>'):''; }
 // narrbio/<id/100>.json (из موسوعة الرواة rabt): id→{rel: родственные связи (мавля кого/отец кого), dp: место смерти} — РЕАЛЬНАЯ биография, не дубль чипов
 var _nbShard={}, _nbShardP={};
 async function _narrBio(id){ if(id==null) return null; const b=Math.floor(id/100); if(_nbShard[b]===undefined){ if(!_nbShardP[b]) _nbShardP[b]=fetch('./narrbio/'+b+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null); _nbShard[b]=await _nbShardP[b]; } return (_nbShard[b]||{})[String(id)]||null; }
@@ -10040,6 +10044,11 @@ async function showNarratorCardLocal(name, host, forceId){
     if(bio.length) h+='<div style="font-size:14.5px;color:var(--text);margin-top:11px;line-height:1.9;border-top:1px dashed var(--border);padding-top:8px;font-family:var(--uiFont,-apple-system,\'Segoe UI\',Roboto,sans-serif)">📜 '+bio.join(' ')+'</div>'; }catch(e){}
   h+='</div>';
   host.insertAdjacentHTML('afterbegin', h);
+  // УКАЗ 11.07 (отметки «будет доделано»): нет вики-ссылки / имя «авто ⚠» → честная заметка, что идёт сплошная обработка
+  try{ const _c0=host.firstElementChild;
+    if(_c0 && !(_wk&&_wk.u)){ const _dnw=await _devNote('wiki_pending'); if(_dnw) _c0.insertAdjacentHTML('beforeend', _devNoteHtml(_dnw)); }
+    else if(_c0 && !_ruShVer){ const _dnr=await _devNote('ru_name_pending'); if(_dnr) _c0.insertAdjacentHTML('beforeend', _devNoteHtml(_dnr)); }
+  }catch(e){}
   // 🧭 СВОД КРИТИКОВ + 🤖 НЕЙРО-МУХАККИК + ссылки-проверки — СРАЗУ под карточкой (заявка владельца: «нейромухакик где вывод? где ссылки на оценки на страницы?»)
   if(!host.dataset.noTT){ try{ const _ttBox=document.createElement('div'); const _cardEl=host.firstElementChild; if(_cardEl&&_cardEl.nextSibling) host.insertBefore(_ttBox,_cardEl.nextSibling); else host.appendChild(_ttBox); await renderTestimoniesCard(id, _ttBox); }catch(e){} }   // свод пропускается если showNarratorBio рендерит его сам (флаг noTT) — иначе дубль
   try{ const _mp=host.querySelector('.mudProof'); if(_mp) _mp.onclick=(e)=>{ e.stopPropagation(); try{ hap('light'); }catch(_e){}
@@ -11187,6 +11196,10 @@ async function verifyNarr(card, place, text){
     }catch(e){}
     // #93 (полезные функции таблицы цепей): копировать цепь целиком (передатчики + формы передачи + id)
     h+='<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><span class="vCopyChain" style="cursor:pointer;font-size:11.5px;color:var(--link);border:1px solid var(--border);border-radius:8px;padding:3px 10px">📋 Копировать цепь</span>'+_cidHtml+'</div>'+_nvHtml+_tdHtml;
+    // УКАЗ 11.07 (отметки «будет доделано»): Дарими — эталон-сверка в очереди (ре-бридж нумерации), люди должны ВИДЕТЬ волю доделать
+    try{ if(String(place.bid)==='21795'){ const _dn=await _devNote('darimi_verify'); if(_dn) h+=_devNoteHtml(_dn); } }catch(e){}
+    // УКАЗ 11.07: неполный вердикт нейротахкика — честная отметка, ЧТО и КАК будет доделано (опознание цепей неканона идёт)
+    try{ if(h.indexOf('неполный расчёт')>=0){ const _dn2=await _devNote('neuro_incomplete'); if(_dn2) h+=_devNoteHtml(_dn2); } }catch(e){}
     box.innerHTML=h;
     try{ box.querySelectorAll('.nvWk').forEach(el=>{ el.onclick=async(ev)=>{ ev.stopPropagation(); try{ const _m=+el.dataset.mid; const c=await _narrCard(_m); openNarratorRijal((c&&c[1])||'', _m); }catch(_e){} }; }); }catch(e){}
     // владелец 02.07: «пишешь матрук — но КТО сказал?» — асинхронно дописываем имена критиков-свидетелей джарха в строку
