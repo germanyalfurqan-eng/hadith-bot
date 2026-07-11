@@ -495,6 +495,7 @@
         <div class="row"><span>🟠 Таблица мудаллисов <span style="color:var(--hint);font-size:11px">(طبقات المدلسين Ибн Хаджара + ذكر المدلسين ан-Насаи)</span></span><button class="go" id="mudTblBtn" style="padding:5px 12px">Открыть</button></div>
         <!-- ⚖️ С39 закон «одна таблица»: 3 таблицы объединены в ОДНУ. База иснадов = клик по коду цепи C внутри неё; идентификация = её базовые колонки. Старые кнопки скрыты (элементы оставлены — их JS-обработчики безопасны). -->
         <div class="row" style="display:none"><span>📊 Таблица цепей передачи (база иснадов)</span><button class="go" id="chainTblBtn" style="padding:5px 12px">Открыть</button></div>
+        <div class="row"><span>🧬 Конструктор иснада <span style="color:var(--hint);font-size:11px">(собери цепь — найди хадисы с ней)</span></span><button class="go" id="isnadCtorBtn" style="padding:5px 12px">Открыть</button></div>
         <div class="row" style="display:none"><span>📒 Таблица всех хадисов (идентификация)</span><button class="go" id="hadTblBtn" style="padding:5px 12px">Открыть</button></div>
         <div class="row"><span>📊 Таблица хадисов — единая (№ общий · № в сборнике · цепь+<b>код C (клик=расшифровка/иснады)</b> · состав S · U·V·P · достоверность · тахридж)</span><button class="go" id="hadTblV2Btn" style="padding:5px 12px">Открыть</button></div>
         <div class="row" style="display:none"><!-- ⚖️ С39 указ владельца: M495 матн-кластер (недоказанный тахридж) убран отовсюду --><span>🌿 Тахридж — уникальные хадисы (версии по случаю)</span><button class="go" id="tahrijBtn" style="padding:5px 12px">Открыть</button></div>
@@ -737,7 +738,11 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1035';   // единый источник версии (бейдж у имени + подзаголовок)
+const APPVER = 'v1036';
+// ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
+// каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
+let _zTop=10100;
+function modalTop(el){ try{ _zTop+=2; el.style.zIndex=String(_zTop); }catch(e){} }   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1300,7 +1305,7 @@ function openNoteEditor(rk, label, ref){
     m.querySelector('#neClose').onclick=()=>m.style.display='none'; m.querySelector('#neCancel').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
   }
-  m.style.zIndex='10003'; m.style.display='flex';
+  modalTop(m); m.style.display='flex';
   const existing=_noteByRef(rk); const lblEl=m.querySelector('#neLabel'); const txt=m.querySelector('#neText');
   lblEl.innerHTML=label?('📌 '+esc(label)):'<span style="color:var(--hint)">свободная заметка</span>';
   txt.value=existing?existing.text:''; setTimeout(()=>{ try{txt.focus();}catch(e){} },50);
@@ -1332,7 +1337,7 @@ function openNotes(){
     document.body.appendChild(m); m.querySelector('#notesClose').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
   }
-  m.style.zIndex='10002'; m.style.display='flex';
+  modalTop(m); m.style.display='flex';
   const body=m.querySelector('#notesBody');
   const render=(q)=>{ let a=loadNotes().slice().reverse(); const qq=(q||'').toLowerCase().trim();
     if(qq) a=a.filter(n=>((n.text||'')+' '+(n.label||'')).toLowerCase().indexOf(qq)>=0);
@@ -1384,7 +1389,7 @@ function openAssistant(){
     inp.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); _assistSend(m); } });
     inp.addEventListener('input',()=>{ inp.style.height='auto'; inp.style.height=Math.min(120,inp.scrollHeight)+'px'; });
   }
-  m.style.zIndex='10002'; m.style.display='flex';
+  modalTop(m); m.style.display='flex';
   _assistRender(m);
   setTimeout(()=>{ try{ m.querySelector('#assistInput').focus(); }catch(e){} },60);
 }
@@ -3160,7 +3165,7 @@ function openBook(bookId, startPg, _forceTurath, _hl){
   }catch(e){}
   // владелец («нет пути назад») — читалка книги может открыться ПОВЕРХ карточки равия (narrModal z-index:10003) или
   // «Науки хадиса» (hadModal, до 10004) — если её теперь не прячут перед вызовом openBook. Ставим bookModal выше обоих.
-  m.style.zIndex='10005'; m.style.display='flex'; _bookLoad(); _applyBkFont();
+  modalTop(m); m.style.display='flex'; _bookLoad(); _applyBkFont();
 }
 // TB: применить размер шрифта читалки книги к #bookText (база 19px × bkFontScale) — как регулятор Корана
 function _applyBkFont(){ try{ const t=document.getElementById('bookText'); if(t) t.style.fontSize=Math.round(19*(cfg.bkFontScale||1))+'px'; }catch(e){} }
@@ -3187,7 +3192,7 @@ async function _bkTOC(){
     tm.querySelector('#bkTocClose').onclick=()=>{ tm.style.display='none'; };   // R46: закрываемость
     tm.addEventListener('click',e=>{ if(e.target===tm) tm.style.display='none'; });
   }
-  tm.style.zIndex='10006'; tm.style.display='flex';   // выше bookModal
+  modalTop(tm); tm.style.display='flex';   // выше bookModal
   const list=tm.querySelector('#bkTocList');
   let hs=_bkTocCache[id];
   if(!hs){ list.innerHTML='<span class="hint">⏳ Загружаю оглавление…</span>';
@@ -4548,7 +4553,7 @@ function showWordPopup(el, word, root, lemma, gram, ctx){
   const g = gramRu(gram);
   const pop=document.createElement('div'); pop.id='wordPop'; pop.className='card';
   // M406: fixed + max-height со скроллом — карточка слова НИКОГДА не вылезает за низ экрана (даже когда Arabus дорастит контент)
-  pop.style.cssText='position:fixed;z-index:10006;max-width:min(360px,94vw);max-height:64vh;overflow:auto;padding:12px 14px;font-size:15.5px;box-shadow:0 8px 28px rgba(0,0,0,.55)';   // №7: шрифт чуть крупнее
+  pop.style.cssText='position:fixed;max-width:min(360px,94vw);max-height:64vh;overflow:auto;padding:12px 14px;font-size:15.5px;box-shadow:0 8px 28px rgba(0,0,0,.55)';   // №7: шрифт чуть крупнее
   let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b style="font-size:22px;'+_AF+'">'+esc(word)+'</b><span id="wpX" style="cursor:pointer;color:var(--hint);font-size:18px">✕</span></div>';
   const ga=gramAr(gram);   // M404: часть речи и по-русски, и по-арабски (термин نحو)
   if(g) h+='<div style="margin-top:6px;color:var(--text)">📝 '+esc(g)+(ga?(' · <b style="'+_AF+';font-size:15px;color:var(--mark)">'+esc(ga)+'</b>'):'')+'</div>';
@@ -4559,7 +4564,7 @@ function showWordPopup(el, word, root, lemma, gram, ctx){
   ;   // корня в нашей базе нет — значения подтянет Arabus ниже
   h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><button id="wpAiBtn" class="tr-btn" style="background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:6px 10px;font-size:13px;width:100%">🧠 Перевод слова (ИИ) — проверить</button><div id="wpAiOut" style="margin-top:5px"></div></div>';
   h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><div style="color:#7fe3bf;font-weight:700;margin-bottom:4px">📕 Значения и формы (Arabus)</div><div id="wpArabusOut" style="margin-top:3px"></div></div>';
-  pop.innerHTML=h; document.body.appendChild(pop);
+  pop.innerHTML=h; document.body.appendChild(pop); modalTop(pop);
   const r=el.getBoundingClientRect();
   // M406: расчёт места — снизу не помещается → показываем НАД словом; и там не влезает → прижимаем в видимую область
   const vw=document.documentElement.clientWidth, vh=window.innerHeight;
@@ -4822,8 +4827,8 @@ function _catFavDefaults(m, cat){
   let azBook=null; try{ azBook=cat.find(b=>canon(b.n||'').indexOf(canon('الجامع الكامل'))!==-1 && canon(b.a||'').indexOf(canon('الأعظمي'))!==-1); }catch(e){}
   const defs=[
     {k:'islamkamil', ru:'Ислам Камиль — الإسلام الكامل (наша книга)', soon:true},
-    {k:'muhaymin', ru:'аль-Мухаймин — الموحد المهيمن (Муршид)', open:()=>{ m.style.display='none'; try{ openReader('muhaymin'); const rm=document.getElementById('readModal'); if(rm) rm.style.zIndex='10005'; }catch(e){} }},
-    {k:'muqbil', ru:'Мукбиль — الصحيح المسند مما ليس في الصحيحين', open:()=>{ m.style.display='none'; try{ openReader('muqbil'); const rm=document.getElementById('readModal'); if(rm) rm.style.zIndex='10005'; }catch(e){} }},
+    {k:'muhaymin', ru:'аль-Мухаймин — الموحد المهيمن (Муршид)', open:()=>{ m.style.display='none'; try{ openReader('muhaymin'); const rm=document.getElementById('readModal'); if(rm) modalTop(rm); }catch(e){} }},
+    {k:'muqbil', ru:'Мукбиль — الصحيح المسند مما ليس في الصحيحين', open:()=>{ m.style.display='none'; try{ openReader('muqbil'); const rm=document.getElementById('readModal'); if(rm) modalTop(rm); }catch(e){} }},
     {k:'azami', ru:'аль-Аʿзами — الجامع الكامل في الحديث الصحيح', open: azBook?(()=>{ m.style.display='none'; openBook(azBook.i); }):null, miss:!azBook},
   ].filter(d=>hid.indexOf(d.k)===-1);
   if(!defs.length) return;
@@ -4919,7 +4924,7 @@ async function openAuthor(authorName){
     document.body.appendChild(m); m.querySelector('#authClose').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
   }
-  m.style.zIndex='10002'; m.dataset.author=authorName; m._books=books;
+  modalTop(m); m.dataset.author=authorName; m._books=books;
   m.querySelector('#authTitle').innerHTML='✍️ '+esc(authorName)+' <span style="font-size:11px;color:var(--hint);font-weight:400">· книг: '+books.length+'</span>';
   const out=m.querySelector('#authBioOut'); out.style.display='none'; out.innerHTML='';
   const authTr={on:false};
@@ -4948,14 +4953,14 @@ async function openAuthor(authorName){
 // === 👤 Разбор ПЕРЕДАТЧИКА (ильм риджаль): что говорят учёные (джарх/тадиль) ===
 // 🔬 НЕЙРО-ТАХКИК (бета) — наглядная схема-древо иснада: цветные звенья + слова учёных + связи
 function openNeuroTahkik(){
-  let m=document.getElementById('ntModal');
-  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='ntModal';
-    m.innerHTML='<div class="panel" style="max-width:780px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 10px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:15px">🔬 Нейро-Тахкик <span style="font-size:11px;background:#6c5ce7;color:#fff;border-radius:6px;padding:2px 7px;vertical-align:middle">БЕТА</span></b><button class="mini" id="ntkClose" style="flex:none">закрыть ✕</button></div><div id="ntBody" style="max-height:80vh;overflow:auto"></div></div>';
+  let m=document.getElementById('ntkModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='ntkModal';
+    m.innerHTML='<div class="panel" style="max-width:780px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 10px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b style="font-size:15px">🔬 Нейро-Тахкик <span style="font-size:11px;background:#6c5ce7;color:#fff;border-radius:6px;padding:2px 7px;vertical-align:middle">БЕТА</span></b><button class="mini" id="ntkClose" style="flex:none">закрыть ✕</button></div><div id="ntkBody" style="max-height:80vh;overflow:auto"></div></div>';
     document.body.appendChild(m); m.querySelector('#ntkClose').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
   }
-  m.style.zIndex='10005'; m.style.display='flex';
-  const body=m.querySelector('#ntBody'); body.innerHTML='';
+  modalTop(m); m.style.display='flex';
+  const body=m.querySelector('#ntkBody'); body.innerHTML='';
   body.innerHTML='<div style="background:#2e1d4a;border:1px solid #6c5ce7;border-radius:10px;padding:10px;font-size:13px;color:#e0d7ff;margin-bottom:11px">🔬 <b>Нейро-Тахкик</b> — будущая система проверки достоверности: берём хадис → строим <b>древо всех цепей (طرق)</b> → каждое звено-передатчик красим по надёжности → собираем слова критиков из 150 трудов риджаля → выносим итог.<br><span style="color:#b9a7ff">⏳ Сейчас — наглядный ДЕМО-пример (данные иллюстративные). Скоро — на реальных хадисах + ИИ.</span></div>';
   const T={ thiqa:['#2e9b5b','🟢','ثقة','надёжный — передача принимается'], saduq:['#caa53a','🟡','صدوق','приемлемый (хасан)'], mudallis:['#e08a2e','🟠','مدلس','тадлис — при عنعنة нужен ثبوت السماع'], daif:['#c0392b','🔴','ضعيف','слабый'], kadhab:['#1c1c1c','⚫','كذّاب/متروك','лжец/оставленный — отвергается'], majhul:['#8a93a0','⚪','مجهول','неизвестный — нет тауси́ка'] };
   // легенда
@@ -4963,7 +4968,7 @@ function openNeuroTahkik(){
   Object.keys(T).forEach(k=>{ const s=document.createElement('span'); s.style.cssText='font-size:11.5px;color:var(--text);display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border);border-radius:20px;padding:3px 9px';
     s.innerHTML='<span style="width:11px;height:11px;border-radius:50%;background:'+T[k][0]+';display:inline-block;border:1px solid #fff3"></span> '+T[k][1]+' · '+esc(T[k][3]); lg.appendChild(s); }); body.appendChild(lg);
   // инфо-панель (обновляется по клику)
-  const info=document.createElement('div'); info.id='ntInfo'; info.style.cssText='border:1px solid var(--border);border-radius:10px;padding:11px;margin-bottom:12px;background:var(--bg);font-size:14px;min-height:46px';
+  const info=document.createElement('div'); info.id='ntkInfo'; info.style.cssText='border:1px solid var(--border);border-radius:10px;padding:11px;margin-bottom:12px;background:var(--bg);font-size:14px;min-height:46px';
   info.innerHTML='<span class="hint">👆 Нажми на <b>звено</b> (передатчика) — слова учёных. Нажми на <b>🔗 связь</b> — доказательство سماع/встречи.</span>';
   const paths=[
    {title:'الطريق ١ — صحيح', verdict:'✅ صحيح — все ثقات والسماع ثابت', nodes:[
@@ -5076,7 +5081,7 @@ async function openNarratorRijal(name, forceId){
     document.body.appendChild(m); m.querySelector('#narrClose').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
   }
-  m.style.zIndex='10050'; m.style.display='flex';   // выше ВСЕХ модалок (таблицы/ридер = 10005/10006): карточка равия не должна уходить ЗА них (баг «открывается за таблицей»)
+  modalTop(m); m.style.display='flex';   // выше ВСЕХ модалок (таблицы/ридер = 10005/10006): карточка равия не должна уходить ЗА них (баг «открывается за таблицей»)
   try{ const _dt=(forceId!=null)?await _narrDisp(forceId):null; m.querySelector('#narrTitle').textContent='👤 '+((_dt&&_dt.ar)||_cleanNarrName(name)); }catch(e){ m.querySelector('#narrTitle').textContent='👤 '+_cleanNarrName(name); }
   const body=m.querySelector('#narrBody'); body.innerHTML='<div class="hint">📜 Загружаю карточку…</div>';
   // ТРЕВОГА-фикс (владелец 01.07.2026, «карточка дохлая» — почему тут только «Оценки», а в других местах полная шапка):
@@ -5284,7 +5289,7 @@ async function openHadithScience(_overNarr){
   }
   // владелец («перенёс на список книг, назад некуда») — если открыт ИЗ карточки передатчика (narrModal, z-index 10003),
   // становимся ВЫШЕ нужно, а не прячем ту карточку: закрыл этот экран — карточка равия снова видна как была.
-  m.style.zIndex=_overNarr?'10004':'10002'; m.style.display='flex';
+  m.style.zIndex=_overNarr?'10004':'10002'; modalTop(m); m.style.display='flex';
   const body=m.querySelector('#hadBody'); body.innerHTML='<div class="hint">Загружаю…</div>';
   try{ if(!_hadRule) _hadRule=await (await fetch('./hadith/rule_01_tawthiq_critics.json?'+Date.now())).json(); }catch(e){ body.innerHTML='<div class="hint">Не удалось загрузить правила.</div>'; return; }
   try{ if(!_rijal) _rijal=await (await fetch('./hadith/rijal_books.json?'+Date.now())).json(); }catch(e){}
@@ -5360,7 +5365,7 @@ async function openOurRazbory(){
     m.innerHTML='<div class="panel" style="max-width:640px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 10px;padding:14px 16px 11px;border-bottom:1px solid var(--border)"><b style="font-size:15px">📿 Наши разборы достоверности</b><button class="mini" id="ourRazClose" style="flex:none">закрыть ✕</button></div><div id="ourRazBody" style="max-height:76vh;overflow:auto"></div></div>';
     document.body.appendChild(m); m.querySelector('#ourRazClose').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
-  m.style.zIndex='10002'; m.style.display='flex';
+  modalTop(m); m.style.display='flex';
   const body=m.querySelector('#ourRazBody'); body.innerHTML='<div class="hint">Загружаю разборы…</div>';
   const data=await loadRazCards(); const cards=(data&&data.cards)||[];
   let _filter='all', _q='', _hf='';   // #202: _hf — фильтр по конкретному хадису (code:num или номер), отдельно от _q/_filter
@@ -5682,11 +5687,11 @@ async function openCatalog(q0){   // q0 (опц.) — начальный зап�
         if(!arr.length) _catNotFound(m.querySelector('#catList'),q);
       }catch(e){ list.innerHTML='<div class="hint">🔧 ИИ недоступен сейчас.</div>'; }
     };
-    const _co=m.querySelector('#catOur'); if(_co) _co.onclick=()=>{ try{ openReader(); const rm=document.getElementById('readModal'); if(rm) rm.style.zIndex='10005'; }catch(e){} };
+    const _co=m.querySelector('#catOur'); if(_co) _co.onclick=()=>{ try{ openReader(); const rm=document.getElementById('readModal'); if(rm) modalTop(rm); }catch(e){} };
     m._render=render;
   }
   if(q0!=null && q0!==''){ const _s=m.querySelector('#catSearch'); if(_s) _s.value=q0; const _c=m.querySelector('#catCat'); if(_c) _c.value=''; }   // открыть сразу с фильтром по q0
-  m.style.display='flex';
+  modalTop(m); m.style.display='flex';
   try{ const _cl=m.querySelector('#catList'); if(_cl && !_cl.children.length) _cl.innerHTML='<div class="hint" style="padding:18px;text-align:center;font-size:14px">⏳ Загружаю раскладку библиотеки…</div>'; }catch(e){}   // #4: видно, что идёт загрузка
   try{ _buildSecPick(); }catch(e){}   // 📂 список разделов с «+»
   if(m._render) m._render();
@@ -5943,7 +5948,7 @@ async function openAyahCard(s,a,_isFollow){ s=+s; a=+a; if(!s||!a) return;
   const _ahMy=window._ahSeq=(window._ahSeq||0)+1;   // QA-low: монотонный токен против гонки наложившихся открытий (ручной тап + авто-follow)
   try{ window._ahCur={s:s,a:a}; if(!_isFollow) window._ahFollow=false; }catch(e){}   // #184: следование попапа за аудио (ручное открытие аята сбрасывает follow)
   let m=document.getElementById('ayahCardModal');
-  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='ayahCardModal'; m.style.zIndex='10020';
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='ayahCardModal'; modalTop(m);
     document.body.appendChild(m);
     m.addEventListener('click',e=>{ if(e.target===m){ m.style.display='none'; try{ if(window._ahPlayTimer){ clearInterval(window._ahPlayTimer); window._ahPlayTimer=null; } window._ahFollow=false; }catch(err){} } });   // #70: тап ВНЕ карточки = вернуться в читалку (#184: гасим синхрон/следование)
   }
@@ -7676,7 +7681,7 @@ async function openUCard(code){
     m.innerHTML='<div class="panel" style="max-width:560px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b id="uTitle">🧬 Карточка неотождествлённой формы</b><button class="mini" id="uClose" style="flex:none">закрыть ✕</button></div><div id="uBody" style="max-height:70vh;overflow:auto;margin-top:9px"></div></div>';
     document.body.appendChild(m); m.querySelector('#uClose').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
-  m.style.zIndex='10004'; m.style.display='flex';
+  modalTop(m); m.style.display='flex';
   const body=m.querySelector('#uBody'); body.innerHTML='<div class="hint">⏳ беру реестр…</div>';
   const [reg, part]=await Promise.all([dzUReg(code), dzUPart(code)]);
   body.innerHTML='';
@@ -8045,7 +8050,7 @@ async function openIsnadBase(focusCid){
   _ibS.oninput=()=>{ clearTimeout(window._ibsT); window._ibsT=setTimeout(()=>ibDoSearch(_ibS.value.trim(), _ibF, m.querySelector('#ibList')), 350); };
   _ibF.innerHTML='';
   if(focusCid){ _ibS.value=focusCid; setTimeout(()=>ibDoSearch(focusCid, _ibF, m.querySelector('#ibList')), 60); }
-  m.style.zIndex='10006'; m.style.display='flex';
+  modalTop(m); m.style.display='flex';
   const list=m.querySelector('#ibList'), info=m.querySelector('#ibInfo');
   list.innerHTML='<div class="hint">⏳ загружаю реестр цепей…</div>';
   if(_chMeta===undefined){ try{ const r=await fetch('./isnad/chains_meta.json'); _chMeta=r.ok?await r.json():null; }catch(e){ _chMeta=null; } }
@@ -8143,7 +8148,7 @@ async function openTahrijTable(){
       +'<div id="thList" style="max-height:64vh;overflow:auto"></div></div>';
     document.body.appendChild(m); m.querySelector('#thClose').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
-  m.style.zIndex='10006'; m.style.display='flex';
+  modalTop(m); m.style.display='flex';
   const list=m.querySelector('#thList'), info=m.querySelector('#thInfo');
   list.innerHTML='<div class="hint">⏳ загружаю тахридж…</div>';
   if(_thMeta===undefined){ try{ const r=await fetch('./tahrij/meta.json?v='+APPVER); _thMeta=r.ok?await r.json():null; }catch(e){ _thMeta=null; } }
@@ -8221,7 +8226,7 @@ async function openHTableV2(slug){
     document.body.appendChild(m); m.querySelector('#htbClose').onclick=()=>m.style.display='none';
     m.querySelector('#htbPdf').onclick=()=>{ try{ exportHTableLandscape(); }catch(e){ try{toast('Сначала открой сборник или ленту');}catch(_){} } };
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
-  m.style.zIndex='10006'; m.style.display='flex';
+  modalTop(m); m.style.display='flex';
   const pick=m.querySelector('#htbPick'), list=m.querySelector('#htbList'), q=m.querySelector('#htbQ');
   if(_htbMeta===undefined){ try{ const r=await fetch('./htable/meta.json?v='+APPVER); _htbMeta=r.ok?await r.json():null; }catch(e){ _htbMeta=null; } }
   if(!_htbMeta){ list.innerHTML='<div class="hint">Таблица недоступна.</div>'; return; }
@@ -8308,7 +8313,7 @@ async function openHadithTable(){
       +'<div id="htList" style="max-height:62vh;overflow:auto"></div></div>';
     document.body.appendChild(m); m.querySelector('#htClose').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
-  m.style.zIndex='10006'; m.style.display='flex';
+  modalTop(m); m.style.display='flex';
   const list=m.querySelector('#htList'), info=m.querySelector('#htInfo'), q=m.querySelector('#htQ');
   list.innerHTML='<div class="hint">⏳ загружаю таблицу…</div>';
   if(_htMeta===undefined){ try{ const r=await fetch('./htab/meta.json?v='+APPVER); _htMeta=r.ok?await r.json():null; }catch(e){ _htMeta=null; } }
@@ -8431,7 +8436,7 @@ async function openNarrTable(opts){
       +'<div id="ntList" style="max-height:64vh;overflow:auto"></div></div>';
     document.body.appendChild(m); m.querySelector('#ntClose').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); }
-  m.style.zIndex='10005'; m.style.display='flex';
+  modalTop(m); m.style.display='flex';
   const all=await loadNarrTable();
   try{ await loadNarrVoc(); }catch(e){}   // TB-11: огласованные имена (M361c) в строках, где уже готовы
   try{ await loadNarrFlags(); }catch(e){}   // M504: флаги رجال البخاري/مسلم для фильтра «только الصحيحين»
@@ -8530,7 +8535,11 @@ async function openNarrTable(opts){
 }
 // M425: Esc (с компа) закрывает ВЕРХНЕЕ открытое окно — не надо «лезть в рестарт»; Alt+← = «назад» где есть
 document.addEventListener('keydown', e=>{
-  if(e.key==='Escape'){ const open=[...document.querySelectorAll('.modal')].filter(m=>m.style.display==='flex'||m.style.display==='block');
+  if(e.key==='Escape'){
+    // ревизия 11.07 п.23: urModal/mpModal живут на классах (.hidden/.active), display-фильтр их не видел
+    try{ const ur=document.getElementById('urModal'); if(ur&&!ur.classList.contains('hidden')){ if(window.UR&&UR.close) UR.close(); else ur.classList.add('hidden'); e.preventDefault(); return; } }catch(_e){}
+    try{ const mp=document.getElementById('mpModal'); if(mp&&mp.classList.contains('active')){ mp.classList.remove('active'); e.preventDefault(); return; } }catch(_e){}
+    const open=[...document.querySelectorAll('.modal')].filter(m=>m.style.display==='flex'||m.style.display==='block');
     if(open.length){ const top=open.reduce((a,b)=>((+getComputedStyle(a).zIndex||0)>=(+getComputedStyle(b).zIndex||0)?a:b)); top.style.display='none';
       try{ if(top.id==='ayahCardModal'){ if(window._ahPlayTimer){ clearInterval(window._ahPlayTimer); window._ahPlayTimer=null; } window._ahFollow=false; } }catch(_e){}   // #184-фикс: Escape прятал карточку аята мимо #ahClose → интервал _ahSync утекал
       e.preventDefault(); return; }
@@ -11457,7 +11466,7 @@ function openTafsir(s,a){ const m=document.getElementById('tafsirModal'); const 
   // владелец 03.07: «тафсир открыл, он открылся за аятом и не видно ничего» — карточка аята (ayahCardModal) висит на
   // z-index:10020, тафсир был на 10007 (ниже) → буквально прятался ЗА карточкой. z-index:10025 — выше карточки аята
   // и читалки Корана (TB-12), тафсир теперь всегда самый верхний слой (он всегда конечная точка «углубления»).
-  if(m){ m.style.zIndex='10025'; m.style.display='flex'; }
+  if(m){ modalTop(m); m.style.display='flex'; }
   doTafsir(s,a,body,null); }
 const TAFSIRS=[
   {key:'ibnkathir',nm:'Ибн Касир',ar:'ar-tafsir-ibn-kathir',ru:'ru-tafsir-ibne-kahtir'},
@@ -12182,14 +12191,14 @@ function addNotFoundBtn(res, q){ try{ if(!res) return; const w=document.createEl
   b.onclick=()=>{ try{ openFeedback('поиск не дал результата: «'+(q||'').slice(0,120)+'»'); }catch(e){} };
   w.appendChild(b); res.appendChild(w); }catch(e){} }
 function _fbImgReset(){ var fi=document.getElementById('fbImg'); if(fi) fi.value=''; var fp=document.getElementById('fbImgPrev'); if(fp) fp.style.display='none'; var fn=document.getElementById('fbImgName'); if(fn) fn.textContent=''; }
-function openFeedback(ctx){ _fbCtx=ctx||''; var c=document.getElementById('fbCtx'); if(c) c.textContent=ctx?('Контекст: '+ctx):'Общее замечание'; var t=document.getElementById('fbText'); if(t) t.value=''; _fbImgReset(); var m=document.getElementById('fbModal'); m.style.zIndex='10000'; m.style.display='flex'; }
+function openFeedback(ctx){ _fbCtx=ctx||''; var c=document.getElementById('fbCtx'); if(c) c.textContent=ctx?('Контекст: '+ctx):'Общее замечание'; var t=document.getElementById('fbText'); if(t) t.value=''; _fbImgReset(); var m=document.getElementById('fbModal'); modalTop(m); m.style.display='flex'; }
 // M30/#30: «Что нового» — пункты обновления, у каждого кнопка 💬 чтобы оставить замечание ПО ЭТОМУ пункту
 window.showUpdateNotes=async function(ver){
   ver=ver||APPVER;
   let m=document.getElementById('wnModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='wnModal';
     m.innerHTML='<div class="panel" style="max-width:600px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px"><b id="wnTitle">🆕 Что нового</b><button class="mini" id="wnClose" style="flex:none">закрыть ✕</button></div><div id="wnBody"></div><div class="hint" style="font-size:12px;margin-top:8px">💬 у каждого пункта — оставить замечание именно по нему (передумал / неверно / уточнение).</div></div>';
-    document.body.appendChild(m); m.style.zIndex='10001';
+    document.body.appendChild(m); modalTop(m);
     m.querySelector('#wnClose').onclick=()=>m.style.display='none';
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
   }
@@ -12242,6 +12251,8 @@ const APP_WEB_URL='https://germanyalfurqan-eng.github.io/hadith-bot/';
 const APP_TG_URL='https://t.me/muslimoontt_bot?startapp=';
 function deepLinkUrls(token){ const e=encodeURIComponent(token); return { web:APP_WEB_URL+'?g='+e, tg:APP_TG_URL+e }; }
 function _deepLinkToken(){ let g=''; try{ if(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.start_param) g=tg.initDataUnsafe.start_param; }catch(e){} if(!g){ try{ g=new URLSearchParams(location.search).get('g')||''; }catch(e){} } return (g||'').trim(); }
+// R46 (ревизия 11.07): клик по фону закрывает статические модалки (было только у legendModal)
+try{ ['modal','favModal','settingsModal','menuModal','extraModal','helpModal','devModal','tafsirModal','readModal'].forEach(function(id){ var m=document.getElementById(id); if(m) m.addEventListener('click',function(e){ if(e.target===m) m.style.display='none'; }); }); }catch(e){}
 function runDeepLink(){ const g=_deepLinkToken(); if(!g) return; const p=g.split('_').filter(x=>x!==''); const t=(p[0]||'').toLowerCase();
   setTimeout(()=>{ try{
     if(!userAllowed()) return;   // QA-low: не открывать deep-link модал поверх gate-экрана у заблокированного юзера
@@ -12347,7 +12358,7 @@ function showZoomBanner(strong){
   el.appendChild(msg);
   const row=document.createElement('div'); row.style.cssText='display:flex;gap:8px;margin-top:9px;flex-wrap:wrap';
   const mk=(t,fn,col)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=t; if(col)b.style.color=col; b.onclick=fn; row.appendChild(b); };
-  mk('⚙️ Настройки',()=>{ el.remove(); var s=document.getElementById('settingsModal'); if(s) s.style.display='flex'; });
+  mk('⚙️ Настройки',()=>{ el.remove(); var s=document.getElementById('settingsModal'); if(s) modalTop(s); s.style.display='flex'; });
   mk('Больше не показывать',()=>{ localStorage.setItem('zoomHintOff','1'); el.remove(); });
   if(strong) mk('✍️ Сообщить нам',()=>{ el.remove(); try{ openFeedback('зум/увеличение экрана'); }catch(e){} },'var(--link)');
   mk('✕',()=>el.remove());
@@ -12645,7 +12656,7 @@ document.getElementById('menuBtn').onclick=()=>{ try{ setupMenuRows(); }catch(e)
 document.getElementById('menuClose').onclick=()=>{ document.getElementById('menuModal').style.display='none'; };
 var _setB=document.getElementById('setBtn'); if(_setB) _setB.onclick=()=>{ document.getElementById('settingsModal').style.display='flex'; };
 var _setC=document.getElementById('settingsClose'); if(_setC) _setC.onclick=()=>{ document.getElementById('settingsModal').style.display='none'; };
-var _lgB=document.getElementById('legendBtn'); if(_lgB) _lgB.onclick=()=>{ var m=document.getElementById('legendModal'); if(m) m.style.display='flex'; };   // #152
+var _lgB=document.getElementById('legendBtn'); if(_lgB) _lgB.onclick=()=>{ var m=document.getElementById('legendModal'); if(m) modalTop(m); m.style.display='flex'; };   // #152
 var _lgC=document.getElementById('legendClose'); if(_lgC) _lgC.onclick=()=>{ document.getElementById('legendModal').style.display='none'; };
 (function(){ var m=document.getElementById('legendModal'); if(m) m.addEventListener('click',function(e){ if(e.target===m) m.style.display='none'; }); })();   // R46: тап вне = закрыть
 var _tfC=document.getElementById('tafsirClose'); if(_tfC) _tfC.onclick=()=>{ document.getElementById('tafsirModal').style.display='none'; };
@@ -12885,7 +12896,7 @@ function openReader(code,fromNum){
   const _rm=document.getElementById('readModal');
   // владелец («нет пути назад») — та же логика, что у bookModal: ридер может открыться поверх карточки равия/«Науки
   // хадиса», не прячем их — ридер сам встаёт выше по z-index, закрыл — прежний экран на месте.
-  _rm.style.zIndex='10005'; _rm.style.display='flex';
+  modalTop(_rm); _rm.style.display='flex';
   if(code){ if(sel) sel.value=code; _readOpen(code,fromNum); }
 }
 var _rb=document.getElementById('readBtn'); if(_rb) _rb.onclick=()=>{ const one=_rb.dataset.one; one?openReader(one):openReader(); };
