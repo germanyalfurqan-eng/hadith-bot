@@ -738,7 +738,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1041';
+const APPVER = 'v1042';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -10930,7 +10930,12 @@ async function _codifHighlight(text, card, out, place){
     // УКАЗ (распознать передатчиков в КАЖДОМ хадисе): na — авторитетная цепь, НО у Муслим-риваятов (⚬) и др. ТЕКСТ может содержать СВОИ имена не из na.
     // Добавляем передатчиков из ТЕКСТА этого хадиса, резолвя в базу равиев (_narrLookup) — чтобы подсветить ВСЕХ в тексте, не только совпавших с na.
     try{ const _extra=isnadNarrators(text).filter(_keepNarr);
-      for(const nm of _extra){ if(nm in f2id) continue; let _mid=null; try{ _mid=await _narrLookup(nm); }catch(e){} if(_mid!=null){ f2id[nm]=String(_mid); names.push(nm); } } }catch(e){}
+      // A-010 (Муслим 777, 11.07): добор давал ЧУЖОЙ id (тёзка _narrLookup) → DOM-сверка честно краснела «лишний».
+      // П-05: на хадисах С ЭТАЛОНОМ (verify) добор разрешён ТОЛЬКО из id эталона/na; без эталона — как раньше.
+      let _vIds=null; try{ const _vr=await _verifyChain(place.bid,place.num); if(_vr&&_vr.length){ _vIds=new Set(_vr.filter(r=>r[2]!=null&&r[2]!=='?').map(r=>String(r[2]))); naMids.forEach(x=>_vIds.add(String(x))); } }catch(e){}
+      for(const nm of _extra){ if(nm in f2id) continue; let _mid=null; try{ _mid=await _narrLookup(nm); }catch(e){} if(_mid==null) continue;
+        if(_vIds && !_vIds.has(String(_mid))) continue;   // чужой id на эталонном хадисе — не подсвечиваем (тёзка-риск)
+        f2id[nm]=String(_mid); names.push(nm); } }catch(e){}
     // #160/#158: при наличии авторитетной na подсвечиваем ТОЛЬКО её (= строгий стандарт sunnah.com). Эвристический n НЕ добавляем —
     // он тащил мусор-матн (напр. «الله ما كذبني #484» в Бухари 5590) и тёзка-дубли с неверными id. na — полная цепь, добивка не нужна.
     if(names.length){
