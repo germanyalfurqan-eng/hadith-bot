@@ -751,7 +751,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1068';
+const APPVER = 'v1069';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2203,7 +2203,8 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.datas
       try{ narrBoxShow(false); chainRender(); hideNarrSugg(); anyBoxShow(false); }catch(e){}
       inp.placeholder='🧠 Ядро: тема по-русски или арабская фраза (напр. «музыка», الخمر)…';
       if(inp.value.trim()) runSearch(true); else toast('🧠 Режим «Ядро»: спрошу наш сервер знаний — текст только из реальной базы');
-    } else { inp.placeholder=(tab==='hadith'?'Слова, фраза или № хадиса…':'Слова, фраза или № (2:255)…'); }
+    } else { modes.rag=false; const rc=document.querySelector('.chip[data-mode="rag"]'); if(rc) rc.classList.remove('on');   // v1069: повторный тап гарантированно СНИМАЕТ режим
+      inp.placeholder=(tab==='hadith'?'Слова, фраза или № хадиса…':'Слова, фраза или № (2:255)…'); }
     return; }
   if(document.getElementById('q').value.trim()) runSearch();   // сразу пересчитать с новым режимом
 });
@@ -2640,7 +2641,7 @@ async function runSearch(explicit){
   if(_narrBypass){ _narrBypass=false; }   // «🔎 Хадисы с его участием»: один запуск мимо narr-перехвата (текст имени → обычный поиск)
   else if(modes.narr && (/^#\s*\d{1,5}$/.test(q.trim()) || !/^[\d٠-٩\s:№#×.]+$/.test(q))){ await narrRun(q, seq); logSearch(shown,'narr',0); return; }   // M405: «#2433» = равий по ID
   else if(typeof modes!=='undefined' && modes.any && q.trim() && !/^\d{1,4}$/.test(q.trim())){ _actPush({t:'q',q:shown,tab:tab}); await anyTextSearch(q, seq); return; }   // 🌐 M461
-  else if(typeof modes!=='undefined' && modes.rag && q.trim()){ _actPush({t:'q',q:shown,tab:tab}); await ragSearch(q, seq, shown); logSearch(shown,'rag',0); return; }   // 🧠 #59-RAG: поиск по ядру
+  else if(typeof modes!=='undefined' && modes.rag && q.trim() && !/^[\d٠-٩\s:№#]+$/.test(q.trim())){ _actPush({t:'q',q:shown,tab:tab}); await ragSearch(q, seq, shown); logSearch(shown,'rag',0); return; }   // 🧠 #59-RAG: поиск по ядру; v1069: чистый номер (832) = поиск хадиса, не ядро
   else if(typeof modes!=='undefined' && modes.chain && !q.trim() && _chainSel.length>=2){ chainRun(); return; }   // M447/R45: Enter при пустом поле = «Найти цепь»
   else if(typeof modes!=='undefined' && modes.chain && !/^[\d٠-٩\s:№#×.]+$/.test(q)){ try{ narrSuggest(q.trim()); }catch(e){} toast('⛓ Выбери передатчика из подсказок'); return; }   // M447
   // 📚 M314: чистое ЧИСЛО на «Хадисы» = № хадиса → список книг ВСЕЙ Мактабы с этим номером (ленивая подгрузка по скроллу)
@@ -12638,6 +12639,7 @@ function goHome(){
   } }catch(e){}
   document.getElementById('q').value=''; selCols.clear(); selExtra.clear(); _qHist=[]; try{_qHistUpd();}catch(e){} try{ clearSearchScope(); }catch(e){}
   modes.ai=modes.root=modes.diac=modes.matnonly=modes.neuro=false; groupSrc=false;   // сброс режимов (ИИ и пр.)
+  try{ ['rag','narr','chain','any'].forEach(x=>{ modes[x]=false; const c=document.querySelector('.chip[data-mode="'+x+'"]'); if(c) c.classList.remove('on'); }); }catch(e){}   // v1069 (владелец: «значок не сбрасывает режим ядра»): главная = полный сброс режимов
   // TB-16: лого=домой закрывает И окна режимов равиев: бокс Цепи (с очисткой выбора), Передатчика, Любого текста, подсказки
   try{ modes.chain=false; modes.narr=false; modes.any=false; _chainSel.length=0; window._chainFormPre=''; window._chainFormPost=''; window._chainForms=[]; var _ihn=document.getElementById('isnadHint'); if(_ihn)_ihn.style.display='none'; var _ibx=document.getElementById('isnadBox'); if(_ibx)_ibx.style.display='none'; chainRender(); narrBoxShow(false); anyBoxShow(false); hideNarrSugg(); _chainSyncGo(); }catch(e){}
   // заявка: при «домой» сбрасывать и подсказки-чипы (narrHint «Похоже на передатчика», транслит, книги)
