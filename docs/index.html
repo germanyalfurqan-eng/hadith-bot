@@ -739,7 +739,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1060';
+const APPVER = 'v1061';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4405,7 +4405,23 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
       rb.style.cssText='cursor:pointer;color:var(--link);white-space:nowrap';
       rb.textContent='👤 '+_rw; rb.title='Равий хадиса — открыть карточку передатчика';
       rb.onclick=(e)=>{ try{e.stopPropagation();}catch(_e){} try{ openNarratorRijal(_rw); }catch(_e2){} };
-      meta.appendChild(rb); } }catch(e){}
+      meta.appendChild(rb);
+      // заявка (Муслим 654): голое краткое имя из текста («عبد الله») не говорит, КАКОЙ это равий →
+      // если id опознан (_narrLookup: гарант-карта/шухра-индекс), показываем ПОЛНОЕ узнаваемое имя (_narrDisp,
+      // как в заголовке карточки равия); краткую форму из текста оставляем в title-подсказке. id не опознан — не трогаем.
+      (async()=>{ try{ let _id=null;
+        // сначала ЭТАЛОННАЯ цепь ЭТОГО хадиса (verify/, s39: резолв только из verify — не гадать): сахаби = последняя строка,
+        // форма обязана совпасть с чипом. Иначе тёзка-риск: _narrLookup('عبد الله') даёт id3523 (просто «Абд Аллах»), а здесь Ибн Масʿуд id3913.
+        try{ const _vb=(COLL_BIDS[code]&&COLL_BIDS[code][0])||EXTRA_BIDS[code];
+          const _vr=_vb?await _verifyChain(_vb,h.num):null;
+          if(_vr&&_vr.length){ const _lr=_vr[_vr.length-1];
+            if(_lr&&_lr[2]!=null&&_lr[2]!=='?' && _narrCanon(_lr[1]||_lr[0]||'')===_narrCanon(_rw)) _id=Number(_lr[2]); } }catch(_ev){}
+        if(_id==null) _id=await _narrLookup(_rw);   // фолбэк: гарант-карта/шухра (namesake-safe формы)
+        if(_id==null) return;
+        const _d=await _narrDisp(_id); const _full=(_d&&_d.ar)||null;
+        if(_full && _full!==_rw){ rb.textContent='👤 '+_full; rb.title='Равий хадиса (в тексте: «'+_rw+'») — открыть карточку передатчика'; }
+        rb.onclick=(e)=>{ try{e.stopPropagation();}catch(_e){} try{ openNarratorRijal(_rw,_id); }catch(_e2){} };
+      }catch(_e3){} })(); } }catch(e){}
   const _fk = riwNo ? ('h|'+code+'|'+h.num+'#'+riwNo) : ('h|'+code+'|'+h.num);
   const _lab = arOf(code)+' №'+h.num+(riwNo?(' (риваят '+riwNo+')'):'');
   addTr(meta,card,text,null,{k:_fk,type:'h',coll:arOf(code),label:_lab,text:(text||'').slice(0,200),_riwNo:riwNo,_riwTot:riwTot}); card.appendChild(meta);
@@ -9709,16 +9725,20 @@ async function renderTestimoniesCard(mid, host){
   // с сунна.ком»): сподвижники (الصحابة عدول) единогласно надёжны по иджма — формула туثيق/джарх/«N из 48 муʿтабаров»
   // к ним НЕ применяется, даже если в базе случайно нашлись какие-то биографические цитаты. Общая точка входа —
   // фиксит ЛЮБУЮ карточку равия, где вызывается этот рендер (поиск/цепь/чат/openNarratorRijal).
-  try{ if(await _isSahById(+mid)){
+  // v1061 (ЗАКОН СООТВЕТСТВИЯ 13.07, кейс Ибн Масʿуда ↔ sunnah.com/narrator/5079): у сподвижника
+  // свидетельства ПОКАЗЫВАЕМ (sunnah.com показывает) — но как ТАВСИФ/похвалу с преамбулой عدالة,
+  // нейро-формула отключена (фиксированная строка). Рецепт DeepSeek: scratch_marathon/deepseek_sahabi_card.md
+  let _sahMode=false;
+  try{ if(await _isSahById(+mid)){ _sahMode=true;
     const sahNote=document.createElement('div'); sahNote.style.cssText='margin-top:13px;font-size:13px;line-height:1.6;border:1px solid #e8c35a;border-radius:12px;padding:11px 13px;background:rgba(232,195,90,.08);color:var(--text)';
-    sahNote.innerHTML='⭐ <b>الصحابة عدول</b> — сподвижники надёжны по единогласному иджма учёных, формула «туثиق/джарх/N из 48 муʿтабаров» к ним не применяется. Оценки джарх-ва-тадиль здесь намеренно не показываем.';
-    host.appendChild(sahNote); return;
+    sahNote.innerHTML='⭐ <b>الصحابة عدول</b> — сподвижники надёжны по единогласному иджма учёных Ахль ас-Сунна. Высказывания имамов ниже — не критика (джарх), а <b>тавсиф</b>: похвала, достоинства (فضائل) и факты биографии.';
+    host.appendChild(sahNote);
   } }catch(e){}
   let list=null; try{ list=await _testimGet(+mid); }catch(e){}
   if(!list || !list.length) return;
   try{ await loadJarhGl(); }catch(e){}
   let _inSah=false; try{ const _fl=(await loadNarrFlags())[String(mid)]; _inSah=(_fl==='bm'); }catch(e){}
-  const neuro=_ttNeuro(list, _inSah);
+  const neuro=_sahMode?{v:'⭐ صحابي عدول — сподвижник; формула тавсик/джарх не применяется (иджма)',col:'#e8c35a',em:'⭐',nT:0,nJ:0,jah:0,sahihayn:_inSah,note:'',pos:0,neg:0,strictJ:false,cnt:list.length}:_ttNeuro(list, _inSah);   // v1061: у сахаба нейро-формула отключена, фикс-строка (рецепт DeepSeek)
   const byc={}; const order=[];
   list.forEach(c=>{ const k=(c[0]||'').trim(); if(!k||k==='—'||k==='-') return; if(!byc[k]){byc[k]=[];order.push(k);} byc[k].push(c); });
   order.sort((a,b)=>{ const ma=(_isMut(a)&&_critOk(a))?0:1, mb=(_isMut(b)&&_critOk(b))?0:1; if(ma!==mb) return ma-mb;   /* заявка #8: муътабары (48) первыми */ const xa=_critAuth(a), xb=_critAuth(b); if(xa!==xb) return xa-xb; const oa=_critArOrd(a), ob=_critArOrd(b); if(oa!==ob) return oa-ob; const sc=arr=>arr.reduce((s,c)=>s+(_ttScore(c[1])||0),0)/arr.length; return sc(byc[b])-sc(byc[a]); });
@@ -9807,7 +9827,7 @@ async function renderTestimoniesCard(mid, host){
       else { _el.innerHTML='<span style="color:var(--hint);font-size:11.5px">свидетельство — в оценках критиков выше (تقريب/الإصابة)</span>'; }
     }catch(e){}
   }
-  else if(neuro){ const nb=document.createElement('div'); nb.style.cssText='margin-top:12px;background:rgba(46,107,155,.12);border:1px solid #2a5577;border-radius:9px;padding:10px 12px';
+  else if(neuro && !_sahMode){ const nb=document.createElement('div'); nb.style.cssText='margin-top:12px;background:rgba(46,107,155,.12);border:1px solid #2a5577;border-radius:9px;padding:10px 12px';   // v1061: у сахаба блок «Итог/звёзды/из 48» не рисуем — преамбула عدول уже сказала всё (звёзды 0/48 вводили бы в заблуждение)
     var _pos=neuro.nT||0,_neg=neuro.nJ||0,_st=3;
     if(_neg===0){_st=_pos>=2?5:(_pos===1?4:3);} else if(_pos>_neg){_st=4;} else if(_pos===_neg){_st=3;} else if(_pos>0){_st=2;} else {_st=1;}
     if(neuro.sahihayn) _st=Math.max(_st,4);
