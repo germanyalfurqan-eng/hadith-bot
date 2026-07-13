@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from html import unescape
 from urllib.parse import parse_qsl
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler, PollAnswerHandler
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler, PollAnswerHandler, MessageReactionHandler
 
 # ============ АЛЬ-МУХАЙМИН (الموحد المهيمن) — наша выверенная база ============
 # Плоский индекс: { "907": {book, chapter, riwayat:[{text, short_ref, sources}], verified}, ... }
@@ -6344,7 +6344,7 @@ async def _api_serve(application=None):
             msg = await application.bot.send_poll(OWNER_ID, q, opts, is_anonymous=False, allows_multiple_answers=False)
             pid = msg.poll.id
             pm = _data_get('poll_map.json', {}) or {}
-            pm[pid] = {'ref': ref, 'q': q[:120], 'opts': opts, 'ts': _now_msk()}
+            pm[pid] = {'ref': ref, 'q': q[:120], 'opts': opts, 'ts': _now_msk(), 'msg_id': msg.message_id}
             _data_put('poll_map.json', pm, 'опрос ' + (ref or pid))
             return _cors(web.json_response({'ok': True, 'poll_id': pid}))
         except Exception as e:
@@ -8038,6 +8038,24 @@ async def on_poll_answer(update, context):
             pass
     except Exception:
         pass
+
+async def on_reaction(update, context):
+    """#лайки-13.07: владелец ставит ❤️/👍 на опрос — фиксируем «понравившийся» в data/poll_likes.json."""
+    try:
+        mr = update.message_reaction
+        if not mr or (mr.user and mr.user.id != OWNER_ID): return
+        emojis = []
+        for rx in (mr.new_reaction or []):
+            e = getattr(rx, 'emoji', None) or getattr(rx, 'custom_emoji_id', None)
+            if e: emojis.append(str(e))
+        likes = _data_get('poll_likes.json', {}) or {}
+        key = str(mr.chat.id) + ':' + str(mr.message_id)
+        if emojis: likes[key] = {'emojis': emojis, 'ts': _now_msk()}
+        else: likes.pop(key, None)   # реакцию сняли
+        _data_put('poll_likes.json', likes, 'лайк ' + key)
+    except Exception:
+        pass
+app.add_handler(MessageReactionHandler(on_reaction))
 app.add_handler(PollAnswerHandler(on_poll_answer))
 app.add_handler(CommandHandler("start", start_cmd))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
@@ -8124,4 +8142,5 @@ async def _on_error(update, context):
         pass
 app.add_error_handler(_on_error)
 _load_ai_gate()   # 🔒 восстановить состояние рубильника публичного ИИ (дефолт — ВЫКЛ для публики)
-app.run_polling(drop_pending_updates=True)
+from telegram import Update as _Upd
+app.run_polling(drop_pending_updates=True, allowed_updates=_Upd.ALL_TYPES)
