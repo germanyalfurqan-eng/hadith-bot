@@ -7096,6 +7096,52 @@ async def _api_serve(application=None):
         res = await loop.run_in_executor(None, wide_search, q, page) if q else {'count': 0, 'data': [], 'page': 1}
         return _cors(web.json_response(res))
 
+    async def rag_api(r):
+        # #59-RAG «Поиск по ядру» (заявка владельца): мини-апп → тот же HF Space /search, что и команда «раг» в боте.
+        # GET ?q=…&scope=…&initData=… или POST {q, scope, initData}. Ответ: {ok, results:[{text,source,num,…}], note}.
+        # Честность (закон проекта): Space недоступен → ok:false + note «ядро спит/недоступно», НИКАКИХ выдуманных хадисов.
+        if r.method == 'POST':
+            d = await _body(r)
+            q = str(d.get('q') or '').strip()
+            scope = str(d.get('scope') or '').strip() or None
+            user = verify_init_data(d.get('initData') or r.headers.get('X-Init-Data') or r.query.get('initData'))
+        else:
+            q = (r.query.get('q') or '').strip()
+            scope = (r.query.get('scope') or '').strip() or None
+            user = verify_init_data(r.headers.get('X-Init-Data') or r.query.get('initData'))
+        if not feature_allowed('app', user):
+            return _deny('app')
+        if not rate_ok('rag:' + _uid(user, r)):
+            return _ratelimited()
+        if not q:
+            return _cors(web.json_response({'ok': False, 'results': [], 'note': 'пустой запрос: параметр q обязателен'}, status=400))
+        q = q[:500]
+        if scope:
+            scope = scope[:80]
+        # рус-запрос → классич. арабские термины ТЕМ ЖЕ детерминированным лексиконом, что и команда «раг» (без ИИ)
+        try:
+            terms = _ru_ar_terms(q) if not re.search(r'[؀-ۿ]', q) else []
+        except Exception:
+            terms = []
+        qq = ' '.join(terms) if terms else q
+        try:
+            data = await _rag_query(qq, source=scope, n=8)
+        except Exception as e:
+            return _cors(web.json_response({'ok': False, 'results': [], 'note': 'ядро спит/недоступно (%s)' % str(e)[:90]}))
+        out = []
+        for h in (data.get('results') or [])[:8]:
+            tok = h.get('app_token') or ''
+            m = re.match(r'r_(.+)_(\d+)$', tok)
+            out.append({'text': (h.get('arabic') or h.get('snippet') or '')[:1400],
+                        'source': h.get('name') or '',
+                        'num': (m.group(2) if m else str(h.get('num') or '')),
+                        'author': h.get('author') or '',
+                        'tier': h.get('tier_label') or '',
+                        'app_url': h.get('app_url') or ''})
+        return _cors(web.json_response({'ok': True, 'results': out,
+                                        'note': ('' if out else 'ничего не найдено'),
+                                        'q_used': qq}))
+
     async def maktaba(r):
         # ОСНОВНОЙ поиск по всей Мактабе (turath): 40 первоисточников → избранное → كتب السنة → тафсир → остальное
         user = verify_init_data(r.headers.get('X-Init-Data') or r.query.get('initData'))
@@ -7456,6 +7502,7 @@ async def _api_serve(application=None):
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
     a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
+                  web.get('/api/rag', rag_api), web.post('/api/rag', rag_api),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
                   web.post('/api/feedback', feedback), web.post('/api/searchlog', searchlog),

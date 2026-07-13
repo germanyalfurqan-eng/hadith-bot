@@ -289,6 +289,7 @@
     <div class="chip" data-mode="ai" title="По смыслу (ИИ): опиши смысл на русском/англ. — ИИ сам подберёт арабские фразы и найдёт хадисы/аяты (использует ИИ). Текст всегда из реальной базы. ⇄ Для подбора фраз БЕЗ ИИ — режим «🔬 Расширенный».">🧠 По смыслу (ИИ)</div>
     <div class="chip" data-mode="narr" title="Поиск передатчика (равия): набирай имя по-арабски или по-русски (Суфьян ас-Саури) — живые подсказки из 18989 равиев → карточка с оценками риджаля.">👤 Передатчик</div>
     <div class="chip" data-mode="chain" title="Режим ЦЕПЬ (M447): выбери 2+ передатчиков из подсказок — найду все хадисы, где они стоят в иснаде вместе (по штудированным иснадам Э1.1)">⛓ Цепь</div>
+    <div class="chip" data-mode="rag" title="Поиск по ядру (RAG, #59): запрос уходит на наш сервер знаний (41 первоисточник + риджаль). Тема по-русски или арабская фраза. Текст всегда из реальной базы; если ядро спит — честно скажем, ничего не выдумываем.">🧠 Ядро (RAG)</div>
     <div class="chip" id="moreModes" style="border-style:dashed" title="Дополнительные режимы поиска (📜 матн-только, 🔬 расширенный, 🌐 любой текст)">⚙️ ещё ▾</div>
   </div>
   <div class="modes" id="modesMore" style="display:none">
@@ -738,7 +739,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1057';
+const APPVER = 'v1058';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2158,6 +2159,7 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.datas
     if(modes.ai && modes.narr){ modes.narr=false; const nc=document.querySelector('.chip[data-mode="narr"]'); if(nc) nc.classList.remove('on'); hideNarrSugg(); } }
   if(m==='narr'){ const inp=document.getElementById('q');   // 👤 режим поиска передатчика (Сессия 13)
     if(modes.narr){ if(modes.ai){ modes.ai=false; const ac=document.querySelector('.chip[data-mode="ai"]'); if(ac) ac.classList.remove('on'); }
+      if(modes.rag){ modes.rag=false; const rc=document.querySelector('.chip[data-mode="rag"]'); if(rc) rc.classList.remove('on'); }   // #59-RAG: взаимоисключение
       if(modes.chain) chainModeOff();   // режимы Передатчик и Цепь — взаимоисключающие (слово владельца)
       inp.placeholder='Имя равия: араб. или рус. (Суфьян ас-Саури)…';
       narrBoxShow(true);   // R46/как в Цепи: поясняющий бокс с «✕»
@@ -2166,6 +2168,7 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.datas
     } else { inp.placeholder=(tab==='hadith'?'Слова, фраза или № хадиса…':'Слова, фраза или № (2:255)…'); hideNarrSugg(); narrBoxShow(false); } }
   if(m==='chain'){ const inp=document.getElementById('q');   // ⛓ M447: режим «Цепь»
     if(modes.chain){ if(modes.ai){ modes.ai=false; const ac=document.querySelector('.chip[data-mode="ai"]'); if(ac) ac.classList.remove('on'); }
+      if(modes.rag){ modes.rag=false; const rc=document.querySelector('.chip[data-mode="rag"]'); if(rc) rc.classList.remove('on'); }   // #59-RAG: взаимоисключение
       if(modes.narr){ modes.narr=false; const nc=document.querySelector('.chip[data-mode="narr"]'); if(nc) nc.classList.remove('on'); narrBoxShow(false); }
       inp.placeholder='⛓ Имя 1-го передатчика (араб/рус) → выбери из подсказок…';
       chainRender();
@@ -2174,12 +2177,19 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.datas
     } else { inp.placeholder=(tab==='hadith'?'Слова, фраза или № хадиса…':'Слова, фраза или № (2:255)…'); hideNarrSugg(); chainRender(); }
     return; }   // chain не запускает обычный пересчёт
   if(m==='any'){ const inp=document.getElementById('q');   // 🌐 M461: любой текст по всей Мактабе
-    if(modes.any){ ['ai','narr','chain'].forEach(x=>{ if(modes[x]){ modes[x]=false; const c=document.querySelector('.chip[data-mode="'+x+'"]'); if(c) c.classList.remove('on'); } });
+    if(modes.any){ ['ai','narr','chain','rag'].forEach(x=>{ if(modes[x]){ modes[x]=false; const c=document.querySelector('.chip[data-mode="'+x+'"]'); if(c) c.classList.remove('on'); } });
       try{ narrBoxShow(false); chainRender(); hideNarrSugg(); }catch(e){}
       inp.placeholder='🌐 Любой текст по всей Мактабе (слова учёных, джарх, тафсир)…';
       anyBoxShow(true);
       if(inp.value.trim()) runSearch(true);
     } else { inp.placeholder=(tab==='hadith'?'Слова, фраза или № хадиса…':'Слова, фраза или № (2:255)…'); anyBoxShow(false); }
+    return; }
+  if(m==='rag'){ const inp=document.getElementById('q');   // 🧠 #59-RAG: поиск по ядру (HF Space через бэкенд /api/rag)
+    if(modes.rag){ ['ai','narr','chain','any'].forEach(x=>{ if(modes[x]){ modes[x]=false; const c=document.querySelector('.chip[data-mode="'+x+'"]'); if(c) c.classList.remove('on'); } });
+      try{ narrBoxShow(false); chainRender(); hideNarrSugg(); anyBoxShow(false); }catch(e){}
+      inp.placeholder='🧠 Ядро: тема по-русски или арабская фраза (напр. «музыка», الخمر)…';
+      if(inp.value.trim()) runSearch(true); else toast('🧠 Режим «Ядро»: спрошу наш сервер знаний — текст только из реальной базы');
+    } else { inp.placeholder=(tab==='hadith'?'Слова, фраза или № хадиса…':'Слова, фраза или № (2:255)…'); }
     return; }
   if(document.getElementById('q').value.trim()) runSearch();   // сразу пересчитать с новым режимом
 });
@@ -2616,6 +2626,7 @@ async function runSearch(explicit){
   if(_narrBypass){ _narrBypass=false; }   // «🔎 Хадисы с его участием»: один запуск мимо narr-перехвата (текст имени → обычный поиск)
   else if(modes.narr && (/^#\s*\d{1,5}$/.test(q.trim()) || !/^[\d٠-٩\s:№#×.]+$/.test(q))){ await narrRun(q, seq); logSearch(shown,'narr',0); return; }   // M405: «#2433» = равий по ID
   else if(typeof modes!=='undefined' && modes.any && q.trim() && !/^\d{1,4}$/.test(q.trim())){ _actPush({t:'q',q:shown,tab:tab}); await anyTextSearch(q, seq); return; }   // 🌐 M461
+  else if(typeof modes!=='undefined' && modes.rag && q.trim()){ _actPush({t:'q',q:shown,tab:tab}); await ragSearch(q, seq, shown); logSearch(shown,'rag',0); return; }   // 🧠 #59-RAG: поиск по ядру
   else if(typeof modes!=='undefined' && modes.chain && !q.trim() && _chainSel.length>=2){ chainRun(); return; }   // M447/R45: Enter при пустом поле = «Найти цепь»
   else if(typeof modes!=='undefined' && modes.chain && !/^[\d٠-٩\s:№#×.]+$/.test(q)){ try{ narrSuggest(q.trim()); }catch(e){} toast('⛓ Выбери передатчика из подсказок'); return; }   // M447
   // 📚 M314: чистое ЧИСЛО на «Хадисы» = № хадиса → список книг ВСЕЙ Мактабы с этим номером (ленивая подгрузка по скроллу)
@@ -7273,6 +7284,39 @@ async function anyTextSearch(qRaw, seq){
     }catch(e){}
   }
   head.textContent=total?('🌐 Вся Мактаба: найдено '+total+' (первые страницы; уточни фразу, если много лишнего)'):'🤷 По всей Мактабе не нашёл. Попробуй короче кусок или вариант через |.';
+}
+/* ===== 🧠 #59-RAG: «Поиск по ядру» — HF Space через бэкенд /api/rag (та же база, что команда «раг» в боте).
+   Честность (закон проекта): пусто/ошибка/ядро спит → прямо говорим, НИКАКИХ выдуманных хадисов. ===== */
+async function ragSearch(qRaw, seq, shownQ){
+  const res=document.getElementById('res'); res.innerHTML='';
+  const head=document.createElement('div'); head.className='hint'; head.style.cssText='color:#cdb8ff;font-size:13px;margin:0 0 8px';
+  head.textContent='🧠 Спрашиваю ядро (первоисточники + риджаль)…';
+  res.appendChild(head);
+  if(!BACKEND_URL){ head.textContent='🧠 Ядро недоступно (нет соединения с сервером) или ничего не найдено.'; return; }
+  let j=null;
+  try{
+    const ctl=('AbortController' in window)?new AbortController():null;
+    const to=ctl?setTimeout(()=>{ try{ctl.abort();}catch(e){} },40000):null;
+    const r=await fetch(BACKEND_URL+'/rag?q='+encodeURIComponent(String(qRaw||'').slice(0,500))+'&initData='+encodeURIComponent(INITDATA), {signal:ctl?ctl.signal:undefined});
+    if(to) clearTimeout(to);
+    j=await r.json().catch(()=>null);
+  }catch(e){}
+  if(seq!==undefined && seq!==_seq) return;   // за время похода запустили новый поиск — не перетирать
+  if(!j || !j.ok || !(j.results&&j.results.length)){
+    const note=(j&&j.note)?String(j.note):'ядро спит/недоступно';
+    head.textContent='🧠 Ядро недоступно или ничего не найдено ('+note+'). Ничего не выдумываю — попробуй позже, другую формулировку или другой режим поиска.';
+    return;
+  }
+  head.textContent='🧠 Ядро: найдено '+j.results.length+' по «'+(shownQ||qRaw)+'»'+((j.q_used&&j.q_used!==qRaw)?(' · термины: '+j.q_used):'');
+  j.results.forEach(h=>{
+    const d=document.createElement('div'); d.className='card'; d.style.cssText='padding:10px;margin:7px 0';
+    let html='';
+    if(h.text) html+='<div style="direction:rtl;text-align:right;font-size:15px;line-height:2">'+esc(h.text)+'</div>';
+    const srcLine=[h.tier, h.source, (h.num?('№'+h.num):''), h.author].filter(Boolean).join(' · ');
+    if(srcLine) html+='<div class="hint" style="margin-top:6px;font-size:12.5px">📚 '+esc(srcLine)+'</div>';
+    d.innerHTML=html||'<div class="hint">— пустая запись от ядра —</div>';
+    res.appendChild(d);
+  });
 }
 /* ===== M462: 🕐 ИСТОРИЯ ДЕЙСТВИЙ — вернуться на любой недавний этап ===== */
 function _actPush(a){ try{ a.ts=Date.now(); const d=JSON.parse(localStorage.getItem('act_log')||'[]');
