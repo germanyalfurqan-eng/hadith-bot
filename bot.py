@@ -424,6 +424,16 @@ GITHUB_REPO = "germanyalfurqan-eng/hadith-bot"
 ANNOUNCE_CHAT_ID = -1003982210885
 APP_CHANNEL_ID = -1003989206932   # @muslimoonapp — публичный канал приложения (обновления для подписчиков)
 
+# 🌩 ГЕРМЕС-ОБЛАКО (13.07.2026, закон одной личности «ПК/телега/облако — один Гермес»):
+# ПК выключен (пульс /api/hermes_hb молчит >13 мин) → Railway САМ поллит Хермес-бота и отвечает
+# владельцу как полноценный Гермес: душа+память тянутся из ветки data (hermes/), мозг = ask_ai
+# (бесплатная цепь Groq→Gemini→GitHub→NIM→OpenRouter). ПК ожил → релей мгновенно отходит в сторону
+# (страховка: getUpdates возвращает 409, пока поллит ПК — двойных ответов не будет).
+HERMES_BOT_TOKEN = os.environ.get("HERMES_BOT_TOKEN", "")   # токен Хермес-бота (добавить в env Railway!)
+HERMES_OWNER_CHAT = int(os.environ.get("HERMES_OWNER_CHAT", "131827895"))
+_hermes_hb = {"ts": 0.0}
+_HERMES_DATA_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/data/hermes/"
+
 GUIDE_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/bot_guide_tg.txt"
 MAIN_KB = ReplyKeyboardMarkup([["📖 Инструкция"]], resize_keyboard=True)
 def get_guide():
@@ -1696,6 +1706,95 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None):
         if gp is not None and not str(gp).startswith("⚠️"):
             return gp + f"\n\n💰 *Модель:* GPT {OPENAI_MODEL} (платный — DeepSeek недоступен)\n" + _ai_left()
     return None
+
+# ── 🌩 ГЕРМЕС-ОБЛАКО: релей Хермес-бота, когда ПК выключен (13.07.2026, закон одной личности) ──
+_hermes_cache = {"soul": "", "mem": "", "ts": 0.0}
+_hermes_hist = collections.deque(maxlen=8)   # короткая история диалога в облаке (роль, текст)
+
+
+def _hermes_soul_mem():
+    """Душа+память Гермеса из ветки data (hermes/), кэш 10 мин. Нет файлов → минимальная душа."""
+    if time.time() - _hermes_cache["ts"] < 600 and _hermes_cache["soul"]:
+        return _hermes_cache["soul"], _hermes_cache["mem"]
+    soul = ""
+    mem = ""
+    try:
+        r = requests.get(_HERMES_DATA_RAW + "HERMES_SOUL_COMPACT.md", timeout=10)
+        if r.status_code == 200 and len(r.text) > 200:
+            soul = r.text
+    except Exception:
+        pass
+    try:
+        r = requests.get(_HERMES_DATA_RAW + "bot_memory.json", timeout=10)
+        if r.status_code == 200:
+            facts = r.json().get("facts", [])[-60:]
+            if facts:
+                mem = "СПРАВКА о владельце (используй только к месту):\n" + "\n".join(
+                    "- " + f.get("text", "")[:400] for f in facts)
+    except Exception:
+        pass
+    if not soul:
+        soul = ("Ты — Hermes, личный ассистент Анзора (обращение «сэр» или «братан»). Отвечай ТОЛЬКО "
+                "по-русски, кратко и по делу. НИКОГДА не цитируй хадисы/аяты по памяти — честно скажи, "
+                "что сверишься с базой, когда ПК проснётся.")
+    _hermes_cache.update(soul=soul, mem=mem, ts=time.time())
+    return soul, mem
+
+
+def _hermes_cloud_relay():
+    """Фон-тред: пульс ПК молчит >13 мин → поллим Хермес-бота и отвечаем как Гермес.
+    ПК поллит сам → Telegram даёт 409 → спим (двойных ответов не бывает архитектурно)."""
+    if not HERMES_BOT_TOKEN:
+        print("hermes-relay: HERMES_BOT_TOKEN не задан в env — релей спит")
+        return
+    api = f"https://api.telegram.org/bot{HERMES_BOT_TOKEN}"
+    off = None
+    print("hermes-relay: запущен (страхую Гермеса, когда ПК выключен)")
+    while True:
+        try:
+            if time.time() - _hermes_hb["ts"] < 780:   # ПК жив (пульс каждые ~2-5 мин)
+                time.sleep(45)
+                continue
+            params = {"timeout": 25, "allowed_updates": '["message"]'}
+            if off is not None:
+                params["offset"] = off
+            r = requests.get(api + "/getUpdates", params=params, timeout=40)
+            if r.status_code == 409:   # ПК-поллер живой (пульс ещё не дошёл) → не лезем
+                time.sleep(90)
+                continue
+            if r.status_code != 200:
+                time.sleep(60)
+                continue
+            for upd in r.json().get("result", []):
+                off = upd["update_id"] + 1
+                m = upd.get("message") or {}
+                txt = (m.get("text") or "").strip()
+                if not txt or (m.get("chat") or {}).get("id") != HERMES_OWNER_CHAT:
+                    continue
+                soul, mem = _hermes_soul_mem()
+                system = (soul + "\n\nСЕЙЧАС: ОБЛАЧНЫЙ РЕЖИМ — ПК владельца ВЫКЛЮЧЕН, ты отвечаешь с "
+                          "бесплатного облака (Railway). Файлы/базы/локалки ПК недоступны — задачи по ним "
+                          "честно записывай на «когда ПК проснётся», не выдумывай содержимое."
+                          + ("\n\n" + mem if mem else ""))
+                hist = "".join(f"[{r_}] {t}\n" for r_, t in _hermes_hist)
+                prompt = (("Последние реплики:\n" + hist + "\n") if hist else "") + "Владелец: " + txt[:3000]
+                try:
+                    ans = ask_ai(prompt, system=system, owner=True) or "⚠️ Облачные мозги молчат — попробуй ещё раз."
+                except Exception as e:
+                    ans = f"⚠️ Ошибка облака: {str(e)[:120]}"
+                _hermes_hist.append(("Владелец", txt[:400]))
+                _hermes_hist.append(("Гермес", str(ans)[:400]))
+                body = "🌩 Гермес (облако — ПК спит)\n\n" + str(ans)
+                for chunk_start in range(0, len(body), 4000):
+                    try:
+                        requests.post(api + "/sendMessage",
+                                      json={"chat_id": HERMES_OWNER_CHAT,
+                                            "text": body[chunk_start:chunk_start + 4000]}, timeout=25)
+                    except Exception:
+                        pass
+        except Exception:
+            time.sleep(60)
+
 
 def ask_ai_with_memory(prompt, owner=True):
     memory = load_memory()
@@ -7096,52 +7195,6 @@ async def _api_serve(application=None):
         res = await loop.run_in_executor(None, wide_search, q, page) if q else {'count': 0, 'data': [], 'page': 1}
         return _cors(web.json_response(res))
 
-    async def rag_api(r):
-        # #59-RAG «Поиск по ядру» (заявка владельца): мини-апп → тот же HF Space /search, что и команда «раг» в боте.
-        # GET ?q=…&scope=…&initData=… или POST {q, scope, initData}. Ответ: {ok, results:[{text,source,num,…}], note}.
-        # Честность (закон проекта): Space недоступен → ok:false + note «ядро спит/недоступно», НИКАКИХ выдуманных хадисов.
-        if r.method == 'POST':
-            d = await _body(r)
-            q = str(d.get('q') or '').strip()
-            scope = str(d.get('scope') or '').strip() or None
-            user = verify_init_data(d.get('initData') or r.headers.get('X-Init-Data') or r.query.get('initData'))
-        else:
-            q = (r.query.get('q') or '').strip()
-            scope = (r.query.get('scope') or '').strip() or None
-            user = verify_init_data(r.headers.get('X-Init-Data') or r.query.get('initData'))
-        if not feature_allowed('app', user):
-            return _deny('app')
-        if not rate_ok('rag:' + _uid(user, r)):
-            return _ratelimited()
-        if not q:
-            return _cors(web.json_response({'ok': False, 'results': [], 'note': 'пустой запрос: параметр q обязателен'}, status=400))
-        q = q[:500]
-        if scope:
-            scope = scope[:80]
-        # рус-запрос → классич. арабские термины ТЕМ ЖЕ детерминированным лексиконом, что и команда «раг» (без ИИ)
-        try:
-            terms = _ru_ar_terms(q) if not re.search(r'[؀-ۿ]', q) else []
-        except Exception:
-            terms = []
-        qq = ' '.join(terms) if terms else q
-        try:
-            data = await _rag_query(qq, source=scope, n=8)
-        except Exception as e:
-            return _cors(web.json_response({'ok': False, 'results': [], 'note': 'ядро спит/недоступно (%s)' % str(e)[:90]}))
-        out = []
-        for h in (data.get('results') or [])[:8]:
-            tok = h.get('app_token') or ''
-            m = re.match(r'r_(.+)_(\d+)$', tok)
-            out.append({'text': (h.get('arabic') or h.get('snippet') or '')[:1400],
-                        'source': h.get('name') or '',
-                        'num': (m.group(2) if m else str(h.get('num') or '')),
-                        'author': h.get('author') or '',
-                        'tier': h.get('tier_label') or '',
-                        'app_url': h.get('app_url') or ''})
-        return _cors(web.json_response({'ok': True, 'results': out,
-                                        'note': ('' if out else 'ничего не найдено'),
-                                        'q_used': qq}))
-
     async def maktaba(r):
         # ОСНОВНОЙ поиск по всей Мактабе (turath): 40 первоисточников → избранное → كتب السنة → тафсир → остальное
         user = verify_init_data(r.headers.get('X-Init-Data') or r.query.get('initData'))
@@ -7499,10 +7552,20 @@ async def _api_serve(application=None):
         except Exception as e:
             return _cors(web.json_response({'error': str(e)[:160]}, status=500))
 
+    async def hermes_hb(r):
+        # 🌩 пульс ПК для Гермес-релея: klod_responder шлёт каждые ~2 мин; секрет = BACKUP_SECRET
+        try:
+            d = await r.json()
+        except Exception:
+            d = {}
+        if not BACKUP_SECRET or (d.get('secret') or '').strip() != BACKUP_SECRET.strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        _hermes_hb['ts'] = time.time()
+        return _cors(web.json_response({'ok': True}))
+
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
     a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
-                  web.get('/api/rag', rag_api), web.post('/api/rag', rag_api),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
                   web.post('/api/feedback', feedback), web.post('/api/searchlog', searchlog),
@@ -7520,6 +7583,7 @@ async def _api_serve(application=None):
                   web.get('/api/book_page', book_page), web.get('/api/book_toc', book_toc), web.get('/api/book_meta', book_meta), web.post('/api/isnad_ai', isnad_ai_h),
                   web.post('/api/devfeedback', devfeedback), web.post('/api/worklog', worklog),
                   web.post('/api/backup_push', backup_push),
+                  web.post('/api/hermes_hb', hermes_hb),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))
@@ -7633,6 +7697,7 @@ async def _setup(application):
     # тот же, что у стартового блока → двойных постов нет). Канал больше НЕ отстаёт.
     try:
         asyncio.create_task(_app_channel_watcher(application))
+        threading.Thread(target=_hermes_cloud_relay, daemon=True).start()   # 🌩 Гермес-облако (ПК выключен → отвечает Railway)
     except Exception as e:
         print("app channel watcher start failed:", e)
     # #147: разовая авто-обработка разборов достоверности /11..173 из @hadis_isnad (бот — участник)
