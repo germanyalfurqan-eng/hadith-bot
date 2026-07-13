@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from html import unescape
 from urllib.parse import parse_qsl
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler, PollAnswerHandler
 
 # ============ АЛЬ-МУХАЙМИН (الموحد المهيمن) — наша выверенная база ============
 # Плоский индекс: { "907": {book, chapter, riwayat:[{text, short_ref, sources}], verified}, ... }
@@ -6309,6 +6309,28 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'ok': True}))
         except Exception as e:
             return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}), status=500)
+
+    async def send_poll_api(r):
+        """#опросы-13.07 (владелец: пакеты решений опросами в личку, «свой вариант» кнопкой; результаты в data)."""
+        if not application: return _cors(web.json_response({'error': 'no_app'}, status=503))
+        try: body = await r.json()
+        except Exception: return _cors(web.json_response({'error': 'bad_json'}, status=400))
+        if str(body.get('secret','')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        q = str(body.get('question',''))[:290]
+        opts = [str(o)[:95] for o in (body.get('options') or [])][:9]
+        ref = str(body.get('ref',''))[:60]
+        if not q or len(opts) < 2: return _cors(web.json_response({'error': 'need question+2options'}, status=400))
+        opts = opts + ['✍️ Свой вариант (отвечу сообщением)']
+        try:
+            msg = await application.bot.send_poll(OWNER_ID, q, opts, is_anonymous=False, allows_multiple_answers=False)
+            pid = msg.poll.id
+            pm = _data_get('poll_map.json', {}) or {}
+            pm[pid] = {'ref': ref, 'q': q[:120], 'opts': opts, 'ts': _now_msk()}
+            _data_put('poll_map.json', pm, 'опрос ' + (ref or pid))
+            return _cors(web.json_response({'ok': True, 'poll_id': pid}))
+        except Exception as e:
+            return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}), status=500)
     async def opt(r): return _cors(web.Response(text=''))
     async def worklog(r):
         # #62/#63/#165: триггер уведомления владельцу о работе Claude над заявкой (Claude дёргает curl).
@@ -7564,7 +7586,7 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True}))
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
@@ -7978,6 +8000,19 @@ try:
     print("B-004 fix: send_message обёрнут (fallback без разметки)")
 except Exception as _e:
     print("B-004 fix НЕ применён:", _e)
+
+async def on_poll_answer(update, context):
+    """#опросы-13.07: фиксируем голос владельца/джамаата в data/poll_results.json."""
+    try:
+        pa = update.poll_answer
+        if not pa: return
+        res = _data_get('poll_results.json', {}) or {}
+        rec = res.setdefault(pa.poll_id, {'votes': {}})
+        rec['votes'][str(pa.user.id)] = list(pa.option_ids)
+        _data_put('poll_results.json', res, 'голос ' + pa.poll_id)
+    except Exception:
+        pass
+app.add_handler(PollAnswerHandler(on_poll_answer))
 app.add_handler(CommandHandler("start", start_cmd))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
