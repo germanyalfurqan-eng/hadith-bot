@@ -2940,6 +2940,24 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
     text = text.strip()
 
+    # #опросы-13.07: если владелец выбрал «✍️ Свой вариант», ловим его следующий текст как ответ на опрос (а не в ИИ)
+    if is_owner(update) and text and not text.startswith('/'):
+        try:
+            _pend = _data_get('poll_pending.json', None)
+            if _pend and _pend.get('poll_id'):
+                _res = _data_get('poll_results.json', {}) or {}
+                _r = _res.setdefault(_pend['poll_id'], {'votes': {}})
+                _r['write_in'] = text[:500]; _r['ref'] = _pend.get('ref', '')
+                _data_put('poll_results.json', _res, 'свой вариант ' + _pend['poll_id'])
+                _data_put('poll_pending.json', {}, 'сброс pending')
+                try:
+                    await update.message.reply_text('✍️ Твой вариант записан по опросу «' + _pend.get('q', '')[:60] + '». Клод увидит.')
+                except Exception:
+                    pass
+                return
+        except Exception:
+            pass
+
     # 🆔 диагностика: «ид чата» (владелец, любой чат) — узнать числовой chat_id, напр. чтобы настроить кросс-пост ништячка в jamaat_ru
     if is_owner(update) and text.lower().strip() in ("ид чата", "id чата", "chat id", "ид группы"):
         ch = update.effective_chat
@@ -8010,6 +8028,14 @@ async def on_poll_answer(update, context):
         rec = res.setdefault(pa.poll_id, {'votes': {}})
         rec['votes'][str(pa.user.id)] = list(pa.option_ids)
         _data_put('poll_results.json', res, 'голос ' + pa.poll_id)
+        # «✍️ Свой вариант» = последний вариант → ждём текст ответа следующим сообщением
+        try:
+            pm = _data_get('poll_map.json', {}) or {}
+            info = pm.get(pa.poll_id)
+            if info and pa.user.id == OWNER_ID and pa.option_ids and pa.option_ids[0] == len(info.get('opts', [])) - 1:
+                _data_put('poll_pending.json', {'poll_id': pa.poll_id, 'ref': info.get('ref', ''), 'q': info.get('q', '')}, 'ждём свой вариант ' + pa.poll_id)
+        except Exception:
+            pass
     except Exception:
         pass
 app.add_handler(PollAnswerHandler(on_poll_answer))
