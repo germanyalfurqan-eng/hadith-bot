@@ -751,7 +751,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1066';
+const APPVER = 'v1067';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5207,11 +5207,13 @@ async function openNarratorRijal(name, forceId){
         if(part && part.length){ try{ await loadBooksMap(); }catch(e){}
           const byb={}; part.forEach(p=>{ const b=String(p[0]); (byb[b]=byb[b]||[]).push(p); });
           const bids=Object.keys(byb).sort((a,b)=>byb[b].length-byb[a].length);
-          const cov=document.createElement('div'); cov.style.cssText='margin-top:9px';
-          cov.innerHTML='<span style="color:var(--hint);font-size:12px">📊 Охват по нашей разметке иснадов: <b style="color:var(--text)">'+part.length.toLocaleString('ru')+'</b> мест · <b style="color:var(--text)">'+bids.length+'</b> '+(bids.length===1?'книга':(bids.length<5?'книги':'книг'))+':</span>';
-          const wrap=document.createElement('div'); wrap.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:5px'; cov.appendChild(wrap);
-          const lst=document.createElement('div'); lst.style.cssText='margin-top:6px'; cov.appendChild(lst);
-          bids.slice(0,14).forEach(bid=>{ const arr=byb[bid]; const nm=bookName(bid)||('книга '+bid);
+          const cov=document.createElement('div'); cov.style.cssText='margin-top:9px;border:1px solid var(--border);border-radius:11px;padding:9px 12px';
+          cov.innerHTML='<div class="covHdr" style="font-size:13px;font-weight:600;cursor:pointer;display:flex;justify-content:space-between;align-items:center;color:var(--text)">📊 Охват: '+part.length.toLocaleString('ru')+' мест · '+bids.length+' '+(bids.length===1?'книга':(bids.length<5?'книги':'книг'))+' <span class="covTg" style="color:var(--hint);font-weight:400">▸</span></div>';
+          const covBody=document.createElement('div'); covBody.style.cssText='display:none;margin-top:7px'; cov.appendChild(covBody);
+          cov.querySelector('.covHdr').onclick=()=>{ const o=covBody.style.display!=='none'; covBody.style.display=o?'none':'block'; cov.querySelector('.covTg').textContent=o?'▸':'▾'; };   // v1067 (DeepSeek-рецепт концовки): охват схлопнут
+          const wrap=document.createElement('div'); wrap.style.cssText='display:flex;gap:6px;flex-wrap:wrap'; covBody.appendChild(wrap);
+          const lst=document.createElement('div'); lst.style.cssText='margin-top:6px'; covBody.appendChild(lst);
+          const mkChip=(bid)=>{ const arr=byb[bid]; const nm=bookName(bid)||('книга '+bid);
             const chip=document.createElement('span'); chip.style.cssText='cursor:pointer;font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid var(--border);color:var(--text);background:rgba(255,255,255,.03)';
             chip.innerHTML='<span dir="rtl">'+esc(nm)+'</span> · <b>'+arr.length+'</b>'; chip.title='Показать места в этой книге';
             chip.onclick=()=>{ const open=chip.dataset.open==='1';
@@ -5220,8 +5222,10 @@ async function openNarratorRijal(name, forceId){
               if(open) return;
               lst.innerHTML='<div class="hint" style="font-size:11px;margin-bottom:3px"><span dir="rtl">'+esc(nm)+'</span> — мест '+arr.length+(arr.length>60?' (первые 60)':'')+':</div>';
               arr.slice(0,60).forEach(p=>lst.appendChild(_dzPlaceRow(bid,p[1],p[2]))); };
-            wrap.appendChild(chip); });
-          if(bids.length>14){ const more=document.createElement('span'); more.style.cssText='font-size:11px;color:var(--hint);align-self:center'; more.textContent='… ещё '+(bids.length-14); wrap.appendChild(more); }
+            wrap.appendChild(chip); };
+          bids.slice(0,5).forEach(mkChip);
+          if(bids.length>5){ const more=document.createElement('span'); more.style.cssText='cursor:pointer;font-size:12px;color:var(--link);align-self:center;text-decoration:underline'; more.textContent='ещё '+(bids.length-5)+' ▸';
+            more.onclick=()=>{ bids.slice(5).forEach(mkChip); more.remove(); }; wrap.appendChild(more); }
           body.appendChild(cov);
         } }catch(e){}
       await _renderTlinkLinks(_vid2, body, (nm)=>openNarratorRijal(nm));   // Р-37/Р-04: был дубль (старая горизонт. версия) — теперь общий помощник (счётчик передач + рус.имя)
@@ -5255,18 +5259,29 @@ async function openNarratorRijal(name, forceId){
     body.appendChild(sahNote);
   } else {
   body.appendChild(rjBtn); body.appendChild(rjOut);
-  const note=document.createElement('div'); note.style.cssText='margin-top:10px;font-size:13px;line-height:1.5';
-  note.innerHTML='📜 По нашему правилу надёжность передатчика должна быть письменно засвидетельствована одним из <b>48 мутабарун</b>. <span class="goHad" style="color:var(--link);cursor:pointer;text-decoration:underline">список + труды риджаль</span>';
+  const note=document.createElement('div'); note.style.cssText='margin-top:10px;border:1px solid var(--border);border-radius:11px;padding:9px 12px';
+  note.innerHTML='<div class="ntHdr" style="font-size:13px;font-weight:600;cursor:pointer;display:flex;justify-content:space-between;align-items:center">📜 Правило 48 мутабарун · где читать <span class="ntTg" style="color:var(--hint);font-weight:400">▸</span></div>'
+    +'<div class="ntBody" style="display:none;margin-top:7px;font-size:13px;line-height:1.5">Надёжность передатчика должна быть письменно засвидетельствована одним из <b>48 мутабарун</b>. <span class="goHad" style="color:var(--link);cursor:pointer;text-decoration:underline">список + труды риджаль</span></div>';
+  note.querySelector('.ntHdr').onclick=()=>{ const b=note.querySelector('.ntBody'); const o=b.style.display!=='none'; b.style.display=o?'none':'block'; note.querySelector('.ntTg').textContent=o?'▸':'▾'; };   // v1067: дисклеймер+чтение схлопнуты
   // владелец («перенёс на список книг, назад вернуться некуда»): раньше карточка передатчика ПРЯТАЛАСЬ (display:none)
   // перед открытием «Наука хадиса» — при закрытии того экрана некуда было возвращаться. Теперь карточка НЕ прячется,
   // просто временно перекрывается (openHadithScience сам ставит z-index выше) — закрыл «✕» и снова видна карточка равия.
   note.querySelector('.goHad').onclick=()=>{ openHadithScience(true); }; body.appendChild(note);
   try{ if(!_rijal) await fetch('./hadith/rijal_books.json').then(r=>r.json()).then(d=>_rijal=d).catch(()=>{}); }catch(e){}
-  if(_rijal && _rijal.critics){ const rj=document.createElement('div'); rj.style.cssText='margin-top:10px';
-    rj.innerHTML='<div style="font-weight:700;margin:6px 0">📚 Где читать (труды риджаль):</div>';
-    _rijal.critics.slice(0,8).forEach(cr=>{ (cr.books||[]).slice(0,3).forEach(bk=>{ const a=document.createElement('div'); a.style.cssText='font-size:13px;color:var(--link);cursor:pointer;direction:rtl;text-align:right;padding:2px 0'; a.textContent='• '+bk.title+' — '+cr.name;
-      a.onclick=()=>{ const t=String(bk.turath||''); if(/^\d+$/.test(t)){ m.style.display='none'; openBook(t); } else if(t.indexOf('author/')===0){ openLink('https://app.turath.io/'+t); } }; rj.appendChild(a); }); });
-    body.appendChild(rj); }
+  if(_rijal && _rijal.critics){ const rj=document.createElement('div'); rj.style.cssText='margin-top:8px';
+    rj.innerHTML='<div style="font-weight:600;font-size:12px;color:var(--hint);margin:4px 0">📚 Где читать:</div>';
+    const rows=[]; _rijal.critics.slice(0,8).forEach(cr=>{ (cr.books||[]).slice(0,3).forEach(bk=>rows.push([bk,cr])); });
+    const mkRow=([bk,cr])=>{ const a=document.createElement('div'); a.style.cssText='font-size:13px;color:var(--link);cursor:pointer;direction:rtl;text-align:right;padding:2px 0'; a.textContent='📖 '+bk.title+' — '+cr.name;
+      a.onclick=()=>{ const t=String(bk.turath||''); if(/^\d+$/.test(t)){ m.style.display='none'; openBook(t); } else if(t.indexOf('author/')===0){ openLink('https://app.turath.io/'+t); } }; rj.appendChild(a); };
+    rows.slice(0,6).forEach(mkRow);
+    if(rows.length>6){ const more=document.createElement('div'); more.style.cssText='font-size:12px;color:var(--link);cursor:pointer;text-decoration:underline;padding:3px 0'; more.textContent='ещё '+(rows.length-6)+' книг ▸';
+      more.onclick=()=>{ rows.slice(6).forEach(mkRow); more.remove(); }; rj.appendChild(more); }
+    note.querySelector('.ntBody').appendChild(rj); }
+  // v1067: чёткий финал карточки — линия + одно действие
+  const fin=document.createElement('div'); fin.style.cssText='margin-top:14px;border-top:1px solid var(--border);padding-top:10px;text-align:center';
+  fin.innerHTML='<button class="mini" style="border:1px solid var(--border);border-radius:12px;padding:6px 16px">✍️ Сообщить об ошибке</button>';
+  fin.querySelector('button').onclick=()=>{ try{ openLink('https://t.me/muslimoontt_bot'); }catch(e){} };
+  body.appendChild(fin);
   }
 }
 async function maybeNarratorChip(q){ try{
