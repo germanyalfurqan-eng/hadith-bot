@@ -738,7 +738,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1056';
+const APPVER = 'v1057';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -10127,7 +10127,18 @@ async function showNarratorCardLocal(name, host, forceId){
       _ex.style.cssText='margin-top:6px;padding:8px 11px;border:1px solid #c9962b;border-radius:9px;background:rgba(232,182,50,.09);font-size:12.5px;line-height:1.7;direction:rtl;text-align:right;color:var(--text)';
       _ex.innerHTML='⭐ <b>Откуда статус «сподвижник»:</b> '+esc(_sahWhy||'по совокупности данных базы')+'<div style="font-size:11px;color:var(--hint);margin-top:3px">Полные свидетельства критиков — в своде ниже на карточке (#511).</div>';
       _sb.parentNode.insertBefore(_ex,_sb.nextSibling); }; }catch(e){}   // #511: источник статуса по клику
-    hdr.querySelectorAll('.nWikiS').forEach(b=>b.onclick=()=>{ try{ const ru=b.dataset.ru==='1'; openLink('https://'+(ru?'ru':'ar')+'.wikipedia.org/w/index.php?search='+b.dataset.q); }catch(e){} });   // С38: Википедия-поиск (рус.имя→ru-вики, иначе ar-вики)
+    hdr.querySelectorAll('.nWikiS').forEach(b=>b.onclick=async()=>{ try{ // v1057 #510: умный фолбэк ru→en→ar через opensearch (CORS origin=*): открываем ПЕРВУЮ найденную статью, а не пустой поиск
+      const ru=b.dataset.ru==='1'; const q=decodeURIComponent(b.dataset.q);
+      const langs=ru?['ru','en','ar']:['ar','en','ru'];
+      b.style.opacity='.5';
+      for(const L of langs){ try{
+        const r=await fetch('https://'+L+'.wikipedia.org/w/api.php?action=opensearch&limit=1&format=json&origin=*&search='+encodeURIComponent(q));
+        const j=await r.json();
+        if(j&&j[3]&&j[3][0]){ b.style.opacity=''; openLink(j[3][0]); return; }
+      }catch(e){} }
+      b.style.opacity='';
+      openLink('https://'+(ru?'ru':'ar')+'.wikipedia.org/w/index.php?search='+b.dataset.q);   // совсем нигде — старое поведение
+    }catch(e){} });
   }catch(e){}
   return c;   // джарх-моусуа рендерится ОТДЕЛЬНЫМ разделом ПОСЛЕ наших книг
 }
