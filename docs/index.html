@@ -239,7 +239,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1074</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1076</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -757,7 +757,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1075';
+const APPVER = 'v1076';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -11072,7 +11072,11 @@ async function _codifHighlight(text, card, out, place){
     try{ const _extra=isnadNarrators(text).filter(_keepNarr);
       // A-010 (Муслим 777, 11.07): добор давал ЧУЖОЙ id (тёзка _narrLookup) → DOM-сверка честно краснела «лишний».
       // П-05: на хадисах С ЭТАЛОНОМ (verify) добор разрешён ТОЛЬКО из id эталона/na; без эталона — как раньше.
-      let _vIds=null; try{ const _vr=await _verifyChain(place.bid,place.num,place.riw); if(_vr&&_vr.length){ _vIds=new Set(_vr.filter(r=>r[2]!=null&&r[2]!=='?').map(r=>String(r[2]))); naMids.forEach(x=>_vIds.add(String(x))); } }catch(e){}
+      let _vIds=null; try{ const _vr=await _verifyChain(place.bid,place.num,place.riw); if(_vr&&_vr.length){ _vIds=new Set(_vr.filter(r=>r[2]!=null&&r[2]!=='?').map(r=>String(r[2])));
+        // v1076 (852b «محمد» не опознан): ПО-БУКВЕННЫЙ эталон несёт готовые пары имя→mid В ФОРМУЛИРОВКЕ ЭТОГО риваята —
+        // кладём их в подсветку напрямую (короткие имена типа «محمد» _narrLookup не резолвит из-за тёзка-риска, а эталон уже разрешил).
+        if(_vr._letter){ for(const _r of _vr){ const _nm=_r[1], _md=_r[2]; if(_nm && _md!=null && _md!=='?' && !(_nm in f2id)){ f2id[_nm]=String(_md); names.push(_nm); } } }
+        naMids.forEach(x=>_vIds.add(String(x))); } }catch(e){}
       for(const nm of _extra){ if(nm in f2id) continue; let _mid=null; try{ _mid=await _narrLookup(nm); }catch(e){} if(_mid==null) continue;
         if(_vIds && !_vIds.has(String(_mid))) continue;   // чужой id на эталонном хадисе — не подсвечиваем (тёзка-риск)
         f2id[nm]=String(_mid); names.push(nm); } }catch(e){}
@@ -11121,7 +11125,7 @@ async function _verifyChain(bid,num,riw){ const key=bid+'_'+Math.floor(+num/500)
   const m=_verCache[key]; if(!m) return null;
   // v1064 (сирена-1, кейс 654): пер-буквенный эталон — риваят N Муслима сверяется со СВОЕЙ буквой (654b), не с цепью буквы a
   if(riw && bid==='1727'){ try{ const rw=await loadMuslimRiw(); const lets=rw&&rw[String(num)];
-    const L=lets&&lets[riw-1]; if(L && m[String(num)+L]) return m[String(num)+L]; }catch(e){} }
+    const L=lets&&lets[riw-1]; if(L && m[String(num)+L]){ const _r=m[String(num)+L]; try{ Object.defineProperty(_r,'_letter',{value:L,enumerable:false,configurable:true}); }catch(e){ _r._letter=L; } return _r; } }catch(e){} }
   return m[String(num)]||null; }
 // формы передачи между именами (для подписи в схеме): возвращает массив глаголов в порядке текста
 function _isnadForms(text){
@@ -11147,6 +11151,9 @@ async function verifyNarr(card, place, text){
         else if(rec.i||rec.n){   // С38: не-5 книги — «приложение» = РОВНО то, что подсветили (общий _codifNarrPairs), а не сырой n (тащил матн/цепь книги)
           try{ cleanPairs=await _codifNarrPairs(rec, text); }catch(e){ cleanPairs=[]; }
           const seen=new Set(); for(const pr of (cleanPairs||[])){ const id=String(pr[1]); if(!seen.has(id)) seen.add(id); } ourMids=[...seen]; ourNames=(cleanPairs||[]).map(x=>x[0]); } } }catch(e){}
+    // v1076 (852b, риваят 2/6 красный): у Муслим-риваята N>1 с ПО-БУКВЕННЫМ эталоном verify (854b и т.п.) юнион-цепь codif.na
+    // принадлежит риваяту 1 (химера) — НЕ авторитет ЭТОГО текста → сбрасываем recNa и идём веткой эталона (auth=verify, сверка с DOM).
+    try{ if(recNa && place.riw>1 && String(place.bid)==='1727'){ const _vL=await _verifyChain(place.bid,place.num,place.riw); if(_vL && _vL._letter){ recNa=null; recGap=null; ourMids=[]; ourNames=[]; } } }catch(e){}
     // #132: codif пуст → приложение подсвечивает по ТЕКСТУ (_autoHLGuess: isnadNarrators+_keepNarr). Считаем подсветку ПО ФАКТУ — иначе показывали ложный «приложение: 0» при 5 выделенных именах.
     if(!ourNames.length){ try{ ourNames=[...new Set(isnadNarrators(text).filter(_keepNarr))]; }catch(e){} }
     const forms=_isnadForms(text);
