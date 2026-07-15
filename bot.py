@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from html import unescape
 from urllib.parse import parse_qsl
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler, PollAnswerHandler, MessageReactionHandler
 
 # ============ АЛЬ-МУХАЙМИН (الموحد المهيمن) — наша выверенная база ============
 # Плоский индекс: { "907": {book, chapter, riwayat:[{text, short_ref, sources}], verified}, ... }
@@ -699,15 +699,12 @@ def parse_hadith_query(text):
     if text == "случайный бухари": return "random_bukhari", None
     if text == "случайный муслим": return "random_muslim", None
     if text == "случайный коран": return "random_quran", None
-    # тревога владельца 15.07: «Аль Бухари 1147» (артикль «аль» через пробел/дефис) не распознавался как
-    # канон и проваливался в каталог #324 (книги вместо хадиса). Нормализуем ведущий артикль «аль».
     _tc = re.sub(r"^аль[\s\-]+", "", text)
     for ru, en in COLLECTIONS.items():
         for _t in (text, _tc):
             if _t.startswith(ru):
                 num = _t.replace(ru, "", 1).strip()
                 if num.isdigit(): return en, int(num)
-            # #448: «5237 бухари» = «бухари 5237» — от перестановки мест слагаемых сумма не меняется
             if _t.endswith(" " + ru):
                 num = _t[:-len(ru)].strip()
                 if num.isdigit(): return en, int(num)
@@ -2943,6 +2940,24 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text or ""
     text = text.strip()
+
+    # #опросы-13.07: если владелец выбрал «✍️ Свой вариант», ловим его следующий текст как ответ на опрос (а не в ИИ)
+    if is_owner(update) and text and not text.startswith('/'):
+        try:
+            _pend = _data_get('poll_pending.json', None)
+            if _pend and _pend.get('poll_id'):
+                _res = _data_get('poll_results.json', {}) or {}
+                _r = _res.setdefault(_pend['poll_id'], {'votes': {}})
+                _r['write_in'] = text[:500]; _r['ref'] = _pend.get('ref', '')
+                _data_put('poll_results.json', _res, 'свой вариант ' + _pend['poll_id'])
+                _data_put('poll_pending.json', {}, 'сброс pending')
+                try:
+                    await update.message.reply_text('✍️ Твой вариант записан по опросу «' + _pend.get('q', '')[:60] + '». Клод увидит.')
+                except Exception:
+                    pass
+                return
+        except Exception:
+            pass
 
     # 🆔 диагностика: «ид чата» (владелец, любой чат) — узнать числовой chat_id, напр. чтобы настроить кросс-пост ништячка в jamaat_ru
     if is_owner(update) and text.lower().strip() in ("ид чата", "id чата", "chat id", "ид группы"):
@@ -6313,6 +6328,28 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'ok': True}))
         except Exception as e:
             return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}), status=500)
+
+    async def send_poll_api(r):
+        """#опросы-13.07 (владелец: пакеты решений опросами в личку, «свой вариант» кнопкой; результаты в data)."""
+        if not application: return _cors(web.json_response({'error': 'no_app'}, status=503))
+        try: body = await r.json()
+        except Exception: return _cors(web.json_response({'error': 'bad_json'}, status=400))
+        if str(body.get('secret','')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        q = str(body.get('question',''))[:290]
+        opts = [str(o)[:95] for o in (body.get('options') or [])][:9]
+        ref = str(body.get('ref',''))[:60]
+        if not q or len(opts) < 2: return _cors(web.json_response({'error': 'need question+2options'}, status=400))
+        opts = opts + ['✍️ Свой вариант (отвечу сообщением)']
+        try:
+            msg = await application.bot.send_poll(OWNER_ID, q, opts, is_anonymous=False, allows_multiple_answers=False)
+            pid = msg.poll.id
+            pm = _data_get('poll_map.json', {}) or {}
+            pm[pid] = {'ref': ref, 'q': q[:120], 'opts': opts, 'ts': _now_msk(), 'msg_id': msg.message_id}
+            _data_put('poll_map.json', pm, 'опрос ' + (ref or pid))
+            return _cors(web.json_response({'ok': True, 'poll_id': pid}))
+        except Exception as e:
+            return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}), status=500)
     async def opt(r): return _cors(web.Response(text=''))
     async def worklog(r):
         # #62/#63/#165: триггер уведомления владельцу о работе Claude над заявкой (Claude дёргает curl).
@@ -7568,7 +7605,7 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True}))
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
@@ -7982,6 +8019,45 @@ try:
     print("B-004 fix: send_message обёрнут (fallback без разметки)")
 except Exception as _e:
     print("B-004 fix НЕ применён:", _e)
+
+async def on_poll_answer(update, context):
+    """#опросы-13.07: фиксируем голос владельца/джамаата в data/poll_results.json."""
+    try:
+        pa = update.poll_answer
+        if not pa: return
+        res = _data_get('poll_results.json', {}) or {}
+        rec = res.setdefault(pa.poll_id, {'votes': {}})
+        rec['votes'][str(pa.user.id)] = list(pa.option_ids)
+        _data_put('poll_results.json', res, 'голос ' + pa.poll_id)
+        # «✍️ Свой вариант» = последний вариант → ждём текст ответа следующим сообщением
+        try:
+            pm = _data_get('poll_map.json', {}) or {}
+            info = pm.get(pa.poll_id)
+            if info and pa.user.id == OWNER_ID and pa.option_ids and pa.option_ids[0] == len(info.get('opts', [])) - 1:
+                _data_put('poll_pending.json', {'poll_id': pa.poll_id, 'ref': info.get('ref', ''), 'q': info.get('q', '')}, 'ждём свой вариант ' + pa.poll_id)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+async def on_reaction(update, context):
+    """#лайки-13.07: владелец ставит ❤️/👍 на опрос — фиксируем «понравившийся» в data/poll_likes.json."""
+    try:
+        mr = update.message_reaction
+        if not mr or (mr.user and mr.user.id != OWNER_ID): return
+        emojis = []
+        for rx in (mr.new_reaction or []):
+            e = getattr(rx, 'emoji', None) or getattr(rx, 'custom_emoji_id', None)
+            if e: emojis.append(str(e))
+        likes = _data_get('poll_likes.json', {}) or {}
+        key = str(mr.chat.id) + ':' + str(mr.message_id)
+        if emojis: likes[key] = {'emojis': emojis, 'ts': _now_msk()}
+        else: likes.pop(key, None)   # реакцию сняли
+        _data_put('poll_likes.json', likes, 'лайк ' + key)
+    except Exception:
+        pass
+app.add_handler(MessageReactionHandler(on_reaction))
+app.add_handler(PollAnswerHandler(on_poll_answer))
 app.add_handler(CommandHandler("start", start_cmd))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
@@ -8067,4 +8143,5 @@ async def _on_error(update, context):
         pass
 app.add_error_handler(_on_error)
 _load_ai_gate()   # 🔒 восстановить состояние рубильника публичного ИИ (дефолт — ВЫКЛ для публики)
-app.run_polling(drop_pending_updates=True)
+from telegram import Update as _Upd
+app.run_polling(drop_pending_updates=True, allowed_updates=_Upd.ALL_TYPES)
