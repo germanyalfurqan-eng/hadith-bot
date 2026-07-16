@@ -239,7 +239,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1086</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1087</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -757,7 +757,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1086';
+const APPVER = 'v1087';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -9786,6 +9786,12 @@ function _critArOrd(n){ let s=''; try{ s=stripDiac(fold(String(n||''))).replace(
   if(_CRIT_AR_ORD_F[s]!=null) return _CRIT_AR_ORD_F[s];
   for(const k in _CRIT_AR_ORD_F){ if(s.indexOf(k)>=0||k.indexOf(s)>=0) return _CRIT_AR_ORD_F[k]; }   // вариант имени (с куньей/нисбой), ключи сложены как s
   return 9999; }   // неизвестный критик — в конец
+// R-61 v1087: шарды межзаписных ВАРИАНТОВ мнения (кластеризация смены band_0716): testim_clusters/<mid//100>.json = {mid:{учёный:{c:[[idx]],l:[метки]}}}
+let _tcShard={}, _tcShardP={};
+async function _testimClusters(mid){ const b=Math.floor(mid/100);
+  if(!_tcShardP[b]) _tcShardP[b]=fetch('./testim_clusters/'+b+'.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({}));
+  if(_tcShard[b]===undefined) _tcShard[b]=await _tcShardP[b];
+  return (_tcShard[b]||{})[String(mid)]||null; }
 async function renderTestimoniesCard(mid, host){
   if(mid==null) return;
   // ТРЕВОГА-фикс (владелец 04.07.2026, скрин Ибн Умара: «оценки критиков несуществующие, все карточки не совпадают
@@ -9803,6 +9809,7 @@ async function renderTestimoniesCard(mid, host){
   } }catch(e){}
   let list=null; try{ list=await _testimGet(+mid); }catch(e){}
   if(!list || !list.length) return;
+  let _tcl=null; try{ _tcl=await _testimClusters(+mid); }catch(e){}   // R-61 v1087: варианты мнений (кластеры смены)
   try{ await loadJarhGl(); }catch(e){}
   let _inSah=false; try{ const _fl=(await loadNarrFlags())[String(mid)]; _inSah=(_fl==='bm'); }catch(e){}
   const neuro=_sahMode?{v:'⭐ صحابي عدول — сподвижник; формула тавсик/джарх не применяется (иджма)',col:'#e8c35a',em:'⭐',nT:0,nJ:0,jah:0,sahihayn:_inSah,note:'',pos:0,neg:0,strictJ:false,cnt:list.length}:_ttNeuro(list, _inSah);   // v1061: у сахаба нейро-формула отключена, фикс-строка (рецепт DeepSeek)
@@ -9831,6 +9838,9 @@ async function renderTestimoniesCard(mid, host){
     const row=document.createElement('div'); row.dataset.ttRow='1'; row.style.cssText='border-top:1px solid #20302a;padding-top:11px;margin-top:11px'; if(idx>=_TT_TOP) row.style.display='none';
     const yr=_yrOf(cr); const c0=items[0]; const ruv=((c0[9]&&String(c0[9]).trim())||_ruVerdict(terms));
     const _isMuta=_isMutasahil(cr)&&_critOk(cr);   // ПР-3: мутасахиль — джарх принят, таусик нет
+    // R-61 v1087: МЕЖЗАПИСНЫЕ варианты мнения этого учёного (кластеры смены): сводка «вариантов: N» с арабскими метками
+    let _kcl=null; try{ if(_tcl && items.length>1){ const _nk=String(cr||'').replace(/\s+/g,' ').trim(); const _cc=_tcl[_nk];
+      if(_cc && _cc.c && _cc.c.length>1) _kcl=_cc; } }catch(e){}
     // #490 (владелец): зелёная «✓ принят» одинаково висела и на таусике, и на джархе от муʿтабара — звучит как «признан надёжным» (таусик), путает. Джарх теперь своя красная отметка «⚠ джарх принят».
     const _badge=(_isMut(cr)&&_critOk(cr))
       ? (scv<0
@@ -9847,6 +9857,10 @@ async function renderTestimoniesCard(mid, host){
     // которых нет подчёркивания). Убрано, имя чуть светлее фона для отличия от простого текста.
     row.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span class="critNameCl" style="font-size:14.5px;cursor:pointer" title="Открыть карточку этого учёного"><span style="color:#dbe3eb;font-weight:600">'+esc(_ruName(cr))+((_ruName(cr)!==cr)?(' <span dir="rtl" style="font-size:13px;color:#8fa0b0;'+_AF+'">'+esc(cr)+'</span>'):'')+'</span>'+_badge+(yr?(' <span style="color:#7c8b9c;font-size:12.5px">ум. '+yr+' г.х.</span>'):'')+'</span>'+(c0[3]?'':('<span dir="rtl" style="font-size:15.5px;'+_AF+';color:'+vcol+'">'+esc(terms.join('، '))+'</span>'))+'</div>';
     try{ const _cnEl=row.querySelector('.critNameCl'); if(_cnEl) _cnEl.onclick=(e)=>{ e.stopPropagation(); try{ openNarratorRijal(cr); }catch(_e){} }; }catch(e){}   // #владелец 01.07.2026: имена критиков тоже кликабельны — своя биография/книги/вики
+    if(_kcl){ const kb=document.createElement('div'); kb.style.cssText='margin-top:5px;font-size:12px;color:#c9b8ff;background:rgba(122,90,248,.08);border:1px solid #4a3a8a;border-radius:8px;padding:5px 9px';
+      const _lbls=(_kcl.l||[]).map((L,li)=>'<span style="white-space:nowrap"><span style="display:inline-flex;width:15px;height:15px;border-radius:50%;background:#2a2050;color:#c9b8ff;font-size:9.5px;align-items:center;justify-content:center;vertical-align:middle;margin-left:3px">'+(li+1)+'</span> <span dir="rtl" style="'+_AF+'">'+esc(String(L).slice(0,60))+'</span></span>').join(' · ');
+      kb.innerHTML='⚖ у этого учёного <b>'+_kcl.c.length+'</b> разных суждения по источникам'+(_lbls?(': '+_lbls):'')+' <span style="color:#8593a2;font-size:10.5px">(сгруппировано ИИ-сменой، формулировки — из первоисточников)</span>';
+      row.appendChild(kb); }
     // R-61 Э4 (владелец: «Ибн Маин — простыня»): «ومرة»-склейку внутри записи разлепляем на НУМЕРОВАННЫЕ варианты мнения
     let _vars=null; try{ if(c0[3] && /،?\s*و?\s*مرة\s*[:：]/.test(c0[3])){ _vars=String(c0[3]).split(/،?\s*و?\s*مرة\s*[:：]\s*/).map(s=>s.trim()).filter(Boolean); if(_vars.length<2) _vars=null; } }catch(e){}
     if(_vars){
@@ -9895,6 +9909,12 @@ async function renderTestimoniesCard(mid, host){
       // «Читать у нас — к цитате» рисовались только в основном списке — записи Ибн Хаджара/Захаби были без ссылок.
       try{ const _wb=items.find(c=>c[5]&&Number(c[5])>0);
         if(_wb){ const _lr=_ttLinkRow(_wb[5],_wb[6],mid,_wb[7],_wb[4],_wb[3]); _lr.style.margin='2px 0 4px'; lb.appendChild(_lr); } }catch(e){}
+      // R-61 v1087: варианты мнения и у ПОЗДНИХ (Ибн Хаджар/Захаби — у них их больше всего)
+      try{ const _nk2=String(cr||'').replace(/\s+/g,' ').trim(); const _cc2=_tcl&&_tcl[_nk2];
+        if(_cc2 && _cc2.c && _cc2.c.length>1){ const kb2=document.createElement('div'); kb2.style.cssText='margin:2px 0 4px;font-size:11.5px;color:#c9b8ff;background:rgba(122,90,248,.08);border:1px solid #4a3a8a;border-radius:8px;padding:4px 8px';
+          const _lb2=(_cc2.l||[]).map((L,li)=>'<span style="white-space:nowrap"><span style="display:inline-flex;width:14px;height:14px;border-radius:50%;background:#2a2050;color:#c9b8ff;font-size:9px;align-items:center;justify-content:center;vertical-align:middle;margin-left:3px">'+(li+1)+'</span> <span dir="rtl" style="'+_AF+'">'+esc(String(L).slice(0,55))+'</span></span>').join(' · ');
+          kb2.innerHTML='⚖ '+_cc2.c.length+' разных суждения'+(_lb2?(': '+_lb2):'');
+          lb.appendChild(kb2); } }catch(e){}
     }); bd.appendChild(lb); }
   // С56 (скрин владельца «непонятный кусок» + закон «сахабство доводом»): сподвижнику шкала надёжности НЕ показывается —
   // джарх/тадиль к сахабам неприменим; вместо неё статус со свидетельством мутабара (narr_sahabi_dalil / Такриб).
