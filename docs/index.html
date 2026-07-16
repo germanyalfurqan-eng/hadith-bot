@@ -239,7 +239,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1081</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1082</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -757,7 +757,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1081';
+const APPVER = 'v1082';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3456,7 +3456,10 @@ async function _bookLoad(){
       if(_colo){ const _cf=document.createElement('div'); _cf.style.cssText='direction:rtl;text-align:left;font-size:11px;color:var(--hint);margin-top:9px;padding-top:6px;border-top:1px dashed var(--border)'; _cf.textContent='📄 '+_colo; mainEl.appendChild(_cf); }
       try{ enableArabusTap(mainEl); if(_arabusOn) mainEl.style.cursor='pointer'; }catch(e){}
       // указ владельца: при открытии «У нас» (цитата критика) — авто-подсветить её наглядно, как в поиске
-      try{ if(_bookView.hl && typeof window._bookDoFind==='function'){ var _hq=String(_bookView.hl); var _ci=_hq.lastIndexOf(":"); if(_ci>=0&&_ci<_hq.length-6) _hq=_hq.slice(_ci+1); _hq=_hq.replace(/_+/g," ").replace(/[«»"'.]/g," ").replace(/\([^)]*\)/g," ").trim(); if(_hq.length>46) _hq=_hq.slice(0,46); setTimeout(function(){ try{ window._bookDoFind((_hq&&_hq.length>=6)?_hq:_bookView.hl); }catch(_e){} },80); } }catch(e){}
+      try{ if(_bookView.hl && typeof window._bookDoFind==='function'){ var _hq=String(_bookView.hl); var _ci=_hq.lastIndexOf(":"); if(_ci>=0&&_ci<_hq.length-6) _hq=_hq.slice(_ci+1); _hq=_hq.replace(/_+/g," ").replace(/[«»"'.]/g," ").replace(/\([^)]*\)/g," ").trim(); if(_hq.length>46) _hq=_hq.slice(0,46);
+        // R-61 (гонка, 676/تقريب34): want-доводка рендерит страницу ПОВТОРНО — одиночные 80мс красили промежуточную. Ретрай до появления mark (6×450мс).
+        (function _hlTry(n){ setTimeout(function(){ try{ window._bookDoFind((_hq&&_hq.length>=6)?_hq:_bookView.hl); }catch(_e){}
+          try{ var _me=tEl.querySelector('#bookMain')||tEl; if(!_me.querySelector('mark') && n>0) _hlTry(n-1); }catch(_e){} }, n===6?90:450); })(6); } }catch(e){}
       const _pAdd=tEl.querySelector('#bookPrevAdd'); if(_pAdd){ if(_bookView.pg<=1) _pAdd.style.display='none'; _pAdd.onclick=_bookAddPrev; }
       const _nAdd=tEl.querySelector('#bookNextAdd'); if(_nAdd) _nAdd.onclick=_bookAddNext; }
     navEl.innerHTML=''; navEl.style.flexDirection='column'; navEl.style.gap='7px';
@@ -3525,6 +3528,14 @@ async function _bookLoad(){
         try{ const D='['+DIAC+']*'; const _FCLS={'ا':'اإأآٱ','ي':'يىئ','و':'وؤ','ه':'هة','ك':'كگ'};   // отзеркалено из fold() — алиф/я/вав/та-марбута/каф варианты, чтобы запрос «الاعمال» нашёл «الأعمالُ» (как canon)
           const pat=[...stripDiac(qf)].map(c=>{ if(/\s/.test(c)) return '\\s+'; const cls=_FCLS[fold(c)]; return (cls?('['+cls+']'):c.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'))+D; }).join(''); re=new RegExp(pat,'g'); }catch(e){ re=null; }
         html = re ? esc(clean).replace(re, m=>'<mark>'+m+'</mark>') : esc(clean).split(esc(qf)).join('<mark>'+esc(qf)+'</mark>');
+        // R-61 Э4 (владелец 16.07, двухцветная подсветка): РАМКА ПЕРЕДАЧИ перед цитатой (سمعت أبي يقول: فلان…) — ГОЛУБЫМ,
+        // сама цитата остаётся жёлтым <mark>. Ищем глагол передачи (с огласовками) не дальше 90 символов до первого совпадения.
+        try{
+          const _mkD=w=>[...w].map(c=>c.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'['+DIAC+']*').join('');
+          const _verbs=['سمعت','سألت','سالت','قال','قالت','ذكره','ذكر','نقل','روى','حدثنا','حدثني','أخبرنا','اخبرنا'];
+          const _fre=new RegExp('((?:'+_verbs.map(_mkD).join('|')+')[^<>]{0,90}?)(<mark>)');
+          html=html.replace(_fre,'<mark style="background:rgba(80,180,220,.26);color:inherit">$1</mark>$2');
+        }catch(e){}
       } else html=esc(clean);
       me.innerHTML=html.replace(/\n+/g,'<br>'); try{ enableArabusTap(me); if(_arabusOn) me.style.cursor='pointer'; }catch(e){} const f=me.querySelector('mark'); if(f) try{ f.scrollIntoView({block:'center'}); }catch(e){} };
     window._bookDoFind=doFind;   // для авто-подсветки цитаты при открытии «У нас» из карточки равия
@@ -3756,6 +3767,15 @@ async function _bookLoad(){
     aiPanel.appendChild(nbtn);
     try{ tEl.scrollTop=0; m.querySelector('.panel').scrollTop=0; }catch(e){}
     try{ applyFontScale(); }catch(e){}
+    // R-61 (676/تقريب34): ЕДИНЫЙ хук авто-подсветки цитаты — в КОНЦЕ _bookLoad, при любом пути рендера
+    // (want-доводка рендерит повторно, ранний setTimeout-вызов красил промежуточную страницу или не исполнялся).
+    try{ if(_bookView.hl && typeof window._bookDoFind==='function'){
+      (function _hlTry2(n){ setTimeout(function(){
+        try{ var _me2=tEl.querySelector('#bookMain')||tEl;
+          if(!_me2.querySelector('mark')){ var _q2=String(_bookView.hl); if(_q2.length>46) _q2=_q2.slice(0,46); window._bookDoFind(_q2); }
+          if(!_me2.querySelector('mark') && n>0) _hlTry2(n-1);
+        }catch(_e){} }, n===5?250:500); })(5);
+    } }catch(e){}
   }catch(e){ tEl.innerHTML='<span class="hint">🔧 Не удалось загрузить книгу — попробуй позже.</span>'; }
 }
 function wideCard(x){ const card=document.createElement('div');card.className='card';
@@ -5120,7 +5140,9 @@ async function _renderTlinkLinks(id, host, onPick){
       mr.onclick=()=>{ _op=!_op; w.querySelectorAll('[data-tlrow]').forEach((r,i)=>{ if(i>=_SHOWN) r.style.display=_op?'block':'none'; }); mr.textContent=_op?'▴ Свернуть':('▾ Показать ещё ('+(arr.length-_SHOWN)+')'); };
       w.appendChild(mr); }
     d.appendChild(w); (ts._tlBody||ts).appendChild(d); };
-  _mk(_tea,'المشايخ · Учители — у кого учился, от кого передавал'); _mk(_stu,'التلاميذ · Ученики — кто учился у него, передавал от него'); _mk(_neu,'🔗 Связи по цепям (направление не уточнено)');
+  // R-61 v6 (владелец 16.07): «روى عن» ≠ доказанная встреча (سماع) — «عن» может скрывать ирсаль/тадлис. Подписи честные: это ЗАПИСИ передач, не факт встречи.
+  _mk(_tea,'رَوى عن · от кого ЗАПИСАНА передача (перечень ≠ доказанная встреча)'); _mk(_stu,'رَوى عنه · кто записал передачу от него'); _mk(_neu,'🔗 Связи по цепям (направление не уточнено)');
+  try{ const _dsc=document.createElement('div'); _dsc.className='hint'; _dsc.style.cssText='font-size:10.5px;margin-top:4px;color:var(--hint)'; _dsc.textContent='ⓘ наличие передачи в цепях не доказывает встречу (سماع): «عن» может скрывать ирсаль или тадлис'; (ts._tlBody||ts).appendChild(_dsc); }catch(e){}
   host.appendChild(ts);
   return true;
 }
