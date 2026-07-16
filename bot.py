@@ -366,6 +366,47 @@ def _clean_chapter(t):
         t = t[4:].strip()
     return t
 
+# ============ #578: кликабельные передатчики у выдачи хадиса ============
+# Цепь из verify/<bid>_<num//500>.json (эталон sunnah.com/Мактабы, тот же источник, что сверка в аппе).
+# bid — ФАКТИЧЕСКИЕ ключи шардов docs/verify (у Тирмизи это 7895, не первый bid фронта!).
+_VERIFY_BIDS = {"bukhari": "1681", "muslim": "1727", "abudawud": "1726",
+                "nasai": "829", "ibnmajah": "1198", "tirmidhi": "7895", "darimi": "21795"}
+_verify_shard_cache = {}
+def _verify_narrators(collection, number):
+    """[(имя, mid|None)] эталонной цепи хадиса; [] если нет данных. Не бросает."""
+    bid = _VERIFY_BIDS.get(str(collection))
+    if not bid:
+        return []
+    try:
+        key = f"{bid}_{int(number) // 500}"
+    except Exception:
+        return []
+    if key not in _verify_shard_cache:
+        data = None
+        for u in (f"https://cdn.jsdelivr.net/gh/{GITHUB_REPO}@main/docs/verify/{key}.json",
+                  f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/docs/verify/{key}.json"):
+            try:
+                r = requests.get(u, timeout=12)
+                if r.ok:
+                    data = r.json(); break
+            except Exception:
+                pass
+        _verify_shard_cache[key] = data or {}
+    shard = _verify_shard_cache[key]
+    rec = shard.get(str(number))
+    if not rec:   # у Муслима юниона может не быть — берём первую букву
+        rec = shard.get(str(number) + "a")
+    out, seen = [], set()
+    for e in (rec or []):
+        if isinstance(e, list) and len(e) >= 3 and e[1]:
+            mid = str(e[2]) if e[2] not in (None, "", "?") else None
+            k = mid or e[1]
+            if k in seen:
+                continue
+            seen.add(k)
+            out.append((e[1], mid))
+    return out
+
 def muhaymin_crossref_note(code, number):
     """Готовая строка-отметка: где этот первоисточник встречается в Мухаймине.
     Один и тот же хадис автор может приводить в нескольких главах — показываем
@@ -4918,6 +4959,20 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg += f"\n\n📲 Открыть карточку в приложении: https://t.me/muslimoontt_bot?startapp={_sa269}"
 
             await send_long(update, msg)
+            # #578: кликабельные передатчики — кнопки-карточки равиев (id из verify, тот же эталон, что сверка в аппе)
+            try:
+                _nrr578 = _verify_narrators(_src_code, number)
+                _btns578 = [(nm, mid) for nm, mid in _nrr578 if mid]
+                if _btns578:
+                    from telegram import InlineKeyboardButton, InlineKeyboardMarkup   # локальный импорт — как в #324
+                    _rows578 = []
+                    for _nm578, _mid578 in _btns578[:12]:
+                        _rows578.append([InlineKeyboardButton(("👤 " + _nm578)[:60],
+                                        url=f"https://t.me/muslimoontt_bot?startapp=n_{_mid578}")])
+                    await update.message.reply_text("👥 Передатчики (الإسناد) — карточка равия по тапу:",
+                                                    reply_markup=InlineKeyboardMarkup(_rows578))
+            except Exception:
+                pass
             return
 
     # ============ #324: «<книга из каталога> <номер>» (вне 8 канона) → кнопка-ссылка в мини-апп ============
