@@ -239,7 +239,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1087</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1088</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -757,7 +757,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1087';
+const APPVER = 'v1088';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -9722,7 +9722,10 @@ function _ttNeuro(list, inSahihayn){
   let v,col,em,note='';
   const _strictTag = (strictJ>0 && nT>=1) ? ' Часть джарха — от строгих критиков (متشدد): جرح غير مفسر при توثيق не порочит.' : '';
   if(severe){ v='متروك — отвергается (тяжёлый джарх муʿтабаров)'; col='#f87171'; em='🔴'; }
-  else if(nJ>=2 && nJ>=nT){ v='ضعيف — слабый (джарх большинства критиков)'; col='#f8a07a'; em='🟠'; }
+  else if(nJ>=2 && nJ>nT){ v='ضعيف — слабый (джарх большинства критиков)'; col='#f8a07a'; em='🟠'; }
+  // v1088 (аудит С62): при РАВЕНСТВЕ голосов (напр. 3↔3, id676) писалось ложное «большинство» — честно это спор.
+  // Ветка стоит ДО tawthiq намеренно (как и раньше nJ>=nT ловил равенство до неё) — иначе 3↔3 упало бы в «ثقة».
+  else if(nJ>=2 && nJ===nT){ v='مختلف فيه — спорный (توثيق и جرح равносильны: '+nT+'↔'+nJ+')'; col='#d6b35a'; em='🟡'; note='Голоса муʿтабаров разделились поровну — смотри тяжесть джарха и контекст (условия типа «принят в Сахихе» — в записях ниже).'; }
   else if(tawthiq){ v=(nT>=2)?'ثقة — надёжный (توثيق ≥2 муʿтабаров)':'ثقة — надёжный (في الصحيحين — احتجّا به الشيخان)'; col='#4ade80'; em='🟢'; if(nJ>=1) note='Единичный лёгкий джарх не перекрывает توثيق (الجرح غير المفسر لا يقدح).'; }
   else if(nT>=1 && nJ>=1){ v='مختلف فيه — спорный (таʿдиль ↔ джарх; توثيق двух не набран)'; col='#d6b35a'; em='🟡'; note='Учёные разошлись: есть и توثиق, и جرح — нужна проверка контекста.'+_strictTag; }
   else if(nJ>=1){ v='ضعيف — слабый (джарх не перекрыт توثиق двух муʿтабаров)'; col='#f8a07a'; em='🟠'; }
@@ -9759,10 +9762,14 @@ function _ttLinkRow(bid,page,mid,shnum,book,quote){
     // 11.07 (владелец, ذكوان: «нет ссылок на книгу у цитат Ибн Маина»): строки, подтянутые С sunnah.com,
     // не несут книгу/страницу — даём ссылку на ПЕРВОИСТОЧНИК ЦИТАТЫ (страница равия sunnah.com) сразу,
     // а привязка к печатной книге — в очереди выверки (отметка-указ ниже).
+    // v1088 (§2 плавность, «+N выверяются»): полная заметка «страница уточняется» рисовалась у КАЖДОЙ записи
+    // без bid (у id676 — 15 раз подряд). Теперь полностью — только у первой на карточку, дальше — компактная строка.
+    const _qppFirst=!window._qppSeen; window._qppSeen=(window._qppSeen||0)+1;
     (async()=>{ try{
       let _sid=''; try{ _sid=(await loadMid2Sid())[String(mid)]||''; }catch(_e){}
       if(_sid) w.appendChild(mk('🌐 Источник цитаты — sunnah.com #'+esc(String(_sid)),'#cdeede','rgba(22,160,90,.13)','#1c6e4a',()=>openLink('https://sunnah.com/narrator/'+_sid)));
-      const _dn=await _devNote('quote_page_pending'); if(_dn) wrap.insertAdjacentHTML('beforeend', _devNoteHtml(_dn));
+      if(_qppFirst){ const _dn=await _devNote('quote_page_pending'); if(_dn) wrap.insertAdjacentHTML('beforeend', _devNoteHtml(_dn)); }
+      else wrap.insertAdjacentHTML('beforeend','<div style="margin-top:4px;font-size:10.5px;color:#8a7d5a">🔧 стр. выверяется</div>');
     }catch(_e){} })();
   }
   wrap.appendChild(w);
@@ -9794,6 +9801,7 @@ async function _testimClusters(mid){ const b=Math.floor(mid/100);
   return (_tcShard[b]||{})[String(mid)]||null; }
 async function renderTestimoniesCard(mid, host){
   if(mid==null) return;
+  window._qppSeen=0;   // v1088: счётчик заглушек «страница уточняется» — на карточку (полная заметка 1 раз, дальше компакт)
   // ТРЕВОГА-фикс (владелец 04.07.2026, скрин Ибн Умара: «оценки критиков несуществующие, все карточки не совпадают
   // с сунна.ком»): сподвижники (الصحابة عدول) единогласно надёжны по иджма — формула туثيق/джарх/«N из 48 муʿтабаров»
   // к ним НЕ применяется, даже если в базе случайно нашлись какие-то биографические цитаты. Общая точка входа —
@@ -9934,11 +9942,9 @@ async function renderTestimoniesCard(mid, host){
     }catch(e){}
   }
   else if(neuro && !_sahMode){ const nb=document.createElement('div'); nb.style.cssText='margin-top:12px;background:rgba(46,107,155,.12);border:1px solid #2a5577;border-radius:9px;padding:10px 12px';   // v1061: у сахаба блок «Итог/звёзды/из 48» не рисуем — преамбула عدول уже сказала всё (звёзды 0/48 вводили бы в заблуждение)
-    var _pos=neuro.nT||0,_neg=neuro.nJ||0,_st=3;
-    if(_neg===0){_st=_pos>=2?5:(_pos===1?4:3);} else if(_pos>_neg){_st=4;} else if(_pos===_neg){_st=3;} else if(_pos>0){_st=2;} else {_st=1;}
-    if(neuro.sahihayn) _st=Math.max(_st,4);
-    var _starStr='★★★★★'.slice(0,_st)+'☆☆☆☆☆'.slice(0,5-_st);
-    var _scol=_st>=4?'#7fe3bf':(_st===3?'#ffd479':'#ff9b7a');
+    var _pos=neuro.nT||0,_neg=neuro.nJ||0;
+    // v1088 (аудит DeepSeek С62 + R-61 «без процентов»): звёзды «★★★★☆ 4/5 надёжность» сняты — рейтинг-шкала
+    // это скрытый процент и противоречила итогу (у id676 было «Итог: ضعيف» и тут же 4/5). Полоса+целые счётчики остаются.
     var _contra=(_pos>0&&_neg>0)?('<div style="font-size:12px;color:#ffd479;margin-top:3px">⚖️ Мнения расходятся: <b style="color:#7fe3bf">'+_pos+'</b> за надёжность · <b style="color:#ff9b7a">'+_neg+'</b> с критикой</div>'):'';
     // R-61 Э3 (владелец: свод ТОЛЬКО по мутабарам، без процентов): трёхцветная полоса-пропорция ФОРМУЛИРОВОК муʿтабаров + оговорка «не вердикт»
     var _bp=neuro.pos||0,_bn=neuro.neg||0,_bj=neuro.jah||0,_btot=_bp+_bn+_bj,_bar='';
@@ -9947,8 +9953,7 @@ async function renderTestimoniesCard(mid, host){
       +(_bj?('<div style="width:'+Math.max(4,Math.round(_bj/_btot*100))+'%;background:#b58a24" title="جهالة/середина"></div>'):'')
       +(_bn?('<div style="width:'+Math.max(4,Math.round(_bn/_btot*100))+'%;background:#b33c50" title="جرح — критика муʿтабаров"></div>'):'')
       +'</div><div style="font-size:10.5px;color:#8593a2;margin-top:2px">пропорция формулировок муʿتабаров (توثيق/جهالة/جرح) — иллюстрация، НЕ вердикт: сильный обоснованный جرح перевешивает численность</div>'; }
-    nb.innerHTML='<div style="font-size:13.5px;color:'+neuro.col+';font-weight:600">'+neuro.em+' Итог: '+esc(neuro.v)+'</div>'
-      +'<div style="font-size:17px;color:'+_scol+';margin-top:2px;letter-spacing:2px">'+_starStr+' <span style="font-size:11.5px;color:#8593a2;letter-spacing:0">'+_st+'/5 надёжность</span></div>'+_bar
+    nb.innerHTML='<div style="font-size:13.5px;color:'+neuro.col+';font-weight:600">'+neuro.em+' Итог: '+esc(neuro.v)+'</div>'+_bar
       +'<div style="font-size:12.5px;color:#aab6c2;margin-top:3px">✅ Подтверждений (توثيق): <b style="color:'+(neuro.nT>=2?'#7fe3bf':'#ffd479')+'">'+neuro.nT+'</b> из 48'+(neuro.sahihayn?' · 📗📘 в Сахихайн':'')+' · 🔴 Критика (джарх): <b style="color:#ff9b7a">'+neuro.nJ+'</b>'+(neuro.jah?(' · ⚪ джахаля '+neuro.jah):'')+'</div>'
       +_contra
       +(neuro.note?('<div style="font-size:12px;color:#ffd479;margin-top:3px">ⓘ '+esc(neuro.note)+'</div>'):'')
@@ -10149,7 +10154,10 @@ async function showNarratorCardLocal(name, host, forceId){
   try{ const _dsp=await _narrDisp(id); const _da=(_dsp&&_dsp.ar)||'';
     if(_da){ const _GEN2={'المدني':1,'الكوفي':1,'البصري':1,'المكي':1,'الشامي':1,'اليماني':1,'المصري':1,'مولاهم':1,'الحافظ':1};
       let _n1=''; try{ _n1=String(((_sun&&_sun.ns)||c[3]||'')).split(/[،,\s]+/).filter(x=>x&&!_GEN2[x])[0]||''; }catch(_e){}
-      _hdrMain=_da+((_n1&&_da.indexOf(_n1)<0&&_da.split(' ').length<=3)?(' '+_n1):'');
+      // v1088 (С62, корень #554/#555): 1618 disp-имён были огрызками («إسماعيل بن أبي») — клейка нисбы давала
+      // мусор «إسماعيل بن أبي الأصبحي». Данные починены (fix_disp_truncated), тут гард на остаток: огрызок → полное имя.
+      const _daCut=/(^|\s)(بن|ابن|أبي|ابي|عبد|عبيد|أبو|ابو|أم|ام)$/.test(_da);
+      _hdrMain=_daCut?_hdrName:(_da+((_n1&&_da.indexOf(_n1)<0&&_da.split(' ').length<=3)?(' '+_n1):''));
       if(stripDiac(_hdrName)!==stripDiac(_hdrMain)) _hdrSub=_hdrName;
     }
   }catch(e){}
