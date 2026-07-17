@@ -244,7 +244,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1096</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1097</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -796,7 +796,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1096';
+const APPVER = 'v1097';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4223,7 +4223,7 @@ async function maktabaByNum(seq, n){
     const wk=(window._wikiT&&window._wikiT[bid])||null;   // W-чип (замечание: «википедии ссылок нету»)
     if((tr&&tr.ru)||wk||_shamChip(bid)){ h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:2px">'
       +((tr&&tr.ru)?('<span style="font-size:12.5px;color:#bcd0ff">'+esc(tr.ru)+'</span>'):'')
-      +(wk?('<span class="nbWk" style="cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px;white-space:nowrap"><b style="font-family:Georgia,serif">W</b> Википедия ↗</span>'):'')
+      +(_wikiOk(wk)?('<span class="nbWk" style="cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px;white-space:nowrap"><b style="font-family:Georgia,serif">W</b> Википедия ↗</span>'):'')
       +_shamChip(bid)
       +'</div>'; }
     if(x.author) h+='<div class="nbAuth" style="font-size:12px;color:var(--link);margin-top:2px;direction:rtl;text-align:right;cursor:pointer" title="Все книги этого автора">✍️ '+esc(x.author)+'</div>';
@@ -8766,7 +8766,7 @@ async function openNarrTable(opts){
       const voc=(_narrVoc&&(_narrVoc[String(r[0])]||_narrVoc[r[1]]))||'';   // ключ voc = ID равия (M361c)
       const rk=(r[4]||'').trim(); const rc=/ثق|أوثق|حافظ|إمام/.test(rk)?'#4eb573':/صدوق/.test(rk)?'#9fd3a8':/صحاب/.test(rk)?'#e8c35a':/ضعيف|متروك|كذاب|منكر/.test(rk)?'#e07f7f':'#9aa7b5';
       let ruN=''; try{ ruN=arNameRu(r[1],4); }catch(e){}                       // M467: перевод имени
-      const wk=_WIKI_NARR_OK?((window._narrWiki||{})[String(r[0])]):null;            // M467/TB-26: до валидации — скрыто
+      const wk=_WIKI_NARR_OK?(()=>{ const _x=(window._narrWiki||{})[String(r[0])]; return _wikiOk(_x)?_x:null; })():null;   // v1097: только выверенные            // M467/TB-26: до валидации — скрыто
       d.innerHTML='<span style="flex:none;width:56px;font-size:11px;color:#5b87b5">#'+r[0]+(cnt?('<b style="display:block;color:#9fd3a8">×'+(cnt.get(r[0])||0)+'</b>'):'')
         +'<span class="ntT" data-k="t" data-id="'+r[0]+'" data-nm="'+esc(r[1])+'" title="От кого передавал (учителя)" style="display:block;cursor:pointer;font-size:12px;margin-top:3px">👨‍🏫</span>'
         +'<span class="ntT" data-k="s" data-id="'+r[0]+'" data-nm="'+esc(r[1])+'" title="Кто от него передавал (ученики)" style="display:block;cursor:pointer;font-size:12px">👨‍🎓</span></span>'
@@ -9118,6 +9118,13 @@ function _flagSearch(nm, f){
   runSearch(true);
 }
 document.addEventListener('click', e=>{ const b=e.target&&e.target.closest&&e.target.closest('.flgB'); if(!b) return; e.stopPropagation(); _flagSearch(b.dataset.nm||'', b.dataset.f||''); });
+// v1097 (ЗАЯВКА #589, владелец 17.07: «ссылки Википедия не совпадают с карточкой личностью. Покажи
+// документ-отчёт, кто приводил в соответствие?»). Документа не было — сделан сплошной аудит (audit_wiki.py,
+// акт: scratch_marathon/band_0716/_wiki_audit.md): из 18 777 ссылок ТОЛЬКО 4951 сошлись с именем карточки;
+// 14 071 — нет (в т.ч. 556 служебных страниц вики и 155 статей о ПЛЕМЕНАХ вместо людей).
+// Данные НЕ удалены (владелец: «просто так выкидывать не можем») — помечены v=1/v=0 (wiki_mark_verified.py).
+// Гард: значок «W» даём ТОЛЬКО при v===1. Невыверенная привязка = не показываем как «его статью» (честность).
+function _wikiOk(w){ try{ return !!(w && w.u && w.v===1 && !w.bad); }catch(e){ return false; } }
 const _WIKI_NARR_OK=true;   // #258 (С32): включено на ВЫВЕРЕННЫХ ссылках v7 (резолв реальной статьи ru→en→ar, тёзка-проверка: ism+отец+⊆+различающий токен+эпоха+категория). Король Саудии/Пророк/эмир Кордовы отсекаются. narrators_wiki.json = narrators_wiki_v7
 let _narrWiki=null;
 function loadNarrWiki(){ if(_narrWiki) return Promise.resolve(_narrWiki);
@@ -9172,7 +9179,7 @@ function _narrRow(c){   // строка-кандидат: ПРИВЫЧНОЕ и�
     }catch(_e){} };
     r.appendChild(ic); }
   // #504: бейдж W (Википедия) и в подсказках-кандидатах — как в таблице передатчиков (.ntW, R45 единообразие)
-  if(c.id!=null && _WIKI_NARR_OK){ try{ loadNarrWiki().then(w=>{ const wk=(w||{})[String(c.id)]; if(wk&&wk.u){
+  if(c.id!=null && _WIKI_NARR_OK){ try{ loadNarrWiki().then(w=>{ const wk=(w||{})[String(c.id)]; if(_wikiOk(wk)){
     const wb=document.createElement('span'); wb.className='ntW'; wb.title='Википедия ↗';
     wb.innerHTML='<b style="font-family:Georgia,serif">W</b>'+(wk.l&&wk.l!=='ru'?(' '+esc(wk.l)):'');
     wb.style.cssText='flex:none;cursor:pointer;font-size:10px;color:#e6e6e6;border:1px solid #72777d;border-radius:7px;padding:2px 7px';
@@ -10356,7 +10363,7 @@ async function showNarratorCardLocal(name, host, forceId){
   // #439 (владелец: «отметь каждое непроверенное имя что это неточный перевод»): транслит выверен ТОЛЬКО если из
   // Википедии или курированной карты _NARR_RU; голый arNameRu — авто, помечаем «авто ⚠».
   let _ruSh='', _ruShVer=false; try{ _ruSh=arNameRu(_hdrName,5); }catch(e){}
-  if(_WIKI_NARR_OK && _wk && _wk.t && /[А-Яа-яЁё]/.test(_wk.t)){ _ruSh=_wk.t; _ruShVer=true; }
+  if(_WIKI_NARR_OK && _wikiOk(_wk) && _wk.t && /[А-Яа-яЁё]/.test(_wk.t)){ _ruSh=_wk.t; _ruShVer=true; }   // v1097: невыверенная привязка давала ЧУЖОЕ русское имя в карточку
   try{ const _kunNorm=(x)=>String(x||'').replace(/^اب[يا] /,'ابو '); const _cks=[canon(_hdrName||'').trim(), canon(_c1||'').trim()]; _cks.push(_kunNorm(_cks[0]), _kunNorm(_cks[1])); for(const k of _cks){ if(_NARR_RU[k]){ _ruSh=_NARR_RU[k]; _ruShVer=true; break; } } }catch(e){}
   let _ruNm=''; try{ _ruNm=arNameRu(_c1,12).replace(/\s+ибн$/i,''); }catch(e){}   // #457: имя обрывалось на висящем «ибн» у длинных генеалогий (лимит был 7 слов) — поднят лимит + подчищен возможный хвост
   let _td=null,_inSahT=false; try{ _inSahT=(_flags==='bm'); }catch(e){}
@@ -10380,7 +10387,7 @@ async function showNarratorCardLocal(name, host, forceId){
       +'<div style="flex:none"><div style="position:relative;width:62px;height:62px">'
         +'<div style="width:62px;height:62px;border-radius:50%;border:2px solid #2ea043;background:#0f1712;display:flex;align-items:center;justify-content:center;font-size:30px;color:#cfeada;overflow:hidden">'+_avHtml+'</div>'
         // #472 (владелец, «сто раз просил Википедия в круг передатчика»): значок W — прямо НА кружке аватара (угол), кликабелен. Кнопка выше (у ID) осталась — не убираем то, что уже работает.
-        +((_WIKI_NARR_OK&&_wk&&_wk.u)?('<span class="nWikiAv" data-u="'+esc(_wk.u)+'" title="Википедия" style="position:absolute;right:-4px;bottom:-4px;width:20px;height:20px;border-radius:50%;background:#1c2128;border:1.5px solid #3a434d;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:Georgia,serif;font-size:11px;font-weight:700;color:#e9eef3">W</span>'):'')
+        +((_WIKI_NARR_OK&&_wikiOk(_wk))?('<span class="nWikiAv" data-u="'+esc(_wk.u)+'" title="Википедия" style="position:absolute;right:-4px;bottom:-4px;width:20px;height:20px;border-radius:50%;background:#1c2128;border:1.5px solid #3a434d;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:Georgia,serif;font-size:11px;font-weight:700;color:#e9eef3">W</span>'):'')
       +'</div></div>'
       +'<div style="flex:1;min-width:190px">'
         // 10.07 (владелец, эталон sunnah.com «سمي القرشي (سمي مولى أبي بكر)»): главный заголовок = канон.имя + различающая нисба, полная форма (мавля и т.п.) — подписью в скобках
@@ -10391,7 +10398,7 @@ async function showNarratorCardLocal(name, host, forceId){
           +'<span class="ourId" title="Наш внутренний номер равия — нажми, чтобы скопировать" style="cursor:pointer;font-size:13px;font-weight:700;color:#7fe0a8;background:rgba(46,160,67,.16);border:1px solid #2ea043;border-radius:7px;padding:2px 10px;letter-spacing:.2px">🆔 наш №'+c[0]+'</span>'   // #владелец 01.07.2026: не писать «Muslimoon» — просто наш номер
           +'<span class="narrShare" title="Поделиться карточкой — ссылка откроет приложение на этом же передатчике" style="cursor:pointer;font-size:11px;color:var(--link);border:1px solid var(--border);border-radius:6px;padding:2px 8px">📤 Поделиться</span>'
           // #493 (владелец, «Wikipedia+sunnah.com наверх к ID, вернуть надпись Википедия»): перенесены сюда из нижнего ряда
-          +((_WIKI_NARR_OK&&_wk&&_wk.u)?('<span class="nWiki" data-u="'+esc(_wk.u)+'" title="Википедия" style="cursor:pointer;font-size:11px;color:#e9eef3;border:1px solid #3a434d;background:#1c2128;border-radius:6px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px"><b style="font-family:Georgia,serif;font-size:13px">W</b> Википедия</span>'):('<span class="nWikiS" data-q="'+encodeURIComponent((_ruSh&&/[А-Яа-яЁё]/.test(_ruSh))?_ruSh:((c[1]||'').replace(/[ً-ْٰ]/g,'').split(' ').slice(0,4).join(' ')))+'" data-ru="'+((_ruSh&&/[А-Яа-яЁё]/.test(_ruSh))?'1':'')+'" title="Искать в Википедии" style="cursor:pointer;font-size:11px;color:#cfd6dc;border:1px dashed #3a434d;background:#1c2128;border-radius:6px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px"><b style="font-family:Georgia,serif;font-size:13px">W</b> Википедия</span>'))
+          +((_WIKI_NARR_OK&&_wikiOk(_wk))?('<span class="nWiki" data-u="'+esc(_wk.u)+'" title="Википедия" style="cursor:pointer;font-size:11px;color:#e9eef3;border:1px solid #3a434d;background:#1c2128;border-radius:6px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px"><b style="font-family:Georgia,serif;font-size:13px">W</b> Википедия</span>'):('<span class="nWikiS" data-q="'+encodeURIComponent((_ruSh&&/[А-Яа-яЁё]/.test(_ruSh))?_ruSh:((c[1]||'').replace(/[ً-ْٰ]/g,'').split(' ').slice(0,4).join(' ')))+'" data-ru="'+((_ruSh&&/[А-Яа-яЁё]/.test(_ruSh))?'1':'')+'" title="Искать в Википедии" style="cursor:pointer;font-size:11px;color:#cfd6dc;border:1px dashed #3a434d;background:#1c2128;border-radius:6px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px"><b style="font-family:Georgia,serif;font-size:13px">W</b> Википедия</span>'))
           // владелец («зачем два, надо в рамках одной ссылки писать ид и знак»): было — рядом с ID лежал ГОЛЫЙ
           // некликабельный «sunnah #NNNN», а НАСТОЯЩАЯ кликабельная кнопка sunnah.com — отдельно в той же строке.
           // Слито в ОДНУ кнопку: номер теперь часть подписи самой рабочей ссылки.

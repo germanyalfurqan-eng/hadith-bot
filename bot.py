@@ -7954,20 +7954,26 @@ def _format_channel_post(note):
     return photo, body
 
 async def _post_app_channel(bot, note):
-    """Единый постер в @muslimoonapp: скрин (если есть) + анонс + сворачиваемая инструкция. Фолбэк — текстом, чтобы пост не потерялся."""
+    """Единый постер в @muslimoonapp: скрин (если есть) + анонс + сворачиваемая инструкция.
+    ЗАЯВКА #592 (владелец 17.07: «1095 повторил два раза в канале, хотя строго было»): это был НЕ дубль
+    очереди (claim отработал раз), а САМ ПОСТЕР: при note > 1024 симв. он слал ДВА сообщения (фото + текст),
+    и владелец видел «объявление дважды». Плюс except-фолбэк мог дать ТРЕТЬЕ.
+    Фикс: ОДНО сообщение всегда — длинную ноту режем под лимит подписи (1024) с «…», фолбэк не дублирует."""
     photo, body = _format_channel_post(note)
+    def _fit(t, lim):
+        t = t or ''
+        if len(t) <= lim: return t
+        cut = t[:lim - 20]
+        p = max(cut.rfind('. '), cut.rfind('; '), cut.rfind(' · '))
+        return (cut[:p + 1] if p > lim * 0.6 else cut) + ' …'
     try:
         if photo:
-            if len(body) <= 1024:
-                await bot.send_photo(APP_CHANNEL_ID, photo=photo, caption=body, parse_mode="HTML")
-            else:
-                await bot.send_photo(APP_CHANNEL_ID, photo=photo, parse_mode="HTML")
-                await bot.send_message(APP_CHANNEL_ID, body, parse_mode="HTML", disable_web_page_preview=True)
+            await bot.send_photo(APP_CHANNEL_ID, photo=photo, caption=_fit(body, 1024), parse_mode="HTML")
         else:
-            await bot.send_message(APP_CHANNEL_ID, body, parse_mode="HTML", disable_web_page_preview=True)
+            await bot.send_message(APP_CHANNEL_ID, _fit(body, 4096), parse_mode="HTML", disable_web_page_preview=True)
     except Exception:
-        # фото 404 / HTML не прошёл — отправляем тело текстом (HTML), пост обязан выйти
-        await bot.send_message(APP_CHANNEL_ID, body, parse_mode="HTML", disable_web_page_preview=True)
+        # фото 404 / HTML не прошёл — ОДНО сообщение текстом, пост обязан выйти (но не вторым «дублем»)
+        await bot.send_message(APP_CHANNEL_ID, _fit(body, 4096), parse_mode="HTML", disable_web_page_preview=True)
 
 async def _app_channel_watcher(application):
     """Фон: раз в 5 мин публикует новую update_note.txt в @muslimoonapp (см. _setup)."""
