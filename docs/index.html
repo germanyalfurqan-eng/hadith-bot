@@ -244,7 +244,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1106</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1107</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -808,7 +808,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1106';
+const APPVER = 'v1107';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4413,6 +4413,54 @@ let _scopeIds=null, _scopeName='';
 function setSearchScope(ids, name){ _scopeIds=(ids&&ids.size)?ids:null; _scopeName=name||''; renderScopeChip(); try{ renderCols(); }catch(e){}   // 🎯 чипы сборников подсвечиваются
   if(_scopeIds){ try{ var qi=document.getElementById('q'); if(qi){ qi.focus(); if(qi.value.trim()) runSearch(true); else toast('🎯 Введи слово — ищу в: '+_scopeName); } }catch(e){} } }
 function clearSearchScope(){ _scopeIds=null; _scopeName=''; try{ _pickIds.clear(); _renderPickBar(); }catch(e){} renderScopeChip(); try{ renderCols(); }catch(e){} }
+/* Совет 6 (DeepSeek, приоритет 1): «видно заранее — ИИ-каналы живы или исчерпаны, не тыкаешь впустую».
+   Источник без редеплоя Railway: /api/health УЖЕ отдаёт {ok, ai:{groq,gemini,openrouter,deepseek,nvidia_nim}} —
+   какие каналы настроены + жив ли бэкенд. Пингуем при старте (тихо), рисуем компактную точку у ИИ-режимов:
+   🟢 ИИ на связи (N каналов) · 🟡 занят/лимит (появляется когда ИИ-кнопка вернула 429) · ⚪ недоступен (бэк молчит).
+   Второй слой «занят» ставит _aiBusyPing() из обработчиков 429 — точка честно тускнеет до следующего успеха. */
+var _aiHealth={state:'unknown', ch:0, ts:0};
+function _aiDotHtml(){
+  var s=_aiHealth.state, dot, txt;
+  if(s==='live'){ dot='🟢'; txt='ИИ на связи · каналов: '+_aiHealth.ch; }
+  else if(s==='busy'){ dot='🟡'; txt='ИИ-каналы заняты (лимит) — подожди минуту'; }
+  else if(s==='down'){ dot='⚪'; txt='ИИ сейчас недоступен (нет связи с сервером)'; }
+  else { dot='⚪'; txt='Проверяю доступность ИИ…'; }
+  return '<span id="aiDot" title="'+txt+'" style="cursor:pointer;font-size:11px;opacity:.85;white-space:nowrap;align-self:center;margin-inline-start:2px">'+dot+' <span style="color:var(--hint);font-size:10.5px">ИИ</span></span>';
+}
+function renderAiDot(){
+  var mo=document.querySelector('.modes'); if(!mo) return;
+  var old=document.getElementById('aiDot'); if(old) old.outerHTML=_aiDotHtml(); else mo.insertAdjacentHTML('beforeend', _aiDotHtml());
+  var el=document.getElementById('aiDot'); if(el) el.onclick=function(){ _aiPing(true); };
+}
+function _aiPing(force){
+  if(!BACKEND_URL) { _aiHealth.state='down'; renderAiDot(); return; }
+  if(!force && _aiHealth.ts && Date.now()-_aiHealth.ts<120000) return;   // не чаще раза в 2 мин
+  var ctl=('AbortController' in window)?new AbortController():null;
+  var to=ctl?setTimeout(function(){ try{ctl.abort();}catch(e){} },6000):null;
+  fetch(BACKEND_URL+'/health', {signal:ctl?ctl.signal:undefined}).then(function(r){ return r.ok?r.json():null; }).then(function(j){
+    if(to) clearTimeout(to);
+    if(j && j.ai){ _aiHealth.state='live'; _aiHealth.ch=Object.values(j.ai).filter(Boolean).length; }
+    else { _aiHealth.state='down'; }
+    _aiHealth.ts=Date.now(); renderAiDot();
+  }).catch(function(){ if(to) clearTimeout(to); _aiHealth.state='down'; _aiHealth.ts=Date.now(); renderAiDot(); });
+}
+function _aiBusyPing(){ _aiHealth.state='busy'; _aiHealth.ts=Date.now(); renderAiDot(); setTimeout(function(){ if(_aiHealth.state==='busy') _aiPing(true); }, 60000); }
+// Слой «занят» без правки 12 обработчиков 429: ОДНА обёртка fetch — 429 на ИИ-пути → точка тускнеет до 🟡.
+// Успешный ответ ИИ-пути → возвращаем 🟢 (канал ожил). Не-ИИ пути (поиск, книги) не трогаем.
+(function(){
+  if(window._aiFetchWrapped) return; window._aiFetchWrapped=true;
+  var _AI_PATHS=/\/(explain|neuro|rag|narrator_ai|isnad_ai|wordai|groupai|assistant|booktrans|translate|book_rag|tashkeel)\b/;
+  var of=window.fetch;
+  window.fetch=function(u){
+    var isAi=false; try{ isAi=_AI_PATHS.test(String(u)); }catch(e){}
+    var p=of.apply(this,arguments);
+    if(isAi){ p.then(function(r){ try{
+      if(r && r.status===429) _aiBusyPing();
+      else if(r && r.ok && _aiHealth.state!=='live'){ _aiHealth.state='live'; _aiHealth.ts=Date.now(); renderAiDot(); }
+    }catch(e){} }).catch(function(){}); }
+    return p;
+  };
+})();
 /* Совет 7 (ИДЕЯ ВЛАДЕЛЬЦА + DeepSeek, приоритет 1): «как в Другие сборники — раздел добавляется в поиск
    одним тапом». Каталог (8589 книг) уже размечен по разделам полем c — 40 разделов; чипы строим ИЗ НЕГО,
    новых данных не заводим (R-45). Тап = раздел в области поиска, ещё тап = убран; несколько разделов
@@ -13599,6 +13647,7 @@ async function boot(){
     }catch(e){}
     renderCols();
     try{ initSectChips(); }catch(e){}   // совет 7: чипы разделов каталога — строятся из catalog.json, грузится лениво
+    try{ renderAiDot(); _aiPing(false); }catch(e){}   // совет 6: индикатор живости ИИ (пинг /api/health, без редеплоя)
     // M463: пришли по share-ссылке #go=… → воспроизвести то же место у получателя
     try{ const m=location.hash.match(/#go=([^&]+)/);
       if(m){ const ctx=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
