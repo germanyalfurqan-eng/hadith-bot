@@ -244,7 +244,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1112</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1113</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -808,7 +808,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1112';
+const APPVER = 'v1113';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7650,6 +7650,16 @@ async function ragSearch(qRaw, seq, shownQ){
   if(!j || !j.ok || !(j.results&&j.results.length)){
     const note=(j&&j.note)?String(j.note):'ядро спит/недоступно';
     head.textContent='🧠 Ядро недоступно или ничего не найдено ('+note+'). Ничего не выдумываю — попробуй позже, другую формулировку или другой режим поиска.';
+    // #568 (владелец «не работает ни хрена» — режим Ядро выдал «спит»): ядро на бесплатном сервере ЗАСЫПАЕТ при
+    // простое и просыпается ~30-60с при первом запросе. Даём явную кнопку «разбудить и повторить» — второй запрос
+    // почти всегда проходит (сервер уже проснулся). Живая проверка ядра, не молчаливый отказ.
+    if(!(j && j.results)){ try{
+      const wk=document.createElement('button'); wk.className='mini';
+      wk.style.cssText='display:block;margin:8px auto;padding:9px 16px;border:1px solid #6c5ce7;color:#d9ccff;background:rgba(108,92,231,.12);border-radius:10px;font-size:13px;cursor:pointer';
+      wk.textContent='🔄 Разбудить ядро и повторить';
+      wk.onclick=()=>{ try{ hap('light'); }catch(e){} wk.disabled=true; wk.textContent='⏳ бужу ядро (до минуты)…'; setTimeout(()=>{ try{ ragSearch(qRaw, _seq, shownQ); }catch(e){} }, 1200); };
+      res.appendChild(wk);
+    }catch(_e){} }
     return;
   }
   head.textContent='🧠 Ядро: найдено '+j.results.length+' по «'+(shownQ||qRaw)+'»'+((j.q_used&&j.q_used!==qRaw)?(' · термины: '+j.q_used):'');
