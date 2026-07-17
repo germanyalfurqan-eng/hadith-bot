@@ -244,7 +244,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1117</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1118</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -808,7 +808,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1117';
+const APPVER = 'v1118';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -10074,6 +10074,17 @@ function _ttLinkRow(bid,page,mid,shnum,book,quote,crit){
     // клик открывает книгу в нашей читалке. Тогда плашка «страница выверяется» не нужна — источник назван.
     const _CRIT_SRC=[[/تقريب التهذيب|في التقريب|«التقريب»|"التقريب"/,'تقريب التهذيب — ابن حجر','3975'],[/المجروحين/,'المجروحين — ابن حبان',''],[/الثقات/,'الثقات — ابن حبان','309'],[/هدي الساري/,'هدي الساري — ابن حجر',''],[/تهذيب التهذيب/,'تهذيب التهذيب — ابن حجر','796'],[/لسان الميزان/,'لسان الميزان — ابن حجر','203'],[/ميزان الاعتدال|«الميزان»|في الميزان/,'ميزان الاعتدال — الذهبي','1692'],[/سير أعلام النبلاء|«السير»/,'سير أعلام النبلاء — الذهبي',''],[/تذكرة الحفاظ/,'تذكرة الحفاظ — الذهبي',''],[/الكاشف/,'الكاشف — الذهبي',''],[/الجرح والتعديل/,'الجرح والتعديل — ابن أبي حاتم','155'],[/التاريخ الكبير/,'التاريخ الكبير — البخاري','113'],[/تعجيل المنفعة/,'تعجيل المنفعة — ابن حجر',''],[/الإصابة/,'الإصابة — ابن حجر',''],[/الاستيعاب/,'الاستيعاب — ابن عبد البر',''],[/أسد الغابة/,'أسد الغابة — ابن الأثير','']];
     let _srcBook=null; const _qt=String(quote||''); for(const it of _CRIT_SRC){ if(it[0].test(_qt)){ _srcBook=it; break; } }
+    // #571 ТОЧНЫЙ ВЫВЕРЕННЫЙ провенанс (локальный индекс الجرح والتعديل из базы Мактабы maktaba_fts, page_id=pidx+1,
+    // verify: имя равия в заголовке биографии + текст оценки НА ТОЙ ЖЕ странице — тёзки отсеяны). Если для ЭТОГО
+    // равия (mid) и ЭТОЙ оценки есть выверенная страница — показываем ТОЧНУЮ кликабельную ссылку (открывает
+    // الجرح والتعديل на нужном листе + подсветка цитаты), с пометкой «выверено». Приоритет над общими ссылками.
+    let _exactP=null;
+    try{
+      if(window._provJarh===undefined){ window._provJarh='loading'; fetch('./prov_jarh.json?v='+APPVER).then(function(r){return r.ok?r.json():{};}).then(function(j){window._provJarh=j||{};}).catch(function(){window._provJarh={};}); }
+      var _pj=(window._provJarh&&window._provJarh!=='loading')?window._provJarh[String(mid)]:null;
+      if(_pj&&_pj.length){ var _qn=String(quote||'').replace(/[ًٌٍَُِّْـ]/g,''); _exactP=_pj.find(function(x){ return x.q && _qn.indexOf(x.q)>=0; }); }
+    }catch(_e){}
+    if(_exactP){ w.appendChild(mk('📖 Первоисточник (выверено): الجرح والتعديل — открыть с подсветкой','#9be7c4','rgba(46,160,67,.14)','#2d6a45',function(){ try{ openBook('2170', _exactP.pid, false, _qt); }catch(e){} })); }
     // #571 шаг 2: книга не названа в тексте, НО критик имеет ЕДИНСТВЕННЫЙ труд джарха, где собраны его оценки —
     // тогда его книга и есть первоисточник (Бухари писал джарх только в «التاريخ الكبير», Ибн Ади — в «الكامل»,
     // العقيلي — в «الضعفاء», ابن سعد — в «الطبقات», العجلي — «معرفة الثقات»). Точно, не гадание. Критиков с
@@ -10085,13 +10096,13 @@ function _ttLinkRow(bid,page,mid,shnum,book,quote,crit){
       // Захаби→Мизан аль-Итидаль, Ибн Хаджар→Тахзиб ат-Тахзиб (главные своды джарха каждого).
       const _CRIT_WORK=[[/البخاري/,'التاريخ الكبير — البخاري','113'],[/بن عدي|ابن عدي/,'الكامل في الضعفاء — ابن عدي','12579'],[/العقيلي/,'الضعفاء الكبير — العقيلي','13041'],[/بن سعد/,'الطبقات الكبرى — ابن سعد','146'],[/العجلي/,'معرفة الثقات — العجلي',''],[/ابو حاتم الرازي|أبو حاتم الرازي|ابو حاتم ال|أبو حاتم ال/,'الجرح والتعديل — ابن أبي حاتم','2170'],[/ابو زرعة|أبو زرعة/,'الجرح والتعديل — ابن أبي حاتم','2170'],[/الذهبي/,'ميزان الاعتدال — الذهبي','1692'],[/ابن حجر|ابن حجر العسقلاني|العسقلاتي/,'تهذيب التهذيب — ابن حجر','796']];
       for(const it of _CRIT_WORK){ if(it[0].test(_c)){ _srcBook=it; break; } } }
-    if(_srcBook){ w.appendChild(mk('📚 Первоисточник: '+_srcBook[1],'#cdeede','rgba(22,160,90,.13)','#1c6e4a', _srcBook[2]?(()=>{ try{ openBook(_srcBook[2], 1, false, _qt); }catch(e){} }):(()=>toast('Первоисточник оценки: '+_srcBook[1])))); }
+    if(_srcBook && !_exactP){ w.appendChild(mk('📚 Первоисточник: '+_srcBook[1],'#cdeede','rgba(22,160,90,.13)','#1c6e4a', _srcBook[2]?(()=>{ try{ openBook(_srcBook[2], 1, false, _qt); }catch(e){} }):(()=>toast('Первоисточник оценки: '+_srcBook[1])))); }
     const _qppFirst=!window._qppSeen; window._qppSeen=(window._qppSeen||0)+1;
     (async()=>{ try{
       let _sid=''; try{ _sid=(await loadMid2Sid())[String(mid)]||''; }catch(_e){}
       if(_sid) w.appendChild(mk('🌐 Источник цитаты — sunnah.com #'+esc(String(_sid)),'#cdeede','rgba(22,160,90,.13)','#1c6e4a',()=>openLink('https://sunnah.com/narrator/'+_sid)));
       // плашку «страница выверяется» показываем ТОЛЬКО если первоисточник НЕ назван в тексте (иначе он уже есть)
-      if(!_srcBook){ if(_qppFirst){ const _dn=await _devNote('quote_page_pending'); if(_dn) wrap.insertAdjacentHTML('beforeend', _devNoteHtml(_dn)); }
+      if(!_srcBook && !_exactP){ if(_qppFirst){ const _dn=await _devNote('quote_page_pending'); if(_dn) wrap.insertAdjacentHTML('beforeend', _devNoteHtml(_dn)); }
         else wrap.insertAdjacentHTML('beforeend','<div style="margin-top:4px;font-size:10.5px;color:#8a7d5a">🔧 стр. выверяется</div>'); }
     }catch(_e){} })();
   }
