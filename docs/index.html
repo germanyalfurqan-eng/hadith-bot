@@ -244,7 +244,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1105</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1106</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -808,7 +808,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1105';
+const APPVER = 'v1106';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7591,15 +7591,35 @@ async function ragSearch(qRaw, seq, shownQ){
     return;
   }
   head.textContent='🧠 Ядро: найдено '+j.results.length+' по «'+(shownQ||qRaw)+'»'+((j.q_used&&j.q_used!==qRaw)?(' · термины: '+j.q_used):'');
-  j.results.forEach(h=>{
-    const d=document.createElement('div'); d.className='card'; d.style.cssText='padding:10px;margin:7px 0';
-    let html='';
-    if(h.text) html+='<div style="direction:rtl;text-align:right;font-size:15px;line-height:2">'+esc(h.text)+'</div>';
-    const srcLine=[h.tier, h.source, (h.num?('№'+h.num):''), h.author].filter(Boolean).join(' · ');
-    if(srcLine) html+='<div class="hint" style="margin-top:6px;font-size:12.5px">📚 '+esc(srcLine)+'</div>';
-    d.innerHTML=html||'<div class="hint">— пустая запись от ядра —</div>';
-    res.appendChild(d);
-  });
+  // #560 (владелец, скрин 13.07): «почему так выглядит нестандартно? Надо же как обычно выдача результаты,
+  // а тут вообще без огласовок даже непонятно». Корень: Ядро рисовало САМОДЕЛЬНУЮ плашку — голый esc(h.text)
+  // от бэка (текст без огласовок) + строка источника, без кнопок (Перевод/Объяснить/Передатчики/sunnah.com)
+  // и без степени достоверности. Рядом уже есть showHadithRefs → makeCard — ТОТ ЖЕ путь, которым выдаёт
+  // обычный поиск и ответы ИИ: находит хадис в НАШЕЙ базе по источнику+номеру (текст с огласовками) и сверяет
+  // по фразе. Единообразие (R-45): своей отрисовки не держим. Нет в нашей базе — честный фолбэк с пометкой.
+  (async()=>{
+    try{
+      const refs=j.results.map(h=>({src:h.source, num:h.num})).filter(x=>x.src&&x.num);
+      const phr=j.results.map(h=>String(h.text||'').replace(/\s+/g,' ').trim().split(' ').slice(0,7).join(' ')).filter(x=>x.length>=10);
+      if(refs.length){
+        // showHadithRefs чистит #res и ставит СВОЙ заголовок — передаём туда шапку ядра (запрос + термины),
+        // иначе они потерялись бы при перерисовке.
+        const _note='🧠 Ядро: найдено '+j.results.length+' по «'+(shownQ||qRaw)+'»'+((j.q_used&&j.q_used!==qRaw)?(' · термины: '+j.q_used):'');
+        const r=await showHadithRefs(refs, {phrases:phr, note:_note}, (shownQ||qRaw), _seq);
+        if(r && r.shown) return;   // карточки как обычно — с огласовками, кнопками, достоверностью
+      }
+    }catch(e){}
+    j.results.forEach(h=>{   // фолбэк: нашей записи нет — сырой отрывок ядра, честно помечая
+      const d=document.createElement('div'); d.className='card'; d.style.cssText='padding:10px;margin:7px 0';
+      let html='';
+      if(h.text) html+='<div style="direction:rtl;text-align:right;font-size:15px;line-height:2">'+esc(h.text)+'</div>';
+      const srcLine=[h.tier, h.source, (h.num?('№'+h.num):''), h.author].filter(Boolean).join(' · ');
+      if(srcLine) html+='<div class="hint" style="margin-top:6px;font-size:12.5px">📚 '+esc(srcLine)+'</div>';
+      html+='<div class="hint" style="margin-top:5px;font-size:11px;opacity:.8">отрывок из ядра — этой записи нет в нашей базе, поэтому без огласовок и кнопок</div>';
+      d.innerHTML=html||'<div class="hint">— пустая запись от ядра —</div>';
+      res.appendChild(d);
+    });
+  })();
 }
 /* ===== M462: 🕐 ИСТОРИЯ ДЕЙСТВИЙ — вернуться на любой недавний этап ===== */
 function _actPush(a){ try{ a.ts=Date.now(); const d=JSON.parse(localStorage.getItem('act_log')||'[]');
