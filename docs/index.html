@@ -244,7 +244,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1107</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1108</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -808,7 +808,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1107';
+const APPVER = 'v1108';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4345,7 +4345,10 @@ async function maktabaByNum(seq, n){
         }
         if(add===0) emptyRuns++; else emptyRuns=0;
         if(emptyRuns>=6 || page>=80) done=true;
-        _headTxt(done?'':' · листай вниз, ищу ещё…');
+        // #584/#585/#596 (владелец: «долго грузится», «ищет не грузит», «полуглюки»): старый текст «ищу ещё…»
+        // ОБЕЩАЛ автопоиск, а догрузка ленивая — ждёт скролла к кнопке. Пользователь видел вечное «ищу», думал
+        // «зависло». Теперь честно: это приглашение листать (книги Мактабы), а не «сам ищу без конца».
+        _headTxt(done?'':' · ⬇️ листайте вниз — ещё книги Мактабы');
       }
     }catch(e){}
     if(done) await fillF40();   // M390в: адресный добор недостающих печатей первоисточников
@@ -4356,7 +4359,13 @@ async function maktabaByNum(seq, n){
     } else { more.disabled=false; more.textContent='⬇️ Ещё книги с №'+n; observe(); }
   };
   more.onclick=load;
-  await load(); if(!done) observe();
+  await load();
+  // #584/#596: fillF40 (адресный добор недостающих первоисточников по bid) РАНЬШЕ вызывался только при done —
+  // а done при обходе 8589 книг Мактабы почти недостижим, поэтому «27 из 41» висело вечно, хотя остальные
+  // первоисточники можно добрать точечно. Зовём СРАЗУ после первого прохода: первоисточники (главное, 41 книга)
+  // дособираются без скролла, заголовок финализируется. Дальше — только фоновая догрузка прочих книг по скроллу.
+  if(!done){ try{ await fillF40(); }catch(e){} }
+  if(!done) observe();
 }
 function maktabaMoreBtn(seq,q,st,strictWords){
   const wrap=document.createElement('div'); wrap.style.cssText='text-align:center;margin:10px 0';
