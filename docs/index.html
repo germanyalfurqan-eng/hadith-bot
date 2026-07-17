@@ -244,7 +244,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1095</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1096</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -796,7 +796,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1095';
+const APPVER = 'v1096';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2662,6 +2662,48 @@ function _goBusy(on){ try{ const b=document.getElementById('goBtn'); if(!b) retu
           b.innerHTML='<span class="miniSpin"></span>ищу'; }
   else { b.classList.remove('btnBusy'); b.removeAttribute('aria-busy'); b.textContent=b._t||'Найти'; }
 }catch(e){} }
+/* ===== v1096 (закон владельца 17.07: «применить КО ВСЕМ кнопкам ИИ»): единый ИИ-ожидатель =====
+   Было: у каждой ИИ-кнопки свой текст-заглушка («Спрашиваю ИИ…», «Перевожу…») — статичный на все 60 сек.
+   Стало: _aiWait(host,{what,btn}) рисует ОДИН стандарт: скелет + счётчик секунд + честные фазы + «отменить»
+   + подпись очереди каналов; .done(j) дорисовывает РЕАЛЬНУЮ цепочку с бэка (j.tried), .fail() — блок с «повторить».
+   Бэкенд (bot.py _ai_call) отдаёт tried[] на: /translate /explain /narrator_ai /tashkeel /wordai /structure. */
+const _AI_QUEUE_TXT='бесплатные ИИ по очереди: Groq → Gemini → GitHub → NVIDIA → OpenRouter';
+function _aiWait(host, opts){
+  opts=opts||{}; const what=opts.what||'спрашиваю ИИ'; const btn=opts.btn||null;
+  const t0=Date.now(); let ph=0, tick=null;
+  const PH=[what+'…','канал отвечает — '+what+'…','дольше обычного: первый канал молчит, идём по резервным…','всё ещё идёт: очередь бесплатных каналов длинная…'];
+  const ac=new AbortController();
+  host.style.display='block';
+  host.innerHTML='<div style="border:1px solid #6c5ce7;border-radius:10px;padding:10px 12px;background:rgba(108,92,231,.08)">'
+    +'<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#b9a9ff">'
+      +'<span class="miniSpin" style="border-color:rgba(185,169,255,.35);border-top-color:#b9a9ff"></span>'
+      +'<span class="_aiPh">'+esc(PH[0])+'</span>'
+      +'<span class="_aiSec" style="margin-inline-start:auto;color:var(--hint);font-size:11px">0 сек</span>'
+      +'<span class="_aiCx" style="cursor:pointer;color:var(--hint);font-size:11px;text-decoration:underline">отменить</span></div>'
+    +'<div class="sk" style="width:94%"></div><div class="sk" style="width:86%"></div><div class="sk" style="width:58%"></div>'
+    +'<div style="font-size:10.5px;color:var(--hint);margin-top:5px">'+_AI_QUEUE_TXT+'</div></div>';
+  if(btn){ btn.classList.add('btnBusy'); if(!btn._t) btn._t=btn.textContent; btn.innerHTML='<span class="miniSpin"></span>'+(opts.btnTxt||'ИИ…'); }
+  const stop=()=>{ try{ clearInterval(tick); }catch(e){} if(btn){ btn.classList.remove('btnBusy'); btn.style.pointerEvents=''; btn.textContent=btn._t||'🧠 ИИ'; } };
+  tick=setInterval(()=>{ const s=Math.round((Date.now()-t0)/1000);
+    if(s>=6&&ph<1) ph=1; if(s>=16&&ph<2) ph=2; if(s>=32&&ph<3) ph=3;
+    const p=host.querySelector('._aiPh'), c=host.querySelector('._aiSec');
+    if(p) p.textContent=PH[ph]; if(c) c.textContent=s+' сек'; }, 500);
+  try{ const cx=host.querySelector('._aiCx'); if(cx) cx.onclick=()=>{ try{ ac.abort(); }catch(e){} }; }catch(e){}
+  return {
+    signal: ac.signal,
+    // РЕАЛЬНАЯ цепочка (не выдумка): «Groq ✕ → GitHub ✓ · 12 сек». Нет данных с бэка — строки нет.
+    chainHtml(j){ try{ const tr=((j&&j.tried)||[]).filter(x=>x&&x.n); if(!tr.length) return '';
+      return '<div style="font-size:10.5px;color:var(--hint);margin-top:6px;line-height:1.6">🔁 '
+        +tr.map(x=>'<span style="color:'+(x.ok?'#7fe3bf':'#f8a07a')+'">'+esc(x.n)+(x.ok?' ✓':' ✕')+'</span>').join(' <span style="color:#5a6b7c">→</span> ')
+        +' <span style="opacity:.75">· '+Math.round((Date.now()-t0)/1000)+' сек</span></div>'; }catch(e){ return ''; } },
+    done(){ stop(); },
+    fail(msg, retry){ stop();
+      host.innerHTML='<div class="stateBox err"><div class="ic">⚠️</div><div class="tt">'+esc(msg||'Не удалось')+'</div>'
+        +'<div class="hh">Бесплатные ИИ-каналы заняты или исчерпали дневной лимит — попробуйте через минуту.</div>'
+        +(retry?'<div class="bb"><button class="go _aiRe" style="font-size:12.5px;padding:7px 12px">🔄 повторить</button></div>':'')+'</div>';
+      if(retry){ try{ const b=host.querySelector('._aiRe'); if(b) b.onclick=retry; }catch(e){} } }
+  };
+}
 // v1093 П-1 (скелет вместо пустоты) + П-7 (статус называет ЭТАП, как у них «Поиск хадиса и загрузка
 // вариантов перевода…» — наш «Ищу…» молчал о том, чем занят). Скелет живёт в #res до первой карточки.
 function _skelOn(stage){ try{ const res=document.getElementById('res'); if(!res) return;
@@ -4781,21 +4823,21 @@ function showWordPopup(el, word, root, lemma, gram, ctx){
 // ИИ-перевод/проверка ОДНОГО слова (точный перевод+корень, приоритет над Arabus; копится; владельцу уведомление)
 async function wordAi(word, root, host, btn, ctx){
   if(!host) return; if(!BACKEND_URL){ host.textContent='ИИ-перевод работает на сервере'; return; }
-  host.innerHTML='<span class="hint">🧠 Спрашиваю ИИ…</span>'; if(btn){ btn.disabled=true; btn.style.opacity=.6; }
+  const _w=_aiWait(host,{what:'разбираю слово «'+word+'»', btn:btn, btnTxt:'ИИ…'});   // v1096: единый ИИ-ожидатель
   try{
     const r=await fetch(BACKEND_URL+'/wordai',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({word:word, root:root||'', ctx:(ctx||'').slice(0,200), initData:INITDATA})});
+      body:JSON.stringify({word:word, root:root||'', ctx:(ctx||'').slice(0,200), initData:INITDATA}), signal:_w.signal});
     const j=await r.json().catch(()=>({}));
-    if(r.status===403){ host.textContent=(j&&j.message)||'функция пока не открыта'; return; }
-    if(r.status===429){ host.textContent='⏳ слишком часто — подожди немного'; if(btn){btn.disabled=false;btn.style.opacity='';} return; }
-    if(j&&j.ru){
-      host.innerHTML='<div style="background:#1d1830;border:1px solid #6c5ce7;border-radius:8px;padding:7px 9px">'
-        +'<div><b style="color:#c9b8ff">🧠 ИИ-перевод'+(j.cached?' ♻️':'')+':</b> '+esc(j.ru)+'</div>'
+    if(r.status===403){ _w.done(); host.textContent=(j&&j.message)||'функция пока не открыта'; return; }
+    if(r.status===429){ _w.done(); host.textContent='⏳ слишком часто — подожди немного'; if(btn){btn.disabled=false;btn.style.opacity='';} return; }
+    if(j&&j.ru){ const _chain=_w.chainHtml(j); _w.done();
+      host.innerHTML='<div class="fadeIn" style="background:#1d1830;border:1px solid #6c5ce7;border-radius:8px;padding:7px 9px">'
+        +'<div><b style="color:#c9b8ff">🧠 ИИ-перевод'+(j.cached?' ♻️':'')+':</b> '+esc(j.ru)+'</div>'+_chain
         +(j.root?('<div style="margin-top:3px">🌿 корень (ИИ): <b style="font-size:17px;color:var(--mark);'+_AF+'">'+esc(j.root)+'</b></div>'):'')
         +(j.gram?('<div style="margin-top:2px;color:var(--hint);font-size:12px">'+esc(j.gram)+'</div>'):'')
         +'<div style="margin-top:3px;color:var(--hint);font-size:11px">проверено ИИ · сохранено в нашу базу'+(j.d?(' · '+esc(j.d)):'')+'</div></div>';
-    } else { host.textContent='ИИ не дал перевод — попробуй ещё раз'; if(btn){btn.disabled=false;btn.style.opacity='';} }
-  }catch(e){ host.textContent='🔧 сервис недоступен'; if(btn){btn.disabled=false;btn.style.opacity='';} }
+    } else { _w.fail('ИИ не дал перевод слова', ()=>wordAi(word, root, host, btn, ctx)); if(btn){btn.disabled=false;btn.style.opacity='';} }
+  }catch(e){ _w.fail((e&&e.name==='AbortError')?'Запрос прерван':'Сервис ИИ недоступен', ()=>wordAi(word, root, host, btn, ctx)); if(btn){btn.disabled=false;btn.style.opacity='';} }
 }
 document.addEventListener('click',e=>{ if(!(e.target.closest&&(e.target.closest('#wordPop')||e.target.closest('.qw')))) closeWordPopup(); }, true);
 // M256: недавние (🕐) скрываются при тапе мимо поиска
@@ -5472,11 +5514,13 @@ function ensureStructureBtn(){ const res=document.getElementById('res'); if(!res
   hint.innerHTML='💡 Что сделает: сгруппирует по теме и сборнику, уберёт дубли, выделит главное и подскажет более достоверные. <span style="color:#b9a7ff">(ИИ — вспомогательно)</span>';
   const out=document.createElement('div'); out.id='structOut'; out.style.cssText='display:none;margin:6px 0;font-size:13px;line-height:1.55;border:1px solid var(--border);border-radius:10px;padding:9px;background:var(--bg)';
   b.onclick=async()=>{ if(!BACKEND_URL){toast('Нужен сервер');return;} const items=_resultSnippets(); if(!items.length){toast('Нет результатов');return;}
-    out.style.display='block'; out.innerHTML='<span class="hint">🧠 Структурирую…</span>';
+    const _w=_aiWait(out,{what:'структурирую найденное'});   // v1096: единый ИИ-ожидатель
     try{ const r=await fetch(BACKEND_URL+'/structure',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:(document.getElementById('q').value||''),items:items,initData:INITDATA})});
-      const j=await r.json().catch(()=>({})); if(r.status===403){ out.innerHTML='<span class="hint">функция пока не открыта</span>'; return; }
-      out.innerHTML=j.text?('<div style="white-space:pre-wrap">'+esc(j.text)+'</div><div style="margin-top:5px;font-size:11px;color:var(--hint)">🧠 ИИ — вспомогательно, проверяй</div>'):'<span class="hint">не удалось</span>';
-    }catch(e){ out.innerHTML='<span class="hint">🔧 сервис недоступен</span>'; } };
+      const j=await r.json().catch(()=>({})); if(r.status===403){ _w.done(); out.innerHTML='<span class="hint">функция пока не открыта</span>'; return; }
+      if(j.text){ const _chain=_w.chainHtml(j); _w.done();
+        out.innerHTML='<div class="fadeIn"><div style="white-space:pre-wrap">'+esc(j.text)+'</div><div style="margin-top:5px;font-size:11px;color:var(--hint)">🧠 ИИ — вспомогательно, проверяй</div>'+_chain+'</div>'; }
+      else _w.fail('ИИ не структурировал результаты', null);
+    }catch(e){ _w.fail((e&&e.name==='AbortError')?'Запрос прерван':'Сервис ИИ недоступен', null); } };
   res.insertBefore(out, res.firstChild); res.insertBefore(hint, out); res.insertBefore(b, hint);
 }
 // === 📜 Наука хадиса (мусталях): правила достоверности + 48 мутабарун + труды риджаль ===
@@ -6546,25 +6590,27 @@ async function doExplain(text, ayah, ref, host, btn){
   if(btn&&btn.dataset.shown==='1'){ host.style.display='none'; btn.dataset.shown=''; return; }
   const src = ayah?'quran':((ref&&ref.source)||'x'); const num = ayah?(ayah.s+':'+ayah.a):(((ref&&ref.num)!=null)?ref.num:'');
   const kind = ayah?'quran':'hadith';
-  host.style.display='block'; host.innerHTML='<span class="hint">🧠 Объясняю простыми словами…</span>'; if(btn) btn.dataset.shown='1';
-  const _ac=new AbortController(); const _to=setTimeout(()=>{try{_ac.abort();}catch(e){}},60000);   // #323-класс: объяснение не виснет вечно
+  if(btn) btn.dataset.shown='1';
+  const _w=_aiWait(host,{what:'объясняю простыми словами', btn:btn, btnTxt:'объясняю'});   // v1096: единый ИИ-ожидатель (было: статичная строка на 60 сек)
+  const _ac={signal:_w.signal}; const _to=setTimeout(()=>{try{_w.signal.dispatchEvent&&0;}catch(e){}},60000);
   try{
     const r=await fetch(BACKEND_URL+'/explain',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text:text, source:src, num:num, kind:kind, initData:INITDATA}), signal:_ac.signal}); clearTimeout(_to);
+      body:JSON.stringify({text:text, source:src, num:num, kind:kind, initData:INITDATA}), signal:_w.signal}); clearTimeout(_to);
     const j=await r.json().catch(()=>({}));
-    if(r.status===403){ host.innerHTML='<span class="hint">'+((j&&j.message)||'функция пока не открыта')+'</span>'; return; }
-    if(r.status===429){ host.innerHTML='<span class="hint">⏳ слишком часто — подожди немного</span>'; return; }
-    if(j&&j.explanation){ const paras=j.explanation.split(/\n+/).filter(p=>p.trim());
-      host.innerHTML='<div style="border:1px solid #6c5ce7;border-radius:10px;padding:10px;background:rgba(108,92,231,.08);font-size:14px;line-height:1.7">'
-        +'<div style="color:#b9a9ff;font-size:11px;margin-bottom:6px">'+(j.cached?'♻️ Объяснение (из базы, бесплатно)':'🧠 Объяснение (ИИ — простыми словами; возможны ошибки, не замена учёным)')+'</div>'
-        +paras.map(p=>'<p style="margin:0 0 8px">'+esc(p)+'</p>').join('')+'</div>';
+    if(r.status===403){ _w.done(); host.innerHTML='<span class="hint">'+((j&&j.message)||'функция пока не открыта')+'</span>'; return; }
+    if(r.status===429){ _w.done(); host.innerHTML='<span class="hint">⏳ слишком часто — подожди немного</span>'; return; }
+    if(j&&j.explanation){ const paras=j.explanation.split(/\n+/).filter(p=>p.trim()); const _chain=_w.chainHtml(j); _w.done();
+      host.innerHTML='<div class="fadeIn" style="border:1px solid #6c5ce7;border-radius:10px;padding:10px;background:rgba(108,92,231,.08);font-size:14px;line-height:1.7">'
+        +'<div style="color:#b9a9ff;font-size:11px;margin-bottom:6px">'+(j.cached?'♻️ Объяснение (из базы, бесплатно — ключ не потрачен)':'🧠 Объяснение (ИИ — простыми словами; возможны ошибки, не замена учёным)')+'</div>'
+        +paras.map(p=>'<p style="margin:0 0 8px">'+esc(p)+'</p>').join('')+_chain+'</div>';
       // M240: дать указать на ошибку ИИ-объяснения (→ отзывы владельцу)
       const fb=document.createElement('div'); fb.style.cssText='margin-top:5px;font-size:12px';
       fb.innerHTML='<span class="exErr" style="color:var(--link);cursor:pointer;text-decoration:underline">⚠️ Ошибка в объяснении? Сообщить</span>';
       fb.querySelector('.exErr').onclick=()=>{ try{ openFeedback('ИИ-объяснение '+(kind==='quran'?'аята':'хадиса')+' '+src+(num!==''?(' №'+num):'')); }catch(e){} };
       host.appendChild(fb);
-    } else host.innerHTML='<span class="hint">не удалось объяснить — попробуй ещё раз</span>';
-  }catch(e){ try{clearTimeout(_to);}catch(_t){} host.innerHTML='<span class="hint">'+((e&&e.name==='AbortError')?'⏳ объяснение долго не отвечает — попробуй ещё раз':'🔧 сервис недоступен')+'</span>'; }
+    } else _w.fail('Не удалось объяснить', ()=>{ try{ if(btn) btn.dataset.shown=''; }catch(e){} doExplain(text, ayah, ref, host, btn); });   // v1096: блок с «повторить» вместо сухой строки
+  }catch(e){ try{clearTimeout(_to);}catch(_t){}
+    _w.fail((e&&e.name==='AbortError')?'Объяснение прервано':'Сервис ИИ недоступен', ()=>{ try{ if(btn) btn.dataset.shown=''; }catch(_e){} doExplain(text, ayah, ref, host, btn); }); }
 }
 function addTr(meta,card,text,ayah,fav){
   if(fav) addStar(meta,fav);
@@ -10748,19 +10794,19 @@ async function doRijalCorpus(name, out, btn){
 }
 async function doNarratorAI(name, out, btn){
   if(!BACKEND_URL){ toast('Нужен сервер'); return; }
-  btn.disabled=true; const prev=btn.textContent; btn.textContent='ИИ думает…';
-  out.innerHTML='<span class="hint">🧠 Собираю справку об «'+esc(name)+'» (ИИ)…</span>';
-  const _ac=new AbortController(); const _to=setTimeout(()=>_ac.abort(),60000);   // Р-77: таймаут 60с — кнопка не залипает «ИИ думает…» при зависшем бэкенде
+  btn.disabled=true; const prev=btn.textContent;
+  const _w=_aiWait(out,{what:'собираю справку об «'+name+'»', btn:btn, btnTxt:'думаю'});   // v1096: единый ИИ-ожидатель
+  const _ac={signal:_w.signal}; const _to=setTimeout(()=>{},60000);   // v1096: отмена и таймер живут в _aiWait
   try{ const r=await fetch(BACKEND_URL+'/narrator_ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name, initData:INITDATA}),signal:_ac.signal});
-    if(r.status===403){ out.innerHTML='<span class="hint">ИИ-справка тебе пока не открыта.</span>'; }
-    else if(r.status===429){ out.innerHTML='<span class="hint">⏳ Слишком много запросов — подожди немного.</span>'; }
-    else { const j=await r.json().catch(()=>({})); if(j.bio){
-      out.innerHTML='<div style="border:1px solid #6c5ce7;border-radius:10px;padding:9px;margin-top:4px;background:rgba(108,92,231,.08);font-size:13.5px;line-height:1.55">'
-        +'<div style="color:#b9a9ff;font-size:11px;margin-bottom:4px">🧠 Справка собрана ИИ '+(j.cached?'(из базы, бесплатно)':'')+' — возможны ошибки, сверяйте с источниками</div>'
-        +esc(j.bio).replace(/\n+/g,'<br>')+'</div>'; }
-      else out.innerHTML='<span class="hint">ИИ не дал ответа — попробуй полную карточку.</span>'; }
-  }catch(e){ out.innerHTML='<span class="hint">'+(e&&e.name==='AbortError'?'⏱ ИИ долго не отвечает — попробуй позже.':'🔧 Сервис недоступен.')+'</span>'; }
-  finally{ clearTimeout(_to); btn.disabled=false; btn.textContent=prev; }
+    if(r.status===403){ _w.done(); out.innerHTML='<span class="hint">ИИ-справка тебе пока не открыта.</span>'; }
+    else if(r.status===429){ _w.done(); out.innerHTML='<span class="hint">⏳ Слишком много запросов — подожди немного.</span>'; }
+    else { const j=await r.json().catch(()=>({})); if(j.bio){ const _chain=_w.chainHtml(j); _w.done();
+      out.innerHTML='<div class="fadeIn" style="border:1px solid #6c5ce7;border-radius:10px;padding:9px;margin-top:4px;background:rgba(108,92,231,.08);font-size:13.5px;line-height:1.55">'
+        +'<div style="color:#b9a9ff;font-size:11px;margin-bottom:4px">🧠 Справка собрана ИИ '+(j.cached?'(из базы, бесплатно — ключ не потрачен)':'')+' — возможны ошибки, сверяйте с источниками</div>'
+        +esc(j.bio).replace(/\n+/g,'<br>')+_chain+'</div>'; }
+      else _w.fail('ИИ не дал ответа', ()=>doNarratorAI(name, out, btn)); }
+  }catch(e){ _w.fail((e&&e.name==='AbortError')?'Запрос прерван':'Сервис ИИ недоступен', ()=>doNarratorAI(name, out, btn)); }
+  finally{ clearTimeout(_to); btn.disabled=false; if(!btn.classList.contains('btnBusy')) btn.textContent=prev; }
 }
 // Оценка достоверности равия по рангам учёных (ибн Хаджар/Захаби) → цвет звена в древе
 function _narrGrade(rankH, rankZ){

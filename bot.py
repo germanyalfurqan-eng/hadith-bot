@@ -1668,14 +1668,37 @@ def _ai_left():
     n = _AI_DAY['n']
     return "📊 осталось ~%d из ~%d беспл. ИИ-ответов/день" % (max(0, _AI_FREE_DAILY - n), _AI_FREE_DAILY)
 
+# 17.07 (владелец: «цепочку каналов — КО ВСЕМ кнопкам ИИ»): потоковый сборщик попыток.
+# ask_ai пишет сюда КАЖДУЮ попытку; эндпоинт оборачивает свой ИИ-вызов в _ai_call() и получает
+# (результат, цепочка) — без прокидывания параметров через промежуточные функции (translate_matn, neuro и пр.).
+_AI_LOG = threading.local()
+def _ai_call(fn):
+    """Выполнить fn() в ЭТОМ потоке, собрав реальную цепочку ИИ-попыток. → (результат, [{n,ok},…])"""
+    _AI_LOG.items = []
+    try:
+        res = fn()
+        items, seen = [], set()
+        for it in (getattr(_AI_LOG, 'items', None) or []):
+            if it['n'] in seen: continue
+            seen.add(it['n']); items.append(it)
+        return res, items[:8]
+    finally:
+        _AI_LOG.items = None
+
 def ask_ai(prompt, system=None, owner=False, max_tokens=None, tried_out=None):
     # 🚨 авто-рубильник убран сверху: он защищал ПЛАТНЫЙ DeepSeek от спама. Теперь бесплатный Groq первый → бесплатные работают ВСЕГДА (эндпоинты сами rate-лимитят), килл гейтит ТОЛЬКО DeepSeek (ниже). Чинит «рубильник сам включается».
     # 17.07 (заявка владельца: «перевод будто завис — покажи, кого вызывал: Грок не дал → следующий»):
     # tried_out — если передан СПИСОК, пишем в него РЕАЛЬНУЮ цепочку попыток [{n:канал, ok:bool}], фронт её показывает.
+    # 17.07-2 (владелец: «применить КО ВСЕМ кнопкам ИИ»): дополнительно пишем в потоковый сборщик _AI_LOG —
+    # тогда ЛЮБОЙ эндпоинт получает цепочку через _ai_call(), не прокидывая параметр через промежуточные функции.
     def _tr(n, ok):
         if tried_out is not None:
             try: tried_out.append({'n': n, 'ok': bool(ok)})
             except Exception: pass
+        try:
+            _it = getattr(_AI_LOG, 'items', None)
+            if _it is not None: _it.append({'n': n, 'ok': bool(ok)})
+        except Exception: pass
     _ai_tick()
     if system is None:
         system = f"Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском. Сегодняшняя дата: {datetime.now().strftime('%d.%m.%Y')}."
@@ -6804,7 +6827,7 @@ async def _api_serve(application=None):
                     "Без воды, маркированно. Не выдумывай того, чего нет в списке.")
             txt = await loop.run_in_executor(None, ask_neuro, "Запрос: " + q + "\nНайдено:\n" + numbered, sysm) or ""
             await loop.run_in_executor(None, usage_log, user, "структурировать", True, len(q), "", "")
-            return _cors(web.json_response({'text': txt.strip()[:2500]}))
+            return _cors(web.json_response({'text': txt.strip()[:2500], 'tried': _tried}))
         except Exception as e:
             return _cors(web.json_response({'text': '', 'error': str(e)}))
 
@@ -7026,7 +7049,8 @@ async def _api_serve(application=None):
                     "Пример: «لِكُلِّ» (контекст: لكل نبي دعوة) → ПЕРЕВОД: для каждого / КОРЕНЬ: كلل / "
                     "ГРАММ: предлог لـ + имя كل в род. падеже. Выведи ТОЛЬКО эти 3 строки.")
             prompt = "Слово: " + word + (("\nКорень (подсказка): " + root_hint) if root_hint else "") + (("\nКонтекст: " + ctx) if ctx else "")
-            txt = await loop.run_in_executor(None, ask_neuro, prompt, sysm) or ""
+            txt, _tried = await loop.run_in_executor(None, lambda: _ai_call(lambda: ask_neuro(prompt, sysm) or ""))   # 17.07: цепочка каналов
+            txt = txt or ""
             _model_tag = _neuroModelTag(txt) or '?'   # владелец (05.07): в КАЖДОМ ИИ-уведомлении обязана быть модель, не только у DeepSeek
             def _g(lbl):
                 m = re.search(lbl + r'\s*[:：]\s*(.+)', txt); return m.group(1).strip() if m else ''
@@ -7050,7 +7074,7 @@ async def _api_serve(application=None):
                         parse_mode="Markdown", disable_web_page_preview=True)
                 except Exception:
                     pass
-            out = dict(val); out['cached'] = False
+            out = dict(val); out['cached'] = False; out['tried'] = _tried   # 17.07: цепочка каналов
             return _cors(web.json_response(out))
         except Exception as e:
             return _cors(web.json_response({'ru': '', 'error': str(e)}))
@@ -7226,7 +7250,8 @@ async def _api_serve(application=None):
                     "главный смысл + польза/урок + краткий довод. ОБЯЗАТЕЛЬНО начни с источника (" + ref + "). "
                     "Не пересказывай весь текст, без длинных предисловий и воды. НЕ выдумывай факты/хадисы; "
                     "если спорно — отметь одним словом. Только объяснение, коротко.")
-            ex = await loop.run_in_executor(None, ask_neuro, "Источник: " + ref + "\n" + text, sysm)
+            # 17.07 (владелец: цепочка каналов КО ВСЕМ ИИ-кнопкам): _ai_call собирает реальные попытки
+            ex, _tried = await loop.run_in_executor(None, lambda: _ai_call(lambda: ask_neuro("Источник: " + ref + "\n" + text, sysm)))
             _exModel = _neuroModelTag(ex or '')
             ex = re.sub(r'\s*⚡.*$', '', (ex or ''), flags=re.S).strip()
             if not ex:
@@ -7236,7 +7261,7 @@ async def _api_serve(application=None):
                 saved = await loop.run_in_executor(None, coll_add_translation, store_src, num, text, ex)
             await loop.run_in_executor(None, usage_log, user, "объяснение", True, len(text), source, str(num or ""))
             await _notify_usage(user, "объяснение", True, source, num, saved, model=_exModel)
-            return _cors(web.json_response({'explanation': ex, 'cached': False}))
+            return _cors(web.json_response({'explanation': ex, 'cached': False, 'tried': _tried, 'model': _exModel}))
         except Exception as e:
             return _cors(web.json_response({'explanation': '', 'error': str(e)}))
 
@@ -7457,14 +7482,15 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'text': cached, 'cached': True}))
         sysm = ("Ты расставляешь огласовки (تشكيل) в арабском тексте. "
                 "Верни ТОТ ЖЕ текст с полной огласовкой. Без перевода, без пояснений, без кавычек — только огласованный текст.")
-        out = await loop.run_in_executor(None, ask_neuro, text, sysm) or ""
+        out, _tried = await loop.run_in_executor(None, lambda: _ai_call(lambda: ask_neuro(text, sysm) or ""))   # 17.07: цепочка каналов
+        out = out or ""
         _tkModel = _neuroModelTag(out)
         out = re.sub(r'\s*⚡.*$', '', out, flags=re.S).strip()
         if out and source and num not in (None, ''):
             await loop.run_in_executor(None, tashkeel_add, source, num, out)
         await loop.run_in_executor(None, usage_log, user, "огласовки", True, len(text), source, str(num or ""))
         await _notify_usage(user, "огласовки", True, source, num, None, model=_tkModel)
-        return _cors(web.json_response({'text': out, 'cached': False}))
+        return _cors(web.json_response({'text': out, 'cached': False, 'tried': _tried, 'model': _tkModel}))
 
     async def searchlog(r):
         # аналитика: что ищут (тихо, агрегируем); гейт — вход в приложение
@@ -7587,12 +7613,12 @@ async def _api_serve(application=None):
                 "словами имамов (ثقة/صدوق/ضعيف и т.п.) — КТО так оценил и в какой книге (تقريب التهذيب لابن حجر، "
                 "الجرح والتعديل لابن أبي حاتم، تهذيب الكمال للمزي). 4-7 строк, без воды. "
                 "В конце с новой строки: «⚠️ Справку собрал ИИ — сверяйте с первоисточниками (الجرح والتعديل، تقريب التهذيب).»")
-        bio = await loop.run_in_executor(None, ask_neuro, "Передатчик хадисов: " + name, sysm) or ""
-        bio = bio.strip()
+        bio, _tried = await loop.run_in_executor(None, lambda: _ai_call(lambda: ask_neuro("Передатчик хадисов: " + name, sysm) or ""))   # 17.07: цепочка каналов
+        bio = (bio or "").strip()
         if bio and len(bio) > 15:
             await loop.run_in_executor(None, rijal_ai_put, name, bio)
         await loop.run_in_executor(None, usage_log, user, "равий-ИИ", True, len(name), "", "")
-        return _cors(web.json_response({'bio': bio, 'cached': False}))
+        return _cors(web.json_response({'bio': bio, 'cached': False, 'tried': _tried}))
 
     async def popular(r):
         # 🔥 Популярное: топ запросов (из накопленного searchlog), гейт = вход в приложение
