@@ -244,7 +244,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1093</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1094</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -796,7 +796,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1093';
+const APPVER = 'v1094';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -11895,24 +11895,69 @@ async function translateTafsir(txt, key, s, a, host, btn, kind){
   if(!host) return; host.style.display='block';   // FIX: в читалке книги контейнер был display:none → перевод приходил, но был скрыт
   if(!BACKEND_URL){ host.textContent='перевод заработает на сервере'; return; }
   const _isJarh=(kind==='jarh');   // P0-2: оценка передатчика — НЕ тафсир (другой промт на бэке через source)
-  host.innerHTML='<span class="hint">🧠 Перевожу '+(_isJarh?'оценку':'тафсир')+'…</span>'; if(btn){ btn.style.pointerEvents='none'; btn.textContent='…'; }
-  const restore=()=>{ if(btn){ btn.style.pointerEvents=''; btn.textContent='🧠 Перевести (ИИ)'; } };
+  // v1094 (заявка владельца 17.07: «перевод будто завис — нужна живая анимация и пусть перечисляет, кого
+  // вызывал: Грок не дал → следующий»). Раньше тут была ОДНА статичная строка на все 60 секунд ожидания.
+  // Теперь: скелет-строки + счётчик секунд + честные фазы + отмена; после ответа — РЕАЛЬНАЯ цепочка с бэка (tried[]).
+  const _t0=Date.now(); let _tick=null, _phase=0;
+  const _PH=['ищу свободный ИИ-канал…','канал отвечает — перевожу…','дольше обычного: первый канал молчит, идём по резервным…','всё ещё идёт: очередь бесплатных каналов длинная…'];
+  const _draw=()=>{ const sec=Math.round((Date.now()-_t0)/1000);
+    if(sec>=6&&_phase<1) _phase=1; if(sec>=16&&_phase<2) _phase=2; if(sec>=32&&_phase<3) _phase=3;
+    const l=host.querySelector('#_trPhase'), t=host.querySelector('#_trSec');
+    if(l) l.textContent=_PH[_phase]; if(t) t.textContent=sec+' сек';
+  };
+  host.innerHTML='<div style="border:1px solid #6c5ce7;border-radius:10px;padding:10px 12px;background:rgba(108,92,231,.08)">'
+    +'<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#b9a9ff">'
+      +'<span class="miniSpin" style="border-color:rgba(185,169,255,.35);border-top-color:#b9a9ff"></span>'
+      +'<span id="_trPhase">'+_PH[0]+'</span>'
+      +'<span id="_trSec" style="margin-inline-start:auto;color:var(--hint);font-size:11px">0 сек</span>'
+      +'<span id="_trCancel" style="cursor:pointer;color:var(--hint);font-size:11px;text-decoration:underline">отменить</span></div>'
+    +'<div class="sk" style="width:94%"></div><div class="sk" style="width:88%"></div><div class="sk" style="width:62%"></div>'
+    +'<div style="font-size:10.5px;color:var(--hint);margin-top:5px">переводят бесплатные ИИ по очереди: Groq → Gemini → GitHub → NVIDIA → OpenRouter</div></div>';
+  if(btn){ btn.classList.add('btnBusy'); btn.innerHTML='<span class="miniSpin"></span>перевожу'; }
+  _tick=setInterval(_draw,500);
+  const restore=()=>{ try{ clearInterval(_tick); }catch(e){} if(btn){ btn.classList.remove('btnBusy'); btn.style.pointerEvents=''; btn.textContent='🧠 Перевести (ИИ)'; } };
   const _ac=new AbortController(); const _to=setTimeout(()=>{try{_ac.abort();}catch(e){}},60000);   // #323: таймаут 60с — перевод тафсира/равия не виснет вечно
+  try{ const _cx=host.querySelector('#_trCancel'); if(_cx) _cx.onclick=()=>{ try{_ac.abort();}catch(e){} };   // v1094: ожидание можно прервать
+  }catch(e){}
   try{ const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({text:(txt||'').slice(0,11000), source:(_isJarh?'jarh_':'tafsir_')+key, num:s+':'+a, initData:INITDATA}), signal:_ac.signal});
     clearTimeout(_to);
     const j=await r.json().catch(()=>({}));
     if(r.status===403){ host.innerHTML='<span class="hint">'+((j&&j.message)||'перевод пока не открыт')+'</span>'; restore(); return; }
     if(j&&j.translation){
+      try{ clearInterval(_tick); }catch(e){}
       const paras=j.translation.split(/\n+/).filter(p=>p.trim());
-      host.innerHTML='<div style="border:1px solid #6c5ce7;border-radius:10px;padding:10px;background:rgba(108,92,231,.08);font-size:14px;line-height:1.75">'
-        +'<div style="color:#b9a9ff;font-size:11px;margin-bottom:6px">'+(j.cached?('♻️ Перевод '+(_isJarh?'оценки':'тафсира')+' (из базы, бесплатно)'):('🧠 Перевод '+(_isJarh?'оценки передатчика':'тафсира')+' (ИИ — возможны ошибки, сверяйте)'))+'</div>'
-        +paras.map(p=>'<p style="margin:0 0 8px">'+esc(p)+'</p>').join('')+'</div>';
+      // v1094: РЕАЛЬНАЯ цепочка попыток с бэкенда (tried[]) — «Groq не дал → Gemini не дал → перевёл GitHub».
+      // Не выдумка: bot.py пишет её по факту вызовов (ask_ai tried_out). Нет данных — строку не рисуем.
+      let _chain='';
+      try{ const tr=(j.tried||[]).filter(x=>x&&x.n);
+        if(tr.length){ const _sec=Math.round((Date.now()-_t0)/1000);
+          _chain='<div style="font-size:10.5px;color:var(--hint);margin-top:7px;border-top:1px dashed rgba(185,169,255,.25);padding-top:5px;line-height:1.6">🔁 '
+            +tr.map(x=>'<span style="color:'+(x.ok?'#7fe3bf':'#f8a07a')+'">'+esc(x.n)+(x.ok?' ✓':' ✕')+'</span>').join(' <span style="color:#5a6b7c">→</span> ')
+            +' <span style="opacity:.75">· '+_sec+' сек</span></div>'; }
+      }catch(e){}
+      host.innerHTML='<div class="fadeIn" style="border:1px solid #6c5ce7;border-radius:10px;padding:10px;background:rgba(108,92,231,.08);font-size:14px;line-height:1.75">'
+        +'<div style="color:#b9a9ff;font-size:11px;margin-bottom:6px">'+(j.cached?('♻️ Перевод '+(_isJarh?'оценки':'тафсира')+' (из базы, бесплатно — ключ не потрачен)'):('🧠 Перевод '+(_isJarh?'оценки передатчика':'тафсира')+' (ИИ — возможны ошибки, сверяйте)'))+'</div>'
+        +paras.map(p=>'<p style="margin:0 0 8px">'+esc(p)+'</p>').join('')+_chain+'</div>';
       // M205: перевод появляется НИЖЕ длинного оригинала — кнопка становится указателем «к переводу» + авто-прокрутка
       if(btn){ btn.style.pointerEvents=''; btn.textContent='⬇️ К переводу'; btn.title='Перейти к переводу (ниже)'; btn.onclick=()=>{ try{ host.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} }; }
       if(cfg.tafJump!==false){ setTimeout(()=>{ try{ host.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} }, 60); }
-    } else { host.innerHTML='<span class="hint">не удалось перевести</span>'; restore(); }
-  }catch(e){ try{clearTimeout(_to);}catch(_t){} host.innerHTML='<span class="hint">'+((e&&e.name==='AbortError')?'⏳ перевод долго не отвечает — попробуй ещё раз':'🔧 сервис недоступен')+'</span>'; restore(); }
+    } else {
+      // v1094 П-6-класс: вместо сухой строки — блок с причиной и «повторить» (все каналы отказали — это факт с бэка)
+      let _ch=''; try{ const tr=(j&&j.tried||[]).filter(x=>x&&x.n);
+        if(tr.length) _ch='<div style="font-size:10.5px;color:var(--hint);margin-top:6px">🔁 '+tr.map(x=>esc(x.n)+(x.ok?' ✓':' ✕')).join(' → ')+'</div>'; }catch(e){}
+      host.innerHTML='<div class="stateBox err"><div class="ic">⚠️</div><div class="tt">Не удалось перевести</div>'
+        +'<div class="hh">Бесплатные ИИ-каналы сейчас заняты или исчерпали дневной лимит. Попробуйте через минуту — очередь освободится.</div>'
+        +_ch+'<div class="bb"><button class="go" id="_trRetry" style="font-size:12.5px;padding:7px 12px">🔄 повторить</button></div></div>';
+      try{ const rb=host.querySelector('#_trRetry'); if(rb) rb.onclick=()=>translateTafsir(txt,key,s,a,host,btn,kind); }catch(e){}
+      restore();
+    }
+  }catch(e){ try{clearTimeout(_to);}catch(_t){} const _ab=(e&&e.name==='AbortError');
+    host.innerHTML='<div class="stateBox err"><div class="ic">'+(_ab?'⏳':'🔧')+'</div><div class="tt">'+(_ab?'Перевод прерван':'Сервис перевода недоступен')+'</div>'
+      +'<div class="hh">'+(_ab?'Вы отменили ожидание или каналы не ответили за минуту.':'Не достучались до сервера — проверьте связь.')+'</div>'
+      +'<div class="bb"><button class="go" id="_trRetry2" style="font-size:12.5px;padding:7px 12px">🔄 повторить</button></div></div>';
+    try{ const rb=host.querySelector('#_trRetry2'); if(rb) rb.onclick=()=>translateTafsir(txt,key,s,a,host,btn,kind); }catch(_e){}
+    restore(); }
 }
 async function doTafsir(s,a,out,btn,key,lang){
   const tf=TAFSIRS.find(t=>t.key===key)||TAFSIRS[0]; key=tf.key;

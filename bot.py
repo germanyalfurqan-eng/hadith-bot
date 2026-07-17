@@ -1668,27 +1668,41 @@ def _ai_left():
     n = _AI_DAY['n']
     return "📊 осталось ~%d из ~%d беспл. ИИ-ответов/день" % (max(0, _AI_FREE_DAILY - n), _AI_FREE_DAILY)
 
-def ask_ai(prompt, system=None, owner=False, max_tokens=None):
+def ask_ai(prompt, system=None, owner=False, max_tokens=None, tried_out=None):
     # 🚨 авто-рубильник убран сверху: он защищал ПЛАТНЫЙ DeepSeek от спама. Теперь бесплатный Groq первый → бесплатные работают ВСЕГДА (эндпоинты сами rate-лимитят), килл гейтит ТОЛЬКО DeepSeek (ниже). Чинит «рубильник сам включается».
+    # 17.07 (заявка владельца: «перевод будто завис — покажи, кого вызывал: Грок не дал → следующий»):
+    # tried_out — если передан СПИСОК, пишем в него РЕАЛЬНУЮ цепочку попыток [{n:канал, ok:bool}], фронт её показывает.
+    def _tr(n, ok):
+        if tried_out is not None:
+            try: tried_out.append({'n': n, 'ok': bool(ok)})
+            except Exception: pass
     _ai_tick()
     if system is None:
         system = f"Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском. Сегодняшняя дата: {datetime.now().strftime('%d.%m.%Y')}."
     # 🆓 БЕСПЛАТНЫЕ ИИ — доступны ВСЕМ (указ владельца #379: сначала бесплатные, DeepSeek потом). Порядок Groq→Gemini→OpenRouter→DeepSeek.
     g = ask_groq(prompt, system, max_tokens)   # 1) Groq (free, очень быстрый)
     if g and not str(g).startswith("⚠️"):
+        _tr('Groq (Llama 3.3 70B)', True)
         return g + "\n\n⚡ *Модель:* 🆓 Groq (Llama 3.3 70B) — бесплатно\n" + _ai_left()
+    _tr('Groq', False)
     if GEMINI_API_KEY:                          # 2) Gemini (free)
         _ga = ask_gemini(prompt, system)
         if _ga and not str(_ga).startswith("⚠️"):
+            _tr('Gemini', True)
             return _ga + "\n\n⚡ *Модель:* 🆓 Gemini — бесплатно\n" + _ai_left()
+        _tr('Gemini', False)
     if GITHUB_MODELS_TOKEN:                      # 3) GitHub Models (GPT-4o-mini, free)
         _gh = ask_github(prompt, system, max_tokens)
         if _gh and not str(_gh).startswith("⚠️"):
+            _tr('GitHub GPT-4o-mini', True)
             return _gh + "\n\n⚡ *Модель:* 🆓 GitHub GPT-4o-mini — бесплатно\n" + _ai_left()
+        _tr('GitHub GPT-4o-mini', False)
     if NVIDIA_NIM_API_KEY:                       # 3.5) NVIDIA NIM (free, добавлен 05.07.2026) — до OpenRouter-цикла (тот перебирает 5 моделей подряд, дольше)
         _nv = ask_nvidia_nim(prompt, system, max_tokens)
         if _nv and not str(_nv).startswith("⚠️"):
+            _tr('NVIDIA NIM', True)
             return _nv + "\n\n⚡ *Модель:* 🆓 NVIDIA NIM — бесплатно\n" + _ai_left()
+        _tr('NVIDIA NIM', False)
     модели = [
         "meta-llama/llama-3.3-70b-instruct:free",
         "deepseek/deepseek-r1:free",
@@ -1958,7 +1972,7 @@ def _chunk_by_paras(text, maxlen=1200):
         chunks.append(cur)
     return chunks
 
-def translate_matn(arabic, src="", owner=False, force=False, model_out=None):
+def translate_matn(arabic, src="", owner=False, force=False, model_out=None, tried_out=None):
     """Перевод матна на русский с накопительным кэшем (оригинал+перевод+источник).
     force=True — переперевести заново (минуя кэш). Длинные тексты переводим ПО АБЗАЦАМ, иначе free-модель
     часто возвращает арабский оригинал вместо перевода. Битый арабский кэш игнорируем и переводим заново.
@@ -1993,7 +2007,7 @@ def translate_matn(arabic, src="", owner=False, force=False, model_out=None):
                   "Имена и термины передавай по-русски. "
                   "Без вступлений, без пояснений, без кавычек, без указания модели — только перевод.")
     def _one(t):
-        r = ask_ai("Переведи на русский:\n" + t, sysmsg, owner=owner, max_tokens=4000)
+        r = ask_ai("Переведи на русский:\n" + t, sysmsg, owner=owner, max_tokens=4000, tried_out=tried_out)   # 17.07: цепочка попыток → фронту
         if not r or r.startswith("❌") or r.startswith("⏸"):
             return None
         if model_out is not None:
@@ -7250,7 +7264,8 @@ async def _api_serve(application=None):
                 return _cors(web.json_response({'translation': stored['ru'], 'cached': True}))
             # 2) нет в базе (или force) → переводим заново и копим (перезаписываем оборванный)
             _model_used = []   # тревога 04.07.2026: узнать РЕАЛЬНУЮ модель, а не рапортовать «DeepSeek» по умолчанию
-            tr = await loop.run_in_executor(None, lambda: translate_matn(text, source, True, force, _model_used))   # P0-2: source ('jarh_*'/'tafsir_*') → джарх-аварный промт в translate_matn
+            _tried = []        # 17.07 (заявка владельца): РЕАЛЬНАЯ цепочка попыток [{n,ok}] → фронт показывает «Groq не дал → Gemini не дал → перевёл GitHub»
+            tr = await loop.run_in_executor(None, lambda: translate_matn(text, source, True, force, _model_used, _tried))   # P0-2: source ('jarh_*'/'tafsir_*') → джарх-аварный промт в translate_matn
             tr = re.sub(r'\s*⚡.*$', '', (tr or ''), flags=re.S).strip()
             saved = None
             if tr and source and num not in (None, ''):
@@ -7258,7 +7273,12 @@ async def _api_serve(application=None):
             if tr:   # #348: не списывать ключ и не слать «потрачено», если перевод реально не удался (tr пустой)
                 await loop.run_in_executor(None, usage_log, user, "перевод", True, len(text), source, str(num or ""))
                 await _notify_usage(user, "перевод", True, source, num, saved, frag=(tr or text), model=(_model_used[-1] if _model_used else ""))
-            return _cors(web.json_response({'translation': tr, 'cached': False}))
+            # 17.07: отдаём фронту РЕАЛЬНУЮ цепочку (кого звали, кто отказал) и итоговую модель — не выдумка, а факт
+            _uniq = []
+            for _t in _tried:
+                if not any(_u['n'] == _t['n'] for _u in _uniq): _uniq.append(_t)
+            return _cors(web.json_response({'translation': tr, 'cached': False,
+                                            'tried': _uniq[:8], 'model': (_model_used[-1] if _model_used else '')}))
         except Exception as e:
             return _cors(web.json_response({'translation': '', 'error': str(e)}))
 
