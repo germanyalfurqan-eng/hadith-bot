@@ -244,7 +244,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1098</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1099</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -796,7 +796,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1098';
+const APPVER = 'v1099';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -1147,7 +1147,12 @@ function termMatch(term,doc,modes){
   if(modes.root){
     const wk=modes.matnonly?'_wskM':'_wsk';
     if(!doc[wk]) doc[wk]=nf.split(' ').map(skel);
-    const qs=canon(term.t).split(' ').map(skel).filter(s=>s.length>=2);
+    // #577 (владелец): «вбил بغيا بينهم — высвечивает даже без بغيا». Корень: skel() срезает слабые буквы
+    // (ا و ي ى ء ؤ ئ), и у слабых корней скелет вырождается в ДВЕ буквы: بغيا → بغ. Порог >=2 такой огрызок
+    // пропускал, и он матчил بغير (корень غير!), يبغون и пр. — 124 аята вместо 5. Скелет из 2 букв не несёт
+    // корня: у слабых корней (بغي, نية) однокоренной поиск невозможен в принципе — честнее искать ТОЧНО
+    // (ниже уже есть фолбэк: пустой qs → nf.indexOf(canon(term.t)), подстрока ловит и النية/بالنية).
+    const qs=canon(term.t).split(' ').map(skel).filter(s=>s.length>=3);
     if(!qs.length) return nf.indexOf(canon(term.t))!==-1;
     return qs.every(q=> doc[wk].some(w=> w.length>=q.length && w.indexOf(q)!==-1));  // корень = смежная подстрока скелета (не вразброс)
   }
