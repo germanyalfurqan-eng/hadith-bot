@@ -244,7 +244,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1102</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1103</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -808,7 +808,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1102';
+const APPVER = 'v1103';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4413,6 +4413,37 @@ let _scopeIds=null, _scopeName='';
 function setSearchScope(ids, name){ _scopeIds=(ids&&ids.size)?ids:null; _scopeName=name||''; renderScopeChip(); try{ renderCols(); }catch(e){}   // 🎯 чипы сборников подсвечиваются
   if(_scopeIds){ try{ var qi=document.getElementById('q'); if(qi){ qi.focus(); if(qi.value.trim()) runSearch(true); else toast('🎯 Введи слово — ищу в: '+_scopeName); } }catch(e){} } }
 function clearSearchScope(){ _scopeIds=null; _scopeName=''; try{ _pickIds.clear(); _renderPickBar(); }catch(e){} renderScopeChip(); try{ renderCols(); }catch(e){} }
+/* Совет 7 (ИДЕЯ ВЛАДЕЛЬЦА + DeepSeek, приоритет 1): «как в Другие сборники — раздел добавляется в поиск
+   одним тапом». Каталог (8589 книг) уже размечен по разделам полем c — 40 разделов; чипы строим ИЗ НЕГО,
+   новых данных не заводим (R-45). Тап = раздел в области поиска, ещё тап = убран; несколько разделов
+   складываются. Область ставим существующим setSearchScope — свой механизм поиска не плодим. */
+var _sectSel=new Set(), _sectMap=null, _sectMore=false;
+function _sectBuild(cat){ var m={}; (cat||[]).forEach(function(b){ var c=b.c||''; if(!c) return; (m[c]=m[c]||[]).push(String(b.i)); });
+  return Object.keys(m).map(function(c){ return {c:c, ids:m[c]}; }).sort(function(a,b){ return b.ids.length-a.ids.length; }); }
+function _sectApply(){
+  if(!_sectSel.size){ clearSearchScope(); return; }
+  var ids=new Set(), names=[];
+  _sectMap.forEach(function(s){ if(_sectSel.has(s.c)){ names.push(s.c); s.ids.forEach(function(i){ ids.add(i); }); } });
+  setSearchScope(ids, names.join(' + ')+' ('+ids.size+' кн.)');
+}
+function renderSectChips(){
+  var box=document.getElementById('sectChips');
+  if(!box){ box=document.createElement('div'); box.id='sectChips'; box.style.cssText='margin:5px 0 2px';
+    var a=document.querySelector('.modes'); if(!a||!a.parentNode) return; a.parentNode.insertBefore(box,a); }
+  if(!_sectMap){ box.innerHTML=''; return; }
+  var top=_sectMore?_sectMap:_sectMap.slice(0,6);
+  box.innerHTML='<div class="hint" style="font-size:11px;margin-bottom:4px">📂 Искать сразу в разделе — тап добавляет:</div>'
+    +top.map(function(s){ var on=_sectSel.has(s.c);
+      return '<span class="chip sectChip" data-c="'+esc(s.c)+'" style="cursor:pointer;font-size:12px;'
+        +(on?'background:rgba(46,155,91,.16);border-color:#2ea043;color:#9be7c4':'')+'" dir="rtl">'
+        +esc(s.c)+' <span style="opacity:.6">'+s.ids.length+'</span> <b style="color:'+(on?'#ff9d9d':'#7fe3bf')+'">'+(on?'−':'+')+'</b></span>'; }).join(' ')
+    +(_sectMap.length>6?(' <span class="chip sectMore" style="cursor:pointer;font-size:12px;opacity:.75">'+(_sectMore?'скрыть ▴':('ещё '+(_sectMap.length-6)+' ▾'))+'</span>'):'');
+  box.querySelectorAll('.sectChip').forEach(function(c){ c.onclick=function(){ var k=c.dataset.c;
+    if(_sectSel.has(k)) _sectSel.delete(k); else _sectSel.add(k);
+    try{ hap('light'); }catch(e){} renderSectChips(); _sectApply(); }; });
+  var mb=box.querySelector('.sectMore'); if(mb) mb.onclick=function(){ _sectMore=!_sectMore; renderSectChips(); };
+}
+function initSectChips(){ loadCatalog().then(function(cat){ if(!cat||!cat.length) return; _sectMap=_sectBuild(cat); renderSectChips(); }).catch(function(){}); }
 function renderScopeChip(){ var bar=document.getElementById('scopeBar');
   if(!bar){ bar=document.createElement('div'); bar.id='scopeBar'; bar.style.cssText='margin:6px 0'; var a=document.querySelector('.modes'); if(a&&a.parentNode) a.parentNode.insertBefore(bar,a); }
   if(!_scopeIds){ bar.style.display='none'; bar.innerHTML=''; return; }
@@ -13536,6 +13567,7 @@ async function boot(){
         } }
     }catch(e){}
     renderCols();
+    try{ initSectChips(); }catch(e){}   // совет 7: чипы разделов каталога — строятся из catalog.json, грузится лениво
     // M463: пришли по share-ссылке #go=… → воспроизвести то же место у получателя
     try{ const m=location.hash.match(/#go=([^&]+)/);
       if(m){ const ctx=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
