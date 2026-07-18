@@ -244,7 +244,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1126</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1127</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -808,7 +808,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1126';
+const APPVER = 'v1127';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -13200,23 +13200,33 @@ function openLink(u, opts){
   // диалог согласия рисовался ПОД ними: владелец жал W (Википедия), а «Открыть ↗» было не видно и не нажать.
   // Тот же класс бага уже ловили с тафсиром (был 10007 «прятался ЗА карточкой»). Выход наружу — самый верхний слой.
   const m=document.createElement('div'); m.className='modal'; m.id='extAskModal'; m.style.display='flex'; m.style.zIndex='10060';
-  m.innerHTML='<div class="panel fadeIn" style="max-width:420px;text-align:center;padding:18px 16px">'
+  // #606/#605 (владелец): ① пружинное появление + глубокая тень/подсветка; ② touch-action:manipulation (убирает
+  // задержку тапа в WebView) + :active-отклик (кнопка ВИДИМО отжимается — «выделять кликабельные»). Стиль — один раз.
+  if(!document.getElementById('_exAskCss')){ var _st=document.createElement('style'); _st.id='_exAskCss';
+    _st.textContent='@keyframes _exPop{0%{opacity:0;transform:scale(.86) translateY(10px)}58%{transform:scale(1.025) translateY(0)}100%{opacity:1;transform:scale(1)}}'
+      +'#extAskModal .panel{animation:_exPop .3s cubic-bezier(.2,.9,.25,1.25) both !important;box-shadow:0 32px 80px -8px rgba(0,0,0,.82),0 0 0 1px rgba(120,200,150,.18),0 0 46px rgba(90,180,120,.14) !important}'
+      +'#extAskModal button{touch-action:manipulation;transition:transform .12s ease,filter .12s ease}'
+      +'#extAskModal button:active{transform:scale(.93);filter:brightness(1.13)}#extAskModal #_exYes{box-shadow:0 4px 14px rgba(46,160,67,.4)}';
+    document.head.appendChild(_st); }
+  m.innerHTML='<div class="panel" style="max-width:420px;text-align:center;padding:18px 16px">'
     +'<div style="font-size:34px">'+inf.icon+'</div>'
     +'<div style="font-size:15px;font-weight:600;margin-top:7px;color:var(--text)">Выйти из приложения?</div>'
     +'<div style="font-size:12.5px;color:var(--hint);margin-top:5px;line-height:1.6">Откроется внешний сайт <b style="color:var(--link)">'+esc(inf.name)+'</b> — это не наш ресурс, за его содержимое мы не отвечаем.</div>'
     +'<div dir="ltr" style="font-size:11px;color:var(--hint);margin-top:6px;word-break:break-all;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 8px">'+esc(url.slice(0,120))+(url.length>120?'…':'')+'</div>'
     // #606 (владелец: «Остаться не нажимается, нажимает за ней»): была текстовая .mini-кнопка без явной рамки —
     // палец промахивался. Теперь ОБЕ кнопки — крупные, с чёткими границами и активным откликом, попасть легко.
-    +'<div style="display:flex;gap:9px;margin-top:15px"><button class="mini" id="_exNo" style="flex:1;padding:13px;border:1.5px solid var(--border-strong,#3a434d);border-radius:11px;font-size:14px;font-weight:600;background:var(--bg)">Остаться</button>'
-      +'<button class="go" id="_exYes" style="flex:1;padding:13px;border-radius:11px;font-size:14px;font-weight:600">Открыть ↗</button></div>'
+    +'<div style="display:flex;gap:9px;margin-top:15px"><button class="mini" id="_exNo" style="flex:1;padding:14px;border:1.5px solid var(--border-strong,#3a434d);border-radius:11px;font-size:14.5px;font-weight:700;background:var(--bg);color:var(--text)">Остаться</button>'
+      +'<button class="go" id="_exYes" style="flex:1;padding:14px;border-radius:11px;font-size:14.5px;font-weight:700">Открыть ↗</button></div>'
     +'<label style="display:flex;align-items:center;gap:6px;justify-content:center;margin-top:10px;font-size:11.5px;color:var(--hint);cursor:pointer">'
       +'<input type="checkbox" id="_exNever" style="accent-color:var(--btn)"> не спрашивать до конца сеанса</label></div>';
   document.body.appendChild(m);
-  const close=()=>{ try{ m.remove(); }catch(e){} };
+  // #606 (владелец: «Остаться нажимает за ней»): ЩИТ от призрачного клика — WebView после закрытия синтезирует
+  // click на элемент под пальцем; прозрачный слой 430мс поглощает его, чтобы не «нажималось за диалогом».
+  const close=()=>{ try{ const _sh=document.createElement('div'); _sh.style.cssText='position:fixed;inset:0;z-index:10061;background:transparent'; document.body.appendChild(_sh); setTimeout(()=>{ try{_sh.remove();}catch(e){} },430); }catch(e){} try{ m.remove(); }catch(e){} };
   m.addEventListener('click', e=>{ if(e.target===m) close(); });
-  m.querySelector('#_exNo').onclick=close;
-  m.querySelector('#_exYes').onclick=()=>{ try{ if(m.querySelector('#_exNever').checked) window._extAsk=false; }catch(e){}
-    try{ hap('light'); }catch(e){} close(); _openLinkRaw(url); };
+  m.querySelector('#_exNo').onclick=(e)=>{ try{e.stopPropagation();e.preventDefault();}catch(_){} try{hap('light');}catch(_){} close(); };
+  m.querySelector('#_exYes').onclick=(e)=>{ try{e.stopPropagation();e.preventDefault();}catch(_){} try{ if(m.querySelector('#_exNever').checked) window._extAsk=false; }catch(_){}
+    try{ hap('light'); }catch(_){} close(); _openLinkRaw(url); };
 }
 // M311: первые 3 раза — подсказка «тап по лого = обновление» + кнопка отключить свечение (экономия заряда)
 function _logoHint(){ try{
