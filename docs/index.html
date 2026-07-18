@@ -247,7 +247,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1135</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1136</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -815,7 +815,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1135';
+const APPVER = 'v1136';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7252,6 +7252,7 @@ function _keepNarr(nm){ const t=(nm||'').trim();
   // паритет sunnah.com: «имя + نисба/лакаб» (عمرو الناقد, يحيى القطان) — 2 слова, 2-е с «ال», ПЕРВОЕ имя в индексе موسوعة
   // (لаكаб отдельно в индекс не попал). Матн «قال الله»/«رسول الله» не проходит — «قال»/«رسول» не в индексе равиев.
   // (откат: фикс «имя+نисба» снят — индекс равиев засорён служебными словами (قال/في), давал ложные плюсы «في المسجد»; нужна чистка данных индекса, не regex)
+  if(window._narrKnownNisba && ((w.length===1 && /^ال/.test(t) && window._narrKnownNisba.has(t)) || (w.length===2 && /^ال/.test(w[1]) && window._narrKnownNisba.has(w[1])))) return true;   // паритет sunnah.com: нисба (الجريري) / имя+нисба (عمرو الناقد) по ЧИСТОМУ нисба-сету last-words
   if(w.length<=2){ const a=t.replace(/[^ء-ي]/g,'');
     if(a.length>=4 && !/^(?:قال|قالا|قالت|كان|ثنا|نا|ثني|عن|أن|إن|ثم|وقد|قد|به|له|عنه|عنها|كلهم|جميعا|واحد|واحده|رحمه|صدور|قدميه|قدمي|ثوب|يقول|سمعت|اخبرنا|حدثنا|وجهه|وجهها|يده|يديه|يداه|رأسه|راسه|ظهره|بطنه|عينيه|عينه|فمه|لسانه|جسده|جسمه|صدره|كفه|كفيه)$/.test(t)){
       if(_narrIndexed(_narrCanon(t))===false) return false;   // не равий موسوعة (صدور/رحمة/واحد) → не подсвечивать
@@ -7433,7 +7434,9 @@ function loadNarrNames(){ if(_narrNames) return Promise.resolve(_narrNames); if(
     try{ const n2=await fetchJSON('./narrators_names2.json?v='+APPVER, 20000, {silent:true});
       (n2.u||[]).forEach(p=>_narrNames.push(p)); window._narrMulti=n2.m||[]; }catch(e){}   // QA-свип: таймаут (вторичный индекс форм)
     // Сессия21: набор ПЕРВЫХ слов имён равиев موسوعة — проверка подсветки (واحد/رحمة/صدور — НЕ имена → не метим)
-    try{ const S=new Set(), F=new Set(); _narrNames.forEach(p=>{ const nm=p[0]||''; if(!nm) return; F.add(nm); const f=nm.split(' ')[0]; if(f&&f.length>1){ S.add(f); S.add(f.replace(/^ال/,'')); } }); window._narrKnownW=S; window._narrKnownF=F; }catch(e){}
+    try{ const S=new Set(), F=new Set(), N=new Set(); _narrNames.forEach(p=>{ const nm=p[0]||''; if(!nm) return; F.add(nm); const ws=nm.split(' '); const f=ws[0]; if(f&&f.length>1){ S.add(f); S.add(f.replace(/^ال/,'')); }
+      const last=ws[ws.length-1]; if(last && last.length>=5 && /^ال/.test(last) && last!=='الله' && last!=='الذي' && last!=='التي') N.add(last);   // паритет sunnah.com: нисба-сет из ПОСЛЕДНИХ слов полных имён (الجريري/الناقد/الزهري) — чист от قال/في (те — first-words)
+    }); window._narrKnownW=S; window._narrKnownF=F; window._narrKnownNisba=N; }catch(e){}
     return _narrNames; }).catch(()=>{_narrNames=[];return _narrNames;}); return _narrNamesP; }
 function _narrCanon(s){ s=(s||'').replace(/[ً-ْـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه'); return s.replace(/\s+/g,' ').trim(); }
 let _mudPromise=null;
