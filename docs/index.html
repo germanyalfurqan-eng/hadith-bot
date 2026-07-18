@@ -244,7 +244,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1127</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1128</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -492,6 +492,10 @@
   #appShine.on{ animation:appShine 1.05s cubic-bezier(.25,.6,.2,1); transform-origin:11% 5%; }
   /* M311: уважаем системную настройку «меньше движения» — гасим разгорание лого и проход света (переход «домой» при этом работает как обычно) */
   @media (prefers-reduced-motion:reduce){ #brandLogo.refreshing{ animation:none!important } #appShine.on{ animation:none!important; opacity:0!important } }
+  /* #654 (владелец: «когда включается приложение — лёгкая красивая анимация»): мягкий вход контейнера при первом показе */
+  @keyframes appEnter{ from{ opacity:0; transform:translateY(10px) scale(.988) } to{ opacity:1; transform:none } }
+  #app.appIn{ animation:appEnter .55s cubic-bezier(.2,.72,.2,1) both }
+  @media (prefers-reduced-motion:reduce){ #app.appIn{ animation:none!important } }
   /* ===== v1093 (гугл-апп, согласовано владельцем 17.07 — пункты 1-8) ===== */
   /* П-8а: тонкий скроллбар (у них 5px вместо системного «бревна») — списки цепей/критиков/книг длинные */
   ::-webkit-scrollbar{ width:5px; height:5px }
@@ -808,7 +812,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1127';
+const APPVER = 'v1128';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -13737,7 +13741,9 @@ async function boot(){
   if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
   if(BACKEND_URL){ try{ fetch(BACKEND_URL+'/hit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:INITDATA})}); }catch(e){} }   // G3: счётчик запусков
   if(userAllowed()){
-    document.getElementById('app').style.display='block';
+    var _appEl=document.getElementById('app'); _appEl.style.display='block';
+    try{ _appEl.classList.add('appIn'); }catch(e){}   // #654: мягкий вход приложения при старте
+    try{ var _ash=document.getElementById('appShine'); if(_ash){ _ash.classList.remove('on'); void _ash.offsetWidth; _ash.classList.add('on'); } }catch(e){}   // #654: лёгкий проход света при открытии
     if(isOwner){ var _db=document.getElementById('devBtn'); if(_db) _db.style.display='block'; document.getElementById('sub').textContent='режим владельца'; }
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab && st.tab!=='hadith'){ var _bt=document.querySelector('.tab[data-tab="'+st.tab+'"]'); if(_bt && _bt.offsetParent!==null) _bt.click(); }   // QA-low: восстановить любую видимую вкладку (была только quran; hadith=дефолт; trending только если виден)
