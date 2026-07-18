@@ -3708,8 +3708,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("📝 *Заметки JM:*\n\n" + "\n".join(_lines), parse_mode="Markdown")
             return
         # ===== Добавить заявку: «заявка <текст>» / «замечание <текст>» (+ подсказка о дубле) =====
-        if _tl.startswith("заявка ") or _tl.startswith("замечание ") or _tl == "заявка" or _tl == "замечание":
-            body = text.strip()[6:].strip() if _tl.startswith("заявк") or _tl == "заявка" else text.strip()[9:].strip()
+        _zm = re.match(r'^(заявка|замечание)(?:[\s.,:;!?)»«—-].*)?$', _tl, re.S)   # #фикс (владелец 18.07): точка/запятая после «заявка» ломала приём («заявка.» не матчилось) — теперь любой разделитель ок
+        if _zm:
+            body = text.strip()[len(_zm.group(1)):].lstrip(" \t.,:;!?)»«—-\r\n").strip()
             img_flag = False; imgkey = ""
             rep = update.message.reply_to_message
             # #245/#274: «заявка [коммент]» РЕПЛАЕМ на сообщение → регистрируем ОСНОВНОЙ текст отвеченного сообщения + коммент владельца.
