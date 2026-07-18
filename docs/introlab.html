@@ -109,12 +109,13 @@
   <h2>🎬 Звук интро (кино-логотип)</h2>
   <div class="seg" id="soundSeg"><span class="segLbl">Звук:</span><button data-snd="camera" class="on">📷 Камера</button><button data-snd="click">👆 Мягкий клик</button><button data-snd="shimmer">✨ Блеск</button><button data-snd="whoosh">🍃 Свуш</button><button data-snd="drop">💧 Капля</button><button data-snd="soft">🌙 Мягкий</button><button data-snd="off">выкл</button><button id="sPrev" style="background:var(--card2);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:6px 11px;font-size:12px;cursor:pointer">↻ ещё раз</button></div>
   <div class="tlcap">Клик по варианту = сразу слышно. <b>Лёгкие и тихие</b> звуки (без баса-бабаха) — короткий чистый акцент на появлении логотипа. 📷 Камера = щелчок затвора. Играет вместе с видео и голосом.</div>
+  <div class="sliders"><label>Громкость звука: <b id="svolV">50%</b><input type="range" id="svol" min="0" max="100" step="5" value="50"></label></div>
 
   <h2>🎙️ Голос-приветствие <span style="color:var(--hint);font-weight:400;text-transform:none;letter-spacing:0">— отдельный переключатель</span></h2>
   <div class="seg"><span class="segLbl">Голос:</span><button id="vOn" class="on">вкл</button><button id="vOff">выкл</button></div>
   <div class="sliders">
-    <label>Голос стартует через: <b id="delayV">1.2 с</b><input type="range" id="delay" min="0" max="2500" step="100" value="1200"></label>
-    <label>Громкость: <b id="volV">100%</b><input type="range" id="vol" min="0" max="100" step="5" value="100"></label>
+    <label>Голос стартует через: <b id="delayV">0.0 с</b><input type="range" id="delay" min="0" max="2500" step="100" value="0"></label>
+    <label>Громкость голоса: <b id="volV">50%</b><input type="range" id="vol" min="0" max="100" step="5" value="50"></label>
   </div>
   <div class="tlcap" style="margin-top:4px">🎩 «Джарвис-стиль» = наш нейро-голос + кино-обработка (глубина, «комната», фильтр) — <b>тот же вайб без кражи чужого голоса</b>. «голо/комм» = заметно синтетический (как ИИ-дворецкий), «мягкий» = премиум-натуральный. Кружок ▶ — прослушать.</div>
   <div id="list"></div>
@@ -136,10 +137,11 @@
       stage=document.getElementById('stage'),buzz=document.getElementById('buzz'),buzzTxt=document.getElementById('buzzTxt'),
       ripple=document.getElementById('ripple'),pv=document.getElementById('pv'),list=document.getElementById('list'),ph=document.getElementById('ph');
   vid.src=D.vid;
-  var sel=D.items[0].id, srcMap={}; D.items.forEach(function(it){srcMap[it.id]=it.src;});
-  var voiceAudio=new Audio(), delayMs=1200, volume=1;
+  var sel='jarvis_ar_combo_soft', srcMap={}; D.items.forEach(function(it){srcMap[it.id]=it.src;});
+  if(!srcMap[sel]) sel=D.items[0].id;
+  var voiceAudio=new Audio(), delayMs=0, volume=0.5;
   var hapticOn=true, voiceOn=true, anStyle='casc', timers=[], rafId=null;
-  var stingAudio=new Audio(), soundMode='camera';
+  var stingAudio=new Audio(), soundMode='camera', soundVol=0.5;
   function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
   function render(){
     var groups=[['jarvis','🎩 Джарвис-стиль (обработка) — арабский и русский'],['main','Обычные (без обработки, Hamed)'],['alt','Другие голоса']],html='';
@@ -176,7 +178,7 @@
   function playAll(){ clearAll(); intro.classList.remove('gone'); menu.className=anStyle;
     voiceAudio.src=srcMap[sel]; voiceAudio.volume=volume;
     try{vid.currentTime=0;vid.play();}catch(e){}
-    if(soundMode!=='off' && D.sting[soundMode]){ stingAudio.src=D.sting[soundMode]; stingAudio.volume=1; stingAudio.currentTime=0; stingAudio.play().catch(function(){}); }
+    if(soundMode!=='off' && D.sting[soundMode]){ stingAudio.src=D.sting[soundMode]; stingAudio.volume=soundVol; stingAudio.currentTime=0; stingAudio.play().catch(function(){}); }
     D.haptic.forEach(function(h){ timers.push(setTimeout(function(){pulse(h.k);}, h.t*1000)); });
     if(voiceOn){ timers.push(setTimeout(function(){voiceAudio.currentTime=0;voiceAudio.play().catch(function(){});}, delayMs)); }
     (function loop(){ var t=vid.currentTime||0; ph.style.left=Math.min(100,t/D.vdur*100)+'%'; if(t<D.vdur){rafId=requestAnimationFrame(loop);} })(); }
@@ -191,7 +193,7 @@
   document.getElementById('vOff').onclick=function(){voiceOn=false;segPick('vOn','vOff',false);list.classList.add('off');};
   document.getElementById('anCasc').onclick=function(){anStyle='casc';segPick('anCasc','anSpring',true);};
   document.getElementById('anSpring').onclick=function(){anStyle='spring';segPick('anCasc','anSpring',false);};
-  function playSting(){ if(soundMode==='off')return; try{stingAudio.pause();}catch(e){} stingAudio.src=D.sting[soundMode]; stingAudio.volume=1; stingAudio.currentTime=0; stingAudio.play().catch(function(){}); }
+  function playSting(){ if(soundMode==='off')return; try{stingAudio.pause();}catch(e){} stingAudio.src=D.sting[soundMode]; stingAudio.volume=soundVol; stingAudio.currentTime=0; stingAudio.play().catch(function(){}); }
   document.getElementById('soundSeg').addEventListener('click',function(e){
     var b=e.target.closest('[data-snd]'); if(b){ soundMode=b.getAttribute('data-snd');
       [].forEach.call(this.querySelectorAll('[data-snd]'),function(x){x.classList.toggle('on',x===b);});
@@ -201,6 +203,8 @@
   var dEl=document.getElementById('delay'),vEl=document.getElementById('vol');
   dEl.oninput=function(){delayMs=+dEl.value;document.getElementById('delayV').textContent=(delayMs/1000).toFixed(1)+' с';};
   vEl.oninput=function(){volume=(+vEl.value)/100;document.getElementById('volV').textContent=vEl.value+'%';pv.volume=volume;voiceAudio.volume=volume;};
+  var svEl=document.getElementById('svol');
+  svEl.oninput=function(){soundVol=(+svEl.value)/100;document.getElementById('svolV').textContent=svEl.value+'%';stingAudio.volume=soundVol;};
 </script>
 </body>
 </html>
