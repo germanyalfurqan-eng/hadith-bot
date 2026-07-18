@@ -247,7 +247,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1142</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1143</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -815,7 +815,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1142';
+const APPVER = 'v1143';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7230,7 +7230,13 @@ function isnadNarrators(text){
     const _qm=_m2.match(/^\s*(?:قال\s*[:：،]?\s*)?قرأت\s+على\s+([\s\S]*?)(?:\sقال|[«»]|$)/);
     if(_qm && _qm[1] && _qm[1].trim().length>2) isn += ' عن ' + _qm[1].trim();
   }catch(e){}
-  const VERB=/\s*(?:حدثناه|حدثنا|حدثني|أخبرنا|أخبرني|أنبأنا|أنبأني|سمعت|عن|قالا|قالوا|قال|ثنا|كلهم|جميعا)\s+/u;
+  // паритет sunnah.com (Бухари №1 и мн.др.): «حدثنا A ، قال : حدثنا B ، قال : أخبرني C…» — splitIsnad режет на ПЕРВОМ قال, вложенная цепь (B, C…) уходит в матн.
+  // Если part[1] НАЧИНАЕТСЯ с «قال: [حدثنا/أخبرنا/حدثني/أنبأنا]» — это ЕЩЁ иснад (собиратель продолжает «сказал: рассказал нам…»): добираем до реального матна (يقول/قال رسول/«»).
+  try{ const _m3=stripDiac(splitIsnad(text)[1]||'').replace(/ـ/g,'');
+    const _cm=_m3.match(/^\s*قال\s*[:：،]?\s*((?:حدثنا|حدثني|أخبرنا|أخبرني|أنبأنا|أنبأني)\s[\s\S]*?)(?:\sيقول|\sقال\s+رسول|\sقال\s+النبي|[«»]|$)/);
+    if(_cm && _cm[1] && _cm[1].trim().length>3) isn += ' ' + _cm[1].trim();
+  }catch(e){}
+  const VERB=/\s*(?:حدثناه|حدثنا|حدثني|أخبرنا|أخبرني|أنبأنا|أنبأني|سمعت|سمع|عن|قالا|قالوا|قال|ثنا|كلهم|جميعا)\s+/u;
   const parts=[];
   isn.split(VERB).forEach(seg=>{ seg=seg.replace(/[،,.:؛«»()]/g,' ').replace(/\s+/g,' ').trim(); if(!seg) return;
     // разделить совместных передатчиков по «و», НО не рвать составное имя после «بن/ابن» (وقاص, وكيع — часть имени)
