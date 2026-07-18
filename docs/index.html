@@ -247,7 +247,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1147</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1148</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -815,7 +815,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1147';
+const APPVER = 'v1148';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4511,7 +4511,7 @@ function _aiBusyPing(){ _aiHealth.state='busy'; _aiHealth.ts=Date.now(); renderA
    одним тапом». Каталог (8589 книг) уже размечен по разделам полем c — 40 разделов; чипы строим ИЗ НЕГО,
    новых данных не заводим (R-45). Тап = раздел в области поиска, ещё тап = убран; несколько разделов
    складываются. Область ставим существующим setSearchScope — свой механизм поиска не плодим. */
-var _sectSel=new Set(), _sectMap=null, _sectMore=false;
+var _sectSel=new Set(), _sectMap=null, _sectMore=false, _sectOpen=false;   // #заявка владельца: разделы СВЁРНУТЫ по умолчанию (одна кнопка), _sectOpen=разворот
 function _sectBuild(cat){ var m={}; (cat||[]).forEach(function(b){ var c=b.c||''; if(!c) return; (m[c]=m[c]||[]).push(String(b.i)); });
   return Object.keys(m).map(function(c){ return {c:c, ids:m[c]}; }).sort(function(a,b){ return b.ids.length-a.ids.length; }); }
 function _sectApply(){
@@ -4528,10 +4528,17 @@ function renderSectChips(){
   if(typeof tab!=='undefined' && tab!=='hadith'){ box.style.display='none'; box.innerHTML=''; return; }
   box.style.display='';
   if(!_sectMap){ box.innerHTML=''; return; }
+  // #заявка владельца (сто раз): разделы (كتب السنة/العقيدة/…) СВЁРНУТЫ в ОДНУ кнопку по умолчанию — не занимают место. Тап → разворот. Выбранные показываем счётчиком.
+  if(!_sectOpen){
+    var _n=_sectSel.size;
+    box.innerHTML='<span class="chip sectToggle" style="cursor:pointer;font-size:12px;opacity:.9">📂 Искать сразу в разделе'+(_n?(' <b style="color:#9be7c4">· выбрано '+_n+'</b>'):'')+' ▾</span>';
+    var _tg=box.querySelector('.sectToggle'); if(_tg) _tg.onclick=function(){ _sectOpen=true; try{hap('light');}catch(e){} renderSectChips(); };
+    return;
+  }
   // #605-класс/скрин владельца («неудачно выглядит»): при раскрытии все 40 разделов вываливались на пол-экрана.
   // Теперь раскрытый список — в КОМПАКТНОМ скролл-блоке (max-height), не занимает весь экран.
   var top=_sectMore?_sectMap:_sectMap.slice(0,6);
-  var chips='<div class="hint" style="font-size:11px;margin-bottom:4px">📂 Искать сразу в разделе — тап добавляет:</div>'
+  var chips='<div class="hint" style="font-size:11px;margin-bottom:4px">📂 Искать сразу в разделе — тап добавляет: <span class="sectHide" style="cursor:pointer;color:var(--link);font-weight:600">свернуть ▴</span></div>'
     +'<div style="'+(_sectMore?'max-height:112px;overflow-y:auto;overscroll-behavior:contain;padding:2px 0;-webkit-overflow-scrolling:touch;':'')+'">'
     +top.map(function(s){ var on=_sectSel.has(s.c);
       return '<span class="chip sectChip" data-c="'+esc(s.c)+'" style="cursor:pointer;font-size:12px;'
@@ -4544,6 +4551,7 @@ function renderSectChips(){
     if(_sectSel.has(k)) _sectSel.delete(k); else _sectSel.add(k);
     try{ hap('light'); }catch(e){} renderSectChips(); _sectApply(); }; });
   var mb=box.querySelector('.sectMore'); if(mb) mb.onclick=function(){ _sectMore=!_sectMore; renderSectChips(); };
+  var hb=box.querySelector('.sectHide'); if(hb) hb.onclick=function(){ _sectOpen=false; try{hap('light');}catch(e){} renderSectChips(); };
 }
 function initSectChips(){ loadCatalog().then(function(cat){ if(!cat||!cat.length) return; _sectMap=_sectBuild(cat); renderSectChips(); }).catch(function(){}); }
 function renderScopeChip(){ var bar=document.getElementById('scopeBar');
