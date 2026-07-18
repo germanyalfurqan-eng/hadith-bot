@@ -247,7 +247,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1145</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1146</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -815,7 +815,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1145';
+const APPVER = 'v1146';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5563,14 +5563,23 @@ async function openNarratorRijal(name, forceId){
   const rjBtn=document.createElement('button'); rjBtn.className='mini'; rjBtn.textContent='📚 Что сказали критики (по 150 трудам риджаля)';
   rjBtn.style.cssText='margin-top:11px;width:100%;border:1px solid #2e9b5b;color:#bff5d4;background:#173d30;padding:10px;border-radius:10px;font-size:13.5px;font-weight:700;cursor:pointer';
   const rjOut=document.createElement('div'); rjOut.style.cssText='margin-top:8px';
-  rjBtn.onclick=async()=>{ if(!BACKEND_URL){ toast('Нужен сервер'); return; } rjBtn.disabled=true; rjOut.innerHTML='<div class="hint">📚 Ищу «'+esc(name)+'» по 150 трудам джарх-ва-тадиль…</div>';
-    try{ const r=await fetch(BACKEND_URL+'/rijal?name='+encodeURIComponent(name)+'&initData='+encodeURIComponent(INITDATA));
-      const jj=await r.json().catch(()=>({}));
-      if(r.status===429){ rjOut.innerHTML='<div class="hint">Слишком часто — подожди немного.</div>'; rjBtn.disabled=false; return; }
-      if(r.status===403){ rjOut.innerHTML='<div class="hint">Функция пока не открыта.</div>'; rjBtn.disabled=false; return; }
-      const data=jj.data||[];
-      if(!data.length){ rjOut.innerHTML='<div class="hint">Прямых упоминаний не нашёл (имя бывает в другой форме — попробуй полнее, напр. с куньей/нисбой).</div>'; rjBtn.disabled=false; rjBtn.textContent='📚 Искать снова'; return; }
-      rjOut.innerHTML='<div class="hint" style="margin-bottom:7px">📚 Найдено мест: <b>'+(jj.count||data.length).toLocaleString('ru')+'</b> в трудах риджаля (по '+(jj.books||150)+' книгам критиков · показаны первые '+data.length+'):</div>';
+  rjBtn.onclick=async()=>{ if(!BACKEND_URL){ toast('Нужен сервер'); return; } rjBtn.disabled=true;
+    // #паритет (совет DeepSeek): не тупик на одном имени — мультипоиск по формам (полное/кунья/нисба/исм), берём первый непустой
+    const _rjVars=(()=>{ const o=[],add=x=>{ x=(x||'').trim(); if(x && x.replace(/[^ء-ي]/g,'').length>=3 && !o.includes(x)) o.push(x); };
+      add(name); const w=stripDiac(name||'').replace(/ـ/g,'').split(/\s+/).filter(Boolean);
+      const ki=w.findIndex(x=>/^(أبو|أبي|أبا|أم|ابن|بنت)$/.test(x)); if(ki>=0&&w[ki+1]) add(w[ki]+' '+w[ki+1]);
+      const nis=[...w].reverse().find(x=>/^ال..+/.test(x) && x!=='الله' && x!=='اللهم'); if(nis) add(nis);
+      const ism=w.find(x=>x.replace(/[^ء-ي]/g,'').length>=3 && !/^(أبو|أبي|أبا|أم|ابن|بن|بنت)$/.test(x)); if(ism) add(ism);
+      return o.slice(0,4); })();
+    let jj={}, data=[], _usedQ=name;
+    try{
+      for(const _q of _rjVars){ rjOut.innerHTML='<div class="hint">📚 Ищу «'+esc(_q)+'» по 150 трудам джарх-ва-тадиль…</div>';
+        const r=await fetch(BACKEND_URL+'/rijal?name='+encodeURIComponent(_q)+'&initData='+encodeURIComponent(INITDATA));
+        if(r.status===429){ rjOut.innerHTML='<div class="hint">Слишком часто — подожди немного.</div>'; rjBtn.disabled=false; return; }
+        if(r.status===403){ rjOut.innerHTML='<div class="hint">Функция пока не открыта.</div>'; rjBtn.disabled=false; return; }
+        jj=await r.json().catch(()=>({})); data=jj.data||[]; _usedQ=_q; if(data.length) break; }
+      if(!data.length){ rjOut.innerHTML='<div class="hint">📌 В 150 трудах джарх-ва-тадиль прямых цитат не нашёл (искал по формам: '+esc(_rjVars.join(' · '))+'). Возможно, редкий передатчик или имя в иной форме. Сводка оценок Ибн Хаджара / аз-Захаби — выше в карточке.</div>'; rjBtn.disabled=false; rjBtn.textContent='📚 Искать снова'; return; }
+      rjOut.innerHTML='<div class="hint" style="margin-bottom:7px">📚 Найдено мест: <b>'+(jj.count||data.length).toLocaleString('ru')+'</b>'+(_usedQ!==name?(' <span style="color:var(--hint)">(по форме «'+esc(_usedQ)+'»)</span>'):'')+' в трудах риджаля (по '+(jj.books||150)+' книгам критиков · показаны первые '+data.length+'):</div>';
       data.forEach(x=>{ const c=document.createElement('div'); c.className='card'; c.style.cssText='margin-bottom:7px';
         const loc=(x.vol?('т.'+x.vol+' '):'')+(x.page!=null?('стр. '+x.page):'');
         c.innerHTML='<div class="rjH" style="font-size:12.5px;color:var(--link);direction:rtl;text-align:right;font-weight:600;cursor:pointer">📖 '+esc(x.book_name||'')+(x.critic?(' <span style="color:#bff5d4">· '+esc(_critRu(x.critic))+'</span>'):'')+(loc?(' <span style="color:var(--hint);font-weight:400">· '+esc(loc)+'</span>'):'')+'</div>'
