@@ -244,7 +244,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1125</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1126</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -808,7 +808,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1125';
+const APPVER = 'v1126';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3316,7 +3316,7 @@ function bookName(id){ id=String(id||''); return (_booksMap&&_booksMap[id])||'';
 function bookAuthorOf(id){ id=String(id||''); try{ if(_catalog){ const b=_catalog.find(x=>String(x.i)===id); return b?(b.a||''):''; } }catch(e){} return ''; }
 // M216: читалка любой книги Мактабы (через turath /api/book_page) — листание + Arabus
 let _bookView={id:null,pg:1};
-function openBook(bookId, startPg, _forceTurath, _hl){
+function openBook(bookId, startPg, _forceTurath, _hl, _wantPrinted){
   const id=String(bookId||'').replace(/[^0-9]/g,''); if(!id) return;
   try{ _pushRecentBook(id); }catch(e){}   // M111+: запоминаем открытые книги → раздел «🕐 Недавно читал» в каталоге
   // «Муслим в Мактабе = в Избранном»: издания Сахих Муслим (тур. печать 711 / ت عبد الباقي 1727) открываем
@@ -3332,7 +3332,10 @@ function openBook(bookId, startPg, _forceTurath, _hl){
   let sp=parseInt(String(startPg||'').replace(/[^0-9]/g,''))||1; if(sp<1) sp=1;
   // M318: ПРОДОЛЖИТЬ ЧТЕНИЕ — если страница не указана, возвращаемся туда, где остановились
   if(!startPg){ try{ const pos=JSON.parse(localStorage.getItem('bk_pos')||'{}'); if(pos[id]&&pos[id].pg>1){ sp=pos[id].pg; setTimeout(()=>toast('▶ Продолжаю со стр. '+sp+' (читал ранее)'),300); } }catch(e){} }
-  _bookView={id:id, pg:sp, hl:(_hl||'')};   // hl = цитата для авто-подсветки в ридере (указ владельца: «У нас» выделять наглядно как в поиске)
+  // #Читать-у-нас (баг targeting'а): критики дают ПЕЧАТНУЮ страницу (تقريب стр.441), а turath листает по «листу».
+  // Раньше openBook брал печатную стр. как лист → садился не туда (441-лист = печатная ~515). Теперь _wantPrinted →
+  // _bookView.want, и ридер САМ снапит лист на нужную печатную страницу — та же проверенная машинерия, что у ввода «стр.» (стр.3654/3567).
+  _bookView={id:id, pg:sp, hl:(_hl||''), want:((_wantPrinted&&Number(_wantPrinted)>0)?Number(_wantPrinted):null)};
   try{ _actPush({t:'book', bid:id, pg:sp}); }catch(e){}   // M462
   let m=document.getElementById('bookModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='bookModal';
@@ -10081,7 +10084,7 @@ function _ttLinkRow(bid,page,mid,shnum,book,quote,crit){
     // старт = печатная стр., иначе shamela-стр. (shnum), иначе 1; ГЛАВНОЕ — quote уходит в _bookView.hl,
     // ридер сам находит цитату (_bookDoFind) и ПОДСВЕЧИВАЕТ её. Кнопка всегда зелёная и всегда ведёт к месту.
     const _pg2 = pgok ? page : ((shnum && Number(shnum) > 0) ? Number(shnum) : 1);
-    w.appendChild(mk('📖 Читать у нас — к цитате','#9be7c4','rgba(46,160,67,.10)','#2d6a45',()=>{ openBook(bid,_pg2,false,quote); }));
+    w.appendChild(mk('📖 Читать у нас — к цитате','#9be7c4','rgba(46,160,67,.10)','#2d6a45',()=>{ openBook(bid,_pg2,false,quote,(pgok?Number(page):null)); }));
     w.appendChild(mk('📚 الشاملة','#f0d9a8','rgba(201,138,42,.12)','#5e4d23',()=>openLink('https://shamela.ws/book/'+bid+(shnum?('/'+shnum):''))));
   } else {
     // 11.07 (владелец, ذكوان: «нет ссылок на книгу у цитат Ибн Маина»): строки, подтянутые С sunnah.com,
