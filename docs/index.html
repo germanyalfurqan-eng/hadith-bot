@@ -244,7 +244,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1124</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1125</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -808,7 +808,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1124';
+const APPVER = 'v1125';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3614,7 +3614,15 @@ async function _bookLoad(){
         ft.onclick=()=>{ const on=fc.style.display==='none'; fc.style.display=on?'block':'none'; ft.textContent=(on?'▴':'▾')+' حاشية · сноски страницы'; };
         fb.appendChild(ft); fb.appendChild(fc); mainEl.appendChild(fb); }
       // TB: ВЫДЕЛИТЬ передатчиков в тексте читалки (как в карточках хадиса) — тап → карточка равия
-      try{ const _nms=isnadNarrators(_body).filter(_keepNarr); if(_nms.length) highlightNarratorsInDiv(mainEl, _nms, nm=>{ try{ openNarratorRijal(nm); }catch(e){} }); }catch(e){}
+      // #598: (1) собираем передатчиков ПОБЛОЧНО (turath-лист бывает многохадисным — isnadNarrators(_body) брал
+      //       имена только ПЕРВОГО иснада → عائشة из другого хадиса не подсвечивалась); (2) зовём ОБЕ функции,
+      //       как в карточке хадиса (11593/11605/12002) — раньше в читалке был только highlightNarratorsInDiv,
+      //       без highlightRelationalInDiv «عن أبيه/جده» не красились и не резолвились в отца (#246).
+      try{ let _nms=[]; try{ _hadithBlocks.forEach(b=>{ if(b&&b.trim()) isnadNarrators(b).forEach(n=>_nms.push(n)); }); }catch(e){}
+        if(!_nms.length) _nms=isnadNarrators(_body);
+        _nms=[...new Set(_nms)].filter(_keepNarr);
+        if(_nms.length) highlightNarratorsInDiv(mainEl, _nms, nm=>{ try{ openNarratorRijal(nm); }catch(e){} }); }catch(e){}
+      try{ highlightRelationalInDiv(mainEl); }catch(e){}   // #598: «عن أبيه/جده» — реляционные звенья + резолв отца (#246), как в карточках
       if(_colo){ const _cf=document.createElement('div'); _cf.style.cssText='direction:rtl;text-align:left;font-size:11px;color:var(--hint);margin-top:9px;padding-top:6px;border-top:1px dashed var(--border)'; _cf.textContent='📄 '+_colo; mainEl.appendChild(_cf); }
       try{ enableArabusTap(mainEl); if(_arabusOn) mainEl.style.cursor='pointer'; }catch(e){}
       // указ владельца: при открытии «У нас» (цитата критика) — авто-подсветить её наглядно, как в поиске
@@ -7197,7 +7205,12 @@ function isnadNarrators(text){
     merged.forEach(p0=>{
       // M376/№10: «أبو عامر أو أبو مالك» = شك الراوي — это ДВА передатчика, «أو» НЕ часть имени → сплит
       p0.split(/\s+أو\s+/).forEach(p=>{
-        p=p.replace(/^و/,'').replace(/\s+(?:قال|يقول|أنه|قالت|رضي|رضى)$/,'').trim();
+        p=p.replace(/^و/,'').trim();
+        // #598: срезать матн, приклеенный к ПОСЛЕДНЕМУ передатчику (часто сподвижнику) через «قالت/قال/كان/أن/رضي…»
+        // — عن عائشة رضي الله عنها قالت كان النبي… → «عائشة». Эти слова НИКОГДА не часть имени (целыми словами, в пробелах),
+        // поэтому срез безопасен: обычные сегменты иснада (между حدثنا/عن) их не содержат — они уже точки VERB-сплита.
+        p=p.split(/\s+(?:قال|قالت|قالا|قالوا|يقول|تقول|فقال|أن|أنه|أنها|كان|رضي|رضى)\s+/)[0]
+           .replace(/\s+(?:قال|يقول|أنه|قالت|رضي|رضى)$/,'').trim();
         const w=p.split(' ').filter(Boolean).length;
         if(p.length>3 && w>=1 && w<=6 && !/رسول الله|النبي|صلى الله|وسلم/.test(p)) parts.push(p); }); });
   });
