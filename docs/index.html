@@ -247,7 +247,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1132</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1133</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -815,7 +815,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1132';
+const APPVER = 'v1133';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7228,6 +7228,14 @@ function isnadNarrators(text){
         const w=p.split(' ').filter(Boolean).length;
         if(p.length>3 && w>=1 && w<=6 && !/رسول الله|النبي|صلى الله|وسلم/.test(p)) parts.push(p); }); });
   });
+  // паритет sunnah.com (#654): сподвижник, ЦИТИРУЕМЫЙ в начале матна через двойное «قال: قال [СПОДВИЖНИК]:»
+  // (напр. «عن أبي الأحوص قال: قال عبد الله:») — splitIsnad относит его к матну, цепь недобирает. Ловим ТОЛЬКО
+  // двойное قال+قال+имя+двоеточие (специфично для цитаты сахаба); junk отсеет _keepNarr. رسول/النبي исключены.
+  try{ const _mt=stripDiac(splitIsnad(text)[1]||'').replace(/ـ/g,'');
+    const _sm=_mt.match(/^\s*قال\s*[:،]?\s*قال\s+([ء-ي][ء-ي\s]{2,24}?)\s*[:،]/);
+    if(_sm){ const _s=_sm[1].replace(/^لي\s+/,'').replace(/\s+(?:رضي|رضى|قال|يقول).*$/,'').trim();
+      if(_s && _s.length>3 && !/رسول|النبي|صلى/.test(_s)) parts.push(_s); }
+  }catch(e){}
   return [...new Set(parts)].slice(0,30);
 }
 // фильтр имён для подсветки/древа (вопрос владельца «не все передатчики кликабельны»):
