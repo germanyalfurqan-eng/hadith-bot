@@ -5081,8 +5081,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _c324 = _catalog_match(_m324.group(1))
         except Exception:
             _c324 = []
-        # в группах отвечаем только при УВЕРЕННОМ матче (≥0.8) — чтобы не спамить на случайные «слово 123»
-        if _c324 and (getattr(update.effective_chat, "type", "") == "private" or _c324[0][0] >= 0.8):
+        # #581/#575 («че за белиберда»): в ЛИЧКЕ фича ловила ЛЮБОЙ матч (даже слабый) → путаные кандидаты.
+        # Теперь порог уверенности и в личке (≥0.6); в группах строже (≥0.8) против спама на «слово 123».
+        _thr324 = 0.6 if getattr(update.effective_chat, "type", "") == "private" else 0.8
+        if _c324 and _c324[0][0] >= _thr324:
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup   # локальный импорт — как в «закреп» (стр. ~3231)
             _n324 = _m324.group(2)
             _kb324 = []
@@ -5090,8 +5092,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _lbl = ("📖 " + _nm[:38] + (" — " + _au.split()[-1] if _au else ""))[:60]
                 _kb324.append([InlineKeyboardButton(_lbl, url=f"https://t.me/muslimoontt_bot?startapp=b_{_bid}_{_n324}")])
             await update.message.reply_text(
-                f"📚 Нашёл в каталоге Мактабы — открыть №{_n324} в приложении:"
-                + ("" if len(_c324) == 1 else "\n(если не та книга — выбери из кандидатов)"),
+                f"📚 Похоже, это книга из каталога Мактабы — открыть №{_n324}:"
+                + ("" if len(_c324) == 1 else "\n(если не та — выбери из кандидатов ниже)"),
                 reply_markup=InlineKeyboardMarkup(_kb324))
             return
 
