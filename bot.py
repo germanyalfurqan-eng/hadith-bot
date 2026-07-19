@@ -2108,7 +2108,15 @@ async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]])
         elif member.new_chat_member.status in ["left", "kicked"]:
             a = "🚫 Удалён" if member.new_chat_member.status == "kicked" else "➖ Вышел"
-            msg = f"{a} {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}\n🕐 {now}"
+            by = ""   # #574: писать КЕМ удалён (from_user = инициатор изменения)
+            try:
+                fu = getattr(member, "from_user", None)
+                if member.new_chat_member.status == "kicked" and fu and fu.id != uid:
+                    by = f"\n👮 кем: @{fu.username}" if fu.username else f"\n👮 кем: {fu.full_name}"
+                elif member.new_chat_member.status == "left":
+                    by = "\n🚪 сам покинул группу"
+            except Exception: pass
+            msg = f"{a} {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}{by}\n🕐 {now}"
         else: return
         await context.bot.send_message(chat_id=LOG_CHAT_ID, text=msg, reply_markup=_kb)
     except: pass
@@ -3219,8 +3227,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 await update.message.reply_text(_none)
                             return
                         _cards = _rag_cards(_top, _terms, limit=4)   # карточки: целый хадис+выделение+перевод+ссылка
-                        _hdr = '🔎 По запросу «%s»%s — карточки хадисов (%d из %d):' % (
-                            _q, (' в «%s»' % _src) if _src else '', len(_cards), len(_top))
+                        _hdr = '🔎 По запросу «%s»%s — карточки хадисов (%d из %d):\n⚡ Поиск по ядру (RAG) — семантический, ИИ-токены НЕ тратятся.' % (
+                            _q, (' в «%s»' % _src) if _src else '', len(_cards), len(_top))   # #561: прозрачность — RAG не жжёт LLM-токены
                         if _wait:
                             try: await _wait.edit_text(_hdr)
                             except Exception: await update.message.reply_text(_hdr)
