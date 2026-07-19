@@ -17,8 +17,8 @@ import requests
 from datetime import datetime, timedelta
 from html import unescape
 from urllib.parse import parse_qsl
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler, PollAnswerHandler, MessageReactionHandler
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup, ChatPermissions
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler, PollAnswerHandler, MessageReactionHandler, CallbackQueryHandler
 
 # ============ АЛЬ-МУХАЙМИН (الموحد المهيمن) — наша выверенная база ============
 # Плоский индекс: { "907": {book, chapter, riwayat:[{text, short_ref, sources}], verified}, ... }
@@ -2091,14 +2091,60 @@ async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
         name = user.full_name
         username = f"@{user.username}" if user.username else "нет"
         uid = user.id
+        _kb = None
         if member.new_chat_member.status == "member":
             msg = f"➕ {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}\n🕐 {now}"
+            # #570: кнопки модерации при входе — действие ТОЛЬКО по клику владельца
+            _cd = f"{chat.id}:{uid}"
+            _kb = InlineKeyboardMarkup([[
+                InlineKeyboardButton("🚫 Бан", callback_data=f"mod:ban:{_cd}"),
+                InlineKeyboardButton("🔇 Ограничить", callback_data=f"mod:mute:{_cd}"),
+                InlineKeyboardButton("✅ ОК", callback_data="mod:ok"),
+            ]])
         elif member.new_chat_member.status in ["left", "kicked"]:
             a = "🚫 Удалён" if member.new_chat_member.status == "kicked" else "➖ Вышел"
             msg = f"{a} {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}\n🕐 {now}"
         else: return
-        await context.bot.send_message(chat_id=LOG_CHAT_ID, text=msg)
+        await context.bot.send_message(chat_id=LOG_CHAT_ID, text=msg, reply_markup=_kb)
     except: pass
+
+async def mod_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """#570: кнопки модерации под уведомлением о входе. Бан/ограничение — ТОЛЬКО по клику владельца."""
+    q = update.callback_query
+    if not q: return
+    try: await q.answer()
+    except: pass
+    try:
+        if q.from_user and q.from_user.id != OWNER_ID:
+            try: await q.answer("Только для владельца", show_alert=True)
+            except: pass
+            return
+        parts = (q.data or "").split(":")
+        act = parts[1] if len(parts) > 1 else ""
+        if act == "ok":
+            try: await q.edit_message_reply_markup(reply_markup=None)
+            except: pass
+            return
+        cid = int(parts[2]); uid = int(parts[3])
+        base = (q.message.text if q.message else "") or ""
+        if act == "ban":
+            try:
+                await context.bot.ban_chat_member(cid, uid); res = "🚫 ЗАБАНЕН (владельцем)"
+            except Exception as e:
+                res = f"⚠️ не смог забанить: {str(e)[:70]} (бот админ с правами?)"
+        elif act == "mute":
+            try:
+                await context.bot.restrict_chat_member(cid, uid, permissions=ChatPermissions(can_send_messages=False)); res = "🔇 ОГРАНИЧЕН — без права писать (владельцем)"
+            except Exception as e:
+                res = f"⚠️ не смог ограничить: {str(e)[:70]} (бот админ с правами?)"
+        else:
+            return
+        try: await q.edit_message_text(base + "\n\n" + res, reply_markup=None)
+        except: pass
+    except Exception as e:
+        try: await q.answer(f"ошибка: {str(e)[:60]}", show_alert=True)
+        except: pass
+
 
 _AI_BAN = set()   # чёрный список (chat_id/user_id) — кого НЕ обслуживать ИИ; владелец правит командами «бан/разбан»
 
@@ -8196,6 +8242,7 @@ async def handle_pinned(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 app.add_handler(MessageHandler(filters.StatusUpdate.PINNED_MESSAGE, handle_pinned))
 app.add_handler(ChatMemberHandler(track_member, ChatMemberHandler.CHAT_MEMBER))
+app.add_handler(CallbackQueryHandler(mod_callback, pattern=r"^mod:"))   # #570: кнопки модерации при входе (бан/ограничить по клику владельца)
 _seen_chats = set()
 async def _chat_seen(update, context):
     try:
