@@ -2082,6 +2082,7 @@ async def send_long(update, text, parse_mode=None):
             except Exception:
                 pass
 
+_member_seen = {}   # #567: анти-дубликат уведомлений о входе/выходе (Telegram шлёт статус повторно)
 async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         chat = update.effective_chat
@@ -2091,6 +2092,10 @@ async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
         name = user.full_name
         username = f"@{user.username}" if user.username else "нет"
         uid = user.id
+        _st = member.new_chat_member.status
+        _dk = (chat.id, uid, _st); _tn = datetime.now().timestamp()
+        if _member_seen.get(_dk, 0) > _tn - 300: return   # #567: тот же вход/выход в пределах 5 мин — не дублируем
+        _member_seen[_dk] = _tn
         _kb = None
         if member.new_chat_member.status == "member":
             msg = f"➕ {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}\n🕐 {now}"
