@@ -233,7 +233,7 @@
 </style>
 </head>
 <body>
-<!-- v1150: видео-заставка лого (заявка владельца) — раз за сессию, тап-скип, reduced-motion пропускает, без звука; фон = фон апла (#070a10, без рывка) -->
+<!-- v1151: интро — видео-лого + звук(Блеск,50%) + голос(мягкий премиум,50%,старт 0) + вибро(деликатно, Telegram-хаптик по пикам видео) + каскадное появление меню. Тумблеры в ⚙️Настройках (mn_i_video/sound/voice/vibro, по умолч. вкл). Раз за сессию, тап-скип, reduced-motion/видео-выкл пропускают, вход НИКОГДА не блокируется. -->
 <style>
 #introSplash{position:fixed;inset:0;z-index:100000;background:#070a10;display:flex;align-items:center;justify-content:center;transition:opacity .5s ease,transform .5s ease;cursor:pointer}
 #introSplash.gone{opacity:0;transform:scale(1.06);pointer-events:none}
@@ -242,16 +242,37 @@
 #introSplash .isk{position:absolute;bottom:16px;left:0;right:0;text-align:center;font-size:11px;color:#fff;opacity:0;transition:opacity .4s;pointer-events:none}
 #introSplash .isk.v{opacity:.3}
 @media(prefers-reduced-motion:reduce){#introSplash{display:none!important}}
+@keyframes mnRise{from{opacity:0;transform:translateY(16px);filter:blur(5px)}to{opacity:1;transform:none;filter:none}}
+#app.mnReveal>*{animation:mnRise .55s cubic-bezier(.22,1,.36,1) both}
+@media(prefers-reduced-motion:reduce){#app.mnReveal>*{animation:none}}
 </style>
 <div id="introSplash"><video id="introVid" muted playsinline autoplay preload="auto" src="./intro_logo.mp4?v=1"></video><div class="isk">нажмите, чтобы пропустить</div></div>
 <script>(function(){var s=document.getElementById('introSplash');if(!s)return;
-  try{ if(sessionStorage.getItem('mn_intro1')||(window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches)){ s.remove(); return; } }catch(e){}
+  function LS(k){try{return localStorage.getItem(k)!=='0';}catch(e){return true;}}
+  var onVideo=LS('mn_i_video'),onSound=LS('mn_i_sound'),onVoice=LS('mn_i_voice'),onVibro=LS('mn_i_vibro');
+  var reduce=false;try{reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;}catch(e){}
+  try{ if(sessionStorage.getItem('mn_intro1')||reduce||!onVideo){ s.remove(); return; } }catch(e){}
   var v=document.getElementById('introVid'),done=false;
-  function fin(){ if(done)return; done=true; try{sessionStorage.setItem('mn_intro1','1');}catch(e){} s.classList.add('gone'); setTimeout(function(){ try{s.remove();}catch(e){} },600); }
-  if(v){ v.addEventListener('ended',fin); v.addEventListener('error',fin); try{var p=v.play();if(p&&p.catch)p.catch(function(){});}catch(e){} }
-  s.addEventListener('click',fin);
+  var snd=null,voc=null;
+  try{ if(onSound){snd=new Audio('./intro_snd.mp3?v=1');snd.volume=0.5;} }catch(e){}
+  try{ if(onVoice){voc=new Audio('./intro_voice.mp3?v=1');voc.volume=0.5;} }catch(e){}
+  function playAudio(){ if(done)return; try{ if(snd&&snd.paused){var p=snd.play();if(p&&p.catch)p.catch(function(){});} }catch(e){} try{ if(voc&&voc.paused){var q=voc.play();if(q&&q.catch)q.catch(function(){});} }catch(e){} }
+  function haptic(k){ try{ var H=window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.HapticFeedback;
+    if(H&&H.impactOccurred){ H.impactOccurred(k==='heavy'?'heavy':k==='medium'?'medium':k==='soft'?'soft':'light'); }
+    else if(navigator.vibrate){ navigator.vibrate(k==='heavy'?55:k==='medium'?28:k==='soft'?10:14); } }catch(e){} }
+  var ht=[];
+  function startVibro(){ if(!onVibro)return; [[200,'light'],[430,'medium'],[870,'light'],[1200,'heavy'],[1400,'soft']].forEach(function(h){ ht.push(setTimeout(function(){haptic(h[1]);},h[0])); }); }
+  function revealMenu(){ try{ var app=document.getElementById('app'); if(app&&app.style.display!=='none'&&!reduce){ var vi=0,ch=app.children; for(var i=0;i<ch.length&&vi<11;i++){ try{ if(getComputedStyle(ch[i]).display!=='none'){ ch[i].style.animationDelay=(vi*0.06).toFixed(2)+'s'; vi++; } }catch(e){} } app.classList.add('mnReveal'); } }catch(e){} }
+  function fin(stopA){ if(done)return; done=true; try{sessionStorage.setItem('mn_intro1','1');}catch(e){}
+    ht.forEach(clearTimeout); ht=[];
+    if(stopA){ try{if(snd)snd.pause();}catch(e){} try{if(voc)voc.pause();}catch(e){} }
+    if(onVibro)haptic('soft'); revealMenu(); s.classList.add('gone'); setTimeout(function(){ try{s.remove();}catch(e){} },600); }
+  if(v){ v.addEventListener('ended',function(){fin(false);}); v.addEventListener('error',function(){fin(true);}); try{var pp=v.play();if(pp&&pp.catch)pp.catch(function(){});}catch(e){} }
+  playAudio(); startVibro();
+  if((snd&&snd.paused)||(voc&&voc.paused)){ var retry=function(){ playAudio(); try{document.removeEventListener('pointerdown',retry,true);}catch(e){} }; document.addEventListener('pointerdown',retry,true); }
+  s.addEventListener('click',function(){fin(true);});
   setTimeout(function(){var k=s.querySelector('.isk');if(k)k.classList.add('v');},700);
-  setTimeout(fin,6000);   // предохранитель: если видео не сыграло/зависло — уйти через 6с (никогда не заблокировать вход)
+  setTimeout(function(){fin(true);},6000);   // предохранитель: вход НИКОГДА не блокируется
 })();</script>
 <!-- ШЛАГБАУМ для не-владельца -->
 <div class="gate" id="gate" style="display:none">
@@ -267,7 +288,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1150</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1151</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -474,6 +495,12 @@
           <div class="row"><span>🎯 Подсветка слов поиска (когда в поле фокус)</span><div class="sw" id="qHlSw"></div></div>
           <div class="row"><span>🕐 Недавние поиски (показывать при пустом поле)</span><div class="sw" id="recentSw"></div></div>
           <div class="row"><span>🔥 Популярное (что чаще ищут, при пустом поле)</span><div class="sw" id="popSw"></div></div>
+    </details>
+    <details class="setSec"><summary>🎬 Заставка при входе · 4</summary>
+          <div class="row"><span>🎬 Видео-заставка при открытии</span><div class="sw" id="introVideoSw"></div></div>
+          <div class="row"><span>🔊 Звук заставки <span style="color:var(--hint);font-size:11px">(лёгкий, при появлении лого)</span></span><div class="sw" id="introSoundSw"></div></div>
+          <div class="row"><span>🎙 Голос-приветствие <span style="color:var(--hint);font-size:11px">(«Ассаляму алейкум, добро пожаловать в Muslimoon»)</span></span><div class="sw" id="introVoiceSw"></div></div>
+          <div class="row"><span>📳 Вибро-отклик заставки <span style="color:var(--hint);font-size:11px">(деликатно, по ритму видео)</span></span><div class="sw" id="introVibroSw"></div></div>
     </details>
     <details class="setSec"><summary>🎨 Вид и интерфейс · 5</summary>
           <div class="row"><span>🎨 Тема оформления</span>
@@ -835,7 +862,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1150';
+const APPVER = 'v1151';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -13175,6 +13202,17 @@ var _ttsw=document.getElementById('ttsSw'); if(_ttsw){ _ttsw.classList.toggle('o
 // #193: тумблер «Случайный достоверный хадис» — по умолчанию ВЫКЛ, включается тут
 (function(){ var _rsw=document.getElementById('randHadSw'); if(!_rsw) return; _rsw.classList.toggle('on',!!cfg.randHadith);
   _rsw.onclick=function(){ cfg.randHadith=!cfg.randHadith; saveCfg(cfg); _rsw.classList.toggle('on',!!cfg.randHadith); try{ _updRandBtn(); }catch(e){} toast(cfg.randHadith?'🎲 Кнопка случайного хадиса включена (на главной)':'Кнопка случайного хадиса скрыта'); }; })();
+// v1151: тумблеры заставки (интро читает эти же ключи localStorage до загрузки cfg). По умолчанию всё вкл.
+(function(){ function bindI(id,key,onT,offT){ var sw=document.getElementById(id); if(!sw)return;
+    function on(){ try{ return localStorage.getItem(key)!=='0'; }catch(e){ return true; } }
+    sw.classList.toggle('on',on());
+    sw.onclick=function(){ var nv=!on(); try{ localStorage.setItem(key,nv?'1':'0'); }catch(e){} sw.classList.toggle('on',nv); try{ toast(nv?onT:offT); }catch(e){} };
+  }
+  bindI('introVideoSw','mn_i_video','🎬 Видео-заставка вкл','Видео-заставка выкл');
+  bindI('introSoundSw','mn_i_sound','🔊 Звук заставки вкл','Звук заставки выкл');
+  bindI('introVoiceSw','mn_i_voice','🎙 Голос-приветствие вкл','Голос-приветствие выкл');
+  bindI('introVibroSw','mn_i_vibro','📳 Вибро заставки вкл','Вибро заставки выкл');
+})();
 var _vfw=document.getElementById('verifySw'); if(_vfw){ _vfw.classList.toggle('on',cfg.verify!==false); _vfw.onclick=()=>{ cfg.verify=!(cfg.verify!==false); saveCfg(cfg); _vfw.classList.toggle('on',cfg.verify!==false); toast(cfg.verify?'🛡 Независимая сверка ВКЛ':'Сверка выкл'); }; }   // независимая сверка передатчиков
 // #79: вся строка настроек нажимаемая — клик по строке с тумблером переключает его (не только по самому тумблеру)
 (function(){ var sm=document.getElementById('settingsModal'); if(!sm||sm._rowClick) return; sm._rowClick=true;
