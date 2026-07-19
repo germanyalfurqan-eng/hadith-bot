@@ -288,7 +288,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1152</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1153</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -862,7 +862,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1152';
+const APPVER = 'v1153';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4552,7 +4552,9 @@ function _aiBusyPing(){ _aiHealth.state='busy'; _aiHealth.ts=Date.now(); renderA
   var of=window.fetch;
   window.fetch=function(u){
     var isAi=false; try{ isAi=_AI_PATHS.test(String(u)); }catch(e){}
+    try{ if(window._loaderInc) _loaderInc(); }catch(e){}   // #619: показать что идёт загрузка
     var p=of.apply(this,arguments);
+    try{ p.then(function(){ try{ if(window._loaderDec) _loaderDec(); }catch(e){} }, function(){ try{ if(window._loaderDec) _loaderDec(); }catch(e){} }); }catch(e){}
     if(isAi){ p.then(function(r){ try{
       if(r && r.status===429) _aiBusyPing();
       else if(r && r.ok && _aiHealth.state!=='live'){ _aiHealth.state='live'; _aiHealth.ts=Date.now(); renderAiDot(); }
@@ -4560,6 +4562,18 @@ function _aiBusyPing(){ _aiHealth.state='busy'; _aiHealth.ts=Date.now(); renderA
     return p;
   };
 })();
+/* #619 (владелец: «интро прошло, а загрузка ещё идёт — показывать что грузится»): глобальный тонкий top-loader,
+   заводится на ЛЮБОЙ fetch (поиск/книги/ИИ), исчезает когда все запросы завершены. Аддитивно, без изменения логики. */
+(function(){ try{
+  var el=document.createElement('div'); el.id='topLoader';
+  el.style.cssText='position:fixed;top:0;left:0;height:3px;width:0;z-index:100001;pointer-events:none;opacity:0;'
+    +'background:linear-gradient(90deg,transparent,var(--btn,#2f7be6),#7cc6ff,var(--btn,#2f7be6),transparent);'
+    +'box-shadow:0 0 8px var(--btn,#2f7be6);transition:width .35s ease,opacity .3s ease';
+  (document.body||document.documentElement).appendChild(el);
+  var n=0, t=null;
+  window._loaderInc=function(){ n++; if(n===1){ clearTimeout(t); el.style.opacity='1'; el.style.width='4%'; requestAnimationFrame(function(){ el.style.width='82%'; }); } };
+  window._loaderDec=function(){ n=Math.max(0,n-1); if(n===0){ el.style.width='100%'; clearTimeout(t); t=setTimeout(function(){ el.style.opacity='0'; setTimeout(function(){ if(n===0) el.style.width='0'; },300); },220); } };
+}catch(e){} })();
 /* Совет 7 (ИДЕЯ ВЛАДЕЛЬЦА + DeepSeek, приоритет 1): «как в Другие сборники — раздел добавляется в поиск
    одним тапом». Каталог (8589 книг) уже размечен по разделам полем c — 40 разделов; чипы строим ИЗ НЕГО,
    новых данных не заводим (R-45). Тап = раздел в области поиска, ещё тап = убран; несколько разделов
