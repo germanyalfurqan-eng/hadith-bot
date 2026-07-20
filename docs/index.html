@@ -288,7 +288,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1154</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1155</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -862,7 +862,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1154';
+const APPVER = 'v1155';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4570,9 +4570,14 @@ function _aiBusyPing(){ _aiHealth.state='busy'; _aiHealth.ts=Date.now(); renderA
     +'background:linear-gradient(90deg,transparent,var(--btn,#2f7be6),#7cc6ff,var(--btn,#2f7be6),transparent);'
     +'box-shadow:0 0 8px var(--btn,#2f7be6);transition:width .35s ease,opacity .3s ease';
   (document.body||document.documentElement).appendChild(el);
-  var n=0, t=null;
-  window._loaderInc=function(){ n++; if(n===1){ clearTimeout(t); el.style.opacity='1'; el.style.width='4%'; requestAnimationFrame(function(){ el.style.width='82%'; }); } };
-  window._loaderDec=function(){ n=Math.max(0,n-1); if(n===0){ el.style.width='100%'; clearTimeout(t); t=setTimeout(function(){ el.style.opacity='0'; setTimeout(function(){ if(n===0) el.style.width='0'; },300); },220); } };
+  // #625 (владелец: «сверху линия не работает, странная вообще она»): первая версия (v1153) вспыхивала на КАЖДОМ
+  // fetch — на кэшированных/локальных запросах это мелькание 0→82%→100% за миллисекунды, читается как глюк.
+  // Теперь ДЕБАУНС: полоса появляется только если загрузка реально идёт дольше 280мс; быстрые запросы её не будят.
+  var n=0, shown=false, showT=null, hideT=null;
+  function _ldShow(){ shown=true; clearTimeout(hideT); el.style.opacity='1'; el.style.width='8%'; requestAnimationFrame(function(){ el.style.width='80%'; }); }
+  function _ldFinish(){ shown=false; el.style.width='100%'; clearTimeout(hideT); hideT=setTimeout(function(){ el.style.opacity='0'; setTimeout(function(){ if(!shown) el.style.width='0'; },320); },200); }
+  window._loaderInc=function(){ n++; if(n===1 && !shown){ clearTimeout(showT); showT=setTimeout(function(){ if(n>0) _ldShow(); }, 280); } };
+  window._loaderDec=function(){ n=Math.max(0,n-1); if(n===0){ clearTimeout(showT); if(shown) _ldFinish(); } };
 }catch(e){} })();
 /* Совет 7 (ИДЕЯ ВЛАДЕЛЬЦА + DeepSeek, приоритет 1): «как в Другие сборники — раздел добавляется в поиск
    одним тапом». Каталог (8589 книг) уже размечен по разделам полем c — 40 разделов; чипы строим ИЗ НЕГО,
