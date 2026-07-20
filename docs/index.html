@@ -288,7 +288,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1155</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1156</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -862,7 +862,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1155';
+const APPVER = 'v1156';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5547,8 +5547,15 @@ async function openNarratorRijal(name, forceId){
   // только раздел «Оценки учёных». Владелец объявил карточку УНИВЕРСАЛЬНОЙ — теперь showNarratorCardLocal (та же
   // полная карточка, что в режиме «Передатчик»/таблице) рендерится ПЕРВОЙ, она сама включает и «Оценки» (ниже flag noTT не ставим — она их покажет сама).
   let _cardShown=false;
-  body.innerHTML='';   // #владелец 01.07.2026 («уродство» — «Загружаю карточку…» висело НИЖЕ готовой карточки): showNarratorCardLocal вставляет через insertAdjacentHTML('afterbegin') — ДОПОЛНЯЕТ body, не заменяет; плейсхолдер надо убрать САМИМ до вставки
-  try{ const _rc=await showNarratorCardLocal(name, body, forceId); if(_rc) _cardShown=true; }catch(e){}
+  // #625 (владелец: «загрузка анимация в карточке передатчика криво строится, дёргается когда достраивается»):
+  // раньше скелетон СТИРАЛСЯ (body.innerHTML='') ДО рендера карточки → высота схлопывалась в ноль и тут же
+  // прыгала обратно = рывок на каждом открытии. Теперь карточка собирается в СКРЫТОМ контейнере рядом со
+  // скелетоном и подменяет его ОДНИМ движением — высота не схлопывается.
+  // (Комментарий 01.07 остаётся в силе: showNarratorCardLocal вставляет через afterbegin и ДОПОЛНЯЕТ контейнер,
+  //  поэтому даём ей собственный контейнер, а не общий body.)
+  const _realBox=document.createElement('div'); _realBox.style.display='none'; body.appendChild(_realBox);
+  try{ const _rc=await showNarratorCardLocal(name, _realBox, forceId); if(_rc) _cardShown=true; }catch(e){}
+  try{ Array.prototype.slice.call(body.children).forEach(function(ch){ if(ch!==_realBox) ch.remove(); }); _realBox.style.display=''; }catch(e){}
   if(!_cardShown){   // фолбэк на старое поведение — если полная карточка не построилась (имя не резолвится), хотя бы «Оценки» локально
     body.innerHTML='<div class="hint">📜 Загружаю оценки учёных…</div>';
     try{ let _v=(forceId!=null&&forceId!=='')?String(forceId):await _narrLookup(name); if(_v!=null){ body.innerHTML=''; await renderTestimoniesCard(_v, body); } else body.innerHTML='<div class="hint">Не удалось опознать передатчика точно.</div>'; }catch(e){ body.innerHTML='<div class="hint">Не удалось опознать передатчика точно.</div>'; }
