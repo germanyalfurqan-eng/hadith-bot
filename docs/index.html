@@ -288,7 +288,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1159</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1160</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -862,7 +862,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1159';
+const APPVER = 'v1160';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -9764,7 +9764,7 @@ async function narrOpen(nm){
   if(res.childNodes.length && !res.dataset.narrCard){ const fr=document.createDocumentFragment(); while(res.firstChild) fr.appendChild(res.firstChild);
     window._resBack=fr; window._resBackQ=_prevQ; }
   res.innerHTML=''; res.dataset.narrCard='1';
-  const box=document.createElement('div'); box.className='card'; box.style.cssText='padding:11px'; res.appendChild(box);
+  const box=document.createElement('div'); box.className='card'; box.style.cssText='padding:11px;animation:fadeInUp .28s ease'; res.appendChild(box);   // #616 (владелец «плохо открывается карточки»): плавное появление
   if(window._resBack){ const bk=document.createElement('button'); bk.className='mini';
     bk.style.cssText='width:100%;padding:10px;margin-bottom:9px;border:1px solid var(--btn);color:var(--link);background:transparent;border-radius:10px;font-weight:700;font-size:13.5px;cursor:pointer';
     bk.textContent='← Назад к результатам поиска';
@@ -11032,6 +11032,15 @@ async function renderNuances(mid, host){ if(mid==null) return; let nz=null; try{
 }
 async function showNarratorBio(name, out){
   out.style.display='block'; out.innerHTML='';
+  // #611/#616 (владелец: «а где анимация загрузки карточки», «нет анимации срочно»): showNarratorCardLocal делает 6+ await
+  // (lookup/card/глоссарий/ext/X/sun) ДО первой отрисовки — до этого карточка равия «открывалась пустой» без индикатора.
+  // Показываем скелетон-шиммер (переиспользуем @keyframes skSh, R45), снимаем его сразу после прихода идентификации.
+  var _nSkel=null; try{
+    var _shim='background:linear-gradient(90deg,rgba(140,152,172,.10) 25%,rgba(140,152,172,.24) 50%,rgba(140,152,172,.10) 75%);background-size:200% 100%;animation:skSh 1.15s linear infinite;border-radius:7px;display:block;margin-bottom:9px';
+    _nSkel=document.createElement('div'); _nSkel.setAttribute('aria-hidden','true'); _nSkel.style.cssText='padding:5px 2px';
+    _nSkel.innerHTML='<i style="'+_shim+';height:24px;width:54%"></i><i style="'+_shim+';height:15px;width:82%"></i><i style="'+_shim+';height:15px;width:66%"></i><i style="'+_shim+';height:46px;width:100%;margin-bottom:0"></i>';
+    out.appendChild(_nSkel);
+  }catch(e){}
   try{ var _nmb=document.getElementById('narrModeBox'); if(_nmb) _nmb.style.display='none'; }catch(e){}   // заявка С46: убрать фразу «Режим Передатчик» после открытия карточки
   out.dataset.noTT='1';   // 🔴 фикс дубля: свод критиков рендерит showNarratorBio ОДИН раз (ниже, после учители/ученики); showNarratorCardLocal свой свод пропускает по этому флагу
   // 📂 прогрессивное раскрытие (консенсус ИИ + указ владельца: первый экран чистый, тяжёлые секции — под «раскрыть»)
@@ -11043,6 +11052,7 @@ async function showNarratorBio(name, out){
     w.appendChild(h); w.appendChild(b); out.appendChild(w); return b; };
   // Идентификация (имя/كنية/نسب/وفاة/طبقة/رتبة + бейдж) — без джарха
   let c=null; try{ c=await showNarratorCardLocal(name, out); }catch(e){}
+  try{ if(_nSkel) _nSkel.remove(); }catch(e){}   // #611/#616: идентификация пришла — снимаем скелетон
   try{ if(!out.dataset.noClose){ const _ch=document.createElement('div'); _ch.style.cssText='display:flex;justify-content:flex-end;margin:0 0 2px';   // #10 (R46): свернуть карточку равия → вернуться к результатам
     const _cx=document.createElement('button'); _cx.textContent='✕ свернуть'; _cx.className='mini'; _cx.title='Закрыть карточку передатчика и вернуться к результатам';
     _cx.style.cssText='border:1px solid var(--border);background:transparent;color:var(--hint);font-size:12px;border-radius:8px;padding:3px 10px;cursor:pointer';
