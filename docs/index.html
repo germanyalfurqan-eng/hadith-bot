@@ -288,7 +288,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1162</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1163</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -862,7 +862,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1162';
+const APPVER = 'v1163';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4980,6 +4980,20 @@ function gramAr(code){
   if(has('PASS')) out.push('مبني للمجهول');
   return out.join(' ');
 }
+// M244/M337: пословный перевод Корана (quran_wbw_ru.json, ~88% аятов) — показ в карточке слова
+let _quranWbw=null,_quranWbwP=null;
+function loadQuranWbw(){ if(_quranWbw) return Promise.resolve(_quranWbw); if(_quranWbwP) return _quranWbwP;
+  _quranWbwP=fetch('./quran_wbw_ru.json?'+APPVER).then(r=>r.ok?r.json():{}).then(j=>{_quranWbw=j||{};return _quranWbw;}).catch(()=>{_quranWbw={};return _quranWbw;}); return _quranWbwP; }
+// перевод слова по позиции в аяте; защита от рассинхрона индексов — .qpz (паузные знаки) в wbw-массив не входят
+function _wbwWord(el){ try{
+    const arEl=el&&el.closest?el.closest('[data-sa]'):null; if(!arEl||!_quranWbw) return null;
+    const sa=arEl.dataset.sa; const arr=sa&&_quranWbw[sa]; if(!arr||!arr.length) return null;
+    const qws=Array.prototype.slice.call(arEl.querySelectorAll('.qw'));
+    if(qws.length!==arr.length) return null;   // рассинхрон (басмаля/паузные знаки) → не показываем чужое слово
+    const idx=qws.indexOf(el); if(idx<0) return null;
+    const t=arr[idx]; return (t&&String(t).trim())?String(t).trim():null;
+  }catch(e){ return null; } }
+
 async function onWordTap(word, el, ctx){
   // режим «по словам»: в читалке Корана тап по слову = озвучить ТОЛЬКО это слово (без попапа)
   if(window._qrWordMode && el && el.classList && el.classList.contains('qw') && el.closest && el.closest('#qrBody')){ if(_qrSayWord(el)) return; }
@@ -5012,6 +5026,13 @@ function showWordPopup(el, word, root, lemma, gram, ctx){
   h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><button id="wpAiBtn" class="tr-btn" style="background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:6px 10px;font-size:13px;width:100%">🧠 Перевод слова (ИИ) — проверить</button><div id="wpAiOut" style="margin-top:5px"></div></div>';
   h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><div style="color:#7fe3bf;font-weight:700;margin-bottom:4px">📕 Значения и формы (Arabus)</div><div id="wpArabusOut" style="margin-top:3px"></div></div>';
   pop.innerHTML=h; document.body.appendChild(pop); modalTop(pop);
+  // M244/M337: русский пословный перевод слова (quran_wbw_ru.json), если аят размечен и индексы совпали
+  (async()=>{ try{ await loadQuranWbw(); const _tr=_wbwWord(el); if(!_tr) return;
+    if(document.getElementById('wordPop')!==pop) return;   // попап уже закрыт/сменился
+    const d=document.createElement('div'); d.style.cssText='margin-top:6px;color:#7fe3bf;font-size:15px';
+    d.innerHTML='🇷🇺 <b>'+esc(_tr)+'</b>';
+    const hdr=pop.firstElementChild; if(hdr&&hdr.nextSibling) pop.insertBefore(d, hdr.nextSibling); else pop.appendChild(d);
+  }catch(e){} })();
   const r=el.getBoundingClientRect();
   // M406: расчёт места — снизу не помещается → показываем НАД словом; и там не влезает → прижимаем в видимую область
   const vw=document.documentElement.clientWidth, vh=window.innerHeight;
@@ -6748,7 +6769,7 @@ function cardAyah(d,groups){
   const hd=document.createElement('div'); hd.style.cssText='font-size:12.5px;color:var(--link);margin-bottom:5px;font-weight:600;cursor:pointer'; hd.title='Открыть суру для чтения';
   hd.textContent='📖 Сура '+v.s+' · '+(SURA_RU[v.s]||SURA_NAMES[v.s-1]||'')+(_faIsBasmalaHdr(v.s,v.a)?'':(' · аят '+_faDispA(v.s,v.a)));
   hd.onclick=()=>openQuranReader(v.s, v.a); card.appendChild(hd);
-  const ar=document.createElement('div');ar.className='ar';
+  const ar=document.createElement('div');ar.className='ar'; ar.dataset.sa=v.s+':'+v.a;   // M244/M337: s:a аята → привязка пословного перевода (quran_wbw_ru.json)
   if(cfg.wordTap!==false){ loadRoots(); ar.innerHTML=qWordsHTML(v.text,groups,d._root);
     ar.addEventListener('click',e=>{ const sp=e.target.closest&&e.target.closest('.qw'); if(sp){ e.stopPropagation(); onWordTap(sp.textContent, sp, (ar.textContent||'').replace(/\s+/g,' ').trim().slice(0,200)); } });
   } else { ar.innerHTML=highlight(cfg.noDiac?stripDiac(v.text):v.text,groups,modes); }
