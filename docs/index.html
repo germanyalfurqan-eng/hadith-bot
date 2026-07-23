@@ -107,6 +107,11 @@
   .searchbar{display:flex;gap:8px;margin-bottom:8px}
   input[type=text],textarea#q{flex:1;padding:12px;border-radius:12px;border:1px solid var(--border);
        background:var(--card);color:var(--text);font-size:16px;min-height:48px}   /* M426-фикс: textarea потеряла стили input → «белая полоса» */
+  /* #620: плейсхолдер поиска появляется ПЛАВНО (мягкий fade-in на загрузке), а не резко. Тонко; вводу текста не мешает (::placeholder виден только при пустом поле). fill=both держит итог .9 (видим), :focus-затухание опустили — с forwards-заливкой оно не срабатывает, а перегружать каскад анимаций ради мелочи не стоит. */
+  textarea#q::placeholder{ opacity:.9; animation:qPhIn .9s ease-out both }
+  textarea#q::-webkit-input-placeholder{ opacity:.9; animation:qPhIn .9s ease-out both }
+  @keyframes qPhIn{ from{opacity:.3} to{opacity:.9} }   /* старт с .3 (не с 0): мягкое «свечение»-появление, и плейсхолдер НИКОГДА не невидим, даже если анимация где-то замрёт */
+  @media (prefers-reduced-motion:reduce){ textarea#q::placeholder,textarea#q::-webkit-input-placeholder{ animation:none } }
   button{font-size:15px;border:none;border-radius:12px;cursor:pointer}
   /* v1066 perceived-speed①⑤: мгновенный тап-отклик ≤50мс на ВСЁ кликабельное (GPU transform, 80мс ease-out) */
   button,.chip,.mini,.col,.tile,.card,.grade,.pill,.nWiki,.nWikiS,[onclick]{transition:transform .08s ease-out,opacity .12s ease-out}
@@ -288,7 +293,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1173</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1174</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -867,7 +872,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1173';
+const APPVER = 'v1174';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4390,7 +4395,7 @@ async function maktabaByNum(seq, n){
   const srcSet=new Set();
   const _headTxt=(tail)=>{ head.textContent='📚 Хадис №'+n+' — книг: '+shown+' · ПЕРВОИСТОЧНИКОВ: '+srcSet.size+' из 41 (печатей: '+shownF+')'+(tail||''); };
   // M468: прозрачность «N из 41» — кнопка-список, КАКИЕ первоисточники не вошли и почему
-  const nfBtn=document.createElement('button'); nfBtn.className='mini'; nfBtn.style.cssText='font-size:11.5px;padding:4px 10px;margin:2px 0 6px;border:1px dashed var(--border)';
+  const nfBtn=document.createElement('button'); nfBtn.className='mini'; nfBtn.style.cssText='font-size:11.5px;padding:4px 10px;margin:2px 0 6px;border:1px dashed var(--border);animation:fadeInUp .25s ease-out both';   // #635: плавное появление свода (не резкая вставка в DOM)
   nfBtn.textContent='ℹ️ какие не вошли';
   const nfOut=document.createElement('div'); nfOut.style.cssText='display:none;font-size:12px;border:1px dashed var(--border);border-radius:9px;padding:8px 10px;margin:0 0 8px;color:var(--hint)';
   nfBtn.onclick=async()=>{ if(nfOut.style.display==='block'){ nfOut.style.display='none'; return; }
@@ -4430,7 +4435,7 @@ async function maktabaByNum(seq, n){
     _headTxt(' · ищу ещё…');
   }catch(e){} })(); });
   // M365/M372: глобальный тумблер «показать все доп. печати» (по умолчанию печати скрыты, у каждого слота своя кнопка)
-  const edTglBox=document.createElement('div'); edTglBox.style.cssText='margin:0 0 7px';
+  const edTglBox=document.createElement('div'); edTglBox.style.cssText='margin:0 0 7px;animation:fadeInUp .25s ease-out both';   // #635: плавное появление свода «показать все доп. печати»
   const edTgl=document.createElement('span'); edTgl.style.cssText='cursor:pointer;font-size:11.5px;padding:3px 10px;border-radius:8px;border:1px solid var(--border);color:var(--hint)';
   edTgl.textContent='☐ показать все доп. печати';
   edTgl.onclick=()=>{ _edHide=!_edHide; const open=!_edHide;
@@ -4439,7 +4444,7 @@ async function maktabaByNum(seq, n){
     Object.values(canonSlots).forEach(sl=>{ if(!sl.__edBtn) return; sl.__edBtn.__open=open;
       sl.querySelectorAll('.canonEd').forEach(c=>{ c.style.display=open?'':'none'; }); _edBtnPaint(sl.__edBtn, sl); }); };
   edTglBox.appendChild(edTgl); res.insertBefore(edTglBox, listCanon);
-  const tail=document.createElement('div'); tail.style.cssText='text-align:center;margin:10px 0';
+  const tail=document.createElement('div'); tail.style.cssText='text-align:center;margin:10px 0;animation:fadeInUp .25s ease-out both';   // #635: плавное появление свода «⏳ ищу дальше…»/«ещё книги»
   const more=document.createElement('button'); more.className='mini'; more.style.cssText='border:1px solid var(--border);padding:8px 16px;border-radius:10px'; more.textContent='⬇️ Ещё книги с №'+n;
   tail.appendChild(more); res.appendChild(tail);
   const seen=new Set(); let page=0, shown=0, shownF=0, emptyRuns=0, busy=false, done=false;
@@ -4581,7 +4586,7 @@ async function maktabaByNum(seq, n){
   if(!done) observe();
 }
 function maktabaMoreBtn(seq,q,st,strictWords){
-  const wrap=document.createElement('div'); wrap.style.cssText='text-align:center;margin:10px 0';
+  const wrap=document.createElement('div'); wrap.style.cssText='text-align:center;margin:10px 0;animation:fadeInUp .25s ease-out both';   // #635: плавное появление свода «⏳ ищу дальше…» (Мактаба)
   const b=document.createElement('button'); b.className='mini'; b.textContent='⬇️ Ещё из Мактабы'+(strictWords?' (строго: все слова)':''); b.style.cssText='border:1px solid var(--border);padding:8px 16px;border-radius:10px';
   let io; const observe=()=>{ try{ io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){io.disconnect();load();}});},{rootMargin:'220px'}); io.observe(b);}catch(e){} };
   const load=async()=>{ if(b.disabled) return; b.disabled=true; b.textContent='⏳ ищу дальше…';
@@ -11219,7 +11224,13 @@ async function showNarratorBio(name, out){
     w.appendChild(h); w.appendChild(b); out.appendChild(w); return b; };
   // Идентификация (имя/كنية/نسب/وفاة/طبقة/رتبة + бейдж) — без джарха
   let c=null; try{ c=await showNarratorCardLocal(name, out); }catch(e){}
-  try{ if(_nSkel) _nSkel.remove(); }catch(e){}   // #611/#616: идентификация пришла — снимаем скелетон
+  // #625: скелетон снимаем ПЛАВНО (fade + схлопывание высоты), а не мгновенным remove — иначе контент «прыгает» вверх рывком (дёрганая анимация карточки равия)
+  try{ if(_nSkel){ var _sk=_nSkel; _nSkel=null;
+    _sk.style.overflow='hidden'; _sk.style.maxHeight=_sk.scrollHeight+'px';
+    _sk.style.transition='opacity .22s ease, max-height .3s ease, margin .3s ease, padding .3s ease';
+    void _sk.offsetWidth; _sk.style.opacity='0'; _sk.style.maxHeight='0'; _sk.style.marginBottom='0'; _sk.style.paddingTop='0'; _sk.style.paddingBottom='0';
+    setTimeout(function(){ try{ _sk.remove(); }catch(_e){} }, 320);
+  } }catch(e){ try{ if(typeof _sk!=='undefined'&&_sk) _sk.remove(); else if(_nSkel) _nSkel.remove(); }catch(_e){} }   // #611/#616: идентификация пришла — снимаем скелетон (defense-in-depth: скелетон уходит при ЛЮБОМ сбое, не залипает)
   try{ if(!out.dataset.noClose){ const _ch=document.createElement('div'); _ch.style.cssText='display:flex;justify-content:flex-end;margin:0 0 2px';   // #10 (R46): свернуть карточку равия → вернуться к результатам
     const _cx=document.createElement('button'); _cx.textContent='✕ свернуть'; _cx.className='mini'; _cx.title='Закрыть карточку передатчика и вернуться к результатам';
     _cx.style.cssText='border:1px solid var(--border);background:transparent;color:var(--hint);font-size:12px;border-radius:8px;padding:3px 10px;cursor:pointer';
