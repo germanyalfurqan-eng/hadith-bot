@@ -288,7 +288,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1165</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1166</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -467,6 +467,7 @@
     <div id="arFontTestOut" style="display:none"></div>
     <div class="row" style="margin-top:-4px;padding-top:0;border-bottom:1px solid var(--border)"><span style="font-size:11px;color:var(--hint);line-height:1.45">ℹ️ Основные — <b>веб-шрифты</b>, рисуют арабский одинаково на любом устройстве (айфон/андроид/ПК). KFGQPC HAFS — официальный мусхафный.</span></div>
           <div class="row"><span>🌿 Тап по слову аята → корень + все места в Коране</span><div class="sw" id="wtSw"></div></div>
+          <div class="row"><span>🇷🇺 Перевод под словами Корана <span style="color:var(--hint);font-size:11px">(глосса под каждым словом, как quran.com; ~88% аятов)</span></span><div class="sw" id="wbwSw"></div></div>
           <div class="row"><span>🔤 Учитывать пробел в поиске Корана <span style="color:var(--hint);font-size:11px">(точный поиск с пробелами; огласовки игнор)</span></span><div class="sw" id="qSpaceExactSw"></div></div>
           <div class="row"><span>🔡 Автоподсказки в Коране (списком при вводе номера)</span><div class="sw" id="acSw"></div></div>
           <div class="row"><span>▶️ Авто-переход на следующую суру <span style="color:var(--hint);font-size:11px">(в плеере/чтеце Корана)</span></span><div class="sw" id="qrAutoNextSw"></div></div>
@@ -862,7 +863,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1165';
+const APPVER = 'v1166';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4993,6 +4994,20 @@ function _wbwWord(el){ try{
     const idx=qws.indexOf(el); if(idx<0) return null;
     const t=arr[idx]; return (t&&String(t).trim())?String(t).trim():null;
   }catch(e){ return null; } }
+// M244: перевод ПОД каждым словом (грид как quran.com) — оборачивает .qw в колонку [слово / русская глосса]
+function enrichWbwInline(arEl, sa){ try{
+    if(!_quranWbw||!arEl) return; const arr=_quranWbw[sa]; if(!arr||!arr.length) return;
+    const qws=Array.prototype.slice.call(arEl.querySelectorAll('.qw'));
+    if(qws.length!==arr.length) return;   // защита индексов (как _wbwWord): рассинхрон → не рисуем
+    qws.forEach(function(w,i){ const tr=arr[i]; if(!tr||!String(tr).trim()) return;
+      if(w.parentNode&&w.parentNode.classList&&w.parentNode.classList.contains('qwc')) return;   // уже обёрнут
+      const c=document.createElement('span'); c.className='qwc';
+      c.style.cssText='display:inline-flex;flex-direction:column;align-items:center;vertical-align:top;margin:1px 3px';
+      const g=document.createElement('span'); g.className='wbwg';
+      g.style.cssText='font-size:10.5px;color:#7fe3bf;line-height:1.25;margin-top:2px;max-width:94px;text-align:center;direction:ltr';
+      g.textContent=String(tr).trim();
+      w.parentNode.insertBefore(c,w); c.appendChild(w); c.appendChild(g); });
+  }catch(e){} }
 
 async function onWordTap(word, el, ctx){
   // режим «по словам»: в читалке Корана тап по слову = озвучить ТОЛЬКО это слово (без попапа)
@@ -6771,6 +6786,7 @@ function cardAyah(d,groups){
   hd.onclick=()=>openQuranReader(v.s, v.a); card.appendChild(hd);
   const ar=document.createElement('div');ar.className='ar'; ar.dataset.sa=v.s+':'+v.a;   // M244/M337: s:a аята → привязка пословного перевода (quran_wbw_ru.json)
   if(cfg.wordTap!==false){ loadRoots(); ar.innerHTML=qWordsHTML(v.text,groups,d._root);
+    if(cfg.wbwInline&&ar.dataset.sa){ (async()=>{ try{ await loadQuranWbw(); enrichWbwInline(ar, ar.dataset.sa); }catch(e){} })(); }   // M244: перевод под словами (тумблер)
     ar.addEventListener('click',e=>{ const sp=e.target.closest&&e.target.closest('.qw'); if(sp){ e.stopPropagation(); onWordTap(sp.textContent, sp, (ar.textContent||'').replace(/\s+/g,' ').trim().slice(0,200)); } });
   } else { ar.innerHTML=highlight(cfg.noDiac?stripDiac(v.text):v.text,groups,modes); }
   card.appendChild(ar);
@@ -13220,6 +13236,7 @@ var _is=document.getElementById('isnadSw'); if(_is){ _is.classList.toggle('on',!
 var _hi=document.getElementById('hideIsnadSw'); if(_hi){ _hi.classList.toggle('on',!!cfg.hideIsnad); _hi.onclick=()=>{ cfg.hideIsnad=!cfg.hideIsnad; saveCfg(cfg); _hi.classList.toggle('on',!!cfg.hideIsnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _ac=document.getElementById('acSw'); if(_ac){ _ac.classList.toggle('on',!!cfg.ac); _ac.onclick=()=>{ cfg.ac=!cfg.ac; saveCfg(cfg); _ac.classList.toggle('on',!!cfg.ac); updateQuranHelper(); }; }
 var _wt=document.getElementById('wtSw'); if(_wt){ _wt.classList.toggle('on',cfg.wordTap!==false); _wt.onclick=()=>{ cfg.wordTap=(cfg.wordTap===false); saveCfg(cfg); _wt.classList.toggle('on',cfg.wordTap!==false); if(document.getElementById('q').value.trim()&&tab==='quran') runSearch(); }; }
+var _wbw=document.getElementById('wbwSw'); if(_wbw){ _wbw.classList.toggle('on',!!cfg.wbwInline); _wbw.onclick=()=>{ cfg.wbwInline=!cfg.wbwInline; saveCfg(cfg); _wbw.classList.toggle('on',!!cfg.wbwInline); if(document.getElementById('q').value.trim()&&tab==='quran') runSearch(); }; }   // M244: глосса под словами
 var _qse=document.getElementById('qSpaceExactSw'); if(_qse){ _qse.classList.toggle('on',!!cfg.qSpaceExact); _qse.onclick=()=>{ cfg.qSpaceExact=!cfg.qSpaceExact; saveCfg(cfg); _qse.classList.toggle('on',!!cfg.qSpaceExact); if(document.getElementById('q').value.trim()&&tab==='quran') runSearch(); }; }   // M309 тумблер «учитывать пробел»
 var _qhl=document.getElementById('qHlSw'); if(_qhl){ _qhl.classList.toggle('on',cfg.qHl!==false); _qhl.onclick=()=>{ cfg.qHl=(cfg.qHl===false); saveCfg(cfg); _qhl.classList.toggle('on',cfg.qHl!==false); toggleQHl(); }; }
 try{ toggleQHl(); }catch(e){}   // QA#4: применить НАЧАЛЬНОЕ состояние подсветки при загрузке (при сохранённом qHl=false класс no-q-highlight иначе не навешивался до клика тоггла)
