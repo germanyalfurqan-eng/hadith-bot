@@ -293,7 +293,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1174</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1175</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -872,7 +872,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1174';
+const APPVER = 'v1175';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4727,8 +4727,12 @@ function _sectApply(){
 }
 function renderSectChips(){
   var box=document.getElementById('sectChips');
-  if(!box){ box=document.createElement('div'); box.id='sectChips'; box.style.cssText='margin:5px 0 2px';
-    var a=document.querySelector('.modes'); if(!a||!a.parentNode) return; a.parentNode.insertBefore(box,a); }
+  if(!box){ box=document.createElement('div'); box.id='sectChips'; box.style.cssText='margin:2px 0 8px;padding-inline-start:2px';
+    // #621 (владелец «не плодить сущности»): раздел-селектор — ЧАСТЬ поискового блока (сразу под «🔎 сборники ▾»),
+    // а не отдельная кричащая полукарта над строкой режимов. Фолбэк — прежнее место (перед .modes).
+    var a=document.getElementById('colsWrap');
+    if(a&&a.parentNode){ a.parentNode.insertBefore(box, a.nextSibling); }
+    else { a=document.querySelector('.modes'); if(!a||!a.parentNode) return; a.parentNode.insertBefore(box,a); } }
   // #607 (владелец, ТРЕВОГА): чипы «Искать в разделе» — ТОЛЬКО вкладка Хадисы. В Коране они не к месту и мешали подсказке аятов (6:66/66:6).
   if(typeof tab!=='undefined' && tab!=='hadith'){ box.style.display='none'; box.innerHTML=''; return; }
   box.style.display='';
@@ -4736,7 +4740,7 @@ function renderSectChips(){
   // #заявка владельца (сто раз): разделы (كتب السنة/العقيدة/…) СВЁРНУТЫ в ОДНУ кнопку по умолчанию — не занимают место. Тап → разворот. Выбранные показываем счётчиком.
   if(!_sectOpen){
     var _n=_sectSel.size;
-    box.innerHTML='<span class="chip sectToggle" style="cursor:pointer;font-size:12px;opacity:.9">'+t('📂 Искать сразу в разделе','📂 Search within a section')+(_n?(' <b style="color:#9be7c4">'+t('· выбрано ','· selected ')+_n+'</b>'):'')+' ▾</span>';   // M15 Тир2
+    box.innerHTML='<span class="sectToggle" style="cursor:pointer;font-size:12px;color:var(--hint);display:inline-flex;align-items:center;gap:5px">'+t('📂 Искать сразу в разделе','📂 Search within a section')+(_n?(' <b style="color:#9be7c4">'+t('· выбрано ','· selected ')+_n+'</b>'):'')+' ▾</span>';   // M15 Тир2 · #621: тише и подчинено блоку поиска (без chip-полукарты)
     var _tg=box.querySelector('.sectToggle'); if(_tg) _tg.onclick=function(){ _sectOpen=true; try{hap('light');}catch(e){} renderSectChips(); };
     return;
   }
@@ -4914,16 +4918,37 @@ async function _applyIsnadMatn(ar, code, num, text){
   }catch(e){}
 }
 // С57 (владелец, Муслим 2363): в данных баки в хвосте записи сидят заголовок СЛЕДУЮЩЕЙ главы и шарх-пояснение.
-function _cleanMuslimTail(t){ try{
+// fb#1 (владелец, Муслим 2162 риваят 3): заголовок СЛЕДУЮЩЕЙ главы клеился к концу матна. Прежний regex ловил лишь
+// «N - باب» (голое число+ZWNJ, формат локального muslim_baqi.json). Но ЖИВОЙ текст (бэкенд/muslim_clean.json) идёт
+// без ZWNJ и без номера — заголовок висит прямо за закрывающей кавычкой матна: «…فاتبعه ». بَابُ النهي…». Поэтому
+// ловим ДВЕ формы: (A) закрывающая кавычка »/”/" + опц. пунктуация + باب/كتاب; (B) ZWNJ + опц.(N)/тире + باب/كتاب.
+// Арабский текст НЕ режем — заголовок ПОКАЗЫВАЕМ отдельным блоком с разделителем (см. _cardHadithOne). Проверено на
+// muslim_baqi (1198 хвостов) и muslim_clean (703 хвоста): матн цел (0 обрезаний тела), ложных срабатываний нет.
+function _muslimTailSplit(t){ try{
   t=String(t||'');
-  t=t.replace(/[‌\s]*\d+\s*-\s*بَ?اب[^"«»]*$/,'').trim();   // хвост-заголовок следующей главы
-  return t;
-}catch(e){ return t; } }
+  if(t.length<40) return { body:t.trim(), chap:'' };
+  var re=/(?:[»”"›][\s.،؛:]*|[‌][\s‌]*[\(（]?\s*[\d٠-٩]{1,4}\s*[\)）]?\s*[-–—]?\s*)(ك[ً-ْ]?ت[ً-ْ]?اب|ب[ً-ْ]?اب)(?=[ً-ْ]?\s|[ً-ْ]?$)/g;
+  var m, start=-1;
+  while((m=re.exec(t))!==null){ var hs=m.index+m[0].length-m[1].length; if(hs>t.length*0.4) start=hs; }   // ПОСЛЕДНИЙ заголовок в хвосте (не внутри матна)
+  if(start<30) return { body:t.trim(), chap:'' };
+  var body=t.slice(0,start).replace(/[\s‌]+$/,'').trim();
+  var chap=t.slice(start).replace(/^[\s‌]+/,'').split('⚬')[0].trim();   // ⚬-страховка: только сам заголовок, без след. риваята
+  if(!chap || chap.length>=body.length) return { body:t.trim(), chap:'' };   // заголовок обязан быть меньшинством-хвостом
+  return { body:body, chap:chap };
+}catch(e){ return { body:String(t||''), chap:'' }; } }
+function _cleanMuslimTail(t){ return _muslimTailSplit(t).body; }   // обратная совместимость (тело без хвоста-главы)
 function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
   try{ text=_cleanShamela(text); }catch(e){}
-  if(code==='muslim'){ try{ text=_cleanMuslimTail(text); }catch(e){} }   // владелец 05.07 (Дарими №10): издательские хвосты [ب ١٠، د ١٠…] не показываем в карточке
+  let _musTailChap='';
+  if(code==='muslim'){ try{ const _sp=_muslimTailSplit(text); text=_sp.body; _musTailChap=_sp.chap; }catch(e){} }   // fb#1: заголовок след. главы — В ОТДЕЛЬНЫЙ блок, не клеим к матну (владелец 05.07 С57: издательские хвосты)
   const card=document.createElement('div');card.className='card';
   const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(text,groups);_styleCollectorNote(ar);card.appendChild(ar);
+  // fb#1 (Муслим 2162 риваят 3): заголовок главы/раздела (باب/كتاب) из хвоста риваята — ОТДЕЛЬНЫМ блоком с
+  // разделителем (не слитно с концом хадиса). Как СИБЛИНГ после .ar (внутрь .ar нельзя — _applyIsnadMatn перерисует .ar).
+  if(_musTailChap){ try{ const _chb=document.createElement('div');
+    _chb.style.cssText='display:block;margin-top:11px;padding-top:9px;border-top:1px dashed var(--border);direction:rtl;text-align:right;font-size:13px;line-height:1.7;color:var(--mark)';
+    _chb.innerHTML='<span style="opacity:.85">📑 </span>'+esc(_musTailChap);
+    card.appendChild(_chb); }catch(e){} }
   ar._mkpGroups=groups; try{ _applyIsnadMatn(ar,code,(h.num||h.n),text); }catch(e){}   // С57: иснад мельче / матн крупно из ночной разметки
   const meta=document.createElement('div');meta.className='meta';
   const canRead = isReadable(code);   // С57 (владелец: «почему муслим-книга не нажимается»): клик в читалку разрешён всегда, noNav глушил его в цепи/конструкторе
@@ -6359,6 +6384,11 @@ async function openCatalog(q0){   // q0 (опц.) — начальный зап�
   }
   if(q0!=null && q0!==''){ const _s=m.querySelector('#catSearch'); if(_s) _s.value=q0; const _c=m.querySelector('#catCat'); if(_c) _c.value=''; }   // открыть сразу с фильтром по q0
   modalTop(m); m.style.display='flex';
+  // TB-4 (владелец): Мактаба открывается для ЧТЕНИЯ → всегда режим чтения, ➕-полукарты «искать по сборникам»
+  // (catPickBar/catSecPick/«➕ в поиск») спрятаны, чтобы не мешали листать. Раньше readMode ставился ЛИШЬ при
+  // СОЗДАНИИ модалки → стоило раз переключиться в поиск, и ➕-полукарты висели при каждом след. открытии. Переключатель
+  // «➕ искать по сборникам» на месте — режим поиска по сборникам возвращается по тапу (в НЁМ ➕ остаётся).
+  try{ m.classList.add('readMode'); var _tgR=m.querySelector('#catModeTog'); if(_tgR) _tgR.textContent='➕ искать по сборникам'; var _hnR=m.querySelector('#catAiHint'); if(_hnR) _hnR.innerHTML='📖 <b style="color:var(--text)">Тапни книгу — читать/листать</b>'; }catch(e){}
   try{ const _cl=m.querySelector('#catList'); if(_cl && !_cl.children.length) _cl.innerHTML='<div class="hint" style="padding:18px;text-align:center;font-size:14px">⏳ Загружаю раскладку библиотеки…</div>'; }catch(e){}   // #4: видно, что идёт загрузка
   try{ _buildSecPick(); }catch(e){}   // 📂 список разделов с «+»
   if(m._render) m._render();
