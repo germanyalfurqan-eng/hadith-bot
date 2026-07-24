@@ -293,7 +293,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1175</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1176</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -872,7 +872,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1175';
+const APPVER = 'v1176';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2173,20 +2173,23 @@ function updateQuranHelper(){
   if(!cap||!box) return;
   cap.style.display='none'; box.style.display='none'; if(L)L.innerHTML=''; if(R)R.innerHTML='';
   const v=(document.getElementById('q').value||'').trim();
-  if(tab!=='quran' || !v) return;
+  if(!v) return;
   let m;
-  // Многозначное число без двоеточия → трактуем как сура:аят (4238 → 42:38)
+  // #636: многозначное число как аят Корана — подсказка в ЛЮБОМ режиме поиска (не только вкладка Аяты); клик → открыть в читалке Корана
   if((m=v.match(/^(\d{2,6})$/)) && (m[1].length>=4 || +m[1]>114)){
     const cands=ayahCandidates(m[1]);
+    const _goA=(s,a)=>{ try{ openQuranReader(s,a); }catch(e){ _setQ(s+':'+a,true); } };
     if(cands.length===1){ const c=cands[0];
       cap.innerHTML='📖 Похоже, это аят <b>'+c.s+':'+c.a+'</b> — сура '+SURA_NAMES[c.s-1]+'. <span id="qHgo" style="color:var(--link);cursor:pointer;font-weight:600">открыть →</span>'; cap.style.display='block';
-      var g=document.getElementById('qHgo'); if(g) g.onclick=()=>_setQ(c.s+':'+c.a,true); return; }
-    if(cands.length>1){ cap.innerHTML='🤔 Это номер аята? Выбери вариант:'; cap.style.display='block';
+      var g=document.getElementById('qHgo'); if(g) g.onclick=()=>_goA(c.s,c.a); return; }
+    if(cands.length>1){ cap.innerHTML='🤔 Это номер аята Корана? Выбери вариант:'; cap.style.display='block';
       if(L){ L.appendChild(_sgHead('Возможно вы имели в виду:'));
-      cands.forEach(c=> L.appendChild(_sgItem('Аят '+c.s+':'+c.a+' — '+SURA_NAMES[c.s-1], ()=>_setQ(c.s+':'+c.a,true)))); }
+      cands.forEach(c=> L.appendChild(_sgItem('Аят '+c.s+':'+c.a+' — '+SURA_NAMES[c.s-1], ()=>_goA(c.s,c.a)))); }
       box.style.display='flex'; return; }
-    cap.innerHTML='⚠️ Не распознал как «сура:аят». Введи в формате 42:38.'; cap.style.display='block'; return;
+    if(tab==='quran'){ cap.innerHTML='⚠️ Не распознал как «сура:аят». Введи в формате 42:38.'; cap.style.display='block'; } return;
   }
+  // остальной сура-помощник (одиночное число / s:a) — только в режиме Коран
+  if(tab!=='quran') return;
   if((m=v.match(/^(\d{1,3})$/))){
     const d=m[1], s=+d;
     if(!cfg.ac){ cap.innerHTML = (s>=1&&s<=114) ? ('📖 '+s+' '+SURA_NAMES[s-1]+' — '+SURA_AYAHS[s-1]+' аятов · для аята введи '+s+':номер') : '⚠️ В Коране 114 сур.'; cap.style.display='block'; return; }
