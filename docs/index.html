@@ -77,6 +77,17 @@
   .brand .b{color:#3da5ff}
   .ver{font-size:10px;color:#9fb4cc;background:#16263a;border:1px solid #2a3f59;border-radius:8px;padding:1px 5px;vertical-align:middle;font-weight:400}
   .sub{text-align:center;color:var(--hint);font-size:11.5px;letter-spacing:.5px;margin:3px 0 13px;opacity:.82}   /* M289: тоньше, с трекингом */
+  /* M231: нижняя навигация — главное под большим пальцем */
+  #botNav{position:fixed;left:0;right:0;bottom:0;z-index:50;display:flex;justify-content:space-around;align-items:stretch;
+    background:linear-gradient(180deg,rgba(20,27,38,.94),rgba(13,17,24,.98));backdrop-filter:blur(9px);
+    border-top:1px solid var(--border);padding:5px 4px calc(5px + env(safe-area-inset-bottom,0px));box-shadow:0 -3px 16px rgba(0,0,0,.35)}
+  body.light #botNav{background:linear-gradient(180deg,rgba(250,252,255,.95),rgba(240,245,250,.99));box-shadow:0 -3px 16px rgba(60,90,130,.13)}
+  #botNav .bn{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;background:transparent;border:none;
+    color:var(--hint);font-size:10px;padding:5px 2px 3px;cursor:pointer;border-radius:11px;transition:color .15s,background .15s}
+  #botNav .bn:active{background:rgba(74,163,255,.13);color:var(--link);transform:scale(.94)}
+  #botNav .bi{font-size:19px;line-height:1.1}
+  #botNav .bl{letter-spacing:.2px;white-space:nowrap}
+  body.hasBotNav{padding-bottom:64px}
   .gear{flex:none;background:var(--card);border:1px solid var(--border);
         border-radius:10px;padding:6px 9px;font-size:12px;cursor:pointer;display:none}
   .tabs{display:flex;gap:8px;margin-bottom:12px}
@@ -296,7 +307,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1178</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1180</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -868,6 +879,13 @@
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<!-- M231: нижняя навигация — главные разделы под большим пальцем (верхние ⭐⚙️☰ переехали сюда) -->
+<nav id="botNav" style="display:none">
+  <button class="bn" id="bnHome"><span class="bi">🏠</span><span class="bl">Главная</span></button>
+  <button class="bn" id="bnFav"><span class="bi">⭐</span><span class="bl">Избранное</span></button>
+  <button class="bn" id="bnSet"><span class="bi">⚙️</span><span class="bl">Настройки</span></button>
+  <button class="bn" id="bnMore"><span class="bi">☰</span><span class="bl">Ещё</span></button>
+</nav>
 <!-- #владелец 01.07.2026 (указ «одно на другое заходит»): toTop/toBottom были ВТОРОЙ, независимой системой плавающих кнопок,
      дублирующей и перекрывающей уже существующую #floatTools (Aa + ▲ «наверх»). Убраны — «▼ вниз» встроена В floatTools ниже,
      тем же _activeScroller()-механизмом (учитывает открытые модалки), одна система плавающих кнопок вместо двух. -->
@@ -875,7 +893,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1179';
+const APPVER = 'v1180';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -13969,6 +13987,19 @@ var _hro=document.getElementById('hadithReadOurBtn'); if(_hro) _hro.onclick=()=>
 var _rcb=document.getElementById('recentBtn'); if(_rcb) _rcb.onclick=()=>{ var b=document.getElementById('recentBox'); if(b&&b.style.display==='block'){ hideRecent(); } else { showRecent(true); } };   // M256: 🕐 переключает недавние
 var _fb=document.getElementById('favBtn'); if(_fb) _fb.onclick=()=>{ renderFav('date'); var _fm=document.getElementById('favModal'); try{modalTop(_fm);}catch(e){} _fm.style.display='flex'; };   // M340: z-index-инвариант
 var _fh=document.getElementById('favHdr'); if(_fh) _fh.onclick=()=>{ renderFav('date'); var _fm2=document.getElementById('favModal'); try{modalTop(_fm2);}catch(e){} _fm2.style.display='flex'; };   // M340: z-index-инвариант
+// M231: нижняя навигация — переносим ⭐/⚙️/☰ из шапки вниз (под большой палец), шапка разгружается
+try{
+  var _bn=document.getElementById('botNav');
+  if(_bn){
+    _bn.style.display='flex'; document.body.classList.add('hasBotNav');
+    var _click=function(id){ var el=document.getElementById(id); if(el&&el.onclick) el.onclick(); else if(el) el.click(); };
+    var _h=document.getElementById('bnHome'); if(_h) _h.onclick=function(){ try{hap('light');}catch(e){} _click('brand'); try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(e){} };
+    var _f2=document.getElementById('bnFav'); if(_f2) _f2.onclick=function(){ try{hap('light');}catch(e){} _click('favHdr'); };
+    var _s2=document.getElementById('bnSet'); if(_s2) _s2.onclick=function(){ try{hap('light');}catch(e){} _click('setBtn'); };
+    var _m2=document.getElementById('bnMore'); if(_m2) _m2.onclick=function(){ try{hap('light');}catch(e){} _click('menuBtn'); };
+    ['favHdr','setBtn','menuBtn'].forEach(function(id){ var e2=document.getElementById(id); if(e2) e2.style.display='none'; });   // дубли сверху убираем (R45: не множить сущности)
+  }
+}catch(e){}
 document.getElementById('favClose').onclick=()=>{ document.getElementById('favModal').style.display='none'; };
 document.getElementById('favByDate').onclick=()=>renderFav('date');
 document.getElementById('favByColl').onclick=()=>renderFav('coll');
