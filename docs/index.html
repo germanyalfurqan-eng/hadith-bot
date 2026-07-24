@@ -296,7 +296,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1177</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1178</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -875,7 +875,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1177';
+const APPVER = 'v1178';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -1075,6 +1075,7 @@ function applyI18nShell(){
     var _fb2=document.getElementById('menuFbBtn'); if(_fb2) _fb2.textContent='Report';
     // — M15 Тир2: подробная подсказка поиска + «ⓘ Как искать» (сохраняем #helpBtn: его onclick вешается позже, стр.~13727) —
     var _hb=document.getElementById('helpBtn'); if(_hb && _hb.parentNode) _hb.parentNode.innerHTML='Word, phrase or # (e.g. <b>2:255</b>, <b>bukhari 333</b>, <b>amalu niyat</b>). <b>"in quotes"</b> = exact phrase. Modes: 🌱 (same-root), ◌َ (vowels), 🧠 (by meaning), 👤 (narrator), ⛓ (chain), more ▾. <span id="helpBtn" style="color:var(--link);cursor:pointer;font-weight:600">ⓘ How to search</span>';
+    try{ var _hb2=document.getElementById('helpBtn'); if(_hb2) _hb2.onclick=function(){ var hm=document.getElementById('helpModal'); if(hm){ try{modalTop(hm);}catch(e){} hm.style.display='flex'; } }; }catch(e){}   /* F1(аудит): перевесить onclick на НОВЫЙ helpBtn после EN-замены innerHTML — иначе «Как искать» не кликалось в EN */
     // — M15 Тир4: модалка «Легенда» (значки) — статичный контент. Арабские термины/цвета сохраняем, переводим только русские слова —
     var _lgP=document.querySelector('#legendModal .panel');
     if(_lgP){
@@ -1802,7 +1803,7 @@ async function fetchEdition(code){
 let ahmadArr=null;
 async function loadAhmad(){ if(ahmadArr)return ahmadArr; setStatus('Загружаю Муснад Ахмада (большой)…');
   let j; try{ j=await cachedFetchJSON(AHMAD_URL, 180000); }catch(_e){ j=await cachedFetchJSON(AHMAD_URL, 180000); }   // A-136: 25МБ — самый большой; кэш Cache Storage (повтор мгновенно) + таймаут 180с + 2 попытки (90с не хватало на медленной мобиле)
-  ahmadArr=j.map(x=>({num:String(x.n),text:x.t||'',grade:x.g||'',norm:''})); return ahmadArr; }
+  ahmadArr=(Array.isArray(j)?j:[]).map(x=>({num:String(x.n),text:x.t||'',grade:x.g||'',norm:''})); return ahmadArr; }   /* F3(аудит): guard — cachedFetchJSON при ошибке даёт не-массив, .map крашил экран */
 // A-136 шардинг: открыть ОДИН хадис Ахмада по номеру → грузим шард ~900КБ (ahmad/<num//1000>.json), НЕ весь 25МБ
 const _ahmOne={};
 async function loadAhmadOne(num){ if(ahmadArr){ return ahmadArr.find(x=>x.num===String(num))||null; }   // если полный массив уже в памяти (поиск/читалка) — берём оттуда
@@ -1816,12 +1817,12 @@ async function loadMuslimOne(num){ if(cache['muslim']){ return cache['muslim'].f
 const _local={};
 async function loadLocal(code,file){ if(_local[code])return _local[code]; setStatus('Загружаю '+nameOf(code)+'…');
   let j; try{ j=await cachedFetchJSON('./'+file, 180000); }catch(_e){ j=await cachedFetchJSON('./'+file, 180000); }   // A-124/A-137: крупные книги (muslim_baqi 8.4МБ, Абу Авана 22МБ, Насаи-Кубра/Абу Яʿля 12-13МБ); кэш Cache Storage + таймаут 180с + 2 попытки (60-90с не хватало на медленной мобиле)
-  _local[code]=j.map(x=>{ const raw=_muslimStripApparatus((x.ar||x.t||'').replace(/\s+/g,' ').trim()); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }   // v1062: чистка аппарата (Заваид и др.) для локальных изданий
+  _local[code]=(Array.isArray(j)?j:[]).map(x=>{ const raw=_muslimStripApparatus((x.ar||x.t||'').replace(/\s+/g,' ').trim()); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }   /* F3(аудит): guard массива */   // v1062: чистка аппарата (Заваид и др.) для локальных изданий
 async function loadExtra(code){ if(_local[code])return _local[code]; const e=EXTRA_MAP[code]; setStatus('Загружаю '+(e?e.short:code)+'…');
   if(e&&e.cdn){ const j=await fetchEdition(code);
     _local[code]=(j.hadiths||[]).map(h=>({num:String(h.hadithnumber),text:_muslimStripApparatus((h.text||'').replace(/\s+/g,' ').trim()),grade:gradeOf(h),norm:''})); return _local[code]; }
   const j=await cachedFetchJSON(EXTRA_BASE+code+'.json', 90000);   // A-124: крупные издания (Ибн Хиббан 11МБ, Абу Авана 22МБ…) — таймаут 90с; кэш Cache Storage → повторное открытие мгновенно (#301 ishaq/#326 abuyala)
-  _local[code]=j.map(x=>{ const raw=_muslimStripApparatus((x.ar||x.t||'').replace(/\s+/g,' ').trim()); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }   // v1062: чистка аппарата (Заваид и др.) для локальных изданий
+  _local[code]=(Array.isArray(j)?j:[]).map(x=>{ const raw=_muslimStripApparatus((x.ar||x.t||'').replace(/\s+/g,' ').trim()); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }   /* F3(аудит): guard массива */   // v1062: чистка аппарата (Заваид и др.) для локальных изданий
 async function loadQuran(){ if(quran)return quran;
   try{ if(!(typeof modes!=='undefined'&&(modes.narr||modes.chain))) setStatus('Загружаю Коран…'); }catch(e){}   // в режимах равиев фоновая загрузка молчит («зачем при поиске передатчика грузить Коран»)
   let j; try{ j=await cachedFetchJSON(QURAN_URL, 60000); }catch(e){ try{ j=await cachedFetchJSON(QURAN_URL, 60000); }catch(e2){ try{ setStatus('Не удалось загрузить Коран — проверь сеть'); }catch(_){} throw e2; } }   // A-135: Cache Storage (повтор мгновенно) + 60с + 2 попытки (1.5МБ рвался за 30с на медленной мобиле)
