@@ -426,7 +426,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1218</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1219</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -974,14 +974,19 @@
           <input type="checkbox" id="readRoot" style="margin:0"> 🌱 однокоренные</label>
       </div>
       <div id="readBody"></div>
+      <!-- Владелец 26.07.2026: «арабский справа налево читается» + заявка #656 «внизу стрелки запутанно
+           как-то выглядят». Листалка была собрана по-латински: «⏮ в начало» слева, «← пред.» слева,
+           «след. →» справа. Арабская книга листается СПРАВА НАЛЕВО: начало книги справа, следующий
+           хадис — СЛЕВА. Порядок кнопок и стрелки развёрнуты под чтение книги, а не под латинский текст.
+           Идентификаторы кнопок не менял — обработчики и вся логика прежние. -->
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:10px">
-        <button class="go" id="readFirst" style="padding:8px 10px" title="В начало книги">⏮</button>
-        <button class="go" id="readPrev" style="padding:8px 12px">← пред.</button>
-        <input type="number" id="readJump" placeholder="№ хадиса" min="1" inputmode="numeric" title="Введи НОМЕР хадиса в этой книге и нажми Enter или кнопку «→» — листалка перейдёт к нему (это номер хадиса, не том/страница). Для книг без точного индекса переход приблизительный — на этот лист или соседний (по маркерам печати)."
+        <button class="go" id="readLast" style="padding:8px 10px" title="В конец книги (последний хадис)">⏮</button>
+        <button class="go" id="readNext" style="padding:8px 12px" title="Следующий хадис — дальше по книге">← след.</button>
+        <input type="number" id="readJump" placeholder="№ хадиса" min="1" inputmode="numeric" title="Введи НОМЕР хадиса в этой книге и нажми Enter или кнопку перехода — листалка перейдёт к нему (это номер хадиса, не том/страница). Для книг без точного индекса переход приблизительный — на этот лист или соседний (по маркерам печати)."
                style="width:96px;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:7px 9px;font-size:13px">
-        <button class="go" id="readJumpGo" style="padding:8px 11px" title="Перейти к введённому номеру хадиса">→</button>
-        <button class="go" id="readNext" style="padding:8px 12px">след. →</button>
-        <button class="go" id="readLast" style="padding:8px 10px" title="В конец книги">⏭</button>
+        <button class="go" id="readJumpGo" style="padding:8px 11px" title="Перейти к введённому номеру хадиса">⏎</button>
+        <button class="go" id="readPrev" style="padding:8px 12px" title="Предыдущий хадис — назад по книге">пред. →</button>
+        <button class="go" id="readFirst" style="padding:8px 10px" title="В начало книги (хадис №1)">⏭</button>
       </div>
     </div>
   </div>
@@ -1168,7 +1173,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1218';
+const APPVER = 'v1219';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -15136,6 +15141,19 @@ async function _readLoad(code){
   if(C&&C.file) return await loadLocal(code,C.file);
   return await loadCollection(code);
 }
+// Заявка владельца #661 (26.07.2026): «почему названия глав между некоторыми нумерованными хадисами
+// … в Бухари ты удалил у нас в читалке? почему так получилось?»
+// Проверено по данным: НЕ удалял — их там не было никогда. Читалка живёт на editions/ara-<код>.min.json
+// (выгрузка sunnah.com), а это ТОЛЬКО нумерованные хадисы: названий глав в файле ровно 0.
+// Зато они есть в нашей копии Мактабы: у Бухари 3188 глав. build_chapters_index.py собрал из неё
+// chapters/<код>.json = {номер хадиса: название главы} — 6843 номера Бухари получили свою главу.
+const _chapCache={}, _chapCacheP={};
+async function _chapGet(code){
+  if(code in _chapCache) return _chapCache[code];
+  if(!_chapCacheP[code]) _chapCacheP[code]=fetch('./chapters/'+code+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
+  _chapCache[code]=await _chapCacheP[code];
+  return _chapCache[code];
+}
 function _readRender(){
   if(!_readArr||!_readArr.length) return;
   if(_readIdx<0)_readIdx=0; if(_readIdx>=_readArr.length)_readIdx=_readArr.length-1;
@@ -15152,6 +15170,18 @@ function _readRender(){
     mq.onclick=()=>{ try{ openBook(_mb,1,false,'مقدمة'); }catch(e){} };
     body.appendChild(mq);
   }catch(e){} }
+  // #661: название главы ПЕРЕД хадисом — как в печатном оригинале. Грузим лениво, вставляем первым
+  // элементом тела (не ждём: рендер карточки не должен тормозить из-за словаря глав).
+  try{ const _chSlot=document.createElement('div'); body.appendChild(_chSlot);
+    _chapGet(_readCode).then(map=>{
+      const ttl=map&&map[String(h.num)];
+      if(!ttl || _readArr[_readIdx]!==h) return;   // ушли на другой хадис, пока грузилось — не рисуем
+      _chSlot.dir='rtl';
+      _chSlot.style.cssText='font-size:15px;'+_AF+';color:#e8c35a;background:rgba(232,195,90,.09);border:1px solid #6b5a28;border-radius:9px;padding:6px 11px;margin:0 0 9px;line-height:1.75';
+      _chSlot.textContent='📑 '+ttl;
+      _chSlot.title='Название главы — из печатного издания (Мактаба). В выгрузке sunnah.com глав нет.';
+    }).catch(()=>{});
+  }catch(e){}
   const sg=_groups;                 // #311: в читалке СОХРАНЯЕМ подсветку искомого слова (зашёл из поиска → sg непуст; из меню/новый поиск → []) — тот же hl(), Arabus не затронут
   try{ body.appendChild(cardHadith({code:_readCode,h,noNav:true},sg||[])); }
   catch(e){   // M496: сбой полной карточки → НЕ голый текст, а мини-карточка с addTr
