@@ -426,7 +426,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1209</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1210</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1168,7 +1168,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1209';
+const APPVER = 'v1210';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -12631,7 +12631,10 @@ function _codifPlace(ref){ if(!ref||ref.num==null) return null;
   else if(ref.source!=null){ const s=String(ref.source); b=_SLUG2BID[s]||(/^\d+$/.test(s)?s:null); }   // h-карточка — слаг→bid
   if(!b) return null;
   const _rm=String(ref.num).match(/#(\d+)/);   // v1064: риваят-номер сохраняем отдельно (654#2 → riw:2) для пер-буквенной сверки
-  return {bid:b, num:String(ref.num).replace(/#.*/,'').replace(/[^0-9]/g,''), riw:_rm?+_rm[1]:null};   // #242/В-01: срезать риваят-суффикс (654#1→654) — иначе codifChain/_verifyChain искали несуществующий «654#1» → сверка Муслима падала в Мактабу
+  // 25.07.2026: тащим и ОБЩЕЕ число риваятов нашего издания (ref._riwTot, ставится карточкой) —
+  // без него нельзя понять, совпадает ли наша нарезка риваятов с буквами sunnah.com (ошибки A-124/A-125).
+  return {bid:b, num:String(ref.num).replace(/#.*/,'').replace(/[^0-9]/g,''), riw:_rm?+_rm[1]:null,
+          riwTot:(ref&&(ref._riwTot||ref.riwTot))||null};
 }
 // подсветка ТОЛЬКО реальных передатчиков этого хадиса (из таблицы), клик → ИМЕННО их карточка (id таблицы, не угадка типа 224→215)
 // сегменты иснада В ПОРЯДКЕ ТЕКСТА: режем по глаголам передачи (для позиционного связывания с цепью таблицы)
@@ -12970,7 +12973,22 @@ async function verifyNarr(card, place, text){
     // звена» здесь означает лишь, что в рантайме не подставился id для повтора/краткой формы, а НЕ пробел данных.
     // Поэтому `missing` больше не повод для записи в журнал: пишем только при реальном противоречии —
     // разное число РАЗНЫХ равиев (cntMis) или лишние у нас id (extra). Красная плашка на экране остаётся.
-    const _realIdDiff = !_softBridgeOnly && (cntMis || extra.length>0);
+    let _realIdDiff = !_softBridgeOnly && (cntMis || extra.length>0);
+    // 🔴 25.07, четвёртая правка — по ошибкам A-124/A-125 (Муслим №544, №845; Тирмизи №2230), разобранным по данным.
+    // У Муслима один номер содержит несколько риваятов, и РАЗБИВКА У НАС И У SUNNAH.COM РАЗНАЯ:
+    // для №544 `muslim_riw.json` даёт ДВЕ буквы (a, b), а наш текст делится на ТРИ риваята. Значит наш «риваят 2/3»
+    // не равен ни 544a, ни 544b — он часть их «b». Сверять такой сегмент с чужим эталоном бессмысленно:
+    // в цепи законно окажется يعقوب بن عبد الرحمن там, где у них سفيان بن عيينة, и приложение кричало «РАСХОЖДЕНИЕ»
+    // на СВОЮ ЖЕ нарезку. Такие ложные тревоги залили журнал ошибок (A-124 приходил трижды за минуту).
+    // Поэтому: число наших риваятов ≠ числу букв эталона → это НЕ расхождение данных, а разная нарезка изданий.
+    // Говорим об этом словами, в журнал ошибок НЕ пишем, красную плашку не ставим.
+    let _riwSplitDiff = false;
+    try{
+      if(String(place.bid)==='1727' && place.riwTot && place.riwTot>1){
+        const _rwm=await loadMuslimRiw(); const _lets=(_rwm&&_rwm[String(place.num)])||[];
+        if(_lets.length && _lets.length!==place.riwTot){ _riwSplitDiff=true; _realIdDiff=false; }
+      }
+    }catch(e){}
     if(alarm && idMode && _realIdDiff && String(place.bid)!=='21795'){ try{ const _vmsg='СВЕРКА РАСХОЖДЕНИЕ с sunnah.com: bid'+place.bid+' №'+place.num+' — эталон '+authCount+', опознано '+ourCount+(missing.length?(', НЕ опознано '+missing.length):'')+(extra.length?(', лишних id '+extra.length+' ['+extra.slice(0,6).join(',')+']'):''); _appReport(_vmsg, 'сверка-расхождение'); }catch(_e){} }   // A-174/177/182/188/189: Дарими (21795) — ИЗВЕСТНЫЙ рассинхрон нумерации эталона (нужен ре-бридж) → в журнал ошибок не спамим, визуальная сверка остаётся
     // #119/#111 (З-09): ДЕТЕКТОР УСЕЧЁННОГО ТЕКСТА. Показанный текст без маркеров иснада (حدثنا/أخبرنا/عن) и начинается с матна (قال رسول/النبي) → иснад отсутствует в показе. Флагуем ТОЛЬКО при авторитетном эталоне, где краул подтверждает наличие иснада ≥2 (иначе риск ложного флага на хадисах, где автор НАМЕРЕННО дал только матн — CLAUDE.md п.4).
     const _flat=stripDiac(String(text||'')).replace(/ـ/g,'').replace(/[أإآ]/g,'ا');
@@ -12979,12 +12997,23 @@ async function verifyNarr(card, place, text){
     const box=document.createElement('div'); box.className='verifyBox';
     // #386 (заявка владельца «Муслим не сверен с sunnah.com»): доп.риваят 5 verify-сборников (Бухари/Муслим/Насаи/АбуДауд/ИбнМаджа) — текст=sunnah.com 1:1, цепь подлинная. НЕ нейтральная «Мактаба», а честный 🟢: структурного эталона на доп.риваяте нет (он только на основном), но передатчики ИЗ подлинного текста sunnah.com.
     const _authText = !idMode && _abbrevRiw && ['1681','1727','829','1726','1198'].indexOf(String(place.bid))>=0;
-    const _bc = idMode ? (alarm?'#e0796a':(softGap?'#d8a85a':'#3a8a5a')) : (_authText?'#3a8a5a':'#3a4a66'); const _bg = idMode ? (alarm?'rgba(224,121,106,.10)':(softGap?'rgba(216,168,90,.10)':'rgba(58,138,90,.08)')) : (_authText?'rgba(58,138,90,.08)':'rgba(90,120,170,.08)');
+    const _alarmShow = alarm && !_riwSplitDiff;   // разная нарезка риваятов — не тревога, красным не красим
+    const _bc = idMode ? (_alarmShow?'#e0796a':(softGap?'#d8a85a':'#3a8a5a')) : (_authText?'#3a8a5a':'#3a4a66'); const _bg = idMode ? (_alarmShow?'rgba(224,121,106,.10)':(softGap?'rgba(216,168,90,.10)':'rgba(58,138,90,.08)')) : (_authText?'rgba(58,138,90,.08)':'rgba(90,120,170,.08)');
     box.style.cssText='margin-top:9px;border-radius:10px;padding:9px 11px;font-size:12px;border:1px solid '+_bc+';background:'+_bg+';';
     const _hdr = !idMode ? (_authText?'🟢 Цепь этого риваята · текст = sunnah.com (передатчики подлинные)':'🔵 Сверка по базе Мактабы (передатчики опознаны по тексту)') : (alarm?('🔴 СВЕРКА: РАСХОЖДЕНИЕ с sunnah.com'+(_nameMis?(' — '+(_nameMis.dom?'НА ЭКРАНЕ':'пер-id')+': эталон '+_nameMis.vCount+', у нас лишних '+_nameMis.extraR.length+', не хватает '+_nameMis.missV.length+(_nameMis.dom?' (подсветка в тексте не совпала с эталоном)':'')):'')):(softGap?('🟡 Сверка: почти совпадает — '+gapList.length+' равия'+(gapList.length===1?'':'/-ев')+' мост не привязал по краткой форме'):((recNa&&_vMis&&_vMis.ok)?'🟢 Сверка: пер-id совпадает с эталоном sunnah.com':'🟢 Сверка: звенья согласованы (число и мост)')));   // фикс по диагнозу Хермеса 05.07
-    const _hcol = !idMode ? (_authText?'#7fd3a0':'#6fb0e0') : (alarm?'#e0796a':(softGap?'#e0c07a':'#7fd3a0'));
+    const _hcol = !idMode ? (_authText?'#7fd3a0':'#6fb0e0') : (_alarmShow?'#e0796a':(softGap?'#e0c07a':'#7fd3a0'));
     let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b style="color:'+_hcol+'">'+_hdr+'</b>'
       +'<span style="color:var(--hint)">'+(idMode?('эталон ('+srcLbl+'): <b>'+authCount+'</b> · '):'')+'приложение: <b style="color:'+(cntMis&&idMode?'#e0796a':'inherit')+'">'+ourCount+'</b></span></div>';
+    if(_riwSplitDiff){
+      // По ошибкам A-124/A-125: у Муслима один номер содержит несколько риваятов, и наше издание делит их
+      // ИНАЧЕ, чем sunnah.com (например №544: у них две буквы a/b, у нас три риваята). Сверять наш сегмент
+      // с чужой буквой бессмысленно — цепь законно другая. Говорим это словами, тревогу не поднимаем.
+      h+='<div style="margin-top:6px;color:#e0c07a;line-height:1.5">⚖️ <b>Сверка по этому риваяту не проводится.</b> '
+        +'Наше издание делит хадис №'+esc(String(place.num))+' на <b>'+esc(String(place.riwTot))+'</b> риваята, '
+        +'а sunnah.com — на другое число. Значит этот отрывок не соответствует ни одной их букве целиком, '
+        +'и любое «расхождение» тут было бы нашей же нарезкой, а не ошибкой данных. '
+        +'Сопоставление разбивок изданий — в очереди работ.</div>';
+    }
     // #119/#111: текст-уровневая тревога — показан только матн, а эталон знает иснад (≥2 передатчика)
     if(idMode && textWithoutIsnad && authCount>=2) h+='<div style="margin-top:7px;color:#e0b3a8;font-size:11.5px;border-top:1px dashed rgba(224,121,106,.35);padding-top:6px">⚠️ <b>ТЕКСТ:</b> показан только матн (начинается с «قال…»), а по эталону у хадиса есть иснад из <b>'+authCount+'</b> передатчиков — иснад в этом показе отсутствует/сокращён (расхождение в самом ТЕКСТЕ, не только в числе).</div>';
     // СХЕМА-ЦЕПЬ передатчиков с подписанными id и формой передачи между ними (наглядно для сверки)
@@ -13341,7 +13370,10 @@ async function _isnadUrl(source,num){ const slug=ISNAD_SLUG[source]; if(!slug) r
   for(const c of chs){ if(c[0]!=null && c[0]<=num && num<=c[1]){ best=c[2]; break; } }
   return 'https://isnad.link/book/'+slug+(best?('/'+best):''); }
 function refOf(fav){ if(!fav||!fav.k) return null; const p=String(fav.k).split('|');
-  if(p[0]==='h') return {source:p[1], num:p[2]};
+  // 25.07.2026: пробрасываем ОБЩЕЕ число риваятов нашего издания (карточка кладёт его в fav._riwTot) —
+  // по нему сверка понимает, совпадает ли наша нарезка риваятов с буквами sunnah.com (ложные A-124/A-125).
+  const _rt=(fav&&fav._riwTot)||null;
+  if(p[0]==='h') return {source:p[1], num:p[2], _riwTot:_rt};
   if(p[0]==='m') return {source:'muhaymin', num:p[1]};
   if(p[0]==='mk') return {bid:p[1], num:p[2]};   // Э2.2: номерная карточка Мактабы — точная книга Шамелы + № печати
   return null; }
