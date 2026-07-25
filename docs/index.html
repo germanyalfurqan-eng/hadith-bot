@@ -200,9 +200,13 @@
   #qHint{position:absolute;left:38px;top:50%;transform:translateY(-50%);pointer-events:none;z-index:1;
          font-size:16px;line-height:1.2;color:var(--hint);max-width:calc(100% - 150px);
          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;unicode-bidi:isolate}
-  #qHint .qhTx{display:inline-block;opacity:.92;transition:transform .34s cubic-bezier(.22,.61,.36,1),opacity .3s ease}
-  #qHint.out .qhTx{transform:translateY(-9px);opacity:0}
-  #qHint.pre .qhTx{transform:translateY(9px);opacity:0;transition:none}
+  /* смена примеров: кроссфейд с лёгким масштабом 0.98→1 (совет Gemini 2.5 — спокойнее и «дороже», чем уезд вверх;
+     всё на opacity/transform, телефон не греется). 400мс, ease-in-out, пауза между сменами 3с — успеть прочитать. */
+  #qHint .qhTx{display:inline-block;opacity:.92;transform-origin:left center;transition:transform .4s cubic-bezier(.42,0,.58,1),opacity .4s cubic-bezier(.42,0,.58,1)}
+  #qHint.out .qhTx{transform:scale(.98);opacity:0}
+  #qHint.pre .qhTx{transform:scale(.98);opacity:0;transition:none}
+  #qHint .qhL{opacity:.62}
+  #qHint b{font-weight:600;color:var(--link);opacity:.95}
   #qHint bdi{font-family:"Traditional Arabic","Amiri",serif;font-size:17px}
   @media(max-width:430px){ #qHint{font-size:15px;max-width:calc(100% - 120px)} }
   @media (prefers-reduced-motion:reduce){ #qHint .qhTx{transition:none} }
@@ -409,7 +413,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1187</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1188</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -950,6 +954,10 @@
         <input type="text" id="readFind" placeholder="🔎 поиск в этой книге…" autocomplete="off" enterkeyhint="search"
                style="flex:1;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:7px 10px;font-size:13px">
         <span class="hint" id="readFindInfo" style="margin:0;white-space:nowrap"></span>
+        <!-- M330: поиск ОДНОКОРЕННЫХ внутри книги — тот же скелет слова, что и в основном поиске («Однокоренные») -->
+        <label id="readRootWrap" title="Искать все формы слова: не только как набрано, но и однокоренные (كتب → يكتب، مكتوب)"
+               style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--hint);cursor:pointer;white-space:nowrap;flex:none">
+          <input type="checkbox" id="readRoot" style="margin:0"> 🌱 однокоренные</label>
       </div>
       <div id="readBody"></div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:10px">
@@ -1146,7 +1154,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1187';
+const APPVER = 'v1188';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -14196,10 +14204,13 @@ try{
     var _qhBase=_qi.getAttribute('placeholder')||'';
     var _qhSet=function(html){ _qh.classList.add('out');
       setTimeout(function(){ _qhTx.innerHTML=html; _qh.classList.remove('out'); _qh.classList.add('pre');
-        setTimeout(function(){ _qh.classList.remove('pre'); }, 20); }, 320); };
+        setTimeout(function(){ _qh.classList.remove('pre'); }, 20); }, 400); };
+    // примеры подобраны так, чтобы КАЖДЫЙ учил отдельной возможности: перевод, номер в сборнике, общий номер,
+    // имя передатчика, точная фраза в кавычках, исключение минусом, арабский текст, смысловой запрос к ИИ.
+    var _ex=function(s){ return '<span class="qhL">например:</span> <b>'+s+'</b>'; };
     var _qhList=function(){ var q=(typeof tab!=='undefined' && tab==='quran');
-      return q ? [_qhBase, 'например: 2:255', 'например: сура 18', 'например: милость']
-               : [_qhBase, 'например: терпение', 'например: бухари 333', 'например: <bdi dir="rtl">إنما الأعمال</bdi>', 'например: 87']; };
+      return q ? [_qhBase, _ex('2:255'), _ex('сура 18'), _ex('милость'), _ex('<bdi dir="rtl">بسم الله</bdi>'), _ex('&laquo;будь терпелив&raquo;'), _ex('рай -ад')]
+               : [_qhBase, _ex('терпение'), _ex('бухари 333'), _ex('Абу Хурайра'), _ex('&laquo;не гневайся&raquo;'), _ex('<bdi dir="rtl">إنما الأعمال</bdi>'), _ex('87'), _ex('молитва -фард')]; };
     var _qhOn=function(on){ _qh.style.display=on?'':'none'; _qi.setAttribute('placeholder', on?'':_qhBase); };
     var _qhI=0,_qhLap=0,_qhT=null;
     _qhTx.textContent=_qhBase; _qhOn(true);
@@ -14210,7 +14221,7 @@ try{
         var arr=_qhList(); _qhI=(_qhI+1)%arr.length; if(_qhI===0) _qhLap++;
         _qhOn(true); _qhSet(arr[_qhI]);
       }catch(e){} };
-    _qhT=setInterval(_qhTick, 3600);
+    _qhT=setInterval(_qhTick, 3000);
     ['focus','input','paste'].forEach(function(ev){ _qi.addEventListener(ev, function(){ _qhOn(false); }); });
     _qi.addEventListener('blur', function(){ setTimeout(function(){ if(!_qi.value && _qhLap<3) _qhOn(true); }, 150); });
   }
@@ -14433,15 +14444,25 @@ var _ecl=document.getElementById('extraClear'); if(_ecl) _ecl.onclick=()=>{ selE
 const READABLE=[
   {code:'bukhari',ru:'Сахих аль-Бухари'},{code:'muslim',ru:'Сахих Муслим'},{code:'abudawud',ru:'Сунан Абу Дауд'},
   {code:'tirmidhi',ru:'Сунан ат-Тирмизи'},{code:'ibnmajah',ru:'Сунан Ибн Маджа'},{code:'nasai',ru:'Сунан ан-Насаи'},
-  {code:'malik',ru:'аль-Муватта (Малик)'},{code:'ahmad',ru:'Муснад Ахмада'},
-].concat(EXTRA.filter(e=>e.code!=='muhaymin' && !e.soon).map(e=>({code:e.code,ru:e.ru})));   // муфхаймин — особая структура (рв); «скоро» — ещё нет данных
+  {code:'malik',ru:'аль-Муватта (Малик)'},{code:'ahmad',ru:'Муснад Ахмада'},{code:'darimi',ru:'Сунан ад-Дарими'},
+];   // слово владельца 25.07: в читалке — ТОЛЬКО девять сводов (كتب التسعة). Прежний список подмешивал сюда все
+     // «другие сборники» (Мукбиль, Ибн Хиббан, Абу Авана, мусаннафы, муснады…) — вышла свалка из четырёх десятков
+     // строк без порядка. Остальные книги читаются через Мактабу (кнопка «📚 Вся библиотека и разделы» рядом).
 let _readArr=null,_readCode='',_readIdx=0,_readFindM=[],_readFindPos=-1,_readSeq=0;
 /* Поиск ВНУТРИ книги (локально, бесплатно): собираем индексы совпадений, листаем по ним */
 function _readDoFind(){
   const inp=document.getElementById('readFind'); const info=document.getElementById('readFindInfo');
   const q=canon((inp&&inp.value||'')); _readFindM=[]; _readFindPos=-1;
   if(!q || !_readArr){ if(info) info.textContent=''; return; }
-  for(let i=0;i<_readArr.length;i++){ if(canon(_readArr[i].text||'').indexOf(q)!==-1) _readFindM.push(i); }
+  // M330 (заявка «поиск однокоренных внутри книги»): при включённом тумблере сравниваем СКЕЛЕТЫ слов —
+  // тот же skel(), что и в режиме «Однокоренные» основного поиска, так что результат предсказуемо одинаковый.
+  const _rootOn = !!(document.getElementById('readRoot')||{}).checked;
+  const _qSk = _rootOn ? q.split(/\s+/).map(skel).filter(s=>s.length>=2) : null;
+  for(let i=0;i<_readArr.length;i++){ const _tx=canon(_readArr[i].text||'');
+    if(_rootOn){ if(!_qSk.length) continue;
+      const _ws=_tx.split(/\s+/).map(skel);
+      if(_qSk.every(s=>_ws.some(w=>w.indexOf(s)!==-1))) _readFindM.push(i);
+    } else if(_tx.indexOf(q)!==-1) _readFindM.push(i); }
   if(!_readFindM.length){ if(info) info.textContent='0 совпадений'; return; }
   _readFindPos=0; _readIdx=_readFindM[0]; _readRender();
   if(info) info.textContent='1 / '+_readFindM.length;
