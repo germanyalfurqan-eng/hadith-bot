@@ -426,7 +426,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1216</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1217</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1168,7 +1168,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1216';
+const APPVER = 'v1217';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4834,6 +4834,13 @@ async function maktabaByNum(seq, n){
     const tr=(typeof _catTr!=='undefined'&&_catTr&&_catTr.map&&_catTr.map[bn])||null;
     card.innerHTML='<div style="direction:rtl;text-align:right;font-weight:700;color:var(--link);font-size:15px">📖 '+esc((tr&&tr.voc)?tr.voc:bn)+'</div>'
       +((tr&&tr.ru)?('<div style="font-size:12.5px;color:#bcd0ff;margin-top:2px">'+esc(tr.ru)+'</div>'):'');
+    // Заявки владельца #655 («бардак» — в тексте торчал сырой тег) и #661 («почему главы пропускаешь?»):
+    // название главы приходило ПРИКЛЕЕННЫМ к хвосту хадиса тегом <span data-type="title">…</span>, и в RTL-потоке
+    // выглядело абракадаброй. Данные вычищены (7508 записей), название вынесено третьим элементом it[2] —
+    // показываем его как заголовок главы, ровно как в печатном оригинале.
+    if(it[2]){ const chp=document.createElement('div'); chp.dir='rtl';
+      chp.style.cssText='font-size:14px;'+_AF+';color:#e8c35a;background:rgba(232,195,90,.09);border:1px solid #6b5a28;border-radius:8px;padding:4px 9px;margin-top:6px;line-height:1.7';
+      chp.textContent='📑 '+it[2]; card.appendChild(chp); }
     const ar=document.createElement('div'); ar.className='ar'; ar.style.cssText='font-size:16px;line-height:2;margin-top:6px'; ar.textContent=it[1]; card.appendChild(ar);
     const meta=document.createElement('div'); meta.className='meta';
     try{ addTr(meta, card, it[1], null, {k:'mk|'+bid+'|'+n, leaf:(it[0]||''), type:'h', coll:bn, label:bn+' №'+n, text:it[1].slice(0,200)}); }catch(e){}   // QA#1-фикс: ключ ЕДИНЫЙ (mk|bid|n) как в развёрнутом виде (3667) → нет дублей/рассинхрона звезды; лист вынесен в отдельное поле f.leaf (для openBook)
@@ -5552,6 +5559,11 @@ async function wpTranslate(word, host, btn){
   finally{ if(btn) btn.style.pointerEvents=''; }
 }
 const _AF='font-family:var(--arFont,\'Noto Naskh Arabic\',\'Amiri\',serif)';
+// Владелец 25.07.2026 (скрин карточки равия): «почему шрифты разные и слова непроверенные, орфография неверная».
+// Корень: русский перевод рендерился ВНУТРИ контейнера dir="rtl" с арабским шрифтом _AF — кириллица бралась из
+// Noto Naskh Arabic (у него есть свои кириллические глифы другого начертания) → «разные шрифты» в одной карточке,
+// а bidi-алгоритм уносил точку и скобки в начало строки («.группа»). Русский ОБЯЗАН иметь свой dir и свой шрифт.
+const _RF='font-family:var(--uiFont,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif);direction:ltr;text-align:left;unicode-bidi:isolate';
 // грамматика слова на РУССКОМ из кода корпуса (V|IMPF|VF:4|3MP|MOOD:IND и т.п.)
 function gramRu(code){
   if(!code) return '';
@@ -11404,6 +11416,17 @@ async function renderTestimoniesCard(mid, host){
   const _ruName=(cr)=>(_lookup(_CRIT_RU,cr)||cr);
   const _yrOf=(cr)=>_lookup(_CRIT_HIJRI,cr);
   const _ruVerdict=(terms)=>{ const seen=new Set(),out=[]; terms.forEach(t=>String(t||'').split(/[\s،,]+/).filter(Boolean).forEach(w=>{ try{ const ex=jarhExplain(w); if(ex){ const ru=(ex.split(' — ')[1]||'').split(' · ')[0].trim(); if(ru&&!seen.has(ru)){seen.add(ru);out.push(ru);} } }catch(e){} })); return out.join(', '); };
+  // Владелец 25.07.2026: «слова непроверенные, орфография неверная». Переводы свидетельств (поле c[9]) — машинные,
+  // и часть их бракована: 904 записи из 70460 держат непереведённую латиницу («мufti», «Religious authority»),
+  // 121 — машина приняла НАЗВАНИЕ КНИГИ за обычное слово («قال في التقريب» → «Говорили о близком» вместо
+  // «сказал в „ат-Такриб“»). Молча показывать такое нельзя: рядом лежит арабский оригинал, перевод — вспомогательный,
+  // поэтому честнее пометить черновое, чем выдавать за выверенное (тот же приём, что бейдж «авто ⚠» у транслитерации).
+  const _ruDraft=(t)=>{ const s=String(t||''); return /[A-Za-z]{3,}/.test(s)||/В приближении|Говорили о близком|Худи ас-Сари/.test(s); };
+  // Единая строка русского перевода: свой шрифт и свой dir (см. _RF) + пометка, если перевод черновой.
+  const _ruLine=(t,fs)=>{ const d=document.createElement('div');
+    d.style.cssText='font-size:'+(fs||13)+'px;color:#9aa7b5;margin-top:4px;line-height:1.5;'+_RF;
+    d.innerHTML='≈ '+esc(String(t))+(_ruDraft(t)?(' <span title="Черновой машинный перевод — в нём осталось непереведённое или неверно передано название книги. Эталон — арабский текст выше." style="font-size:9.5px;color:#c9a24a;border:1px solid #5e4d23;border-radius:6px;padding:0 5px;cursor:help;white-space:nowrap">черновой ⚠</span>'):'');
+    return d; };
   const _TT_TOP=6;
   const _emap={}, _eord=[]; _early.forEach(cr=>{ const key=_ruName(cr); if(!_emap[key]){_emap[key]={ar:cr,items:[]}; _eord.push(key);} byc[cr].forEach(it=>_emap[key].items.push(it)); });
   _eord.forEach((key,idx)=>{ const cr=_emap[key].ar; const items=_emap[key].items; const terms=[...new Set(items.map(c=>c[1]))];
@@ -11448,7 +11471,7 @@ async function renderTestimoniesCard(mid, host){
         b.innerHTML='<span style="display:inline-flex;width:17px;height:17px;border-radius:50%;background:#1c2b44;color:#9cc3f0;font-size:10.5px;align-items:center;justify-content:center;margin-left:6px;vertical-align:middle">'+(vi+1)+'</span>'+esc(v);
         vw.appendChild(b); });
       row.appendChild(vw);
-      if(ruv){ const r2=document.createElement('div'); r2.style.cssText='font-size:12.5px;color:#9aa7b5;margin-top:4px'; r2.textContent='≈ '+ruv; row.appendChild(r2); }
+      if(ruv) row.appendChild(_ruLine(ruv,12.5));
     }
     if(!_vars && c0[3]){ const q=document.createElement('div'); q.dir='rtl';
       // владелец 02.07 (скрин «джарх в зелёной рамке»): рамка/фон цитаты — ПО ПОЛЯРНОСТИ вердикта: джарх ВСЕГДА красным, таусик зелёным, нейтральное серым
@@ -11464,7 +11487,7 @@ async function renderTestimoniesCard(mid, host){
         _xp.onclick=function(){ var was=q.style.maxHeight!==''; q.style.maxHeight=was?'':'120px'; _xp.textContent=was?'▴ свернуть':'▾ цитата целиком'; };
         row.appendChild(q); row.appendChild(_xp); }
       else row.appendChild(q); }
-    if(!_vars && ruv){ const r=document.createElement('div'); r.style.cssText='font-size:13px;color:#9aa7b5;margin-top:4px'; r.textContent='≈ '+ruv; row.appendChild(r); }
+    if(!_vars && ruv) row.appendChild(_ruLine(ruv,13));
     try{ row.appendChild(_ttLinkRow(c0[5],c0[6],mid,c0[7],c0[4],c0[3],c0[0])); }catch(e){}
     // R-61 Э4: у ОСТАЛЬНЫХ записей группы тоже есть свои книги-носители (bid+стр) — раньше рисовалась только первая
     try{ items.slice(1).forEach(cx=>{ if(cx[5]&&Number(cx[5])>0){ const _x=_ttLinkRow(cx[5],cx[6],mid,cx[7],cx[4],cx[3],cx[0]); _x.style.marginTop='3px'; row.appendChild(_x); } }); }catch(e){}
@@ -11477,8 +11500,17 @@ async function renderTestimoniesCard(mid, host){
   if(_late.length){ const lb=document.createElement('div'); lb.style.cssText='margin-top:12px;border-top:1px solid #20302a;padding-top:11px';
     lb.innerHTML='<div style="font-size:13px;color:#9aa7b5;margin-bottom:7px">📜 Поздние своды (справочно)</div>';
     _late.forEach(cr=>{ const items=byc[cr]; const terms=[...new Set(items.map(c=>c[1]))]; const c0=items[0]; const ruv=((c0[9]&&String(c0[9]).trim())||_ruVerdict(terms));
-      const rr=document.createElement('div'); rr.style.cssText='display:flex;justify-content:space-between;gap:8px;background:rgba(46,107,155,.08);border-radius:8px;padding:7px 10px;margin-top:5px;align-items:baseline';
-      rr.innerHTML='<span class="critNameCl" style="font-size:14.5px;color:#aeb9c4;cursor:pointer;font-weight:600" title="Открыть карточку этого учёного">'+esc(_ruName(cr))+((_ruName(cr)!==cr)?(' <span dir="rtl" style="font-size:12.5px;color:#8593a2;'+_AF+'">'+esc(cr)+'</span>'):'')+(c0[4]?(' · '+esc(c0[4])):'')+'</span><span dir="rtl" style="font-size:15.5px;color:#e6edf3;'+_AF+'">'+esc(terms.join('، '))+(ruv?(' <span style="color:#9aa7b5;font-size:13px">≈ '+esc(ruv)+'</span>'):'')+'</span>';
+      // Владелец 25.07.2026 (скрин «шрифты разные»): было — имя слева, а арабский И русский ОДНИМ span'ом справа,
+      // внутри dir="rtl" с арабским шрифтом. У поздних сводов (Ибн Хаджар/Захаби) поле термина в 10% случаев держит
+      // не термин, а цитату в 120 знаков — она с русским переводом мешалась в одном bidi-потоке в кашу.
+      // Теперь строение ровно как у основного списка (закон единообразия R45): шапка → арабский → русский.
+      const rr=document.createElement('div'); rr.style.cssText='background:rgba(46,107,155,.08);border-radius:8px;padding:7px 10px;margin-top:5px';
+      const _arT=terms.join('، '); const _longT=_arT.length>40;
+      rr.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span class="critNameCl" style="font-size:14.5px;color:#aeb9c4;cursor:pointer;font-weight:600" title="Открыть карточку этого учёного">'+esc(_ruName(cr))+((_ruName(cr)!==cr)?(' <span dir="rtl" style="font-size:12.5px;color:#8593a2;'+_AF+'">'+esc(cr)+'</span>'):'')+(c0[4]?(' · '+esc(c0[4])):'')+'</span>'+(_longT?'':('<span dir="rtl" style="font-size:15.5px;color:#e6edf3;'+_AF+'">'+esc(_arT)+'</span>'))+'</div>';
+      if(_longT){ const aq=document.createElement('div'); aq.dir='rtl';
+        aq.style.cssText='font-size:16.5px;'+_AF+';color:#e6edf3;background:rgba(122,134,147,.07);border:1px solid #3a434d;border-radius:8px;padding:5px 9px;margin-top:5px;line-height:1.75';
+        aq.textContent=_arT; rr.appendChild(aq); }
+      if(ruv) rr.appendChild(_ruLine(ruv,13));
       try{ const _cnEl=rr.querySelector('.critNameCl'); if(_cnEl) _cnEl.onclick=(e)=>{ e.stopPropagation(); try{ openNarratorRijal(cr); }catch(_e){} }; }catch(e){}
       lb.appendChild(rr);
       // R-61 Э4 (владелец 16.07 «ссылок нету»): у поздних сводов КАК РАЗ есть bid+страница (تقريب/الكاشف)، а чипы
