@@ -426,7 +426,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1206</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1207</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1168,7 +1168,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1206';
+const APPVER = 'v1207';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -8007,7 +8007,25 @@ function highlightNarratorsInDiv(ad, names, onClick, idMap){
     }catch(e){ return null; } }).filter(Boolean);
   const walker=document.createTreeWalker(ad, NodeFilter.SHOW_TEXT, null); const nodes=[];
   while(walker.nextNode()) nodes.push(walker.currentNode);
-  nodes.forEach(node=>{ const txt=node.nodeValue; const ms=[];
+  // 🔴 25.07.2026 (владелец, серия скринов «тут бардак», Дарими 247 / Абу Авана 3190 и 7409):
+  // подсветка шла по ВСЕМУ тексту карточки, включая аппарат тахкика и комментарий составителя.
+  // В таких карточках примечание длиннее самого хадиса и напичкано именами — выходило десятки
+  // зелёных пятен по всему листу, а сам иснад читался хуже, чем без подсветки.
+  // ПРАВИЛО: подсвечиваем ТОЛЬКО иснад — от начала текста до начала матна. Дальше не трогаем:
+  // ① комментарий составителя (.cnote, #77) пропускаем целиком;
+  // ② аппарат тахкика начинается после матна — граница по маркерам речи Пророка ﷺ / открывающей кавычке
+  //    / первой печатной сноске вида [ص: N] или [٢٤٤]. До границы — иснад, после — не наше дело.
+  var _MATN_EDGE=/«|"|\[\s*ص\s*:|\[[\d٠-٩]{2,}\]|قال رسول الله|قَالَ رَسُولُ اللَّه|أن رسول الله|أَنَّ رَسُولَ اللَّه|قال النبي|قَالَ النَّبِيّ|صلى الله عليه وسلم|صَلَّى اللَّهُ عَلَيْهِ وَسَلَّم/;
+  var _seen=0, _limitHit=false;
+  nodes.forEach(node=>{
+    if(_limitHit) return;
+    try{ if(node.parentElement && node.parentElement.closest && node.parentElement.closest('.cnote')) return; }catch(e){}
+    var _t0=node.nodeValue||'';
+    var _e=_t0.search(_MATN_EDGE);
+    var _cut=(_e>=0)?_e:_t0.length;      // в этом узле подсвечиваем только до границы матна
+    if(_e>=0) _limitHit=true;            // дальше по карточке — ни одного имени
+    _seen+=_cut;
+    const txt=_t0.slice(0,_cut); const ms=[];
     for(const p of pats){ const re=new RegExp(p.re.source,'g'); let m;
       while((m=re.exec(txt))){ ms.push({i:m.index,len:m[0].length,nm:p.nm}); if(!m[0].length) re.lastIndex++; } }
     if(!ms.length) return;
@@ -8044,6 +8062,9 @@ function highlightNarratorsInDiv(ad, names, onClick, idMap){
       // #139: id передатчика БОЛЬШЕ НЕ дописываем в матн (загромождало текст) — id показываем ВНИЗУ, в блоке «Сверка»/списке передатчиков. (отмена #130)
       frag.appendChild(span); pos=m.i+m.len; });
     if(pos<txt.length) frag.appendChild(document.createTextNode(txt.slice(pos)));
+    // ⚠️ хвост узла ЗА границей матна возвращаем как есть — иначе при подсветке только иснада
+    // сам матн и аппарат тахкика исчезли бы из карточки (txt выше подрезан).
+    if(_cut<_t0.length) frag.appendChild(document.createTextNode(_t0.slice(_cut)));
     node.parentNode.replaceChild(frag, node);
   });
   // #222: عن красим как «передачу» (.tword) ТОЛЬКО когда оно реально между ДВУМЯ распознанными передатчиками (.nhl слева И справа). Иначе عن — обычный матн → снимаем синий. Безопасно: только РАЗворачиваем уже существующие .tword-обёртки عن, ничего не добавляем (подсветку имён не трогаем).
