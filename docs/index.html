@@ -207,7 +207,7 @@
   #qHint.pre .qhTx{transform:scale(.98);opacity:0;transition:none}
   #qHint .qhL{opacity:.62}
   #qHint b{font-weight:600;color:var(--link);opacity:.95}
-  #qHint bdi{font-family:"Traditional Arabic","Amiri",serif;font-size:17px}
+  #qHint bdi{font-family:var(--arFont,"Noto Naskh Arabic","Amiri",serif);font-size:16.5px}   /* закон единообразия (владелец 25.07): арабский в подсказке — ТЕМ ЖЕ шрифтом, что выбран в настройках, а не своим */
   @media(max-width:430px){ #qHint{font-size:15px;max-width:calc(100% - 120px)} }
   @media (prefers-reduced-motion:reduce){ #qHint .qhTx{transition:none} }
   /* Слово владельца 25.07: «верхняя полоска выпрыгивает без анимации; при поиске много чего без анимаций —
@@ -413,7 +413,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1188</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1189</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1154,7 +1154,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1188';
+const APPVER = 'v1189';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -12479,7 +12479,14 @@ async function verifyNarr(card, place, text){
                           : (idMode ? authMids.filter(m=>!ourSet.has(m)) : []);
     const missResolved = recNa ? gapList.filter(g=>g[1]!=null).length : missing.length;   // resolved-missing → можно в бот; чистый unres → НЕ спамим
     const extra = (idMode && !recNa) ? ourMids.filter(m=>!new Set(authMids).has(m)) : [];
-    const cntMis = authCount!==ourCount;
+    // 25.07 (владелец: «когда ты исправишь эти расхождения уже», журнал A-108…A-114, 110 записей):
+    // разбор показал — 96 из 110 ЛОЖНЫЕ. Причина: authCount считает ЗВЕНЬЯ эталона (с повторами), а ourCount —
+    // УНИКАЛЬНЫЕ id (ourMids дедуплицирован через Set выше). Если один равий стоит в цепи дважды (общий шейх
+    // двух ветвей, «حدثنا فلان … عن فلان»), цифры не сходятся сами по себе: «эталон 6, опознано 5» при
+    // ПОЛНОМ совпадении наборов id. Теперь сравниваем МНОЖЕСТВА, а не длины: расхождение по количеству —
+    // только когда число РАЗНЫХ равиев реально разное.
+    const _authUniq = (idMode && authMids && authMids.length) ? new Set(authMids.map(String)).size : authCount;
+    const cntMis = idMode ? (_authUniq!==ourCount) : (authCount!==ourCount);
     // С38 (заявка «бардак красным на каждом хадисе»): для recNa остаток gap = ПРОБЕЛ МОСТА (равий есть у sunnah, у нас id краткой формой не привязан) — это НЕ противоречие текста. → ЖЁЛТЫЙ «почти», НЕ красный «РАСХОЖДЕНИЕ».
     const softGap = !!recNa && gapList.length>0;
     let _nameMis = (recNa && _vMis && !_vMis.ok) ? _vMis : null;
@@ -14212,8 +14219,25 @@ try{
       return q ? [_qhBase, _ex('2:255'), _ex('сура 18'), _ex('милость'), _ex('<bdi dir="rtl">بسم الله</bdi>'), _ex('&laquo;будь терпелив&raquo;'), _ex('рай -ад')]
                : [_qhBase, _ex('терпение'), _ex('бухари 333'), _ex('Абу Хурайра'), _ex('&laquo;не гневайся&raquo;'), _ex('<bdi dir="rtl">إنما الأعمال</bdi>'), _ex('87'), _ex('молитва -фард')]; };
     var _qhOn=function(on){ _qh.style.display=on?'':'none'; _qi.setAttribute('placeholder', on?'':_qhBase); };
+    // владелец 25.07 (скрин: подсказка и родная надпись НАЛОЖИЛИСЬ друг на друга): режимы поиска и переключение
+    // вкладок сами переставляют placeholder (updateQuranHelper и соседние ветки) — очистка «на входе» их не держит.
+    // Сторожим атрибут: пока слой на экране, родная надпись обязана быть пустой, а её новый текст становится базой.
+    try{
+      new MutationObserver(function(){
+        try{ if(_qh.style.display==='none') return;
+          var ph=_qi.getAttribute('placeholder')||'';
+          if(ph){ _qhBase=ph; _qi.setAttribute('placeholder',''); }
+        }catch(e){}
+      }).observe(_qi, {attributes:true, attributeFilter:['placeholder']});
+    }catch(e){}
     var _qhI=0,_qhLap=0,_qhT=null;
-    _qhTx.textContent=_qhBase; _qhOn(true);
+    // владелец 25.07 («в начале с анимацией проблемы бывают»): на первых секундах загрузки родной placeholder
+    // ещё доигрывает своё появление (qPhIn), тема/шрифты доприменяются — если влезть в этот момент слоем,
+    // видно мигание и подмену. Поэтому слой включаем ПОЗЖЕ и первым кадром показываем ровно тот же текст,
+    // без анимации: пользователь не видит момента подмены вообще.
+    _qh.style.display='none';
+    setTimeout(function(){ try{ if(_qi.value || document.activeElement===_qi) return;
+      _qhTx.textContent=_qhBase; _qhOn(true); }catch(e){} }, 1400);
     var _qhTick=function(){ try{
         if(_qi.value || document.activeElement===_qi){ _qhOn(false); return; }
         if(document.querySelector('.modal[style*="flex"]')) return;
@@ -14221,7 +14245,7 @@ try{
         var arr=_qhList(); _qhI=(_qhI+1)%arr.length; if(_qhI===0) _qhLap++;
         _qhOn(true); _qhSet(arr[_qhI]);
       }catch(e){} };
-    _qhT=setInterval(_qhTick, 3000);
+    _qhT=setInterval(_qhTick, 3000);   // первая смена — не раньше 4.4с от загрузки (1.4с пауза + 3с интервал)
     ['focus','input','paste'].forEach(function(ev){ _qi.addEventListener(ev, function(){ _qhOn(false); }); });
     _qi.addEventListener('blur', function(){ setTimeout(function(){ if(!_qi.value && _qhLap<3) _qhOn(true); }, 150); });
   }
