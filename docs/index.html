@@ -413,7 +413,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1189</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1190</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1154,7 +1154,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1189';
+const APPVER = 'v1190';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -12475,7 +12475,12 @@ async function verifyNarr(card, place, text){
     const ourSet=new Set(ourMids);
     const ourCount = ourMids.length || ourNames.length;   // #132 → 10.07: фактически подсвечено В DOM (не данные)
     const authCount = recNa ? (recNa.length + gapList.length) : (idMode ? authMids.length : auth.length);
-    const missing = recNa ? gapList.map(g=> g[1]!=null?String(g[1]):('؟'+g[0]))
+    // 25.07 (разбор журнала A-114): часть «расхождений» — АНОНИМНЫЕ звенья иснада: у sunnah.com в цепи стоит
+    // «رجل» (некий мужчина), «امرأة» (некая женщина), «بعض أصحاب النبي» — такого равия невозможно опознать
+    // в принципе, и у нас на этом месте пусто. Это не ошибка данных, а свойство самого иснада (мубхам).
+    const _isAnon=(nm)=>{ try{ const s=stripDiac(String(nm||'')).replace(/ـ/g,'').replace(/[أإآ]/g,'ا').replace(/^(و|ف)/,'').trim();
+      return /^(عن\s+)?(رجل|رجلا|رجال|امراة|امراه|نسوه|بعض|شيخ|قوم|ناس|اناس|رجلين)(\s|$)/.test(s); }catch(e){ return false; } };
+    const missing = recNa ? gapList.filter(g=>!_isAnon(g[0])).map(g=> g[1]!=null?String(g[1]):('؟'+g[0]))
                           : (idMode ? authMids.filter(m=>!ourSet.has(m)) : []);
     const missResolved = recNa ? gapList.filter(g=>g[1]!=null).length : missing.length;   // resolved-missing → можно в бот; чистый unres → НЕ спамим
     const extra = (idMode && !recNa) ? ourMids.filter(m=>!new Set(authMids).has(m)) : [];
