@@ -426,7 +426,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1212</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1213</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1168,7 +1168,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1212';
+const APPVER = 'v1213';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7867,6 +7867,29 @@ async function renderTTtakhrij(ref, box){
   box.innerHTML=html;
   box.querySelectorAll('.ttN').forEach(x=>x.onclick=()=>_ttOpenPlace(x.dataset.b, x.dataset.n));   /* регрессия: не-Бухари путь шёл мимо _BID2READ (openByCodeNum=Мактаба) → открывал чужой хадис; теперь openReader по нашей нумерации */
 }
+// ═══ ТАХРИДЖ ИЗ ГОТОВОЙ БАЗЫ (поручение владельца 25.07.2026: «найди тахридж готовый и интегрируй») ═══
+// Из классических трудов тахкика (التلخيص الحبير, نصب الراية, البدر المنير) добыть автоматически НЕ вышло:
+// они писались до современной нумерации и ссылаются томом/страницей своих изданий — три способа проверены,
+// все дали либо 5% покрытия, либо чужую атрибуцию (подробности — формула Ф-31).
+// Работает другое: готовый тахридж sunnah.one, с номерами и оценкой. Собран к себе (закон суверенности
+// данных: в рантайме к чужому API не ходим) → tahrij_sunnah.json, ключ «bid:номер».
+let _tsMap=null;
+async function _tsLoad(){ if(_tsMap!==null) return _tsMap;
+  try{ _tsMap=await fetchJSON('./tahrij_sunnah.json?v='+APPVER, 25000, {silent:true})||{}; }catch(e){ _tsMap={}; }
+  return _tsMap; }
+async function renderReadyTakhrij(ref, host){
+  try{
+    const pl=(typeof _codifPlace==='function')?_codifPlace(ref):null; if(!pl||!pl.bid||pl.num==null) return false;
+    const m=await _tsLoad(); const v=m[pl.bid+':'+String(pl.num)]; if(!v||!v.t) return false;
+    const d=document.createElement('div');
+    d.style.cssText='margin-top:6px;border:1px solid #2e6b9b;background:rgba(46,107,155,.09);border-radius:10px;padding:9px 11px';
+    d.innerHTML='<div style="font-size:12.5px;color:#9fd0ff;font-weight:700;margin-bottom:4px">📜 Тахридж — где ещё выведен этот хадис</div>'
+      +'<div dir="rtl" style="font-size:15px;line-height:1.85;color:#eaf2ea">'+esc(v.t)+'</div>'
+      +(v.h?('<div style="margin-top:5px;font-size:12px;color:var(--hint)">Оценка источника: <b style="color:#cfe08a">'+esc(v.h)+'</b></div>'):'')
+      +'<div style="margin-top:5px;font-size:11px;color:var(--hint);opacity:.85">Источник свода: sunnah.one. Это оценка и тахридж ИСТОЧНИКА, не наши.</div>';
+    host.appendChild(d); return true;
+  }catch(e){ return false; }
+}
 async function doTakhrij(text, ref, out, btn, force){
   const myseq=++_takhSeq; const aborted=()=>myseq!==_takhSeq;
   btn.disabled=true; const prev=btn.textContent; btn.textContent='ищу…'; out.style.display='block';
@@ -7874,6 +7897,8 @@ async function doTakhrij(text, ref, out, btn, force){
   const mk=()=>{ const d=document.createElement('div'); out.appendChild(d); return d; };
   const ttSec=mk(), muhSec=mk(), tkSec=mk();   // С39: TT первым (сверху); tkSec — только нота/пусто
   // 🔖 Тахридж от TT (تحقيق мухаккика из баз — al-Arnaut/أطراف). ЕДИНСТВЕННЫЙ доказанный источник.
+  let _readyOk=false;
+  try{ _readyOk=await renderReadyTakhrij(ref, ttSec); }catch(e){}   // готовый тахридж из собранной базы — первым
   try{ await renderTTtakhrij(ref, ttSec); }catch(e){}
   // наш указатель аль-Мухаймин — ТОЧНАЯ привязка по источнику+номеру (обратный индекс), а при промахе —
   // fb#4 (владелец 02.07): честная ТЕКСТ-проверка (та же якорь-формула, что muhaymin_check в bot.py) + ЯВНЫЙ ответ в обе стороны
