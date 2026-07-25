@@ -416,7 +416,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1192</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1193</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -467,7 +467,7 @@
     <div id="qSuggR" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto"></div>
   </div>
   <div id="narrSugg" style="display:none;margin:-2px 0 8px;border:1px solid #6c5ce7;border-radius:12px;background:var(--card);overflow:hidden;max-height:300px;overflow-y:auto;box-shadow:0 6px 18px #0006"></div>
-  <div id="narrHint" style="display:none;align-items:center;gap:8px;margin:-2px 0 8px;padding:7px 11px;border:1px solid #6c5ce7;border-radius:10px;background:rgba(108,92,231,.10)"></div><!-- #85: ненавязчивая подсказка карточки равия в обычном поиске -->
+  <div id="narrHint" style="display:none;align-items:center;gap:9px;margin:-2px 0 9px;padding:10px 12px;border:1px solid var(--btn);border-radius:12px;background:rgba(108,92,231,.14);box-shadow:0 0 0 1px rgba(108,92,231,.12)"></div><!-- #85: ненавязчивая подсказка карточки равия в обычном поиске -->
   <div id="isnadHint" style="display:none;align-items:center;gap:8px;margin:-2px 0 8px;padding:7px 11px;border:1px solid #6c5ce7;border-radius:10px;background:rgba(108,92,231,.10)"></div><!-- УКАЗ С40: вставлен полный иснад → предложить разбор в цепь -->
   <div id="recentBox" style="display:none;margin:-4px 0 8px;border:1px solid var(--border);border-radius:10px;background:var(--card);overflow:hidden;box-shadow:0 6px 18px #0006">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 11px;border-bottom:1px solid var(--border)"><span class="hint" style="font-size:11px">🕐 Недавние</span><span><span id="recentClr" style="cursor:pointer;color:var(--link);font-size:11px">очистить</span> <span id="recentClose" style="cursor:pointer;color:var(--hint);font-size:14px;margin-inline-start:8px">✕</span></span></div>
@@ -1157,7 +1157,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1192';
+const APPVER = 'v1193';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3444,7 +3444,11 @@ async function runSearch(explicit){
         try{ const _tw=await translitSuggest(shown.trim()); let _ar=[...new Set((_tw||[]).filter(x=>isArabic(x)&&canon(x).replace(/\s/g,'').length>=3))].slice(0,3);
           let _ruleAr='';   // УКАЗ-2: правило-транслит-фолбэк (джильбаб→جلباب), когда словарь молчит
           if(!_ar.length){ try{ _ruleAr=_ruToAr(shown.trim()); }catch(e){} }
-          // #543: если запрос уже подменён коррекцией (жёлтый corrBanner), третье объяснение про «похоже на арабское» — перебор
+          // Слово владельца 25.07 («пишешь пример "Абу Хурайра" — надо, чтобы подсказкой всплывала КАРТОЧКА Абу Хурайры»):
+    // механизм #85 (_narrHintNormal) для этого уже есть, но он срабатывал только по ВВОДУ с клавиатуры —
+    // при поиске из подсказки-примера, из истории или по кнопке подсказка не появлялась. Дёргаем её и после поиска.
+    try{ if(!numMode && typeof _narrHintNormal==='function' && !(typeof modes!=='undefined' && (modes.narr||modes.chain||modes.ai))) _narrHintNormal(shown); }catch(e){}
+    // #543: если запрос уже подменён коррекцией (жёлтый corrBanner), третье объяснение про «похоже на арабское» — перебор
           if(document.getElementById('corrBanner')) { _ar=[]; _ruleAr=''; }
           if(_ar.length || _ruleAr){ const cb=document.createElement('div'); cb.className='hint arSugBox'; cb.style.cssText='margin:6px 0 4px;display:flex;gap:7px;flex-wrap:wrap;align-items:center';
             cb.innerHTML='<span style="font-size:12.5px;color:var(--hint)">🔎 «'+esc(shown.trim())+'» похоже на арабское слово — искать по-арабски'+(_ruleAr&&!_ar.length?' (по буквам)':'')+':</span>';
@@ -10287,7 +10291,7 @@ async function _narrHintNormal(q){
   const nm=top.nm, shortNm=nm.split(' ').slice(0,4).join(' ');
   box.innerHTML='';
   const a=document.createElement('span'); a.style.cssText='flex:1;cursor:pointer;display:flex;align-items:center;gap:7px;min-width:0';
-  a.innerHTML='<span style="font-size:15px;flex:none">👤</span><span style="font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis">Похоже на передатчика — <b style="font-family:\'Traditional Arabic\',serif">'+esc(shortNm)+'</b> · <span style="color:var(--link)">карточка ›</span></span>';
+  a.innerHTML='<span style="font-size:19px;flex:none">👤</span><span style="font-size:14px;color:var(--text);overflow:hidden;text-overflow:ellipsis">Это передатчик — <b style="font-family:\'Traditional Arabic\',serif">'+esc(shortNm)+'</b> · <span style="color:var(--link)">карточка ›</span></span>';
   a.onclick=()=>{ try{hap('light');}catch(e){} box.style.display='none'; try{ narrOpen(nm); }catch(e){} };
   const x=document.createElement('span'); x.textContent='✕'; x.title='Скрыть подсказку для этого запроса'; x.style.cssText='cursor:pointer;opacity:.55;font-size:13px;padding:0 2px;flex:none';
   x.onclick=(e)=>{ e.stopPropagation(); _narrHintNo.add(key); box.style.display='none'; };
