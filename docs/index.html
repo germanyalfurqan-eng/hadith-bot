@@ -426,7 +426,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1207</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1208</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1168,7 +1168,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1207';
+const APPVER = 'v1208';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2117,7 +2117,16 @@ async function loadLocal(code,file){ if(_local[code])return _local[code]; setSta
 async function loadExtra(code){ if(_local[code])return _local[code]; const e=EXTRA_MAP[code]; setStatus('Загружаю '+(e?e.short:code)+'…');
   if(e&&e.cdn){ const j=await fetchEdition(code);
     _local[code]=(j.hadiths||[]).map(h=>({num:String(h.hadithnumber),text:_muslimStripApparatus((h.text||'').replace(/\s+/g,' ').trim()),grade:gradeOf(h),norm:''})); return _local[code]; }
-  const j=await cachedFetchJSON(EXTRA_BASE+code+'.json', 90000);   // A-124: крупные издания (Ибн Хиббан 11МБ, Абу Авана 22МБ…) — таймаут 90с; кэш Cache Storage → повторное открытие мгновенно (#301 ishaq/#326 abuyala)
+  // A-126 (25.07.2026, ошибка пришла ко мне сторожем): «Загрузка книги не удалась (таймаут 90с): darimi.json».
+  // Проверил ассет напрямую — 3.77 МБ, отдаётся с Pages за 1.2 секунды, HTTP 200. Значит виноват не файл:
+  // запрос либо стоял в очереди за другими крупными загрузками, либо оборвался на слабой сети. Одна попытка
+  // на 90 секунд для такого случая — тупик, поэтому даём ВТОРОЙ заход: короткий (30с), сразу после провала.
+  // Кэш Cache Storage: удачная загрузка второй раз уже не потребуется.
+  let j; try{ j=await cachedFetchJSON(EXTRA_BASE+code+'.json', 90000); }
+  catch(_e1){ setStatus('Повторяю загрузку '+(e?e.short:code)+'…');
+    j=await cachedFetchJSON(EXTRA_BASE+code+'.json', 30000); }
+  // (из прежней правки A-124: крупные издания — Ибн Хиббан 11МБ, Абу Авана 22МБ; кэш Cache Storage →
+  //  повторное открытие мгновенно, #301 ishaq / #326 abuyala)
   _local[code]=(Array.isArray(j)?j:[]).map(x=>{ const raw=_muslimStripApparatus((x.ar||x.t||'').replace(/\s+/g,' ').trim()); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }   /* F3(аудит): guard массива */   // v1062: чистка аппарата (Заваид и др.) для локальных изданий
 async function loadQuran(){ if(quran)return quran;
   try{ if(!(typeof modes!=='undefined'&&(modes.narr||modes.chain))) setStatus('Загружаю Коран…'); }catch(e){}   // в режимах равиев фоновая загрузка молчит («зачем при поиске передатчика грузить Коран»)
