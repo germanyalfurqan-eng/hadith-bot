@@ -426,7 +426,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1219</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1220</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1173,7 +1173,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1219';
+const APPVER = 'v1220';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -15132,7 +15132,20 @@ function _readFindStep(d){
   const info=document.getElementById('readFindInfo'); if(info) info.textContent=(_readFindPos+1)+' / '+_readFindM.length;
   return true;
 }
+// 🔴 Владелец 26.07.2026: «до 4583 есть глава, в которой есть также полезные слова, например про тагута,
+// а ты её не показываешь в читалке. В читалке когда я нажимаю предыдущую страницу они должны как в
+// оригинале страница, понимаешь?»
+// Корень: читалка листала выгрузку sunnah.com — ТОЛЬКО нумерованные хадисы (у Бухари 7589). В настоящей
+// книге между ними стоят главы С ТЕКСТОМ (аяты, слова Бухари), муалляки и вводные — треть содержимого.
+// Плашка с названием главы (v1219) показывала лишь ЗАГОЛОВОК, сам текст главы по-прежнему терялся.
+// Теперь читалка грузит ПОЛНЫЙ ПОТОК СТРАНИЦ печатного издания из нашей копии Мактабы (Бухари 10657
+// записей) и листает по ним подряд — как книга в руках. Номера хадисов сохранены, поиск по № работает.
+const _FULLREADER={bukhari:1,abudawud:1,ibnmajah:1,darimi:1,tirmidhi:1,nasai:1,muslim:1};
 async function _readLoad(code){
+  if(_FULLREADER[code]){ try{
+    const r=await fetch('./reader/'+code+'.json?v='+APPVER);
+    if(r.ok){ const a=await r.json(); if(Array.isArray(a)&&a.length) return a; }
+  }catch(e){} }   // файла нет или сеть подвела — падаем на прежний источник, читалка не остаётся пустой
   const C=COLLECTIONS.find(x=>x.code===code); const X=EXTRA_MAP[code];
   if(code==='muhaymin'){ const a=await loadMuhaymin(); return a.map(x=>({num:x.n,n:x.n,text:x.text,rv:x.rv,rc:x.rc,b:x.b,c:x.c})); }   // #265-след/скрин «не удалось загрузить»: ридер грузил ./editions/muhaymin.json (нет такого файла) → теперь надёжный loadMuhaymin (корень ./muhaymin.json, 3 ретрая)
   if(code==='ahmad') return await loadAhmad();
@@ -15158,7 +15171,9 @@ function _readRender(){
   if(!_readArr||!_readArr.length) return;
   if(_readIdx<0)_readIdx=0; if(_readIdx>=_readArr.length)_readIdx=_readArr.length-1;
   const h=_readArr[_readIdx];
-  document.getElementById('readPos').textContent='№'+(h.num!==undefined?h.num:(_readIdx+1))+'  ('+(_readIdx+1)+' из '+_readArr.length+')';
+  // В полном потоке страниц номер есть только у хадисов: у главы и муалляка его нет, «№null» показывать нельзя.
+  document.getElementById('readPos').textContent=((h.num!=null)?('№'+h.num):(h.вид==='китаб'?'📕 китаб':h.вид==='глава'?'📑 глава':'📄 вне нумерации'))
+    +'  ('+(_readIdx+1)+' из '+_readArr.length+')'+(h.стр?(' · стр. '+h.стр):'');
   const body=document.getElementById('readBody'); body.innerHTML='';
   // v1091 (#531 владельца: «почему читалка Муслима начинается с первого хадиса? Там есть мукадима!»):
   // مقدمة не нумеруется как хадис и в нашей разбивке её нет — даём вход в ПЕЧАТНУЮ книгу с начала (там она есть).
@@ -15170,9 +15185,30 @@ function _readRender(){
     mq.onclick=()=>{ try{ openBook(_mb,1,false,'مقدمة'); }catch(e){} };
     body.appendChild(mq);
   }catch(e){} }
-  // #661: название главы ПЕРЕД хадисом — как в печатном оригинале. Грузим лениво, вставляем первым
-  // элементом тела (не ждём: рендер карточки не должен тормозить из-за словаря глав).
-  try{ const _chSlot=document.createElement('div'); body.appendChild(_chSlot);
+  // Полный поток страниц (см. _FULLREADER): глава, китаб и муалляк — НЕ хадисы, карточка хадиса им
+  // не подходит. Рисуем их как страницу книги: текст целиком, со своим оформлением по виду.
+  // Владелец: «в главе есть полезные слова, например про тагута» — поэтому показываем ВЕСЬ текст главы,
+  // а не только заголовок, как делала плашка v1219.
+  if(h && h.вид && h.вид!=='хадис'){
+    const kind=h.вид;
+    const st=(kind==='китаб')
+      ? 'font-size:19px;font-weight:700;color:#f0d98a;background:rgba(232,195,90,.14);border:1px solid #8a7433'
+      : (kind==='глава')
+        ? 'font-size:17px;color:#e8c35a;background:rgba(232,195,90,.09);border:1px solid #6b5a28'
+        : 'font-size:16.5px;color:#cfe0d6;background:rgba(122,134,147,.08);border:1px solid #3a434d';
+    const d=document.createElement('div'); d.dir='rtl';
+    d.style.cssText=st+';'+_AF+';border-radius:10px;padding:11px 14px;line-height:2;text-align:justify';
+    try{ d.innerHTML=hl(String(h.text||''), _groups||[]); }catch(e){ d.textContent=String(h.text||''); }
+    const cap=document.createElement('div');
+    cap.style.cssText='font-size:11.5px;color:var(--hint);margin:0 0 5px;'+_RF;
+    cap.textContent=(kind==='китаб'?'📕 Книга (китаб)':kind==='глава'?'📑 Глава (باب)':'📄 Из книги — вне нумерации (муалляк, слова автора)')+(h.стр?(' · стр. '+h.стр):'');
+    body.appendChild(cap); body.appendChild(d);
+    try{ enableArabusTap(d); }catch(e){}
+    return;
+  }
+  // #661: если полного потока нет (книга ещё не переведена на него) — показываем хотя бы НАЗВАНИЕ главы
+  // над хадисом, из индекса chapters/. Для книг полного потока это не нужно: глава идёт своей страницей.
+  if(!(h && h.вид)){ try{ const _chSlot=document.createElement('div'); body.appendChild(_chSlot);
     _chapGet(_readCode).then(map=>{
       const ttl=map&&map[String(h.num)];
       if(!ttl || _readArr[_readIdx]!==h) return;   // ушли на другой хадис, пока грузилось — не рисуем
@@ -15181,7 +15217,7 @@ function _readRender(){
       _chSlot.textContent='📑 '+ttl;
       _chSlot.title='Название главы — из печатного издания (Мактаба). В выгрузке sunnah.com глав нет.';
     }).catch(()=>{});
-  }catch(e){}
+  }catch(e){} }
   const sg=_groups;                 // #311: в читалке СОХРАНЯЕМ подсветку искомого слова (зашёл из поиска → sg непуст; из меню/новый поиск → []) — тот же hl(), Arabus не затронут
   try{ body.appendChild(cardHadith({code:_readCode,h,noNav:true},sg||[])); }
   catch(e){   // M496: сбой полной карточки → НЕ голый текст, а мини-карточка с addTr
