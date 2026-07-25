@@ -422,7 +422,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1203</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1204</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1164,7 +1164,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1203';
+const APPVER = 'v1204';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -8877,6 +8877,19 @@ function _srcPrio(bid){ const i=_SRC_PRIO_BIDS.indexOf(String(bid)); return i>=0
 // фильтровать нечем. Здесь — отдельное окно поверх карточки (карточка цела за ним) с фильтрами,
 // наполненными РЕАЛЬНЫМИ данными: достоверность и уникальность из tt_takhrij, соседи по цепи из codif.
 let _nhState=null;
+// Вид хадиса (марфу'/маукуф/мурсаль/макту') — НАША разметка, её нет ни в одном готовом источнике.
+// Строится из цепей codif + текста изданий: самый ранний передатчик определяется ПО ТАБАКЕ (не по позиции
+// в цепи — порядок там не гарантирован), затем матн проверяется на возведение к Пророку ﷺ.
+// Файл ~2 МБ, поэтому грузим ОДИН раз при первом открытии окна и держим в памяти.
+let _htMap=null;
+async function _htLoad(){ if(_htMap!==null) return _htMap;
+  try{ _htMap=await fetchJSON('./hadith_type.json?v='+APPVER, 25000, {silent:true})||{}; }catch(e){ _htMap={}; }
+  return _htMap; }
+const _NH_TY={'مرفوع':{t:'مرفوع · возведён к Пророку ﷺ',c:'#8fd6b0',br:'#2f7a4e'},
+              'موقوف':{t:'موقوف · слова сподвижника',c:'#cfe08a',br:'#6f7a2e'},
+              'مرسل':{t:'مرسل · таби\u02bcи без сподвижника',c:'#e3b57f',br:'#8a6f2e'},
+              'مقطوع':{t:'مقطوع · слова таби\u02bcи',c:'#b9c9dd',br:'#5b6f8a'},
+              'не определено':{t:'вид не определён',c:'#8ea3a8',br:'#39424a'}};
 function _nhGradeClass(g){
   const s=String(g||'');
   if(/منكر|موضوع|باطل/.test(s)) return 'munkar';
@@ -8925,13 +8938,17 @@ async function openNarrHadiths(mid, name, places){
     if(i%4===0) L.innerHTML='<div style="padding:22px;text-align:center;color:var(--hint);font-size:13px">⏳ Собираю оценки и тахридж… '+Math.round((i+1)*100/keys.length)+'%</div>';
   }
   rows.forEach(r=>{ r.gc=_nhGradeClass(r.g); r.uniq=!(r.d&&Object.keys(r.d).length); });
+  // вид хадиса по нашей разметке (ключ «bid:номер»)
+  try{ const _ht=await _htLoad();
+    rows.forEach(r=>{ const v=_ht[r.bid+':'+r.num]; r.ty=(v&&v[0])||'не определено'; r.tyc=(v&&v[1])||''; });
+  }catch(e){ rows.forEach(r=>{ r.ty='не определено'; }); }
 
   // ── соседи по цепям (кто передаёт от него / от кого он) — реальные веса из narr_edges
   let edges={}; try{ edges=await _edgesGet(mid)||{}; }catch(e){}
   const nbr=Object.keys(edges).sort((a,b)=>edges[b]-edges[a]).slice(0,40);
   let nbrName={}; try{ if(typeof _narrNameById==='function') nbr.forEach(x=>{ nbrName[x]=_narrNameById(x)||('равий '+x); }); }catch(e){}
 
-  _nhState={rows, fBook:'', fGrade:'', fUniq:'', fNbr:'', q:'', shown:0, mid:mid, nbrCache:{}};
+  _nhState={rows, fBook:'', fGrade:'', fUniq:'', fNbr:'', fTy:'', q:'', shown:0, mid:mid, nbrCache:{}};
 
   // ── панель фильтров
   const byBook={}; rows.forEach(r=>{ byBook[r.bid]=(byBook[r.bid]||0)+1; });
@@ -8941,6 +8958,10 @@ async function openNarrHadiths(mid, name, places){
   const gChips=Object.keys(_NH_GR).filter(k=>gCnt[k]).map(k=>
     '<span class="nhC" data-f="g" data-v="'+k+'" style="border-color:'+_NH_GR[k].br+';color:'+_NH_GR[k].c+'">'+esc(_NH_GR[k].t)+' <b>'+gCnt[k]+'</b></span>').join('');
   const uCnt=[rows.filter(r=>r.uniq).length, rows.filter(r=>!r.uniq).length];
+  const tCnt={}; rows.forEach(r=>{ tCnt[r.ty]=(tCnt[r.ty]||0)+1; });
+  const tyUnd=tCnt['не определено']||0;
+  const tyChips=Object.keys(_NH_TY).filter(k=>tCnt[k]&&k!=='не определено').map(k=>
+    '<span class="nhC" data-f="t" data-v="'+esc(k)+'" style="border-color:'+_NH_TY[k].br+';color:'+_NH_TY[k].c+'">'+esc(_NH_TY[k].t)+' <b>'+tCnt[k]+'</b></span>').join('');
   F.innerHTML=
    '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'
    +'<select id="nhBook" style="flex:1;min-width:150px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:6px 9px;font-size:12.5px"><option value="">все книги ('+rows.length+')</option>'+bookOpts+'</select>'
@@ -8958,9 +8979,8 @@ async function openNarrHadiths(mid, name, places){
      +'</select></div>'):'')
    +'<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--hint);margin-bottom:6px">'
      +'<span id="nhCnt"></span><span class="nhReset" style="cursor:pointer;text-decoration:underline">сбросить фильтры</span></div>'
-   +'<div style="font-size:11px;color:var(--hint);opacity:.8;margin-bottom:8px;padding:6px 9px;border:1px dashed var(--border);border-radius:8px">'
-     +'🔧 <b>Будет доделано:</b> фильтр «марфу‘ / маукуф / мурсаль» — для него нужна разметка вида хадиса, её у нас пока нет ни в одном источнике данных. '
-     +'Заявка в очереди; ставить пустой фильтр, который ничего не отберёт, не стали.</div>';
+   +'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px">'+tyChips+'</div>'
+   +(tyUnd? ('<div style="font-size:10.5px;color:var(--hint);opacity:.75;margin-bottom:8px">Вид хадиса — наша разметка по цепям и тексту. У '+tyUnd+' из '+rows.length+' мест вид не определён: цепь неполная или поколение передатчика неизвестно. Такое честно помечаем, а не додумываем.</div>'):'');
 
   if(!document.getElementById('nhCss')){ const st=document.createElement('style'); st.id='nhCss';
     st.textContent='.nhC{font-size:11.5px;padding:3px 9px;border-radius:14px;border:1px solid var(--border);background:transparent;cursor:pointer;user-select:none}'
@@ -8974,10 +8994,12 @@ async function openNarrHadiths(mid, name, places){
     const f=c.dataset.f, v=c.dataset.v;
     if(f==='g') _nhState.fGrade=(_nhState.fGrade===v)?'':v;
     if(f==='u') _nhState.fUniq=(_nhState.fUniq===v)?'':v;
+    if(f==='t') _nhState.fTy=(_nhState.fTy===v)?'':v;
     F.querySelectorAll('.nhC').forEach(x=>x.classList.toggle('on',
-      (x.dataset.f==='g'&&x.dataset.v===_nhState.fGrade)||(x.dataset.f==='u'&&x.dataset.v===_nhState.fUniq)));
+      (x.dataset.f==='g'&&x.dataset.v===_nhState.fGrade)||(x.dataset.f==='u'&&x.dataset.v===_nhState.fUniq)
+      ||(x.dataset.f==='t'&&x.dataset.v===_nhState.fTy)));
     _nhRender(); }; });
-  F.querySelector('.nhReset').onclick=()=>{ _nhState.fGrade=_nhState.fUniq=_nhState.fBook=_nhState.fNbr=''; _nhState.q='';
+  F.querySelector('.nhReset').onclick=()=>{ _nhState.fGrade=_nhState.fUniq=_nhState.fBook=_nhState.fNbr=_nhState.fTy=''; _nhState.q='';
     F.querySelectorAll('.nhC').forEach(x=>x.classList.remove('on'));
     const b=document.getElementById('nhBook'); if(b) b.value='';
     const q=document.getElementById('nhQ'); if(q) q.value='';
@@ -9013,6 +9035,7 @@ function _nhRender(){
     if(S.fBook && r.bid!==S.fBook) return false;
     if(S.fGrade && r.gc!==S.fGrade) return false;
     if(S.fUniq!=='' && String(r.uniq?1:0)!==S.fUniq) return false;
+    if(S.fTy && r.ty!==S.fTy) return false;
     if(S.q && String(r.num).indexOf(S.q)<0) return false;
     if(!_nhPassNbr(r)) return false;
     return true; });
@@ -9032,6 +9055,7 @@ function _nhRender(){
         +'<span style="display:block;direction:rtl;text-align:right;font-size:13px;color:var(--text)">'+esc(bn.slice(0,40))+'</span>'
         +'<span style="display:block;font-size:10.5px;color:var(--hint);margin-top:2px">'
           +'<span class="nhG" style="color:'+g.c+';background:'+g.b+';border-color:'+g.br+'">'+esc(r.g||g.t)+'</span>'
+          +(r.ty&&r.ty!=='не определено'?(' <span class="nhG" style="color:'+_NH_TY[r.ty].c+';border-color:'+_NH_TY[r.ty].br+';background:transparent">'+esc(r.ty)+'</span>'):'')
           +(r.uniq?'':' <span style="color:#9fb6d6">🔁 '+esc(Object.keys(r.d||{}).slice(0,3).join(', '))+'</span>')
         +'</span></span>'
         +'<span style="flex:none;font-size:12px;color:#7fb3ff;text-align:left">№'+esc(String(r.num))+(r.leaf?('<span style="display:block;font-size:10.5px">📖 лист '+esc(String(r.leaf))+'</span>'):'')+'</span>';
