@@ -103,11 +103,29 @@ def fmt_book_chapters(arg):
 def search_sunnah_one(query, limit=4):
     """Вернуть (count, [{marked, text, hukm, takhreej, sharh_id}]) — с дедупом одинаковых матнов."""
     try:
-        url = "https://search.sunnah.one/?action=search&ver=2&q=" + requests.utils.quote(query)
-        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
-        if r.status_code != 200:
+        # #537 (владелец из @jamaat_ru: «проверь эту функцию, он ничего не находит никогда»).
+        # sunnah.one ищет строгим И: все слова обязаны встретиться в ОДНОМ матне. ИИ отдаёт 4-7 ключевых слов,
+        # поэтому пересечение почти всегда пустое (замер: 7 слов -> 0, 5 -> 0, 3 -> 0, 2 -> 87). Источник ЖИВОЙ.
+        # Лечим лесенкой: полный запрос -> 3 слова -> 2 -> 1, останавливаемся на первой непустой выдаче.
+        _w = [w for w in str(query or "").split() if w]
+        _steps, _seen_n = [], set()
+        for _n in (len(_w), 3, 2, 1):
+            if 1 <= _n <= len(_w) and _n not in _seen_n:
+                _seen_n.add(_n); _steps.append(_n)
+        if not _steps:
+            _steps = [0]
+        d = None
+        for _i, _n in enumerate(_steps):
+            _q = " ".join(_w[:_n]) if _n else str(query or "")
+            url = "https://search.sunnah.one/?action=search&ver=2&q=" + requests.utils.quote(_q)
+            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=(20 if _i == 0 else 10))
+            if r.status_code != 200:
+                return 0, []
+            d = r.json()
+            if d.get("data"):
+                break
+        if d is None:
             return 0, []
-        d = r.json()
         out = []; seen = set()
         for it in d.get("data", []):
             raw = it.get("text") or ""
@@ -2089,10 +2107,16 @@ async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = f"@{user.username}" if user.username else "нет"
         uid = user.id
         if member.new_chat_member.status == "member":
-            msg = f"➕ {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}\n🕐 {now}"
+            # #572 (владелец: «добавляй теги к постам, чтобы по тегам просматривать темы»): пост шёл без хештегов,
+            # в отличие от #ии/#перевод/#отзыв — отфильтровать его в истории было нельзя.
+            _ctag = "#" + re.sub(r"\W+", "_", (chat.title or "чат")).strip("_")[:32]
+            msg = f"#участники #вошёл {_ctag}\n➕ {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}\n🕐 {now}"
         elif member.new_chat_member.status in ["left", "kicked"]:
             a = "🚫 Удалён" if member.new_chat_member.status == "kicked" else "➖ Вышел"
-            msg = f"{a} {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}\n🕐 {now}"
+            # #572: та же схема тегов для ухода/бана — иначе по тегу «#участники» видны были бы только приходы
+            _ctag = "#" + re.sub(r"\W+", "_", (chat.title or "чат")).strip("_")[:32]
+            _atag = "#удалён" if member.new_chat_member.status == "kicked" else "#вышел"
+            msg = f"#участники {_atag} {_ctag}\n{a} {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}\n🕐 {now}"
         else: return
         await context.bot.send_message(chat_id=LOG_CHAT_ID, text=msg)
     except: pass
@@ -2381,7 +2405,16 @@ async def _nisht_confirm_dispatch(update, context):
             _data_put("nishtyaki.json", arr2, "ништячок из черновика")
         except Exception:
             pass
-        await msg.reply_text("✅ Опубликовано в Muslim Live.")
+        # #530 (владелец: «итогом выложи готовый пост в Муслим лайв С ПЕРЕСЫЛКОЙ в джамаат ру»): прямой путь
+        # _nisht_finish форвардит пост, а публикация ИЗ ЧЕРНОВИКА этот шаг теряла — в jamaat_ru оставался только черновик.
+        fwd530 = False
+        try:
+            if JAMAAT_RU_CHAT_ID and getattr(sent, 'message_id', None):
+                await context.bot.forward_message(JAMAAT_RU_CHAT_ID, MUSLIM_LIVE_CHAT, sent.message_id)
+                fwd530 = True
+        except Exception:
+            pass
+        await msg.reply_text("✅ Опубликовано в Muslim Live." + (" ↪️ Переслано в JAMAAT MUSLIMIN." if fwd530 else " ⚠️ Переслать в jamaat_ru не смог — перешли вручную."))
     except Exception as e:
         await msg.reply_text(f"❌ Не смог опубликовать: {str(e)[:150]}")
     return True
@@ -8120,7 +8153,10 @@ async def start_cmd(update, context):
         if is_private:
             btn = InlineKeyboardButton("📗 Открыть Muslimoon", web_app=WebAppInfo(url=WEBAPP_URL))
         else:
-            btn = InlineKeyboardButton("📗 Открыть Muslimoon", url=WEBAPP_URL)  # web_app-инлайн нельзя в группах
+            # M202 (владелец: «нативная Mini App кнопка в группах, short_name app уже задан»): web_app-инлайн в группах
+            # нельзя, но t.me/<bot>/<short_name> открывает мини-апп ВНУТРИ Telegram. Голый WEBAPP_URL (GitHub Pages)
+            # выкидывал человека из Telegram — там нет initData, и он упирался в гейт «доступ только для владельца».
+            btn = InlineKeyboardButton("📗 Открыть Muslimoon", url="https://t.me/muslimoontt_bot/app")
         await update.message.reply_text(
             "Добро пожаловать в *Muslimoon Bot*! 🌙\n\n"
             "🔎 Поиск по хадисам, аятам и базе аль-Мухаймин — жми кнопку ниже.\n"
