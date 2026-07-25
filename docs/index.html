@@ -422,7 +422,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1202</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1203</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1164,7 +1164,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1202';
+const APPVER = 'v1203';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3836,6 +3836,33 @@ function bookName(id){ id=String(id||''); return (_booksMap&&_booksMap[id])||'';
 function bookAuthorOf(id){ id=String(id||''); try{ if(_catalog){ const b=_catalog.find(x=>String(x.i)===id); return b?(b.a||''):''; } }catch(e){} return ''; }
 // M216: читалка любой книги Мактабы (через turath /api/book_page) — листание + Arabus
 let _bookView={id:null,pg:1};
+// ═══ #603-фикс (слово владельца 25.07.2026: «каждая кнопка первоисточника должна работать и подсвечивать
+// цитату, а где не проверено — писать НЕ ПРОВЕРЕНА») ═══
+// Ищем цитату ПО ВСЕЙ книге и возвращаем страницу, на которой она реально стоит.
+// Раньше чип источника открывал страницу 1 и звал подсветку — а подсветка умеет искать только в уже
+// загруженной странице. Итог: книга с начала, цитаты нет. Теперь сначала находим страницу, потом открываем.
+async function findQuoteInBook(bid, quote){
+  if(!BACKEND_URL || !bid || !quote) return null;
+  // берём самый ДЛИННЫЙ осмысленный кусок цитаты: короткие обрывки дают мусорные совпадения,
+  // вся цитата целиком часто не совпадает из-за огласовок и разной пунктуации издания.
+  const clean=String(quote).replace(/[\u064b-\u0652\u0640]/g,'').replace(/[«»"'\[\]()،؛:.]/g,' ').replace(/\s+/g,' ').trim();
+  const w=clean.split(' ').filter(x=>x.length>1);
+  if(w.length<2) return null;
+  const tries=[];
+  if(w.length>=6) tries.push(w.slice(0,6).join(' '));
+  if(w.length>=4) tries.push(w.slice(0,4).join(' '));
+  tries.push(w.slice(0,Math.min(3,w.length)).join(' '));
+  for(const frag of tries){
+    for(let pg=1; pg<=3; pg++){
+      let j=null;
+      try{ j=await bjson(BACKEND_URL+'/maktaba?q='+encodeURIComponent(frag)+'&page='+pg+'&initData='+encodeURIComponent(INITDATA), 20000); }catch(e){ return null; }
+      const data=(j&&j.data)||[];
+      if(!data.length) break;
+      for(const x of data){ if(String(x.book_id)===String(bid)) return {pid:x.page_id, vol:x.vol, page:x.page, frag:frag}; }
+    }
+  }
+  return null;
+}
 function openBook(bookId, startPg, _forceTurath, _hl, _wantPrinted){
   const id=String(bookId||'').replace(/[^0-9]/g,''); if(!id) return;
   try{ _pushRecentBook(id); }catch(e){}   // M111+: запоминаем открытые книги → раздел «🕐 Недавно читал» в каталоге
@@ -4274,7 +4301,7 @@ async function _bookLoad(){
     sbk.style.cssText='padding:6px 12px;border-radius:9px;font-size:13px;border:1px solid #2e9b5b;color:#bff5d4';
     let bkP=m.querySelector('#bookFindPanel');
     if(!bkP){ bkP=document.createElement('div'); bkP.id='bookFindPanel'; bkP.style.cssText='display:none;margin:4px 0 6px;border:1px solid #2e9b5b;border-radius:10px;padding:8px';
-      bkP.innerHTML='<div style="display:flex;gap:6px;align-items:center"><input id="bkFindQ" type="search" placeholder="слово или вопрос своими словами…" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:14px"><button class="mini" id="bkFindGo" style="padding:7px 13px">Найти</button></div><div style="display:flex;gap:6px;align-items:center;margin-top:6px"><input id="bkHnoQ" type="number" inputmode="numeric" min="1" placeholder="№ хадиса — мгновенный переход" style="flex:1;background:var(--bg);color:var(--text);border:1px solid #2e7d32;border-radius:8px;padding:7px 10px;font-size:14px"><button class="mini" id="bkHnoGo" style="padding:7px 13px;border:1px solid #2e7d32;color:#bff5d4">К №</button></div><div id="bkFindOut" style="max-height:40vh;overflow:auto;margin-top:6px"></div>';
+      bkP.innerHTML='<div style="display:flex;gap:6px;align-items:center"><input id="bkFindQ" type="search" placeholder="слово по-арабски — или вопрос своими словами (🤖 ИИ)" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:14px"><button class="mini" id="bkFindGo" style="padding:7px 13px">Найти</button></div><div style="display:flex;gap:6px;align-items:center;margin-top:6px"><input id="bkHnoQ" type="number" inputmode="numeric" min="1" placeholder="№ хадиса — мгновенный переход" style="flex:1;background:var(--bg);color:var(--text);border:1px solid #2e7d32;border-radius:8px;padding:7px 10px;font-size:14px"><button class="mini" id="bkHnoGo" style="padding:7px 13px;border:1px solid #2e7d32;color:#bff5d4">К №</button></div><div style="font-size:10.5px;color:var(--hint);opacity:.8;margin-top:5px;line-height:1.45">Слово или № — ищу совпадением по книге, мгновенно и без ИИ. Вопрос предложением — включается 🤖 ИИ: переводит вопрос в арабские выражения, ищет их в этой книге и отвечает <b>только по найденным отрывкам</b>, показывая их. <span style="opacity:.75">Это поиск по словам, подобранным ИИ, а не по смысловому индексу книги — смысловой индекс (чанки) в очереди работ.</span></div><div id="bkFindOut" style="max-height:40vh;overflow:auto;margin-top:6px"></div>';
       navEl.parentNode.insertBefore(bkP, tEl); }
     const outB=bkP.querySelector('#bkFindOut');
     let _bkLastResultsHtml='';   // #владелец: «назад к результатам» после перехода на страницу — без повторного поиска
@@ -11072,7 +11099,27 @@ function _ttLinkRow(bid,page,mid,shnum,book,quote,crit){
     // открывал книгу критика с 1-й страницы (openBook(bid,1) — цитаты не видно). Теперь: ВЫВЕРЕННЫЕ (_exactP выше)
     // открывают ТОЧНУЮ страницу с подсветкой; для остальных показываем ЧЕСТНУЮ пометку «источник по своду, точное
     // место выверяется» БЕЗ открытия книги наугад. Клик — поиск цитаты в книге (может найти), но помечено как невыверенное.
-    if(_srcBook && !_exactP){ w.appendChild(mk('📚 Источник (по своду, не выверено): '+_srcBook[1],'#cdb8a0','rgba(160,130,90,.12)','#6e5a3a', _srcBook[2]?(()=>{ try{ openBook(_srcBook[2], 1, false, _qt); toast('Ищу цитату в книге — точное место ещё выверяется'); }catch(e){} }):(()=>toast('Источник оценки (по своду): '+_srcBook[1]+' — точное место выверяется')))); }
+    if(_srcBook && !_exactP){
+      // 25.07.2026 (слово владельца): клик ДОЛЖЕН приводить к цитате, а не «тупо к книге с начала».
+      // Ищем цитату по всей книге (findQuoteInBook) → нашли: открываем ту самую страницу с подсветкой и
+      // подписываем чип «✓ место найдено»; не нашли: честно пишем «НЕ ПРОВЕРЕНА» и книгу наугад НЕ открываем (#603).
+      const _srcChip=mk('📚 Источник: '+_srcBook[1]+' · нажми — найду цитату','#cdb8a0','rgba(160,130,90,.12)','#6e5a3a',
+        _srcBook[2]?(async(ev)=>{
+          const _el=(ev&&ev.currentTarget)||null;
+          const _old=_el?_el.textContent:'';
+          try{ if(_el) _el.textContent='⏳ ищу цитату в «'+_srcBook[1]+'»…'; }catch(e){}
+          let hit=null;
+          try{ hit=await findQuoteInBook(_srcBook[2], _qt); }catch(e){}
+          if(hit){
+            try{ if(_el) _el.textContent='📚 '+_srcBook[1]+' · ✓ т.'+(hit.vol||'?')+' стр.'+(hit.page||'?'); }catch(e){}
+            try{ openBook(_srcBook[2], hit.pid, false, _qt); toast('✓ Нашёл цитату: т.'+(hit.vol||'?')+' стр.'+(hit.page||'?')); }catch(e){}
+          } else {
+            try{ if(_el) _el.textContent='📚 '+_srcBook[1]+' · ⚠️ место НЕ ПРОВЕРЕНО'; }catch(e){ }
+            toast('⚠️ Цитата в книге автоматически не нашлась — место НЕ ПРОВЕРЕНО. Книгу наугад не открываю.');
+            setTimeout(()=>{ try{ if(_el&&_old) _el.textContent=_old; }catch(e){} }, 6000);
+          }
+        }):(()=>toast('Источник оценки (по своду): '+_srcBook[1]+' — точное место НЕ ПРОВЕРЕНО, книги в базе нет')));
+      w.appendChild(_srcChip); }
     const _qppFirst=!window._qppSeen; window._qppSeen=(window._qppSeen||0)+1;
     (async()=>{ try{
       let _sid=''; try{ _sid=(await loadMid2Sid())[String(mid)]||''; }catch(_e){}
