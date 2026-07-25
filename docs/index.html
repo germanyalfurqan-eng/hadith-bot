@@ -394,7 +394,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1184</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1185</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1123,7 +1123,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1184';
+const APPVER = 'v1185';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2870,6 +2870,10 @@ function relaxSearch(words, getNorm, pool, strict){
 // Баннер «искал без …» + кнопка «искать строго как ввёл» (M173). Вставляется сразу под шапкой результатов.
 function relaxBanner(dropped, used){
   const res=document.getElementById('res');
+  // #543 (скрин владельца: на одном экране ТРИ объяснения про один и тот же запрос — «точного совпадения нет»,
+  // «показаны результаты для…», «похоже на арабское слово»). Показываем ОДНО, старшее по смыслу: если запрос уже
+  // подменён коррекцией (corrBanner), этот баннер лишний — он объясняет то же самое другими словами.
+  try{ if(document.getElementById('corrBanner')) return; }catch(e){}
   const b=document.createElement('div'); b.className='hint'; b.style.cssText='color:var(--link);font-size:13px;margin:2px 0 8px';
   b.innerHTML='🔎 По всем словам точного совпадения нет — показываю без: <b>'+dropped.map(esc).join(', ')+'</b>'
     + (used.length?(' (искал: '+used.map(esc).join(' ')+')'):'')
@@ -2911,6 +2915,9 @@ function autoCorrectBanner(orig, corrected){
   // и коррекция теперь применяется только когда оригинал не дал НИЧЕГО (см. вызовы) — право «строго что ввёл» свято.
   const res=document.getElementById('res');
   try{ const _old=document.getElementById('corrBanner'); if(_old) _old.remove(); }catch(e){}
+  // #543: этот баннер — старшее объяснение («искали не то, показали вот это»). Всё, что говорит о том же
+  // другими словами (подсказки «похоже на арабское слово»), убираем — на экране должно остаться ОДНО.
+  try{ document.querySelectorAll('#res .arSugBox').forEach(function(x){ x.remove(); }); }catch(e){}
   const b=document.createElement('div'); b.className='hint'; b.id='corrBanner';
   b.style.cssText='margin:8px 0;padding:10px 12px;border:1.5px solid #d8a85a;border-radius:10px;background:rgba(216,168,90,.12);font-size:13.5px;color:#f2e2c0';
   b.innerHTML='🔤 По запросу «'+esc(orig)+'» ничего не найдено — показаны результаты для <b style="color:#ffd479">'+esc(corrected)+'</b> · <span class="corrGo" style="cursor:pointer;text-decoration:underline;color:#9fd3ff;font-weight:700">искать именно «'+esc(orig)+'»</span>';
@@ -3400,7 +3407,9 @@ async function runSearch(explicit){
         try{ const _tw=await translitSuggest(shown.trim()); let _ar=[...new Set((_tw||[]).filter(x=>isArabic(x)&&canon(x).replace(/\s/g,'').length>=3))].slice(0,3);
           let _ruleAr='';   // УКАЗ-2: правило-транслит-фолбэк (джильбаб→جلباب), когда словарь молчит
           if(!_ar.length){ try{ _ruleAr=_ruToAr(shown.trim()); }catch(e){} }
-          if(_ar.length || _ruleAr){ const cb=document.createElement('div'); cb.className='hint'; cb.style.cssText='margin:6px 0 4px;display:flex;gap:7px;flex-wrap:wrap;align-items:center';
+          // #543: если запрос уже подменён коррекцией (жёлтый corrBanner), третье объяснение про «похоже на арабское» — перебор
+          if(document.getElementById('corrBanner')) { _ar=[]; _ruleAr=''; }
+          if(_ar.length || _ruleAr){ const cb=document.createElement('div'); cb.className='hint arSugBox'; cb.style.cssText='margin:6px 0 4px;display:flex;gap:7px;flex-wrap:wrap;align-items:center';
             cb.innerHTML='<span style="font-size:12.5px;color:var(--hint)">🔎 «'+esc(shown.trim())+'» похоже на арабское слово — искать по-арабски'+(_ruleAr&&!_ar.length?' (по буквам)':'')+':</span>';
             (_ar.length?_ar:[_ruleAr]).forEach(a=>{ const ch=document.createElement('button'); ch.className='mini'; ch.textContent=a; ch.style.cssText='border:1px solid #2e9b5b;color:#bff5d4;background:#10331f;padding:5px 12px;border-radius:9px;font-size:15px;cursor:pointer;direction:rtl';
               ch.onclick=()=>{ const _qi=document.getElementById('q'); if(_qi){ _qi.value=a; } window._noLayoutFix=true; runSearch(true); }; cb.appendChild(ch); });
@@ -4128,9 +4137,11 @@ async function _bookLoad(){
       const nav2=document.createElement('div'); nav2.style.cssText='display:flex;gap:7px;width:100%;margin-top:6px';
       // TB-27: арабская книга листается СПРАВА-НАЛЕВО (как в Шамеле/Мактабе) → «Следующая» СЛЕВА (◀=вперёд по RTL), «Предыдущая» СПРАВА (▶=назад). Раскладку задаём порядком append (детерминированно, не зависит от CSS dir).
       const bNext=document.createElement('button'); bNext.className='mini'; bNext.textContent='◀ Следующая страница';
+      bNext.title='Вперёд по книге. Стрелка смотрит влево, потому что арабская книга листается справа налево — как в самой Мактабе (#598)';
       bNext.style.cssText='flex:1;min-height:44px;font-size:13px;font-weight:700;border:1px solid var(--btn);color:var(--link);border-radius:10px';
       bNext.onclick=()=>{ try{hap('light');}catch(e){} _bookView.pg++; _bookLoad(); };
       const bPrev=document.createElement('button'); bPrev.className='mini'; bPrev.textContent='Предыдущая страница ▶';
+      bPrev.title='Назад по книге (справа налево, как в Мактабе)';
       bPrev.style.cssText='flex:1;min-height:44px;font-size:13px;font-weight:700;border:1px solid var(--btn);color:var(--link);border-radius:10px'+(_bookView.pg<=1?';opacity:.4':'');
       bPrev.disabled=_bookView.pg<=1; bPrev.onclick=()=>{ if(_bookView.pg>1){ try{hap('light');}catch(e){} _bookView.pg--; _bookLoad(); } };
       nav2.appendChild(bNext); nav2.appendChild(bPrev);
@@ -7894,7 +7905,10 @@ function highlightNarratorsInDiv(ad, names, onClick, idMap){
       // ТОТ ЖЕ шрифт (Noto Naskh Arabic), но жирное начертание в арабской вязи выглядит СОВСЕМ другим шрифтом
       // непривычному глазу (буквы у наскха в bold рисуются иначе, не просто «толще»). Убрано — цветной фон+рамка
       // и так достаточно выделяют имя, вес текста теперь как у всего остального матна.
-      span.style.cssText='cursor:pointer;color:#ffeaae;background:#1e3a28;border-radius:4px;padding:0 3px;box-shadow:0 0 0 1px rgba(90,180,120,.45)'; span.title=(_mid?('id'+_mid+' · '):'')+'Нажми: кто это + слова учёных';   // TB-35: НЕПРОЗРАЧНАЯ пилюля
+      // #541 (скрин владельца: «плашки подсветки обрезают верх/низ букв»): у арабского огласовки выходят
+      // за строку, а фон рисовался ровно по её высоте. Даём вертикальный запас и компенсируем отрицательным
+      // margin, чтобы высота строки не выросла; box-decoration-break — чтобы при переносе плашка не рвалась.
+      span.style.cssText='cursor:pointer;color:#ffeaae;background:#1e3a28;border-radius:5px;padding:3px 3px;margin:-3px 0;-webkit-box-decoration-break:clone;box-decoration-break:clone;box-shadow:0 0 0 1px rgba(90,180,120,.45)'; span.title=(_mid?('id'+_mid+' · '):'')+'Нажми: кто это + слова учёных';   // TB-35: НЕПРОЗРАЧНАЯ пилюля
       span.onclick=(e)=>{ e.stopPropagation();
         try{ onClick(m.nm); }catch(_e){ try{ openNarratorRijal(m.nm); }catch(__e){} }   // M427: клик обязан сработать — фолбэк в модал-карточку
       };
@@ -8153,7 +8167,11 @@ function chainRender(){
   _chainSel.forEach((c,i)=>{
     if(seqMode && i===0)   // форма ПЕРЕД 1-м передатчиком (как собиратель книги его цитирует)
       chipParts.push(_chFsel('pre', window._chainFormPre||'', 'Форма, которой собиратель цитирует 1-го передатчика ('+_sh2(c.nm)+'): حدثنا/أخبرنا…', 'pre'));
-    chipParts.push('<span style="display:inline-flex;align-items:center;gap:6px;background:#2e1d4a;border:1px solid #6c5ce7;border-radius:9px;padding:5px 9px;margin:2px;direction:rtl"><b style="font-size:13.5px">'+esc(c.nm)+'</b><span style="font-size:10px;color:#9b8bd0">#'+esc(String(c.id))+'</span><span class="chDel" data-i="'+i+'" style="cursor:pointer;color:#e07f7f;font-weight:700;padding:0 3px">✕</span></span>');   // QA-HIGH: esc(c.id) — защита от XSS через подделанную share-ссылку #go= (c.id из ctx)
+    // #549 (скрин владельца: «непонятно, кто 1-й, кто 2-й, хотя написано ПОРЯДОК ВВОДА = ПОРЯДОК ЦЕПИ»):
+    // перед именем — номер слота. Имя НЕ режем многоточием — в конструкторе важно видеть его целиком.
+    chipParts.push('<span title="'+esc(c.nm)+'" style="display:inline-flex;align-items:center;gap:6px;background:#2e1d4a;border:1px solid #6c5ce7;border-radius:9px;padding:5px 9px;margin:2px;direction:rtl">'
+      +'<span style="direction:ltr;flex:none;min-width:19px;height:19px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#6c5ce7;color:#fff;font-size:11px;font-weight:700" title="'+(i+1)+'-е звено цепи">'+(i+1)+'</span>'
+      +'<b style="font-size:13.5px">'+esc(c.nm)+'</b><span style="font-size:10px;color:#9b8bd0">#'+esc(String(c.id))+'</span><span class="chDel" data-i="'+i+'" style="cursor:pointer;color:#e07f7f;font-weight:700;padding:0 3px">✕</span></span>');   // QA-HIGH: esc(c.id) — защита от XSS через подделанную share-ссылку #go= (c.id из ctx)
     if(seqMode){
       if(i<_chainSel.length-1){ const fv=window._chainForms[i]||'';   // форма МЕЖДУ парой
         chipParts.push(_chFsel(String(i), fv, 'Как '+_sh2(c.nm)+' получил от '+_sh2(_chainSel[i+1].nm)+' (форма передачи)', 'mid')); }
