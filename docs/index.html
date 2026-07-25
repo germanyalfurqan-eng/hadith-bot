@@ -426,7 +426,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1213</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1214</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1168,7 +1168,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1213';
+const APPVER = 'v1214';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -13007,7 +13007,21 @@ async function verifyNarr(card, place, text){
     // звена» здесь означает лишь, что в рантайме не подставился id для повтора/краткой формы, а НЕ пробел данных.
     // Поэтому `missing` больше не повод для записи в журнал: пишем только при реальном противоречии —
     // разное число РАЗНЫХ равиев (cntMis) или лишние у нас id (extra). Красная плашка на экране остаётся.
-    let _realIdDiff = !_softBridgeOnly && (cntMis || extra.length>0);
+    // 🔴 25.07.2026, пятая правка — по живой ошибке A-131 (Муслим №697), разобранной по данным.
+    // Ошибка гласила «эталон 4, опознано 3». Полез в файлы: эталон `verify/1727` и наша цепь `codif/1727`
+    // для №697 СОВПАДАЮТ ПОЛНОСТЬЮ — те же четыре id (7021, 5361, 6509, 3807). Значит расхождения в данных
+    // НЕТ вовсе: приложение просто не опознало одно звено в тексте при отрисовке (форма «ابْنَ عُمَرَ»
+    // в винительном падеже) и записало это как противоречие с sunnah.com.
+    // Правило: если наши id — ПОДМНОЖЕСТВО эталонных и лишних нет, это НЕ расхождение, а недоопознание
+    // на нашей стороне. Пишем мягко («опознали не все звенья»), тревогу не поднимаем, в журнал не пишем.
+    let _subsetOnly = false;
+    try{
+      if(idMode && extra.length===0 && authMids && authMids.length && ourMids && ourMids.length){
+        const _auth=new Set(authMids.map(String));
+        _subsetOnly = ourMids.every(m=>_auth.has(String(m))) && ourMids.length < _auth.size;
+      }
+    }catch(e){}
+    let _realIdDiff = !_softBridgeOnly && !_subsetOnly && (cntMis || extra.length>0);
     // 🔴 25.07, четвёртая правка — по ошибкам A-124/A-125 (Муслим №544, №845; Тирмизи №2230), разобранным по данным.
     // У Муслима один номер содержит несколько риваятов, и РАЗБИВКА У НАС И У SUNNAH.COM РАЗНАЯ:
     // для №544 `muslim_riw.json` даёт ДВЕ буквы (a, b), а наш текст делится на ТРИ риваята. Значит наш «риваят 2/3»
@@ -13031,13 +13045,19 @@ async function verifyNarr(card, place, text){
     const box=document.createElement('div'); box.className='verifyBox';
     // #386 (заявка владельца «Муслим не сверен с sunnah.com»): доп.риваят 5 verify-сборников (Бухари/Муслим/Насаи/АбуДауд/ИбнМаджа) — текст=sunnah.com 1:1, цепь подлинная. НЕ нейтральная «Мактаба», а честный 🟢: структурного эталона на доп.риваяте нет (он только на основном), но передатчики ИЗ подлинного текста sunnah.com.
     const _authText = !idMode && _abbrevRiw && ['1681','1727','829','1726','1198'].indexOf(String(place.bid))>=0;
-    const _alarmShow = alarm && !_riwSplitDiff;   // разная нарезка риваятов — не тревога, красным не красим
+    const _alarmShow = alarm && !_riwSplitDiff && !_subsetOnly;   // разная нарезка риваятов — не тревога, красным не красим
     const _bc = idMode ? (_alarmShow?'#e0796a':(softGap?'#d8a85a':'#3a8a5a')) : (_authText?'#3a8a5a':'#3a4a66'); const _bg = idMode ? (_alarmShow?'rgba(224,121,106,.10)':(softGap?'rgba(216,168,90,.10)':'rgba(58,138,90,.08)')) : (_authText?'rgba(58,138,90,.08)':'rgba(90,120,170,.08)');
     box.style.cssText='margin-top:9px;border-radius:10px;padding:9px 11px;font-size:12px;border:1px solid '+_bc+';background:'+_bg+';';
     const _hdr = !idMode ? (_authText?'🟢 Цепь этого риваята · текст = sunnah.com (передатчики подлинные)':'🔵 Сверка по базе Мактабы (передатчики опознаны по тексту)') : (alarm?('🔴 СВЕРКА: РАСХОЖДЕНИЕ с sunnah.com'+(_nameMis?(' — '+(_nameMis.dom?'НА ЭКРАНЕ':'пер-id')+': эталон '+_nameMis.vCount+', у нас лишних '+_nameMis.extraR.length+', не хватает '+_nameMis.missV.length+(_nameMis.dom?' (подсветка в тексте не совпала с эталоном)':'')):'')):(softGap?('🟡 Сверка: почти совпадает — '+gapList.length+' равия'+(gapList.length===1?'':'/-ев')+' мост не привязал по краткой форме'):((recNa&&_vMis&&_vMis.ok)?'🟢 Сверка: пер-id совпадает с эталоном sunnah.com':'🟢 Сверка: звенья согласованы (число и мост)')));   // фикс по диагнозу Хермеса 05.07
     const _hcol = !idMode ? (_authText?'#7fd3a0':'#6fb0e0') : (_alarmShow?'#e0796a':(softGap?'#e0c07a':'#7fd3a0'));
     let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b style="color:'+_hcol+'">'+_hdr+'</b>'
       +'<span style="color:var(--hint)">'+(idMode?('эталон ('+srcLbl+'): <b>'+authCount+'</b> · '):'')+'приложение: <b style="color:'+(cntMis&&idMode?'#e0796a':'inherit')+'">'+ourCount+'</b></span></div>';
+    if(_subsetOnly && !_riwSplitDiff){
+      h+='<div style="margin-top:6px;color:#e0c07a;line-height:1.5">🔍 <b>Опознали не все звенья цепи.</b> '
+        +'Все передатчики, которых мы опознали, есть в эталоне — противоречия нет; просто '+(authMids?authMids.length:0)
+        +' звеньев в эталоне против '+ourCount+' узнанных в тексте. Обычно причина — падежная или краткая форма имени. '
+        +'Это наша недоработка опознания, а не расхождение с sunnah.com.</div>';
+    }
     if(_riwSplitDiff){
       // По ошибкам A-124/A-125: у Муслима один номер содержит несколько риваятов, и наше издание делит их
       // ИНАЧЕ, чем sunnah.com (например №544: у них две буквы a/b, у нас три риваята). Сверять наш сегмент
