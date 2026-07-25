@@ -206,6 +206,21 @@
   #qHint bdi{font-family:"Traditional Arabic","Amiri",serif;font-size:17px}
   @media(max-width:430px){ #qHint{font-size:15px;max-width:calc(100% - 120px)} }
   @media (prefers-reduced-motion:reduce){ #qHint .qhTx{transition:none} }
+  /* Слово владельца 25.07: «верхняя полоска выпрыгивает без анимации; при поиске много чего без анимаций —
+     надо чтобы анимации были везде». Всё на opacity/transform, только для ПЕРВЫХ карточек выдачи (остальные
+     появляются при прокрутке — анимировать 200 штук ни к чему, телефон греть незачем). */
+  @keyframes anchIn{ from{opacity:0;transform:translateY(-7px)} to{opacity:1;transform:none} }
+  @keyframes resIn{ from{opacity:0;transform:translateY(9px)} to{opacity:1;transform:none} }
+  #res .card:nth-child(-n+10){ animation:resIn .34s cubic-bezier(.22,.61,.36,1) both }
+  #res .card:nth-child(2){ animation-delay:.03s } #res .card:nth-child(3){ animation-delay:.06s }
+  #res .card:nth-child(4){ animation-delay:.09s } #res .card:nth-child(5){ animation-delay:.12s }
+  #res .card:nth-child(6){ animation-delay:.15s } #res .card:nth-child(7){ animation-delay:.17s }
+  #res .card:nth-child(8){ animation-delay:.19s } #res .card:nth-child(9){ animation-delay:.21s }
+  #res .card:nth-child(10){ animation-delay:.23s }
+  #res .status,#corrBanner,#res .arSugBox,#res .hint{ animation:resIn .3s ease-out both }
+  #scopeBar>div{ animation:anchIn .26s ease-out both }
+  .modal .panel{ animation:mIn .18s cubic-bezier(.22,.61,.36,1) }   /* окна открываются мягко, а не «моргают» */
+  @media (prefers-reduced-motion:reduce){ #res .card,#res .status,#corrBanner,#res .hint,.modal .panel,#scopeBar>div{ animation:none!important } }
   @media (prefers-reduced-motion:reduce){ textarea#q::placeholder,textarea#q::-webkit-input-placeholder{ animation:none } }
   button{font-size:15px;border:none;border-radius:12px;cursor:pointer}
   /* v1066 perceived-speed①⑤: мгновенный тап-отклик ≤50мс на ВСЁ кликабельное (GPU transform, 80мс ease-out) */
@@ -394,7 +409,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1185</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1186</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -907,7 +922,7 @@
 <div class="modal" id="readModal">
   <div class="panel" style="max-width:560px">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:6;background:var(--card);margin:-16px -16px 8px;padding:14px 16px 10px;border-bottom:1px solid var(--border)">
-      <b id="readTitle">📖 Читать сборник</b><span style="display:flex;gap:6px;flex:none"><button class="mini" id="readFbBtn" title="✉️ Сообщить разработчикам об ошибке/предложении">✉️ разработчикам</button><button class="mini" id="readClose">закрыть ✕</button></span>
+      <b id="readTitle">📖 Читать сборник</b><span style="display:flex;gap:6px;flex:none"><button class="mini" id="readFbBtn" title="Нашли опечатку, неверный номер или что-то сломалось в этой книге — напишите нам">✉️ Сообщить об ошибке</button><button class="mini" id="readClose">закрыть ✕</button></span>
     </div>
     <div id="readPick">
       <div class="hint" style="margin:0 0 8px">Выбери сборник — открою его подряд (листать хадис за хадисом). Можно начать с номера.</div>
@@ -916,6 +931,14 @@
         <input type="number" id="readFrom" placeholder="с № (необязательно)" min="1"
                style="flex:1;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-size:14px">
         <button class="go" id="readGo" style="padding:9px 16px">Открыть</button>
+      </div>
+      <!-- слово владельца 25.07 («почему тут не все книги? почему именно эти? почему нет избранного и выбора разделов?»):
+           в этом списке — сборники, РАЗОБРАННЫЕ по хадисам (их можно листать по номерам). Вся остальная библиотека
+           открывается рядом, одной кнопкой, вместе с разделами и избранным. Раньше это нигде не объяснялось. -->
+      <div class="hint" style="margin:9px 0 6px;font-size:12px;line-height:1.5">В списке — сборники, разобранные у нас <b>по хадисам</b>: их можно листать по номерам. Остальные книги (тафсиры, фикх, риджаль — всего 8589) живут в библиотеке Мактаба: там же выбор разделов и ваше избранное.</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <button class="mini" id="readToMaktaba" style="flex:1;min-width:150px;min-height:40px;border:1px solid #2e7d5a;color:#bff5d4;border-radius:10px;font-size:12.5px;font-weight:600">📚 Вся библиотека и разделы</button>
+        <button class="mini" id="readToFav" style="flex:1;min-width:130px;min-height:40px;border:1px solid var(--border);color:var(--text);border-radius:10px;font-size:12.5px;font-weight:600">⭐ Избранные книги</button>
       </div>
     </div>
     <div id="readView" style="display:none">
@@ -1123,7 +1146,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1185';
+const APPVER = 'v1186';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2330,7 +2353,7 @@ function renderCols(){
     d.onclick=()=>{ selExtra.delete(code); renderCols(); updateExtraSel(); };
     box.appendChild(d); });
   const total = selCols.size + selExtra.size;
-  document.getElementById('colCount').innerHTML = total ? (t('Выбрано книг: ','Selected books: ')+total+' <span style="color:var(--hint);font-weight:400">'+t('— изменить','— change')+'</span>') : (t('Где искать: сейчас — во всех сборниках','Where to search: now — in all collections')+' <span style="color:var(--hint);font-weight:400">'+t('— нажми, чтобы сузить','— tap to narrow')+'</span>');   // M15 i18n · #185 (владелец: «зачем книги и другие сборники» — из подписи было не понять, что это выбор области поиска): говорим прямо, что сейчас ищем везде и что тап сужает
+  document.getElementById('colCount').innerHTML = total ? (t('Выбрано книг: ','Selected books: ')+total+' <span style="color:var(--hint);font-weight:400">'+t('— изменить','— change')+'</span>') : (t('Где искать: во всех сборниках','Where to search: all collections')+' <span style="color:var(--hint);font-weight:400">▾ '+t('книги и разделы','books & sections')+'</span>');   // M15 i18n · #185 (владелец: «зачем книги и другие сборники» — из подписи было не понять, что это выбор области поиска): говорим прямо, что сейчас ищем везде и что тап сужает
   updateReadBtn();
 }
 // «📖 Читать сборник» → если выбран РОВНО ОДИН сборник, кнопка читает его напрямую
@@ -5009,7 +5032,13 @@ function renderSectChips(){
   // #заявка владельца (сто раз): разделы (كتب السنة/العقيدة/…) СВЁРНУТЫ в ОДНУ кнопку по умолчанию — не занимают место. Тап → разворот. Выбранные показываем счётчиком.
   if(!_sectOpen){
     var _n=_sectSel.size;
-    box.innerHTML='<span class="sectToggle" style="cursor:pointer;font-size:12px;color:var(--hint);display:inline-flex;align-items:center;gap:5px">'+t('📂 Искать сразу в разделе','📂 Search within a section')+(_n?(' <b style="color:#9be7c4">'+t('· выбрано ','· selected ')+_n+'</b>'):'')+' ▾</span>';   // M15 Тир2 · #621: тише и подчинено блоку поиска (без chip-полукарты)
+    // #185-2 (слово владельца 25.07: «искать в разделе должно быть кнопкой ВНУТРИ кнопки „где искать“ — зачем ты их
+    // разделил, суть одна: там можно выбирать книги, а можно разделы»): пустая строка-приглашение убрана с главного
+    // экрана — выбор разделов живёт в том же окне, что и выбор книг (кнопка «Где искать…»). Здесь остаётся ТОЛЬКО
+    // напоминание о том, что раздел уже выбран, чтобы его можно было снять одним тапом.
+    if(!_n){ box.style.display='none'; box.innerHTML=''; return; }
+    box.style.display='';
+    box.innerHTML='<span class="sectToggle" style="cursor:pointer;font-size:12px;color:var(--hint);display:inline-flex;align-items:center;gap:5px">'+t('📂 Выбрано разделов: ','📂 Sections selected: ')+'<b style="color:#9be7c4">'+_n+'</b> ▾</span>';
     var _tg=box.querySelector('.sectToggle'); if(_tg) _tg.onclick=function(){ _sectOpen=true; try{hap('light');}catch(e){} renderSectChips(); };
     return;
   }
@@ -10832,7 +10861,9 @@ function _narrAnchors(rebuild){
     const items=defs.map(([t,rx,ti])=>({t:t,ti:ti,el:find(rx)})).filter(x=>x.el);
     if(items.length<2) return;
     const bar=document.createElement('div'); bar.id='narrAnch';
-    bar.style.cssText='position:sticky;top:-1px;z-index:7;background:var(--bg);display:flex;gap:6px;overflow-x:auto;padding:6px 2px 7px;border-bottom:1px solid var(--border);margin:0 0 4px;scrollbar-width:none';
+    // слово владельца 25.07 («вот эта верхняя выпрыгивает без анимации»): полоска дорисовывается ПОЗЖЕ карточки
+    // (секции строятся асинхронно) и раньше просто возникала рывком. Теперь мягко въезжает сверху.
+    bar.style.cssText='position:sticky;top:-1px;z-index:7;background:var(--bg);display:flex;gap:6px;overflow-x:auto;padding:6px 2px 7px;border-bottom:1px solid var(--border);margin:0 0 4px;scrollbar-width:none;animation:anchIn .3s cubic-bezier(.22,.61,.36,1) both';
     const up=document.createElement('span'); up.textContent='↑'; up.title='к шапке';
     up.style.cssText='white-space:nowrap;cursor:pointer;font-size:11.5px;color:#9cc3f0;border:1px solid #33507a;border-radius:8px;padding:2px 8px;flex:none';
     up.onclick=()=>{ b.scrollTop=0; };   // v1090: smooth в narrBody прерывался (скролл не доезжал) — instant
@@ -11352,7 +11383,17 @@ async function showNarratorCardLocal(name, host, forceId){
     // Группы с русскими подписями, дети — списком с клампом «ещё N»; сырой rel остаётся фолбэком для непропарсенных.
     if(_nb&&_nb.relx&&_nb.relx.length){
       const _IC={'служил':'🕌','мать':'👩','отец':'👨','дети':'👶','жена':'💍','муж':'💍','мавля':'🤝','дед':'👴','дед/внук':'👴','брат':'👥','сестра':'👥','тётя (по матери)':'👩‍👧','дядя (по матери)':'👨‍👦','тётя (по отцу)':'👩‍👧','дядя (по отцу)':'👨‍👦','связь':'🧬'};
-      const lines=_nb.relx.map(([k,v])=>{
+      // #566 (скрин владельца, Ибн Умар: «Мать: ما زينب بنت مظعون» — вместо «أمه» прилип обрывок «ما»,
+      // а в поле «Дядя» свалены племянники/внуки/мавля сплошной строкой): чистим значение от паразитных
+      // ведущих частиц и рвём слипшийся список на элементы. Корень — в данных relx, здесь страхуемся при показе.
+      const _relClean=(s)=>{ try{ return String(s||'')
+          .replace(/^\s*(?:ما|و|هو|هي|هما|ابن|بنت)\s+(?=[؀-ۿ])/,'')   // «ما زينب…» → «زينب…»
+          .replace(/\s{2,}/g,' ').replace(/^[،,\s]+|[،,\s]+$/g,'').trim(); }catch(e){ return s; } };
+      const _relSplit=(v)=>{ if(Array.isArray(v)) return v.map(_relClean).filter(Boolean);
+        const s=_relClean(v); if(!s) return [];
+        return s.split(/\s*[،,]\s*|\s+و(?=[؀-ۿ]{3,})\s*/).map(x=>_relClean(x)).filter(x=>x&&x.length>2); };
+      const lines=_nb.relx.map(([k,v0])=>{
+        const _parts=_relSplit(v0); const v = (Array.isArray(v0)||_parts.length>1) ? _parts : (_parts[0]||'');
         if(Array.isArray(v)){ const head=v.slice(0,6).map(_arSpan).join('، '); const rest=v.length>6?' <span style="color:var(--muted)">и ещё '+(v.length-6)+'</span>':''; return (_IC[k]||'🧬')+' '+esc(k[0].toUpperCase()+k.slice(1))+' ('+v.length+'): '+head+rest; }
         return (_IC[k]||'🧬')+' '+esc(k[0].toUpperCase()+k.slice(1))+': '+_arSpan(v);
       });
@@ -14170,6 +14211,15 @@ try{
     ['focus','input','paste'].forEach(function(ev){ _qi.addEventListener(ev, function(){ _qhOn(false); }); });
     _qi.addEventListener('blur', function(){ setTimeout(function(){ if(!_qi.value && _qhLap<3) _qhOn(true); }, 150); });
   }
+}catch(e){}
+/* Слово владельца 25.07 по окну «Читать сборник»: из него не было выхода ни в остальную библиотеку,
+   ни в разделы, ни в избранное — теперь две кнопки ведут туда же, куда ведёт Мактаба с главного экрана. */
+try{
+  var _r2m=document.getElementById('readToMaktaba'), _r2f=document.getElementById('readToFav');
+  var _closeRead=function(){ var m=document.getElementById('readModal'); if(m) m.style.display='none'; };
+  if(_r2m) _r2m.onclick=function(){ _closeRead(); var b=document.getElementById('maktabaTopBtn'); if(b){ if(b.onclick) b.onclick(); else b.click(); } };
+  if(_r2f) _r2f.onclick=function(){ _closeRead(); var b=document.getElementById('maktabaTopBtn'); if(b){ if(b.onclick) b.onclick(); else b.click(); }
+    setTimeout(function(){ var f=document.getElementById('catFavBtn'); if(f){ if(f.onclick) f.onclick(); else f.click(); } }, 350); };
 }catch(e){}
 /* M231-доработка: Настройки переехали из нижней панели в меню ☰ Ещё (панель отдана главным разделам) */
 try{ var _sfm=document.getElementById('setFromMenu'); if(_sfm) _sfm.onclick=function(){ var _mm=document.getElementById('menuModal'); if(_mm) _mm.style.display='none';
