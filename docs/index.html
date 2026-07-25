@@ -331,6 +331,9 @@
   .card{animation:fadeIn .16s ease}
   /* M334 ОПТИМИЗАЦИЯ: изоляция layout + офф-скрин карточки не рендерятся (длинные списки результатов летают) */
   #res .card{contain:content;content-visibility:auto;contain-intrinsic-size:auto 230px}
+  /* M339 (ревизия читалки Корана): сура рисуется ЦЕЛИКОМ — у аль-Бакары это 286 блоков, в каждом ещё и пословные
+     кнопки. Аяты за экраном не рендерим (тот же приём, что уже работает на карточках выдачи) — прокрутка перестаёт рвать. */
+  #qrZoom > div{content-visibility:auto;contain-intrinsic-size:auto 170px}
   @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
   @keyframes rdHit{0%{box-shadow:0 0 0 rgba(74,222,128,0);transform:scale(1)}45%{box-shadow:0 0 14px #4ade80;transform:scale(1.18)}100%{box-shadow:0 0 0 rgba(74,222,128,0);transform:scale(1)}}
   @keyframes rdPop{0%{transform:scale(1)}40%{transform:scale(1.32)}100%{transform:scale(1)}}
@@ -419,7 +422,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1200</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1201</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1161,7 +1164,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1200';
+const APPVER = 'v1201';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2448,7 +2451,10 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   if(tab==='trending'){ try{ renderTrending(); }catch(e){} }   // #167: Лента — глобальный тренд (что чаще ищут)
 });
 // M96: помощник по Корану — при вводе числа в «Аяты» подсказываем суру и число аятов
-const SURA_AYAHS=[7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,72,135,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
+const /* 🔴 ФИКС ДАННЫХ КОРАНА (25.07): в таблице длин сур были ошибки — сура 24 значилась 72 аята (реально 64),
+   сура 25 — 135 (реально 77); сумма выходила 6302 вместо канонических 6236. Из-за этого автопереход
+   читалки в этих сурах уходил за несуществующие аяты и глох на 404 аудио. Сверено с quran.json. */
+  SURA_AYAHS=[7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
 const SURA_NAMES=['аль-Фатиха','аль-Бакара','Аль Имран','ан-Ниса','аль-Маида','аль-Анам','аль-Араф','аль-Анфаль','ат-Тауба','Юнус','Худ','Юсуф','ар-Раад','Ибрахим','аль-Хиджр','ан-Нахль','аль-Исра','аль-Кахф','Марьям','Та Ха','аль-Анбия','аль-Хадж','аль-Муминун','ан-Нур','аль-Фуркан','аш-Шуара','ан-Намль','аль-Касас','аль-Анкабут','ар-Рум','Лукман','ас-Саджда','аль-Ахзаб','Саба','Фатир','Йа Син','ас-Саффат','Сад','аз-Зумар','Гафир','Фуссылат','аш-Шура','аз-Зухруф','ад-Духан','аль-Джасия','аль-Ахкаф','Мухаммад','аль-Фатх','аль-Худжурат','Каф','аз-Зарият','ат-Тур','ан-Наджм','аль-Камар','ар-Рахман','аль-Вакиа','аль-Хадид','аль-Муджадиля','аль-Хашр','аль-Мумтахана','ас-Сафф','аль-Джумуа','аль-Мунафикун','ат-Тагабун','ат-Талак','ат-Тахрим','аль-Мульк','аль-Калам','аль-Хакка','аль-Мааридж','Нух','аль-Джинн','аль-Муззаммиль','аль-Муддассир','аль-Кияма','аль-Инсан','аль-Мурсалят','ан-Наба','ан-Назиат','Абаса','ат-Таквир','аль-Инфитар','аль-Мутаффифин','аль-Иншикак','аль-Бурудж','ат-Тарик','аль-Аля','аль-Гашия','аль-Фаджр','аль-Балад','аш-Шамс','аль-Лейль','ад-Духа','аш-Шарх','ат-Тин','аль-Аляк','аль-Кадр','аль-Баййина','аз-Зальзаля','аль-Адият','аль-Кариа','ат-Такасур','аль-Аср','аль-Хумаза','аль-Филь','Курайш','аль-Маун','аль-Каусар','аль-Кафирун','ан-Наср','аль-Масад','аль-Ихляс','аль-Фаляк','ан-Нас'];
 function _sgItem(label, on){ const d=document.createElement('div'); d.textContent=label;
   d.style.cssText='background:var(--card);border:1px solid var(--border);border-radius:10px;padding:7px 10px;font-size:13px;cursor:pointer';
@@ -13670,7 +13676,16 @@ async function checkBalance(){
   if(ge){ html+='<div><b>🟣 Gemini</b> <span class="hint" style="font-size:11px">('+esc(ge.model||'?')+', кухня)</span>: '+(ge.enabled?'✅ вкл · бесплатный лимит':'⚪ ключа нет')+'</div>'; }
   out.innerHTML=html||'нет данных';
 }
-async function openDev(){ var _dm=document.getElementById('devModal'); try{modalTop(_dm);}catch(e){} _dm.style.display='flex';   // M340: z-index-инвариант document.getElementById('balOut').textContent='нажми «Проверить»'; document.getElementById('jOut').textContent='загружаю…'; try{ if(!ACC) await fetchAccess(); }catch(e){} renderBanList(); try{ var _gt=document.getElementById('groupAiTgl'); if(_gt&&_gt._load) _gt._load(); }catch(e){}   // #236: подгрузить состояние рубильника ботяры
+async function openDev(){ var _dm=document.getElementById('devModal'); try{modalTop(_dm);}catch(e){} _dm.style.display='flex';   // M340: z-index-инвариант
+  // 🔴 ИСПРАВЛЕНИЕ СВОЕЙ ЖЕ ОШИБКИ (M340, прошлая сессия): однострочный комментарий был вставлен ПОСЕРЕДИНЕ строки
+  // и закомментировал ВЕСЬ остаток тела функции. Кабинет владельца открывался полупустым: не сбрасывался баланс,
+  // не подтягивался конфиг доступа, НЕ рисовался список банов, не грузилось состояние рубильника «ботяра».
+  // Возвращаем код на отдельные строки, каждый доступ к DOM — в try/catch.
+  try{ var _bo=document.getElementById('balOut'); if(_bo) _bo.textContent='нажми «Проверить»'; }catch(e){}
+  try{ var _jo=document.getElementById('jOut'); if(_jo) _jo.textContent='загружаю…'; }catch(e){}
+  try{ if(!ACC) await fetchAccess(); }catch(e){}
+  try{ renderBanList(); }catch(e){}
+  try{ var _gt=document.getElementById('groupAiTgl'); if(_gt&&_gt._load) _gt._load(); }catch(e){}   // #236: подгрузить состояние рубильника ботяры
   await loadDev(); document.getElementById('jOut').textContent=(DEV_DATA&&DEV_DATA.forbidden)?'⛔ только владелец (открой через Telegram)':'выбери журнал — покажу последние записи'; }
 var _dv=document.getElementById('devBtn'); if(_dv) _dv.onclick=openDev;
 var _dc=document.getElementById('devClose'); if(_dc) _dc.onclick=()=>{ document.getElementById('devModal').style.display='none'; };
@@ -14728,7 +14743,24 @@ var _rfind=document.getElementById('readFind'); if(_rfind){ let _rft; _rfind.add
 
 async function boot(){
   // владелец заходит сразу (конфиг тянем в фоне для панели); остальные ждут вердикт сервера
-  if(BACKEND_URL){ const p=fetchAccess(); if(!isOwner) await p; }
+  // fb#2 («Не грузится»): не-владелец ждал вердикт /access до 9 секунд, и всё это время экран был ПУСТОЙ —
+  // интро уже снято (играет раз за сессию), #app ещё скрыт, #gate тоже. Спящий Railway = белый лист, человек уходит.
+  // Теперь ждём максимум 3.5с и честно показываем, что идёт загрузка. Опоздавший ОТКАЗНЫЙ вердикт всё равно
+  // применяется ниже — гейт не ослаблен, платные функции и так под серверной проверкой.
+  if(BACKEND_URL){ const p=fetchAccess();
+    if(!isOwner){
+      var _bw=null;
+      try{ _bw=document.createElement('div'); _bw.id='bootWait';
+        _bw.style.cssText='position:fixed;left:0;top:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:9998;background:var(--bg);color:var(--hint);font-size:14px;text-align:center;padding:24px;box-sizing:border-box';
+        _bw.innerHTML='<img src="./logo.png" alt="Muslimoon" style="width:64px;height:64px;max-width:60%;opacity:.9"><div>⏳ Загружаю Muslimoon…</div>';
+        document.body.appendChild(_bw);
+      }catch(e){}
+      await Promise.race([p, new Promise(function(r){ setTimeout(r,3500); })]);
+      try{ if(_bw) _bw.remove(); }catch(e){}
+      try{ p.then(function(){ try{ if(!userAllowed()){ var _a=document.getElementById('app'); if(_a) _a.style.display='none';
+        var _g=document.getElementById('gate'); if(_g) _g.style.display='flex'; } }catch(e){} }); }catch(e){}
+    }
+  }
   if(BACKEND_URL){ try{ fetch(BACKEND_URL+'/hit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:INITDATA})}); }catch(e){} }   // G3: счётчик запусков
   if(userAllowed()){
     var _appEl=document.getElementById('app'); _appEl.style.display='block';
