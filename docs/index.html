@@ -320,8 +320,12 @@
   body.light .tword{color:#2f6aa8}
   .chip.off{opacity:.4;text-decoration:line-through}
   .status{text-align:center;color:var(--hint);padding:14px;font-size:14px}
-  .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#000;color:#fff;
-        padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:.2s;z-index:99;max-width:90%}
+  /* 25.07.2026 (владелец: «окно внизу под окном открывается, где видно?»): у тоста был z-index 99,
+     а модалы живут на 10003-10007 — сообщение рисовалось ЗА открытым окном и пряталось за нижней
+     панелью. Поднимаем выше всех окон и отодвигаем от нижней навигации. */
+  .toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:#000;color:#fff;
+        padding:11px 17px;border-radius:12px;font-size:14px;opacity:0;transition:.2s;z-index:20000;max-width:90%;
+        box-shadow:0 6px 26px rgba(0,0,0,.55);text-align:center;line-height:1.45}
   .toast.show{opacity:.95}
   button,.chip,.col,.tab,.tr-btn,.gear,.mini{transition:transform .08s ease,background .15s ease,opacity .15s}
   /* #608/#605 (владелец: «показывать что кнопка нажата», «выделять кликабельные»): универсальный отклик — кнопка ВИДИМО отжимается при тапе */
@@ -422,7 +426,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1205</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1206</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1164,7 +1168,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1205';
+const APPVER = 'v1206';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3842,24 +3846,30 @@ let _bookView={id:null,pg:1};
 // Раньше чип источника открывал страницу 1 и звал подсветку — а подсветка умеет искать только в уже
 // загруженной странице. Итог: книга с начала, цитаты нет. Теперь сначала находим страницу, потом открываем.
 async function findQuoteInBook(bid, quote){
-  if(!BACKEND_URL || !bid || !quote) return null;
-  // берём самый ДЛИННЫЙ осмысленный кусок цитаты: короткие обрывки дают мусорные совпадения,
-  // вся цитата целиком часто не совпадает из-за огласовок и разной пунктуации издания.
-  const clean=String(quote).replace(/[\u064b-\u0652\u0640]/g,'').replace(/[«»"'\[\]()،؛:.]/g,' ').replace(/\s+/g,' ').trim();
+  if(!BACKEND_URL || !quote) return null;
+  // 🔴 ПЕРЕПИСАНО 25.07.2026 по показу владельца: он вставил ту же цитату в НАШ поиск «🌐 Любой текст»
+  // и она нашлась чётко, а моя кнопка — нет. Мои две ошибки:
+  //   ① ТРЕБОВАЛ совпадения книги (book_id===bid). Но слова критика часто стоят НЕ в том своде, который
+  //      мы ему приписали: цитата Ибн Уяйны нашлась в «التاريخ الكبير للبخاري», а я искал в «الجرح والتعديل»
+  //      и выбрасывал верный результат;
+  //   ② резал цитату на куски по 6/4/3 слова, а рабочий поиск (anyTextSearch) шлёт её ЦЕЛИКОМ, без огласовок.
+  // Теперь — ровно как рабочий поиск. Ожидаемая книга = лишь ПРЕДПОЧТЕНИЕ при выборе из найденного.
+  const clean=String(quote).replace(/[\u200b-\u200f\ufeff\u061c]/g,'').replace(/[\u064b-\u0652\u0670\u0640]/g,'')
+                           .replace(/[«»"\'\[\]()]/g,' ').replace(/\s+/g,' ').trim();
   const w=clean.split(' ').filter(x=>x.length>1);
   if(w.length<2) return null;
-  const tries=[];
-  if(w.length>=6) tries.push(w.slice(0,6).join(' '));
-  if(w.length>=4) tries.push(w.slice(0,4).join(' '));
-  tries.push(w.slice(0,Math.min(3,w.length)).join(' '));
+  const tries=[clean];                                  // как в рабочем поиске — сначала ЦЕЛИКОМ
+  if(w.length>8) tries.push(w.slice(0,8).join(' '));    // длинную цитату могла развести пунктуация издания
+  if(w.length>5) tries.push(w.slice(0,5).join(' '));
   for(const frag of tries){
-    for(let pg=1; pg<=3; pg++){
-      let j=null;
-      try{ j=await bjson(BACKEND_URL+'/maktaba?q='+encodeURIComponent(frag)+'&page='+pg+'&initData='+encodeURIComponent(INITDATA), 20000); }catch(e){ return null; }
-      const data=(j&&j.data)||[];
-      if(!data.length) break;
-      for(const x of data){ if(String(x.book_id)===String(bid)) return {pid:x.page_id, vol:x.vol, page:x.page, frag:frag}; }
-    }
+    let j=null;
+    try{ j=await bjson(BACKEND_URL+'/maktaba?q='+encodeURIComponent(frag)+'&initData='+encodeURIComponent(INITDATA), 25000); }catch(e){ continue; }
+    const data=(j&&j.data)||[];
+    if(!data.length) continue;
+    const pick=(bid && data.find(x=>String(x.book_id)===String(bid))) || data[0];
+    if(pick) return {pid:pick.page_id, vol:pick.vol, page:pick.page, bid:String(pick.book_id),
+                     kniga:(typeof bookName==='function'?(bookName(String(pick.book_id))||''):''),
+                     tot:data.length, drugaya:!!(bid && String(pick.book_id)!==String(bid))};
   }
   return null;
 }
@@ -4511,7 +4521,20 @@ async function _bookLoad(){
           if(!_me2.querySelector('mark') && n>0) _hlTry2(n-1);
         }catch(_e){} }, n===5?250:500); })(5);
     } }catch(e){}
-  }catch(e){ tEl.innerHTML='<span class="hint">🔧 Не удалось загрузить книгу — попробуй позже.</span>'; }
+  }catch(e){
+    // 25.07.2026 (владелец: книга не открылась, а причины нет): раньше тут был слепой перехват —
+    // одна фраза «попробуй позже» на любой сбой. Проверка показала, что сервер отдаёт страницы этих книг
+    // нормально (HTTP 200 с текстом), значит падало НЕ на сервере: обрыв сети или таймаут на холодном
+    // бэкенде. Теперь называем причину и даём повтор, а не тупик.
+    var _m=String((e&&e.message)||e||'');
+    var _why = /abort|timeout|таймаут/i.test(_m) ? 'сервер не ответил вовремя (бэкенд мог «спать» — второй заход обычно проходит)'
+             : /fail|network|load/i.test(_m) ? 'нет связи с сервером'
+             : ('сбой при разборе страницы: ' + _m.slice(0, 90));
+    tEl.innerHTML='<div class="stateBox err"><div class="ic">📕</div><div class="tt">Страница не открылась</div>'
+      +'<div class="hh">'+esc(_why)+'</div>'
+      +'<div class="bb"><button class="go" id="_bkRetry2" style="font-size:12.5px;padding:7px 12px">🔄 повторить</button></div></div>';
+    try{ var _r2=tEl.querySelector('#_bkRetry2'); if(_r2) _r2.onclick=()=>{ try{ _bookLoad(); }catch(_x){} }; }catch(_x){}
+  }
 }
 function wideCard(x){ const card=document.createElement('div');card.className='card';
   const nm=bookName(x.source); const loc=x.loc||x.source_location||'';
@@ -11131,12 +11154,18 @@ function _ttLinkRow(bid,page,mid,shnum,book,quote,crit){
         _srcBook[2]?(async(ev)=>{
           const _el=(ev&&ev.currentTarget)||null;
           const _old=_el?_el.textContent:'';
-          try{ if(_el) _el.textContent='⏳ ищу цитату в «'+_srcBook[1]+'»…'; }catch(e){}
+          try{ if(_el) _el.textContent='⏳ ищу цитату по библиотеке…'; }catch(e){}
           let hit=null;
           try{ hit=await findQuoteInBook(_srcBook[2], _qt); }catch(e){}
           if(hit){
-            try{ if(_el) _el.textContent='📚 '+_srcBook[1]+' · ✓ т.'+(hit.vol||'?')+' стр.'+(hit.page||'?'); }catch(e){}
-            try{ openBook(_srcBook[2], hit.pid, false, _qt); toast('✓ Нашёл цитату: т.'+(hit.vol||'?')+' стр.'+(hit.page||'?')); }catch(e){}
+            // 25.07.2026: цитата критика часто стоит НЕ в том своде, который мы ему приписали — открываем ТУ книгу,
+            // где она реально нашлась, и честно называем её. Молча подсовывать «ожидаемую» книгу нельзя.
+            const _kn=hit.kniga||_srcBook[1];
+            try{ if(_el) _el.textContent='📚 '+_kn+' · ✓ т.'+(hit.vol||'?')+' стр.'+(hit.page||'?')
+                   +(hit.drugaya?' · найдено в другом своде':''); }catch(e){}
+            try{ openBook(hit.bid||_srcBook[2], hit.pid, false, _qt);
+                 toast('✓ Нашёл цитату: '+_kn+' · т.'+(hit.vol||'?')+' стр.'+(hit.page||'?')
+                       +(hit.tot>1?(' (всего мест: '+hit.tot+')'):'')); }catch(e){}
           } else {
             try{ if(_el) _el.textContent='📚 '+_srcBook[1]+' · ⚠️ место НЕ ПРОВЕРЕНО'; }catch(e){ }
             toast('⚠️ Цитата в книге автоматически не нашлась — место НЕ ПРОВЕРЕНО. Книгу наугад не открываю.');
