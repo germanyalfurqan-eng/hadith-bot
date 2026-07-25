@@ -422,7 +422,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1201</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1202</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1164,7 +1164,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1201';
+const APPVER = 'v1202';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -8845,6 +8845,176 @@ function _isnadCommit(){ const st=window._isnadState; if(!st) return;
 const _BID2SLUG={'1681':'bukhari','1727':'muslim','711':'muslim','1726':'abudawud','829':'nasai','1198':'ibnmajah','28107':'malik','25794':'ahmad'};
 const _SRC_PRIO_BIDS=['1681','1727','711','1726','829','1198','28107','25794'];
 function _srcPrio(bid){ const i=_SRC_PRIO_BIDS.indexOf(String(bid)); return i>=0?i:500; }
+// ═══ R-03 (указ владельца 25.07.2026, «срочно»): ОКНО «ВСЕ ХАДИСЫ С ЭТИМ ПЕРЕДАТЧИКОМ» ═══
+// Раньше места равия жили свёрнутым списком в аккордеоне карточки: листать 700 мест неудобно,
+// фильтровать нечем. Здесь — отдельное окно поверх карточки (карточка цела за ним) с фильтрами,
+// наполненными РЕАЛЬНЫМИ данными: достоверность и уникальность из tt_takhrij, соседи по цепи из codif.
+let _nhState=null;
+function _nhGradeClass(g){
+  const s=String(g||'');
+  if(/منكر|موضوع|باطل/.test(s)) return 'munkar';
+  if(/ضعيف|واه|لا يصح/.test(s)) return 'daif';
+  if(/حسن/.test(s)) return 'hasan';
+  if(/صحيح/.test(s)) return 'sahih';
+  return s?'other':'none';
+}
+const _NH_GR={sahih:{t:'صحيح · достоверный',c:'#7fd39b',b:'#12291d',br:'#2f7a4e'},
+              hasan:{t:'حسن · хороший',c:'#cfe08a',b:'#23280f',br:'#6f7a2e'},
+              daif:{t:'ضعيف · слабый',c:'#f0cf8a',b:'#26200f',br:'#8a6f2e'},
+              munkar:{t:'منكر · отвергаемый',c:'#f2a09a',b:'#2a1512',br:'#8a3d36'},
+              other:{t:'иная оценка',c:'#a9b8d6',b:'#151b26',br:'#3f4d6b'},
+              none:{t:'без оценки',c:'#8ea3a8',b:'#161b22',br:'#39424a'}};
+async function openNarrHadiths(mid, name, places){
+  try{ hap('light'); }catch(e){}
+  let m=document.getElementById('nhModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='nhModal'; m.style.zIndex='10007';
+    m.innerHTML='<div class="panel" style="max-width:720px;padding-top:0">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 10px;padding:13px 16px 10px;border-bottom:1px solid var(--border)">'
+      +'<b id="nhTitle" style="font-size:14.5px;min-width:0;overflow:hidden;text-overflow:ellipsis">📜 Все хадисы</b>'
+      +'<button class="mini" id="nhClose" style="flex:none">закрыть ✕</button></div>'
+      +'<div id="nhFilters"></div><div id="nhList" style="max-height:64vh;overflow:auto"></div></div>';
+    document.body.appendChild(m);
+    m.querySelector('#nhClose').onclick=()=>{ m.style.display='none'; };
+    m.onclick=(e)=>{ if(e.target===m) m.style.display='none'; };   // R46: закрываемость — клик по фону тоже закрывает
+  }
+  m.style.display='flex';
+  document.getElementById('nhTitle').innerHTML='📜 Все хадисы с ним · <span style="font-weight:400;opacity:.75">'+esc(String(name||'').slice(0,42))+'</span>';
+  const L=document.getElementById('nhList'), F=document.getElementById('nhFilters');
+  L.innerHTML='<div style="padding:22px;text-align:center;color:var(--hint);font-size:13px">⏳ Собираю оценки и тахридж…</div>';
+  F.innerHTML='';
+
+  try{ await loadBooksMap(); }catch(e){}
+  // ── подтягиваем оценку (g) и тахридж (d) по каждому месту: шардами, чтобы не дёргать сеть по разу на хадис
+  const rows=(places||[]).map(p=>({bid:String(p[0]), num:p[1], leaf:p[2], g:'', d:null}));
+  const need={};
+  rows.forEach(r=>{ const src=(typeof _TT_BID2SRC!=='undefined')?_TT_BID2SRC[r.bid]:null; if(!src) return;
+    const slug=(_TT_SRC[src]||{}).slug||src; const seg=Math.floor((+r.num||0)/1000);
+    (need[slug+'|'+seg]=need[slug+'|'+seg]||[]).push(r); });
+  const keys=Object.keys(need);
+  for(let i=0;i<keys.length;i++){
+    const [slug,seg]=keys[i].split('|');
+    let sh=null; try{ sh=await _ttLoad(slug, +seg); }catch(e){}
+    if(sh) need[keys[i]].forEach(r=>{ const o=sh[String(r.num)]; if(o){ r.g=o.g||''; r.d=o.d||null; } });
+    if(i%4===0) L.innerHTML='<div style="padding:22px;text-align:center;color:var(--hint);font-size:13px">⏳ Собираю оценки и тахридж… '+Math.round((i+1)*100/keys.length)+'%</div>';
+  }
+  rows.forEach(r=>{ r.gc=_nhGradeClass(r.g); r.uniq=!(r.d&&Object.keys(r.d).length); });
+
+  // ── соседи по цепям (кто передаёт от него / от кого он) — реальные веса из narr_edges
+  let edges={}; try{ edges=await _edgesGet(mid)||{}; }catch(e){}
+  const nbr=Object.keys(edges).sort((a,b)=>edges[b]-edges[a]).slice(0,40);
+  let nbrName={}; try{ if(typeof _narrNameById==='function') nbr.forEach(x=>{ nbrName[x]=_narrNameById(x)||('равий '+x); }); }catch(e){}
+
+  _nhState={rows, fBook:'', fGrade:'', fUniq:'', fNbr:'', q:'', shown:0, mid:mid, nbrCache:{}};
+
+  // ── панель фильтров
+  const byBook={}; rows.forEach(r=>{ byBook[r.bid]=(byBook[r.bid]||0)+1; });
+  const bookOpts=Object.keys(byBook).sort((a,b)=>byBook[b]-byBook[a])
+    .map(b=>'<option value="'+esc(b)+'">'+esc(String(bookName(b)||('книга '+b)).slice(0,34))+' ('+byBook[b]+')</option>').join('');
+  const gCnt={}; rows.forEach(r=>{ gCnt[r.gc]=(gCnt[r.gc]||0)+1; });
+  const gChips=Object.keys(_NH_GR).filter(k=>gCnt[k]).map(k=>
+    '<span class="nhC" data-f="g" data-v="'+k+'" style="border-color:'+_NH_GR[k].br+';color:'+_NH_GR[k].c+'">'+esc(_NH_GR[k].t)+' <b>'+gCnt[k]+'</b></span>').join('');
+  const uCnt=[rows.filter(r=>r.uniq).length, rows.filter(r=>!r.uniq).length];
+  F.innerHTML=
+   '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'
+   +'<select id="nhBook" style="flex:1;min-width:150px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:6px 9px;font-size:12.5px"><option value="">все книги ('+rows.length+')</option>'+bookOpts+'</select>'
+   +'<input id="nhQ" type="search" placeholder="№ хадиса" style="width:110px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:6px 9px;font-size:12.5px">'
+   +'</div>'
+   +'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px">'+gChips+'</div>'
+   +'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px">'
+     +'<span class="nhC" data-f="u" data-v="1" style="border-color:#5b6f8a;color:#b9c9dd">🔹 уникальный (нет в др. сборниках) <b>'+uCnt[0]+'</b></span>'
+     +'<span class="nhC" data-f="u" data-v="0" style="border-color:#5b6f8a;color:#b9c9dd">🔁 есть в других сборниках <b>'+uCnt[1]+'</b></span>'
+   +'</div>'
+   +(nbr.length?('<div style="display:flex;gap:6px;align-items:center;margin-bottom:7px">'
+     +'<select id="nhNbr" style="flex:1;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:6px 9px;font-size:12.5px">'
+     +'<option value="">кто рядом с ним в цепи — все</option>'
+     +nbr.map(x=>'<option value="'+esc(x)+'">'+esc(String(nbrName[x]||('равий '+x)).slice(0,40))+' · '+edges[x]+' передач</option>').join('')
+     +'</select></div>'):'')
+   +'<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--hint);margin-bottom:6px">'
+     +'<span id="nhCnt"></span><span class="nhReset" style="cursor:pointer;text-decoration:underline">сбросить фильтры</span></div>'
+   +'<div style="font-size:11px;color:var(--hint);opacity:.8;margin-bottom:8px;padding:6px 9px;border:1px dashed var(--border);border-radius:8px">'
+     +'🔧 <b>Будет доделано:</b> фильтр «марфу‘ / маукуф / мурсаль» — для него нужна разметка вида хадиса, её у нас пока нет ни в одном источнике данных. '
+     +'Заявка в очереди; ставить пустой фильтр, который ничего не отберёт, не стали.</div>';
+
+  if(!document.getElementById('nhCss')){ const st=document.createElement('style'); st.id='nhCss';
+    st.textContent='.nhC{font-size:11.5px;padding:3px 9px;border-radius:14px;border:1px solid var(--border);background:transparent;cursor:pointer;user-select:none}'
+      +'.nhC.on{background:rgba(108,92,231,.22);font-weight:700}'
+      +'#nhList .nhR{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:7px 5px;border-bottom:1px solid var(--border);cursor:pointer}'
+      +'#nhList .nhR:hover{background:rgba(255,255,255,.03)}'
+      +'.nhG{font-size:10.5px;padding:1px 7px;border-radius:10px;border:1px solid;white-space:nowrap}';
+    document.head.appendChild(st); }
+
+  F.querySelectorAll('.nhC').forEach(c=>{ c.onclick=()=>{
+    const f=c.dataset.f, v=c.dataset.v;
+    if(f==='g') _nhState.fGrade=(_nhState.fGrade===v)?'':v;
+    if(f==='u') _nhState.fUniq=(_nhState.fUniq===v)?'':v;
+    F.querySelectorAll('.nhC').forEach(x=>x.classList.toggle('on',
+      (x.dataset.f==='g'&&x.dataset.v===_nhState.fGrade)||(x.dataset.f==='u'&&x.dataset.v===_nhState.fUniq)));
+    _nhRender(); }; });
+  F.querySelector('.nhReset').onclick=()=>{ _nhState.fGrade=_nhState.fUniq=_nhState.fBook=_nhState.fNbr=''; _nhState.q='';
+    F.querySelectorAll('.nhC').forEach(x=>x.classList.remove('on'));
+    const b=document.getElementById('nhBook'); if(b) b.value='';
+    const q=document.getElementById('nhQ'); if(q) q.value='';
+    const nb=document.getElementById('nhNbr'); if(nb) nb.value=''; _nhRender(); };
+  const bs=document.getElementById('nhBook'); if(bs) bs.onchange=()=>{ _nhState.fBook=bs.value; _nhRender(); };
+  const qi=document.getElementById('nhQ'); if(qi) qi.oninput=()=>{ _nhState.q=qi.value.trim(); _nhRender(); };
+  const nb=document.getElementById('nhNbr'); if(nb) nb.onchange=async()=>{ _nhState.fNbr=nb.value; await _nhLoadNbr(); _nhRender(); };
+  _nhRender();
+}
+// подгрузка цепей (codif) — только для книг, реально попавших в текущую выборку: соседа по цепи иначе не узнать
+async function _nhLoadNbr(){
+  const S=_nhState; if(!S||!S.fNbr) return;
+  const L=document.getElementById('nhList');
+  const set={}; S.rows.forEach(r=>{ if(!S.fBook||r.bid===S.fBook) set[r.bid+'|'+Math.floor((+r.num||0)/500)]=1; });
+  const keys=Object.keys(set); let i=0;
+  for(const k of keys){
+    if(k in S.nbrCache){ i++; continue; }
+    const [bid,seg]=k.split('|');
+    try{ const r=await fetch('./codif/'+bid+'_'+seg+'.json?v='+APPVER); S.nbrCache[k]=r.ok?await r.json():{}; }catch(e){ S.nbrCache[k]={}; }
+    i++; if(i%3===0) L.innerHTML='<div style="padding:22px;text-align:center;color:var(--hint);font-size:13px">⏳ Читаю цепи передачи… '+Math.round(i*100/keys.length)+'%</div>';
+  }
+}
+function _nhPassNbr(r){
+  const S=_nhState; if(!S.fNbr) return true;
+  const c=S.nbrCache[r.bid+'|'+Math.floor((+r.num||0)/500)]; if(!c) return false;
+  const o=c[String(r.num)]; if(!o||!o.n) return false;
+  return o.n.some(x=>String(x[1])===String(S.fNbr));
+}
+function _nhRender(){
+  const S=_nhState; if(!S) return;
+  const L=document.getElementById('nhList');
+  let list=S.rows.filter(r=>{
+    if(S.fBook && r.bid!==S.fBook) return false;
+    if(S.fGrade && r.gc!==S.fGrade) return false;
+    if(S.fUniq!=='' && String(r.uniq?1:0)!==S.fUniq) return false;
+    if(S.q && String(r.num).indexOf(S.q)<0) return false;
+    if(!_nhPassNbr(r)) return false;
+    return true; });
+  const cnt=document.getElementById('nhCnt');
+  if(cnt) cnt.textContent='показано: '+list.length+' из '+S.rows.length;
+  L.innerHTML='';
+  if(!list.length){ L.innerHTML='<div style="padding:24px;text-align:center;color:var(--hint);font-size:13px">Ничего не найдено по этим фильтрам.<br><span style="font-size:11.5px;opacity:.75">Сбросьте лишний фильтр — счётчики на кнопках показывают, сколько есть на самом деле.</span></div>'; return; }
+  let sh=0;
+  const more=document.createElement('button'); more.className='mini';
+  more.style.cssText='margin-top:8px;width:100%;padding:9px;border:1px solid var(--border);border-radius:9px;font-size:12.5px';
+  const wrap=document.createElement('div'); L.appendChild(wrap); L.appendChild(more);
+  const draw=(n)=>{ list.slice(sh,sh+n).forEach(r=>{
+      const g=_NH_GR[r.gc]||_NH_GR.none;
+      const d=document.createElement('div'); d.className='nhR';
+      const bn=String(bookName(r.bid)||('книга '+r.bid));
+      d.innerHTML='<span style="flex:1;min-width:0">'
+        +'<span style="display:block;direction:rtl;text-align:right;font-size:13px;color:var(--text)">'+esc(bn.slice(0,40))+'</span>'
+        +'<span style="display:block;font-size:10.5px;color:var(--hint);margin-top:2px">'
+          +'<span class="nhG" style="color:'+g.c+';background:'+g.b+';border-color:'+g.br+'">'+esc(r.g||g.t)+'</span>'
+          +(r.uniq?'':' <span style="color:#9fb6d6">🔁 '+esc(Object.keys(r.d||{}).slice(0,3).join(', '))+'</span>')
+        +'</span></span>'
+        +'<span style="flex:none;font-size:12px;color:#7fb3ff;text-align:left">№'+esc(String(r.num))+(r.leaf?('<span style="display:block;font-size:10.5px">📖 лист '+esc(String(r.leaf))+'</span>'):'')+'</span>';
+      d.onclick=()=>{ try{ const src=_dzPlaceRow(r.bid, r.num, r.leaf); src.onclick(); }catch(e){} };
+      wrap.appendChild(d); });
+    sh=Math.min(list.length, sh+n);
+    more.textContent='⬇️ Показать ещё ('+(list.length-sh)+')';
+    more.style.display=sh>=list.length?'none':'block'; };
+  more.onclick=()=>draw(40); draw(25);
+}
 function _dzPlaceRow(bid,num,leaf){
   // M449-замечание владельца: «ид книги недостаточно» — название (с огласовками, если выверено) + рус + Википедия
   const id=String(bid);
@@ -11728,6 +11898,15 @@ async function showNarratorBio(name, out){
       pw.appendChild(mr);
       const tline=document.createElement('button'); tline.className='mini'; tline.style.cssText='margin-top:6px;width:100%;padding:7px;border:1px solid var(--border);border-radius:9px;font-size:12px;color:var(--hint)';
       tline.textContent='🔎 Также по тексту имени (где назван целиком)'; tline.onclick=_byText; pw.appendChild(tline);
+      // R-03 (указ владельца 25.07.2026 «срочно»): отдельное окно со ВСЕМИ хадисами равия и рабочими фильтрами.
+      // Свёрнутый список ниже оставлен как быстрый взгляд; кнопка — для настоящей работы с 700+ местами.
+      try{
+        const _nhB=document.createElement('button'); _nhB.className='mini';
+        _nhB.style.cssText='margin-top:9px;width:100%;padding:11px;border:1px solid #2e7d5a;border-radius:11px;font-size:13.5px;font-weight:700;color:#0d1a13;background:linear-gradient(180deg,#7fd6a4,#4faa79);box-shadow:0 2px 10px rgba(79,170,121,.25);cursor:pointer';
+        _nhB.innerHTML='📜 Все хадисы с ним — '+_places.length+' <span style="font-weight:600;opacity:.8">· фильтры</span>';
+        _nhB.onclick=()=>{ try{ openNarrHadiths(c?c[0]:null, name, _places); }catch(e){ try{ toast('не открылось: '+e.message); }catch(_e){} } };
+        pw.insertAdjacentElement('afterbegin', _nhB);
+      }catch(e){}
     } else {
       const allb=document.createElement('button'); allb.className='mini'; allb.style.cssText='width:100%;padding:9px;border:1px solid #2e6b9b;color:#bfe0f5;background:#16314d;border-radius:9px;font-size:13px;font-weight:600';
       allb.textContent='📜 Хадисы, которые он передаёт (по тексту имени)'; allb.onclick=_byText; pw.appendChild(allb);
