@@ -426,7 +426,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1217</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1218</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1168,7 +1168,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1217';
+const APPVER = 'v1218';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -12900,8 +12900,16 @@ async function _verifyChain(bid,num,riw,ourIds){ const key=bid+'_'+Math.floor(+n
   // Если вызывающий передал НАШИ id (ourIds), выбираем букву по фактическому совпадению цепей, а не по счёту.
   if(riw && bid==='1727' && ourIds && ourIds.length){ try{
     const rw2=await loadMuslimRiw(); const lets2=(rw2&&rw2[String(num)])||[];
+    // 🔴 26.07.2026, скрин владельца «опять расхождение» (Муслим №321) — разобрано ПО ДАННЫМ.
+    // Кричало «эталон 5, у нас лишних 1» на Аишу. В verify лежат ОБА варианта: буквенный «321a» = 5 звеньев,
+    // обрывается на Абу Саляме, и ПОЛНЫЙ «321» = те же 6, что у нас, Аишу включая. Наша цепь верна целиком.
+    // Причина ложной тревоги: в кандидаты на лучшее совпадение брались ТОЛЬКО буквы, а полный ключ шёл
+    // лишь запасным вариантом в самом конце. 321a давал 5 попаданий и побеждал, хотя полный 321 давал 6.
+    // Лечение: полный эталон номера — такой же кандидат, как буквы. Побеждает тот, кто совпал ЛУЧШЕ.
+    const cands=lets2.map(L2=>[L2, m[String(num)+L2]]);
+    cands.push(['', m[String(num)]]);
     const mine=new Set(ourIds.map(String)); let best=null, bestHit=-1;
-    for(const L2 of lets2){ const cand=m[String(num)+L2]; if(!cand||!cand.length) continue;
+    for(const [L2,cand] of cands){ if(!cand||!cand.length) continue;
       const hit=cand.reduce((a,l)=>a+((l&&l[2]&&mine.has(String(l[2])))?1:0),0);
       if(hit>bestHit){ bestHit=hit; best=[L2,cand]; } }
     if(best && bestHit>0){ const _r=best[1];
