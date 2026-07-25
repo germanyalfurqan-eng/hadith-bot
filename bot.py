@@ -17,8 +17,8 @@ import requests
 from datetime import datetime, timedelta
 from html import unescape
 from urllib.parse import parse_qsl
-from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup, ChatPermissions
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler, PollAnswerHandler, MessageReactionHandler, CallbackQueryHandler
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler, PollAnswerHandler, MessageReactionHandler
 
 # ============ АЛЬ-МУХАЙМИН (الموحد المهيمن) — наша выверенная база ============
 # Плоский индекс: { "907": {book, chapter, riwayat:[{text, short_ref, sources}], verified}, ... }
@@ -366,47 +366,6 @@ def _clean_chapter(t):
         t = t[4:].strip()
     return t
 
-# ============ #578: кликабельные передатчики у выдачи хадиса ============
-# Цепь из verify/<bid>_<num//500>.json (эталон sunnah.com/Мактабы, тот же источник, что сверка в аппе).
-# bid — ФАКТИЧЕСКИЕ ключи шардов docs/verify (у Тирмизи это 7895, не первый bid фронта!).
-_VERIFY_BIDS = {"bukhari": "1681", "muslim": "1727", "abudawud": "1726",
-                "nasai": "829", "ibnmajah": "1198", "tirmidhi": "7895", "darimi": "21795"}
-_verify_shard_cache = {}
-def _verify_narrators(collection, number):
-    """[(имя, mid|None)] эталонной цепи хадиса; [] если нет данных. Не бросает."""
-    bid = _VERIFY_BIDS.get(str(collection))
-    if not bid:
-        return []
-    try:
-        key = f"{bid}_{int(number) // 500}"
-    except Exception:
-        return []
-    if key not in _verify_shard_cache:
-        data = None
-        for u in (f"https://cdn.jsdelivr.net/gh/{GITHUB_REPO}@main/docs/verify/{key}.json",
-                  f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/docs/verify/{key}.json"):
-            try:
-                r = requests.get(u, timeout=12)
-                if r.ok:
-                    data = r.json(); break
-            except Exception:
-                pass
-        _verify_shard_cache[key] = data or {}
-    shard = _verify_shard_cache[key]
-    rec = shard.get(str(number))
-    if not rec:   # у Муслима юниона может не быть — берём первую букву
-        rec = shard.get(str(number) + "a")
-    out, seen = [], set()
-    for e in (rec or []):
-        if isinstance(e, list) and len(e) >= 3 and e[1]:
-            mid = str(e[2]) if e[2] not in (None, "", "?") else None
-            k = mid or e[1]
-            if k in seen:
-                continue
-            seen.add(k)
-            out.append((e[1], mid))
-    return out
-
 def muhaymin_crossref_note(code, number):
     """Готовая строка-отметка: где этот первоисточник встречается в Мухаймине.
     Один и тот же хадис автор может приводить в нескольких главах — показываем
@@ -457,6 +416,12 @@ GITHUB_MODELS_TOKEN = os.environ.get("GITHUB_MODELS_TOKEN", "") or GITHUB_TOKEN
 NVIDIA_NIM_API_KEY = os.environ.get("NVIDIA_NIM_API_KEY") or os.environ.get("NVIDIANIM_API_KEY") or ""   # владелец назвал переменную в Railway БЕЗ подчёркивания (NVIDIANIM_API_KEY) — читаем оба варианта
 NVIDIA_NIM_MODEL = os.environ.get("NVIDIA_NIM_MODEL", "meta/llama-3.1-70b-instruct")
 GITHUB_MODELS_MODEL = os.environ.get("GITHUB_MODELS_MODEL", "openai/gpt-4o-mini")
+# 🆓 #573 (владелец: «я сказал: API перед дипсиком, там 12 API или больше»): ещё две бесплатные ступени
+# ПЕРЕД платным DeepSeek. Ключей может не быть в env — тогда ступень просто пропускается.
+CEREBRAS_API_KEY = os.environ.get("CEREBRAS_API_KEY", "")
+CEREBRAS_MODEL = os.environ.get("CEREBRAS_MODEL", "llama-3.3-70b")
+SAMBANOVA_API_KEY = os.environ.get("SAMBANOVA_API_KEY", "")
+SAMBANOVA_MODEL = os.environ.get("SAMBANOVA_MODEL", "Meta-Llama-3.3-70B-Instruct")
 BACKUP_SECRET = os.environ.get("BACKUP_SECRET", "")   # #259/#261: общий секрет для приёма локального бэкапа (ps1 -> /api/backup_push -> журнал/ЛС)
 OWNER_ID = 131827895
 OWNER_CHANNEL_ID = -1001660979432
@@ -1600,6 +1565,45 @@ def ask_nvidia_nim(prompt, system=None, max_tokens=None):
     except Exception as e:
         return f"⚠️ NVIDIA NIM недоступен: {e}"
 
+def ask_cerebras(prompt, system=None, max_tokens=None):
+    """🆓 Cerebras (cloud.cerebras.ai) — бесплатный тир, OpenAI-совместимо, очень быстрый.
+    UA обязателен: без него Cloudflare отдаёт 403 (1010). Ключ CEREBRAS_API_KEY в env Railway."""
+    if not CEREBRAS_API_KEY:
+        return None
+    try:
+        msgs = []
+        if system: msgs.append({"role": "system", "content": system})
+        msgs.append({"role": "user", "content": prompt})
+        r = requests.post(
+            "https://api.cerebras.ai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {CEREBRAS_API_KEY}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+            json={"model": CEREBRAS_MODEL, "messages": msgs, "max_tokens": max_tokens or 1500, "temperature": 0.3},
+            timeout=60)
+        if r.status_code == 200:
+            return r.json()["choices"][0]["message"]["content"].strip()
+        return f"⚠️ Cerebras код {r.status_code}: {r.text[:150]}"
+    except Exception as e:
+        return f"⚠️ Cerebras недоступен: {e}"
+
+def ask_sambanova(prompt, system=None, max_tokens=None):
+    """🆓 SambaNova (cloud.sambanova.ai) — бесплатный тир, OpenAI-совместимо. Ключ SAMBANOVA_API_KEY в env Railway."""
+    if not SAMBANOVA_API_KEY:
+        return None
+    try:
+        msgs = []
+        if system: msgs.append({"role": "system", "content": system})
+        msgs.append({"role": "user", "content": prompt})
+        r = requests.post(
+            "https://api.sambanova.ai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {SAMBANOVA_API_KEY}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
+            json={"model": SAMBANOVA_MODEL, "messages": msgs, "max_tokens": max_tokens or 1500, "temperature": 0.3},
+            timeout=60)
+        if r.status_code == 200:
+            return r.json()["choices"][0]["message"]["content"].strip()
+        return f"⚠️ SambaNova код {r.status_code}: {r.text[:150]}"
+    except Exception as e:
+        return f"⚠️ SambaNova недоступен: {e}"
+
 def ask_neuro(prompt, system, max_tokens=2000):
     """Нейро-конвейер (поиск-подбор/огласовки/справки о равии/объяснения хадиса/книгозапрос) —
     БЕСПЛАТНЫЕ ИИ ПЕРВЫМИ (указ владельца #379, подтверждён #414/#420: «почему тратишь DeepSeek,
@@ -1616,6 +1620,30 @@ def ask_neuro(prompt, system, max_tokens=2000):
         gh = ask_github(prompt, system, max_tokens)
         if gh and not str(gh).startswith("⚠️"):
             return gh + "\n\n⚡ *Модель:* 🆓 GitHub GPT-4o-mini — бесплатно"
+    # #573 (владелец: «почему DeepSeek потратил после Groq? я сказал — API ПЕРЕД дипсиком, их 12»):
+    # у нейро-конвейера лестница обрывалась на трёх бесплатных и падала в ПЛАТНЫЙ DeepSeek, хотя в ask_ai()
+    # ступеней больше. Догоняем: NVIDIA NIM → Cerebras → SambaNova → OpenRouter (free-модели) → и только потом DeepSeek.
+    if NVIDIA_NIM_API_KEY:
+        nv = ask_nvidia_nim(prompt, system, max_tokens)
+        if nv and not str(nv).startswith("⚠️"):
+            return nv + "\n\n⚡ *Модель:* 🆓 NVIDIA NIM — бесплатно"
+    cb = ask_cerebras(prompt, system, max_tokens)
+    if cb and not str(cb).startswith("⚠️"):
+        return cb + "\n\n⚡ *Модель:* 🆓 Cerebras — бесплатно"
+    sn = ask_sambanova(prompt, system, max_tokens)
+    if sn and not str(sn).startswith("⚠️"):
+        return sn + "\n\n⚡ *Модель:* 🆓 SambaNova — бесплатно"
+    if OPENROUTER_API_KEY:
+        for _m in ("meta-llama/llama-3.3-70b-instruct:free", "deepseek/deepseek-r1:free", "qwen/qwen3-235b-a22b:free"):
+            try:
+                _r = requests.post("https://openrouter.ai/api/v1/chat/completions",
+                                   headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+                                   json={"model": _m, "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+                                         "max_tokens": max_tokens or 1500}, timeout=60)
+                if _r.status_code == 200:
+                    return _r.json()["choices"][0]["message"]["content"] + f"\n\n⚡ *Модель:* 🆓 {_m.split('/')[-1].replace(':free','')} (OpenRouter) — бесплатно"
+            except Exception:
+                continue
     return ask_deepseek(prompt, system, max_tokens)
 
 def _neuroModelTag(txt):
@@ -1668,64 +1696,33 @@ def _ai_left():
     n = _AI_DAY['n']
     return "📊 осталось ~%d из ~%d беспл. ИИ-ответов/день" % (max(0, _AI_FREE_DAILY - n), _AI_FREE_DAILY)
 
-# 17.07 (владелец: «цепочку каналов — КО ВСЕМ кнопкам ИИ»): потоковый сборщик попыток.
-# ask_ai пишет сюда КАЖДУЮ попытку; эндпоинт оборачивает свой ИИ-вызов в _ai_call() и получает
-# (результат, цепочка) — без прокидывания параметров через промежуточные функции (translate_matn, neuro и пр.).
-_AI_LOG = threading.local()
-def _ai_call(fn):
-    """Выполнить fn() в ЭТОМ потоке, собрав реальную цепочку ИИ-попыток. → (результат, [{n,ok},…])"""
-    _AI_LOG.items = []
-    try:
-        res = fn()
-        items, seen = [], set()
-        for it in (getattr(_AI_LOG, 'items', None) or []):
-            if it['n'] in seen: continue
-            seen.add(it['n']); items.append(it)
-        return res, items[:8]
-    finally:
-        _AI_LOG.items = None
-
-def ask_ai(prompt, system=None, owner=False, max_tokens=None, tried_out=None):
+def ask_ai(prompt, system=None, owner=False, max_tokens=None):
     # 🚨 авто-рубильник убран сверху: он защищал ПЛАТНЫЙ DeepSeek от спама. Теперь бесплатный Groq первый → бесплатные работают ВСЕГДА (эндпоинты сами rate-лимитят), килл гейтит ТОЛЬКО DeepSeek (ниже). Чинит «рубильник сам включается».
-    # 17.07 (заявка владельца: «перевод будто завис — покажи, кого вызывал: Грок не дал → следующий»):
-    # tried_out — если передан СПИСОК, пишем в него РЕАЛЬНУЮ цепочку попыток [{n:канал, ok:bool}], фронт её показывает.
-    # 17.07-2 (владелец: «применить КО ВСЕМ кнопкам ИИ»): дополнительно пишем в потоковый сборщик _AI_LOG —
-    # тогда ЛЮБОЙ эндпоинт получает цепочку через _ai_call(), не прокидывая параметр через промежуточные функции.
-    def _tr(n, ok):
-        if tried_out is not None:
-            try: tried_out.append({'n': n, 'ok': bool(ok)})
-            except Exception: pass
-        try:
-            _it = getattr(_AI_LOG, 'items', None)
-            if _it is not None: _it.append({'n': n, 'ok': bool(ok)})
-        except Exception: pass
     _ai_tick()
     if system is None:
         system = f"Ты — полезный ассистент в исламском Телеграм-боте. Отвечай на русском. Сегодняшняя дата: {datetime.now().strftime('%d.%m.%Y')}."
     # 🆓 БЕСПЛАТНЫЕ ИИ — доступны ВСЕМ (указ владельца #379: сначала бесплатные, DeepSeek потом). Порядок Groq→Gemini→OpenRouter→DeepSeek.
     g = ask_groq(prompt, system, max_tokens)   # 1) Groq (free, очень быстрый)
     if g and not str(g).startswith("⚠️"):
-        _tr('Groq (Llama 3.3 70B)', True)
         return g + "\n\n⚡ *Модель:* 🆓 Groq (Llama 3.3 70B) — бесплатно\n" + _ai_left()
-    _tr('Groq', False)
     if GEMINI_API_KEY:                          # 2) Gemini (free)
         _ga = ask_gemini(prompt, system)
         if _ga and not str(_ga).startswith("⚠️"):
-            _tr('Gemini', True)
             return _ga + "\n\n⚡ *Модель:* 🆓 Gemini — бесплатно\n" + _ai_left()
-        _tr('Gemini', False)
     if GITHUB_MODELS_TOKEN:                      # 3) GitHub Models (GPT-4o-mini, free)
         _gh = ask_github(prompt, system, max_tokens)
         if _gh and not str(_gh).startswith("⚠️"):
-            _tr('GitHub GPT-4o-mini', True)
             return _gh + "\n\n⚡ *Модель:* 🆓 GitHub GPT-4o-mini — бесплатно\n" + _ai_left()
-        _tr('GitHub GPT-4o-mini', False)
     if NVIDIA_NIM_API_KEY:                       # 3.5) NVIDIA NIM (free, добавлен 05.07.2026) — до OpenRouter-цикла (тот перебирает 5 моделей подряд, дольше)
         _nv = ask_nvidia_nim(prompt, system, max_tokens)
         if _nv and not str(_nv).startswith("⚠️"):
-            _tr('NVIDIA NIM', True)
             return _nv + "\n\n⚡ *Модель:* 🆓 NVIDIA NIM — бесплатно\n" + _ai_left()
-        _tr('NVIDIA NIM', False)
+    _cb = ask_cerebras(prompt, system, max_tokens)   # 3.6) Cerebras (free, #573)
+    if _cb and not str(_cb).startswith("⚠️"):
+        return _cb + "\n\n⚡ *Модель:* 🆓 Cerebras — бесплатно\n" + _ai_left()
+    _sn = ask_sambanova(prompt, system, max_tokens)  # 3.7) SambaNova (free, #573)
+    if _sn and not str(_sn).startswith("⚠️"):
+        return _sn + "\n\n⚡ *Модель:* 🆓 SambaNova — бесплатно\n" + _ai_left()
     модели = [
         "meta-llama/llama-3.3-70b-instruct:free",
         "deepseek/deepseek-r1:free",
@@ -1995,7 +1992,7 @@ def _chunk_by_paras(text, maxlen=1200):
         chunks.append(cur)
     return chunks
 
-def translate_matn(arabic, src="", owner=False, force=False, model_out=None, tried_out=None):
+def translate_matn(arabic, src="", owner=False, force=False, model_out=None):
     """Перевод матна на русский с накопительным кэшем (оригинал+перевод+источник).
     force=True — переперевести заново (минуя кэш). Длинные тексты переводим ПО АБЗАЦАМ, иначе free-модель
     часто возвращает арабский оригинал вместо перевода. Битый арабский кэш игнорируем и переводим заново.
@@ -2030,7 +2027,7 @@ def translate_matn(arabic, src="", owner=False, force=False, model_out=None, tri
                   "Имена и термины передавай по-русски. "
                   "Без вступлений, без пояснений, без кавычек, без указания модели — только перевод.")
     def _one(t):
-        r = ask_ai("Переведи на русский:\n" + t, sysmsg, owner=owner, max_tokens=4000, tried_out=tried_out)   # 17.07: цепочка попыток → фронту
+        r = ask_ai("Переведи на русский:\n" + t, sysmsg, owner=owner, max_tokens=4000)
         if not r or r.startswith("❌") or r.startswith("⏸"):
             return None
         if model_out is not None:
@@ -2082,7 +2079,6 @@ async def send_long(update, text, parse_mode=None):
             except Exception:
                 pass
 
-_member_seen = {}   # #567: анти-дубликат уведомлений о входе/выходе (Telegram шлёт статус повторно)
 async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         chat = update.effective_chat
@@ -2092,72 +2088,14 @@ async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
         name = user.full_name
         username = f"@{user.username}" if user.username else "нет"
         uid = user.id
-        _st = member.new_chat_member.status
-        _dk = (chat.id, uid, _st); _tn = datetime.now().timestamp()
-        if _member_seen.get(_dk, 0) > _tn - 300: return   # #567: тот же вход/выход в пределах 5 мин — не дублируем
-        _member_seen[_dk] = _tn
-        _kb = None
         if member.new_chat_member.status == "member":
             msg = f"➕ {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}\n🕐 {now}"
-            # #570: кнопки модерации при входе — действие ТОЛЬКО по клику владельца
-            _cd = f"{chat.id}:{uid}"
-            _kb = InlineKeyboardMarkup([[
-                InlineKeyboardButton("🚫 Бан", callback_data=f"mod:ban:{_cd}"),
-                InlineKeyboardButton("🔇 Ограничить", callback_data=f"mod:mute:{_cd}"),
-                InlineKeyboardButton("✅ ОК", callback_data="mod:ok"),
-            ]])
         elif member.new_chat_member.status in ["left", "kicked"]:
             a = "🚫 Удалён" if member.new_chat_member.status == "kicked" else "➖ Вышел"
-            by = ""   # #574: писать КЕМ удалён (from_user = инициатор изменения)
-            try:
-                fu = getattr(member, "from_user", None)
-                if member.new_chat_member.status == "kicked" and fu and fu.id != uid:
-                    by = f"\n👮 кем: @{fu.username}" if fu.username else f"\n👮 кем: {fu.full_name}"
-                elif member.new_chat_member.status == "left":
-                    by = "\n🚪 сам покинул группу"
-            except Exception: pass
-            msg = f"{a} {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}{by}\n🕐 {now}"
+            msg = f"{a} {name}\n🔗 {username}\n🆔 {uid}\n📁 {chat.title}\n🕐 {now}"
         else: return
-        await context.bot.send_message(chat_id=LOG_CHAT_ID, text=msg, reply_markup=_kb)
+        await context.bot.send_message(chat_id=LOG_CHAT_ID, text=msg)
     except: pass
-
-async def mod_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """#570: кнопки модерации под уведомлением о входе. Бан/ограничение — ТОЛЬКО по клику владельца."""
-    q = update.callback_query
-    if not q: return
-    try: await q.answer()
-    except: pass
-    try:
-        if q.from_user and q.from_user.id != OWNER_ID:
-            try: await q.answer("Только для владельца", show_alert=True)
-            except: pass
-            return
-        parts = (q.data or "").split(":")
-        act = parts[1] if len(parts) > 1 else ""
-        if act == "ok":
-            try: await q.edit_message_reply_markup(reply_markup=None)
-            except: pass
-            return
-        cid = int(parts[2]); uid = int(parts[3])
-        base = (q.message.text if q.message else "") or ""
-        if act == "ban":
-            try:
-                await context.bot.ban_chat_member(cid, uid); res = "🚫 ЗАБАНЕН (владельцем)"
-            except Exception as e:
-                res = f"⚠️ не смог забанить: {str(e)[:70]} (бот админ с правами?)"
-        elif act == "mute":
-            try:
-                await context.bot.restrict_chat_member(cid, uid, permissions=ChatPermissions(can_send_messages=False)); res = "🔇 ОГРАНИЧЕН — без права писать (владельцем)"
-            except Exception as e:
-                res = f"⚠️ не смог ограничить: {str(e)[:70]} (бот админ с правами?)"
-        else:
-            return
-        try: await q.edit_message_text(base + "\n\n" + res, reply_markup=None)
-        except: pass
-    except Exception as e:
-        try: await q.answer(f"ошибка: {str(e)[:60]}", show_alert=True)
-        except: pass
-
 
 _AI_BAN = set()   # чёрный список (chat_id/user_id) — кого НЕ обслуживать ИИ; владелец правит командами «бан/разбан»
 
@@ -2272,6 +2210,47 @@ async def _nisht_extract_one(msg):
                 return txt.strip(), "аудио/видео (расшифровка Whisper)" + (f": {t}" if t else "")
         except Exception:
             pass
+    # #546/#524 (владелец: реплай «Ништячок» на PDF → «не смог извлечь содержимое»): документы брались ТОЛЬКО
+    # с mime audio/video, а PDF/txt молча игнорировались. Теперь читаем и их.
+    _doc = getattr(msg, "document", None)
+    if _doc:
+        _mt = (getattr(_doc, "mime_type", "") or "").lower()
+        _fn = (getattr(_doc, "file_name", "") or "").lower()
+        _ispdf = ("pdf" in _mt) or _fn.endswith(".pdf")
+        _istxt = _mt.startswith("text/") or _fn.endswith((".txt", ".md", ".csv", ".json"))
+        if _ispdf or _istxt:
+            try:
+                _f = await _doc.get_file()
+                _p = f"/tmp/nisht_{_f.file_id}" + (".pdf" if _ispdf else ".txt")
+                await _f.download_to_drive(_p)
+                _body = ""
+                if _ispdf:
+                    try:
+                        from pypdf import PdfReader          # лёгкая, чистый python; нет в окружении → просто пропустим
+                    except Exception:
+                        try:
+                            from PyPDF2 import PdfReader
+                        except Exception:
+                            PdfReader = None
+                    if PdfReader:
+                        try:
+                            _rd = PdfReader(_p)
+                            _body = "\n".join((pg.extract_text() or "") for pg in _rd.pages[:40])
+                        except Exception:
+                            _body = ""
+                else:
+                    try:
+                        _body = open(_p, encoding="utf-8", errors="replace").read()
+                    except Exception:
+                        _body = ""
+                try: os.remove(_p)
+                except Exception: pass
+                _body = re.sub(r"\s+\n", "\n", (_body or "")).strip()[:14000]
+                if len(_body) > 40:
+                    _nm = getattr(_doc, "file_name", "") or ("PDF" if _ispdf else "файл")
+                    return _body, f"документ ({_nm[:60]})" + (f": {t}" if t else "")
+            except Exception:
+                pass
     m = re.search(r'https?://\S+', t) if t else None
     if m and not vid:
         try:
@@ -3227,8 +3206,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 await update.message.reply_text(_none)
                             return
                         _cards = _rag_cards(_top, _terms, limit=4)   # карточки: целый хадис+выделение+перевод+ссылка
-                        _hdr = '🔎 По запросу «%s»%s — карточки хадисов (%d из %d):\n⚡ Поиск по ядру (RAG) — семантический, ИИ-токены НЕ тратятся.' % (
-                            _q, (' в «%s»' % _src) if _src else '', len(_cards), len(_top))   # #561: прозрачность — RAG не жжёт LLM-токены
+                        _hdr = '🔎 По запросу «%s»%s — карточки хадисов (%d из %d):' % (
+                            _q, (' в «%s»' % _src) if _src else '', len(_cards), len(_top))
                         if _wait:
                             try: await _wait.edit_text(_hdr)
                             except Exception: await update.message.reply_text(_hdr)
@@ -3767,9 +3746,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("📝 *Заметки JM:*\n\n" + "\n".join(_lines), parse_mode="Markdown")
             return
         # ===== Добавить заявку: «заявка <текст>» / «замечание <текст>» (+ подсказка о дубле) =====
-        _zm = re.match(r'^(заявка|замечание)(?:[\s.,:;!?)»«—-].*)?$', _tl, re.S)   # #фикс (владелец 18.07): точка/запятая после «заявка» ломала приём («заявка.» не матчилось) — теперь любой разделитель ок
-        if _zm:
-            body = text.strip()[len(_zm.group(1)):].lstrip(" \t.,:;!?)»«—-\r\n").strip()
+        if _tl.startswith("заявка ") or _tl.startswith("замечание ") or _tl == "заявка" or _tl == "замечание":
+            body = text.strip()[6:].strip() if _tl.startswith("заявк") or _tl == "заявка" else text.strip()[9:].strip()
             img_flag = False; imgkey = ""
             rep = update.message.reply_to_message
             # #245/#274: «заявка [коммент]» РЕПЛАЕМ на сообщение → регистрируем ОСНОВНОЙ текст отвеченного сообщения + коммент владельца.
@@ -4977,7 +4955,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _vfp = vf.split()
                 if len(_vfp) >= 2 and _vfp[1].isdigit() and _vfp[0].isalpha():
                     _vfcode = {"ahmad_local": "ahmad"}.get(_vfp[0], _vfp[0])
-                    body += f"\n📲 Открыть карточку первоисточника: https://t.me/muslimoontt_bot?startapp=r_{_vfcode}_{_vfp[1]}"
+                    body += f"\n📲 [Открыть карточку первоисточника](https://t.me/muslimoontt_bot?startapp=r_{_vfcode}_{_vfp[1]})"   # #629: голый URL с «_» Telegram-Markdown резал в курсив (юзернейм слипался → «имя не найдено») — прячем URL в markdown-ссылку
                 await send_long(update, body)
             flush_trans()
         else:
@@ -5053,23 +5031,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg += muhaymin_crossref_note(_src_code, number)
             # #269: прямая ссылка — открыть ЭТУ карточку хадиса в приложении одним тапом
             _sa269 = ('m_' + str(number)) if _src_code == 'muhaymin' else ('r_' + str(_src_code) + '_' + str(number))
-            msg += f"\n\n📲 Открыть карточку в приложении: https://t.me/muslimoontt_bot?startapp={_sa269}"
+            msg += f"\n\n📲 [Открыть карточку в приложении](https://t.me/muslimoontt_bot?startapp={_sa269})"   # #629: см. выше — «_» в голом URL ломали ссылку
 
             await send_long(update, msg)
-            # #578: кликабельные передатчики — кнопки-карточки равиев (id из verify, тот же эталон, что сверка в аппе)
-            try:
-                _nrr578 = _verify_narrators(_src_code, number)
-                _btns578 = [(nm, mid) for nm, mid in _nrr578 if mid]
-                if _btns578:
-                    from telegram import InlineKeyboardButton, InlineKeyboardMarkup   # локальный импорт — как в #324
-                    _rows578 = []
-                    for _nm578, _mid578 in _btns578[:12]:
-                        _rows578.append([InlineKeyboardButton(("👤 " + _nm578)[:60],
-                                        url=f"https://t.me/muslimoontt_bot?startapp=n_{_mid578}")])
-                    await update.message.reply_text("👥 Передатчики (الإسناد) — карточка равия по тапу:",
-                                                    reply_markup=InlineKeyboardMarkup(_rows578))
-            except Exception:
-                pass
             return
 
     # ============ #324: «<книга из каталога> <номер>» (вне 8 канона) → кнопка-ссылка в мини-апп ============
@@ -5081,10 +5045,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _c324 = _catalog_match(_m324.group(1))
         except Exception:
             _c324 = []
-        # #581/#575 («че за белиберда»): в ЛИЧКЕ фича ловила ЛЮБОЙ матч (даже слабый) → путаные кандидаты.
-        # Теперь порог уверенности и в личке (≥0.6); в группах строже (≥0.8) против спама на «слово 123».
-        _thr324 = 0.6 if getattr(update.effective_chat, "type", "") == "private" else 0.8
-        if _c324 and _c324[0][0] >= _thr324:
+        # в группах отвечаем только при УВЕРЕННОМ матче (≥0.8) — чтобы не спамить на случайные «слово 123»
+        if _c324 and (getattr(update.effective_chat, "type", "") == "private" or _c324[0][0] >= 0.8):
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup   # локальный импорт — как в «закреп» (стр. ~3231)
             _n324 = _m324.group(2)
             _kb324 = []
@@ -5092,8 +5054,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _lbl = ("📖 " + _nm[:38] + (" — " + _au.split()[-1] if _au else ""))[:60]
                 _kb324.append([InlineKeyboardButton(_lbl, url=f"https://t.me/muslimoontt_bot?startapp=b_{_bid}_{_n324}")])
             await update.message.reply_text(
-                f"📚 Похоже, это книга из каталога Мактабы — открыть №{_n324}:"
-                + ("" if len(_c324) == 1 else "\n(если не та — выбери из кандидатов ниже)"),
+                f"📚 Нашёл в каталоге Мактабы — открыть №{_n324} в приложении:"
+                + ("" if len(_c324) == 1 else "\n(если не та книга — выбери из кандидатов)"),
                 reply_markup=InlineKeyboardMarkup(_kb324))
             return
 
@@ -5908,7 +5870,7 @@ async def log_bot_ai(update, context, feat="ботяра", ai_text=""):
         elif _bmodel:
             tag = f"🆕 свежий ({_bmodel})"
         else:
-            tag = "🆕 свежий (DeepSeek, ключ потрачен)"   # фолбэк — модель не удалось определить из ответа
+            tag = "🆕 свежий (модель не определена — тег не пришёл; ключ мог и НЕ тратиться)"   # #573: НЕ врать «DeepSeek потрачен» вслепую — владелец справедливо ловил на этом
         await context.bot.send_message(LOG_CHAT_ID,
             f"#ии #ботяра 🤖 {feat}: 👤 {who}{where} — {tag}\n⛔ забанить: `бан {(update.effective_user.id if update.effective_user else '')}`" + (f" · `бан {ch.id}`" if (ch and getattr(ch,'type','')!='private') else ""),
             parse_mode="Markdown", disable_web_page_preview=True)
@@ -6270,7 +6232,7 @@ async def _api_serve(application=None):
         elif model:
             tag = f"🆕 свежий ({model})"
         else:
-            tag = "🆕 свежий (DeepSeek, ключ потрачен)"   # фолбэк — модель не удалось определить из ответа
+            tag = "🆕 свежий (модель не определена — тег не пришёл; ключ мог и НЕ тратиться)"   # #573: НЕ врать «DeepSeek потрачен» вслепую — владелец справедливо ловил на этом
         # #272/«ссылка вкладки»: МЕСТО = кликабельная дип-ссылка ровно на карточку хадиса в приложении (m_ для Мухаймина, r_ для остальных)
         if src and num not in (None, ''):
             _sa = ('m_' + str(num)) if src == 'muhaymin' else ('r_' + str(src) + '_' + str(num))
@@ -6889,7 +6851,7 @@ async def _api_serve(application=None):
                     "Без воды, маркированно. Не выдумывай того, чего нет в списке.")
             txt = await loop.run_in_executor(None, ask_neuro, "Запрос: " + q + "\nНайдено:\n" + numbered, sysm) or ""
             await loop.run_in_executor(None, usage_log, user, "структурировать", True, len(q), "", "")
-            return _cors(web.json_response({'text': txt.strip()[:2500], 'tried': _tried}))
+            return _cors(web.json_response({'text': txt.strip()[:2500]}))
         except Exception as e:
             return _cors(web.json_response({'text': '', 'error': str(e)}))
 
@@ -7111,8 +7073,7 @@ async def _api_serve(application=None):
                     "Пример: «لِكُلِّ» (контекст: لكل نبي دعوة) → ПЕРЕВОД: для каждого / КОРЕНЬ: كلل / "
                     "ГРАММ: предлог لـ + имя كل в род. падеже. Выведи ТОЛЬКО эти 3 строки.")
             prompt = "Слово: " + word + (("\nКорень (подсказка): " + root_hint) if root_hint else "") + (("\nКонтекст: " + ctx) if ctx else "")
-            txt, _tried = await loop.run_in_executor(None, lambda: _ai_call(lambda: ask_neuro(prompt, sysm) or ""))   # 17.07: цепочка каналов
-            txt = txt or ""
+            txt = await loop.run_in_executor(None, ask_neuro, prompt, sysm) or ""
             _model_tag = _neuroModelTag(txt) or '?'   # владелец (05.07): в КАЖДОМ ИИ-уведомлении обязана быть модель, не только у DeepSeek
             def _g(lbl):
                 m = re.search(lbl + r'\s*[:：]\s*(.+)', txt); return m.group(1).strip() if m else ''
@@ -7136,7 +7097,7 @@ async def _api_serve(application=None):
                         parse_mode="Markdown", disable_web_page_preview=True)
                 except Exception:
                     pass
-            out = dict(val); out['cached'] = False; out['tried'] = _tried   # 17.07: цепочка каналов
+            out = dict(val); out['cached'] = False
             return _cors(web.json_response(out))
         except Exception as e:
             return _cors(web.json_response({'ru': '', 'error': str(e)}))
@@ -7312,8 +7273,7 @@ async def _api_serve(application=None):
                     "главный смысл + польза/урок + краткий довод. ОБЯЗАТЕЛЬНО начни с источника (" + ref + "). "
                     "Не пересказывай весь текст, без длинных предисловий и воды. НЕ выдумывай факты/хадисы; "
                     "если спорно — отметь одним словом. Только объяснение, коротко.")
-            # 17.07 (владелец: цепочка каналов КО ВСЕМ ИИ-кнопкам): _ai_call собирает реальные попытки
-            ex, _tried = await loop.run_in_executor(None, lambda: _ai_call(lambda: ask_neuro("Источник: " + ref + "\n" + text, sysm)))
+            ex = await loop.run_in_executor(None, ask_neuro, "Источник: " + ref + "\n" + text, sysm)
             _exModel = _neuroModelTag(ex or '')
             ex = re.sub(r'\s*⚡.*$', '', (ex or ''), flags=re.S).strip()
             if not ex:
@@ -7323,7 +7283,7 @@ async def _api_serve(application=None):
                 saved = await loop.run_in_executor(None, coll_add_translation, store_src, num, text, ex)
             await loop.run_in_executor(None, usage_log, user, "объяснение", True, len(text), source, str(num or ""))
             await _notify_usage(user, "объяснение", True, source, num, saved, model=_exModel)
-            return _cors(web.json_response({'explanation': ex, 'cached': False, 'tried': _tried, 'model': _exModel}))
+            return _cors(web.json_response({'explanation': ex, 'cached': False}))
         except Exception as e:
             return _cors(web.json_response({'explanation': '', 'error': str(e)}))
 
@@ -7351,8 +7311,7 @@ async def _api_serve(application=None):
                 return _cors(web.json_response({'translation': stored['ru'], 'cached': True}))
             # 2) нет в базе (или force) → переводим заново и копим (перезаписываем оборванный)
             _model_used = []   # тревога 04.07.2026: узнать РЕАЛЬНУЮ модель, а не рапортовать «DeepSeek» по умолчанию
-            _tried = []        # 17.07 (заявка владельца): РЕАЛЬНАЯ цепочка попыток [{n,ok}] → фронт показывает «Groq не дал → Gemini не дал → перевёл GitHub»
-            tr = await loop.run_in_executor(None, lambda: translate_matn(text, source, True, force, _model_used, _tried))   # P0-2: source ('jarh_*'/'tafsir_*') → джарх-аварный промт в translate_matn
+            tr = await loop.run_in_executor(None, lambda: translate_matn(text, source, True, force, _model_used))   # P0-2: source ('jarh_*'/'tafsir_*') → джарх-аварный промт в translate_matn
             tr = re.sub(r'\s*⚡.*$', '', (tr or ''), flags=re.S).strip()
             saved = None
             if tr and source and num not in (None, ''):
@@ -7360,12 +7319,7 @@ async def _api_serve(application=None):
             if tr:   # #348: не списывать ключ и не слать «потрачено», если перевод реально не удался (tr пустой)
                 await loop.run_in_executor(None, usage_log, user, "перевод", True, len(text), source, str(num or ""))
                 await _notify_usage(user, "перевод", True, source, num, saved, frag=(tr or text), model=(_model_used[-1] if _model_used else ""))
-            # 17.07: отдаём фронту РЕАЛЬНУЮ цепочку (кого звали, кто отказал) и итоговую модель — не выдумка, а факт
-            _uniq = []
-            for _t in _tried:
-                if not any(_u['n'] == _t['n'] for _u in _uniq): _uniq.append(_t)
-            return _cors(web.json_response({'translation': tr, 'cached': False,
-                                            'tried': _uniq[:8], 'model': (_model_used[-1] if _model_used else '')}))
+            return _cors(web.json_response({'translation': tr, 'cached': False}))
         except Exception as e:
             return _cors(web.json_response({'translation': '', 'error': str(e)}))
 
@@ -7544,15 +7498,14 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'text': cached, 'cached': True}))
         sysm = ("Ты расставляешь огласовки (تشكيل) в арабском тексте. "
                 "Верни ТОТ ЖЕ текст с полной огласовкой. Без перевода, без пояснений, без кавычек — только огласованный текст.")
-        out, _tried = await loop.run_in_executor(None, lambda: _ai_call(lambda: ask_neuro(text, sysm) or ""))   # 17.07: цепочка каналов
-        out = out or ""
+        out = await loop.run_in_executor(None, ask_neuro, text, sysm) or ""
         _tkModel = _neuroModelTag(out)
         out = re.sub(r'\s*⚡.*$', '', out, flags=re.S).strip()
         if out and source and num not in (None, ''):
             await loop.run_in_executor(None, tashkeel_add, source, num, out)
         await loop.run_in_executor(None, usage_log, user, "огласовки", True, len(text), source, str(num or ""))
         await _notify_usage(user, "огласовки", True, source, num, None, model=_tkModel)
-        return _cors(web.json_response({'text': out, 'cached': False, 'tried': _tried, 'model': _tkModel}))
+        return _cors(web.json_response({'text': out, 'cached': False}))
 
     async def searchlog(r):
         # аналитика: что ищут (тихо, агрегируем); гейт — вход в приложение
@@ -7675,12 +7628,12 @@ async def _api_serve(application=None):
                 "словами имамов (ثقة/صدوق/ضعيف и т.п.) — КТО так оценил и в какой книге (تقريب التهذيب لابن حجر، "
                 "الجرح والتعديل لابن أبي حاتم، تهذيب الكمال للمزي). 4-7 строк, без воды. "
                 "В конце с новой строки: «⚠️ Справку собрал ИИ — сверяйте с первоисточниками (الجرح والتعديل، تقريب التهذيب).»")
-        bio, _tried = await loop.run_in_executor(None, lambda: _ai_call(lambda: ask_neuro("Передатчик хадисов: " + name, sysm) or ""))   # 17.07: цепочка каналов
-        bio = (bio or "").strip()
+        bio = await loop.run_in_executor(None, ask_neuro, "Передатчик хадисов: " + name, sysm) or ""
+        bio = bio.strip()
         if bio and len(bio) > 15:
             await loop.run_in_executor(None, rijal_ai_put, name, bio)
         await loop.run_in_executor(None, usage_log, user, "равий-ИИ", True, len(name), "", "")
-        return _cors(web.json_response({'bio': bio, 'cached': False, 'tried': _tried}))
+        return _cors(web.json_response({'bio': bio, 'cached': False}))
 
     async def popular(r):
         # 🔥 Популярное: топ запросов (из накопленного searchlog), гейт = вход в приложение
@@ -8016,26 +7969,20 @@ def _format_channel_post(note):
     return photo, body
 
 async def _post_app_channel(bot, note):
-    """Единый постер в @muslimoonapp: скрин (если есть) + анонс + сворачиваемая инструкция.
-    ЗАЯВКА #592 (владелец 17.07: «1095 повторил два раза в канале, хотя строго было»): это был НЕ дубль
-    очереди (claim отработал раз), а САМ ПОСТЕР: при note > 1024 симв. он слал ДВА сообщения (фото + текст),
-    и владелец видел «объявление дважды». Плюс except-фолбэк мог дать ТРЕТЬЕ.
-    Фикс: ОДНО сообщение всегда — длинную ноту режем под лимит подписи (1024) с «…», фолбэк не дублирует."""
+    """Единый постер в @muslimoonapp: скрин (если есть) + анонс + сворачиваемая инструкция. Фолбэк — текстом, чтобы пост не потерялся."""
     photo, body = _format_channel_post(note)
-    def _fit(t, lim):
-        t = t or ''
-        if len(t) <= lim: return t
-        cut = t[:lim - 20]
-        p = max(cut.rfind('. '), cut.rfind('; '), cut.rfind(' · '))
-        return (cut[:p + 1] if p > lim * 0.6 else cut) + ' …'
     try:
         if photo:
-            await bot.send_photo(APP_CHANNEL_ID, photo=photo, caption=_fit(body, 1024), parse_mode="HTML")
+            if len(body) <= 1024:
+                await bot.send_photo(APP_CHANNEL_ID, photo=photo, caption=body, parse_mode="HTML")
+            else:
+                await bot.send_photo(APP_CHANNEL_ID, photo=photo, parse_mode="HTML")
+                await bot.send_message(APP_CHANNEL_ID, body, parse_mode="HTML", disable_web_page_preview=True)
         else:
-            await bot.send_message(APP_CHANNEL_ID, _fit(body, 4096), parse_mode="HTML", disable_web_page_preview=True)
+            await bot.send_message(APP_CHANNEL_ID, body, parse_mode="HTML", disable_web_page_preview=True)
     except Exception:
-        # фото 404 / HTML не прошёл — ОДНО сообщение текстом, пост обязан выйти (но не вторым «дублем»)
-        await bot.send_message(APP_CHANNEL_ID, _fit(body, 4096), parse_mode="HTML", disable_web_page_preview=True)
+        # фото 404 / HTML не прошёл — отправляем тело текстом (HTML), пост обязан выйти
+        await bot.send_message(APP_CHANNEL_ID, body, parse_mode="HTML", disable_web_page_preview=True)
 
 async def _app_channel_watcher(application):
     """Фон: раз в 5 мин публикует новую update_note.txt в @muslimoonapp (см. _setup)."""
@@ -8257,7 +8204,6 @@ async def handle_pinned(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 app.add_handler(MessageHandler(filters.StatusUpdate.PINNED_MESSAGE, handle_pinned))
 app.add_handler(ChatMemberHandler(track_member, ChatMemberHandler.CHAT_MEMBER))
-app.add_handler(CallbackQueryHandler(mod_callback, pattern=r"^mod:"))   # #570: кнопки модерации при входе (бан/ограничить по клику владельца)
 _seen_chats = set()
 async def _chat_seen(update, context):
     try:
