@@ -137,6 +137,18 @@
      ② видно, ГДЕ Я — активный пункт подсвечен и помечен полоской сверху;
      ③ в режиме чтения (книга/Коран во весь экран) панель уезжает вниз — 64px это две строки текста. */
   #botNav .bn.on{color:var(--link);font-weight:700}
+  /* анимации панели (слово владельца 25.07 «плюс анимации сделай им тоже»): иконка пружинит при выборе,
+     полоска-индикатор выезжает, нажатие даёт мягкую волну. Всё на transform/opacity — телефон не греется. */
+  #botNav .bn .bi{transition:transform .18s cubic-bezier(.34,1.56,.64,1)}
+  #botNav .bn:active .bi{transform:scale(1.22) translateY(-2px)}
+  #botNav .bn.on .bi{animation:bnPop .36s cubic-bezier(.34,1.56,.64,1)}
+  @keyframes bnPop{0%{transform:scale(1)}45%{transform:scale(1.28) translateY(-3px)}100%{transform:scale(1)}}
+  #botNav .bn.on::before{animation:bnBar .3s ease-out}
+  @keyframes bnBar{from{width:0;opacity:0}to{width:26px;opacity:1}}
+  #botNav .bn::after{content:"";position:absolute;inset:2px 6px;border-radius:12px;background:currentColor;opacity:0;transform:scale(.6);pointer-events:none}
+  #botNav .bn:active::after{animation:bnWave .42s ease-out}
+  @keyframes bnWave{0%{opacity:.16;transform:scale(.6)}100%{opacity:0;transform:scale(1)}}
+  @media (prefers-reduced-motion:reduce){ #botNav .bn .bi,#botNav .bn.on .bi,#botNav .bn.on::before,#botNav .bn:active::after{animation:none;transition:none} }
   #botNav .bn.on::before{content:"";position:absolute;top:0;width:26px;height:2.5px;border-radius:0 0 3px 3px;background:var(--link);box-shadow:0 0 8px var(--link)}
   #botNav .bn{position:relative}
   #botNav{transition:transform .22s ease-out}
@@ -181,6 +193,19 @@
   textarea#q::placeholder{ opacity:.9; animation:qPhIn .9s ease-out both }
   textarea#q::-webkit-input-placeholder{ opacity:.9; animation:qPhIn .9s ease-out both }
   @keyframes qPhIn{ from{opacity:.3} to{opacity:.9} }   /* старт с .3 (не с 0): мягкое «свечение»-появление, и плейсхолдер НИКОГДА не невидим, даже если анимация где-то замрёт */
+  /* #620 (владелец: «анимация внутри поиска… чтобы объясняло, а не мешало»; вторая правка — «не анимирована красиво
+     и стоит неровно»): подмена атрибута placeholder не годится — его нельзя двигать, длинный текст рвался на две
+     строки и обрезался, арабский пример ломал направление. Делаем СЛОЙ поверх пустого поля: текст уезжает вверх
+     и новый приходит снизу, строка всегда одна, арабский изолирован по направлению. Тапы слой не перехватывает. */
+  #qHint{position:absolute;left:38px;top:50%;transform:translateY(-50%);pointer-events:none;z-index:1;
+         font-size:16px;line-height:1.2;color:var(--hint);max-width:calc(100% - 150px);
+         white-space:nowrap;overflow:hidden;text-overflow:ellipsis;unicode-bidi:isolate}
+  #qHint .qhTx{display:inline-block;opacity:.92;transition:transform .34s cubic-bezier(.22,.61,.36,1),opacity .3s ease}
+  #qHint.out .qhTx{transform:translateY(-9px);opacity:0}
+  #qHint.pre .qhTx{transform:translateY(9px);opacity:0;transition:none}
+  #qHint bdi{font-family:"Traditional Arabic","Amiri",serif;font-size:17px}
+  @media(max-width:430px){ #qHint{font-size:15px;max-width:calc(100% - 120px)} }
+  @media (prefers-reduced-motion:reduce){ #qHint .qhTx{transition:none} }
   @media (prefers-reduced-motion:reduce){ textarea#q::placeholder,textarea#q::-webkit-input-placeholder{ animation:none } }
   button{font-size:15px;border:none;border-radius:12px;cursor:pointer}
   /* v1066 perceived-speed①⑤: мгновенный тап-отклик ≤50мс на ВСЁ кликабельное (GPU transform, 80мс ease-out) */
@@ -256,6 +281,12 @@
   .grade{background:#22303f;border-radius:8px;padding:2px 8px}
   .srcchk{color:#ffb74d;font-size:10px;margin-left:4px;cursor:help}
   .tr-btn{padding:6px 12px;background:var(--btn);color:#fff;font-size:13px}
+  /* #336/#548 (скрины с телефона: «стена» из 11 кнопок в один столбец на весь экран, читать хадис невозможно) —
+     на узком экране кнопки карточки компактнее, чтобы вставали по 2-3 в ряд, а не лесенкой. */
+  @media(max-width:430px){
+    #res .meta{gap:5px}
+    #res .meta .tr-btn,#res .meta .mini{padding:5px 9px;font-size:12px;max-width:100%}
+  }
   .tr-out{margin-top:8px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:calc(14px * var(--txtScale,1));display:none}
   mark{background:var(--mark);color:#241c00;border-radius:3px;padding:0 1px}
   mark.hlx{background:#ff7a18;color:#1a0a00;font-weight:700;box-shadow:inset 0 0 0 1.5px #b34d0a;border-radius:3px;padding:0 2px}  /* точное совпадение с огласовками в режиме «Огласовки» — ярче однокоренных */
@@ -363,7 +394,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1183</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1184</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -401,6 +432,7 @@
   <div class="searchbar" style="position:relative;margin-top:16px">
     <button id="recentBtn" title="🕐 Недавние запросы" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--hint);font-size:18px;cursor:pointer;padding:4px 6px;z-index:3">🕐</button>
     <textarea id="q" rows="1" placeholder="Слово, фраза или № хадиса…" autocomplete="off" enterkeyhint="search" style="padding-left:36px;border:2px solid var(--btn);box-shadow:0 0 0 3px rgba(47,123,230,.18), 0 6px 22px rgba(47,123,230,.28);resize:none;overflow-y:hidden;line-height:1.45;max-height:132px;font-family:inherit;font-size:inherit;width:100%;box-sizing:border-box"></textarea><!-- M426: расширяемое поле как в GPT (Enter=поиск, Shift+Enter=перенос) -->
+    <span id="qHint" aria-hidden="true"><span class="qhTx"></span></span><!-- #620: слой-подсказка с примерами, поверх ПУСТОГО поля -->
     <button id="qBack" title="↩ Вернуть прошлый запрос" style="display:none;position:absolute;right:128px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--hint);font-size:19px;cursor:pointer;padding:4px 7px;z-index:10">↩</button>
     <button id="qClear" title="Очистить поиск" style="display:none;position:absolute;right:94px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--hint);font-size:20px;cursor:pointer;padding:4px 8px;z-index:10">✕</button>
     <button class="go" id="goBtn" title="Искать по запросу">Найти</button>
@@ -1077,8 +1109,9 @@
 <div class="toast" id="toast"></div>
 <!-- M231: нижняя навигация — главные разделы под большим пальцем (верхние ⭐⚙️☰ переехали сюда) -->
 <nav id="botNav" style="display:none">
-  <button class="bn on" id="bnHome"><span class="bi">🔍</span><span class="bl">Поиск</span></button>
-  <button class="bn" id="bnQuran"><span class="bi">📖</span><span class="bl">Коран</span></button>
+  <!-- Слово владельца 25.07: «Коран» из панели убран (есть кнопка «Открыть Коран»), «Поиск» тоже — выходя из любого
+       раздела и так попадаешь на поиск. Возвращена «Главная», как и было. Итог: Главная · Книги · Избранное · Ещё. -->
+  <button class="bn on" id="bnHome"><span class="bi">🏠</span><span class="bl">Главная</span></button>
   <button class="bn" id="bnBooks"><span class="bi">📚</span><span class="bl">Книги</span></button>
   <button class="bn" id="bnFav"><span class="bi">⭐</span><span class="bl">Избранное</span></button>
   <button class="bn" id="bnMore"><span class="bi">☰</span><span class="bl">Ещё</span></button>
@@ -1090,7 +1123,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1183';
+const APPVER = 'v1184';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5000,10 +5033,14 @@ async function _renderScopeList(){ var box=document.getElementById('scopeListBox
   box.innerHTML='<div class="hint" style="font-size:11px;padding:6px">загружаю…</div>';
   const cat=await loadCatalog(); const mp={}; cat.forEach(b=>mp[String(b.i)]=b);
   const books=[..._scopeIds].map(id=>mp[id]).filter(Boolean);
-  let html='<div class="hint" style="font-size:11px;margin-bottom:4px">Выбрано '+_scopeIds.size+' книг — лишнюю убери «−»:</div><div style="border:1px solid var(--border);border-radius:8px;max-height:40vh;overflow:auto;background:var(--card)">';
-  books.forEach(b=>{ const ru=(_catTr.map[b.n]&&_catTr.map[b.n].ru)||'';
+  // #599 (скрин: выбрал раздел كتب السنة — список из 1241 книги занял весь экран): рисуем первые 200 строк,
+  // остальные считаем цифрой. В поиске участвуют ВСЕ выбранные — режем только показ, не область поиска.
+  const _SHOWN=200, _more=Math.max(0, books.length-_SHOWN);
+  let html='<div class="hint" style="font-size:11px;margin-bottom:4px">Выбрано '+_scopeIds.size+' книг'+(_more?(' · показаны первые '+_SHOWN):'')+' — лишнюю убери «−»:</div><div style="border:1px solid var(--border);border-radius:8px;max-height:38vh;overflow:auto;background:var(--card)">';
+  books.slice(0,_SHOWN).forEach(b=>{ const ru=(_catTr.map[b.n]&&_catTr.map[b.n].ru)||'';
     html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 9px;border-bottom:1px solid var(--border)"><span style="flex:1;min-width:0">'+(ru?('<div style="font-size:13px">📖 '+esc(ru)+'</div>'):'')+'<div style="font-size:12.5px;color:#9fb6d6;direction:rtl;text-align:right">'+esc(b.n)+'</div></span><button class="scDel" data-id="'+String(b.i)+'" style="border:1px solid #b3502e;color:#ff9b7a;background:transparent;padding:2px 11px;font-size:15px;border-radius:7px;cursor:pointer;flex:none">−</button></div>'; });
   html+='</div>';
+  if(_more) html+='<div class="hint" style="font-size:11px;margin-top:5px">…и ещё '+_more+' книг — они тоже участвуют в поиске. Чтобы выбрать точечно, открой «➕ Другие сборники».</div>';
   box.innerHTML=html;
   box.querySelectorAll('.scDel').forEach(d=>d.onclick=()=>{ _scopeIds.delete(d.dataset.id); try{_pickIds.delete(d.dataset.id);}catch(e){}
     if(!_scopeIds.size){ clearSearchScope(); } else { _scopeName='Выбранные книги ('+_scopeIds.size+')'; renderScopeChip(); var bb=document.getElementById('scopeListBox'); if(bb){ bb.style.display='block'; var sl=document.getElementById('scopeList'); if(sl) sl.textContent='📋 скрыть'; _renderScopeList(); } } });
@@ -8925,6 +8962,10 @@ function dzChainLazy(host, bid, num){
 }
 async function dzChainInto(host, bid, num){
   try{
+    // #474 (скрин: Ибн Маджа 831 — блок «Цепочка передатчиков + код цепи + другие печати» отрисован ДВАЖДЫ):
+    // на карточку цепь вешают три разных места (cardHadith, риваятная ветка, карточка по коду) — на некоторых
+    // хадисах срабатывали два. Ставим отметку на вставленный блок и второй раз не рисуем.
+    if(host && host.querySelector && host.querySelector('[data-dzchain]')) return;
     const _rec=await codifChain(bid,num);
     const naChain=(_rec&&_rec.na&&_rec.na.length)? _rec.na : null;
     const full=await dzChainFull(bid, num);
@@ -8947,7 +8988,9 @@ async function dzChainInto(host, bid, num){
       }
     }
     if(!codes || !codes.length) return;
+    if(host && host.querySelector && host.querySelector('[data-dzchain]')) return;   // #474: пока ждали данные, блок мог вставить параллельный вызов
     const box=document.createElement('div'); box.style.cssText='margin-top:8px;padding-top:7px;border-top:1px dashed var(--border)';
+    box.dataset.dzchain='1';   // #474: отметка «блок цепи уже здесь» — второй вызов увидит её и не нарисует дубль
     const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:11px;margin-bottom:4px';
     lbl.textContent=(_src==='na'||_src==='verify')?'🧬 Цепочка передатчиков (по сверке sunnah.com/Мактаба · тап — карточка):':((_src==='codif')?'🧬 Цепочка передатчиков (по базе Мактабы · тап — карточка):':'🧬 Цепочка по кодам Э1.1 (форма передачи между именами · тап — карточка):');
     box.appendChild(lbl);
@@ -14080,6 +14123,36 @@ function setupMenuRows(){
       row.addEventListener('click', e=>{ if(b.contains(e.target)||e.target===b) return; b.click(); }); }
   });
 }
+/* #620: слой-подсказка в пустом поле — показывает ПРИМЕРЫ того, что сюда можно вводить.
+   Молчит, когда поле в фокусе, в нём что-то набрано, включён спец-режим или открыто окно.
+   Три круга — и замолкает навсегда (мельтешить не должно). Родной placeholder на это время пуст,
+   иначе подсказка двоилась бы с ним. */
+try{
+  var _qh=document.getElementById('qHint'), _qi=document.getElementById('q');
+  var _qhTx=_qh&&_qh.querySelector('.qhTx');
+  if(_qh && _qi && _qhTx && !window.matchMedia('(prefers-reduced-motion:reduce)').matches){
+    var _qhBase=_qi.getAttribute('placeholder')||'';
+    var _qhSet=function(html){ _qh.classList.add('out');
+      setTimeout(function(){ _qhTx.innerHTML=html; _qh.classList.remove('out'); _qh.classList.add('pre');
+        setTimeout(function(){ _qh.classList.remove('pre'); }, 20); }, 320); };
+    var _qhList=function(){ var q=(typeof tab!=='undefined' && tab==='quran');
+      return q ? [_qhBase, 'например: 2:255', 'например: сура 18', 'например: милость']
+               : [_qhBase, 'например: терпение', 'например: бухари 333', 'например: <bdi dir="rtl">إنما الأعمال</bdi>', 'например: 87']; };
+    var _qhOn=function(on){ _qh.style.display=on?'':'none'; _qi.setAttribute('placeholder', on?'':_qhBase); };
+    var _qhI=0,_qhLap=0,_qhT=null;
+    _qhTx.textContent=_qhBase; _qhOn(true);
+    var _qhTick=function(){ try{
+        if(_qi.value || document.activeElement===_qi){ _qhOn(false); return; }
+        if(document.querySelector('.modal[style*="flex"]')) return;
+        if(_qhLap>=3){ clearInterval(_qhT); _qhTx.textContent=_qhBase; return; }
+        var arr=_qhList(); _qhI=(_qhI+1)%arr.length; if(_qhI===0) _qhLap++;
+        _qhOn(true); _qhSet(arr[_qhI]);
+      }catch(e){} };
+    _qhT=setInterval(_qhTick, 3600);
+    ['focus','input','paste'].forEach(function(ev){ _qi.addEventListener(ev, function(){ _qhOn(false); }); });
+    _qi.addEventListener('blur', function(){ setTimeout(function(){ if(!_qi.value && _qhLap<3) _qhOn(true); }, 150); });
+  }
+}catch(e){}
 /* M231-доработка: Настройки переехали из нижней панели в меню ☰ Ещё (панель отдана главным разделам) */
 try{ var _sfm=document.getElementById('setFromMenu'); if(_sfm) _sfm.onclick=function(){ var _mm=document.getElementById('menuModal'); if(_mm) _mm.style.display='none';
   var _sb=document.getElementById('setBtn'); if(_sb){ if(_sb.onclick) _sb.onclick(); else _sb.click(); } }; }catch(e){}
@@ -14210,9 +14283,6 @@ try{
     // она возвращается на исходный раздел при закрытии (совет DeepSeek: таб-бар показывает контекст, а не поверхность).
     window._bnSet=function(id){ try{ document.querySelectorAll('#botNav .bn').forEach(function(b){ b.classList.toggle('on', b.id===id); }); }catch(e){} };
     var _h=document.getElementById('bnHome'); if(_h) _h.onclick=function(){ try{hap('light');}catch(e){} _bnSet('bnHome'); _click('brand'); try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(e){} };
-    var _q2=document.getElementById('bnQuran'); if(_q2) _q2.onclick=function(){ try{hap('light');}catch(e){} _bnSet('bnQuran');
-      var _qt=document.querySelector('.tab[data-tab="quran"]'); if(_qt) _qt.click();          // сперва вкладка Аяты — там живёт читалка Корана
-      setTimeout(function(){ _click('quranReadBtn'); }, 60); };
     var _b2=document.getElementById('bnBooks'); if(_b2) _b2.onclick=function(){ try{hap('light');}catch(e){} _bnSet('bnBooks'); _click('readBtn2'); };
     var _f2=document.getElementById('bnFav'); if(_f2) _f2.onclick=function(){ try{hap('light');}catch(e){} _click('favHdr'); };
     var _m2=document.getElementById('bnMore'); if(_m2) _m2.onclick=function(){ try{hap('light');}catch(e){} _click('menuBtn'); };
