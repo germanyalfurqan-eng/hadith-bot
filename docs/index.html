@@ -426,7 +426,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1208</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1209</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1168,7 +1168,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1208';
+const APPVER = 'v1209';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2487,7 +2487,28 @@ function updateQuranHelper(){
   const v=(document.getElementById('q').value||'').trim();
   if(!v) return;
   let m;
-  // #636: многозначное число как аят Корана — подсказка в ЛЮБОМ режиме поиска (не только вкладка Аяты); клик → открыть в читалке Корана
+  // 🔴 25.07.2026 (владелец, скрин: «почему тут написано это номер Корана, если я поиск ХАДИСА сделал»):
+  // подсказка про аят по #636 показывалась в ЛЮБОМ режиме — и на вкладке «Хадисы» вводила в заблуждение:
+  // человек ищет хадис №321, а приложение спрашивает про аят. На вкладке хадисов число — это ПРЕЖДЕ ВСЕГО
+  // номер хадиса, поэтому первыми даём сборники, а вариант аята оставляем ниже, отдельной строкой.
+  if(typeof tab!=='undefined' && tab==='hadith' && (m=v.match(/^(\d{1,6})$/))){
+    const _n=m[1];
+    const _COLL=[['bukhari','Сахих аль-Бухари'],['muslim','Сахих Муслим'],['abudawud','Сунан Абу Дауда'],
+                 ['tirmidhi','Сунан ат-Тирмизи'],['nasai','Сунан ан-Насаи'],['ibnmajah','Сунан Ибн Маджа']];
+    cap.innerHTML='📚 Хадис №<b>'+esc(_n)+'</b> — в каком сборнике открыть?';
+    cap.style.display='block';
+    if(L){ L.appendChild(_sgHead('Открыть хадис №'+_n+':'));
+      _COLL.forEach(([cd,ru])=> L.appendChild(_sgItem(ru, ()=>{ try{ openReader(cd, _n); }catch(e){ _setQ(cd+' '+_n, true); } }))); }
+    // вариант «а может это аят» — только если число вообще может быть аятом, и НЕ как заголовок
+    if(R && (_n.length>=4 || +_n>114)){
+      const _ac=ayahCandidates(_n);
+      if(_ac.length){ R.appendChild(_sgHead('Или это аят Корана:'));
+        _ac.slice(0,6).forEach(c=> R.appendChild(_sgItem('Аят '+c.s+':'+c.a+' — '+SURA_NAMES[c.s-1],
+          ()=>{ try{ openQuranReader(c.s,c.a); }catch(e){ _setQ(c.s+':'+c.a,true); } }))); }
+    }
+    box.style.display='flex'; return;
+  }
+  // #636: многозначное число как аят Корана — подсказка в ЛЮБОМ режиме поиска (не только вкладка Аяты); клик → открытьв читалке Корана
   if((m=v.match(/^(\d{2,6})$/)) && (m[1].length>=4 || +m[1]>114)){
     const cands=ayahCandidates(m[1]);
     const _goA=(s,a)=>{ try{ openQuranReader(s,a); }catch(e){ _setQ(s+':'+a,true); } };
