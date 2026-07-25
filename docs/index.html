@@ -419,7 +419,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1198</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1199</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1161,7 +1161,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1198';
+const APPVER = 'v1199';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -12416,13 +12416,28 @@ function autoHighlightNarr(text, card, out, ref){
 // Эталон = цепь sunnah.com (= Мактаба): verify/<bid>_<num/500>.json {num:[[sid,имя,mid]]}. mid = id Мактабы (=наш id).
 // Сверяем: сколько передатчиков по эталону vs сколько подсветило ПРИЛОЖЕНИЕ (codif n). Расхождение (кол-во ИЛИ состав иснада) → 🚨 тревога + регистрация ошибки.
 let _verCache={}, _verCacheP={};
-async function _verifyChain(bid,num,riw){ const key=bid+'_'+Math.floor(+num/500);
+async function _verifyChain(bid,num,riw,ourIds){ const key=bid+'_'+Math.floor(+num/500);
   if(!(key in _verCache)){
     if(!_verCacheP[key]) _verCacheP[key]=fetch('./verify/'+key+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
     _verCache[key]=await _verCacheP[key];   // владелец 01.07.2026 («грузилось долго»): promise-кэш — verify/*.json грузился по 16-30 раз параллельно на каждый хадис на экране
   }
   const m=_verCache[key]; if(!m) return null;
   // v1064 (сирена-1, кейс 654): пер-буквенный эталон — риваят N Муслима сверяется со СВОЕЙ буквой (654b), не с цепью буквы a
+  // 25.07 (разбор живой ошибки A-121, Муслим №987): у одного номера несколько риваятов со СВОИМИ цепями —
+  // 987a (3 звена: Сувайд→Хафс→Зейд), 987b (4: Юнус→Ибн Вахб→Хишам→Зейд), 987c (5). Буква выбиралась по ПОРЯДКУ
+  // риваята, а карта «номер риваята → буква» местами сбита (известная беда muslim_baqi/fw). Из-за этого текст
+  // риваята «a» сверялся с эталоном «b»: приложение писало «эталон 4, опознано 5, лишний id 1558», хотя цепь верна.
+  // Если вызывающий передал НАШИ id (ourIds), выбираем букву по фактическому совпадению цепей, а не по счёту.
+  if(riw && bid==='1727' && ourIds && ourIds.length){ try{
+    const rw2=await loadMuslimRiw(); const lets2=(rw2&&rw2[String(num)])||[];
+    const mine=new Set(ourIds.map(String)); let best=null, bestHit=-1;
+    for(const L2 of lets2){ const cand=m[String(num)+L2]; if(!cand||!cand.length) continue;
+      const hit=cand.reduce((a,l)=>a+((l&&l[2]&&mine.has(String(l[2])))?1:0),0);
+      if(hit>bestHit){ bestHit=hit; best=[L2,cand]; } }
+    if(best && bestHit>0){ const _r=best[1];
+      try{ Object.defineProperty(_r,'_letter',{value:best[0],enumerable:false,configurable:true}); }catch(e){ _r._letter=best[0]; }
+      return _r; }
+  }catch(e){} }
   if(riw && bid==='1727'){ try{ const rw=await loadMuslimRiw(); const lets=rw&&rw[String(num)];
     const L=lets&&lets[riw-1]; if(L && m[String(num)+L]){ const _r=m[String(num)+L]; try{ Object.defineProperty(_r,'_letter',{value:L,enumerable:false,configurable:true}); }catch(e){ _r._letter=L; } return _r; } }catch(e){} }
   return m[String(num)]||null; }
@@ -12473,7 +12488,7 @@ async function verifyNarr(card, place, text){
       authMids=recNa.map(p=>String(p[1])); srcLbl='sunnah.com / Мактаба'; idMode=true;
       // ДИАГНОЗ ХЕРМЕСА (05.07, Бухари 554): раньше в этой ветке эталон verify/*.json НЕ открывался —
       // сверка сравнивала codif.na сам с собой (вечный зелёный). Теперь ПЕР-ID сверка с настоящим эталоном.
-      try{ const vRows=await _verifyChain(place.bid, place.num, place.riw);
+      try{ const vRows=await _verifyChain(place.bid, place.num, place.riw, (cleanPairs||[]).map(p=>p[1]).filter(Boolean));   // A-121: подсказываем НАШИ id — буква риваята подбирается по совпадению цепей
         if(vRows&&vRows.length){
           const vM=[...new Set(vRows.filter(r=>r[2]!=null&&r[2]!=='?').map(r=>String(r[2])))];   // 10.07: '?' (мост не разрешил) — НЕ эталонный id, не «не хватает» (ложный красный Муслим 565)
           const rM=new Set(authMids.map(String));
@@ -12484,7 +12499,7 @@ async function verifyNarr(card, place, text){
         }
       }catch(e){}
     } else {
-      const rows=_abbrevRiw?null:await _verifyChain(place.bid, place.num, place.riw);   // С38: сокращённый риваят — эталон основного риваята не про этот текст, идём по тексту
+      const rows=_abbrevRiw?null:await _verifyChain(place.bid, place.num, place.riw, (cleanPairs||[]).map(p=>p[1]).filter(Boolean));   // A-121: то же — не по счёту риваята, а по совпадению   // С38: сокращённый риваят — эталон основного риваята не про этот текст, идём по тексту
       if(rows&&rows.length){ auth=rows.filter(r=>r[2]); authMids=[...new Set(auth.map(r=>String(r[2])))]; srcLbl='sunnah.com / Мактаба'; idMode=true; }
       else if(cleanPairs && cleanPairs.length){
         // С38: не-5 книги с codif — цепь-схема из ТОЙ ЖЕ чистой привязки, что и подсветка (число и состав совпадают)
