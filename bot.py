@@ -6083,14 +6083,29 @@ def turath_page(book_id, pg):
         p = re.sub(r'[^0-9]', '', str(pg or '1'))[:6] or '1'
         if not bid:
             return {}
-        r = requests.get('https://api.turath.io/page', params={'book_id': bid, 'pg': p},
-                         headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://app.turath.io/'}, timeout=15)
-        if r.status_code == 200:
-            j = r.json(); meta = j.get('meta')
-            if isinstance(meta, str):
-                try: meta = json.loads(meta)
-                except Exception: meta = {}
-            return {'text': j.get('text', ''), 'meta': meta or {}, 'pg': int(p)}
+        # #582/#632/#539/#576 (скрины владельца: «Не удалось загрузить книгу — попробуй позже 🔧» на
+        # تهذيب الكمال, الجرح والتعديل, سنن ابن ماجه, اليعقوبي): раньше при любом не-200 возвращался пустой словарь,
+        # и фронт показывал одну и ту же безликую фразу — понять, ЧТО именно случилось, было невозможно.
+        # Теперь: один повтор (сеть моргнула) + осмысленная причина наружу.
+        last = None
+        for _try in (1, 2):
+            r = requests.get('https://api.turath.io/page', params={'book_id': bid, 'pg': p},
+                             headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://app.turath.io/'}, timeout=15)
+            last = r
+            if r.status_code == 200:
+                j = r.json(); meta = j.get('meta')
+                if isinstance(meta, str):
+                    try: meta = json.loads(meta)
+                    except Exception: meta = {}
+                txt = j.get('text', '')
+                if not (txt or '').strip():
+                    return {'text': '', 'meta': meta or {}, 'pg': int(p),
+                            'err': 'пустая страница %s в этой книге (возможно, лист вне диапазона)' % p}
+                return {'text': txt, 'meta': meta or {}, 'pg': int(p)}
+            if r.status_code in (404, 400):
+                return {'err': 'книга %s недоступна в библиотеке-источнике (код %s)' % (bid, r.status_code)}
+            time.sleep(0.6)
+        return {'err': 'источник ответил кодом %s' % (getattr(last, 'status_code', '?'))}
     except Exception as e:
         return {'err': str(e)}
     return {}

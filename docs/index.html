@@ -413,7 +413,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1190</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1191</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1154,7 +1154,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1190';
+const APPVER = 'v1191';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4068,6 +4068,19 @@ async function _bookLoad(){
   try{
     const j=await bjson(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+_bookView.pg+'&initData='+encodeURIComponent(INITDATA), 30000); const meta=j.meta||{};   // QA-свип: таймаут 30с (был голый fetch → белый экран при зависании /book_page)
     if(my!==window._bkSeq) return;   // QA#2: пока грузили — пользователь перелистнул дальше; этот ответ устарел, не рисуем
+    // #582/#632/#539/#576 (скрины: «Не удалось загрузить книгу — попробуй позже 🔧» без единого пояснения):
+    // сервер теперь называет ПРИЧИНУ (нет такой книги в источнике / лист вне диапазона / код ответа) — показываем её
+    // человеку и даём выходы: повторить и открыть каталог, а не тупик.
+    if(j && j.err && !(j.text||'').trim()){
+      tEl.innerHTML='<div class="stateBox err"><div class="ic">📕</div><div class="tt">Страница не открылась</div>'
+        +'<div class="hh">'+esc(String(j.err).slice(0,160))+'</div>'
+        +'<div class="bb"><button class="go" id="_bkRetry" style="font-size:12.5px;padding:7px 12px">🔄 повторить</button> '
+        +'<button class="mini" id="_bkCat" style="font-size:12.5px;padding:7px 12px;border:1px solid var(--border);border-radius:10px">📚 к списку книг</button></div></div>';
+      try{ var _rb=tEl.querySelector('#_bkRetry'); if(_rb) _rb.onclick=function(){ _bookLoad(); };
+           var _cb=tEl.querySelector('#_bkCat'); if(_cb) _cb.onclick=function(){ var mm=document.getElementById('bookModal'); if(mm) mm.style.display='none';
+             var b=document.getElementById('maktabaTopBtn'); if(b){ if(b.onclick) b.onclick(); else b.click(); } }; }catch(_e){}
+      return;
+    }
     // «как в Шамиле»: пользователь прыгает по ПЕЧАТНОЙ странице, а turath листает только по «листу» (pg).
     // Подгоняем лист так, чтобы попасть РОВНО в нужную печатную страницу (до 2 шагов авто-коррекции).
     if(_bookView.want!=null && typeof meta.page==='number' && meta.page!==_bookView.want && (_bookView.snaps||0)<2){
