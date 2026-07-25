@@ -419,7 +419,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1199</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1200</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1161,7 +1161,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1199';
+const APPVER = 'v1200';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7991,9 +7991,48 @@ function highlightNarratorsInDiv(ad, names, onClick, idMap){
     node.parentNode.replaceChild(frag, node);
   });
   // #222: عن красим как «передачу» (.tword) ТОЛЬКО когда оно реально между ДВУМЯ распознанными передатчиками (.nhl слева И справа). Иначе عن — обычный матн → снимаем синий. Безопасно: только РАЗворачиваем уже существующие .tword-обёртки عن, ничего не добавляем (подсветку имён не трогаем).
+  try{ _hlYaniKunya(ad); }catch(e){}   // #553: «فلان - يعني <имя>» — кунья это ТОТ ЖЕ равий (паритет с sunnah.com)
   try{ _twAnUnwrapStray(ad); }catch(e){}
 }
 // #222: убрать .tword с عن, у которого нет соседа-.nhl с ОБЕИХ сторон (сосед = ближайший непустой элемент/текст, пробелы и пунктуация-связки пропускаются)
+// #553 (владелец, скрин sunnah.com Абу Дауд 555: «عَنْ أَبِي سَهْلٍ، - يَعْنِي عُثْمَانَ بْنَ حَكِيمٍ у нас не выделен,
+// а я сказал — полное соответствие»). В цепи равий записан ПОЛНЫМ именем, кунья живёт только в тексте иснада, по именам
+// она не матчится и оставалась серой. Но иснад сам называет их одним лицом через «يعني» — дотягиваем кунью до соседнего
+// уже подсвеченного имени: тот же id, тот же стиль, клик открывает ту же карточку. Работаем ТОКЕНАМИ (split по пробелам),
+// чтобы огласовки не сбивали границы, и ничего не трогаем там, где связки «يعني» нет.
+function _hlYaniKunya(root){
+  try{
+    if(!root || !root.querySelectorAll) return;
+    const _pure=s=>{ try{ return canon(String(s||'')).replace(/[^ء-ي]/g,''); }catch(e){ return ''; } };
+    [...root.querySelectorAll('span.nhl')].forEach(sp=>{
+      try{
+        const prev=sp.previousSibling;
+        if(!prev || prev.nodeType!==3) return;
+        const toks=(prev.nodeValue||'').split(/(\s+)/);
+        const wi=[]; toks.forEach((t,i)=>{ if(t && !/^\s+$/.test(t)) wi.push(i); });
+        if(wi.length<3) return;
+        let k=wi.length-1;
+        if(_pure(toks[wi[k]])!=='يعني') return;              // прямо перед именем должно стоять «يعني»
+        k--;
+        while(k>=0 && !_pure(toks[wi[k]])) k--;               // проскочить «-», «،», «–»
+        if(k<1) return;
+        const iName=wi[k], iKun=wi[k-1];
+        if(!/^(?:ابو|ابي|ابا|ام|ابن|بن)$/.test(_pure(toks[iKun]))) return;   // это обязана быть КУНЬЯ
+        const before=toks.slice(0,iKun).join(''), kun=toks.slice(iKun,iName+1).join(''), after=toks.slice(iName+1).join('');
+        const frag=document.createDocumentFragment();
+        if(before) frag.appendChild(document.createTextNode(before));
+        const ks=document.createElement('span');
+        ks.className='nhl'; ks.textContent=kun;
+        ks.dataset.nm=sp.dataset.nm||''; if(sp.dataset.id) ks.dataset.id=sp.dataset.id;
+        ks.style.cssText=sp.style.cssText; ks.title=(sp.title||'')+' · كنية (через «يعني»)';
+        ks.onclick=(e)=>{ e.stopPropagation(); try{ sp.click(); }catch(_e){} };
+        frag.appendChild(ks);
+        if(after) frag.appendChild(document.createTextNode(after));
+        prev.parentNode.replaceChild(frag, prev);
+      }catch(e){}
+    });
+  }catch(e){}
+}
 function _twAnUnwrapStray(root){
   if(!root||!root.querySelectorAll) return;
   const _isAr3en=s=>{ try{ return stripDiac(String(s||'')).replace(/ـ/g,'').trim()==='عن'; }catch(e){ return false; } };
