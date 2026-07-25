@@ -426,7 +426,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1215</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1216</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1168,7 +1168,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1215';
+const APPVER = 'v1216';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5376,8 +5376,34 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
   const meta=document.createElement('div');meta.className='meta';
   const canRead = isReadable(code);   // С57 (владелец: «почему муслим-книга не нажимается»): клик в читалку разрешён всегда, noNav глушил его в цепи/конструкторе
   const _riwL = riwNo ? (' · <b style="color:#9fd3a8">риваят '+riwNo+'/'+riwTot+'</b>') : '';
+  // 🔴 25.07.2026 (владелец, скрин «سمي القرشي»: «где тут два слова найдено?» + закон З-38):
+  // проверил по данным — поиск ПРАВ. У Муслима оба слова есть ровно в одном хадисе (№544): «سمي» на позиции
+  // 379, «القرشي» на позиции 887, то есть в РАЗНЫХ РИВАЯТАХ одного номера. Карточка показывает риваят 1,
+  // где второго слова нет, — и это читается как «поиск выдал не то». Правило З-38 не нарушено, обманывает ПОКАЗ.
+  // Поэтому прямо говорим, какое слово нашлось в другом риваяте — человек видит, что его запрос выполнен целиком.
+  let _riwNote = '';
+  try{
+    if(riwNo && riwTot > 1 && typeof groups !== 'undefined' && groups && groups.length){
+      const _full = canon(String(h.text || h.ar || ''));
+      const _here = canon(String(text || ''));
+      const _elsewhere = [];
+      (groups[0] || []).forEach(function(tm){
+        if(!tm || tm.neg || !tm.t) return;
+        const c = canon(tm.t);
+        if(c && _here.indexOf(c) < 0 && _full.indexOf(c) >= 0) _elsewhere.push(tm.t);
+      });
+      if(_elsewhere.length){
+        _riwNote = '<div style="margin-top:3px;font-size:11.5px;color:#e0c07a;line-height:1.45">'
+          + '🔎 В этом риваяте нет ' + (_elsewhere.length > 1 ? 'слов' : 'слова') + ' '
+          + _elsewhere.map(function(x){ return '<b dir="rtl">' + esc(x) + '</b>'; }).join(', ')
+          + ' — ' + (_elsewhere.length > 1 ? 'они найдены' : 'оно найдено')
+          + ' в другом риваяте этого же хадиса. Запрос выполнен целиком, просто слова стоят в разных риваятах.</div>';
+      }
+    }
+  }catch(e){}
   meta.innerHTML='<span class="src'+(canRead?' srcnav':'')+'"'+(canRead?' title="Открыть в читалке на этом хадисе">📖 ':'>')+vocOf(code)+' · №'+h.num+'</span>'+_riwL;   // #37: название С ОГЛАСОВКАМИ
   meta.innerHTML+=authBadge(code, h.grade, (h.num||h.n));
+  if(_riwNote) meta.innerHTML += _riwNote;
   { const _rl=_ruSrcLine(code); if(_rl) meta.innerHTML+='<span class="srcru" style="display:block;width:100%;font-size:11.5px;color:var(--hint);margin-top:1px;direction:ltr;text-align:left">'+esc(_rl)+'</span>'; }   // #37: рус. название + автор
   try{ ourHukmBadge(code, (h.num||h.n), meta, card); }catch(e){}
   try{ razboryBadge(code, (h.num||h.n), meta, card); }catch(e){}   // обратная связь: «📿 наш разбор» если хадис разбирали на канале
