@@ -4165,6 +4165,49 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         has_media = update.message.audio or update.message.voice or update.message.video or update.message.photo or update.message.document
         is_forward = update.message.forward_origin is not None
 
+        # ============ ПРАВКА СВОИХ ПОСТОВ В КАНАЛЕ (владелец 26.07.2026) ============
+        # «Обеспечь, чтобы бот умел исправлять любое своё смс, тем более в канале!!!»
+        # Команда владельца: «почини анонс v1228» — бот берёт номер сообщения из журнала
+        # (app_post_msgids), прогоняет ноту через чистилку и переписывает пост.
+        # «почини анонсы» без версии — чинит ВСЕ посты, номера которых знает.
+        try:
+            _т = (text or '').strip().lower()
+            if _т.startswith('почини анонс') and _claude_bridge_owner(update):
+                _j = _data_get("journal.json", {}) or {}
+                _мид = _j.get('app_post_msgids') or {}
+                try:
+                    _rq = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_notes_queue.json",
+                                       headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=10)
+                    _оч = json.loads(base64.b64decode(_rq.json().get("content", "")).decode("utf-8") or "[]") if _rq.status_code == 200 else []
+                except Exception:
+                    _оч = []
+                _ноты = {n.get('id'): n.get('note') for n in _оч if isinstance(n, dict) and n.get('id')}
+                _цель = _т.replace('почини анонсы', '').replace('почини анонс', '').strip()
+                _список = [_цель] if _цель else list(_мид)
+                if not _мид:
+                    await update.message.reply_text(
+                        "Номеров постов пока нет: их начали запоминать только сейчас. "
+                        "Старые посты правятся так — перешлите мне пост из канала, я перепишу его по номеру из пересылки.")
+                    return
+                _ок, _мимо = [], []
+                for _в in _список:
+                    _m = _мид.get(_в); _n = _ноты.get(_в)
+                    if not _m or not _n:
+                        _мимо.append(_в); continue
+                    try:
+                        _photo, _body = _format_channel_post(_clean_announce(_n))
+                        await context.bot.edit_message_text(chat_id=APP_CHANNEL_ID, message_id=_m,
+                                                            text=_body, parse_mode="HTML",
+                                                            disable_web_page_preview=True)
+                        _ок.append(_в)
+                    except Exception as e:
+                        _мимо.append('%s (%s)' % (_в, str(e)[:40]))
+                _хвост = (' · не вышло: ' + ', '.join(_мимо)) if _мимо else ''
+                await update.message.reply_text("✅ Переписано: %s%s" % (', '.join(_ок) or '—', _хвост))
+                return
+        except Exception:
+            pass
+
         # ============ ID ПЕРЕСЛАННОГО ЧАТА (владелец 26.07.2026) ============
         # Крупные бэкапы владелец просил слать в чат «Архив облачный», а id этого чата взять неоткуда:
         # бот сидит на вебхуке, getUpdates пуст, в журнал заявок id не попадает. Плюс пересланные
@@ -4174,7 +4217,25 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             _fo = getattr(update.message, 'forward_origin', None)
             _fc = getattr(_fo, 'chat', None) or getattr(update.message, 'forward_from_chat', None)
+            _fmid = getattr(_fo, 'message_id', None) or getattr(update.message, 'forward_from_message_id', None)
             if _fc is not None and _claude_bridge_owner(update):
+                # ПРАВКА АНОНСА В КАНАЛЕ (владелец 26.07.2026, срочно).
+                # В @muslimoonapp ушли ноты с ЛИЧНОЙ РЕЧЬЮ владельца в кавычках и внутренней кухней
+                # (Railway, ключи, id чатов, бэкапы). Публичный канал — для читателей приложения.
+                # Номера отправленных сообщений мы не сохраняли, а Telegram не даёт читать историю
+                # канала — значит id взять неоткуда. Кроме одного пути: владелец ПЕРЕСЫЛАЕТ пост,
+                # и в пересылке приходит message_id. По нему и правим.
+                _ch = str(APP_CHANNEL_ID or '')
+                if _fmid and _ch and str(_fc.id) == _ch:
+                    исходный = (update.message.text or update.message.caption or '')
+                    чистый = _clean_announce(исходный)
+                    try:
+                        await context.bot.edit_message_text(chat_id=_fc.id, message_id=_fmid, text=чистый)
+                        await update.message.reply_text("✅ Пост в канале переписан — личные цитаты и рабочая кухня убраны.")
+                    except Exception as e:
+                        await update.message.reply_text("Не смог переписать: %s\n\nВот чистый текст, вставьте вручную:\n\n%s"
+                                                        % (str(e)[:90], чистый))
+                    return
                 await update.message.reply_text(
                     "🆔 Переслано из: %s\nid: `%s`\nтип: %s"
                     % (getattr(_fc, 'title', '?'), _fc.id, getattr(_fc, 'type', '?')),
@@ -5180,6 +5241,41 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # В приложении поиск идёт в браузере: там векторы книги лежат рядом. Боту их взять неоткуда,
 # поэтому он тянет те же файлы с GitHub Pages ОДИН РАЗ и держит в памяти (19 МБ векторов + метаданные).
 # Модель вектора вопроса — та же bge-m3: векторы разных моделей несопоставимы.
+def _clean_announce(текст):
+    """Чистит анонс перед публикацией: убирает личную речь владельца и рабочую кухню.
+
+    Владелец 26.07.2026, дважды и в гневе: «ты в канал много личной кухни слил, ты что совсем
+    голову потерял? Немедленно исправь и убери мои цитаты личные». Он прав: в @muslimoonapp ушли
+    ноты, где ЦИТИРОВАЛАСЬ его личная речь в кавычках, и упоминались Railway, ключи, id чатов,
+    бэкапы. Публичный канал — для читателей приложения: там место тому, что изменилось для НИХ,
+    а не нашей переписке и не устройству серверов.
+
+    Правило простое: строку выкидываем, если в ней есть речь владельца или внутренняя кухня.
+    Заголовок версии и то, что понятно читателю, остаётся. Это ворота ДО публикации — чтобы
+    впредь такое не проходило само, а не только чинилось задним числом.
+    """
+    ЛИЧНОЕ = ('владелец', 'заявка владельца', 'указ владельца', 'сэр', 'он прав', 'выговор')
+    КУХНЯ = ('railway', 'cloudflare', 'api-ключ', 'api ключ', 'ключ ', 'токен', 'env',
+             'id чата', 'бэкап', 'github', 'commit', 'коммит', 'деплой', 'quota', 'квота',
+             'архив облачный', 'скрипт', 'локалк', 'ollama', 'кэш telegram')
+    строки = []
+    for стр in str(текст or '').split('\n'):
+        н = стр.lower()
+        # цитата в «ёлочках» длиннее короткой фразы — это чужая прямая речь, ей в канале не место
+        if '«' in стр and '»' in стр:
+            вн = стр[стр.find('«') + 1:стр.rfind('»')]
+            if len(вн) > 25:
+                continue
+        if any(с in н for с in ЛИЧНОЕ):
+            continue
+        if any(с in н for с in КУХНЯ):
+            continue
+        строки.append(стр)
+    из = '\n'.join(строки).strip()
+    из = re.sub(r'\n{3,}', '\n\n', из)
+    return из or 'Обновление приложения.'
+
+
 def _cf_creds():
     """Токен и аккаунт Cloudflare из окружения — ЛЮБЫМ регистром и любым из принятых имён.
 
@@ -8257,19 +8353,39 @@ def _format_channel_post(note):
 
 async def _post_app_channel(bot, note):
     """Единый постер в @muslimoonapp: скрин (если есть) + анонс + сворачиваемая инструкция. Фолбэк — текстом, чтобы пост не потерялся."""
+    # ВОРОТА ЧИСТОТЫ (владелец 26.07.2026): через эту функцию идёт ВСЁ, что попадает в канал —
+    # и очередь, и ручной «анонс». Значит одна проверка здесь закрывает все пути разом.
+    # Личная речь владельца и рабочая кухня (ключи, Railway, бэкапы) наружу не выходят.
+    note = _clean_announce(note)
     photo, body = _format_channel_post(note)
+    # ЗАПОМИНАЕМ НОМЕР ПОСТА (владелец 26.07.2026: «обеспечь, чтобы бот умел исправлять любое своё
+    # смс, тем более в канале!!!»). Раньше номера не сохранялись — и когда в канал ушли ноты с личной
+    # речью владельца, править было НЕЧЕГО: Telegram не даёт боту читать историю канала, а без
+    # message_id ни отредактировать, ни удалить нельзя. Теперь каждый пост записывается в журнал,
+    # и бот правит свои сообщения сам, без пересылок и без ручной работы владельца.
+    _отпр = None
     try:
         if photo:
             if len(body) <= 1024:
-                await bot.send_photo(APP_CHANNEL_ID, photo=photo, caption=body, parse_mode="HTML")
+                _отпр = await bot.send_photo(APP_CHANNEL_ID, photo=photo, caption=body, parse_mode="HTML")
             else:
                 await bot.send_photo(APP_CHANNEL_ID, photo=photo, parse_mode="HTML")
-                await bot.send_message(APP_CHANNEL_ID, body, parse_mode="HTML", disable_web_page_preview=True)
+                _отпр = await bot.send_message(APP_CHANNEL_ID, body, parse_mode="HTML", disable_web_page_preview=True)
         else:
-            await bot.send_message(APP_CHANNEL_ID, body, parse_mode="HTML", disable_web_page_preview=True)
+            _отпр = await bot.send_message(APP_CHANNEL_ID, body, parse_mode="HTML", disable_web_page_preview=True)
     except Exception:
         # фото 404 / HTML не прошёл — отправляем тело текстом (HTML), пост обязан выйти
-        await bot.send_message(APP_CHANNEL_ID, body, parse_mode="HTML", disable_web_page_preview=True)
+        _отпр = await bot.send_message(APP_CHANNEL_ID, body, parse_mode="HTML", disable_web_page_preview=True)
+    try:
+        if _отпр is not None:
+            вер = (str(note or '').strip().split()[0] or '?')[:12]
+            _мид = _отпр.message_id
+            def _зап(o):
+                o.setdefault('app_post_msgids', {})[вер] = _мид
+                return o
+            _data_atomic_mutate("journal.json", _зап, "app_post_msgids: запомнили номер поста " + вер)
+    except Exception:
+        pass
 
 async def _app_channel_watcher(application):
     """Фон: раз в 5 мин публикует новую update_note.txt в @muslimoonapp (см. _setup)."""
