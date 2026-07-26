@@ -4165,6 +4165,24 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         has_media = update.message.audio or update.message.voice or update.message.video or update.message.photo or update.message.document
         is_forward = update.message.forward_origin is not None
 
+        # ============ ID ПЕРЕСЛАННОГО ЧАТА (владелец 26.07.2026) ============
+        # Крупные бэкапы владелец просил слать в чат «Архив облачный», а id этого чата взять неоткуда:
+        # бот сидит на вебхуке, getUpdates пуст, в журнал заявок id не попадает. Плюс пересланные
+        # сообщения бот НАРОЧНО пропускает (_ai_loop_guard: иначе он отвечал сам себе и жёг ключ).
+        # Теперь: владелец пересылает боту любое сообщение из нужного чата — бот называет id.
+        # Только владельцу и только по пересылке: постороннего это не касается.
+        try:
+            _fo = getattr(update.message, 'forward_origin', None)
+            _fc = getattr(_fo, 'chat', None) or getattr(update.message, 'forward_from_chat', None)
+            if _fc is not None and _claude_bridge_owner(update):
+                await update.message.reply_text(
+                    "🆔 Переслано из: %s\nid: `%s`\nтип: %s"
+                    % (getattr(_fc, 'title', '?'), _fc.id, getattr(_fc, 'type', '?')),
+                    parse_mode="Markdown")
+                return
+        except Exception:
+            pass
+
         # ============ НИШТЯЧОК (владелец 03.07.2026, С52): вытащить пользу из текста/видео/ссылки/аудио и оформить пост ============
         if await _nisht_dispatch(update, context):
             return
