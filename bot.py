@@ -3213,7 +3213,16 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     _ж = await update.message.reply_text('🧠 Ищу по смыслу%s…' % (' в Сахих аль-Бухари' if _только_бухари else ''))
                 except Exception:
                     _ж = None
-                _нашли, _беда = await loop.run_in_executor(None, _rag_find_sync, _вопрос, 5)
+                # 27.07.2026: здесь стояло `loop.run_in_executor`, но `loop` живёт ВНУТРИ _api_serve —
+                # в обработчике чата его нет, и на этой строке вылетал NameError. Снаружи это выглядело
+                # ровно как прошлая беда с math.sqrt: бот пишет «Ищу по смыслу…» и молчит, потому что
+                # исключение до пользователя не доходит. Берём текущий цикл так же, как в /api/rag_find,
+                # и оборачиваем: если снова что-то отвалится — владелец увидит причину, а не тишину.
+                try:
+                    _нашли, _беда = await asyncio.get_event_loop().run_in_executor(
+                        None, _rag_find_sync, _вопрос, 5)
+                except Exception as _e:
+                    _нашли, _беда = None, '%s: %s' % (type(_e).__name__, str(_e)[:160])
                 if not _нашли:
                     _т = '🧠 Не нашёл: %s' % (_беда or 'ничего похожего по смыслу')
                 else:
