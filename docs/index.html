@@ -426,7 +426,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1223</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1224</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -819,7 +819,7 @@
 <li><b>🧠 По смыслу (ИИ)</b> — опишите смысл своими словами по-русски или по-английски, ИИ сам подберёт арабские фразы и найдёт хадисы и аяты. Текст всегда выдаётся из реальной базы.</li>
 <li><b>👤 Передатчик</b> — имя равия по-арабски или по-русски (Суфьян ас-Саури). Живые подсказки из базы 18 989 передатчиков, выбор ведёт в карточку с оценками учёных.</li>
 <li><b>⛓ Цепь</b> — выберите 2 и более передатчиков: найдутся хадисы, где они стоят в одном иснаде (вместе, рядом или строго по порядку).</li>
-<li><b>🧠 Ядро (RAG)</b> — запрос уходит на наш сервер знаний (41 первоисточник + риджаль). Удобно для тем, заданных по-русски.</li>
+<li><b>🧠 RAG</b> — спросите тему своими словами: найдёт ВСЕ места, где об этом говорится (хадисы, главы, слова автора), по смыслу, а не по буквам. Всё из нашей базы, у каждого ответа номер и ссылка. Знак «?» внутри кнопки — что это и какие книги готовы.</li>
 </ul>
 <p style="margin:4px 0 8px;font-size:14px;line-height:1.6">Под кнопкой <b>⚙️ ещё ▾</b> прячутся ещё три:</p>
 <ul style="margin:4px 0 8px;padding-inline-start:18px;font-size:14px;line-height:1.6">
@@ -1194,7 +1194,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1223';
+const APPVER = 'v1224';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -1246,7 +1246,12 @@ const COLLECTIONS = [
   {code:'ibnmajah',ru:'Ибн Маджа',ar:'ابن ماجه'},
   {code:'nasai',ru:'Насаи',ar:'النسائي'},
   {code:'malik',ru:'Малик',ar:'مالك'},
-  {code:'ahmad',ru:'Ахмад',ar:'أحمد'},
+  // Владелец 26.07.2026: «почему постоянно это Ахмад загружает? Обеспечь, чтобы не было лишних долгих
+  // загрузок». Причина найдена: код уже фильтровал сборники по признаку `heavy` («тяжёлый» — не тянуть
+  // без нужды), НО сам признак нигде не был проставлен. `C.heavy` всегда выходил undefined, фильтр
+  // пропускал всё, и Муснад Ахмада (25 МБ) тянулся при каждом обычном поиске, даже когда не нужен.
+  // Помечаем его тяжёлым: теперь грузится только если выбран в сборниках явно либо ищут по его номеру.
+  {code:'ahmad',ru:'Ахмад',ar:'أحمد',heavy:true},
 ];
 // #243: английские названия сборников (разборы иногда пишут «Muslim 2026») → код + русское имя
 const _COLL_EN={bukhari:['Bukhari','al-Bukhari','Sahih al-Bukhari'],muslim:['Muslim','Sahih Muslim'],abudawud:['Abu Dawud','Abu Dawood','Sunan Abu Dawud'],tirmidhi:['Tirmidhi','al-Tirmidhi','Tirmidthi'],nasai:["Nasa'i",'Nasai','al-Nasai','an-Nasai'],ibnmajah:['Ibn Majah','Ibn Maja'],malik:['Malik','Muwatta'],ahmad:['Ahmad','Musnad Ahmad']};
@@ -2834,8 +2839,8 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.datas
   if(m==='rag'){ const inp=document.getElementById('q');   // 🧠 #59-RAG: поиск по ядру (HF Space через бэкенд /api/rag)
     if(modes.rag){ ['ai','narr','chain','any'].forEach(x=>{ if(modes[x]){ modes[x]=false; const c=document.querySelector('.chip[data-mode="'+x+'"]'); if(c) c.classList.remove('on'); } });
       try{ narrBoxShow(false); chainRender(); hideNarrSugg(); anyBoxShow(false); }catch(e){}
-      inp.placeholder=t('🧠 Ядро: тема по-русски или арабская фраза (напр. «музыка», الخمر)…','🧠 Core: a topic in your language or an Arabic phrase (e.g. "music", الخمر)…');
-      if(inp.value.trim()) runSearch(true); else toast('🧠 Режим «Ядро»: спрошу наш сервер знаний — текст только из реальной базы');
+      inp.placeholder=t('🧠 RAG: спроси тему своими словами (напр. «как относиться к соседу»)…','🧠 RAG: ask a topic in your own words (e.g. "how to treat a neighbour")…');
+      if(inp.value.trim()) runSearch(true); else toast('🧠 RAG: спроси тему своими словами — покажу все места из нашей базы');
     } else { modes.rag=false; const rc=document.querySelector('.chip[data-mode="rag"]'); if(rc) rc.classList.remove('on');   // v1069: повторный тап гарантированно СНИМАЕТ режим
       inp.placeholder=(tab==='hadith'?t('Слова, фраза или № хадиса…','Word, phrase or hadith #…'):t('Слова, фраза или № (2:255)…','Word, phrase or 2:255…')); }
     return; }
@@ -8765,9 +8770,9 @@ async function ragSearch(qRaw, seq, shownQ){
 async function _ragSearchOld(qRaw, seq, shownQ){
   const res=document.getElementById('res'); res.innerHTML='';
   const head=document.createElement('div'); head.className='hint'; head.style.cssText='color:#cdb8ff;font-size:13px;margin:0 0 8px';
-  head.textContent='🧠 Спрашиваю ядро (первоисточники + риджаль)…';
+  head.textContent='🧠 RAG: ищу по смыслу…';
   res.appendChild(head);
-  if(!BACKEND_URL){ head.textContent='🧠 Ядро недоступно (нет соединения с сервером) или ничего не найдено.'; return; }
+  if(!BACKEND_URL){ head.textContent='🧠 RAG недоступен: нет связи с сервером.'; return; }
   let j=null;
   try{
     const ctl=('AbortController' in window)?new AbortController():null;
