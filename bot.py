@@ -7379,7 +7379,15 @@ async def _api_serve(application=None):
             j = resp.json()
             v = ((j.get('result') or {}).get('data') or [None])[0]
             if not v:
-                return _cors(web.json_response({'v': None, 'error': 'empty'}))
+                # Голое «empty» ничего не объясняет: за ним прячется и выбитая квота (429), и просроченный
+                # ключ, и опечатка в имени модели. 26.07.2026 полдня ушло на гадание — поэтому отдаём
+                # то, что реально сказал Cloudflare: код ответа и его текст ошибки. Ключ наружу не идёт.
+                беды = j.get('errors') or []
+                текст = '; '.join(str(b.get('message') or b)[:90] for b in беды[:2]) if беды else ''
+                return _cors(web.json_response({
+                    'v': None, 'error': 'empty', 'код': resp.status_code,
+                    'причина': текст or (str(j)[:160] if j else 'ответ пуст'),
+                    'квота_выбита': resp.status_code == 429 or 'limit' in текст.lower()}))
             return _cors(web.json_response({'v': [round(float(x), 5) for x in v], 'model': 'bge-m3'}))
         except Exception as e:
             return _cors(web.json_response({'v': None, 'error': str(e)[:120]}))
