@@ -3199,13 +3199,18 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # была написана, но НИКЕМ НЕ ВЫЗЫВАЛАСЬ — команда «раг» уходила в HuggingFace Space,
             # то есть в чужую систему мимо нашей книги. Подключаем: «бухари <вопрос>» ищет ПО СМЫСЛУ
             # в нашей базе, а прежний путь остаётся для остальных сборников.
-            if _low.startswith(('бухари ', 'раг бухари ', 'rag бухари ')):
-                _вопрос = re.sub(r'^(раг\s+|rag\s+)?бухари\s+', '', text, flags=re.I).strip()
+            # Владелец 26.07.2026 поправил: «не бухари, а РАГ вызывает раг, а РАГ БУХАРИ ограничивает
+            # в Бухари». То есть «раг <вопрос>» — поиск по смыслу по всей нашей базе, а приписка
+            # «бухари» сужает до этой книги. Пока размечен один Бухари, поэтому оба пути ведут к нему;
+            # когда добавятся остальные сборники, «раг» станет искать по всем, а «раг бухари» — только тут.
+            if _low.startswith(('раг ', 'rag ')) and not _low.startswith(('раг диаг', 'раг debug', 'раг тест')):
+                _вопрос = re.sub(r'^(раг|rag)\s+(бухари\s+)?', '', text, flags=re.I).strip()
+                _только_бухари = bool(re.match(r'^(раг|rag)\s+бухари\s+', text, flags=re.I))
                 if len(_вопрос) < 3:
-                    await update.message.reply_text('Напиши вопрос: «бухари можно ли пить стоя»')
+                    await update.message.reply_text('Напиши вопрос: «раг можно ли пить стоя» или «раг бухари ...» — только по этой книге')
                     return
                 try:
-                    _ж = await update.message.reply_text('🧠 Ищу по смыслу в Сахих аль-Бухари…')
+                    _ж = await update.message.reply_text('🧠 Ищу по смыслу%s…' % (' в Сахих аль-Бухари' if _только_бухари else ''))
                 except Exception:
                     _ж = None
                 _нашли, _беда = await loop.run_in_executor(None, _rag_find_sync, _вопрос, 5)
@@ -8470,6 +8475,24 @@ async def _app_channel_watcher(application):
     while True:
         try:
             await asyncio.sleep(300)
+            # РАЗОВОЕ ОБЪЯВЛЕНИЕ В @jamaat_ru (владелец 26.07.2026: «если работает сейчас,
+            # объявление вышли, обрадуй»). Тот же приём, что с манифестом: маркер-файл в репо,
+            # бот шлёт один раз и запоминает метку — повторов не будет.
+            try:
+                rj = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/jamaat_note.txt",
+                                  headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
+                if rj.status_code == 200:
+                    _текст = base64.b64decode(rj.json().get("content", "")).decode("utf-8").strip()
+                    _jj = _journal_load()
+                    _метка = _текст[:40]
+                    if _текст and _метка != (_jj.get("jamaat_note") or {}).get("flag", ""):
+                        await application.bot.send_message(JAMAAT_RU_CHAT_ID, _текст,
+                                                           parse_mode="HTML", disable_web_page_preview=True)
+                        _jj["jamaat_note"] = {"flag": _метка, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+                        _journal_save("объявление о RAG → @jamaat_ru")
+            except Exception:
+                pass
+
             # M373: разовая отправка МАНИФЕСТА (PDF) в канал — по маркеру manifest_flag.txt в корне репо
             try:
                 rf = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/manifest_flag.txt",
