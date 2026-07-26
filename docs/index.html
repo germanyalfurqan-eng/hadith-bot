@@ -227,7 +227,15 @@
   #res .status,#corrBanner,#res .arSugBox,#res .hint{ animation:resIn .3s ease-out both }
   #scopeBar>div{ animation:anchIn .26s ease-out both }
   .modal .panel{ animation:mIn .18s cubic-bezier(.22,.61,.36,1) }   /* окна открываются мягко, а не «моргают» */
-  @media (prefers-reduced-motion:reduce){ #res .card,#res .status,#corrBanner,#res .hint,.modal .panel,#scopeBar>div{ animation:none!important } }
+  /* ДОРИСОВКА БЕЗ РЫВКОВ (владелец 26.07.2026: «когда в приложении что-то добирается, анимации нету
+     во многих моментах, а надо чтобы везде, прям чтобы профессионально выглядело, а не дёргалось»).
+     Карточка строится в несколько заходов: сперва текст хадиса, потом цепь, потом блок сверки,
+     потом оценки — каждый догоняющий блок раньше ВСКАКИВАЛ на место. Один класс на всех: любой
+     блок, дорисованный позже, мягко проявляется и подъезжает снизу. Навешивается наблюдателем,
+     поэтому работает во ВСЕХ местах разом, без правки каждого вызова. */
+  @keyframes lateIn{ from{ opacity:0; transform:translateY(7px) } to{ opacity:1; transform:none } }
+  .lateIn{ animation:lateIn .26s cubic-bezier(.22,.61,.36,1) both }
+  @media (prefers-reduced-motion:reduce){ #res .card,#res .status,#corrBanner,#res .hint,.modal .panel,#scopeBar>div,.lateIn{ animation:none!important } }
   @media (prefers-reduced-motion:reduce){ textarea#q::placeholder,textarea#q::-webkit-input-placeholder{ animation:none } }
   button{font-size:15px;border:none;border-radius:12px;cursor:pointer}
   /* v1066 perceived-speed①⑤: мгновенный тап-отклик ≤50мс на ВСЁ кликабельное (GPU transform, 80мс ease-out) */
@@ -426,7 +434,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1231</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1232</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1194,7 +1202,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1231';
+const APPVER = 'v1232';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -14834,8 +14842,70 @@ function setStatus(t){ const el=document.getElementById('status'); if(!el) retur
 let toastT; function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('show');
   clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2800);}
 
+/* ===== ПЛАВНАЯ ДОРИСОВКА ВЕЗДЕ (заявка владельца 26.07.2026) =====
+   «Когда в приложении что-то добирается, анимации нету во многих моментах, а надо чтобы
+   анимация была везде, прям чтобы профессионально выглядело, а не дёргалось что-то».
+
+   Карточка хадиса строится в НЕСКОЛЬКО заходов: сперва текст, потом цепь передатчиков, потом
+   блок сверки с эталоном, потом оценки учёных — каждая часть приходит своим запросом. Раньше
+   догоняющий блок ВСКАКИВАЛ на место рывком: это и есть то «дёрганье», о котором речь.
+
+   Почему наблюдатель, а не правка каждого места: таких дорисовок в приложении десятки, и новые
+   будут появляться. Один наблюдатель покрывает все разом и не забудет ни одной — правка по местам
+   неизбежно оставила бы дыры (и оставляла: анимация была лишь у части блоков).
+
+   Что НЕ анимируем, чтобы не устроить мельтешение:
+   · первую отрисовку (в первые 700 мс после запроса — там свои анимации карточек);
+   · мелочь ниже 24 px (значки, бейджи, строчки — они и так не прыгают);
+   · то, что уже анимировано своим классом;
+   · при системной настройке «меньше движения» — вовсе ничего (CSS это уважает). */
+(function(){
+  let _тихо = true, _тихоT = null;
+  window._lateQuiet = function(мс){          // после запроса ненадолго молчим: идёт первая отрисовка
+    _тихо = true; clearTimeout(_тихоT);
+    _тихоT = setTimeout(()=>{ _тихо = false; }, мс || 700);
+  };
+  function навесить(эл){
+    try{
+      if(!(эл instanceof Element)) return;
+      if(эл.classList.contains('lateIn') || эл.dataset.lateSkip) return;
+      const st = getComputedStyle(эл);
+      if(st.animationName && st.animationName !== 'none') return;   // своя анимация уже есть
+      if(эл.offsetHeight < 24) return;                              // мелочь не трогаем
+      эл.classList.add('lateIn');
+      эл.addEventListener('animationend', ()=>эл.classList.remove('lateIn'), {once:true});
+    }catch(e){}
+  }
+  function пуск(){
+    const цель = document.getElementById('res');
+    if(!цель) return;
+    const наб = new MutationObserver(муты=>{
+      if(_тихо) return;
+      for(const м of муты){
+        for(const у of м.addedNodes){
+          if(у.nodeType === 1) навесить(у);
+        }
+      }
+    });
+    наб.observe(цель, {childList:true, subtree:true});
+    // окна (карточка равия, тахридж, цепь) живут вне #res — их тоже ведём
+    const наб2 = new MutationObserver(муты=>{
+      if(_тихо) return;
+      for(const м of муты){
+        for(const у of м.addedNodes){
+          if(у.nodeType === 1 && у.closest && у.closest('.modal')) навесить(у);
+        }
+      }
+    });
+    наб2.observe(document.body, {childList:true, subtree:true});
+    setTimeout(()=>{ _тихо = false; }, 1500);
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', пуск);
+  else пуск();
+})();
+
 /* ===================== СТАРТ ===================== */
-document.getElementById('goBtn').onclick=()=>{ hap('medium');
+document.getElementById('goBtn').onclick=()=>{ hap('medium'); try{ _lateQuiet(700); }catch(e){}
   if(typeof modes!=='undefined'&&modes.chain){ if(_chainSel.length>=2) chainRun(); else toast('⛓ Выбери минимум двух передатчиков из подсказок'); return; }   // R45: одна кнопка на режим Цепь
   try{collapseBookSugg();}catch(e){} try{ var _qi=document.getElementById('q'); if(_qi){ _qi.style.height='auto'; _qi.style.overflowY='hidden'; } }catch(e){}   // #198: после запуска поиска схлопнуть авторост textarea обратно в компактную форму
   Promise.resolve(runSearch(true)).then(()=>{ try{ hap((_results&&_results.length)?'ok':'err'); }catch(e){} }); };   // «Найти» → авто-свернуть подсказки книг
