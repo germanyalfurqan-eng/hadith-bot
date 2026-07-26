@@ -434,7 +434,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1237</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1238</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1202,11 +1202,19 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1237';
+const APPVER = 'v1238';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
-function modalTop(el){ try{ _zTop+=2; el.style.zIndex=String(_zTop); }catch(e){} }   // единый источник версии (бейдж у имени + подзаголовок)
+function modalTop(el){ try{
+  // #651 «опять окно за окном»: раньше modalTop только поднимал z-index — старое окно оставалось
+  // видимым под новым. Теперь это единая точка входа: перед подъёмом гасим все прочие открытые
+  // окна. Правится ЗДЕСЬ, а не в 39 местах вызова — один заслон на все модалки сразу.
+  // Окно, которому вложенность разрешена намеренно, помечается data-stack="1" и не гасится.
+  Array.prototype.forEach.call(document.querySelectorAll('.modal'), function(m){
+    if(m!==el && m.style.display!=='none' && m.style.display!=='' && !m.hasAttribute('data-stack')) m.style.display='none';
+  });
+  _zTop+=2; el.style.zIndex=String(_zTop); }catch(e){} }   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -3393,6 +3401,7 @@ async function runSearch(explicit){
   const strict=_strictSearch; _strictSearch=false;   // M173: захватываем флаг строгого режима на этот запуск
   try{ const _cb=document.getElementById('corrBanner'); if(_cb) _cb.remove(); }catch(e){}   // 05.07: баннер коррекции живёт вне #res — чистим при новом поиске
   const seq=++_seq; groupSrc=false; uniqMode=false; relMode=false; _lastQueryTerms=[];   // новый поиск — сброс режимов вывода
+  try{   // ⬇ #665/#669: тело поиска в try — гашение индикатора теперь в finally внизу (единственная точка выхода)
   _arabusOn=false;   // M-fix: новый поиск → Arabus сброшен в ВЫКЛ (по умолчанию выключен)
   let q=document.getElementById('q').value.trim(); const shown=q;
   if(!q){ toast('Введите запрос'); return; }
@@ -3744,6 +3753,14 @@ async function runSearch(explicit){
   // Поиск по ВСЕЙ библиотеке: наши книги выше (если нашлись), ниже — остальной корпус (sunnah.one). Только при явном «Найти»/Enter.
   if(_scopeIds && _scopeIds.size && explicit && shown && tab==='hadith'){ await appendMaktaba(seq, wideQ||shown); }   // 🎯 поиск в выбранных книгах (риджаль-149 и т.п.)
   else if(wideWill) await appendMaktaba(seq, wideQ);
+  }finally{
+    // #665 «подвисает поиск» + #669 «крутится, хотя написано не нашёл»: у runSearch десятки ранних
+    // return (режимы narr/any/rag/chain, поиск по номеру, поиск в выбранных книгах) — на каждом из них
+    // кнопка оставалась заблокированной, а скелет висел. Гасим ОДИН раз здесь: сюда приходит любой
+    // выход, включая исключение. Условие seq===_seq — от гонки: если владелец уже начал НОВЫЙ поиск,
+    // индикатор принадлежит ему, и гасить его устаревшим запуском нельзя.
+    if(seq===_seq){ try{ _goBusy(false); _skelOff(); }catch(e){} }
+  }
 }
 function makeCard(d){ const c=d.type==='q'?cardAyah(d,_groups):(d.type==='m'?cardMuh(d,_groups):(d.type==='hr'?cardHadithRu(d):cardHadith(d,_groups)));
   try{ c.querySelectorAll('.ar').forEach(a=>{ enableArabusTap(a); if(_arabusOn) a.style.cursor='pointer'; }); }catch(e){}   // сквозной Arabus
