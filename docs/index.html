@@ -434,7 +434,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1233</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1234</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1202,7 +1202,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1233';
+const APPVER = 'v1234';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -11362,7 +11362,29 @@ function _fold489(s){ s=String(s||''); return s.replace(/[أإآٱ]/g,'ا').repl
 const _TT_SCORE_F={}; for(const k in _TT_SCORE) _TT_SCORE_F[_fold489(k)]=_TT_SCORE[k];
 const _TT_KW_NEG_F=_TT_KW_NEG.map(([kw,sc])=>[_fold489(kw),sc]);
 const _TT_KW_POS_F=_TT_KW_POS.map(([kw,sc])=>[_fold489(kw),sc]);
-function _ttScore(verdict){ const v=String(verdict||'').trim(); if(!v) return undefined;
+// ⛔ ЗАКОН владельца 26.07.2026 (суровый): «не должно быть написано ни одного свидетельства,
+// которое не проверено тобой! Как Ахмад может поставить джарх на Малике?? Ну-ка докажи».
+// Он поймал прямую ложь в карточке Малика ибн Анаса: стояло «⚠ джарх принят» от Ахмада ибн Ханбаля.
+// А слова Ахмада: «مالك أثبت في كل شيء ، ومرة : حديثه صحيح ورأيه ضعيف» — «Малик утверждённейший
+// во всём; его ХАДИС достоверен, а его МНЕНИЕ слабое». Джарха нет вовсе: Ахмад прямо говорит
+// حديثه صحيح. Слабым названо فقه — правовое суждение, к передаче хадисов отношения не имеющее.
+// Код же искал подстроку «ضعيف» и клеймил равия. Так нельзя: слово «слабый» само по себе ничего
+// не значит, важно К ЧЕМУ оно относится.
+// Убираем три оборота, где «слабый» НЕ про передачу, ДО всякой оценки:
+//   ① «رأيه ضعيف» / «ضعيف في رأيه» — слабо МНЕНИЕ (Малик, Абу Ханифа, ан-Нахаи…);
+//   ② «لم يثبت أن فلانا ضعفه» — джарх НЕ подтвердился (то есть его нет);
+//   ③ «أخطأ فلان إذ ضعفه» / «وهم… فضعفه» — джарх оспорен и отвергнут.
+function _снятьНеПроПередачу(s){
+  return String(s || '')
+    .replace(/(و?رأيه|في\s*رأيه)\s*(ضعيف|ضعف)/g, ' ')
+    .replace(/ضعيفا?\s*(جدا\s*)?في\s*رأيه/g, ' ')
+    .replace(/(و?رايه|في\s*رايه)\s*(ضعيف|ضعف)/g, ' ')
+    .replace(/لم\s*يثبت[^.،]{0,30}ضعف\S*/g, ' ')
+    .replace(/(أخطأ|اخطا|وهم|شذ)[^.،]{0,25}(إذ\s*|اذ\s*)?ضعف\S*/g, ' ');
+}
+
+function _ttScore(verdict){ const v0=String(verdict||'').trim(); if(!v0) return undefined;
+  const v=_снятьНеПроПередачу(v0).trim() || v0;
   if(_TT_SCORE[v]!==undefined) return _TT_SCORE[v];
   const vf=_fold489(v);
   if(_TT_SCORE_F[vf]!==undefined) return _TT_SCORE_F[vf];
@@ -11656,7 +11678,22 @@ async function renderTestimoniesCard(mid, host){
   _eord.forEach((key,idx)=>{ const cr=_emap[key].ar; const items=_emap[key].items; const terms=[...new Set(items.map(c=>c[1]))];
     let scv=items.reduce((s,c)=>s+(_ttScore(c[1])||0),0);
     // владелец 02.07: длинные цитаты (sunnah/تهذيب) не в точном словаре _TT_SCORE → полярность по паттернам, чтобы джарх был КРАСНЫМ
-    if(scv===0){ const _qt=stripDiac(fold(terms.join(' '))); if(/متروك|كذاب|وضاع|ضعيف|منكر|ليس بشيء|متهم|واه|ساقط|يخطي|غفله|لين|تركوه|لا يكتب|سيء الحفظ|لم يحفظ|قليل الحفظ/.test(_qt)) scv=-1; else if(/ثقه|ثبت|حجه|حافظ|احفظ|صدوق|لا باس|مامون|صالح|متقن/.test(_qt)) scv=1; }
+    if(scv===0){ let _qt=stripDiac(fold(terms.join(' ')));
+      // ⛔ СУРОВЫЙ ЗАКОН владельца 26.07.2026: «не должно быть написано ни одного свидетельства,
+      // которое не проверено тобой! Как Ахмад может поставить джарх на Малике?? Ну-ка докажи».
+      // Он поймал прямую ложь: у Малика стояло «⚠ джарх принят» от Ахмада ибн Ханбаля, а слова Ахмада
+      // были: «مالك أثبت في كل شيء ، ومرة : حديثه صحيح ورأيه ضعيف» — «Малик утверждённейший во всём;
+      // его ХАДИС достоверен, а его МНЕНИЕ слабое». Джарха нет: Ахмад прямо говорит حديثه صحيح.
+      // Слабым назван فقه (правовое мнение), а не передача. Код видел слово «ضعيف» и клеймил равия.
+      // Убираем такие куски ДО оценки полярности — три случая, где «слабый» не про передачу:
+      //   · «رأيه ضعيف» / «ضعيف في رأيه» — слабо МНЕНИЕ (Малик, Абу Ханифа и др.);
+      //   · «لم يثبت أن فلانا ضعفه» — джарх НЕ подтвердился;
+      //   · «أخطأ فلان إذ ضعفه» — джарх оспорен более авторитетным.
+      _qt=_qt.replace(/(و?رايه|في\s*رايه|رايه)\s*(ضعيف|ضعف)/g,' ')
+             .replace(/ضعيفا?\s*(جدا\s*)?في\s*رايه/g,' ')
+             .replace(/لم\s*يثبت[^.،]{0,30}ضعف\S*/g,' ')
+             .replace(/(اخطا|وهم|شذ)[^.،]{0,25}(اذ\s*)?ضعف\S*/g,' ');
+      if(/متروك|كذاب|وضاع|ضعيف|منكر|ليس بشيء|متهم|واه|ساقط|يخطي|غفله|لين|تركوه|لا يكتب|سيء الحفظ|لم يحفظ|قليل الحفظ/.test(_qt)) scv=-1; else if(/ثقه|ثبت|حجه|حافظ|احفظ|صدوق|لا باس|مامون|صالح|متقن/.test(_qt)) scv=1; }
     const vcol=scv>0?'#7ee08a':(scv<0?'#ff9b7a':'#9aa7b5');
     const row=document.createElement('div'); row.dataset.ttRow='1'; row.style.cssText='border-top:1px solid #20302a;padding-top:11px;margin-top:11px'; if(idx>=_TT_TOP) row.style.display='none';
     const yr=_yrOf(cr); const c0=items[0]; const ruv=((c0[9]&&String(c0[9]).trim())||_ruVerdict(terms));
