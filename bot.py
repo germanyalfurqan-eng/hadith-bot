@@ -7589,6 +7589,38 @@ async def _api_serve(application=None):
                 pass
         return _cors(web.json_response({'ok': True}))
 
+    async def rag_find(r):
+        """Диагностика RAG-поиска: тот же путь, что у команды в чате, но видно ошибку и время.
+
+        Владелец 26.07.2026 дважды: «опять не работает в джамаат ру». Бот отвечает «Ищу…» и молчит,
+        а почему — не видно: команда в Telegram не показывает исключений. Этот эндпоинт зовёт ровно
+        ту же функцию и отдаёт результат ИЛИ причину, чтобы не гадать.
+        """
+        import time as _t
+        d = await _body(r)
+        q = (d.get('q') or 'можно ли пить стоя').strip()[:300]
+        шаги = {}
+        т0 = _t.time()
+        try:
+            загр = await asyncio.get_event_loop().run_in_executor(None, _rag_load_sync)
+            шаги['база_загружена'] = загр
+            шаги['на_загрузку_с'] = round(_t.time() - т0, 1)
+            шаги['векторов'] = _RAGB.get('n')
+            шаги['режим'] = 'numpy' if _RAGB.get('быстро') else 'цикл (медленно!)'
+            if not загр:
+                return _cors(web.json_response({'ошибка': 'база не загрузилась', **шаги}))
+            т1 = _t.time()
+            найдено, беда = await asyncio.get_event_loop().run_in_executor(None, _rag_find_sync, q, 3)
+            шаги['на_поиск_с'] = round(_t.time() - т1, 1)
+            if not найдено:
+                return _cors(web.json_response({'ошибка': 'ничего не найдено', 'подробность': str(беда)[:200], **шаги}))
+            шаги['нашёл'] = [{'n': z.get('n'), 'текст': str(z.get('r') or z.get('a') or '')[:90]} for z in найдено]
+            return _cors(web.json_response(шаги))
+        except Exception as e:
+            import traceback
+            return _cors(web.json_response({'ошибка': type(e).__name__ + ': ' + str(e)[:200],
+                                            'след': traceback.format_exc()[-500:], **шаги}))
+
     async def rag_embed(r):
         """Вектор ВОПРОСА для RAG-поиска (26.07.2026, задача владельца «RAG по Сахих аль-Бухари»).
 
@@ -8218,7 +8250,7 @@ async def _api_serve(application=None):
                   web.get('/api/narrator', narrator), web.post('/api/narrator_ai', narrator_ai), web.post('/api/hit', hit),
                   web.get('/api/popular', popular), web.get('/api/arabus', arabus),
                   web.post('/api/wordai', wordai), web.post('/api/explain', explain), web.post('/api/book_rag', book_rag),
-                  web.post('/api/rag_embed', rag_embed),   # 26.07.2026: вектор вопроса для RAG-поиска по Бухари (сам поиск — в браузере)
+                  web.post('/api/rag_embed', rag_embed), web.post('/api/rag_find', rag_find),   # 26.07.2026: вектор вопроса для RAG-поиска по Бухари (сам поиск — в браузере)
                   web.post('/api/booksearch', booksearch),
                   web.post('/api/booktrans', booktrans), web.post('/api/bookinfo', bookinfo),
                   web.post('/api/authorinfo', authorinfo), web.get('/api/qaudio', qaudio),
