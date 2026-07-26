@@ -426,7 +426,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1221</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1222</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -495,7 +495,12 @@
     <div class="chip" data-mode="ai" title="По смыслу (ИИ): опиши смысл на русском/англ. — ИИ сам подберёт арабские фразы и найдёт хадисы/аяты (использует ИИ). Текст всегда из реальной базы. ⇄ Для подбора фраз БЕЗ ИИ — режим «🔬 Расширенный».">🧠 По смыслу (ИИ)</div>
     <div class="chip" data-mode="narr" title="Поиск передатчика (равия): набирай имя по-арабски или по-русски (Суфьян ас-Саури) — живые подсказки из 18989 равиев → карточка с оценками риджаля.">👤 Передатчик</div>
     <div class="chip" data-mode="chain" title="Режим ЦЕПЬ (M447): выбери 2+ передатчиков из подсказок — найду все хадисы, где они стоят в иснаде вместе (по штудированным иснадам Э1.1)">⛓ Цепь</div>
-    <div class="chip" data-mode="rag" title="Поиск по ядру (RAG, #59): запрос уходит на наш сервер знаний (41 первоисточник + риджаль). Тема по-русски или арабская фраза. Текст всегда из реальной базы; если ядро спит — честно скажем, ничего не выдумываем.">🧠 Ядро (RAG)</div>
+    <!-- Владелец 26.07.2026: «а почему слово ядро, вообще при чём тут ядро?» — справедливо, слово моё
+         и оно ничего не объясняет. Хуже того, подсказка обещала «41 первоисточник + риджаль», чего там
+         нет: смысловой поиск построен ПОКА только по Сахих аль-Бухари (7490 мест, издание султанское —
+         то же, что в нашей читалке). Название и подсказка приведены к правде; книги будем подключать
+         поэтапно, и в подписи всегда будет видно, что уже готово. -->
+    <div class="chip" data-mode="rag" title="RAG-поиск: спросите тему своими словами — покажу ВСЕ места, где об этом говорится: хадисы, главы, слова автора. Ищет по смыслу, а не по буквам: «как относиться к соседу» найдёт хадисы, где слова «относиться» нет вовсе. Каждый ответ — из реальной базы, с номером и ссылкой; если подходящего нет, так и скажу, выдумывать не стану. Этим RAG и отличается от режима «По смыслу (ИИ)», где модель отвечает из своей памяти. Пока готов Сахих аль-Бухари (издание султанское, как в читалке), остальные книги подключаем по очереди.">🧠 RAG-поиск · Бухари</div>
     <div class="chip" id="moreModes" style="border-style:dashed" title="Дополнительные режимы поиска (📜 матн-только, 🔬 расширенный, 🌐 любой текст)">⚙️ ещё ▾</div>
   </div>
   <div class="modes" id="modesMore" style="display:none">
@@ -1177,7 +1182,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1221';
+const APPVER = 'v1222';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -8583,7 +8588,120 @@ async function anyTextSearch(qRaw, seq){
 }
 /* ===== 🧠 #59-RAG: «Поиск по ядру» — HF Space через бэкенд /api/rag (та же база, что команда «раг» в боте).
    Честность (закон проекта): пусто/ошибка/ядро спит → прямо говорим, НИКАКИХ выдуманных хадисов. ===== */
+/* ═══ RAG-ПОИСК ПО САХИХ АЛЬ-БУХАРИ (26.07.2026) ═══════════════════════════════════════════════
+   Задача владельца: «сделай полноценный RAG… начинаем из Сахих аль-Бухари… очень качественный и точный».
+   Ключевое его уточнение (я сперва понял неверно): «строгий — я не имел в виду тупо слово в слово.
+   Строгий = я на русском говорю, а он ПО СМЫСЛУ находит и СТРОГО находит: не упустить если есть
+   и не давать мусор если это не то». То есть строгость = полнота + чистота.
+   И: «надо исчерпывающим образом ВСЕ места в Бухари, даже среди глав, муалляк… как ноутбук ЛМ».
+
+   Устройство: 7490 мест книги превращены в 14296 векторов (bge-m3) — отдельно арабский текст и русский
+   перевод. Сжаты 132 → 19 МБ (замер до/после: состав выдачи не изменился, плавает лишь порядок соседей
+   с почти равной близостью). Всё лежит в miniapp/rag/ ПО КНИГЕ: открыли Бухари — приехала только она,
+   иначе на десятках книг это не масштабируется.
+
+   Считаем В БРАУЗЕРЕ. Сервер даёт только вектор ВОПРОСА (/api/rag_embed, ~1 КБ): в браузере модели нет,
+   а ключ Cloudflare в приложение класть нельзя — он тут же станет общим достоянием.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+const _RAG={загружено:false, ids:null, поля:null, векторы:null, мета:null, порог:0.52, dim:0};
+async function _ragLoad(onProgress){
+  if(_RAG.загружено) return true;
+  try{
+    if(onProgress) onProgress('гружу книгу (30 МБ, один раз)…');
+    const [rv,rm]=await Promise.all([fetch('./rag/bukhari.vec.json?v='+APPVER), fetch('./rag/bukhari.meta.json?v='+APPVER)]);
+    if(!rv.ok||!rm.ok) return false;
+    const v=await rv.json(), m=await rm.json();
+    if(onProgress) onProgress('распаковываю…');
+    const bin=atob(v.v); const n=v.n, dim=v.dim;
+    const body=new Int8Array(bin.length);
+    for(let i=0;i<bin.length;i++) body[i]=(bin.charCodeAt(i)<<24)>>24;   // байт → знаковое int8
+    _RAG.ids=v.id; _RAG.поля=v['поле']; _RAG.s=v.s; _RAG.body=body; _RAG.dim=dim; _RAG.n=n;
+    _RAG.мета=m['м']; _RAG.загружено=true;
+    try{ const rp=await fetch('./rag/bukhari.porog.json?v='+APPVER); if(rp.ok){ const p=await rp.json(); if(p&&p['порог']) _RAG.порог=p['порог']; } }catch(e){}
+    return true;
+  }catch(e){ return false; }
+}
+async function _ragQueryVec(q){
+  if(!BACKEND_URL) return null;
+  try{
+    const r=await fetch(BACKEND_URL+'/rag_embed',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({q:String(q||'').slice(0,600), initData:INITDATA})});
+    const j=await r.json().catch(()=>null);
+    return (j&&j.v&&j.v.length)?j.v:null;
+  }catch(e){ return null; }
+}
 async function ragSearch(qRaw, seq, shownQ){
+  const res=document.getElementById('res'); res.innerHTML='';
+  const head=document.createElement('div'); head.className='hint'; head.style.cssText='color:#cdb8ff;font-size:13px;margin:0 0 8px';
+  head.textContent='🧠 RAG по Сахих аль-Бухари: ищу по смыслу…';
+  res.appendChild(head);
+  const ок=await _ragLoad(t=>{ head.textContent='🧠 RAG: '+t; });
+  if(!ок){ head.textContent='🧠 RAG: не удалось загрузить книгу. Обнови приложение и попробуй ещё раз.'; return; }
+  const qv=await _ragQueryVec(qRaw);
+  if(seq!==undefined && seq!==_seq) return;
+  if(!qv){ head.textContent='🧠 RAG: сервер не ответил на запрос вектора — поиск по смыслу сейчас недоступен. Ничего не выдумываю; попробуй обычный поиск.'; return; }
+  // нормируем вопрос: дальше косинус = простое скалярное произведение
+  let nq=0; for(let i=0;i<qv.length;i++) nq+=qv[i]*qv[i]; nq=Math.sqrt(nq)||1;
+  const Q=new Float32Array(qv.length); for(let i=0;i<qv.length;i++) Q[i]=qv[i]/nq;
+  const dim=_RAG.dim, body=_RAG.body, S=_RAG.s, ids=_RAG.ids;
+  const лучшее=Object.create(null);
+  for(let i=0;i<_RAG.n;i++){
+    const off=i*dim, k=S[i]; let s=0;
+    for(let j=0;j<dim;j++) s+=Q[j]*body[off+j]*k;
+    const cid=ids[i];
+    if(!(cid in лучшее) || s>лучшее[cid]) лучшее[cid]=s;
+  }
+  const ранж=Object.keys(лучшее).map(k=>[k,лучшее[k]]).sort((a,b)=>b[1]-a[1]);
+  const порог=_RAG.порог;
+  const группы={хадис:[], глава:[], муалляк:[]};
+  for(const [cid,s] of ранж){
+    if(s<порог) break;
+    const c=_RAG.мета[cid]; if(!c) continue;
+    const ключ=(c.v===0)?'хадис':(c.v===2?'муалляк':'глава');
+    if(группы.хадис.length+группы.глава.length+группы.муалляк.length>=40) break;
+    группы[ключ].push({cid, s, c});
+  }
+  const всего=группы.хадис.length+группы.глава.length+группы.муалляк.length;
+  if(!всего){
+    head.textContent='🧠 RAG: в Сахих аль-Бухари подходящего нет.';
+    const p=document.createElement('div'); p.className='hint'; p.style.cssText='font-size:12.5px;line-height:1.6;margin-top:6px';
+    p.textContent='Самое близкое совпадение — '+(ранж.length?ранж[0][1].toFixed(3):'0')+', это ниже порога '+порог.toFixed(2)+'. Показывать не стал: это был бы мусор, а не ответ. Попробуй сформулировать иначе или поищи обычным поиском.';
+    res.appendChild(p); return;
+  }
+  head.textContent='🧠 RAG по Сахих аль-Бухари · найдено мест: '+всего
+    +'  (хадисов '+группы.хадис.length+' · глав '+группы.глава.length+' · вне нумерации '+группы.муалляк.length+')';
+  const подпись=document.createElement('div'); подпись.className='hint';
+  подпись.style.cssText='font-size:11.5px;margin:0 0 10px;line-height:1.55';
+  подпись.textContent='Из реальной базы: у каждого места есть номер и ссылка. Пока готов Сахих аль-Бухари (издание султанское, как в читалке) — остальные книги подключаем по очереди.';
+  res.appendChild(подпись);
+  const рисовать=(заголовок,ключ)=>{
+    if(!группы[ключ].length) return;
+    const h=document.createElement('div'); h.style.cssText='font-size:12.5px;color:#cdb8ff;margin:10px 0 5px;font-weight:600';
+    h.textContent=заголовок+' — '+группы[ключ].length; res.appendChild(h);
+    группы[ключ].forEach(({s,c})=>{
+      const card=document.createElement('div'); card.className='card'; card.style.marginBottom='7px';
+      const top=document.createElement('div'); top.style.cssText='display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px';
+      top.innerHTML='<b style="color:var(--link)">'+(c.n?('№'+c.n):('стр. '+(c.p||'—')))+'</b>'
+        +'<span style="color:var(--hint);font-size:11px">близость '+s.toFixed(3)+(c.p?(' · стр. '+c.p):'')+'</span>';
+      card.appendChild(top);
+      if(c.g){ const g=document.createElement('div'); g.dir='rtl';
+        g.style.cssText='font-size:13px;'+_AF+';color:#e8c35a;margin-top:4px;line-height:1.7'; g.textContent='📑 '+c.g; card.appendChild(g); }
+      if(c.a){ const a=document.createElement('div'); a.dir='rtl'; a.className='ar';
+        a.style.cssText='font-size:16px;line-height:1.95;margin-top:5px'; a.textContent=c.a; card.appendChild(a); }
+      if(c.r){ const rr=document.createElement('div');
+        rr.style.cssText='font-size:13px;color:#c3cedb;margin-top:5px;line-height:1.55;'+_RF; rr.textContent=c.r; card.appendChild(rr); }
+      if(c.n){ const b=document.createElement('div');
+        b.style.cssText='margin-top:6px;font-size:12.5px;color:#7ee08a;cursor:pointer;font-weight:600';
+        b.textContent='📖 Открыть №'+c.n+' в читалке';
+        b.onclick=()=>{ try{ hap('light'); }catch(e){} try{ openReader('bukhari', String(c.n)); }catch(e){} };
+        card.appendChild(b); }
+      res.appendChild(card);
+    });
+  };
+  рисовать('📗 ХАДИСЫ','хадис'); рисовать('📑 ГЛАВЫ','глава'); рисовать('📄 ВНЕ НУМЕРАЦИИ (муалляки, слова автора)','муалляк');
+  return;
+}
+async function _ragSearchOld(qRaw, seq, shownQ){
   const res=document.getElementById('res'); res.innerHTML='';
   const head=document.createElement('div'); head.className='hint'; head.style.cssText='color:#cdb8ff;font-size:13px;margin:0 0 8px';
   head.textContent='🧠 Спрашиваю ядро (первоисточники + риджаль)…';
@@ -15175,9 +15293,14 @@ function _readRender(){
   if(!_readArr||!_readArr.length) return;
   if(_readIdx<0)_readIdx=0; if(_readIdx>=_readArr.length)_readIdx=_readArr.length-1;
   const h=_readArr[_readIdx];
-  // В полном потоке страниц номер есть только у хадисов: у главы и муалляка его нет, «№null» показывать нельзя.
-  document.getElementById('readPos').textContent=((h.num!=null)?('№'+h.num):(h.вид==='китаб'?'📕 китаб':h.вид==='глава'?'📑 глава':'📄 вне нумерации'))
-    +'  ('+(_readIdx+1)+' из '+_readArr.length+')'+(h.стр?(' · стр. '+h.стр):'');
+  // Владелец 26.07.2026: «непонятно что за цифры». Было «№5864 (8201 из 10657) · стр. 87778» —
+  // три числа подряд, из них 87778 вообще внутренний номер записи Мактабы, а не страница книги.
+  // Оставляем то, что человеку нужно: номер хадиса и НАСТОЯЩУЮ печатную страницу. Порядковый номер
+  // записи в потоке — техническая мелочь, убран в подсказку при наведении.
+  const _pos=document.getElementById('readPos');
+  _pos.textContent=((h.num!=null)?('№'+h.num):(h.вид==='китаб'?'📕 китаб':h.вид==='глава'?'📑 глава':'📄 без номера'))
+    +(h.стр?('  ·  стр. '+h.стр):'');
+  _pos.title='Запись '+(_readIdx+1)+' из '+_readArr.length+' в книге'+(h.стр?(' · страница '+h.стр+' печатного издания'):'');
   const body=document.getElementById('readBody'); body.innerHTML='';
   // v1091 (#531 владельца: «почему читалка Муслима начинается с первого хадиса? Там есть мукадима!»):
   // مقدمة не нумеруется как хадис и в нашей разбивке её нет — даём вход в ПЕЧАТНУЮ книгу с начала (там она есть).
