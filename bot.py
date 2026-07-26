@@ -5377,10 +5377,21 @@ def _rag_load_sync():
         base = 'https://germanyalfurqan-eng.github.io/hadith-bot/rag/'
         v = requests.get(base + 'bukhari.vec.json', timeout=120).json()
         m = requests.get(base + 'bukhari.meta.json', timeout=120).json()
-        body = _arr.array('b')
-        body.frombytes(_b64.b64decode(v['v']))
+        сырое = _b64.b64decode(v['v'])
+        # Владелец 26.07: бот сказал «ищу» и завис. Перебор 14344 векторов по 1024 измерения — это
+        # 14.7 млн умножений; чистым Python на сервере это МИНУТЫ. numpy делает то же одним
+        # матричным умножением за доли секунды. Без него команда в чате бесполезна.
+        try:
+            import numpy as _np
+            M = _np.frombuffer(сырое, dtype=_np.int8).reshape(v['n'], v['dim']).astype(_np.float32)
+            M *= _np.asarray(v['s'], dtype=_np.float32)[:, None]      # свой множитель на каждый вектор
+            body = M
+            быстро = True
+        except Exception:
+            body = _arr.array('b'); body.frombytes(сырое); быстро = False
         _RAGB.update({'ids': v['id'], 'поля': v.get('поле'), 'body': body, 's': v['s'],
-                      'dim': v['dim'], 'n': v['n'], 'мета': m.get('м') or {}, 'готово': True})
+                      'dim': v['dim'], 'n': v['n'], 'мета': m.get('м') or {},
+                      'быстро': быстро, 'готово': True})
         return True
     except Exception:
         return False
@@ -5408,15 +5419,25 @@ def _rag_find_sync(q, top=6):
     qv = [x / nq for x in qv]
     dim, body, S, ids = _RAGB['dim'], _RAGB['body'], _RAGB['s'], _RAGB['ids']
     лучшее = {}
-    for i in range(_RAGB['n']):
-        off = i * dim
-        k = S[i]
-        s = 0.0
-        for j in range(dim):
-            s += qv[j] * body[off + j] * k
-        cid = ids[i]
-        if s > лучшее.get(cid, -2):
-            лучшее[cid] = s
+    if _RAGB.get('быстро'):
+        # numpy: одно матричное умножение вместо 14.7 млн шагов в цикле — доли секунды вместо минут.
+        # Множитель на вектор уже вшит в матрицу при загрузке, поэтому здесь только скалярное произведение.
+        import numpy as _np
+        оценки = body.dot(_np.asarray(qv, dtype=_np.float32))
+        for i, s in enumerate(оценки):
+            cid = ids[i]
+            if s > лучшее.get(cid, -2.0):
+                лучшее[cid] = float(s)
+    else:
+        for i in range(_RAGB['n']):
+            off = i * dim
+            k = S[i]
+            s = 0.0
+            for j in range(dim):
+                s += qv[j] * body[off + j] * k
+            cid = ids[i]
+            if s > лучшее.get(cid, -2):
+                лучшее[cid] = s
     ранж = sorted(лучшее.items(), key=lambda x: -x[1])
     порог = 0.521
     out = []
@@ -8475,6 +8496,61 @@ async def _app_channel_watcher(application):
     while True:
         try:
             await asyncio.sleep(300)
+            # ЧИСТКА ПОСТОВ КАНАЛА ОТ ЛИЧНОГО (заявка владельца #666, 26.07.2026:
+            # «я сто раз сказал убери личные переписки»). Номера постов берём из файла
+            # clean_posts.txt (по номеру в строке) — их видно прямо в ссылке t.me/muslimoonapp/NNNN.
+            # Каждый пост перечитываем, прогоняем через _clean_announce и переписываем.
+            try:
+                rc = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/clean_posts.txt",
+                                  headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
+                if rc.status_code == 200:
+                    _спис = base64.b64decode(rc.json().get("content", "")).decode("utf-8").strip()
+                    _jc = _journal_load()
+                    if _спис and _спис[:60] != (_jc.get("clean_posts") or {}).get("flag", ""):
+                        _почищено, _мимо = [], []
+                        for _стр in _спис.splitlines():
+                            _стр = _стр.strip()
+                            if not _стр or _стр.startswith("#"):
+                                continue
+                            _мид = "".join(c for c in _стр if c.isdigit())
+                            if not _мид:
+                                continue
+                            # текст поста берём из очереди нот по версии, если она указана в строке
+                            _вер = ""
+                            for _w in _стр.split():
+                                if _w.startswith("v") and _w[1:].isdigit():
+                                    _вер = _w
+                            _нота = ""
+                            if _вер:
+                                try:
+                                    _rq2 = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_notes_queue.json",
+                                                        headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
+                                    _оч2 = json.loads(base64.b64decode(_rq2.json().get("content", "")).decode("utf-8") or "[]") if _rq2.status_code == 200 else []
+                                    _нота = next((x.get("note", "") for x in _оч2 if x.get("id") == _вер), "")
+                                except Exception:
+                                    _нота = ""
+                            if not _нота:
+                                _мимо.append(_мид + " (нет текста)"); continue
+                            try:
+                                _p, _b = _format_channel_post(_clean_announce(_нота))
+                                await application.bot.edit_message_text(chat_id=APP_CHANNEL_ID, message_id=int(_мид),
+                                                                        text=_b, parse_mode="HTML",
+                                                                        disable_web_page_preview=True)
+                                _почищено.append(_мид)
+                            except Exception as _e:
+                                _мимо.append("%s (%s)" % (_мид, str(_e)[:40]))
+                        _jc["clean_posts"] = {"flag": _спис[:60], "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+                        _journal_save("чистка постов канала от личного")
+                        try:
+                            await application.bot.send_message(OWNER_ID,
+                                "🧹 Чистка постов канала: переписано %s%s"
+                                % (", ".join(_почищено) or "—",
+                                   (chr(10)+"не вышло: " + ", ".join(_мимо)) if _мимо else ""))
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
             # РАЗОВОЕ ОБЪЯВЛЕНИЕ В @jamaat_ru (владелец 26.07.2026: «если работает сейчас,
             # объявление вышли, обрадуй»). Тот же приём, что с манифестом: маркер-файл в репо,
             # бот шлёт один раз и запоминает метку — повторов не будет.
