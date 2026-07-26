@@ -5170,7 +5170,10 @@ def _cf_creds():
     (строчными!), а код искал CLOUDFLARE_API_TOKEN. Имя переменной я предположил вместо того, чтобы
     посмотреть. Теперь берём по любому из принятых написаний и без оглядки на регистр.
     """
-    низ = {k.lower(): v for k, v in os.environ.items()}
+    # .strip() на ИМЕНИ обязателен: 26.07.2026 владелец завёл переменную, а эндпоинт всё равно молчал —
+    # диагностика показала имя «CLOUDFLARE_ACCOUNT_ID » с ПРОБЕЛОМ на конце (проскочил при вводе в панель).
+    # Для системы это другое имя. Чистим и имя, и значение — чтобы такая опечатка больше ничего не ломала.
+    низ = {k.strip().lower(): (v or '').strip() for k, v in os.environ.items()}
     имена_ток = ('cloudflare_m_api_token', 'cloudflare_api_token', 'cloudflare_api_key',
                  'cloudflare_token', 'cf_token', 'cf_api_token')
     имена_акк = ('cloudflare_m_account_id', 'cloudflare_account_id', 'cf_account_id', 'cloudflare_account')
