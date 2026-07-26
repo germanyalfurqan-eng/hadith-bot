@@ -7257,6 +7257,42 @@ async def _api_serve(application=None):
                 pass
         return _cors(web.json_response({'ok': True}))
 
+    async def rag_embed(r):
+        """Вектор ВОПРОСА для RAG-поиска (26.07.2026, задача владельца «RAG по Сахих аль-Бухари»).
+
+        Зачем отдельный эндпоинт: сам поиск идёт В БРАУЗЕРЕ — у клиента лежат сжатые векторы книги
+        (19 МБ) и метаданные, косинус считается на месте, серверу работы почти нет. Но вектор ВОПРОСА
+        в браузере получить нельзя: модели там нет, а ключ Cloudflare в приложение класть нельзя —
+        он тут же станет достоянием любого, кто откроет исходник.
+        Поэтому сервер возвращает ровно один вектор (около килобайта) и ничего больше.
+
+        Модель ОБЯЗАНА совпадать с той, которой посчитана книга (bge-m3): векторы разных моделей
+        лежат в разных пространствах, и поиск по ним даст бессмыслицу.
+        """
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not rate_ok('ragemb:' + _uid(user, r), 30, 60):
+            return _ratelimited()
+        q = (d.get('q') or '').strip()[:600]
+        if not q:
+            return _cors(web.json_response({'v': None, 'error': 'no-input'}))
+        tok = os.environ.get('CLOUDFLARE_M_API_TOKEN') or os.environ.get('CLOUDFLARE_API_TOKEN') or ''
+        acc = os.environ.get('CLOUDFLARE_M_ACCOUNT_ID') or os.environ.get('CLOUDFLARE_ACCOUNT_ID') or ''
+        if not tok or not acc:
+            return _cors(web.json_response({'v': None, 'error': 'no-key'}))
+        try:
+            url = 'https://api.cloudflare.com/client/v4/accounts/%s/ai/run/@cf/baai/bge-m3' % acc
+            resp = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: requests.post(url, json={'text': [q]},
+                                            headers={'Authorization': 'Bearer ' + tok}, timeout=30))
+            j = resp.json()
+            v = ((j.get('result') or {}).get('data') or [None])[0]
+            if not v:
+                return _cors(web.json_response({'v': None, 'error': 'empty'}))
+            return _cors(web.json_response({'v': [round(float(x), 5) for x in v], 'model': 'bge-m3'}))
+        except Exception as e:
+            return _cors(web.json_response({'v': None, 'error': str(e)[:120]}))
+
     async def book_rag(r):
         # RAG-поиск ВНУТРИ книги (указ владельца 01.07.2026, срочно): клиент уже нашёл отрывки книги
         # (через существующий /api/maktaba, ограниченный этой книгой — retrieval), сюда шлёт вопрос+отрывки —
@@ -7785,6 +7821,7 @@ async def _api_serve(application=None):
                   web.get('/api/narrator', narrator), web.post('/api/narrator_ai', narrator_ai), web.post('/api/hit', hit),
                   web.get('/api/popular', popular), web.get('/api/arabus', arabus),
                   web.post('/api/wordai', wordai), web.post('/api/explain', explain), web.post('/api/book_rag', book_rag),
+                  web.post('/api/rag_embed', rag_embed),   # 26.07.2026: вектор вопроса для RAG-поиска по Бухари (сам поиск — в браузере)
                   web.post('/api/booksearch', booksearch),
                   web.post('/api/booktrans', booktrans), web.post('/api/bookinfo', bookinfo),
                   web.post('/api/authorinfo', authorinfo), web.get('/api/qaudio', qaudio),
