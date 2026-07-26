@@ -5158,6 +5158,89 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=MAIN_KB
         )
 
+# ═══ RAG-ПОИСК В ЧАТЕ (владелец 26.07.2026: «в джамаат ру включи… пока включи чё есть») ═══
+# В приложении поиск идёт в браузере: там векторы книги лежат рядом. Боту их взять неоткуда,
+# поэтому он тянет те же файлы с GitHub Pages ОДИН РАЗ и держит в памяти (19 МБ векторов + метаданные).
+# Модель вектора вопроса — та же bge-m3: векторы разных моделей несопоставимы.
+def _cf_creds():
+    """Токен и аккаунт Cloudflare из окружения — ЛЮБЫМ регистром и любым из принятых имён.
+
+    Владелец 26.07.2026: «есть они в Railway, ты чё не проверяешь-то» — и был прав. Эндпоинт отвечал
+    «no-key», хотя ключи на месте: в Railway они называются CLOUDFLARE_ACCOUNT_ID и cloudflare_api_key
+    (строчными!), а код искал CLOUDFLARE_API_TOKEN. Имя переменной я предположил вместо того, чтобы
+    посмотреть. Теперь берём по любому из принятых написаний и без оглядки на регистр.
+    """
+    низ = {k.lower(): v for k, v in os.environ.items()}
+    имена_ток = ('cloudflare_m_api_token', 'cloudflare_api_token', 'cloudflare_api_key',
+                 'cloudflare_token', 'cf_token', 'cf_api_token')
+    имена_акк = ('cloudflare_m_account_id', 'cloudflare_account_id', 'cf_account_id', 'cloudflare_account')
+    tok = next((низ[n] for n in имена_ток if низ.get(n)), '')
+    acc = next((низ[n] for n in имена_акк if низ.get(n)), '')
+    return tok, acc
+
+
+_RAGB = {'готово': False, 'ids': None, 'поля': None, 'body': None, 's': None,
+         'dim': 0, 'n': 0, 'мета': None}
+
+def _rag_load_sync():
+    """Грузим базу книги с Pages. Синхронно и один раз — вызывается из потока, событийный цикл не держим."""
+    if _RAGB['готово']:
+        return True
+    try:
+        import base64 as _b64, array as _arr
+        base = 'https://germanyalfurqan-eng.github.io/hadith-bot/rag/'
+        v = requests.get(base + 'bukhari.vec.json', timeout=120).json()
+        m = requests.get(base + 'bukhari.meta.json', timeout=120).json()
+        body = _arr.array('b')
+        body.frombytes(_b64.b64decode(v['v']))
+        _RAGB.update({'ids': v['id'], 'поля': v.get('поле'), 'body': body, 's': v['s'],
+                      'dim': v['dim'], 'n': v['n'], 'мета': m.get('м') or {}, 'готово': True})
+        return True
+    except Exception:
+        return False
+
+def _rag_query_vec_sync(q):
+    tok, acc = _cf_creds()
+    if not tok or not acc:
+        return None
+    try:
+        url = 'https://api.cloudflare.com/client/v4/accounts/%s/ai/run/@cf/baai/bge-m3' % acc
+        j = requests.post(url, json={'text': [q[:600]]},
+                          headers={'Authorization': 'Bearer ' + tok}, timeout=30).json()
+        return ((j.get('result') or {}).get('data') or [None])[0]
+    except Exception:
+        return None
+
+def _rag_find_sync(q, top=6):
+    """Поиск по книге: косинус со всеми векторами + порог отсечки мусора."""
+    if not _rag_load_sync():
+        return None, 'база не загрузилась'
+    qv = _rag_query_vec_sync(q)
+    if not qv:
+        return None, 'нет ключа для вектора вопроса'
+    nq = math.sqrt(sum(x * x for x in qv)) or 1.0
+    qv = [x / nq for x in qv]
+    dim, body, S, ids = _RAGB['dim'], _RAGB['body'], _RAGB['s'], _RAGB['ids']
+    лучшее = {}
+    for i in range(_RAGB['n']):
+        off = i * dim
+        k = S[i]
+        s = 0.0
+        for j in range(dim):
+            s += qv[j] * body[off + j] * k
+        cid = ids[i]
+        if s > лучшее.get(cid, -2):
+            лучшее[cid] = s
+    ранж = sorted(лучшее.items(), key=lambda x: -x[1])
+    порог = 0.521
+    out = []
+    for cid, s in ранж:
+        if s < порог or len(out) >= top:
+            break
+        c = (_RAGB['мета'] or {}).get(cid) or {}
+        out.append({'s': s, 'n': c.get('n'), 'g': c.get('g'), 'r': c.get('r'), 'a': c.get('a')})
+    return out, (ранж[0][1] if ранж else 0)
+
 WEBAPP_URL = "https://germanyalfurqan-eng.github.io/hadith-bot/"
 
 # ============ G9: БЕЗОПАСНОСТЬ + ГРАНУЛЯРНЫЙ ДОСТУП ============
@@ -7276,8 +7359,7 @@ async def _api_serve(application=None):
         q = (d.get('q') or '').strip()[:600]
         if not q:
             return _cors(web.json_response({'v': None, 'error': 'no-input'}))
-        tok = os.environ.get('CLOUDFLARE_M_API_TOKEN') or os.environ.get('CLOUDFLARE_API_TOKEN') or ''
-        acc = os.environ.get('CLOUDFLARE_M_ACCOUNT_ID') or os.environ.get('CLOUDFLARE_ACCOUNT_ID') or ''
+        tok, acc = _cf_creds()
         if not tok or not acc:
             return _cors(web.json_response({'v': None, 'error': 'no-key'}))
         try:
