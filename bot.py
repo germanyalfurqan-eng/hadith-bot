@@ -1,4 +1,11 @@
 # DEPLOY-TRIGGER С25 15.06.2026 01:44 — пакет #110/#40/#41/#90 (заявки в боте, #NN, анти-дубль)
+# 27.07.2026: метка сборки. Владелец дважды присылал скрин «раг молчит» после того, как фикс был
+# запушен — и нельзя было отличить «фикс не работает» от «Railway ещё не передеплоился». Теперь
+# у бэкенда есть паспорт: GET /api/version отдаёт эту метку и время старта. Меняем при каждом
+# изменении bot.py — тогда любой спор о том, дошёл ли код до прода, решается одним запросом.
+СБОРКА = 'b1239-rag-loop-fix'
+import time as _time_boot
+_СТАРТ = _time_boot.time()
 import os
 import asyncio
 import re
@@ -7602,6 +7609,20 @@ async def _api_serve(application=None):
                 pass
         return _cors(web.json_response({'ok': True}))
 
+    async def version(r):
+        """Паспорт бэкенда: какая сборка сейчас на проде и сколько живёт.
+
+        Появился 27.07.2026: фикс «раг» был запушен, а бот всё равно молчал, и нельзя было
+        отличить «код не помог» от «Railway ещё не подхватил пуш». Один запрос — и видно.
+        """
+        import time as _t
+        return _cors(web.json_response({
+            'сборка': СБОРКА,
+            'аптайм_мин': round((_t.time() - _СТАРТ) / 60, 1),
+            'запущен': _t.strftime('%d.%m %H:%M:%S', _t.localtime(_СТАРТ)),
+            'rag_база': bool(_RAGB.get('n')), 'rag_векторов': _RAGB.get('n') or 0,
+        }))
+
     async def rag_find(r):
         """Диагностика RAG-поиска: тот же путь, что у команды в чате, но видно ошибку и время.
 
@@ -8263,7 +8284,7 @@ async def _api_serve(application=None):
                   web.get('/api/narrator', narrator), web.post('/api/narrator_ai', narrator_ai), web.post('/api/hit', hit),
                   web.get('/api/popular', popular), web.get('/api/arabus', arabus),
                   web.post('/api/wordai', wordai), web.post('/api/explain', explain), web.post('/api/book_rag', book_rag),
-                  web.post('/api/rag_embed', rag_embed), web.post('/api/rag_find', rag_find),   # 26.07.2026: вектор вопроса для RAG-поиска по Бухари (сам поиск — в браузере)
+                  web.get('/api/version', version), web.post('/api/rag_embed', rag_embed), web.post('/api/rag_find', rag_find),   # 26.07.2026: вектор вопроса для RAG-поиска по Бухари (сам поиск — в браузере)
                   web.post('/api/booksearch', booksearch),
                   web.post('/api/booktrans', booktrans), web.post('/api/bookinfo', bookinfo),
                   web.post('/api/authorinfo', authorinfo), web.get('/api/qaudio', qaudio),
