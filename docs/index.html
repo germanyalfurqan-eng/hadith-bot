@@ -426,7 +426,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1228</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1229</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1194,7 +1194,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1228';
+const APPVER = 'v1229';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -1579,6 +1579,24 @@ async function cachedFetchJSON(url, ms, opts){ ms=ms||60000; opts=opts||{};
   const ctl=new AbortController(); const t=setTimeout(()=>{ try{ctl.abort();}catch(e){} }, ms);
   try{ const r=await fetch(url,{signal:ctl.signal}); if(!r.ok) throw new Error('HTTP '+r.status);
     try{ if(cache) await cache.put(url, r.clone()); }catch(e){}   // кладём сырой ответ; ошибки квоты глотаем (фолбэк = текущее поведение)
+    // ПОЛОСА ЗАГРУЗКИ (заявка владельца 26.07.2026: «это универсальная вещь, должна быть везде,
+    // где загрузка»). Встроена ИМЕННО СЮДА: cachedFetchJSON — единственная дверь, через которую
+    // грузятся все книги, значит одна правка покрывает все случаи разом, без обхода по вызовам.
+    // Тихие вызовы (opts.silent — подгрузка шардов фоном) полосу не показывают: она для ожидания,
+    // а не для всякого чиха. Поток недоступен — молча идём прежним путём.
+    if(!opts.silent && r.body && r.body.getReader){
+      const всего=+(r.headers.get('content-length')||0);
+      if(всего>800000){                                    // мелочь грузится мгновенно, полоса только мигнёт
+        _plShow(String(url).split('/').pop().replace('.json',''));
+        const чтец=r.body.getReader(); const куски=[]; let готово=0;
+        for(;;){ const {done,value}=await чтец.read(); if(done) break;
+          куски.push(value); готово+=value.length; _plSet(готово,всего); }
+        _plHide();
+        const всё=new Uint8Array(готово); let сдвиг=0;
+        for(const к of куски){ всё.set(к,сдвиг); сдвиг+=к.length; }
+        return JSON.parse(new TextDecoder('utf-8').decode(всё));
+      }
+    }
     return await r.json(); }
   catch(e){ const ab=(e&&e.name==='AbortError');
     const reason=ab?('таймаут '+Math.round(ms/1000)+'с'):((e&&e.message)||'сбой сети');
@@ -14697,7 +14715,103 @@ document.addEventListener('wheel', e=>{ if(cfg.noZoom && e.ctrlKey){ pinchAttemp
 
 /* ===================== УТИЛИТЫ ===================== */
 let _stSlowT=null;
+/* ===== ПОЛОСА ЗАГРУЗКИ С НАСТОЯЩИМ ПРОЦЕНТОМ (заявка владельца 26.07.2026) =====
+   «Анимацию в загрузки эти добавь красивую со шкалой загрузки реальной».
+   Ключевое слово — РЕАЛЬНОЙ: бегущая полоска «ни о чём» раздражает сильнее, чем текст,
+   потому что врёт про ход дела. Здесь процент честный: сколько байт пришло из заявленных
+   в Content-Length. Если сервер размер не сообщил (сжатие на лету) — показываем сколько
+   скачано в мегабайтах и мягкое свечение, но НЕ рисуем выдуманный процент.
+   Показ появляется не сразу, а через 400 мс: мгновенные загрузки не должны мигать полосой. */
+let _plBox=null, _plT=null;
+function _plShow(подпись){
+  clearTimeout(_plT);
+  _plT=setTimeout(()=>{
+    const st=document.getElementById('status'); if(!st) return;
+    if(!_plBox){
+      // Владелец 26.07.2026: «может, логотип красивый, который заполняется свечением, — анимация
+      // живая современная». Взяли фирменную букву: она НАЛИВАЕТСЯ снизу вверх ровно на тот процент,
+      // что реально скачан. Полоска под ней — та же величина, для тех, кто читает цифры.
+      // Наливка идёт по-настоящему: высота свечения = принятые байты / размер файла.
+      _plBox=document.createElement('div');
+      _plBox.id='dlBar';
+      _plBox.style.cssText='margin:10px auto 0;max-width:420px;font-size:11.5px;color:var(--hint);'
+        +'display:flex;align-items:center;gap:12px;justify-content:center';
+      _plBox.innerHTML=
+        '<div style="position:relative;width:46px;height:46px;flex:0 0 46px">'
+        +'<div style="position:absolute;inset:0;border-radius:50%;border:2px solid rgba(95,211,154,.22)"></div>'
+        +'<div id="dlHalo" style="position:absolute;inset:-3px;border-radius:50%;'
+          +'box-shadow:0 0 12px 2px rgba(95,211,154,.32);animation:dlPulse 1.8s ease-in-out infinite"></div>'
+        +'<div style="position:absolute;inset:2px;border-radius:50%;overflow:hidden;background:rgba(127,150,180,.10)">'
+          +'<div id="dlWave" style="position:absolute;left:0;right:0;bottom:0;height:0%;'
+            +'background:linear-gradient(180deg,#5fd39a,#3a8a5a);transition:height .3s cubic-bezier(.4,0,.2,1);'
+            +'box-shadow:0 0 14px rgba(95,211,154,.6)"></div></div>'
+        +'<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;'
+          +'font-size:19px;font-weight:800;color:var(--text);text-shadow:0 1px 3px rgba(0,0,0,.5)">M</div>'
+        +'</div>'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="display:flex;justify-content:space-between;margin-bottom:5px;gap:8px">'
+          +'<span id="dlName" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>'
+          +'<span id="dlPct" style="font-variant-numeric:tabular-nums;font-weight:700;color:var(--text);flex:0 0 auto"></span></div>'
+        +'<div style="height:6px;border-radius:999px;background:rgba(127,150,180,.16);overflow:hidden">'
+          +'<div id="dlFill" style="height:100%;width:0%;border-radius:999px;'
+          +'background:linear-gradient(90deg,#3a8a5a,#5fd39a,#3a8a5a);background-size:200% 100%;'
+          +'animation:dlFlow 1.4s linear infinite;transition:width .25s ease"></div></div></div>';
+      st.parentNode.insertBefore(_plBox, st.nextSibling);
+      if(!document.getElementById('dlAnim')){
+        const _s=document.createElement('style'); _s.id='dlAnim';
+        _s.textContent='@keyframes dlFlow{0%{background-position:0% 50%}100%{background-position:200% 50%}}'
+          +'@keyframes dlPulse{0%,100%{opacity:.35}50%{opacity:.9}}'
+          +'@media (prefers-reduced-motion:reduce){#dlFill,#dlHalo{animation:none!important}}';
+        document.head.appendChild(_s);
+      }
+    }
+    _plBox.style.display='';
+    const n=document.getElementById('dlName'); if(n) n.textContent=подпись||'';
+  }, 400);
+}
+function _plSet(готово, всего){
+  const f=document.getElementById('dlFill'), p=document.getElementById('dlPct'),
+        w=document.getElementById('dlWave'); if(!f||!p) return;
+  const мб=(б)=>(б/1048576).toFixed(1)+' МБ';
+  if(всего>0){
+    const пр=Math.max(0,Math.min(100, готово/всего*100));
+    f.style.width=пр.toFixed(1)+'%';
+    if(w) w.style.height=пр.toFixed(1)+'%';        // логотип наливается ровно на скачанное
+    p.textContent=пр.toFixed(0)+'%  ·  '+мб(готово)+' из '+мб(всего);
+  } else {
+    // Размер неизвестен (сервер сжимает на лету) — процент не выдумываем: это было бы враньём.
+    // Логотип держим наполовину и показываем, сколько реально пришло.
+    f.style.width='100%'; f.style.opacity='.45';
+    if(w) w.style.height='50%';
+    p.textContent=мб(готово);
+  }
+}
+function _plHide(){ clearTimeout(_plT); _plT=null; if(_plBox) _plBox.style.display='none'; }
+
+/* Скачивание с честным отсчётом: читаем поток кусками и складываем байты.
+   Если поток недоступен (старый браузер) — тихо откатываемся на обычный ответ. */
+async function fetchWithProgress(url, подпись, опции){
+  _plShow(подпись);
+  try{
+    const r=await fetch(url, опции||{});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const всего=+(r.headers.get('content-length')||0);
+    if(!r.body || !r.body.getReader){ const t=await r.text(); _plHide(); return t; }
+    const чтец=r.body.getReader(); const куски=[]; let готово=0;
+    for(;;){
+      const {done, value}=await чтец.read();
+      if(done) break;
+      куски.push(value); готово+=value.length; _plSet(готово, всего);
+    }
+    _plHide();
+    const всё=new Uint8Array(готово); let сдвиг=0;
+    for(const к of куски){ всё.set(к, сдвиг); сдвиг+=к.length; }
+    return new TextDecoder('utf-8').decode(всё);
+  }catch(e){ _plHide(); throw e; }
+}
+
 function setStatus(t){ const el=document.getElementById('status'); if(!el) return; el.textContent=t;
+  if(!t) _plHide();
   clearTimeout(_stSlowT); _stSlowT=null;
   // v1093 П-5-фикс (найдено живой проверкой «بخاري 1»): у поиска есть РАННИЕ return (номер хадиса, карточка
   // равия, широкий поиск) — они минуют setHead(true), и кнопка «Найти» оставалась заблокированной навсегда.
