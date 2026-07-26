@@ -3194,6 +3194,42 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if update.effective_chat and update.effective_chat.type == 'private':
                     await update.message.reply_text('🔒 RAG-поиск пока доступен только владельцу. Скоро откроем.')
                 return
+            # ── RAG ПО САХИХ АЛЬ-БУХАРИ (владелец 26.07.2026: «джамаат ру как слать?») ──────────
+            # Машинерия поиска по нашей базе (_rag_find_sync + bukhari.vec.json, 14 344 вектора)
+            # была написана, но НИКЕМ НЕ ВЫЗЫВАЛАСЬ — команда «раг» уходила в HuggingFace Space,
+            # то есть в чужую систему мимо нашей книги. Подключаем: «бухари <вопрос>» ищет ПО СМЫСЛУ
+            # в нашей базе, а прежний путь остаётся для остальных сборников.
+            if _low.startswith(('бухари ', 'раг бухари ', 'rag бухари ')):
+                _вопрос = re.sub(r'^(раг\s+|rag\s+)?бухари\s+', '', text, flags=re.I).strip()
+                if len(_вопрос) < 3:
+                    await update.message.reply_text('Напиши вопрос: «бухари можно ли пить стоя»')
+                    return
+                try:
+                    _ж = await update.message.reply_text('🧠 Ищу по смыслу в Сахих аль-Бухари…')
+                except Exception:
+                    _ж = None
+                _нашли, _беда = await loop.run_in_executor(None, _rag_find_sync, _вопрос, 5)
+                if not _нашли:
+                    _т = '🧠 Не нашёл: %s' % (_беда or 'ничего похожего по смыслу')
+                else:
+                    _строки = ['🧠 <b>Сахих аль-Бухари</b> · по смыслу: «%s»' % html.escape(_вопрос[:70]), '']
+                    for _z in _нашли:
+                        _н = _z.get('num') or _z.get('n') or '?'
+                        _тк = (_z.get('русский') or _z.get('r') or _z.get('текст') or _z.get('a') or '')
+                        _тк = re.sub(r'\s+', ' ', str(_тк)).strip()[:320]
+                        _строки.append('📖 <b>№%s</b>\n%s' % (_н, html.escape(_тк)))
+                        _строки.append('')
+                    _строки.append('<i>Найдено по смыслу — слова вопроса в тексте могут не встречаться.</i>')
+                    _т = '\n'.join(_строки)[:3900]
+                try:
+                    if _ж:
+                        await _ж.edit_text(_т, parse_mode='HTML', disable_web_page_preview=True)
+                    else:
+                        await update.message.reply_text(_т, parse_mode='HTML', disable_web_page_preview=True)
+                except Exception:
+                    await update.message.reply_text(re.sub(r'<[^>]+>', '', _т)[:3900])
+                return
+
             if True:
                 _src, _q = _rag_parse(text)
                 if _q or _src:
@@ -5294,6 +5330,34 @@ def _cf_creds():
     tok = next((низ[n] for n in имена_ток if низ.get(n)), '')
     acc = next((низ[n] for n in имена_акк if низ.get(n)), '')
     return tok, acc
+
+
+def _cf_пары():
+    """ВСЕ пары «токен + аккаунт», каждая из своего источника — для запасного хода.
+
+    Мысль владельца 26.07.2026: «надо было наверное оба аккаунта там оставить, чтобы лимитов
+    хватало». Мысль верная. По расчёту одного аккаунта хватает с запасом (10 000 нейронов в сутки
+    ≈ 14 000 вопросов: расчёт всей книги в 14 344 вектора выжег ровно суточную норму, значит
+    вопрос стоит около 0,7 нейрона). Но норма может кончиться — тогда поиск встанет молча.
+
+    ГЛАВНОЕ ПРАВИЛО: токен и номер аккаунта берутся ТОЛЬКО ПАРОЙ из одного источника. Именно
+    смешение — токен от одного, номер от другого — и держало RAG в «401 Authentication error»
+    полдня 26.07. Поэтому здесь пары, а не два независимых списка.
+    """
+    низ = {k.strip().lower(): (v or '').strip() for k, v in os.environ.items()}
+    пары = []
+    for тн, ан in (('cloudflare_api_token', 'cloudflare_account_id'),        # основной
+                   ('cloudflare_m_api_token', 'cloudflare_m_account_id'),    # второй аккаунт
+                   ('cf_token', 'cloudflare_account_id'),                    # запись из muslimoon_api.env
+                   ('cloudflare_api_key', 'cloudflare_account_id')):
+        t, a = низ.get(тн, ''), низ.get(ан, '')
+        if t and a and (t, a) not in пары:
+            пары.append((t, a))
+    if not пары:
+        t, a = _cf_creds()
+        if t and a:
+            пары.append((t, a))
+    return пары
 
 
 _RAGB = {'готово': False, 'ids': None, 'поля': None, 'body': None, 's': None,
@@ -7518,33 +7582,41 @@ async def _api_serve(application=None):
         q = (d.get('q') or '').strip()[:600]
         if not q:
             return _cors(web.json_response({'v': None, 'error': 'no-input'}))
-        tok, acc = _cf_creds()
-        if not tok or not acc:
+        пары = _cf_пары()
+        if not пары:
             # Диагностика без утечки: показываем ИМЕНА переменных с «cloud/cf» в названии и что именно
             # не нашлось. Значения не отдаём никогда. Владелец 26.07 добавил ключ, а эндпоинт всё равно
             # молчал — гадать «есть или нет» бессмысленно, надо видеть, что реально в окружении.
             вижу = sorted([k for k in os.environ if 'cloud' in k.lower() or k.lower().startswith('cf_')])
-            return _cors(web.json_response({'v': None, 'error': 'no-key',
-                                            'нет_токена': not tok, 'нет_аккаунта': not acc,
-                                            'вижу_переменные': вижу}))
+            return _cors(web.json_response({'v': None, 'error': 'no-key', 'вижу_переменные': вижу}))
         try:
-            url = 'https://api.cloudflare.com/client/v4/accounts/%s/ai/run/@cf/baai/bge-m3' % acc
-            resp = await asyncio.get_event_loop().run_in_executor(
-                None, lambda: requests.post(url, json={'text': [q]},
-                                            headers={'Authorization': 'Bearer ' + tok}, timeout=30))
-            j = resp.json()
-            v = ((j.get('result') or {}).get('data') or [None])[0]
-            if not v:
-                # Голое «empty» ничего не объясняет: за ним прячется и выбитая квота (429), и просроченный
-                # ключ, и опечатка в имени модели. 26.07.2026 полдня ушло на гадание — поэтому отдаём
-                # то, что реально сказал Cloudflare: код ответа и его текст ошибки. Ключ наружу не идёт.
+            # ЗАПАСНОЙ АККАУНТ (мысль владельца 26.07: «надо было оба аккаунта оставить, чтобы лимитов
+            # хватало»). Идём по парам: кончилась суточная норма у первого — молча берём второй.
+            # Пара берётся ЦЕЛИКОМ из одного источника: смешение токена и номера от разных аккаунтов
+            # и давало «401 Authentication error», на котором RAG простоял полдня.
+            последняя_беда, последний_код = '', 0
+            for tok, acc in пары:
+                url = 'https://api.cloudflare.com/client/v4/accounts/%s/ai/run/@cf/baai/bge-m3' % acc
+                resp = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda u=url, t=tok: requests.post(u, json={'text': [q]},
+                                                             headers={'Authorization': 'Bearer ' + t}, timeout=30))
+                j = resp.json()
+                v = ((j.get('result') or {}).get('data') or [None])[0]
+                if v:
+                    return _cors(web.json_response({'v': [round(float(x), 5) for x in v], 'model': 'bge-m3'}))
                 беды = j.get('errors') or []
-                текст = '; '.join(str(b.get('message') or b)[:90] for b in беды[:2]) if беды else ''
-                return _cors(web.json_response({
-                    'v': None, 'error': 'empty', 'код': resp.status_code,
-                    'причина': текст or (str(j)[:160] if j else 'ответ пуст'),
-                    'квота_выбита': resp.status_code == 429 or 'limit' in текст.lower()}))
-            return _cors(web.json_response({'v': [round(float(x), 5) for x in v], 'model': 'bge-m3'}))
+                последняя_беда = '; '.join(str(b.get('message') or b)[:90] for b in беды[:2]) if беды else (str(j)[:140] if j else '')
+                последний_код = resp.status_code
+                # 429 (норма выбита) и 401/403 (ключ не тот) — повод попробовать следующую пару;
+                # прочее (сеть, модель) повторять смысла нет.
+                if resp.status_code not in (401, 403, 429):
+                    break
+            # Голое «empty» ничего не объясняет: за ним прячется и выбитая квота, и просроченный ключ,
+            # и опечатка в имени модели. 26.07 полдня ушло на гадание — отдаём то, что сказал Cloudflare.
+            return _cors(web.json_response({
+                'v': None, 'error': 'empty', 'код': последний_код, 'пар_пробовал': len(пары),
+                'причина': последняя_беда or 'ответ пуст',
+                'квота_выбита': последний_код == 429 or 'limit' in последняя_беда.lower()}))
         except Exception as e:
             return _cors(web.json_response({'v': None, 'error': str(e)[:120]}))
 
