@@ -5415,7 +5415,11 @@ def _rag_find_sync(q, top=6):
     qv = _rag_query_vec_sync(q)
     if not qv:
         return None, 'нет ключа для вектора вопроса'
-    nq = math.sqrt(sum(x * x for x in qv)) or 1.0
+    # 26.07.2026: тут стояло math.sqrt, а модуль math в bot.py НЕ импортирован — и поиск падал
+    # с NameError на первой же строке. Снаружи это выглядело как «бот сказал „Ищу…“ и замолчал»:
+    # исключение в фоновом потоке до пользователя не доходит. Возведение в степень 0.5 даёт то же
+    # самое и ничего не требует. Нашлось диагностическим эндпоинтом /api/rag_find за один запрос.
+    nq = (sum(x * x for x in qv) ** 0.5) or 1.0
     qv = [x / nq for x in qv]
     dim, body, S, ids = _RAGB['dim'], _RAGB['body'], _RAGB['s'], _RAGB['ids']
     лучшее = {}
