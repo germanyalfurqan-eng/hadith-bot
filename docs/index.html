@@ -434,7 +434,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1234</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1235</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1202,7 +1202,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1234';
+const APPVER = 'v1235';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2154,7 +2154,16 @@ async function fetchEdition(code){
     catch(e2){ return await fetchJSON(EDITION_URL(code), 45000); } }
 }
 let ahmadArr=null;
-async function loadAhmad(){ if(ahmadArr)return ahmadArr; setStatus('Загружаю Муснад Ахмада (большой)…');
+async function loadAhmad(){ if(ahmadArr)return ahmadArr;
+  // 26.07.2026, владелец трижды: «Ахмад загрузка, я сто раз сказал». Найти виновника по коду вышло
+  // не сразу — путей к этой функции много. Поэтому она сама сообщает, кто её позвал: в журнал ошибок
+  // уходит след вызова. Если 25 МБ поедут снова, мы увидим ОТКУДА, а не будем гадать.
+  try{ throw new Error('trace'); }catch(_e){
+    try{ const _кто=String(_e.stack||'').split('
+').slice(2,5).join(' ⟵ ').slice(0,220);
+         _appReport('Полная загрузка Ахмада (25 МБ). Позвали: '+_кто, 'ahmad-full'); }catch(_){}
+  }
+  setStatus('Загружаю Муснад Ахмада (большой)…');
   let j; try{ j=await cachedFetchJSON(AHMAD_URL, 180000); }catch(_e){ j=await cachedFetchJSON(AHMAD_URL, 180000); }   // A-136: 25МБ — самый большой; кэш Cache Storage (повтор мгновенно) + таймаут 180с + 2 попытки (90с не хватало на медленной мобиле)
   ahmadArr=(Array.isArray(j)?j:[]).map(x=>({num:String(x.n),text:x.t||'',grade:x.g||'',norm:''})); return ahmadArr; }   /* F3(аудит): guard — cachedFetchJSON при ошибке даёт не-массив, .map крашил экран */
 // A-136 шардинг: открыть ОДИН хадис Ахмада по номеру → грузим шард ~900КБ (ahmad/<num//1000>.json), НЕ весь 25МБ
@@ -3959,7 +3968,13 @@ function loadDarimi(){ if(_darimiCache) return Promise.resolve(_darimiCache); if
 async function getOne(code,num){
   if(code==='muslim'){ return await loadMuslimOne(num); }   // Муслим — шард ~1МБ по номеру (не весь 15МБ); если полный массив в кэше — loadMuslimOne берёт оттуда
   if(code==='darimi'){ const a=await loadDarimi(); const x=a.find(y=>String(y.num)===String(num)); return x?{num:String(x.num),text:(x.ar||'').replace(/\s+/g,' ').trim(),grade:'',norm:''}:null; }   // #151: Дарими — первоисточник, грузим из локального darimi.json (CDN 403)
-  if(code==='ahmad'){ const a=await loadAhmad(); const x=a.find(y=>String(y.num)===String(num)); return x?{num:String(x.num),text:(x.text||'').replace(/\s+/g,' ').trim(),grade:x.grade||'',norm:''}:null; }   // #171: Ахмад — локальный (CDN ara-ahmad даёт иную нумерацию → клик не открывал)
+  // 26.07.2026, владелец в третий раз: «Ахмад загрузка, я сто раз сказал». Вот корень: getOne
+  // открывает ОДИН хадис — а тянул ВЕСЬ Муснад (25 МБ). Достаточно точечного шарда на 900 КБ,
+  // он лежит рядом (loadAhmadOne, A-136) и по номеру берёт ahmad/<num//1000>.json. Полный массив
+  // остаётся только запасным путём — если шард не дал ответа (пробел в шардировании).
+  if(code==='ahmad'){ let x=await loadAhmadOne(num);
+    if(!x){ const a=await loadAhmad(); x=a.find(y=>String(y.num)===String(num)); }
+    return x?{num:String(x.num),text:(x.text||'').replace(/\s+/g,' ').trim(),grade:x.grade||'',norm:''}:null; }   // #171: Ахмад — локальный (CDN ara-ahmad даёт иную нумерацию → клик не открывал)
   try{ const _X=EXTRA_MAP[code]; if(_X && (_X.file || (!_X.soon && !_X.muhaymin))){ const a=await loadByCode(code); const x=a.find(y=>String(y.num)===String(num)); if(x) return {num:String(x.num),text:(x.text||x.ar||'').replace(/\s+/g,' ').trim(),grade:x.grade||'',norm:''}; } }catch(e){}   // #171: прочие локальные первоисточники/издания (Ибн Хиббан, Насаи-Кубра, Абу Я‘ля…) — из наших editions, не с CDN
   try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-'+code+'/'+num+'.min.json')).json();
     const h=(j.hadiths||[])[0]; if(h){ const raw=(h.text||'').replace(/\s+/g,' ').trim();
