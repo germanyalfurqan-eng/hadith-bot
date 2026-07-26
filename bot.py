@@ -7361,7 +7361,13 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'v': None, 'error': 'no-input'}))
         tok, acc = _cf_creds()
         if not tok or not acc:
-            return _cors(web.json_response({'v': None, 'error': 'no-key'}))
+            # Диагностика без утечки: показываем ИМЕНА переменных с «cloud/cf» в названии и что именно
+            # не нашлось. Значения не отдаём никогда. Владелец 26.07 добавил ключ, а эндпоинт всё равно
+            # молчал — гадать «есть или нет» бессмысленно, надо видеть, что реально в окружении.
+            вижу = sorted([k for k in os.environ if 'cloud' in k.lower() or k.lower().startswith('cf_')])
+            return _cors(web.json_response({'v': None, 'error': 'no-key',
+                                            'нет_токена': not tok, 'нет_аккаунта': not acc,
+                                            'вижу_переменные': вижу}))
         try:
             url = 'https://api.cloudflare.com/client/v4/accounts/%s/ai/run/@cf/baai/bge-m3' % acc
             resp = await asyncio.get_event_loop().run_in_executor(
