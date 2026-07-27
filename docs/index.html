@@ -343,15 +343,27 @@
      подсвечивалась анимацией — человек в куче кнопок обратил на неё внимание. И чтобы не маячила:
      начал движение — затухает потихоньку, не резко». Свечение по контуру, без дёрганья и смещений,
      чтобы не мешать чтению: пульсирует только тень и слегка яркость. */
+  /* Правка 27.07.2026 по замечанию владельца: «свечение и так слабое, перевода вообще незаметно,
+     причём оно быстро уходит, и надо также окружность вокруг обводить несколько раз».
+     Стало: ярче и контурнее (расходящееся кольцо + постоянное свечение), медленнее (2.4 с на круг),
+     и кругов теперь несколько — маяк живёт 5 обводок, а не гаснет от первого же прикосновения. */
   @keyframes mayakPuls{
-    0%  { box-shadow:0 0 0 0 rgba(88,166,255,.55), 0 0 10px 2px rgba(88,166,255,.35) }
-    55% { box-shadow:0 0 0 7px rgba(88,166,255,0),  0 0 16px 5px rgba(88,166,255,.20) }
-    100%{ box-shadow:0 0 0 0 rgba(88,166,255,0),    0 0 10px 2px rgba(88,166,255,.35) }
+    0%  { box-shadow:0 0 0 0 rgba(88,166,255,.85), 0 0 14px 3px rgba(88,166,255,.55);
+          filter:brightness(1.14) }
+    50% { box-shadow:0 0 0 12px rgba(88,166,255,0), 0 0 26px 9px rgba(88,166,255,.34);
+          filter:brightness(1.22) }
+    100%{ box-shadow:0 0 0 0 rgba(88,166,255,0),   0 0 14px 3px rgba(88,166,255,.55);
+          filter:brightness(1.14) }
   }
-  .mayak{ animation:mayakPuls 1.9s ease-in-out infinite; border-radius:10px }
-  .mayak-gasnet{ animation:mayakPuls 1.9s ease-in-out infinite; opacity:1;
-    transition:box-shadow 1.2s ease, filter 1.2s ease; animation-play-state:paused; box-shadow:none!important }
-  @media (prefers-reduced-motion:reduce){ .mayak,.mayak-gasnet{ animation:none!important; box-shadow:0 0 0 2px rgba(88,166,255,.45)!important } }
+  .mayak{ animation:mayakPuls 2.4s ease-in-out infinite; border-radius:10px; position:relative; z-index:1 }
+  .mayak-gasnet{ animation:none; box-shadow:none!important; filter:none;
+    transition:box-shadow 1.4s ease, filter 1.4s ease }
+  @media (prefers-reduced-motion:reduce){ .mayak,.mayak-gasnet{ animation:none!important; box-shadow:0 0 0 3px rgba(88,166,255,.6)!important } }
+  /* Плавная сборка карточек (владелец: «анимация сборки карточки грубая и местами дёргается;
+     в основе всё должно быть гладко и стабильно»). Карточка не выпрыгивает, а проявляется. */
+  @keyframes kartochkaVhod{ from{ opacity:0; transform:translateY(6px) } to{ opacity:1; transform:none } }
+  #res .card, .narrCard, .isnadBox{ animation:kartochkaVhod .26s ease-out both }
+  @media (prefers-reduced-motion:reduce){ #res .card,.narrCard,.isnadBox{ animation:none!important } }
   button:active,.chip:active,.col:active,.tab:active,.tr-btn:active,.gear:active,.bleft:active{transform:scale(.94)}
   .card{animation:fadeIn .16s ease}
   /* M334 ОПТИМИЗАЦИЯ: изоляция layout + офф-скрин карточки не рендерятся (длинные списки результатов летают) */
@@ -447,7 +459,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1239</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1240</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1215,7 +1227,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1239';
+const APPVER = 'v1240';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7733,15 +7745,19 @@ const МАЯК = {
     this.гаси(false);
     this.текущий = э; this.показов++;
     э.classList.add('mayak');
-    // сама по себе гаснет через 12 секунд, даже если человек застыл — маячить не должна
-    setTimeout(()=>{ if(this.текущий===э) this.гаси(true); }, 12000);
+    // Владелец 27.07.2026: «оно быстро уходит… надо окружность обводить несколько раз».
+    // Пять полных обводок по 2.4 с = 12 секунд ровного маяка, потом плавное затухание.
+    setTimeout(()=>{ if(this.текущий===э) this.гаси(true); }, 2400 * 5);
   },
   первый(корень){
     try{ return (корень||document).querySelector('[data-mayak="perevod"]'); }catch(e){ return null; }
   }
 };
-// любое движение = человек включился, подсказка больше не нужна
-['pointerdown','keydown','wheel','touchstart'].forEach(ev=>
+// Гасим по ДЕЙСТВИЮ, но не по чтению. Первая версия гасла и от скролла — а человек как раз
+// прокручивает карточку, чтобы её прочесть, и маяк умирал раньше, чем на него посмотрят
+// (владелец: «свечение перевода вообще незаметно, причём оно быстро уходит»). Скролл и колесо —
+// это чтение, а не «я понял про кнопку». Гасим только от касания, клика и клавиатуры.
+['pointerdown','keydown'].forEach(ev=>
   addEventListener(ev, ()=>МАЯК.гаси(true), {passive:true, capture:true}));
 // нажал «Перевод» — значит понял, где она; больше не подсвечиваем никогда
 addEventListener('click', e=>{
