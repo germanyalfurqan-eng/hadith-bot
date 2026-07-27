@@ -380,7 +380,16 @@
   #qrBody .qrAyah.cur{ background:rgba(74,222,128,.08); box-shadow:inset 3px 0 0 var(--ok) }
   /* Арабский: тёплый тон вместо чисто белого — белое на тёмном режет глаз при долгом чтении.
      Высота строки 2.3: огласовкам и хамзам нужна вертикаль, иначе знаки соседних строк сходятся. */
-  #qrBody .qrAr{ direction:rtl; text-align:right; font-size:23px; line-height:2.3; color:#ece7dd }
+  /* Шрифт — Amiri, тот самый из макета. Владелец 27.07.2026: «у тебя шрифт другой был в макете,
+     вот как в макете сделай шрифт в Коране». Ставим ТОЛЬКО читалке Корана: глобальный дефолт
+     арабского трогать нельзя (решение владельца v636 — мусхафные «застряли» у тестировавших),
+     и хадисы остаются на своём шрифте, как он и просил.
+     Amiri лежит у нас локально (miniapp/fonts/amiri-400/700), сеть не нужна.
+     Кегль поднят с 23 до 27px: у Amiri мелкий очковый рисунок, при 23 он выглядел меньше макета. */
+  #qrBody .qrAr{ direction:rtl; text-align:right; font-size:27px; line-height:2.25; color:#ece7dd;
+    font-family:'Amiri','Scheherazade New','Noto Naskh Arabic',serif !important;
+    letter-spacing:.2px; text-rendering:optimizeLegibility }
+  #qrBody .qrBasmala, #qrBody .qrAyah b{ font-family:'Amiri','Noto Naskh Arabic',serif }
   body.light #qrBody .qrAr{ color:#1c1710 }
   body.sand  #qrBody .qrAr{ color:#241f16 }
   /* Перевод: был 13.5px цветом служебных подписей — читался как сноска, хотя его читают наравне
@@ -531,7 +540,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1245</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1246</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1299,7 +1308,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1245';
+const APPVER = 'v1246';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7592,8 +7601,21 @@ async function _qrLoad(){
   nav.appendChild(_titleRow); nav.appendChild(navBox);
   const mk=(t,fn,dis)=>{ const b=document.createElement('button'); b.textContent=t; if(dis)b.disabled=true; b.onclick=fn;
     b.style.cssText='background:var(--btn);color:#fff;border:1px solid var(--btn);border-radius:10px;padding:9px 16px;font-size:14.5px;font-weight:700;cursor:pointer;margin:4px 5px;min-width:108px'+(dis?';opacity:.35':''); return b; };   // #47: компактнее (было 14px/17px/140px — пол-экрана)
-  navBox.appendChild(mk('← пред. сура', ()=>{ _qrView={s:s-1,a:0}; _qrLoad(); }, s<=1));
-  navBox.appendChild(mk('след. сура →', ()=>{ _qrView={s:s+1,a:0}; _qrLoad(); }, s>=114));
+  // Владелец 27.07.2026: «следующая-предыдущая когда листаешь, он как-то мерцает — анимацию более
+  // гладкую можешь?». Мерцало потому, что _qrLoad стирал ленту и рисовал новую мгновенно: глаз
+  // ловил пустой кадр между ними. Теперь уходим через затухание и возвращаемся проявлением —
+  // пустого кадра не видно, а переход читается как перелистывание страницы.
+  const _листать=(нов)=>{ try{
+      const z=document.getElementById('qrZoom'), b=document.getElementById('qrBody');
+      if(!z){ _qrView={s:нов,a:0}; _qrLoad(); return; }
+      z.style.transition='opacity .16s ease'; z.style.opacity='0';
+      setTimeout(()=>{ _qrView={s:нов,a:0}; _qrLoad();
+        try{ if(b) b.scrollTop=0; const z2=document.getElementById('qrZoom');
+             if(z2){ z2.style.opacity='0'; requestAnimationFrame(()=>{ z2.style.transition='opacity .22s ease'; z2.style.opacity='1'; }); }
+        }catch(e){} }, 165);
+    }catch(e){ _qrView={s:нов,a:0}; _qrLoad(); } };
+  navBox.appendChild(mk('← пред. сура', ()=>_листать(s-1), s<=1));
+  navBox.appendChild(mk('след. сура →', ()=>_листать(s+1), s>=114));
   // выбор суры списком (крутилка) — быстро перейти к любой суре
   const ss=document.createElement('select'); ss.style.cssText='background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px;font-size:14px;margin:5px 6px;max-width:230px';
   for(let i=1;i<=114;i++){ const o=document.createElement('option'); o.value=i; o.textContent=i+'. '+(SURA_NAMES[i-1]||''); if(i===s) o.selected=true; ss.appendChild(o); }
