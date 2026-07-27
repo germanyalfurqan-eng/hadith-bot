@@ -3,7 +3,7 @@
 # запушен — и нельзя было отличить «фикс не работает» от «Railway ещё не передеплоился». Теперь
 # у бэкенда есть паспорт: GET /api/version отдаёт эту метку и время старта. Меняем при каждом
 # изменении bot.py — тогда любой спор о том, дошёл ли код до прода, решается одним запросом.
-СБОРКА = 'b1241-claude-reply-v-chat'
+СБОРКА = 'b1242-html-import'
 import time as _time_boot
 _СТАРТ = _time_boot.time()
 from concurrent.futures import ThreadPoolExecutor as _TPE
@@ -30,7 +30,10 @@ import shutil
 import difflib
 import requests
 from datetime import datetime, timedelta
-from html import unescape
+import html                      # 27.07.2026: был только `from html import unescape` — при этом
+from html import unescape        # html.escape в ответе «раг» падал с NameError. ТРЕТИЙ случай
+                                 # одного класса за два дня (math.sqrt, loop, html): имя используется,
+                                 # а в области видимости его нет. Ловится статически — см. imya_storozh.py
 from urllib.parse import parse_qsl
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler, PollAnswerHandler, MessageReactionHandler
