@@ -3,7 +3,7 @@
 # запушен — и нельзя было отличить «фикс не работает» от «Railway ещё не передеплоился». Теперь
 # у бэкенда есть паспорт: GET /api/version отдаёт эту метку и время старта. Меняем при каждом
 # изменении bot.py — тогда любой спор о том, дошёл ли код до прода, решается одним запросом.
-СБОРКА = 'b1248-kvota-uchastnikov'
+СБОРКА = 'b1249-bez-lichnyh-putey'
 import time as _time_boot
 _СТАРТ = _time_boot.time()
 from concurrent.futures import ThreadPoolExecutor as _TPE
@@ -7623,17 +7623,30 @@ async def _api_serve(application=None):
         except Exception as e:
             return _cors(web.json_response({'error': str(e)}))
 
+    def _без_личного(x):
+        """Вырезать домашние пути с именем пользователя. Владелец 27.07.2026, увидев в тревоге
+        «локально/...»: «такие ссылки, где сказано anzor, нигде не должны светиться».
+        Чистим и здесь, на приёме: фронт у людей бывает старой версии, а закон о защите данных один.
+        Это вторая линия — первая стоит в самом приложении, перед отправкой."""
+        try:
+            x = re.sub(r'file:///[A-Za-z]:локально/]+/', 'локально/', str(x or ''), flags=re.I)
+            x = re.sub(r'[A-Za-z]:' + chr(92) * 2 + 'Users' + chr(92) * 2 + '[^' + chr(92) + ']+' + chr(92) * 2,
+                       'локально' + chr(92), x, flags=re.I)
+            return re.sub(r'/(?:home|Users)/[^/]+/', 'локально/', x)
+        except Exception:
+            return str(x or '')
+
     async def errlog(r):
         # Журнал ошибок приложения: клиент шлёт ошибку → data/errors.json (с дедупом) + уведомление владельцу.
         try:
             d = await _body(r)
             user = verify_init_data(d.get('initData'))
-            msg = (d.get('msg') or '').strip()[:300]
+            msg = _без_личного((d.get('msg') or '').strip())[:300]
             if not msg:
                 return _cors(web.json_response({'ok': False}))
-            where = (d.get('where') or '').strip()[:120]
+            where = _без_личного((d.get('where') or '').strip())[:120]
             ver = (d.get('ver') or '').strip()[:20]
-            stack = (d.get('stack') or '').strip()[:600]
+            stack = _без_личного((d.get('stack') or '').strip())[:600]
             uid = _uid(user, r)
             if not rate_ok('errlog:' + uid, 8, 60):
                 return _cors(web.json_response({'ok': False, 'rate': True}))

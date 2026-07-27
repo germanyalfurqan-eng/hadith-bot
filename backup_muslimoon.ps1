@@ -6,8 +6,8 @@
 #   -Monthly: дополнительно отдельный месячный зип Muslimoon_MONTHLY_<ГГГГ-ММ>.zip (хранится, 11-го числа)
 param([switch]$Monthly)
 $ErrorActionPreference = 'Stop'
-$proj  = 'C:\Users\anzor\Documents\MUSLIMOON BOT claud'
-$bk    = 'C:\Users\anzor\Documents\Google drive s\Muslimoon_BACKUP'
+$proj  = '%USERPROFILE%\Documents\MUSLIMOON BOT claud'
+$bk    = '%USERPROFILE%\Documents\Google drive s\Muslimoon_BACKUP'
 $zip   = Join-Path $bk 'Muslimoon_RECOVERY.zip'
 $stamp = Get-Date -Format 'yyyy-MM-dd'
 $now   = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
