@@ -3,7 +3,7 @@
 # запушен — и нельзя было отличить «фикс не работает» от «Railway ещё не передеплоился». Теперь
 # у бэкенда есть паспорт: GET /api/version отдаёт эту метку и время старта. Меняем при каждом
 # изменении bot.py — тогда любой спор о том, дошёл ли код до прода, решается одним запросом.
-СБОРКА = 'b1247-ostatok-limita'
+СБОРКА = 'b1248-kvota-uchastnikov'
 import time as _time_boot
 _СТАРТ = _time_boot.time()
 from concurrent.futures import ThreadPoolExecutor as _TPE
@@ -3242,11 +3242,27 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if _ac is not None:
                     await update.message.reply_text(_ac)
                     return
-            # гейт доступа: владелец / анон-админ группы / белый список / «всем вкл»
-            if not (is_owner(update) or _anon or _rag_allowed(_uid)):
-                if update.effective_chat and update.effective_chat.type == 'private':
-                    await update.message.reply_text('🔒 RAG-поиск пока доступен только владельцу. Скоро откроем.')
-                return
+            # ── ГДЕ И КОМУ РАЗРЕШЁН РАГ (владелец 27.07.2026) ──────────────────────────────
+            # «Эта функция строго в джамаат ру только работает пока, даже в личке никому кроме
+            # меня — два аккаунта. Лимит установи также для других пользователей, небольшой,
+            # не забудь: обращайтесь к админам, пусть пишут».
+            # Значит: владелец — везде и без счёта; участники — ТОЛЬКО в чате Джамаат и с
+            # дневным лимитом; всё остальное — вежливый отказ. Каждый вопрос стоит нейронов
+            # Cloudflare, поэтому лимит здесь не формальность, а защита общего кошелька.
+            _свой = is_owner(update) or _anon or _rag_allowed(_uid)
+            _в_джамаате = bool(update.effective_chat and update.effective_chat.id == RAG_CHAT_ID)
+            if not _свой:
+                if not _в_джамаате:
+                    if update.effective_chat and update.effective_chat.type == 'private':
+                        await update.message.reply_text(
+                            '🔒 Смысловой поиск работает пока только в чате @jamaat_ru — заходи туда и спрашивай.')
+                    return
+                _можно, _ост = _rag_квота(_uid)
+                if not _можно:
+                    await update.message.reply_text(
+                        '🔒 На сегодня твои %d запроса к РАГ израсходованы — счётчик обнулится завтра.\n'
+                        'Нужно больше — напиши админам чата, откроют.' % RAG_ЛИМИТ_ЮЗЕР)
+                    return
             # ── RAG ПО САХИХ АЛЬ-БУХАРИ (владелец 26.07.2026: «джамаат ру как слать?») ──────────
             # Машинерия поиска по нашей базе (_rag_find_sync + bukhari.vec.json, 14 344 вектора)
             # была написана, но НИКЕМ НЕ ВЫЗЫВАЛАСЬ — команда «раг» уходила в HuggingFace Space,
@@ -3352,6 +3368,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 _ост = ' · остаток Cloudflare не отдаёт (%s)' % _CF_ЛИМИТ['ошибка'][:40]
                         except Exception:
                             pass
+                        if not _свой:
+                            _мой = RAG_ЛИМИТ_ЮЗЕР - (_RAG_КВОТА.get(_uid) or {}).get('сколько', 0)
+                            _строки.append('👤 твоих запросов на сегодня осталось: <b>%d</b> из %d · '
+                                           'нужно больше — напиши админам чата' % (max(0, _мой), RAG_ЛИМИТ_ЮЗЕР))
                         _строки.append('⚙️ вектор <code>bge-m3</code> · %s · за смену: новых %d, из накопленного %d%s'
                                        % ('взят из накопленного, лимит не тронут' if _из_кэша
                                           else 'новый запрос к Cloudflare',
@@ -5579,6 +5599,25 @@ def _rag_load_sync():
         return True
     except Exception:
         return False
+
+RAG_CHAT_ID = -1001925828112          # @jamaat_ru — единственное место, где РАГ открыт участникам
+RAG_ЛИМИТ_ЮЗЕР = 3                    # запросов в сутки на участника (владельца не касается)
+_RAG_КВОТА = {}                       # uid -> {'день': 'ГГГГ-ММ-ДД', 'сколько': N}
+
+def _rag_квота(uid):
+    """Дневная квота участника. Каждый вопрос стоит нейронов Cloudflare из общего кошелька,
+    поэтому счёт ведём по человеку и по суткам. Владелец 27.07.2026: «лимит небольшой, и не
+    забудь — обращайтесь к админам, пусть пишут»."""
+    import time as _t
+    день = _t.strftime('%Y-%m-%d')
+    з = _RAG_КВОТА.get(uid)
+    if not з or з.get('день') != день:
+        з = {'день': день, 'сколько': 0}
+        _RAG_КВОТА[uid] = з
+    if з['сколько'] >= RAG_ЛИМИТ_ЮЗЕР:
+        return False, 0
+    з['сколько'] += 1
+    return True, RAG_ЛИМИТ_ЮЗЕР - з['сколько']
 
 _CF_ЛИМИТ = {'нейронов': None, 'когда': 0, 'ошибка': ''}
 _CF_СУТКИ = 10000        # бесплатный дневной потолок Workers AI
