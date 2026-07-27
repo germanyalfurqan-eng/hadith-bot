@@ -569,7 +569,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1248</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1249</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1337,7 +1337,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1248';
+const APPVER = 'v1249';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2376,21 +2376,69 @@ async function loadQuranRu(){
   // перевод Корана уважает настройку cfg.qtr (Кулиев / Абу Адель). Кеш — по изданию.
   const ed=(cfg&&cfg.qtr)||'rus-elmirkuliev';
   if(quranRu && window._quranRuEd===ed) return quranRu;
-  const nm=ed==='rus-abuadel'?'Абу Адель':'Кулиев'; setStatus('Загружаю перевод Корана ('+nm+')…');
+  const nm=ed==='rus-abuadel'?'Абу Адель':'Кулиев';
   const map={};
+  // 27.07.2026, владелец: «разберись с этой загрузкой вечной». Разобрался: статус «Загружаю перевод
+  // Корана…» СТАВИЛСЯ, но никогда не снимался — ни при успехе, ни при ошибке. Файл при этом приходит
+  // за 1.3 секунды (1.58 МБ), то есть ничего не висело: висела только надпись. Классическая ловушка —
+  // индикатор без парного гашения. Теперь снимаем в любом случае, через finally.
+  // Заодно, как просил владелец: живая шкала с процентами и скоростью, а если скорость упала до нуля
+  // или загрузка ползёт — пишем в журнал ошибок, чтобы это не осталось незамеченным.
   try{
-    if(ed==='rus-abuadel'){   // полное издание Абу Аделя с CDN fawazahmed0 (того же, что у кнопки «Перевод»)
-      const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/rus-abuadel.min.json')).json();
-      ((j&&j.quran)||[]).forEach(v=>{ map[v.chapter+':'+v.verse]=v.text; });
-    } else {
-      const j=await (await fetch(QURAN_RU_URL)).json();
-      j.forEach(v=>{ map[v.s+':'+v.a]=v.t; });
-    }
+    const url = (ed==='rus-abuadel')
+      ? 'https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/rus-abuadel.min.json'
+      : QURAN_RU_URL;
+    const текст = await _грузитьСоШкалой(url, 'перевод Корана ('+nm+')');
+    const j = JSON.parse(текст);
+    if(ed==='rus-abuadel'){ ((j&&j.quran)||[]).forEach(v=>{ map[v.chapter+':'+v.verse]=v.text; }); }
+    else { j.forEach(v=>{ map[v.s+':'+v.a]=v.t; }); }
   }catch(e){   // фолбэк — локальный Кулиев, чтобы перевод не пропал совсем
     try{ const j=await (await fetch(QURAN_RU_URL)).json(); j.forEach(v=>{ map[v.s+':'+v.a]=v.t; }); }catch(_e){}
-  }
+  }finally{ try{ setStatus(''); }catch(_){} }
   if(!Object.keys(map).length && quranRu) return quranRu;   // не затирать рабочий кеш пустотой
   quranRu=map; window._quranRuEd=ed; return quranRu; }
+
+/* Загрузка со шкалой. Владелец 27.07.2026: «когда что-то грузится — анимация приятная, плюс шкала
+   сколько идёт и цифры скользящие приятные, как быстро они идут показывает; а если не идут цифры
+   или медленно — должна ошибка кидать в журнал».
+   Читаем ответ потоком, считаем проценты и скорость. Если за 6 секунд не прибавилось НИ БАЙТА —
+   это зависание, и о нём надо знать: пишем в журнал ошибок приложения. */
+async function _грузитьСоШкалой(url, что){
+  const t0 = Date.now();
+  const r = await fetch(url);
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const всего = +(r.headers.get('content-length') || 0);
+  if(!r.body || !всего){ try{ setStatus('Загружаю '+что+'…'); }catch(_){} return await r.text(); }
+  const чтец = r.body.getReader();
+  const куски = []; let принято = 0, былоПринято = 0, тихо = 0;
+  const сторож = setInterval(()=>{
+    if(принято === былоПринято){
+      тихо += 2;
+      if(тихо === 6){
+        try{ if(typeof _appReport==='function')
+          _appReport('загрузка встала: '+что+' — 0 байт за 6 с ('+Math.round(принято/1024)+' КБ из '+Math.round(всего/1024)+' КБ)', 'load-stall'); }catch(_){}
+      }
+    } else { тихо = 0; былоПринято = принято; }
+  }, 2000);
+  try{
+    for(;;){
+      const {done, value} = await чтец.read();
+      if(done) break;
+      куски.push(value); принято += value.length;
+      const сек = Math.max(.15, (Date.now()-t0)/1000);
+      const проц = Math.min(99, Math.round(принято*100/всего));
+      const скор = принято/1024/сек;                       // КБ/с
+      try{ setStatus('Загружаю '+что+' — '+проц+'% · '+
+        (скор>900 ? (скор/1024).toFixed(1)+' МБ/с' : Math.round(скор)+' КБ/с')); }catch(_){}
+    }
+  } finally { clearInterval(сторож); }
+  const сек = Math.max(.15,(Date.now()-t0)/1000);
+  if(принято/1024/сек < 40 && принято > 200*1024){        // ползёт — тоже повод записать
+    try{ if(typeof _appReport==='function')
+      _appReport('медленная загрузка: '+что+' — '+Math.round(принято/1024/сек)+' КБ/с за '+сек.toFixed(1)+' с', 'load-slow'); }catch(_){}
+  }
+  return new TextDecoder('utf-8').decode(await new Blob(куски).arrayBuffer());
+}
 // M336: параметрический загрузчик перевода Корана (кэш по изданию) — для читалки с режимом «оба перевода»
 const _qTrC={};
 async function loadQuranTr(ed){ if(_qTrC[ed]) return _qTrC[ed];
