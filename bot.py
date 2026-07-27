@@ -3,7 +3,7 @@
 # запушен — и нельзя было отличить «фикс не работает» от «Railway ещё не передеплоился». Теперь
 # у бэкенда есть паспорт: GET /api/version отдаёт эту метку и время старта. Меняем при каждом
 # изменении bot.py — тогда любой спор о том, дошёл ли код до прода, решается одним запросом.
-СБОРКА = 'b1246-ball-sovpadeniya'
+СБОРКА = 'b1247-ostatok-limita'
 import time as _time_boot
 _СТАРТ = _time_boot.time()
 from concurrent.futures import ThreadPoolExecutor as _TPE
@@ -3285,6 +3285,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # выглядит точно так же, как поломка. Поэтому: свой отдельный пул только под RAG
                 # (никто его не займёт) и жёсткий срок ожидания — лучше честное «не успел», чем тишина.
                 _кэш_до = _ВЕК_СЧЁТ['из_кэша']
+                try:
+                    await asyncio.get_event_loop().run_in_executor(_RAG_POOL, _cf_neurons_sync)
+                except Exception:
+                    pass
                 _из_кэша = False
                 try:
                     _нашли, _беда = await asyncio.wait_for(
@@ -3338,10 +3342,20 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             _строки.append('')
                         _строки.append('<i>Найдено по смыслу — слова вопроса в тексте могут не встречаться. '
                                        'Размечен пока только Сахих аль-Бухари: 14 344 фрагмента.</i>')
-                        _строки.append('⚙️ вектор <code>bge-m3</code> · %s · за смену: новых %d, из накопленного %d'
+                        _ост = ''
+                        try:
+                            _нейр = _CF_ЛИМИТ.get('нейронов')
+                            if _нейр is not None:
+                                _ост = ' · лимит Cloudflare: %d из %d нейронов за сутки, осталось %d' % (
+                                    int(_нейр), _CF_СУТКИ, max(0, _CF_СУТКИ - int(_нейр)))
+                            elif _CF_ЛИМИТ.get('ошибка'):
+                                _ост = ' · остаток Cloudflare не отдаёт (%s)' % _CF_ЛИМИТ['ошибка'][:40]
+                        except Exception:
+                            pass
+                        _строки.append('⚙️ вектор <code>bge-m3</code> · %s · за смену: новых %d, из накопленного %d%s'
                                        % ('взят из накопленного, лимит не тронут' if _из_кэша
                                           else 'новый запрос к Cloudflare',
-                                          _ВЕК_СЧЁТ['новых'], _ВЕК_СЧЁТ['из_кэша']))
+                                          _ВЕК_СЧЁТ['новых'], _ВЕК_СЧЁТ['из_кэша'], _ост))
                         _т = '\n'.join(_строки)
                 except Exception as _e2:
                     _т = '🧠 Сбой при сборке ответа: %s: %s' % (type(_e2).__name__, str(_e2)[:200])
@@ -5565,6 +5579,38 @@ def _rag_load_sync():
         return True
     except Exception:
         return False
+
+_CF_ЛИМИТ = {'нейронов': None, 'когда': 0, 'ошибка': ''}
+_CF_СУТКИ = 10000        # бесплатный дневной потолок Workers AI
+
+def _cf_neurons_sync():
+    """Сколько нейронов Cloudflare съедено за сегодня. Владелец 27.07.2026: «ты не пишешь остаток
+    лимита, важно знать сколько осталось». Свой счётчик запросов — это не остаток: цену запроса
+    назначает Cloudflare, поэтому спрашиваем У НЕГО, через GraphQL-аналитику. Ответ держим 5 минут,
+    чтобы не дёргать на каждый вопрос."""
+    import time as _t
+    if _CF_ЛИМИТ['когда'] and _t.time() - _CF_ЛИМИТ['когда'] < 300:
+        return _CF_ЛИМИТ['нейронов']
+    tok, acc = _cf_creds()
+    _CF_ЛИМИТ['когда'] = _t.time()
+    if not tok or not acc:
+        _CF_ЛИМИТ['ошибка'] = 'нет ключей'; return None
+    try:
+        сег = _t.strftime('%Y-%m-%d', _t.gmtime())
+        q = {"query": "query($acc:String!,$d:Date!){viewer{accounts(filter:{accountTag:$acc}){"
+                      "aiInferenceAdaptiveGroups(limit:100,filter:{date_geq:$d}){sum{totalNeurons}}}}}",
+             "variables": {"acc": acc, "d": сег}}
+        r = requests.post('https://api.cloudflare.com/client/v4/graphql', json=q,
+                          headers={'Authorization': 'Bearer ' + tok}, timeout=25).json()
+        гр = (((r.get('data') or {}).get('viewer') or {}).get('accounts') or [{}])[0]
+        сумма = sum(float((g.get('sum') or {}).get('totalNeurons') or 0)
+                    for g in (гр.get('aiInferenceAdaptiveGroups') or []))
+        _CF_ЛИМИТ['нейронов'] = сумма
+        _CF_ЛИМИТ['ошибка'] = '' if гр else str(r.get('errors'))[:120]
+        return сумма
+    except Exception as e:
+        _CF_ЛИМИТ['ошибка'] = str(e)[:120]
+        return None
 
 def _rag_query_vec_sync(q):
     _к = ' '.join((q or '').lower().split())[:300]
@@ -7852,6 +7898,8 @@ async def _api_serve(application=None):
             'запущен': _t.strftime('%d.%m %H:%M:%S', _t.localtime(_СТАРТ)),
             'rag_база': bool(_RAGB.get('n')), 'rag_векторов': _RAGB.get('n') or 0,
             'помнит_раг': bool(_ПОСЛ_РАГ.get('chat')), 'посл_вопрос': _ПОСЛ_РАГ.get('вопрос') or '',
+            'нейронов_за_сутки': _CF_ЛИМИТ.get('нейронов'), 'потолок_нейронов': _CF_СУТКИ,
+            'лимит_ошибка': _CF_ЛИМИТ.get('ошибка') or '',
         }))
 
     async def rag_find(r):
