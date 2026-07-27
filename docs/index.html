@@ -373,23 +373,28 @@
      Про ритм — это арифметика, а не вкус: строки внутри аята стояли через 47px (23px × 2.05),
      а между аятами было 19px отступа. Внутренний интервал вдвое с лишним больше внешнего — глаз
      не собирал аят в единое целое и видел ленту, разрезанную линейками. Теперь наоборот. */
+  /* Разделители ВОЗВРАЩЕНЫ, но лёгкие. Владелец 27.07.2026: «лёгкие полосы-разделители между аятами
+     всё-таки надо оставить, лёгкое выделение». Убрать их совсем оказалось перебором: без всякой
+     границы аяты сливались в одно полотно. Возвращаем — но не сплошной линией во всю ширину, а
+     короткой чертой по центру с растворяющимися краями: она отделяет, но не режет страницу. */
   #qrBody .qrAyah{ padding:20px 12px 24px; border-radius:12px; border-bottom:none;
     padding-inline-start:58px; position:relative; transition:background .2s ease }
   #qrBody .qrAyah + .qrAyah{ margin-top:4px }
+  #qrBody .qrAyah + .qrAyah::before{ content:''; position:absolute; top:-2px; left:12%; right:12%;
+    height:1px; background:linear-gradient(90deg,transparent,var(--border) 22%,var(--border) 78%,transparent) }
   #qrBody .qrAyah:hover{ background:rgba(127,160,200,.05) }
   #qrBody .qrAyah.cur{ background:rgba(74,222,128,.08); box-shadow:inset 3px 0 0 var(--ok) }
   /* Арабский: тёплый тон вместо чисто белого — белое на тёмном режет глаз при долгом чтении.
      Высота строки 2.3: огласовкам и хамзам нужна вертикаль, иначе знаки соседних строк сходятся. */
-  /* Шрифт — Amiri, тот самый из макета. Владелец 27.07.2026: «у тебя шрифт другой был в макете,
-     вот как в макете сделай шрифт в Коране». Ставим ТОЛЬКО читалке Корана: глобальный дефолт
-     арабского трогать нельзя (решение владельца v636 — мусхафные «застряли» у тестировавших),
-     и хадисы остаются на своём шрифте, как он и просил.
-     Amiri лежит у нас локально (miniapp/fonts/amiri-400/700), сеть не нужна.
-     Кегль поднят с 23 до 27px: у Amiri мелкий очковый рисунок, при 23 он выглядел меньше макета. */
-  #qrBody .qrAr{ direction:rtl; text-align:right; font-size:27px; line-height:2.25; color:#ece7dd;
-    font-family:'Amiri','Scheherazade New','Noto Naskh Arabic',serif !important;
+  /* ШРИФТ — ОТКАТ. Владелец 27.07.2026: «я же сказал, что шрифт этот неприемлем, я сто раз говорил,
+     жаловался». В v1246 я навязал читалке Amiri, потому что он был в моём макете и владелец сказал
+     «как в макете». Ошибка была в том, что макет я рисовал шрифтом, который в приложении уже
+     отвергали: в макете на короткой строке без огласовок он смотрелся хорошо, а на живом мусхафном
+     тексте с полными огласовками — тонко и не по-мусхафному.
+     Возвращаем выбор пользователя (var(--arFont) из настроек) и НЕ навязываем ничего сверху.
+     Урок: показывать макет тем же шрифтом, что реально стоит, иначе сравнение обманывает. */
+  #qrBody .qrAr{ direction:rtl; text-align:right; font-size:26px; line-height:2.25; color:#ece7dd;
     letter-spacing:.2px; text-rendering:optimizeLegibility }
-  #qrBody .qrBasmala, #qrBody .qrAyah b{ font-family:'Amiri','Noto Naskh Arabic',serif }
   body.light #qrBody .qrAr{ color:#1c1710 }
   body.sand  #qrBody .qrAr{ color:#241f16 }
   /* Перевод: был 13.5px цветом служебных подписей — читался как сноска, хотя его читают наравне
@@ -403,12 +408,25 @@
      синим пятном, но остаются на месте и всегда доступны. */
   #qrBody .qrCtl{ position:absolute; inset-inline-start:6px; top:18px; margin:0;
     display:flex; flex-direction:column; gap:8px; align-items:center }
-  #qrBody .qrPlayBtn{ width:34px; height:34px; border-radius:50%; font-size:14px; cursor:pointer;
-    background:transparent; color:var(--link); border:1px solid var(--border);
-    display:flex; align-items:center; justify-content:center; flex:none; box-shadow:none;
-    transition:background .15s ease, border-color .15s ease }
-  #qrBody .qrPlayBtn:hover{ background:rgba(61,165,255,.12); border-color:var(--link) }
-  #qrBody .qrToolsBtn{ font-size:15px; padding:4px 8px; line-height:1; border-radius:9px }
+  /* Кнопки объёмнее. Владелец 27.07.2026: «а кнопки более… объёмнее, чтоб нажать, и анимация,
+     и тень лёгкая». Плоская кнопка на тёмном не читается как кнопка — добавляем мягкий градиент,
+     тень под низом и отклик на нажатие: палец должен чувствовать, что попал. */
+  #qrBody .qrPlayBtn{ width:38px; height:38px; border-radius:50%; font-size:15px; cursor:pointer;
+    background:linear-gradient(160deg, rgba(61,165,255,.18), rgba(61,165,255,.06));
+    color:var(--link); border:1px solid rgba(61,165,255,.42);
+    display:flex; align-items:center; justify-content:center; flex:none;
+    box-shadow:0 2px 6px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.10);
+    transition:transform .12s ease, box-shadow .18s ease, background .18s ease }
+  #qrBody .qrPlayBtn:hover{ background:linear-gradient(160deg, rgba(61,165,255,.3), rgba(61,165,255,.12));
+    box-shadow:0 4px 12px rgba(61,165,255,.28), inset 0 1px 0 rgba(255,255,255,.14) }
+  #qrBody .qrPlayBtn:active{ transform:scale(.92); box-shadow:0 1px 4px rgba(0,0,0,.4) }
+  #qrBody .qrToolsBtn{ font-size:16px; padding:7px 10px; line-height:1; border-radius:11px;
+    background:linear-gradient(160deg, rgba(127,160,200,.14), rgba(127,160,200,.05));
+    border:1px solid var(--border);
+    box-shadow:0 2px 6px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.07);
+    transition:transform .12s ease, box-shadow .18s ease, border-color .18s ease }
+  #qrBody .qrToolsBtn:hover{ border-color:var(--acc); box-shadow:0 4px 12px rgba(0,0,0,.38) }
+  #qrBody .qrToolsBtn:active{ transform:scale(.92) }
   @media(max-width:520px){ #qrBody .qrAyah{ padding-inline-start:48px } }
   /* ПЛАШКА — белая табличка с чёрным текстом. Владелец 27.07.2026: «этот стиль, белая и чёрный
      шрифт, на заметные элементы будешь вставлять — он в принципе очень заметно выглядит… но там
@@ -540,7 +558,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1246</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1247</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1308,7 +1326,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1246';
+const APPVER = 'v1247';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
