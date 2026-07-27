@@ -459,7 +459,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1240</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1241</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1227,7 +1227,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1240';
+const APPVER = 'v1241';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3799,10 +3799,7 @@ async function runSearch(explicit){
     if(seq===_seq){ try{ _goBusy(false); _skelOff(); }catch(e){} }
     // Маяк на первой карточке: показать новичку, где перевод. Только первая — остальные,
     // как верно заметил владелец, человек сообразит сам. Ждём отрисовки, карточки приходят не сразу.
-    try{ if(seq===_seq) setTimeout(()=>{ try{
-      const res=document.getElementById('res');
-      if(res && seq===_seq) МАЯК.зажги(МАЯК.первый(res));
-    }catch(e){} }, 700); }catch(e){}
+    try{ if(seq===_seq) МАЯК.ждиИЗажги(document.getElementById('res'), 'perevod', 12000); }catch(e){}
   }
 }
 function makeCard(d){ const c=d.type==='q'?cardAyah(d,_groups):(d.type==='m'?cardMuh(d,_groups):(d.type==='hr'?cardHadithRu(d):cardHadith(d,_groups)));
@@ -4539,7 +4536,24 @@ async function _bookLoad(){
     };
     const _bindResultClicks=()=>{ outB.querySelectorAll('.bkFr').forEach(el=>el.onclick=()=>{ _bkLastResultsHtml=outB.innerHTML; _bookView.pg=+el.dataset.pid||1; _bookView.want=null; bkP.style.display='none'; sbk.textContent='🔎 Поиск по книге ▾'; _bookLoad(); setTimeout(_bkShowChip,200); }); };
     sbk.onclick=()=>{ _press(sbk); const open=bkP.style.display!=='none'; bkP.style.display=open?'none':'block'; sbk.textContent='🔎 Поиск по книге '+(open?'▾':'▴'); if(!open){ try{ bkP.querySelector('#bkFindQ').focus(); }catch(e){} const chip=m.querySelector('#bkBackChip'); if(chip) chip.remove(); } };
+    sbk.dataset.mayak = 'poisk';   // цель маяка: при первом открытии книги показать, что искать можно ВНУТРИ неё
     tgl.appendChild(sbk);
+    // ↔ Ширина страницы у книг Мактабы. Слайдер TB-5 был только у Корана (#qrModal), а у книг
+    // ширины не было вовсе — владелец и спросил «как расширять страницы, отменили этот режим?».
+    // Ставим рядом с поиском, а не в настройки: склад, куда не ходят, ничего не решает.
+    try{
+      const wb=document.createElement('button'); wb.className='mini'; wb.id='bkWide';
+      wb.style.cssText='padding:7px 11px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text)';
+      const _пан=()=>m.querySelector('.panel');
+      const _ширины=[680, 900, 1200, 9999];
+      let _и=Math.max(0, _ширины.indexOf(+localStorage.getItem('bkWidth')||680));
+      const _прим=()=>{ const v=_ширины[_и], p=_пан();
+        if(p) p.style.maxWidth=(v>=9999?'98vw':v+'px');
+        wb.textContent='↔ '+(v>=9999?'во весь экран':v+'px');
+        try{ localStorage.setItem('bkWidth', String(v)); }catch(e){} };
+      wb.onclick=()=>{ _и=(_и+1)%_ширины.length; _прим(); try{hap('light');}catch(e){} };
+      _прим(); tgl.appendChild(wb);
+    }catch(e){}
     const _resHead=(title,color)=>'<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:5px;margin-bottom:6px"><b style="font-size:12.5px;color:'+color+'">'+title+'</b><span class="bkResX" style="cursor:pointer;color:#e07f7f;font-size:15px;padding:0 4px">✕</span></div>';
     const _bkFind=async()=>{
       const qv=(bkP.querySelector('#bkFindQ').value||'').trim();
@@ -7633,7 +7647,7 @@ function openArabus(word){
   word=word.split(/\s+/).slice(0,3).join(' ');
   if(!word){ toast('Выдели слово в тексте поста, потом жми Arabus'); return; }
   const url='https://arabus.ru/?search_word='+encodeURIComponent(word);
-  try{ if(tg&&tg.openLink) tg.openLink(url); else window.open(url,'_blank'); }catch(e){ try{window.open(url,'_blank');}catch(_){ } }
+  try{ openLink(url); }catch(e){ try{window.open(url,'_blank');}catch(_){ } }   // 27.07: через общий диалог согласия, а не мимо него
 }
 // M191: офлайн-снапшот словаря Arabus (./arabus.json) — мгновенно, без Railway. Прокси — фолбэк.
 let _arabusLocal=null, _arabusLocalP=null;
@@ -7731,6 +7745,12 @@ const МАЯК = {
   показов: 0,
   предел: 3,
   текущий: null,
+  // 27.07.2026, вторая цель. Владелец предложил добавить переключатель поиска по странице — а поиск
+  // по книге, поиск по странице и поле в читалке УЖЕ есть, все три. То есть беда не в нехватке
+  // возможностей, а в их невидимости: даже автор приложения их не нашёл. Значит лечим видимостью,
+  // а не четвёртой кнопкой (З-33 — не множить сущности). Каждая цель помнит себя отдельно.
+  знаетЦель(имя){ try{ return +(localStorage.getItem('mayak_' + имя) || 0) >= 1; }catch(e){ return false; } },
+  запомнитьЦель(имя){ try{ localStorage.setItem('mayak_' + имя, '1'); }catch(e){} },
   знает(){ try{ return +(localStorage.getItem(this.ключ)||0) >= 1; }catch(e){ return false; } },
   запомнить(){ try{ localStorage.setItem(this.ключ, String(+(localStorage.getItem(this.ключ)||0)+1)); }catch(e){} },
   гаси(плавно){
@@ -7740,8 +7760,10 @@ const МАЯК = {
     э.classList.remove('mayak'); э.classList.add('mayak-gasnet');
     setTimeout(()=>{ try{ э.classList.remove('mayak-gasnet'); }catch(e){} }, 1300);
   },
-  зажги(э){
-    if(!э || this.знает() || this.показов >= this.предел) return;
+  зажги(э, вид){
+    вид = вид || 'perevod';
+    if(!э || this.показов >= this.предел) return;
+    if(вид === 'perevod' ? this.знает() : this.знаетЦель(вид)) return;
     this.гаси(false);
     this.текущий = э; this.показов++;
     э.classList.add('mayak');
@@ -7749,8 +7771,24 @@ const МАЯК = {
     // Пять полных обводок по 2.4 с = 12 секунд ровного маяка, потом плавное затухание.
     setTimeout(()=>{ if(this.текущий===э) this.гаси(true); }, 2400 * 5);
   },
-  первый(корень){
-    try{ return (корень||document).querySelector('[data-mayak="perevod"]'); }catch(e){ return null; }
+  первый(корень, вид){
+    try{ return (корень||document).querySelector('[data-mayak="' + (вид||'perevod') + '"]'); }catch(e){ return null; }
+  },
+  /* Ждать появления цели, а не гадать по таймеру.
+     27.07.2026, владелец: «открыл 654 и не высветилось свечение перевода, он же первый всегда должен
+     светиться». Так и было задумано, но маяк искал кнопку ровно через 700 мс после поиска — а карточки
+     по номеру собираются дольше: часть приходит из локальных изданий, часть дотягивается из Мактабы.
+     Искать было нечего, и подсказка молча не появлялась. Теперь ждём цель до 12 секунд, проверяя
+     четыре раза в секунду, и зажигаем в тот момент, когда кнопка реально появилась на экране. */
+  ждиИЗажги(корень, вид, ждатьМс){
+    const край = Date.now() + (ждатьМс || 12000);
+    const тик = ()=>{
+      if(this.знает() && (вид||'perevod')==='perevod') return;
+      const э = this.первый(корень, вид);
+      if(э){ this.зажги(э, вид); return; }
+      if(Date.now() < край) setTimeout(тик, 250);
+    };
+    тик();
   }
 };
 // Гасим по ДЕЙСТВИЮ, но не по чтению. Первая версия гасла и от скролла — а человек как раз
@@ -7762,7 +7800,27 @@ const МАЯК = {
 // нажал «Перевод» — значит понял, где она; больше не подсвечиваем никогда
 addEventListener('click', e=>{
   try{ if(e.target && e.target.closest && e.target.closest('[data-mayak="perevod"]')){ МАЯК.запомнить(); МАЯК.гаси(true); } }catch(_){}
+  try{ if(e.target && e.target.closest && e.target.closest('[data-mayak="poisk"]')){ МАЯК.запомнитьЦель('poisk'); МАЯК.гаси(true); } }catch(_){}
 }, {capture:true});
+
+/* Подсказка-однодневка: показать один раз, что у книги есть поиск внутри и ширина.
+   Владелец не нашёл ни того, ни другого — значит и никто не найдёт. Строка живёт 9 секунд,
+   исчезает от первого касания и больше не появляется НИКОГДА. */
+function подсказкаКниги(корень){
+  try{
+    if(localStorage.getItem('podskazka_kniga')) return;
+    const p=document.createElement('div');
+    p.style.cssText='margin:8px 0;padding:8px 11px;border:1px dashed var(--border);border-radius:9px;'
+      +'font-size:12.5px;color:var(--hint);line-height:1.5;transition:opacity .8s ease';
+    p.innerHTML='💡 Внутри книги можно <b>искать</b> — кнопка «🔎 Поиск по книге» сверху: слово по-арабски, '
+      +'номер хадиса или вопрос своими словами. Рядом <b>↔</b> — ширина страницы.';
+    (корень||document.body).insertBefore(p, (корень||document.body).firstChild);
+    const убрать=()=>{ try{ localStorage.setItem('podskazka_kniga','1'); p.style.opacity='0';
+      setTimeout(()=>{ try{ p.remove(); }catch(e){} }, 900); }catch(e){} };
+    setTimeout(убрать, 9000);
+    ['pointerdown','keydown'].forEach(ev=>addEventListener(ev, убрать, {once:true, passive:true}));
+  }catch(e){}
+}
 
 function addTr(meta,card,text,ayah,fav){
   if(fav) addStar(meta,fav);
@@ -7905,7 +7963,7 @@ function addTr(meta,card,text,ayah,fav){
     il.title=t('Открыть этот хадис на isnad.link (рус. перевод + тройная нумерация)','Open this hadith on isnad.link (Russian translation + triple numbering)');
     il.style.cssText='background:transparent;border:1px solid var(--border);color:var(--link);padding:6px 11px';
     il.onclick=async()=>{ const u=await _isnadUrl(_ril.source,_ril.num); if(!u){ toast(t('isnad.link: сборник пока не подключён','isnad.link: collection not connected yet')); return; }
-      try{ if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.openLink) Telegram.WebApp.openLink(u); else window.open(u,'_blank'); }catch(e){ window.open(u,'_blank'); } };
+      try{ openLink(u); }catch(e){ try{ window.open(u,'_blank'); }catch(_){} } };   // 27.07: isnad.link тоже через диалог согласия
     meta.appendChild(il); } }
   if(!ayah){ const nb=document.createElement('button');nb.className='tr-btn';nb.textContent=t('🌳 Передатчики','🌳 Narrators');nb.title=t('Древо иснада: цепочка передатчиков, цвет = достоверность по учёным','Isnad tree: chain of narrators, color = reliability per scholars');
     nb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
@@ -7930,7 +7988,11 @@ function addTr(meta,card,text,ayah,fav){
     const _SUNNAH_SLUGS={bukhari:1,muslim:1,abudawud:1,tirmidhi:1,nasai:1,ibnmajah:1,malik:1,ahmad:1};
     if(_slug && _SUNNAH_SLUGS[_slug] && _sn!=null){
       const _scn=String(_sn).replace(/#.*/,'').replace(/[^0-9]/g,'');   // голый номер (срезать #риваят: 2408#1 → 2408)
-      const _openSun=(u)=>{ try{hap('light');}catch(e){} try{ if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.openLink) Telegram.WebApp.openLink(u); else window.open(u,'_blank'); }catch(_e){ try{window.open(u,'_blank');}catch(__e){} } };
+      // 27.07.2026, владелец: «нажал ссылку sunnah.com и мне не предложили, не уведомили, что я
+      // выхожу за пределы приложения — ты же раньше ставил». Диалог согласия был, но ЭТА кнопка
+      // звала Telegram.WebApp.openLink напрямую, в обход него. Такой же обход нашёлся ещё в двух
+      // местах (Arabus и isnad.link) — чиню класс, а не случай: всё наружу идёт через openLink().
+      const _openSun=(u)=>{ try{hap('light');}catch(e){} try{ openLink(u); }catch(_e){ try{window.open(u,'_blank');}catch(__e){} } };
       const _sunUrl=(suf)=>'https://sunnah.com/'+_slug+(_slug==='malik'?('/'+_scn):(':'+_scn+(suf||'')));   // malik=/malik/<num>; иначе :<num><буква?>
       const sb=document.createElement('button'); sb.className='tr-btn'; sb.textContent='🌐 sunnah.com';
       sb.title=t('Открыть этот хадис на sunnah.com','Open this hadith on sunnah.com')+' ('+_slug+':'+_scn+')';
@@ -14761,7 +14823,7 @@ try{ ['modal','favModal','settingsModal','menuModal','extraModal','helpModal','d
 function runDeepLink(){ const g=_deepLinkToken(); if(!g) return;
   // Пришёл по ссылке из чата (в том числе из ответа РАГ) — человек тут, скорее всего, впервые
   // и ему нужен перевод. Мягко подсветим кнопку, когда карточка отрисуется.
-  try{ setTimeout(()=>{ try{ МАЯК.зажги(МАЯК.первый(document.getElementById('res')) || МАЯК.первый(document)); }catch(e){} }, 1400); }catch(e){}
+  try{ МАЯК.ждиИЗажги(document, 'perevod', 15000); }catch(e){}
   const p=g.split('_').filter(x=>x!==''); const t=(p[0]||'').toLowerCase();
   setTimeout(()=>{ try{
     if(!userAllowed()) return;   // QA-low: не открывать deep-link модал поверх gate-экрана у заблокированного юзера
