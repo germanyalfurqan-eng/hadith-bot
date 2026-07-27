@@ -3,7 +3,7 @@
 # запушен — и нельзя было отличить «фикс не работает» от «Railway ещё не передеплоился». Теперь
 # у бэкенда есть паспорт: GET /api/version отдаёт эту метку и время старта. Меняем при каждом
 # изменении bot.py — тогда любой спор о том, дошёл ли код до прода, решается одним запросом.
-СБОРКА = 'b1242-html-import'
+СБОРКА = 'b1243-rag-otvet-polnyj'
 import time as _time_boot
 _СТАРТ = _time_boot.time()
 from concurrent.futures import ThreadPoolExecutor as _TPE
@@ -14,6 +14,13 @@ _RAG_POOL = _TPE(max_workers=2, thread_name_prefix='rag')
 # что чинишь, что пробуешь, пробовать ли снова». Токена у Клода нет и не будет: он зовёт
 # /api/claude_notify с секретом, а бот отвечает реплаем вот на это запомненное сообщение.
 _ПОСЛ_РАГ = {'chat': None, 'msg': None, 'вопрос': '', 'когда': 0}
+# Расход на векторы вопросов. Владелец 27.07.2026: «надо указывать, потрачен ли лимит,
+# накоплено ли знание по тегу, какая модель и остаток». Вектор считает Cloudflare (bge-m3),
+# это единственное место, где «раг» тратит внешний лимит. Одинаковый вопрос второй раз
+# берётся из кэша и НЕ стоит ничего — это и есть накопленное знание.
+_ВЕК_КЭШ = {}                                   # вопрос(норм) -> вектор
+_ВЕК_СЧЁТ = {'новых': 0, 'из_кэша': 0, 'сбоев': 0}
+СПРАВКА_РАГ = ('🧠 <b>Как пользоваться РАГ</b>\n\n<b>Что это.</b> Поиск ПО СМЫСЛУ, а не по словам: спрашиваешь своими словами, находит хадисы, где слов вопроса может не быть вовсе.\n\n<b>Как звать.</b>\n• <code>раг что делать при затмении</code> — по всей размеченной базе\n• <code>раг бухари ...</code> — только по Сахих аль-Бухари\n\n<b>Что уже размечено.</b> Пока ТОЛЬКО Сахих аль-Бухари — 14 344 фрагмента. Остальные сборники ждут разметки, по ним смысловой поиск не работает.\n\n<b>Про лимит.</b> Каждый НОВЫЙ вопрос требует вектора — его считает Cloudflare (модель bge-m3), это единственная трата. Повторный такой же вопрос берётся из накопленного и не стоит ничего. Строка ⚙️ под ответом всегда показывает, потрачен лимит или взято из накопленного.\n\n<b>Ссылки.</b> «📖 Сахих аль-Бухари №N» открывает мини-апп прямо на этом хадисе.\n\n<b>Замечание.</b> Ответь реплаем на ответ бота любым текстом — «не то», «упустил №1234», «запрос понял неверно» — и это ляжет в журнал РАГ. Простое поправим сразу, хлопотное — в доработку.')
 import os
 import asyncio
 import re
@@ -36,7 +43,7 @@ from html import unescape        # html.escape в ответе «раг» пад
                                  # а в области видимости его нет. Ловится статически — см. imya_storozh.py
 from urllib.parse import parse_qsl
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler, PollAnswerHandler, MessageReactionHandler
+from telegram.ext import CallbackQueryHandler, ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler, PollAnswerHandler, MessageReactionHandler
 
 # ============ АЛЬ-МУХАЙМИН (الموحد المهيمن) — наша выверенная база ============
 # Плоский индекс: { "907": {book, chapter, riwayat:[{text, short_ref, sources}], verified}, ... }
@@ -3175,6 +3182,27 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
+    # ── ЗАМЕЧАНИЕ К РАГ ОДНИМ ДВИЖЕНИЕМ (владелец 27.07.2026: «облегчённый интерфейс, чтобы можно
+    # было свои замечания сразу прикреплять — запрос неточный, хадис такой-то упустил — и до тебя
+    # доходило»). Никаких команд: ответил реплаем на ответ бота — замечание легло в журнал РАГ
+    # к тому самому запросу. Простое поправлю сам, хлопотное останется записанным для доработки.
+    try:
+        _рм = getattr(update.message, 'reply_to_message', None)
+        if _рм and _ПОСЛ_РАГ.get('ответ_msg') and _рм.message_id == _ПОСЛ_РАГ['ответ_msg']                 and (text or '').strip() and not (text or '').lower().startswith(('раг ', 'rag ')):
+            _ж_лог = _data_get('rag_journal.json', []) or []
+            if _ж_лог:
+                _ж_лог[-1].setdefault('замечания', []).append({
+                    'когда': _time_boot.strftime('%d.%m %H:%M', _time_boot.localtime()),
+                    'текст': (text or '').strip()[:600],
+                    'кто': (update.effective_user.first_name if update.effective_user else 'владелец')})
+                _data_put('rag_journal.json', _ж_лог[-500:], 'раг: замечание владельца')
+                await update.message.reply_text(
+                    '📝 Записал в журнал РАГ — к запросу «%s».\nПростое поправлю сам, '
+                    'хлопотное пойдёт в доработку.' % (_ж_лог[-1].get('вопрос') or '')[:60])
+                return
+    except Exception:
+        pass
+
     # 🧩 RAG-поиск по ядру (первоисточники+риджаль). Триггер — ТОЛЬКО слово «раг» (чтобы не мешать болтовне в чате).
     # Доступ: пока только владелец; рубильник «всем» + белый/чёрный списки (команды владельца).
     try:
@@ -3247,6 +3275,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # забит, задача ждёт в очереди сколько угодно — «Ищу…» висит вечно, и снаружи это
                 # выглядит точно так же, как поломка. Поэтому: свой отдельный пул только под RAG
                 # (никто его не займёт) и жёсткий срок ожидания — лучше честное «не успел», чем тишина.
+                _кэш_до = _ВЕК_СЧЁТ['из_кэша']
+                _из_кэша = False
                 try:
                     _нашли, _беда = await asyncio.wait_for(
                         asyncio.get_event_loop().run_in_executor(_RAG_POOL, _rag_find_sync, _вопрос, 5),
@@ -3256,6 +3286,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                            'после перезапуска — повтори запрос через полминуты.')
                 except Exception as _e:
                     _нашли, _беда = None, '%s: %s' % (type(_e).__name__, str(_e)[:160])
+                _из_кэша = _ВЕК_СЧЁТ['из_кэша'] > _кэш_до
                 # 27.07.2026, третий заход. Владелец прислал скрин молчания уже на СВЕЖЕЙ сборке —
                 # значит падает не там, где я думал, а ниже: при сборке текста или при отправке.
                 # Хватит гадать вслепую: весь остаток обёрнут так, что ЛЮБАЯ ошибка выходит владельцу
@@ -3264,24 +3295,65 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if not _нашли:
                         _т = '🧠 Не нашёл: %s' % (_беда or 'ничего похожего по смыслу')
                     else:
+                        # Формат задан владельцем 27.07.2026: «оригинал тоже обязательно; ссылку на
+                        # хадис в приложении обязательно; указывать, потрачен ли лимит и накоплено ли
+                        # знание; может, цитатой — арабский отдельно, русский отдельно, и чтобы
+                        # сворачивалось». Telegram умеет <blockquote expandable>: длинный хадис лежит
+                        # свёрнутым и раскрывается тапом — потому всё в одном посте, а не в пяти.
                         _строки = ['🧠 <b>Сахих аль-Бухари</b> · по смыслу: «%s»' % html.escape(_вопрос[:70]), '']
                         for _z in _нашли:
-                            _н = _z.get('num') or _z.get('n') or '?'
-                            _тк = (_z.get('русский') or _z.get('r') or _z.get('текст') or _z.get('a') or '')
-                            _тк = re.sub(r'\s+', ' ', str(_тк)).strip()[:320]
-                            _строки.append('📖 <b>№%s</b>\n%s' % (_н, html.escape(_тк)))
+                            _н = _z.get('n') or '?'
+                            _ар = re.sub(r'\s+', ' ', str(_z.get('a') or '')).strip()
+                            _ру = re.sub(r'\s+', ' ', str(_z.get('r') or '')).strip()
+                            # ссылка открывает мини-апп сразу на этом хадисе (формат startapp=r_<книга>_<номер>)
+                            _сс = 'https://t.me/muslimoontt_bot?startapp=r_bukhari_%s' % _н
+                            _строки.append('<a href="%s">📖 Сахих аль-Бухари №%s</a>' % (_сс, _н))
+                            _цит = []
+                            if _ар:
+                                _цит.append('<b>%s</b>' % html.escape(_ар[:900]))
+                            if _ру:
+                                _цит.append(html.escape(_ру[:1100]))
+                            if _цит:
+                                _строки.append('<blockquote expandable>%s</blockquote>' % '\n\n'.join(_цит))
                             _строки.append('')
-                        _строки.append('<i>Найдено по смыслу — слова вопроса в тексте могут не встречаться.</i>')
-                        _т = '\n'.join(_строки)[:3900]
+                        _строки.append('<i>Найдено по смыслу — слова вопроса в тексте могут не встречаться. '
+                                       'Размечен пока только Сахих аль-Бухари: 14 344 фрагмента.</i>')
+                        _строки.append('⚙️ вектор <code>bge-m3</code> · %s · за смену: новых %d, из накопленного %d'
+                                       % ('взят из накопленного, лимит не тронут' if _из_кэша
+                                          else 'новый запрос к Cloudflare',
+                                          _ВЕК_СЧЁТ['новых'], _ВЕК_СЧЁТ['из_кэша']))
+                        _т = '\n'.join(_строки)[:4000]
                 except Exception as _e2:
                     _т = '🧠 Сбой при сборке ответа: %s: %s' % (type(_e2).__name__, str(_e2)[:200])
+                # ЖУРНАЛ РАГ (владелец 27.07.2026: «в журнал рага, который ты должен был создать,
+                # добавляй; простое — правь сам, хлопотное — записывай, потом улучшим. РАГ должен
+                # совершенствоваться»). Пишем КАЖДЫЙ запрос: что спросили, что нашлось, с какими
+                # оценками. К этой записи потом цепляется замечание владельца — так видно не только
+                # «что сломалось», но и «что подобралось плохо».
+                try:
+                    _зап = {'когда': _time_boot.strftime('%d.%m %H:%M', _time_boot.localtime()),
+                            'вопрос': _вопрос[:200], 'сборка': СБОРКА,
+                            'нашёл': [{'n': _z.get('n'), 'оценка': round(float(_z.get('s') or 0), 3)}
+                                      for _z in (_нашли or [])],
+                            'беда': str(_беда)[:200] if not _нашли else '',
+                            'из_накопленного': bool(_из_кэша), 'замечания': []}
+                    _ж_лог = _data_get('rag_journal.json', []) or []
+                    _ж_лог.append(_зап)
+                    _data_put('rag_journal.json', _ж_лог[-500:], 'раг: запрос «%s»' % _вопрос[:40])
+                except Exception:
+                    pass
                 # Отправка тоже под охраной: если и HTML, и запасной простой текст не прошли,
                 # владелец всё равно должен получить хоть что-то — тишина недопустима.
                 try:
+                    from telegram import InlineKeyboardButton as _IKB, InlineKeyboardMarkup as _IKM
+                    _кб = _IKM([[_IKB('❓ Как пользоваться РАГ', callback_data='rag_help')]])
                     if _ж:
-                        await _ж.edit_text(_т, parse_mode='HTML', disable_web_page_preview=True)
+                        await _ж.edit_text(_т, parse_mode='HTML', disable_web_page_preview=True, reply_markup=_кб)
+                        _ПОСЛ_РАГ['ответ_msg'] = _ж.message_id
                     else:
-                        await update.message.reply_text(_т, parse_mode='HTML', disable_web_page_preview=True)
+                        _от = await update.message.reply_text(_т, parse_mode='HTML',
+                                                              disable_web_page_preview=True, reply_markup=_кб)
+                        _ПОСЛ_РАГ['ответ_msg'] = _от.message_id
                 except Exception:
                     try:
                         await update.message.reply_text(re.sub(r'<[^>]+>', '', _т)[:3900])
@@ -5454,15 +5526,28 @@ def _rag_load_sync():
         return False
 
 def _rag_query_vec_sync(q):
+    _к = ' '.join((q or '').lower().split())[:300]
+    if _к in _ВЕК_КЭШ:                      # уже спрашивали — лимит не тратим
+        _ВЕК_СЧЁТ['из_кэша'] += 1
+        return _ВЕК_КЭШ[_к]
     tok, acc = _cf_creds()
     if not tok or not acc:
+        _ВЕК_СЧЁТ['сбоев'] += 1
         return None
     try:
         url = 'https://api.cloudflare.com/client/v4/accounts/%s/ai/run/@cf/baai/bge-m3' % acc
         j = requests.post(url, json={'text': [q[:600]]},
                           headers={'Authorization': 'Bearer ' + tok}, timeout=30).json()
-        return ((j.get('result') or {}).get('data') or [None])[0]
+        _в = ((j.get('result') or {}).get('data') or [None])[0]
+        if _в:
+            _ВЕК_СЧЁТ['новых'] += 1
+            if len(_ВЕК_КЭШ) < 3000:
+                _ВЕК_КЭШ[_к] = _в
+        else:
+            _ВЕК_СЧЁТ['сбоев'] += 1
+        return _в
     except Exception:
+        _ВЕК_СЧЁТ['сбоев'] += 1
         return None
 
 def _rag_find_sync(q, top=6):
@@ -8877,6 +8962,20 @@ async def on_reaction(update, context):
         pass
 app.add_handler(MessageReactionHandler(on_reaction))
 app.add_handler(PollAnswerHandler(on_poll_answer))
+async def on_rag_help(update, context):
+    """Кнопка «Как пользоваться РАГ» под каждым ответом (владелец 27.07.2026: «сделай кнопку,
+    которая показывает, как пользоваться рагом, что есть только бухари пока, что это жрёт лимиты»)."""
+    q = update.callback_query
+    try:
+        await q.answer()
+        await q.message.reply_text(СПРАВКА_РАГ, parse_mode='HTML', disable_web_page_preview=True)
+    except Exception:
+        try:
+            await q.answer('Справка недоступна', show_alert=True)
+        except Exception:
+            pass
+
+app.add_handler(CallbackQueryHandler(on_rag_help, pattern='^rag_help$'))
 app.add_handler(CommandHandler("start", start_cmd))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
