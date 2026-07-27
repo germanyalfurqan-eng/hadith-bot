@@ -3,7 +3,7 @@
 # запушен — и нельзя было отличить «фикс не работает» от «Railway ещё не передеплоился». Теперь
 # у бэкенда есть паспорт: GET /api/version отдаёт эту метку и время старта. Меняем при каждом
 # изменении bot.py — тогда любой спор о том, дошёл ли код до прода, решается одним запросом.
-СБОРКА = 'b1244-urllib-import'
+СБОРКА = 'b1245-gibrid-poisk'
 import time as _time_boot
 _СТАРТ = _time_boot.time()
 from concurrent.futures import ThreadPoolExecutor as _TPE
@@ -14,6 +14,10 @@ _RAG_POOL = _TPE(max_workers=2, thread_name_prefix='rag')
 # что чинишь, что пробуешь, пробовать ли снова». Токена у Клода нет и не будет: он зовёт
 # /api/claude_notify с секретом, а бот отвечает реплаем вот на это запомненное сообщение.
 _ПОСЛ_РАГ = {'chat': None, 'msg': None, 'вопрос': '', 'когда': 0}
+# Владелец 27.07.2026: «ты отвечаешь на последнее смс вместо того, к которому я обращался
+# изначально». Держим ленту последних вопросов: Клод указывает, на какой отвечает, и реплай
+# ложится куда надо, а не на самый свежий.
+_ЛЕНТА_РАГ = []          # [{'chat','msg','вопрос','когда'}], хвост — самые новые
 # Расход на векторы вопросов. Владелец 27.07.2026: «надо указывать, потрачен ли лимит,
 # накоплено ли знание по тегу, какая модель и остаток». Вектор считает Cloudflare (bge-m3),
 # это единственное место, где «раг» тратит внешний лимит. Одинаковый вопрос второй раз
@@ -3262,6 +3266,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     _ПОСЛ_РАГ.update({'chat': update.effective_chat.id if update.effective_chat else None,
                                       'msg': update.message.message_id, 'вопрос': _вопрос[:120],
                                       'когда': _time_boot.time()})
+                    _ЛЕНТА_РАГ.append(dict(_ПОСЛ_РАГ))
+                    del _ЛЕНТА_РАГ[:-30]
                 except Exception:
                     pass
                 try:
@@ -3310,12 +3316,16 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             _ру = re.sub(r'\s+', ' ', str(_z.get('r') or '')).strip()
                             # ссылка открывает мини-апп сразу на этом хадисе (формат startapp=r_<книга>_<номер>)
                             _сс = 'https://t.me/muslimoontt_bot?startapp=r_bukhari_%s' % _н
-                            _строки.append('<a href="%s">📖 Сахих аль-Бухари №%s</a>' % (_сс, _н))
+                            _как = ' · 🎯 слова совпали' if (_z.get('w') or 0) >= 0.5 else ''
+                            _строки.append('<a href="%s">📖 Сахих аль-Бухари №%s</a>%s' % (_сс, _н, _как))
+                            # Владелец 27.07.2026: «хадисы обрезаются, а не полные». Режем не текст,
+                            # а число хадисов: полный хадис ценнее, чем пять огрызков. Сколько влезет
+                            # в лимит Telegram (4096) — столько и покажем, остальное честно посчитаем.
                             _цит = []
                             if _ар:
-                                _цит.append('<b>%s</b>' % html.escape(_ар[:900]))
+                                _цит.append('<b>%s</b>' % html.escape(_ар))
                             if _ру:
-                                _цит.append(html.escape(_ру[:1100]))
+                                _цит.append(html.escape(_ру))
                             if _цит:
                                 _строки.append('<blockquote expandable>%s</blockquote>' % '\n\n'.join(_цит))
                             _строки.append('')
@@ -3325,7 +3335,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                        % ('взят из накопленного, лимит не тронут' if _из_кэша
                                           else 'новый запрос к Cloudflare',
                                           _ВЕК_СЧЁТ['новых'], _ВЕК_СЧЁТ['из_кэша']))
-                        _т = '\n'.join(_строки)[:4000]
+                        _т = '\n'.join(_строки)
                 except Exception as _e2:
                     _т = '🧠 Сбой при сборке ответа: %s: %s' % (type(_e2).__name__, str(_e2)[:200])
                 # ЖУРНАЛ РАГ (владелец 27.07.2026: «в журнал рага, который ты должен был создать,
@@ -3350,13 +3360,34 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try:
                     from telegram import InlineKeyboardButton as _IKB, InlineKeyboardMarkup as _IKM
                     _кб = _IKM([[_IKB('❓ Как пользоваться РАГ', callback_data='rag_help')]])
-                    if _ж:
-                        await _ж.edit_text(_т, parse_mode='HTML', disable_web_page_preview=True, reply_markup=_кб)
-                        _ПОСЛ_РАГ['ответ_msg'] = _ж.message_id
-                    else:
-                        _от = await update.message.reply_text(_т, parse_mode='HTML',
-                                                              disable_web_page_preview=True, reply_markup=_кб)
-                        _ПОСЛ_РАГ['ответ_msg'] = _от.message_id
+                    # Владелец 27.07.2026: «первый был неплохой, но обрезался, а это хуже — там
+                    # сворачивался текст удобно и ссылки были, сделай грамотно». Разгадка: длинный
+                    # ответ не влезал в лимит Telegram, отправка HTML падала, и запасной путь вырезал
+                    # ВСЮ разметку — вместе со свёртками и ссылками. Потому второй ответ и вышел хуже.
+                    # Правильно не резать, а РАЗБИВАТЬ: посты режем строго по границе хадиса, каждый
+                    # хадис уходит целиком, со своей ссылкой и своей свёрткой.
+                    _посты, _тек = [], ''
+                    for _кусок in _т.split('\n📖 ') if _т.count('📖') > 1 else [_т]:
+                        _кусок = _кусок if not _посты and _тек == '' and _кусок.startswith('🧠') else \
+                                 (_кусок if _кусок.startswith('🧠') else '📖 ' + _кусок)
+                        if len(_тек) + len(_кусок) > 3800 and _тек:
+                            _посты.append(_тек.rstrip())
+                            _тек = ''
+                        _тек += ('\n' if _тек else '') + _кусок
+                    if _тек.strip():
+                        _посты.append(_тек.rstrip())
+                    _посты = _посты or [_т[:3800]]
+                    for _i, _пост in enumerate(_посты):
+                        _последний = (_i == len(_посты) - 1)
+                        if _i == 0 and _ж:
+                            await _ж.edit_text(_пост, parse_mode='HTML', disable_web_page_preview=True,
+                                               reply_markup=_кб if _последний else None)
+                            _ПОСЛ_РАГ['ответ_msg'] = _ж.message_id
+                        else:
+                            _от = await update.message.reply_text(
+                                _пост, parse_mode='HTML', disable_web_page_preview=True,
+                                reply_markup=_кб if _последний else None)
+                            _ПОСЛ_РАГ['ответ_msg'] = _от.message_id
                 except Exception:
                     try:
                         await update.message.reply_text(re.sub(r'<[^>]+>', '', _т)[:3900])
@@ -5588,13 +5619,56 @@ def _rag_find_sync(q, top=6):
             if s > лучшее.get(cid, -2):
                 лучшее[cid] = s
     ранж = sorted(лучшее.items(), key=lambda x: -x[1])
-    порог = 0.521
+    мета = _RAGB.get('мета') or {}
+
+    # ── ВТОРОЙ ПРИЗНАК: прямое совпадение слов ────────────────────────────────────
+    # Владелец 27.07.2026: «раг бухари хариджиты» → «Не нашёл 0.470», а слово есть
+    # в четырёх хадисах; «пророк слушал музыку» → пять хадисов про «سمعت النبي»
+    # («я СЛЫШАЛ Пророка»), потому что вектор зацепился за корень سمع.
+    # Причина одна: чистая близость векторов слаба на КОРОТКИХ запросах — слово против
+    # длинного хадиса всегда «дальше», чем фраза против фразы. Об этом прямо сказано
+    # в калибровке (порог.json): «области перекрылись, нужен второй признак — совпадение слов».
+    # Поэтому ищем ещё и буквально: основы слов запроса в русском тексте и в арабском.
+    # Русское слово меняет окончание («хариджиты/хариджитов»), поэтому сравниваем по основе.
+    def _основы(текст):
+        сл = re.findall(r'[а-яёa-z؀-ۿ]{4,}', (текст or '').lower())
+        м = []
+        for w in сл:
+            if w in ('этом', 'этот', 'быть', 'если', 'чего', 'зачем', 'какой', 'какая',
+                     'когда', 'нужно', 'можно', 'нельзя', 'делать', 'через'):
+                continue
+            м.append(w[:max(4, int(len(w) * 0.7))])
+        return м
+
+    осн = _основы(q)
+    словесно = {}
+    if осн:
+        for cid, c in мета.items():
+            текст = ((c.get('r') or '') + ' ' + (c.get('a') or '')).lower()
+            если_есть = sum(1 for о in осн if о in текст)
+            if если_есть:
+                словесно[cid] = если_есть / len(осн)
+
+    # Порог зависит от длины запроса: короткий вопрос честно даёт меньшую близость,
+    # и держать для него ту же планку — значит отвечать «не нашёл» на очевидное.
+    слов_в_запросе = len(re.findall(r'\S+', q or ''))
+    порог = 0.521 if слов_в_запросе >= 4 else (0.47 if слов_в_запросе >= 2 else 0.44)
+
+    итог = {}
+    for cid, s in лучшее.items():
+        w = словесно.get(cid, 0.0)
+        # словесное совпадение добавляет к близости; полное совпадение слов вытянет
+        # хадис наверх, даже если вектор его недооценил
+        итог[cid] = s + 0.12 * w
+    годные = [(cid, итог[cid], лучшее[cid], словесно.get(cid, 0.0)) for cid in итог
+              if лучшее[cid] >= порог or словесно.get(cid, 0.0) >= 0.5]
+    годные.sort(key=lambda x: -x[1])
+
     out = []
-    for cid, s in ранж:
-        if s < порог or len(out) >= top:
-            break
-        c = (_RAGB['мета'] or {}).get(cid) or {}
-        out.append({'s': s, 'n': c.get('n'), 'g': c.get('g'), 'r': c.get('r'), 'a': c.get('a')})
+    for cid, общ, век, сл in годные[:top]:
+        c = мета.get(cid) or {}
+        out.append({'s': век, 'w': сл, 'n': c.get('n'), 'g': c.get('g'),
+                    'r': c.get('r'), 'a': c.get('a')})
     return out, (ранж[0][1] if ранж else 0)
 
 WEBAPP_URL = "https://germanyalfurqan-eng.github.io/hadith-bot/"
@@ -6919,14 +6993,22 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'error': 'auth'}, status=403))
         # режим «в_чат»: ответить реплаем на последний «раг» владельца — там, где он спрашивал
         if body.get('в_чат'):
-            if not _ПОСЛ_РАГ.get('chat'):
+            # «на_вопрос»: кусок текста вопроса — ответим именно на него, а не на последний
+            _цель = dict(_ПОСЛ_РАГ)
+            _иск = str(body.get('на_вопрос', '') or '').strip().lower()
+            if _иск:
+                for _з in reversed(_ЛЕНТА_РАГ):
+                    if _иск in (_з.get('вопрос') or '').lower():
+                        _цель = _з
+                        break
+            if not _цель.get('chat'):
                 return _cors(web.json_response({'ok': False, 'error': 'бот ещё не видел ни одного «раг» после перезапуска'}))
             try:
                 await application.bot.send_message(
-                    _ПОСЛ_РАГ['chat'], text[:3900],
-                    reply_to_message_id=_ПОСЛ_РАГ['msg'], disable_web_page_preview=True)
-                return _cors(web.json_response({'ok': True, 'sent': 'в_чат', 'chat': _ПОСЛ_РАГ['chat'],
-                                                'на_вопрос': _ПОСЛ_РАГ['вопрос']}))
+                    _цель['chat'], text[:3900],
+                    reply_to_message_id=_цель['msg'], disable_web_page_preview=True)
+                return _cors(web.json_response({'ok': True, 'sent': 'в_чат', 'chat': _цель['chat'],
+                                                'на_вопрос': _цель['вопрос']}))
             except Exception as e:
                 return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}), status=500)
         b64 = str(body.get('file_b64', '') or '')
