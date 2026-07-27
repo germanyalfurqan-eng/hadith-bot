@@ -3,7 +3,7 @@
 # запушен — и нельзя было отличить «фикс не работает» от «Railway ещё не передеплоился». Теперь
 # у бэкенда есть паспорт: GET /api/version отдаёт эту метку и время старта. Меняем при каждом
 # изменении bot.py — тогда любой спор о том, дошёл ли код до прода, решается одним запросом.
-СБОРКА = 'b1243-rag-otvet-polnyj'
+СБОРКА = 'b1244-urllib-import'
 import time as _time_boot
 _СТАРТ = _time_boot.time()
 from concurrent.futures import ThreadPoolExecutor as _TPE
@@ -41,7 +41,10 @@ import html                      # 27.07.2026: был только `from html im
 from html import unescape        # html.escape в ответе «раг» падал с NameError. ТРЕТИЙ случай
                                  # одного класса за два дня (math.sqrt, loop, html): имя используется,
                                  # а в области видимости его нет. Ловится статически — см. imya_storozh.py
-from urllib.parse import parse_qsl
+import urllib.request           # 27.07.2026: сторож имён нашёл ЧЕТВЁРТЫЙ случай того же класса —
+from urllib.parse import parse_qsl   # в /api/qaudio зовётся urllib.request, а импортирован был
+                                     # только urllib.parse. Аудио Корана упало бы с NameError.
+                                     # Найдено ДО жалобы владельца — ради этого сторож и писался.
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import CallbackQueryHandler, ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler, PollAnswerHandler, MessageReactionHandler
 
