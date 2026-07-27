@@ -413,6 +413,24 @@
     box-shadow:0 2px 10px rgba(0,0,0,.45), 0 0 14px rgba(160,200,255,.28) }
   .plashka .znak{ font-size:9.5px; font-weight:500; color:#8a6d18; background:#fff6d8;
     border:1px solid #d9c07a; border-radius:6px; padding:2px 6px; line-height:1; white-space:nowrap }
+  /* Главное действие карточки слова — «Все места этого корня в Коране». Владелец 27.07.2026:
+     «вот это как раз тот момент, когда его лучше на белой плашке чёрным с лёгким свечением и
+     лёгкими тенями, причём анимацию делать когда открываешь — лёгкую, чтобы обратить внимание
+     на возможность искать слово везде в Коране».
+     Анимация играет ОДИН раз при открытии карточки и затихает: постоянное мигание превратилось бы
+     в тот самый фарс, которого владелец просил избегать. */
+  @keyframes plashkaZov{
+    0%   { transform:scale(.94); opacity:0 }
+    45%  { transform:scale(1.03); opacity:1;
+           box-shadow:0 2px 10px rgba(0,0,0,.45), 0 0 22px 6px rgba(120,190,255,.55) }
+    100% { transform:scale(1); opacity:1;
+           box-shadow:0 2px 10px rgba(0,0,0,.45), 0 0 14px rgba(160,200,255,.28) }
+  }
+  .wpGlavnoe{ cursor:pointer; margin-top:10px; font-size:14px; width:100%; justify-content:center;
+    animation:plashkaZov .85s cubic-bezier(.2,.9,.3,1.2) both }
+  .wpGlavnoe:hover{ box-shadow:0 2px 12px rgba(0,0,0,.5), 0 0 18px rgba(160,200,255,.45) }
+  .wpGlavnoe:active{ transform:scale(.97) }
+  @media (prefers-reduced-motion:reduce){ .wpGlavnoe{ animation:none } }
   /* Плавная сборка карточек (владелец: «анимация сборки карточки грубая и местами дёргается;
      в основе всё должно быть гладко и стабильно»). Карточка не выпрыгивает, а проявляется. */
   @keyframes kartochkaVhod{ from{ opacity:0; transform:translateY(6px) } to{ opacity:1; transform:none } }
@@ -513,7 +531,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1244</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1245</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1281,7 +1299,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1244';
+const APPVER = 'v1245';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -1290,8 +1308,17 @@ function modalTop(el){ try{
   // видимым под новым. Теперь это единая точка входа: перед подъёмом гасим все прочие открытые
   // окна. Правится ЗДЕСЬ, а не в 39 местах вызова — один заслон на все модалки сразу.
   // Окно, которому вложенность разрешена намеренно, помечается data-stack="1" и не гасится.
+  // 27.07.2026, РЕГРЕССИЯ И ЕЁ ЛЕЧЕНИЕ. Владелец: «нажал — и исчез аят весь… это окно должно
+  // открываться ПОВЕРХ аятов». Правка #651 гасила все прочие окна перед открытием нового — и
+  // карточка слова закрывала читалку Корана, из которой её же и вызвали.
+  // Разница, которую я упустил: «окно за окном» — это два РАВНОПРАВНЫХ окна (настройки поверх меню),
+  // а читалка с карточкой слова — законный СТЕК: карточка живёт внутри чтения и без него бессмысленна.
+  // Поэтому окна-подложки (читалки) не гасим никогда: из них открывают дочерние карточки.
+  var _подложки = ['qrModal', 'readModal', 'bookModal', 'modal'];
   Array.prototype.forEach.call(document.querySelectorAll('.modal'), function(m){
-    if(m!==el && m.style.display!=='none' && m.style.display!=='' && !m.hasAttribute('data-stack')) m.style.display='none';
+    if(m===el || m.hasAttribute('data-stack')) return;
+    if(_подложки.indexOf(m.id) !== -1) return;          // читалка остаётся открытой под карточкой
+    if(m.style.display!=='none' && m.style.display!=='') m.style.display='none';
   });
   _zTop+=2; el.style.zIndex=String(_zTop); }catch(e){} }   // единый источник версии (бейдж у имени + подзаголовок)
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
@@ -5917,7 +5944,7 @@ function showWordPopup(el, word, root, lemma, gram, ctx){
   if(g) h+='<div style="margin-top:6px;color:var(--text)">📝 '+esc(g)+(ga?(' · <b style="'+_AF+';font-size:15px;color:var(--mark)">'+esc(ga)+'</b>'):'')+'</div>';
   if(lemma && rootKey(lemma)!==rootKey(word)) h+='<div style="margin-top:3px;color:var(--hint);font-size:13px">лемма: <b style="'+_AF+'">'+esc(lemma)+'</b></div>';
   if(root){ h+='<div style="margin-top:6px">🌿 Корень: <b style="font-size:19px;color:var(--mark);'+_AF+'">'+esc(root)+'</b></div>'+
-    '<div id="wpAll" style="margin-top:9px;color:var(--link);cursor:pointer;font-weight:600">📍 Все места этого корня в Коране ('+n+')</div>'+
+    '<div id="wpAll" class="plashka wpGlavnoe" title="Найти это слово во всём Коране">📍 Все места этого корня в Коране <span class="znak">'+n+'</span></div>'+
     '<div id="wpDicts" style="margin-top:8px"></div>'; }   // M404: кнопки словарей (наполняются асинхронно)
   ;   // корня в нашей базе нет — значения подтянет Arabus ниже
   h+='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><button id="wpAiBtn" class="tr-btn" style="background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:6px 10px;font-size:13px;width:100%">🧠 Перевод слова (ИИ) — проверить</button><div id="wpAiOut" style="margin-top:5px"></div></div>';
@@ -5927,7 +5954,7 @@ function showWordPopup(el, word, root, lemma, gram, ctx){
   (async()=>{ try{ await loadQuranWbw(); const _tr=_wbwWord(el); if(!_tr) return;
     if(document.getElementById('wordPop')!==pop) return;   // попап уже закрыт/сменился
     const d=document.createElement('div'); d.style.cssText='margin-top:6px;color:#7fe3bf;font-size:15px';
-    d.innerHTML='🇷🇺 <b>'+esc(_tr)+'</b>';
+    d.innerHTML='<b>'+esc(_tr)+'</b>';   // 27.07: флаг 🇷🇺 убран — «зачем, если всем и так ясно, что это русский»
     const hdr=pop.firstElementChild; if(hdr&&hdr.nextSibling) pop.insertBefore(d, hdr.nextSibling); else pop.appendChild(d);
   }catch(e){} })();
   const r=el.getBoundingClientRect();
