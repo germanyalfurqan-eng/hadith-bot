@@ -3,13 +3,17 @@
 # запушен — и нельзя было отличить «фикс не работает» от «Railway ещё не передеплоился». Теперь
 # у бэкенда есть паспорт: GET /api/version отдаёт эту метку и время старта. Меняем при каждом
 # изменении bot.py — тогда любой спор о том, дошёл ли код до прода, решается одним запросом.
-СБОРКА = 'b1240-rag-pool-timeout'
+СБОРКА = 'b1241-claude-reply-v-chat'
 import time as _time_boot
 _СТАРТ = _time_boot.time()
 from concurrent.futures import ThreadPoolExecutor as _TPE
 # отдельный пул ТОЛЬКО под RAG: общий делят все блокирующие операции бота,
 # и когда он забит, поиск ждёт в очереди — снаружи это неотличимо от поломки
 _RAG_POOL = _TPE(max_workers=2, thread_name_prefix='rag')
+# Куда Клоду отвечать. Владелец 27.07.2026: «пиши в джамаат ру ответом на мой последний запрос —
+# что чинишь, что пробуешь, пробовать ли снова». Токена у Клода нет и не будет: он зовёт
+# /api/claude_notify с секретом, а бот отвечает реплаем вот на это запомненное сообщение.
+_ПОСЛ_РАГ = {'chat': None, 'msg': None, 'вопрос': '', 'когда': 0}
 import os
 import asyncio
 import re
@@ -3220,6 +3224,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if len(_вопрос) < 3:
                     await update.message.reply_text('Напиши вопрос: «раг можно ли пить стоя» или «раг бухари ...» — только по этой книге')
                     return
+                try:
+                    _ПОСЛ_РАГ.update({'chat': update.effective_chat.id if update.effective_chat else None,
+                                      'msg': update.message.message_id, 'вопрос': _вопрос[:120],
+                                      'когда': _time_boot.time()})
+                except Exception:
+                    pass
                 try:
                     _ж = await update.message.reply_text('🧠 Ищу по смыслу%s…' % (' в Сахих аль-Бухари' if _только_бухари else ''))
                 except Exception:
@@ -6816,6 +6826,18 @@ async def _api_serve(application=None):
         text = str(body.get('text', '')).strip()
         if not secret or secret != (BACKUP_SECRET or '').strip():
             return _cors(web.json_response({'error': 'auth'}, status=403))
+        # режим «в_чат»: ответить реплаем на последний «раг» владельца — там, где он спрашивал
+        if body.get('в_чат'):
+            if not _ПОСЛ_РАГ.get('chat'):
+                return _cors(web.json_response({'ok': False, 'error': 'бот ещё не видел ни одного «раг» после перезапуска'}))
+            try:
+                await application.bot.send_message(
+                    _ПОСЛ_РАГ['chat'], text[:3900],
+                    reply_to_message_id=_ПОСЛ_РАГ['msg'], disable_web_page_preview=True)
+                return _cors(web.json_response({'ok': True, 'sent': 'в_чат', 'chat': _ПОСЛ_РАГ['chat'],
+                                                'на_вопрос': _ПОСЛ_РАГ['вопрос']}))
+            except Exception as e:
+                return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}), status=500)
         b64 = str(body.get('file_b64', '') or '')
         fname = str(body.get('filename', 'файл.md') or 'файл.md')
         caption = str(body.get('caption', '') or '')
@@ -7649,6 +7671,7 @@ async def _api_serve(application=None):
             'аптайм_мин': round((_t.time() - _СТАРТ) / 60, 1),
             'запущен': _t.strftime('%d.%m %H:%M:%S', _t.localtime(_СТАРТ)),
             'rag_база': bool(_RAGB.get('n')), 'rag_векторов': _RAGB.get('n') or 0,
+            'помнит_раг': bool(_ПОСЛ_РАГ.get('chat')), 'посл_вопрос': _ПОСЛ_РАГ.get('вопрос') or '',
         }))
 
     async def rag_find(r):
