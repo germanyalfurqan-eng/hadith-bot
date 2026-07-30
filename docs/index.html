@@ -290,6 +290,16 @@
   .mkp-isnad{font-size:1em;line-height:2;color:var(--hint);border-inline-start:2px solid rgba(122,162,255,.35);padding-inline-start:8px;margin-bottom:6px}   /* С57: иснад из разметки — мельче/приглушённо; матн остаётся крупным .ar */
   .mkp-matn{}
   .mkp-sharh{font-size:.78em;line-height:1.7;color:var(--hint);opacity:.75;margin-top:6px;border-top:1px dashed var(--border);padding-top:4px}
+  /* Р-02 (владелец, Тирмизи 654): слова АВТОРА СБОРНИКА — не слова Пророка ﷺ. Отдельным абзацем,
+     мельче матна, но заметнее шарха мухаккика: это всё-таки первоисточник, а не современный комментарий. */
+  .mkp-author{font-size:.88em;line-height:1.85;color:var(--hint);margin-top:8px;padding-inline-start:10px;
+    border-inline-start:2px solid rgba(190,160,90,.5)}
+  .mkp-author .mkp-lbl{display:block;font-size:.72em;letter-spacing:.3px;opacity:.7;margin-bottom:2px}
+  /* пометка «текст как у соседнего хадиса» (نحوه / مثله / بمعناه) */
+  .mkp-nahw{display:inline-flex;align-items:center;gap:6px;font-size:.8em;padding:3px 9px;border-radius:999px;
+    background:rgba(190,160,90,.14);border:1px solid rgba(190,160,90,.4);color:var(--hint);margin-bottom:6px}
+  body.light .mkp-author{border-inline-start-color:rgba(150,120,50,.55)}
+  body.light .mkp-nahw{background:rgba(150,120,50,.1);border-color:rgba(150,120,50,.45)}
   /* #302/#325: явно разрешить выделение текста хадиса/перевода/слов внутри карточки (iOS WebView по умолчанию режет) */
   #res .card, #res .ar, .ar .qw, .ru, .cnote, .trbox, #bookText, #bookMain{ -webkit-user-select:text; user-select:text; -webkit-touch-callout:default }   /* #412: читалка книг (#bookText/#bookMain) не входила в список — в iOS Telegram WebView текст там не выделялся */
   /* #77: комментарий составителя (قال أبو عيسى/قال أبو داود) — НЕ часть хадиса: абзац с отступом, приглушённый цвет, отбивка */
@@ -635,7 +645,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1252</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1253</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1404,7 +1414,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1252';
+const APPVER = 'v1253';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5770,6 +5780,35 @@ function _mkpSplitIdx(text, matnText){ // индекс начала матна �
   const idx=ft.join('').indexOf(probe);
   return idx>0? map[idx] : -1;
 }
+// ─── Р-02 (владелец, Тирмизи 654): три слоя текста вместо одного ───
+// «Слова автора надо будет отдельно отмечать внизу, ниже абзацем, а мухаккика вообще колонтитулом».
+// Смешение слов Пророка ﷺ, автора сборника и мухаккика в одном абзаце — не косметика, а искажение:
+// человек читает оценку Тирмизи как часть хадиса. Слой мухаккика (.mkp-sharh) уже был; здесь
+// добавляется слой АВТОРА СБОРНИКА.
+// Маркеры — устойчивые зачины, которыми составители переходят от хадиса к своей речи:
+//   Тирмизи: «قال أبو عيسى», «هذا حديث حسن صحيح/غريب», «وفي الباب عن…»
+//   Абу Дауд/Насаи/Ибн Маджа: «قال أبو داود», «قال أبو عبد الرحمن», «قال أبو الحسن»
+//   общие: «وروي عن», «وهذا حديث», «قال الشيخ»
+const _АВТОР_ЗАЧИН=/(?:^|[\s.،؛])((?:قَالَ|قال)\s+(?:أَبُو|أبو)\s+(?:عِيسَى|عيسى|دَاوُدَ|داود|عَبْدِ|عبد|الْحَسَنِ|الحسن)[\s\S]*|(?:هَذَا|هذا)\s+(?:حَدِيثٌ|حديث)[\s\S]*|(?:وَفِي|وفي)\s+(?:الْبَابِ|الباب)\s+(?:عَنْ|عن)[\s\S]*)$/;
+function _отделитьАвтора(matn){
+  try{
+    const m=(matn||'').match(_АВТОР_ЗАЧИН);
+    if(!m) return {матн:matn, автор:''};
+    const хвост=m[1].trim();
+    // страховки: слова автора не должны съедать сам хадис и не должны быть обрывком в пару букв
+    if(хвост.length<12 || хвост.length>matn.length*0.55) return {матн:matn, автор:''};
+    return {матн:matn.slice(0, matn.length-m[1].length).trim(), автор:хвост};
+  }catch(e){ return {матн:matn, автор:''}; }
+}
+// «نحوه» / «مثله» / «بمعناه» — матн НЕ приведён: он такой же, как у соседнего хадиса, изменился иснад.
+// Без пометки человек видит карточку без текста и не понимает, что произошло (жалоба владельца).
+function _нахвуМетка(t){
+  try{
+    if(!/نَحْوَهُ|نحوه|مِثْلَهُ|مثله|بِمَعْنَاهُ|بمعناه|نَحْوَ ذَلِكَ|نحو ذلك/.test(t||'')) return '';
+    return '<div class="mkp-nahw" title="В источнике текст не приведён целиком: он тот же, что у соседнего хадиса, отличается только цепочка передатчиков">'
+      + '<span>🔗</span><span>текст тот же, что у соседнего хадиса — отличается цепочка</span></div>';
+  }catch(e){ return ''; }
+}
 async function _applyIsnadMatn(ar, code, num, text){
   try{
     const slug=(code==='ibnmaja')?'ibnmajah':code;
@@ -5785,8 +5824,12 @@ async function _applyIsnadMatn(ar, code, num, text){
     const H=(t)=>{ try{ return hl(t,g); }catch(e){ try{ return esc(t); }catch(e2){ return t; } } };
     let matnCore=matn, sharhTail='';
     if(rec.sharh||slug==='muslim'){ const m=matn.match(/^([\s\S]*["»][.،؛]?)\s*(\([\s\S]+)$/); if(m && m[2].length<matn.length*0.6){ matnCore=m[1]; sharhTail=m[2]; } }
-    ar.innerHTML='<div class="mkp-isnad" title="Иснад — цепочка передатчиков">'+H(isn)+'</div>'
+    // Р-02: отделить СЛОВА АВТОРА СБОРНИКА от слов Пророка ﷺ
+    const _ав=_отделитьАвтора(matnCore); matnCore=_ав.матн; const авторТекст=_ав.автор;
+    ar.innerHTML=(_нахвуМетка(isn+matnCore)||'')
+      +'<div class="mkp-isnad" title="Иснад — цепочка передатчиков">'+H(isn)+'</div>'
       +'<div class="mkp-matn">'+H(matnCore)+'</div>'
+      +(авторТекст?('<div class="mkp-author" title="Слова автора сборника — не слова Пророка ﷺ"><span class="mkp-lbl">слова автора сборника</span>'+H(авторТекст)+'</div>'):'')
       +(sharhTail?('<div class="mkp-sharh" title="Пояснение издания (шарх) — не текст хадиса">'+H(sharhTail)+'</div>'):'');
     _styleCollectorNote(ar);
   }catch(e){}
