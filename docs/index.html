@@ -635,7 +635,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1251</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1252</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1404,7 +1404,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1251';
+const APPVER = 'v1252';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7376,6 +7376,31 @@ function _qrWordByWord(s, a){
 }
 // Анализ реального аудио аята: слова распределяются по ФАКТИЧЕСКОЙ речи (паузы держат слово) → ровнее «в слог»
 let _wtCache={};
+// Р-03 (караоке «строго в строй»). Было: длительность слова = число букв, причём
+// replace(/[^ء-ي]/g,'') ВЫБРАСЫВАЛ огласовки — а в Коране длительность задают именно они.
+// Замер на Фатихе 1:7: слово ٱلضَّآلِّينَ (две шадды + мадда) по буквам весит 15,0% аята,
+// по таджвиду 19,9% — накопленный сдвиг границы 4,9% длительности, то есть 0,25 с на аяте
+// в 5 с и 0,59 с на аяте в 12 с. Отсюда «подсветка убегает», заметнее к концу аята.
+// Теперь считаем с учётом того, что реально держит звук:
+//   шадда — удвоение согласной · знак мадда ٓ — сильное протяжение (до 6 харакатов)
+//   надстрочный алиф ٰ — протяжение · танвин — чуть длиннее · сукун — короче огласованной
+//   огласовка + ا/و/ي без своей огласовки — естественный мадд
+function _вес(w){
+  if(!w) return 2;
+  let в=0;
+  for(let i=0;i<w.length;i++){
+    const c=w[i];
+    if(c>='ء'&&c<='ي'){
+      в+=1; const хв=w.slice(i+1,i+4);
+      if(хв.indexOf('ّ')>=0) в+=1;      // шадда
+      if(хв.indexOf('ٓ')>=0) в+=2.5;    // мадда
+      if(/[ً-ٍ]/.test(хв)) в+=0.5; // танвин
+      if(хв.indexOf('ْ')>=0) в-=0.3;    // сукун
+    } else if(c==='ٰ') в+=1;            // надстрочный алиф
+  }
+  в+=0.7*((w.match(/[َ-ِ][اوي](?![ً-ْ])/g)||[]).length);
+  return Math.max(2,в);
+}
 async function _analyzeWordEnds(url, wordLens){
   try{
     if(!_wtCache[url]){
@@ -7427,7 +7452,7 @@ function _qrPlay(s, a){ _qrWordStop();
   // ПЛАВНАЯ пословная подсветка по длительности аята (Худайфи и любой everyayah — без внешних таймкодов)
   let _qw=[], _ends=[], _cw=-1;
   const _buildWT=()=>{ try{ if(!blk||cfg.wordTap===false||cfg.qrHl===false) return; _qw=[...blk.querySelectorAll('.qw')]; const dur=au.duration||0; if(!dur||!_qw.length){_qw=[];return;}
-    const wl=_qw.map(x=>Math.max(2,(x.textContent||'').replace(/[^ء-ي]/g,'').length)); const tot=wl.reduce((p,c)=>p+c,0)||1; let acc=0; _ends=wl.map(x=>{ acc+=x; return (acc/tot)*dur; }); // равномерно — сразу
+    const wl=_qw.map(x=>_вес(x.textContent||'')); const tot=wl.reduce((p,c)=>p+c,0)||1; let acc=0; _ends=wl.map(x=>{ acc+=x; return (acc/tot)*dur; }); // по таджвидному весу — сразу
     // ...подстройка под РЕАЛЬНЫЙ голос + бесшовность: обрезаем тишину в начале/конце аята
     _analyzeWordEnds(u, wl).then(e=>{ if(window._qrAudio!==au) return; if(e && e.length===_qw.length) _ends=e;
       const A=_wtCache[u]; if(A){ if(cfg.qrTrim!==false){
