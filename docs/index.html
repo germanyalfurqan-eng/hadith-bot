@@ -645,7 +645,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1255</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1256</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1171,7 +1171,11 @@
 <div class="modal" id="readModal">
   <div class="panel" style="max-width:560px">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:6;background:var(--card);margin:-16px -16px 8px;padding:14px 16px 10px;border-bottom:1px solid var(--border)">
-      <b id="readTitle">📖 Читать сборник</b><span style="display:flex;gap:6px;flex:none"><button class="mini" id="readFbBtn" title="Нашли опечатку, неверный номер или что-то сломалось в этой книге — напишите нам">✉️ Сообщить об ошибке</button><button class="mini" id="readClose">закрыть ✕</button></span>
+      <!-- #682 (владелец): «сверху какая надобность так переносить имя книги чтобы написать непонятное
+           сообщить об ошибке». Длинная надпись на кнопке выдавливала название сборника на вторую строку,
+           а сама надпись при этом ничего не поясняла. Кнопка сжата до конверта (смысл — в подсказке),
+           заголовку разрешено сокращаться многоточием вместо переноса. -->
+      <b id="readTitle" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📖 Читать сборник</b><span style="display:flex;gap:6px;flex:none"><button class="mini" id="readFbBtn" title="Нашли опечатку, неверный номер или что-то сломалось в этой книге — напишите нам" aria-label="Сообщить об ошибке" style="padding-left:9px;padding-right:9px">✉️</button><button class="mini" id="readClose">закрыть ✕</button></span>
     </div>
     <div id="readPick">
       <div class="hint" style="margin:0 0 8px">Выбери сборник — открою его подряд (листать хадис за хадисом). Можно начать с номера.</div>
@@ -1414,7 +1418,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1255';
+const APPVER = 'v1256';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -1549,11 +1553,27 @@ function hap(kind){ try{
   if(typeof cfg!=='undefined' && cfg.haptic===false) return;   // выключено в ⚙️ Настройках
   if(_hapErr>3) return;                                         // после нескольких сбоев — больше не дёргаем (защита)
   const now=Date.now(); if(now-_hapLast<70) return;             // троттл ~14/сек — вибро не «зависнет»
-  _hapLast=now; const h=tg&&tg.HapticFeedback; if(!h) return;
+  _hapLast=now; const h=tg&&tg.HapticFeedback;
+  if(!h){   // #677: вне Telegram (браузер, ярлык на рабочем столе) HapticFeedback нет — отдаём вибро сами
+    try{ if(navigator.vibrate) navigator.vibrate(kind==='err'?55:kind==='ok'?[14,40,14]:kind==='soft'?10:14); }catch(e){}
+    return; }
   if(kind==='ok') h.notificationOccurred('success'); else if(kind==='err') h.notificationOccurred('error');
   else if(kind==='sel') h.selectionChanged(); else if(kind==='light') h.impactOccurred('light');
   else if(kind==='soft') h.impactOccurred('soft'); else h.impactOccurred('medium');
 }catch(e){ _hapErr++; } }
+// #677 (владелец: «на такие кнопки надо делать вибро чувствительность чтобы отдавала вибрацией при выборе»).
+// Расставлять hap() вручную по каждой кнопке — тупик: их сотни, новые появляются каждую версию, и
+// половина всё равно останется молчащей (сейчас вызовов 62 на всё приложение). Ставим ОДИН слушатель
+// на документ: любое нажатие по кнопке/чипу/пункту даёт отклик. Двойного вибро не будет — у hap()
+// свой троттл 70 мс, и там, где hap уже вызывается вручную, второй вызов просто проглотится.
+// Выключатель прежний: ⚙️ Настройки → haptic=false гасит всё разом.
+document.addEventListener('pointerdown', function(e){
+  try{
+    const t=e.target && e.target.closest && e.target.closest('button,.chip,.mini,.go,.sw,.tab,[role="button"]');
+    if(!t || t.disabled) return;
+    hap(t.classList && t.classList.contains('chip') ? 'sel' : 'light');
+  }catch(_e){}
+}, {passive:true, capture:true});
 let USER=null;
 if (tg){ try{ tg.ready(); tg.expand();
   try{ tg.disableVerticalSwipes && tg.disableVerticalSwipes(); }catch(e){}   // M258: чтобы выделение текста не «тянуло» приложение к сворачиванию
@@ -2537,11 +2557,17 @@ async function loadHadithRu(silent){ if(hadithRu)return hadithRu; if(hadithRuP) 
 async function getArabicHadith(code,num){
   try{ const arr=await loadByCode(code); const h=arr.find(x=>String(x.num)===String(num)); return h?(h.text||''):''; }catch(e){ return ''; }
 }
+// #682 (владелец: «как может быть хадис номер 0») — СТРАЖ НУМЕРАЦИИ.
+// Нулевой номер в наших книгах = артефакт разбора: под него попадали редакторские приписки
+// («وتابعه عبد الواحد…» в Адаб аль-Муфрад, «سماعه مقرون بسماع أشهب» в Муватте), а не хадисы.
+// Сами записи из данных убраны (scratch_marathon/chistka_nomer_nol.py), но страж нужен на будущее:
+// новый такой же артефакт не должен подписываться как хадис с номером.
+function _номТекст(n){ const s=String(n==null?'':n).trim(); return (!s||s==='0'||s==='٠')?'':(' · №'+s); }
 function cardHadithRu(d){ const card=document.createElement('div');card.className='card';
   const ru=document.createElement('div');ru.className='ru-out';ru.style.cssText='font-size:16px;line-height:1.7';ru.innerHTML=hlRu(d.ru,d.rq||'');card.appendChild(ru);
   const meta=document.createElement('div');meta.className='meta';
   const canRead = isReadable(d.s);   // M102: клик по источнику → читалка на этом хадисе
-  meta.innerHTML='<span class="src'+(canRead?' srcnav" style="cursor:pointer" title="Открыть в читалке на этом хадисе">📖 ':'">')+vocOf(d.s)+' · №'+d.n+'</span>';   // #37: с огласовками
+  meta.innerHTML='<span class="src'+(canRead?' srcnav" style="cursor:pointer" title="Открыть в читалке на этом хадисе">📖 ':'">')+vocOf(d.s)+_номТекст(d.n)+'</span>';   // #37: с огласовками; #682: без «№0»
   { const _rl=_ruSrcLine(d.s); if(_rl) meta.innerHTML+='<span class="srcru" style="display:block;width:100%;font-size:11.5px;color:var(--hint);margin-top:1px;direction:ltr;text-align:left">'+esc(_rl)+'</span>'; }   // #37: рус. название + автор
   if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp) sp.onclick=()=>{ if(cfg.urBeta){ try{ openUnifiedReader(d.s,String(d.n)); return; }catch(e){} } openReader(d.s,String(d.n)); }; }
   try{ ourHukmBadge(d.s, d.n, meta, card); }catch(e){}   // #309/аудит: достоверность·разбор·материал и в рус-карточке (единообразие с обычной/Мухэймин)
@@ -3808,7 +3834,21 @@ async function runSearch(explicit){
               +'<button class="mini" id="_ebFb" style="font-size:12.5px;padding:7px 12px">✉️ сообщить</button>'))+'</div>';
         res.appendChild(bx);
         try{ const r=bx.querySelector('#_ebRoot'); if(r) r.onclick=()=>{ try{ modes.root=true; const rc=document.querySelector('.chip[data-mode="root"]'); if(rc) rc.classList.add('on'); }catch(e){} runSearch(true); }; }catch(e){}
-        try{ const m=bx.querySelector('#_ebMak'); if(m) m.onclick=()=>{ try{ appendMaktaba(seq, q, groups, modes); m.classList.add('btnBusy'); m.innerHTML='<span class="miniSpin"></span>ищу'; }catch(e){} }; }catch(e){}
+        // #669 (владелец: «внизу написано не нашёл, а поиск ещё крутится и вводит в заблуждение»).
+        // Здесь было ДВЕ ошибки в одной строке:
+        //   ① appendMaktaba(seq, q, groups, modes) — функция принимает (seq, q, primary), и `groups`
+        //      попадал в `primary`, а при истинном primary она делает res.innerHTML='' и СТИРАЕТ выдачу;
+        //   ② кнопка переводилась в «ищу», вызов шёл БЕЗ await, и снять состояние было некому —
+        //      поиск давно закончился, внизу висело «по Мактабе совпадения нет», а кнопка крутилась.
+        // Теперь: верные аргументы (дописываем ПОД пустым окном, ничего не стирая) и возврат кнопки
+        // в исходный вид в finally — то есть при любом исходе, включая ошибку сети.
+        try{ const m=bx.querySelector('#_ebMak'); if(m) m.onclick=async()=>{
+          const _был=m.innerHTML;
+          m.classList.add('btnBusy'); m.innerHTML='<span class="miniSpin"></span>ищу';
+          try{ await appendMaktaba(seq, q); }
+          catch(e){}
+          finally{ m.classList.remove('btnBusy'); m.innerHTML=_был; }
+        }; }catch(e){}
         try{ const f=bx.querySelector('#_ebFb'); if(f) f.onclick=()=>{ try{ openFeedback&&openFeedback('Поиск «'+shown.slice(0,60)+'» ничего не нашёл'); }catch(e){ try{ document.getElementById('fbBtn')?.click(); }catch(_){} } }; }catch(e){}
       }
       if(count>CAP) ensureMoreBtn(seq, _lastQueryTerms, q, groups, modes); } };
