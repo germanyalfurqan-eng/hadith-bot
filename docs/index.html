@@ -645,7 +645,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1256</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1257</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1418,7 +1418,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1256';
+const APPVER = 'v1257';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -1574,6 +1574,36 @@ document.addEventListener('pointerdown', function(e){
     hap(t.classList && t.classList.contains('chip') ? 'sel' : 'light');
   }catch(_e){}
 }, {passive:true, capture:true});
+// #677 (владелец: «если человек нажал кнопку и не появился результат, он должен ошибку показывать
+// и скидывать в журнал»). Поиски с нулём уже уходят на /searchlog — не хватало ДРУГОГО: случая, когда
+// нажатие не дало ВООБЩЕ НИЧЕГО. Такое рождается из `catch(e){}`, которых в коде сотни: обработчик
+// падает, ошибка проглатывается, до window.onerror не доходит, человек видит неподвижный экран.
+// Сторож: снимаем слепок выдачи при нажатии и через 2,5 с смотрим, изменилось ли хоть что-то.
+// Не изменилось — говорим честно и пишем в журнал ошибок, чтобы владелец видел место, а не догадывался.
+(function(){
+  let _последний=0;
+  const _слепок=()=>{ try{ const r=document.getElementById('res');
+    return r ? (r.childElementCount+'|'+(r.textContent||'').length) : 'нет'; }catch(e){ return 'нет'; } };
+  document.addEventListener('click', function(e){
+    try{
+      const t=e.target && e.target.closest && e.target.closest('#goBtn,.chip[data-mode]');
+      if(!t) return;
+      const q=(document.getElementById('q')||{}).value||'';
+      if(!q.trim()) return;                       // пустой запрос — молчание законно
+      const now=Date.now(); if(now-_последний<30000) return;   // не чаще раза в 30 с, чтобы не спамить
+      const было=_слепок(), где=(t.id||t.dataset.mode||'кнопка');
+      setTimeout(()=>{
+        try{
+          if(_слепок()!==было) return;            // что-то изменилось — всё в порядке
+          if(document.querySelector('.btnBusy,.miniSpin,#_skel')) return;   // ещё работает — не тревога
+          _последний=Date.now();
+          try{ toast('Не получилось — записал в журнал, разберёмся'); }catch(_t){}
+          try{ _appReport('Нажатие без отклика: '+где+' · запрос: '+q.slice(0,60), 'отклик'); }catch(_r){}
+        }catch(_e){}
+      }, 2500);
+    }catch(_e){}
+  }, {capture:true});
+})();
 let USER=null;
 if (tg){ try{ tg.ready(); tg.expand();
   try{ tg.disableVerticalSwipes && tg.disableVerticalSwipes(); }catch(e){}   // M258: чтобы выделение текста не «тянуло» приложение к сворачиванию
@@ -3142,6 +3172,14 @@ var _rcls=document.getElementById('recentClose'); if(_rcls) _rcls.onclick=()=>{ 
 var _pcls=document.getElementById('popClose'); if(_pcls) _pcls.onclick=()=>{ _popClosed=true; var p=document.getElementById('popularBox'); if(p) p.style.display='none'; };
 document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.dataset.mode;
   if(!m) return;   // чипы без режима (⚙️ ещё, журналы) имеют свои обработчики
+  // #677 (владелец: «раг кнопка часто не нажимается не выбирается потому что параллельно грузит поиск»).
+  // Причина: идущий поиск рисует сотни карточек и держит главный поток, поэтому переключение режима
+  // «не берётся» — событие приходит, но обработать его нечем. Отмену прежнего поиска раньше делал
+  // только сам runSearch В КОНЦЕ обработчика, то есть уже ПОСЛЕ всей работы, а для режима RAG он и
+  // вовсе не вызывается (там ранний return) — поток не освобождался вообще.
+  // Теперь идущий поиск отменяется ПЕРВЫМ действием: все его циклы проверяют seq!==_seq и выходят,
+  // отрисовка прекращается, индикаторы гаснут — и переключение отрабатывает сразу.
+  try{ _seq++; _goBusy(false); _skelOff(); }catch(e){}
   if(m==='neuro'){ modes.neuro=!modes.neuro; ch.classList.toggle('on',modes.neuro);
     document.getElementById('neuroBox').style.display=modes.neuro?'block':'none'; return; }
   modes[m]=!modes[m]; ch.classList.toggle('on',modes[m]);
@@ -3193,7 +3231,10 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.datas
     } else { modes.rag=false; const rc=document.querySelector('.chip[data-mode="rag"]'); if(rc) rc.classList.remove('on');   // v1069: повторный тап гарантированно СНИМАЕТ режим
       inp.placeholder=(tab==='hadith'?t('Слова, фраза или № хадиса…','Word, phrase or hadith #…'):t('Слова, фраза или № (2:255)…','Word, phrase or 2:255…')); }
     return; }
-  if(document.getElementById('q').value.trim()) runSearch();   // сразу пересчитать с новым режимом
+  // #677: пересчёт — СЛЕДУЮЩИМ кадром, а не в этом же обработчике. Синхронный вызов забирал поток
+  // до того, как браузер успевал перерисовать сам чип, и нажатие выглядело «не сработавшим»,
+  // хотя режим уже переключился. Кадр задержки не заметен, а отклик становится мгновенным.
+  if(document.getElementById('q').value.trim()) requestAnimationFrame(()=>{ try{ runSearch(); }catch(e){} });
 });
 var _ct=document.getElementById('colsToggle'); if(_ct) _ct.onclick=()=>{ const b=document.getElementById('colsBody'); const open=b.style.display==='none'; b.style.display=open?'block':'none'; var a=document.getElementById('colsArrow'); if(a) a.textContent=open?'▴':'▾'; };
 document.getElementById('selAll').onclick=()=>{ COLLECTIONS.forEach(c=>selCols.add(c.code)); renderCols(); };
