@@ -9064,10 +9064,46 @@ async def _app_channel_watcher(application):
                                 try: await application.bot.send_message(OWNER_ID, _atxt)
                                 except Exception: pass
                             continue
-                        # Claim (и app_post_ids, и app_post.note) уже закоммичен АТОМАРНО ВМЕСТЕ выше, ДО поста —
-                        # здесь только сам реальный вызов Telegram API, ничего больше писать в journal не нужно.
-                        await _post_app_channel(application.bot, item["note"])
-                        posted_now += 1
+                        # 🔴 ВЫГОВОР В-41 (владелец 01.08.2026: «ты всё это время не описывал обновления
+                        # в канал… 1252 последнее обновление, мне негде иначе узнать что ты сделал»).
+                        # ЧТО БЫЛО. Заявка (_channel_claim) ставилась ДО поста и НЕ ОТКАТЫВАЛАСЬ при провале,
+                        # а сам вызов Telegram шёл БЕЗ try/except. Любая ошибка отправки → исключение улетало
+                        # в общий except ниже, который только печатает в лог Railway (его никто не читает),
+                        # ОБРЫВАЛ весь цикл (остальные ожидающие версии тоже пропускались) и оставлял заявку.
+                        # Итог: v1253, v1254, v1255, v1256 числятся запощенными, а в канале их НЕТ —
+                        # доказано по app_post_msgids: последний реальный пост v1252 (#1104).
+                        # ЧИНИМ КЛАСС, А НЕ СЛУЧАЙ: заявка — это ЗАМОК. Работа провалилась → замок отпустить,
+                        # владельцу сказать, соседние версии не терять.
+                        try:
+                            await _post_app_channel(application.bot, item["note"])
+                            posted_now += 1
+                        except Exception as _e_post:
+                            def _откат(obj, _id=item["id"], _note=item["note"]):
+                                obj = obj or {}
+                                obj["app_post_ids"] = [x for x in (obj.get("app_post_ids") or []) if x != _id]
+                                obj["app_post_notes"] = [x for x in (obj.get("app_post_notes") or [])
+                                                         if (x or "").strip() != (_note or "").strip()]
+                                sb = obj.get("app_post_fails") or []
+                                sb.append({"id": _id, "err": str(_e_post)[:200],
+                                           "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")})
+                                obj["app_post_fails"] = sb[-50:]
+                                return obj
+                            try:
+                                _data_atomic_mutate("journal.json", _откат,
+                                                    "ОТКАТ заявки: пост %s не вышел" % item["id"])
+                                if _journal_cache is not None:
+                                    _journal_cache["app_post_ids"] = [x for x in (_journal_cache.get("app_post_ids") or []) if x != item["id"]]
+                            except Exception:
+                                pass
+                            _txt_fail = ("🔴 НЕ СМОГ опубликовать обновление %s в @muslimoonapp.\n\n"
+                                         "Причина: %s\n\n"
+                                         "Заявку откатил — попробую снова через 5 минут. Если повторится, "
+                                         "проверь, остаётся ли бот администратором канала с правом публикации."
+                                         % (item["id"], str(_e_post)[:300]))
+                            for _чат in (OWNER_ID, LOG_CHAT_ID):
+                                try: await application.bot.send_message(_чат, _txt_fail)
+                                except Exception: pass
+                            continue   # соседние версии не теряем — идём дальше по очереди
                         await asyncio.sleep(2)   # пауза между постами — не флудить Telegram API
             except Exception as e:
                 print("app channel queue watcher error:", e)
