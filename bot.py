@@ -3,7 +3,7 @@
 # запушен — и нельзя было отличить «фикс не работает» от «Railway ещё не передеплоился». Теперь
 # у бэкенда есть паспорт: GET /api/version отдаёт эту метку и время старта. Меняем при каждом
 # изменении bot.py — тогда любой спор о том, дошёл ли код до прода, решается одним запросом.
-СБОРКА = 'b1253-chistka-postov-po-hesu'
+СБОРКА = 'b1254-pochemu-chistka-ne-vyshla'
 import time as _time_boot
 _СТАРТ = _time_boot.time()
 from concurrent.futures import ThreadPoolExecutor as _TPE
@@ -9674,7 +9674,18 @@ async def _app_channel_watcher(application):
                                                                         disable_web_page_preview=True)
                                 _почищено.append(_мид)
                             except Exception as _e:
-                                _мимо.append("%s (%s)" % (_мид, str(_e)[:40]))
+                                # ⛔ ПОЧЕМУ НЕ ВЫШЛО — НАДО СКАЗАТЬ СЛОВАМИ (02.08.2026, заявка #666).
+                                # Telegram не даёт боту править СВОИ ЖЕ посты старше 48 часов. Пост 1081 —
+                                # недельной давности, и переписать его мы не сможем НИКОГДА, сколько ни чини
+                                # механизм. Раньше это уходило владельцу обрывком английской ошибки, он читал
+                                # его как очередную поломку и просил снова. Теперь говорим прямо: править
+                                # нечем, вот ссылка, сделай сам одним нажатием.
+                                _txt_e = str(_e)
+                                if "can't be edited" in _txt_e or "message to edit not found" in _txt_e:
+                                    _мимо.append("%s — СТАРШЕ 48 ЧАСОВ, бот править не может: открой "
+                                                 "https://t.me/muslimoonapp/%s и поправь или удали сам" % (_мид, _мид))
+                                else:
+                                    _мимо.append("%s (%s)" % (_мид, _txt_e[:60]))
                         _jc["clean_posts"] = {"flag": _хеш, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
                         _journal_save("чистка постов канала от личного")
                         try:
