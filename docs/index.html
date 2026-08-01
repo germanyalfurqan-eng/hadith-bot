@@ -590,7 +590,15 @@
   .modal{position:fixed;inset:0;background:#000a;display:none;align-items:flex-start;justify-content:center;z-index:80;padding:14px;padding-top:calc(46px + var(--tgTop,0px) + env(safe-area-inset-top,0px));overflow:auto;overscroll-behavior:contain}   /* #657/#659 (С67): было 40px без учёта панели Telegram — верх окна уходил ей под кнопки · #681: прокрутка окна не «протекает» на фон */
   /* #681 (С67): пока открыто хоть одно окно — страница под ним заморожена. Иначе палец тянул сразу
      три прокрутки (страница → окно → панель), и окно на глазах «шагало». Класс ставит _bodyLock(). */
-  body.winOpen{ overflow:hidden }
+  /* #681 (С67, ПОВТОРНАЯ правка — прошлая не работала, замерено живьём): прокручиваемый элемент здесь
+     html (document.scrollingElement===documentElement), а заморозка стояла ТОЛЬКО на body — при открытом
+     окне фон спокойно ехал дальше (проверка: scrollTo(0,1200) при видимом окне давал ровно 1200).
+     Отсюда и «шагает окна»: окно стоит, а всё под ним уползает.
+     Морозим ОБА уровня. position:fixed нужен отдельно: в iOS-WebView (Telegram) overflow:hidden на
+     html/body визуальную прокрутку не останавливает — только вынос body из потока. Сдвиг top:-Ypx
+     держит страницу на прежнем месте, при закрытии _bodyLock() возвращает scrollTo(0,Y). */
+  html.winOpen{ overflow:hidden }
+  body.winOpen{ overflow:hidden; position:fixed; left:0; right:0; width:100% }
   .modal .panel{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;max-width:460px;width:100%;max-height:calc(90vh - var(--tgTop,0px));overflow:auto;overscroll-behavior:contain;box-shadow:0 22px 64px -12px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.05),0 3px 10px rgba(0,0,0,.45)}   /* #659 (С67): раз верх отодвинули — на столько же ужимаем высоту, иначе низ окна уезжает за экран */
   /* #657/#659 (С67), закон З-40 «чинить КЛАСС, а не случай»: шапки окон написаны ИНЛАЙНОМ в 25 местах
      (position:sticky;top:0 + свой padding 11–14px), поэтому один общий отступ задаём селектором по самому
@@ -672,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1264</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1265</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1464,7 +1472,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1264';
+const APPVER = 'v1265';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -1513,8 +1521,23 @@ function _zLift(el){ try{
 function _bodyLock(){ try{
   var any=false;
   Array.prototype.forEach.call(document.querySelectorAll('.modal'), function(m){ var d=m.style.display; if(d && d!=='none') any=true; });
-  document.body.classList.toggle('winOpen', any);
+  /* #681 (С67, повторная правка): переключаем ТОЛЬКО на смене состояния — иначе наблюдатель окон, который
+     дёргает _bodyLock() на каждую мутацию style, сбрасывал бы сохранённое положение прокрутки. */
+  var было=document.body.classList.contains('winOpen');
+  if(any===было) return;
+  if(any){
+    _lockY=window.pageYOffset||document.documentElement.scrollTop||0;
+    document.documentElement.classList.add('winOpen');
+    document.body.style.top=(-_lockY)+'px';
+    document.body.classList.add('winOpen');
+  }else{
+    document.body.classList.remove('winOpen');
+    document.documentElement.classList.remove('winOpen');
+    document.body.style.top='';
+    window.scrollTo(0,_lockY);   // вернуть человека ровно туда, где он читал, а не в начало страницы
+  }
 }catch(e){} }
+var _lockY=0;   /* #681 (С67): где стояла страница в момент открытия окна */
 /* Наблюдатель показа окон: слой + фиксация фона + пересчёт шапки — на КАЖДОЕ окно, включая созданные позже. */
 (function(){ try{
   var seen=(typeof WeakSet!=='undefined')?new WeakSet():null;
@@ -12610,7 +12633,25 @@ async function renderTestimoniesCard(mid, host){
   const neuro=_sahMode?{v:'⭐ صحابي عدول — сподвижник; формула тавсик/джарх не применяется (иджма)',col:'#e8c35a',em:'⭐',nT:0,nJ:0,jah:0,sahihayn:_inSah,note:'',pos:0,neg:0,strictJ:false,cnt:list.length}:_ttNeuro(list, _inSah);   // v1061: у сахаба нейро-формула отключена, фикс-строка (рецепт DeepSeek)
   const byc={}; const order=[];
   list.forEach(c=>{ const k=(c[0]||'').trim(); if(!k||k==='—'||k==='-') return; if(!byc[k]){byc[k]=[];order.push(k);} byc[k].push(c); });
-  order.sort((a,b)=>{ const ma=(_isMut(a)&&_critOk(a))?0:1, mb=(_isMut(b)&&_critOk(b))?0:1; if(ma!==mb) return ma-mb;   /* заявка #8: муътабары (48) первыми */ const xa=_critAuth(a), xb=_critAuth(b); if(xa!==xb) return xa-xb; const oa=_critArOrd(a), ob=_critArOrd(b); if(oa!==ob) return oa-ob; const sc=arr=>arr.reduce((s,c)=>s+(_ttScore(c[1])||0),0)/arr.length; return sc(byc[b])-sc(byc[a]); });
+  /* #679 (С67, владелец: «в каждой карточке передатчика сначала идёт по приоритетности шейхи с проверенными
+     оригиналами фраз, а после тех, кто нет ссылки»). Раньше порядок держался на авторитете критика, и учёный
+     с ВЫВЕРЕННОЙ цитатой (книга+лист сверены с именем равия — prov_crit) мог оказаться ниже шестого места и
+     вовсе не попасть на экран (_TT_TOP=6), а сверху стояли записи, под которыми честно написано «первоисточник
+     цитаты не выверен». Теперь провенанс — ключ сортировки: ⓪ цитата выверена по первоисточнику, ① есть
+     книга-носитель с листом (клик открывает страницу), ② книга есть, лист не выверен, ③ ссылки нет вовсе.
+     Класс муътабаров (заявка #8) НАМЕРЕННО оставлен первым ключом: это религиозный вес свидетельства, его
+     провенансом не перебить — поэтому провенанс сортирует ВНУТРИ класса, а не поверх него. */
+  try{ if(!window._provCrit || typeof window._provCrit!=='object'){ window._provCrit='loading';
+        window._provCrit=await fetch('./prov_crit.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); } }catch(_e){ window._provCrit={}; }
+  const _srcRankMemo={};
+  const _srcRank=(cr)=>{ if(_srcRankMemo[cr]!==undefined) return _srcRankMemo[cr];
+    let best=3; const pj=(window._provCrit&&typeof window._provCrit==='object')?window._provCrit[String(mid)]:null;
+    (byc[cr]||[]).forEach(c=>{ let r=3;
+      try{ if(pj&&pj.length){ const qn=String(c[3]||'').replace(/[ًٌٍَُِّْـ]/g,''); if(qn && pj.some(x=>x.q && qn.indexOf(x.q)>=0)) r=0; } }catch(_e){}
+      if(r>1 && c[5] && Number(c[5])>0) r=(c[6]!=null && Number(c[6])>0)?1:2;
+      if(r<best) best=r; });
+    _srcRankMemo[cr]=best; return best; };
+  order.sort((a,b)=>{ const ma=(_isMut(a)&&_critOk(a))?0:1, mb=(_isMut(b)&&_critOk(b))?0:1; if(ma!==mb) return ma-mb;   /* заявка #8: муътабары (48) первыми */ const sa=_srcRank(a), sb=_srcRank(b); if(sa!==sb) return sa-sb;   /* #679 (С67): выверенный первоисточник — выше «нет ссылки» */ const xa=_critAuth(a), xb=_critAuth(b); if(xa!==xb) return xa-xb; const oa=_critArOrd(a), ob=_critArOrd(b); if(oa!==ob) return oa-ob; const sc=arr=>arr.reduce((s,c)=>s+(_ttScore(c[1])||0),0)/arr.length; return sc(byc[b])-sc(byc[a]); });
   const _early=[], _late=[]; order.forEach(cr=>{ (_critAuth(cr)>=900?_late:_early).push(cr); });
   const sec=document.createElement('div'); sec.style.cssText='margin-top:13px;border:1px solid #36703d;border-radius:12px;overflow:hidden;background:#0f1712';
   const hdr=document.createElement('div'); hdr.style.cssText='padding:12px 13px;background:rgba(63,185,80,.08);display:flex;justify-content:space-between;align-items:center;cursor:pointer';
@@ -15971,8 +16012,19 @@ function setStatus(t){ const el=document.getElementById('status'); if(!el) retur
   // Все эти пути заканчиваются setStatus('') — снимаем busy и скелет здесь: один шов на все выходы.
   if(!t){ try{ _goBusy(false); }catch(e){} try{ _skelOff(); }catch(e){} }
   // #72: если загрузка длится дольше обычного — честно сообщаем (медленная сеть или идёт обновление/деплой)
+  /* #644 (С67, скрин «че за загрузка Корана»): под этой надписью с 26–27.07 уже живёт полоса с
+     НАСТОЯЩИМИ процентами и мегабайтами (_plShow/_plSet, включается на файлах >800 КБ — Коран 1,5 МБ
+     под это подходит), плюс Cache Storage в cachedFetchJSON, так что второй заход мгновенный.
+     Оставалось только оправдание «медленная сеть или идёт обновление»: рядом с живым «47% · 0,7 из
+     1,5 МБ» оно и лишнее, и перекладывает вину на человека — вопреки правилу владельца показывать
+     проценты. Приписку оставляем ТОЛЬКО там, где цифр нет (полоса не поднялась). */
   if(t && /загруж|ищу|подбираю|подключ|готовлю/i.test(t)){
-    _stSlowT=setTimeout(()=>{ try{ if(el.textContent===t) el.textContent=t+'  ⏳ дольше обычного (медленная сеть или идёт обновление)'; }catch(e){} }, 4500); }
+    _stSlowT=setTimeout(()=>{ try{
+      var _пол=document.getElementById('dlPct');
+      var _цифрыИдут=!!(_пол && _пол.textContent && /\d/.test(_пол.textContent)
+        && _plBox && _plBox.style.display!=='none');
+      if(!_цифрыИдут && el.textContent===t) el.textContent=t+'  ⏳ дольше обычного (медленная сеть или идёт обновление)';
+    }catch(e){} }, 4500); }
 }
 let toastT; function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('show');
   clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2800);}
