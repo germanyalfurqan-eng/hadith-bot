@@ -3,7 +3,7 @@
 # запушен — и нельзя было отличить «фикс не работает» от «Railway ещё не передеплоился». Теперь
 # у бэкенда есть паспорт: GET /api/version отдаёт эту метку и время старта. Меняем при каждом
 # изменении bot.py — тогда любой спор о том, дошёл ли код до прода, решается одним запросом.
-СБОРКА = 'b1252-dyra-anonima-i-chelovechnyy-otkaz'
+СБОРКА = 'b1253-chistka-postov-po-hesu'
 import time as _time_boot
 _СТАРТ = _time_boot.time()
 from concurrent.futures import ThreadPoolExecutor as _TPE
@@ -9634,7 +9634,15 @@ async def _app_channel_watcher(application):
                 if rc.status_code == 200:
                     _спис = base64.b64decode(rc.json().get("content", "")).decode("utf-8").strip()
                     _jc = _journal_load()
-                    if _спис and _спис[:60] != (_jc.get("clean_posts") or {}).get("flag", ""):
+                    # ⛔ ПРИЗНАК ИЗМЕНЕНИЯ — ХЕШ ВСЕГО ФАЙЛА, А НЕ ЕГО НАЧАЛО (02.08.2026).
+                    # Было `_спис[:60]` — первые шестьдесят знаков. А там лежит НЕИЗМЕННЫЙ
+                    # комментарий-заголовок «# Посты канала @muslimoonapp, которые надо…».
+                    # Значит сколько постов в список ни добавляй, признак не менялся и чистка
+                    # НЕ ЗАПУСКАЛАСЬ НИКОГДА после первого раза (26.07.2026 11:46). Владелец
+                    # просил трижды — «я сто раз сказал убери личные переписки» (#666) — пост
+                    # 1081 стоял в списке и всё это время оставался с его прямой речью.
+                    _хеш = hashlib.md5(_спис.encode("utf-8")).hexdigest()
+                    if _спис and _хеш != (_jc.get("clean_posts") or {}).get("flag", ""):
                         _почищено, _мимо = [], []
                         for _стр in _спис.splitlines():
                             _стр = _стр.strip()
@@ -9667,7 +9675,7 @@ async def _app_channel_watcher(application):
                                 _почищено.append(_мид)
                             except Exception as _e:
                                 _мимо.append("%s (%s)" % (_мид, str(_e)[:40]))
-                        _jc["clean_posts"] = {"flag": _спис[:60], "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+                        _jc["clean_posts"] = {"flag": _хеш, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
                         _journal_save("чистка постов канала от личного")
                         try:
                             await application.bot.send_message(OWNER_ID,
