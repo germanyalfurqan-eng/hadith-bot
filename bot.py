@@ -8884,7 +8884,12 @@ async def _post_app_channel(bot, note):
         _отпр = await bot.send_message(APP_CHANNEL_ID, body, parse_mode="HTML", disable_web_page_preview=True)
     try:
         if _отпр is not None:
-            вер = (str(note or '').strip().split()[0] or '?')[:12]
+            # 01.08.2026: ключ версии брался как ПЕРВОЕ СЛОВО ноты. По закону З-48 ноты теперь
+            # начинаются с эмодзи («🆕 v1254 — …»), и ключом становилось «🆕» — все версии легли
+            # под один ключ и затёрли друг друга (в журнале остался только последний, #1117).
+            # Берём номер версии регулярным поиском, а первое слово — лишь запасной путь.
+            _mv = re.search(r'v(\d{3,5})', str(note or ''))
+            вер = ('v' + _mv.group(1)) if _mv else (str(note or '').strip().split()[0] or '?')[:12]
             _мид = _отпр.message_id
             def _зап(o):
                 o.setdefault('app_post_msgids', {})[вер] = _мид
