@@ -38,6 +38,12 @@
     --bg:#0f1620; --text:#e8edf2; --hint:#8aa0b4; --link:#3da5ff;
     --btn:#1e6fd6; --btn-text:#fff; --card:#172230; --border:#243345; --mark:#ffd24d;
     --ok:#34c759;
+    /* #657/#659 (С67): единый верхний запас под ЧУЖУЮ шапку.
+       env(safe-area-inset-top) знает только про «чёлку» iOS, но НЕ про панель самого Telegram:
+       в полноэкранном режиме мини-аппа его кнопки «…»/«✕» рисуются ПОВЕРХ нашей страницы и
+       срезают верх окон. Реальное значение кладёт сюда _syncTopInset() (Telegram Bot API 8.0);
+       нет данных — остаётся 0, и работает только safe-area, как раньше. */
+    --tgTop:0px;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;font-family:var(--uiFont,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif);
@@ -109,7 +115,7 @@
   body.light .brand .b{ color:#1565c0 }
   body.light #verBadge{ color:#33597e!important;background:#dde8f4!important;border-color:#bcd2e8!important }
   .col,.chip,.tab,input[type=text],textarea#q{box-shadow:0 2px 8px #0006}
-  .wrap{max-width:820px;margin:0 auto;padding:12px;padding-top:calc(28px + env(safe-area-inset-top,0px))}
+  .wrap{max-width:820px;margin:0 auto;padding:12px;padding-top:calc(30px + var(--tgTop,0px) + env(safe-area-inset-top,0px))}   /* #657 (С67): + запас под панель Telegram, иначе шапка приложения «почти накладывается» на его кнопки */
   @media(min-width:1024px){ .wrap{max-width:1040px;padding-left:22px;padding-right:22px} }   /* M125: на ПК/планшете контент шире */
   @media(min-width:1500px){ .wrap{max-width:1180px} }
   /* шапка/бренд */
@@ -289,12 +295,16 @@
   .ar{font-size:calc(19px * var(--txtScale,1));line-height:2;direction:rtl;text-align:right;font-family:var(--arFont,"Noto Naskh Arabic","Amiri",serif);user-select:text;-webkit-user-select:text;-moz-user-select:text;-webkit-touch-callout:default;overflow-wrap:break-word;word-break:break-word}   /* #184: длинная арабская строка без пробелов не вываливается за экран · #302/#325: webkit-префиксы+touch-callout — iOS Telegram WebView выделял текст только с ними */
   .mkp-isnad{font-size:1em;line-height:2;color:var(--hint);border-inline-start:2px solid rgba(122,162,255,.35);padding-inline-start:8px;margin-bottom:6px}   /* С57: иснад из разметки — мельче/приглушённо; матн остаётся крупным .ar */
   .mkp-matn{}
-  .mkp-sharh{font-size:.78em;line-height:1.7;color:var(--hint);opacity:.75;margin-top:6px;border-top:1px dashed var(--border);padding-top:4px}
+  /* #683 (владелец: «с чего вдруг внизу надо менять шрифт меньше делать»): хвостовые блоки текста
+     (шарх мухаккика, слова автора сборника, комментарий составителя) шли ЗАМЕТНО мельче матна —
+     читаешь хадис, а низ вдруг сжимается. Кегль возвращён к общему (1em), а «это не матн» по-прежнему
+     видно по цвету, рамке и отступу — различаем оформлением, а не размером букв. */
+  .mkp-sharh{font-size:1em;line-height:1.8;color:var(--hint);opacity:.8;margin-top:6px;border-top:1px dashed var(--border);padding-top:5px}
   /* Р-02 (владелец, Тирмизи 654): слова АВТОРА СБОРНИКА — не слова Пророка ﷺ. Отдельным абзацем,
      мельче матна, но заметнее шарха мухаккика: это всё-таки первоисточник, а не современный комментарий. */
-  .mkp-author{font-size:.88em;line-height:1.85;color:var(--hint);margin-top:8px;padding-inline-start:10px;
-    border-inline-start:2px solid rgba(190,160,90,.5)}
-  .mkp-author .mkp-lbl{display:block;font-size:.72em;letter-spacing:.3px;opacity:.7;margin-bottom:2px}
+  .mkp-author{font-size:1em;line-height:1.9;color:var(--hint);margin-top:8px;padding-inline-start:10px;
+    border-inline-start:2px solid rgba(190,160,90,.5)}   /* #683 (С67): тот же кегль, что у матна */
+  .mkp-author .mkp-lbl{display:block;font-size:.8em;letter-spacing:.3px;opacity:.75;margin-bottom:2px}
   /* пометка «текст как у соседнего хадиса» (نحوه / مثله / بمعناه) */
   .mkp-nahw{display:inline-flex;align-items:center;gap:6px;font-size:.8em;padding:3px 9px;border-radius:999px;
     background:rgba(190,160,90,.14);border:1px solid rgba(190,160,90,.4);color:var(--hint);margin-bottom:6px}
@@ -303,8 +313,8 @@
   /* #302/#325: явно разрешить выделение текста хадиса/перевода/слов внутри карточки (iOS WebView по умолчанию режет) */
   #res .card, #res .ar, .ar .qw, .ru, .cnote, .trbox, #bookText, #bookMain{ -webkit-user-select:text; user-select:text; -webkit-touch-callout:default }   /* #412: читалка книг (#bookText/#bookMain) не входила в список — в iOS Telegram WebView текст там не выделялся */
   /* #77: комментарий составителя (قال أبو عيسى/قال أبو داود) — НЕ часть хадиса: абзац с отступом, приглушённый цвет, отбивка */
-  .cnote{display:block;margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);text-indent:1.3em;color:var(--hint);font-size:.9em;line-height:1.75}
-  .cnote::before{content:"✎ комментарий составителя";display:block;text-indent:0;font-size:10px;color:var(--link);opacity:.85;margin-bottom:3px;font-family:-apple-system,Segoe UI,sans-serif}
+  .cnote{display:block;margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);text-indent:1.3em;color:var(--hint);font-size:1em;line-height:1.8}   /* #683 (С67): хвост хадиса больше не мельчает — отличаем цветом и отбивкой */
+  .cnote::before{content:"✎ комментарий составителя";display:block;text-indent:0;font-size:11.5px;color:var(--link);opacity:.85;margin-bottom:3px;font-family:-apple-system,Segoe UI,sans-serif}
   .qw{cursor:pointer;border-radius:4px;padding:0 1px;transition:background .18s,color .18s,box-shadow .18s}
   .qw:hover,.qw:active{background:rgba(74,158,255,.28)}
   .qw.hit{background:var(--mark);color:#241c00}
@@ -343,6 +353,14 @@
   body.light .tword{color:#2f6aa8}
   .chip.off{opacity:.4;text-decoration:line-through}
   .status{text-align:center;color:var(--hint);padding:14px;font-size:14px}
+  /* #670 (С67): «обрезано → кнопка развернуть». Кнопка живёт ВНУТРИ строки текста (в т.ч. арабской,
+     справа налево), поэтому inline-block + свой ЛАТИНСКИЙ шрифт и dir:ltr — иначе «▾ развернуть»
+     утаскивало в конец RTL-строки и оно выглядело оторванным от обрезанного места. */
+  .clampTx{display:inline}
+  .clampBtn{display:inline-block;margin-inline-start:7px;background:rgba(74,158,255,.10);border:1px solid var(--border);
+    color:var(--link);font-size:12.5px;font-weight:600;cursor:pointer;padding:2px 9px;border-radius:9px;line-height:1.5;
+    white-space:nowrap;vertical-align:middle;direction:ltr;unicode-bidi:isolate;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .clampBtn:active{opacity:.65}
   /* 25.07.2026 (владелец: «окно внизу под окном открывается, где видно?»): у тоста был z-index 99,
      а модалы живут на 10003-10007 — сообщение рисовалось ЗА открытым окном и пряталось за нижней
      панелью. Поднимаем выше всех окон и отодвигаем от нижней навигации. */
@@ -569,8 +587,17 @@
   .gate h2{font-size:20px;margin:14px 0 6px}
   .gate p{color:var(--hint);max-width:360px}
   /* modal управление */
-  .modal{position:fixed;inset:0;background:#000a;display:none;align-items:flex-start;justify-content:center;z-index:80;padding:14px;padding-top:calc(40px + env(safe-area-inset-top,0px));overflow:auto}
-  .modal .panel{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;max-width:460px;width:100%;max-height:90vh;overflow:auto;overscroll-behavior:contain;box-shadow:0 22px 64px -12px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.05),0 3px 10px rgba(0,0,0,.45)}
+  .modal{position:fixed;inset:0;background:#000a;display:none;align-items:flex-start;justify-content:center;z-index:80;padding:14px;padding-top:calc(46px + var(--tgTop,0px) + env(safe-area-inset-top,0px));overflow:auto;overscroll-behavior:contain}   /* #657/#659 (С67): было 40px без учёта панели Telegram — верх окна уходил ей под кнопки · #681: прокрутка окна не «протекает» на фон */
+  /* #681 (С67): пока открыто хоть одно окно — страница под ним заморожена. Иначе палец тянул сразу
+     три прокрутки (страница → окно → панель), и окно на глазах «шагало». Класс ставит _bodyLock(). */
+  body.winOpen{ overflow:hidden }
+  .modal .panel{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;max-width:460px;width:100%;max-height:calc(90vh - var(--tgTop,0px));overflow:auto;overscroll-behavior:contain;box-shadow:0 22px 64px -12px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.05),0 3px 10px rgba(0,0,0,.45)}   /* #659 (С67): раз верх отодвинули — на столько же ужимаем высоту, иначе низ окна уезжает за экран */
+  /* #657/#659 (С67), закон З-40 «чинить КЛАСС, а не случай»: шапки окон написаны ИНЛАЙНОМ в 25 местах
+     (position:sticky;top:0 + свой padding 11–14px), поэтому один общий отступ задаём селектором по самому
+     признаку шапки — так правило накрывает ВСЕ окна разом, включая те, что рисуются из JS. Нижние липкие
+     панели (position:sticky;bottom:0) под условие [style*="top:0"] не попадают и не трогаются. */
+  .modal .panel>[style*="position:sticky;top:0"]{ padding-top:16px!important; padding-bottom:11px!important }
+  .modal .panel>[style*="position:sticky;top:0"]>b{ line-height:1.35 }
   .row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:8px}
   .sw{width:46px;height:26px;border-radius:14px;background:#3a4658;position:relative;cursor:pointer;flex:none}
   .sw.on{background:var(--ok)}
@@ -645,7 +672,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1258</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1259</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1198,8 +1225,12 @@
       <!-- Заявки владельца #657 («у тебя везде сверху стоит так, отступы маленькие, почти накладывается»)
            и #659 («верхняя часть постоянно обрезается») + закон 26.07.2026: «везде отступы разумные должны
            быть, нигде такого не было чтобы наседало». Строка позиции сидела на 46px под шапкой с полем
-           padding:5px — на телефоне она наезжала на заголовок книги. Отступ увеличен и сверху, и снизу. -->
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;position:sticky;top:52px;background:var(--card);z-index:5;padding:10px 0 8px">
+           padding:5px — на телефоне она наезжала на заголовок книги. Отступ увеличен и сверху, и снизу.
+           #659 (С67), доводка: 52px — всё равно ЧИСЛО НАУГАД. Настоящая шапка выше (у кнопок «закрыть»
+           min-height:40px + отступы = ~67px), поэтому строка позиции продолжала подлезать под неё и
+           верх срезался. Липнем к --winHeadH — её меряет _syncWinHeads() по факту, для любого окна.
+           64px в запасе — если переменная почему-то не проставилась. -->
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;position:sticky;top:var(--winHeadH,64px);background:var(--card);z-index:5;padding:10px 0 8px">
         <button class="mini" id="readBack">← к выбору</button>
         <span class="hint" id="readPos" style="margin:0"></span>
       </div>
@@ -1224,14 +1255,29 @@
            «след. →» справа. Арабская книга листается СПРАВА НАЛЕВО: начало книги справа, следующий
            хадис — СЛЕВА. Порядок кнопок и стрелки развёрнуты под чтение книги, а не под латинский текст.
            Идентификаторы кнопок не менял — обработчики и вся логика прежние. -->
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:10px">
-        <button class="go" id="readLast" style="padding:8px 10px" title="В конец книги (последний хадис)">⏮</button>
-        <button class="go" id="readNext" style="padding:8px 12px" title="Следующий хадис — дальше по книге">← след.</button>
-        <input type="number" id="readJump" placeholder="№ хадиса" min="1" inputmode="numeric" title="Введи НОМЕР хадиса в этой книге и нажми Enter или кнопку перехода — листалка перейдёт к нему (это номер хадиса, не том/страница). Для книг без точного индекса переход приблизительный — на этот лист или соседний (по маркерам печати)."
-               style="width:96px;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:7px 9px;font-size:13px">
-        <button class="go" id="readJumpGo" style="padding:8px 11px" title="Перейти к введённому номеру хадиса">⏎</button>
-        <button class="go" id="readPrev" style="padding:8px 12px" title="Предыдущий хадис — назад по книге">пред. →</button>
-        <button class="go" id="readFirst" style="padding:8px 10px" title="В начало книги (хадис №1)">⏭</button>
+      <!-- #656 (владелец: «внизу стрелки запутанно как-то выглядят, не думаешь?»): шесть контролов стояли
+           ОДНИМ рядом, и три из них были голыми глифами — ⏮ ⏎ ⏭. Понять, что ⏮ это «в конец книги», а не
+           «назад», было невозможно: медиа-глифы читаются по-плеерски, а книга листается наоборот.
+           Разнесли по смыслу и подписали словами, тремя ясными рядами:
+             ① чем листают ПОСТОЯННО — две крупные кнопки «Следующий»/«Предыдущий»;
+             ② края книги — «в начало» / «в конец» (раньше это и были загадочные ⏮ ⏭);
+             ③ переход к номеру — поле и кнопка «Перейти» (был голый ⏎).
+           В один ряд шесть контролов на телефоне не влезали и переносились как попало.
+           Стрелка больше НЕ единственный носитель смысла — рядом всегда слово. Направление стрелок
+           оставлено под арабское чтение (следующий — влево), как решено 26.07. Идентификаторы кнопок
+           не менял: обработчики и вся логика листания прежние. -->
+      <div style="display:flex;align-items:stretch;gap:8px;margin-top:12px">
+        <button class="go" id="readNext" style="flex:1;padding:11px 12px;font-weight:700" title="Следующий хадис — дальше по книге (арабская книга листается справа налево, поэтому «дальше» слева)">⟵ Следующий</button>
+        <button class="go" id="readPrev" style="flex:1;padding:11px 12px;font-weight:700" title="Предыдущий хадис — назад по книге">Предыдущий ⟶</button>
+      </div>
+      <div style="display:flex;align-items:stretch;gap:8px;margin-top:8px">
+        <button class="mini" id="readFirst" style="flex:1;border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:13px;color:var(--text)" title="В самое начало книги — хадис №1">⤒ В начало книги</button>
+        <button class="mini" id="readLast" style="flex:1;border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:13px;color:var(--text)" title="В самый конец книги — последний хадис">⤓ В конец книги</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+        <input type="number" id="readJump" placeholder="перейти к № хадиса" min="1" inputmode="numeric" title="Введи НОМЕР хадиса в этой книге и нажми Enter или «Перейти» — листалка перейдёт к нему (это номер хадиса, не том/страница). Для книг без точного индекса переход приблизительный — на этот лист или соседний (по маркерам печати)."
+               style="flex:1;min-width:92px;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:13px">
+        <button class="mini" id="readJumpGo" style="flex:none;border:1px solid var(--btn);color:var(--link);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600" title="Перейти к введённому номеру хадиса">Перейти</button>
       </div>
     </div>
   </div>
@@ -1418,7 +1464,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1258';
+const APPVER = 'v1259';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -1439,7 +1485,106 @@ function modalTop(el){ try{
     if(_подложки.indexOf(m.id) !== -1) return;          // читалка остаётся открытой под карточкой
     if(m.style.display!=='none' && m.style.display!=='') m.style.display='none';
   });
-  _zTop+=2; el.style.zIndex=String(_zTop); }catch(e){} }   // единый источник версии (бейдж у имени + подзаголовок)
+  _zLift(el);
+  try{ _syncWinHeads(); }catch(_){}   /* #659 (С67): окно открылось — сразу пересчитать высоту его шапки */
+}catch(e){} }   // единый источник версии (бейдж у имени + подзаголовок)
+/* ===== #651/#652 (С67): «опять окно за окном» / «опять сзади окна внизу» =====
+   Слой у окна должен назначаться ТОЛЬКО отсюда. Раньше так и было задумано, но по факту около десятка
+   окон открывались мимо modalTop() (просто `display='flex'`: «Как искать», ⚖️ манифест, таблица
+   мудаллисов, разбор хукма, диалоги Корана…). У них оставался базовый `.modal{z-index:80}` — то есть
+   ЛЮБОЕ окно, открытое через modalTop (10100+), ложилось ПОВЕРХ, и владелец видел своё окно «сзади».
+   Чинить каждый вызов бессмысленно — завтра добавят новый и он снова забудет про modalTop. Поэтому:
+     ① _zLift — единственное место, где вообще пишется z-index окна;
+     ② наблюдатель ниже ловит САМ ФАКТ показа любого .modal и поднимает слой, кто бы его ни открыл.
+   Политику «гасить ли соседние окна» наблюдатель НЕ трогает — она остаётся у modalTop, чтобы не
+   повторить регрессию 27.07 («нажал — исчез весь аят»: карточка слова гасила читалку-родителя). */
+function _zLift(el){ try{
+  if(!el) return;
+  if(_zTop>19000){   // не перерастаем тост (z-index 20000): когда все окна закрыты — начинаем стек заново
+    var vis=false;
+    Array.prototype.forEach.call(document.querySelectorAll('.modal'), function(m){ var d=m.style.display; if(d && d!=='none' && m!==el) vis=true; });
+    if(!vis) _zTop=10100;
+  }
+  _zTop+=2; el.style.zIndex=String(_zTop);
+}catch(e){} }
+/* #681 (владелец: «непонятно шагает окна что ли?»): пока окно открыто, страница под ним НЕ должна ехать.
+   Было три вложенных прокрутки разом (body → .modal → .panel) — палец тянул то одну, то другую, и окно
+   «шагало». Фон замораживаем, окно листается само (у .modal/.panel есть overscroll-behavior:contain). */
+function _bodyLock(){ try{
+  var any=false;
+  Array.prototype.forEach.call(document.querySelectorAll('.modal'), function(m){ var d=m.style.display; if(d && d!=='none') any=true; });
+  document.body.classList.toggle('winOpen', any);
+}catch(e){} }
+/* Наблюдатель показа окон: слой + фиксация фона + пересчёт шапки — на КАЖДОЕ окно, включая созданные позже. */
+(function(){ try{
+  var seen=(typeof WeakSet!=='undefined')?new WeakSet():null;
+  function проверить(m){ try{
+    var d=m.style.display;
+    if(!d || d==='none'){ m._zOn=false; _bodyLock(); return; }
+    if(m._zOn) return;                       // уже подняли на этом показе — второй раз не дёргаем
+    m._zOn=true;
+    var z=parseInt(m.style.zIndex||'0',10)||0;
+    if(z < _zTop) _zLift(m);                 // окно показали, а слой ему никто не назначил → поднять над всеми
+    _bodyLock();
+    try{ _syncWinHeads(); }catch(e){}
+  }catch(e){} }
+  function вести(m){ try{
+    if(!m || (seen && seen.has(m))) return; if(seen) seen.add(m);
+    new MutationObserver(function(){ проверить(m); }).observe(m,{attributes:true,attributeFilter:['style']});
+    проверить(m);
+  }catch(e){} }
+  function обход(){ try{ Array.prototype.forEach.call(document.querySelectorAll('.modal'), вести); }catch(e){} }
+  new MutationObserver(function(муты){
+    var убрали=false;
+    for(var i=0;i<муты.length;i++){ var доб=муты[i].addedNodes;
+      for(var j=0;j<доб.length;j++){ var n=доб[j]; if(!n || n.nodeType!==1) continue;
+        try{ if(n.classList && n.classList.contains('modal')) вести(n);
+             else if(n.querySelectorAll) Array.prototype.forEach.call(n.querySelectorAll('.modal'), вести); }catch(e){}
+      }
+      // окно, созданное на лету (диалог внешней ссылки и т.п.), закрывается УДАЛЕНИЕМ из DOM, а не display:none —
+      // без этой ветки класс заморозки фона оставался бы висеть навсегда и страница переставала прокручиваться
+      var уб=муты[i].removedNodes;
+      for(var k=0;k<уб.length;k++){ var r=уб[k]; if(!r || r.nodeType!==1) continue;
+        try{ if((r.classList && r.classList.contains('modal')) || (r.querySelector && r.querySelector('.modal'))) убрали=true; }catch(e){}
+      }
+    }
+    if(убрали) _bodyLock();
+  }).observe(document.documentElement,{childList:true,subtree:true});
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', обход); else обход();
+}catch(e){} })();
+/* ===== #657/#659 (С67), закон З-40 «чинить КЛАСС, а не случай» =====
+   #657 «сверху отступы маленькие, почти накладывается» и #659 «верхняя часть постоянно обрезается» —
+   одна и та же болезнь: под липкой шапкой окна вторая липкая строка прилипала на ЖЁСТКОЕ число
+   (у читалки было top:52px), а реальная высота шапки зависит от кегля, языка и от того, что кнопки
+   «закрыть» имеют min-height:40px — фактически ~67px. Разница и наезжала на заголовок, срезая верх.
+   Меряем шапку по факту и кладём её высоту в --winHeadH на саму панель; все вторые строки прилипают
+   к этой переменной, а не к магическому числу. Помощник общий — годится любому окну.
+   Заодно тянем реальный отступ из Telegram (Bot API 8.0): в полноэкранном режиме его кнопки висят
+   ПОВЕРХ страницы, и env(safe-area-inset-top) про них ничего не знает. */
+function _syncWinHeads(){ try{
+  Array.prototype.forEach.call(document.querySelectorAll('.modal'), function(m){
+    var d=m.style.display; if(!d || d==='none') return;
+    var p=m.querySelector('.panel'); if(!p) return;
+    var hd=null;
+    for(var i=0;i<p.children.length;i++){
+      var c=p.children[i]; var st=null; try{ st=getComputedStyle(c); }catch(e){ continue; }
+      if(st.position==='sticky' && Math.abs(parseFloat(st.top||'999'))<1){ hd=c; break; }   // шапка = первый липкий ребёнок, прижатый к верху
+    }
+    if(!hd) return;
+    var h=Math.round(hd.getBoundingClientRect().height);
+    if(h>0) p.style.setProperty('--winHeadH', h+'px');
+  });
+}catch(e){} }
+function _syncTopInset(){ try{
+  var top=0;
+  try{ var c=tg&&tg.contentSafeAreaInset; if(c && typeof c.top==='number') top=Math.max(top,c.top); }catch(e){}
+  try{ var s=tg&&tg.safeAreaInset;        if(s && typeof s.top==='number') top=Math.max(top,s.top); }catch(e){}
+  if(!(top>0)) top=0;
+  document.documentElement.style.setProperty('--tgTop', Math.round(top)+'px');
+  _syncWinHeads();
+}catch(e){} }
+try{ addEventListener('resize', function(){ _syncTopInset(); }, {passive:true}); }catch(e){}
+try{ setInterval(function(){ if(document.querySelector('.modal[style*="flex"]')) _syncWinHeads(); }, 1200); }catch(e){}
 /* Самообновление: если на сервере версия новее — перезагрузиться со свежим URL (обходит кэш Telegram). */
 ['keydown','input','touchstart','pointerdown','scroll'].forEach(ev=>addEventListener(ev,()=>{window.__interacted=true;},{once:true,passive:true,capture:true}));
 let _updShownFor='';
@@ -1609,7 +1754,15 @@ if (tg){ try{ tg.ready(); tg.expand();
   try{ tg.disableVerticalSwipes && tg.disableVerticalSwipes(); }catch(e){}   // M258: чтобы выделение текста не «тянуло» приложение к сворачиванию
   USER = tg.initDataUnsafe && tg.initDataUnsafe.user;
   const p=tg.themeParams||{};
+  /* #657/#659 (С67): забираем у Telegram РЕАЛЬНЫЙ верхний отступ (его панель/чёлка) и держим его
+     в --tgTop. События новые (Bot API 8.0) — на старых клиентах onEvent просто ничего не даст,
+     и всё останется как было: работает только env(safe-area-inset-top). */
+  try{ _syncTopInset(); }catch(e){}
+  ['safeAreaChanged','contentSafeAreaChanged','fullscreenChanged','viewportChanged'].forEach(function(ev){
+    try{ tg.onEvent(ev, function(){ try{ _syncTopInset(); }catch(e){} }); }catch(e){}
+  });
 }catch(e){} }
+try{ _syncTopInset(); }catch(e){}   /* и вне Telegram (браузер/ярлык) — там просто останется 0 */
 const DEV = location.hash.indexOf('dev')!==-1;
 const isOwner = DEV || (USER && USER.id===OWNER_ID);
 
@@ -2037,6 +2190,45 @@ function highlight(raw,groups,modes){
 }
 function esc(s){return String(s==null?'':s).replace(/�/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}   // #владелец 02.07.2026 (скрин «почему некоторые карточки разные»): esc(число) падал (.replace not a function) — у 63 равиев sid в mid2sid хранится числом → esc(1798) РУШИЛ всю полную карточку → молча показывался урезанный фолбэк (только «Оценки»). String() чинит весь класс.   // QA-свип(XSS): экранируем " — esc-вывод вставляется в innerHTML-атрибуты title="…"/value="…"/data-…; кавычка ломала границу атрибута (attribute-XSS). & экранируется первым → &quot; не двоится; _safeHref/_chFsel с доп. .replace(/"/) безопасны (кавычек уже нет).
 function _safeHref(u){ u=String(u||''); if(!/^https?:\/\//i.test(u)) return '#'; return esc(u).replace(/"/g,'&quot;'); }   // QA(#3): безопасный href — только http(s) (блок javascript:/data:) + экранирование кавычек (defense-in-depth от attribute-XSS в сетевых URL)
+/* ===== #670 (владелец: «ты так не обрезай, лучше делай кнопку развернуть чтобы разворачивалось») =====
+   Обрезка вида text.slice(0,N)+'…' разбросана по десяткам мест: человек видит огрызок и НИЧЕГО не может
+   с ним сделать — ни дочитать, ни понять, много ли скрыто. Помощник даёт ОДИН ответ на весь класс:
+   отдаёт готовый HTML «короткий кусок + кнопка ▾ развернуть», полный текст лежит рядом скрытым.
+   Клик ловится делегированно (ниже), поэтому помощник годится и там, где строка собирается через
+   innerHTML и навесить обработчик негде. Возврат уже экранирован — оборачивать в esc() НЕ надо. */
+function clampTx(text, lim, opts){
+  opts=opts||{}; var t=String(text==null?'':text).replace(/\s+/g,' ').trim();
+  var n=+lim||160;
+  if(t.length<=n+12) return esc(t);   // +12: ради полутора лишних слов кнопку не городим
+  var cut=t.slice(0,n).replace(/\S*$/,'').trim()||t.slice(0,n);   // режем по границе слова, а не посреди
+  return clampHtml(esc(cut), esc(t), opts);
+}
+/* тот же помощник для мест, где куски УЖЕ собраны как HTML (подсветка совпадения, ссылки):
+   резать такую строку по символам нельзя — порвутся теги, поэтому короткий и полный вид приходят готовыми. */
+function clampHtml(shortHtml, fullHtml, opts){
+  opts=opts||{}; if(!fullHtml) return shortHtml;
+  return '<span class="clampTx">'
+    +'<span class="clampCut">'+shortHtml+(opts.dots===false?'':'…')+'</span>'   // dots:false — когда многоточие уже стоит в самом куске
+    +'<span class="clampFull" style="display:none">'+fullHtml+'</span>'
+    +'<button type="button" class="clampBtn" title="Показать текст целиком">▾ '+esc(opts.more||'развернуть')+'</button>'
+    +'</span>';
+}
+/* один слушатель на всё приложение: работает и для блоков, отрисованных позже (капча-фаза capture=true,
+   stopPropagation — чтобы разворот не срабатывал как «открыть книгу» у кликабельной карточки-родителя) */
+document.addEventListener('click', function(e){
+  try{
+    var b = e.target && e.target.closest && e.target.closest('.clampBtn'); if(!b) return;
+    e.preventDefault(); e.stopPropagation();
+    var w=b.closest('.clampTx'); if(!w) return;
+    var cut=w.querySelector('.clampCut'), full=w.querySelector('.clampFull'); if(!cut||!full) return;
+    var open = full.style.display!=='none';
+    full.style.display = open?'none':'inline';
+    cut.style.display  = open?'inline':'none';
+    b.textContent = open ? '▾ развернуть' : '▴ свернуть';
+    b.title = open ? 'Показать текст целиком' : 'Свернуть обратно';
+    try{ hap('light'); }catch(_e){}
+  }catch(_e){}
+}, true);
 function splitIsnad(text){
   // КОНСЕРВАТИВНО: красим иснад только когда УВЕРЕНЫ (принцип владельца «не уверен — не выделяй»).
   const words=(text||'').split(/\s+/); if(words.length<5) return [null,text];
@@ -2182,7 +2374,7 @@ function renderFav(by){
       } else {
         d.style.cursor='pointer'; d.title='Открыть';   // #174: избранное хадиса/аята — КЛИК открывает (раньше клик ничего не делал)
         d.innerHTML='<div class="meta" style="margin:0 0 4px"><span class="src">'+esc(f.label)+'</span></div>'+
-          '<div class="ar" style="font-size:15px;line-height:1.7">'+esc((f.text||'').slice(0,110))+'…</div>';
+          '<div class="ar" style="font-size:15px;line-height:1.7">'+clampTx(f.text,110)+'</div>';   /* #670 (С67): было глухое slice(0,110)+'…' — теперь текст избранного дочитывается на месте */
         d.onclick=async (e)=>{ if(e.target.tagName==='BUTTON') return; document.getElementById('favModal').style.display='none';
           try{ const p=String(f.k||'').split('|');
             if(p[0]==='q' && p[1]){ const _tq=document.querySelector('.tab[data-tab="quran"]'); if(_tq) _tq.click(); const _qi=document.getElementById('q'); if(_qi) _qi.value=p[1]; runSearch(true); }
@@ -3679,7 +3871,32 @@ function _qHistPush(s,t){ if(!s) return; var top=_qHist[_qHist.length-1];
   if(top){ if(top.q===s){ top.tab=t; return; }
     if(top.q.length>=2 && s.length>=2 && (top.q.indexOf(s)===0 || s.indexOf(top.q)===0)){ top.q=s; top.tab=t; _qHistUpd(); return; } }   // один из другого префикс → это тот же набор
   _qHist.push({q:s,tab:t}); if(_qHist.length>40) _qHist.shift(); _qHistUpd(); }
-function _qHistUpd(){ var b=document.getElementById('qBack'); if(b) b.style.display=(_qHist.length>=2)?'block':'none'; }
+function _qHistUpd(){ var b=document.getElementById('qBack'); if(b) b.style.display=(_qHist.length>=2)?'block':'none'; _syncSearchBar(); }
+/* ===== #663 (владелец: «кнопку поиск перекрывает постоянно справа кнопка») =====
+   Кнопки «✕ очистить» и «↩ назад» стояли на ЖЁСТКИХ right:94px/128px, а ширина кнопки «Найти» плавает:
+   «Найти» ≈86px, «⟳ ищу» короче, «🔎 Найти цепь» (режим Цепь) ≈150px, английское «Search» — своё.
+   Как только кнопка становилась шире 94px, ✕ и ↩ ложились прямо на неё. Считаем ФАКТИЧЕСКУЮ ширину
+   кнопки и раскладываем от неё; заодно даём полю отступ справа, чтобы набранный текст не заезжал под ✕/↩. */
+function _syncSearchBar(){ try{
+  var bar=document.querySelector('.searchbar'); if(!bar) return;
+  var go=document.getElementById('goBtn'), qi=document.getElementById('q'),
+      qc=document.getElementById('qClear'), qb=document.getElementById('qBack');
+  if(!go) return;
+  var w=Math.round(go.getBoundingClientRect().width)||86;
+  var GAP=10, BW=34;                     // отступ от кнопки «Найти» и шаг между круглыми кнопками
+  var rc=w+GAP, rb=w+GAP+BW;             // ✕ ближе к «Найти», ↩ левее неё
+  if(qc) qc.style.right=rc+'px';
+  if(qb) qb.style.right=rb+'px';
+  if(qi){ var pad=14;
+    if(qc && qc.style.display && qc.style.display!=='none') pad+=BW;
+    if(qb && qb.style.display && qb.style.display!=='none') pad+=BW;
+    qi.style.paddingRight=pad+'px'; }
+}catch(e){} }
+try{ if(window.ResizeObserver){ var _sbRO=new ResizeObserver(function(){ _syncSearchBar(); });
+      document.addEventListener('DOMContentLoaded', function(){ try{ var g=document.getElementById('goBtn'); if(g) _sbRO.observe(g); }catch(e){} });
+      try{ var _g0=document.getElementById('goBtn'); if(_g0) _sbRO.observe(_g0); }catch(e){} } }catch(e){}
+try{ addEventListener('resize', function(){ _syncSearchBar(); }, {passive:true}); }catch(e){}
+try{ addEventListener('load', function(){ _syncSearchBar(); }, {passive:true}); setTimeout(_syncSearchBar, 1200); }catch(e){}   /* арабские/веб-шрифты догружаются позже и меняют ширину кнопки — пересчитать ещё раз */
 function qBack(){ if(_qHist.length<2){ toast('Больше некуда возвращаться'); return; }
   _qHist.pop();                              // убрать текущий запрос
   var prev=_qHist[_qHist.length-1];          // предыдущий распознанный запрос
@@ -3693,6 +3910,7 @@ function _goBusy(on){ try{ const b=document.getElementById('goBtn'); if(!b) retu
   if(on){ if(!b._t) b._t=b.textContent; b.classList.add('btnBusy'); b.setAttribute('aria-busy','1');
           b.innerHTML='<span class="miniSpin"></span>'+t('ищу','searching'); }
   else { b.classList.remove('btnBusy'); b.removeAttribute('aria-busy'); b.textContent=b._t||t('Найти','Search'); }
+  _syncSearchBar();   /* #663 (С67): текст кнопки сменился → ширина другая → развести ✕/↩ заново */
 }catch(e){} }
 /* ===== v1096 (закон владельца 17.07: «применить КО ВСЕМ кнопкам ИИ»): единый ИИ-ожидатель =====
    Было: у каждой ИИ-кнопки свой текст-заглушка («Спрашиваю ИИ…», «Перевожу…») — статичный на все 60 сек.
@@ -3745,6 +3963,18 @@ function _skelOn(stage){ try{ const res=document.getElementById('res'); if(!res)
 }catch(e){} }
 function _stage(txt){ try{ const l=document.getElementById('_stageLine'); if(l){ const s=l.querySelector('span:last-child'); if(s) s.textContent=txt; } }catch(e){} }
 function _skelOff(){ try{ const s=document.getElementById('_skel'); if(s) s.remove(); }catch(e){} }
+/* ===== #669 (владелец: «почему если внизу написано „не нашёл“, поиск ещё крутится и вводит в заблуждение») =====
+   Корень: при нуле в первоисточниках выдача заменялась строкой «…уже ищу по всей Мактабе — секунду… ⏳»,
+   а ответ Мактабы ДОПИСЫВАЛСЯ снизу («🤷 совпадения нет»). Убрать верхнюю строку было некому — и человек
+   одновременно видел «ищу» и «не нашёл». Гасим ОДНОЙ функцией все признаки ожидания (строка ожидания,
+   скелет, крутилка в кнопке) и зовём её из всех добирающих поисков — чтобы «пусто + закончено» никогда
+   не соседствовало с «ищу». seq — от гонки: если владелец уже запустил НОВЫЙ поиск, гасить не наше. */
+function _srchWaitOff(seq){ try{
+  if(typeof seq!=='undefined' && seq!==_seq) return;
+  const w=document.getElementById('_wideWait'); if(w) w.remove();
+  try{ _skelOff(); }catch(e){}
+  try{ _goBusy(false); }catch(e){}
+}catch(e){} }
 async function runSearch(explicit){
   const strict=_strictSearch; _strictSearch=false;   // M173: захватываем флаг строгого режима на этот запуск
   try{ const _cb=document.getElementById('corrBanner'); if(_cb) _cb.remove(); }catch(e){}   // 05.07: баннер коррекции живёт вне #res — чистим при новом поиске
@@ -4091,7 +4321,7 @@ async function runSearch(explicit){
   const wideWill = (tab==='hadith' && explicit && !_selNarrow);   // #162/M284/M420: по умолчанию (ничего не выбрано) ВСЕГДА ищем по всей Мактабе; при выбранном сборнике (#50) НЕ ищем по Мактабе (это ловит первая проверка _scopeIds выше). Условие isArabic||numMode||ai УБРАНО — оно ошибочно сужало поиск до первоисточников при русском/смысловом запросе
   if(!count && seq===_seq){
     if(tab==='quran' && !strict && await tryRootFallback(shown, seq)){ /* M212/M225: показал по корню (в строгом режиме — не подменяем) */ }
-    else if(wideWill){ res.innerHTML='<div class="status">🔎 В ПЕРВОИСТОЧНИКАХ хадисов точного совпадения нет, но уже ищу по всей Мактабе (8 589 книг) — секунду… <span class="ldot">⏳</span></div>'; }   // M420: одним предложением, чтобы человек не ушёл
+    else if(wideWill){ res.innerHTML='<div class="status" id="_wideWait">🔎 В ПЕРВОИСТОЧНИКАХ хадисов точного совпадения нет, но уже ищу по всей Мактабе (8 589 книг) — секунду… <span class="ldot">⏳</span></div>'; }   // M420: одним предложением, чтобы человек не ушёл · #669 (С67): дали id — это и есть «крутится», которое надо погасить, когда Мактаба ответила
     else if(!res.querySelector('.corrGo')){ res.innerHTML='<div class="status">Ничего не найдено 🤷</div>';
       // M423: смысловой запрос (русский/длинный) при нуле — БОЛЬШАЯ кнопка ИИ-поиска, чтобы человек не ушёл с пустыми руками
       try{ const q0=document.getElementById('q').value.trim();
@@ -4122,6 +4352,7 @@ async function runSearch(explicit){
     // выход, включая исключение. Условие seq===_seq — от гонки: если владелец уже начал НОВЫЙ поиск,
     // индикатор принадлежит ему, и гасить его устаревшим запуском нельзя.
     if(seq===_seq){ try{ _goBusy(false); _skelOff(); }catch(e){} }
+    try{ _srchWaitOff(seq); }catch(e){}   /* #669 (С67): страховка — если до Мактабы дело не дошло, строка «уже ищу…» всё равно не останется висеть */
     // Маяк на первой карточке: показать новичку, где перевод. Только первая — остальные,
     // как верно заметил владелец, человек сообразит сам. Ждём отрисовки, карточки приходят не сразу.
     try{ if(seq===_seq) МАЯК.ждиИЗажги(document.getElementById('res'), 'perevod', 12000); }catch(e){}
@@ -4901,7 +5132,7 @@ async function _bookLoad(){
             const sn=_cleanMaktabaSnip(String(x.snip||'').replace(/<[^>]*>/g,''));
             if(markQ && !markQ.test(sn)) continue;
             found++;
-            html+='<div class="bkFr" data-pid="'+x.page_id+'" style="cursor:pointer;border-bottom:1px solid var(--border);padding:6px 2px;direction:rtl;text-align:right"><span style="color:var(--link);font-size:12px">📄 т.'+esc(String(x.vol||''))+' стр.'+esc(String(x.page||''))+'</span><div style="font-size:13.5px;line-height:1.7;margin-top:2px">'+esc(sn.slice(0,150))+'…</div></div>';
+            html+='<div class="bkFr" data-pid="'+x.page_id+'" style="cursor:pointer;border-bottom:1px solid var(--border);padding:6px 2px;direction:rtl;text-align:right"><span style="color:var(--link);font-size:12px">📄 т.'+esc(String(x.vol||''))+' стр.'+esc(String(x.page||''))+'</span><div style="font-size:13.5px;line-height:1.7;margin-top:2px">'+clampTx(sn,150)+'</div></div>';   /* #670 (С67): найденный кусок можно раскрыть прямо в списке, не переходя на страницу */
             if(found>=25) break; }
         }
       }catch(e){}
@@ -4966,7 +5197,7 @@ async function _bookLoad(){
         outB.innerHTML=_resHead('🤖 Смысловой поиск (ИИ)', '#d9ccff')
           +(ans? ('<div style="border:1px solid #6c5ce7;border-radius:10px;padding:9px;background:rgba(108,92,231,.10);font-size:14px;line-height:1.7;white-space:pre-wrap">'+esc(ans)+'</div>'
              +'<div class="hint" style="font-size:11px;margin-top:6px">📄 использованные отрывки (нажми — перейду на страницу):</div>'
-             +excerpts.map((e,i)=>'<div class="bkFr" data-pid="'+e.pid+'" style="cursor:pointer;border-bottom:1px solid var(--border);padding:5px 2px;direction:rtl;text-align:right"><span style="color:var(--link);font-size:11.5px">'+(i+1)+') 📄 '+esc(e.loc)+'</span><div style="font-size:12.5px;line-height:1.5;color:var(--hint);margin-top:1px">'+esc(e.text.slice(0,120))+'…</div></div>').join(''))
+             +excerpts.map((e,i)=>'<div class="bkFr" data-pid="'+e.pid+'" style="cursor:pointer;border-bottom:1px solid var(--border);padding:5px 2px;direction:rtl;text-align:right"><span style="color:var(--link);font-size:11.5px">'+(i+1)+') 📄 '+esc(e.loc)+'</span><div style="font-size:12.5px;line-height:1.5;color:var(--hint);margin-top:1px">'+clampTx(e.text,120)+'</div></div>').join(''))   /* #670 (С67): выдержки, на которых отвечал ИИ, разворачиваются целиком */
             : '<span class="hint">Не удалось получить ответ — попробуй ещё раз.</span>');
         outB.querySelector('.bkResX').onclick=()=>{ bkP.style.display='none'; sbk.textContent='🔎 Поиск по книге ▾'; };
         _bindResultClicks();
@@ -5175,6 +5406,7 @@ async function appendWide(seq, q, primary){
     data.forEach(x=>res.appendChild(wideCard(x)));
     res.appendChild(wideMoreBtn(seq, q, {page:(j.page||1), shown:data.length, count:(j.count||data.length)}));
   }catch(e){ sec.textContent='🌐 Большая библиотека сейчас недоступна — попробуй позже.'; }
+  finally{ _srchWaitOff(seq); }   /* #669 (С67): тот же класс — ответ пришёл, значит «ищу…» больше не показываем */
 }
 /* Длинная вставка: пробуем несколько фраз-кандидатов, берём первую с результатами */
 async function appendWideMulti(seq, cands){
@@ -5182,6 +5414,7 @@ async function appendWideMulti(seq, cands){
   const res=document.getElementById('res'); res.innerHTML='';
   const sec=document.createElement('div'); sec.className='hint'; sec.style.cssText='color:#4ade80;font-size:13px;margin:0 0 8px';
   sec.textContent='🔎 Ищу этот хадис по всей библиотеке…'; res.appendChild(sec);
+  try{
   for(const c of cands){
     try{
       const r=await fetch(BACKEND_URL+'/wide?q='+encodeURIComponent(c)+'&initData='+encodeURIComponent(INITDATA));
@@ -5193,6 +5426,7 @@ async function appendWideMulti(seq, cands){
     }catch(e){}
   }
   sec.textContent='🤷 Точное совпадение не нашёл. Попробуй вставить характерную фразу из матна (без иснада/имён).';
+  }finally{ _srchWaitOff(seq); }   /* #669 (С67): перебор фраз кончился — снять «ищу…», иначе оно висит рядом с «не нашёл» */
 }
 
 /* ===== ОСНОВНОЙ ПОИСК ПО ВСЕЙ МАКТАБЕ (turath) ===== */
@@ -5418,7 +5652,7 @@ async function maktabaByNum(seq, n){
       +'</div>'; }
     if(x.author) h+='<div class="nbAuth" style="font-size:12px;color:var(--link);margin-top:2px;direction:rtl;text-align:right;cursor:pointer" title="Все книги этого автора">✍️ '+esc(x.author)+'</div>';
     const i=sn.search(mark); const frag=i>=0?sn.slice(i).replace(/^[^٠-٩]*/,''):sn;
-    if(frag) h+='<div style="direction:rtl;text-align:right;font-size:14px;line-height:1.8;margin-top:5px;color:var(--text)">'+esc(frag.slice(0,180))+'…</div>';
+    if(frag) h+='<div style="direction:rtl;text-align:right;font-size:14px;line-height:1.8;margin-top:5px;color:var(--text)">'+clampTx(frag,180)+'</div>';   /* #670 (С67): вместо немого обрыва — «развернуть» (кнопка «📜 Текст + инструменты» рядом остаётся) */
     h+='<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="mini nbBtn" style="font-size:12.5px;padding:6px 12px">📖 Открыть №'+n+(x.vol?(' · т.'+esc(String(x.vol))+' стр.'+esc(String(x.page||'')) ):'')+'</button>'
       +'<button class="mini nbFull" style="font-size:12.5px;padding:6px 12px" title="Полный текст хадиса прямо здесь + Перевод/Передатчики/Где ещё передаётся">📜 Текст + инструменты</button></div>';
     card.innerHTML=h;
@@ -5813,6 +6047,7 @@ async function appendMaktaba(seq, q, primary){
     res.appendChild(maktabaMoreBtn(seq,q,{page:(j.page||1)}, strictWords));
     try{ maktabaSunnahBtn(res,seq,q); }catch(e){}
   }catch(e){ sec.textContent='🌐 Мактаба сейчас недоступна — попробуй позже.'; try{ res.appendChild(sec); }catch(_e){} }   // H1-QA: при сетевой ошибке в scope-поиске (res.innerHTML очищен) sec не добавлялся → пустой экран; теперь показываем сообщение
+  finally{ _srchWaitOff(seq); }   /* #669 (С67): Мактаба ответила (нашла, не нашла, упала) — «ищу…» гасим ВСЕГДА, из единственной точки выхода */
 }
 
 function cardHadith(d,groups){
@@ -7010,7 +7245,11 @@ async function openHadithScience(_overNarr){
   }
   // владелец («перенёс на список книг, назад некуда») — если открыт ИЗ карточки передатчика (narrModal, z-index 10003),
   // становимся ВЫШЕ нужно, а не прячем ту карточку: закрыл этот экран — карточка равия снова видна как была.
-  m.style.zIndex=_overNarr?'10004':'10002'; modalTop(m); m.style.display='flex';
+  /* #651 (С67): жёсткие 10002/10004 здесь были мёртвым кодом — идущий следом modalTop всё равно
+     перезаписывал слой растущим счётчиком. Убрано, чтобы слой назначался ИЗ ОДНОГО места (_zLift):
+     два источника правды по z-index и рождали «окно за окном». Поведение не меняется: и раньше
+     решение принимал modalTop (он же и гасил карточку равия — присвоенный до него z ни на что не влиял). */
+  modalTop(m); m.style.display='flex';
   const body=m.querySelector('#hadBody'); body.innerHTML='<div class="hint">Загружаю…</div>';
   try{ if(!_hadRule) _hadRule=await (await fetch('./hadith/rule_01_tawthiq_critics.json?'+Date.now())).json(); }catch(e){ body.innerHTML='<div class="hint">Не удалось загрузить правила.</div>'; return; }
   try{ if(!_rijal) _rijal=await (await fetch('./hadith/rijal_books.json?'+Date.now())).json(); }catch(e){}
@@ -9053,11 +9292,15 @@ async function _loadShuhra(){ if(_shuhraMap!==null) return _shuhraMap;
   _shuhraMap=await _shuhraPromise; return _shuhraMap; }   // QA-свип: таймаут (резолв имён не виснет)
 // #169/#170: ГАРАНТ-КАРТА канонических id (build_narr_guar.py из авторитетной na, доминирующий id на форму — namesake-safe).
 async function _loadGuar(){ if(_guarMap===null){ try{ _guarMap=await fetchJSON('./narr_guar.json?v='+APPVER, 20000, {silent:true}); }catch(e){ _guarMap={}; } } return _guarMap; }   // QA-свип: таймаут (гарант-карта тёзок не виснет)
-async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.length) return null; const cn=_narrCanon(name); if(cn.length<4) return null;
+async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.length) return null; const cn=_narrCanon(name); if(!cn) return null;
   // #169/#170 (тёзка-резолвер): ГАРАНТ знаменитых ПЕРВЫМ — лечит «مالك→ат-Таии вместо б.Анаса», «قتادة→ар-Рахави вместо ас-Садуси». Неоднозначные (2 Суфьяна) в карту НЕ попали → их решает контекст цепи.
   { try{ const g=await _loadGuar(); if(g && g[cn]!=null) return g[cn]; }catch(e){} }
   // #157/M382: фолбэк по ШУХРЕ/КУНЬЕ (أبو الزناد, и др.) — namesake-safe индекс narr_shuhra.json (только однозначные формы)
   { try{ const sh=await _loadShuhra(); if(sh && sh[cn]!=null) return sh[cn]; }catch(e){} }
+  /* #655 (С67): порог «короче 4 символов» стоял в самом начале и отсекал имя ДО опроса гаранта/шухры —
+     хотя однозначный id для روح/انس/ليث/بهز там уже лежит. Теперь порог работает ПОСЛЕ карт: их ответ
+     тёзка-безопасен по построению, а гадать по общему индексу имён на трёх буквах по-прежнему нельзя. */
+  if(cn.length<4) return null;
   // Ф-04б (M377): ДВУСТОРОННИЙ префикс — иснад бывает и КОРОЧЕ базы (سفيان → سفيان بن سعيد…), и ДЛИННЕЕ
   // (с нисбой: عبد الرحمن بن غنم الأشعري при базе عبد الرحمن بن غنم) → cover-матч (имя базы = префикс запроса, ≥2 слов, длиннейшее)
   let exact=null, pref=null, prefLen=1e9, cover=null, coverLen=0;
@@ -9269,7 +9512,7 @@ async function anyTextSearch(qRaw, seq){
         const meta=(window._catTr&&_catTr.map&&_catTr.map[bn])||{};
         const _rawSnip=String(x.snip||x.text||'');
         d.innerHTML='<div style="direction:rtl;text-align:right;font-weight:700;color:var(--link);font-size:14.5px;cursor:pointer" class="anyOpen">📖 '+esc((meta.voc)||bn)+'</div>'
-          +(_rawSnip?('<div style="direction:rtl;text-align:right;font-size:13.5px;line-height:1.9;margin-top:5px">'+_cleanTurathSnip(_rawSnip.slice(0,240))+'…</div>'):'')   // #23: убраны сырые теги turath, совпадение подсвечено
+          +(_rawSnip?('<div style="direction:rtl;text-align:right;font-size:13.5px;line-height:1.9;margin-top:5px">'+clampHtml(_cleanTurathSnip(_rawSnip.slice(0,240)), (_rawSnip.length>252?_cleanTurathSnip(_rawSnip):''))+'</div>'):'')   // #23: убраны сырые теги turath, совпадение подсвечено · #670 (С67): длинный сниппет разворачивается кнопкой (clampHtml — чтобы не порвать подсветку)
           +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center"><button class="mini anyGo" style="font-size:12px;padding:5px 11px">📖 Открыть страницу</button>'+(_rawSnip?'<button class="mini anyTr" style="font-size:12px;padding:5px 11px;color:var(--link)">🌐 Перевести</button>':'')+_shamChip(bid, x.page_id)+'</div><div class="anyTrOut" style="display:none;margin-top:6px;font-size:13px;line-height:1.6;border-top:1px dashed var(--border);padding-top:6px"></div>';   // #23: кнопка перевода
         const go=()=>{ try{ _actPush({t:'book', bid:bid, pg:x.page_id}); }catch(e){} openBook(bid, x.page_id); };
         d.querySelector('.anyOpen').onclick=go; d.querySelector('.anyGo').onclick=go;
@@ -9566,6 +9809,7 @@ function _chainSyncGo(){
   if(on){ g.textContent=t('🔎 Найти цепь','🔎 Find chain'); const ok=_chainSel.length>=2;
     g.style.opacity=ok?'':'0.45'; g.title=ok?t('Найти хадисы с этой цепью','Find hadiths with this chain'):t('Выбери минимум двух передатчиков','Pick at least two narrators'); }
   else { g.textContent=t('Найти','Search'); g.style.opacity=''; g.title=t('Искать по запросу','Search by query'); }
+  try{ _syncSearchBar(); }catch(e){}   /* #663 (С67): «🔎 Найти цепь» почти вдвое шире «Найти» — ✕/↩ ложились прямо на кнопку */
 }
 function addChainNarr(c){
   if(!c||c.id==null){ toast('У этой формы нет ID — выбери опознанного равия'); return; }
@@ -9876,7 +10120,11 @@ const _NH_GR={sahih:{t:'صحيح · достоверный',c:'#7fd39b',b:'#1229
 async function openNarrHadiths(mid, name, places){
   try{ hap('light'); }catch(e){}
   let m=document.getElementById('nhModal');
-  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='nhModal'; m.style.zIndex='10007';
+  /* #651/#652 (С67): тут стоял хардкод z-index:10007, а карточка равия, ИЗ КОТОРОЙ это окно и открывают,
+     получала от modalTop 10100+ — «Все хадисы с ним» открывались ЗА карточкой. Слой больше не назначаем
+     руками: показ окна ловит общий наблюдатель и кладёт его поверх. Карточку при этом НЕ гасим — она
+     родитель, к ней возвращаются по «закрыть». */
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='nhModal';
     m.innerHTML='<div class="panel" style="max-width:720px;padding-top:0">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 10px;padding:13px 16px 10px;border-bottom:1px solid var(--border)">'
       +'<b id="nhTitle" style="font-size:14.5px;min-width:0;overflow:hidden;text-overflow:ellipsis">📜 Все хадисы</b>'
@@ -11637,11 +11885,14 @@ async function narrOpen(nm){
           for(let i=0;i<t.length;i++){ const c=t[i]; if(!/[ً-ْٰـ]/.test(c)){ bare+=c; map.push(i); } }
           let nb='', k=-1;
           for(const cand of _hlNames){ const nbc=cand.replace(/[ً-ْٰـ]/g,''); const kk=nbc?bare.indexOf(nbc):-1; if(kk>=0){ nb=nbc; k=kk; break; } }
-          if(k<0) return {html: esc('…'+t.replace(/\s+/g,' ').trim().slice(0,220)+'…')};
+          // #670 (С67): у обрезанного с обеих сторон куска теперь есть «▾ развернуть» — весь текст под рукой
+          const _all=esc(String(t).replace(/\s+/g,' ').trim());
+          if(k<0) return {html: clampTx(t,220)};
           const s0=map[k], e0=map[Math.min(k+nb.length,map.length-1)]+1;
           const from=Math.max(0,s0-90), to=Math.min(t.length,e0+110);
-          return {html:(from>0?'…':'')+esc(t.slice(from,s0))+'<mark>'+esc(t.slice(s0,e0))+'</mark>'+esc(t.slice(e0,to))+(to<t.length?'…':'')};
-        }catch(e){ return {html: esc('…'+String(t).slice(0,220)+'…')}; } };
+          const _sh=(from>0?'…':'')+esc(t.slice(from,s0))+'<mark>'+esc(t.slice(s0,e0))+'</mark>'+esc(t.slice(e0,to))+(to<t.length?'…':'');
+          return {html:(from>0||to<t.length)?clampHtml(_sh,_all,{dots:false}):_sh};
+        }catch(e){ return {html: clampTx(t,220)}; } };
       const _mkRow=(p)=>{ const card=document.createElement('div'); card.style.cssText='border-bottom:1px solid var(--border);padding:5px 0;margin-bottom:2px';
           const mt=document.createElement('div'); mt.className='ar'; mt.style.cssText='direction:rtl;text-align:right;font-size:16px;line-height:1.95;color:var(--text)'; card.appendChild(mt);
           card.appendChild(_dzPlaceRow(p[0],p[1],p[2]));
@@ -13670,12 +13921,25 @@ async function _codifNarrPairs(rec, text){
   const _norm=s=>_narrCanon(s).replace(/(^|\s)اب[اي](\s)/g,'$1ابو$2');
   const _ct=' '+_norm(stripDiac(String(text||'')).replace(/ـ/g,''))+' ';
   const out=[]; const used=new Set(); let _cur=0;
-  for(const id of _order){ let c=null; try{ c=await _narrCard(id); }catch(e){} if(!c||!c[1]) continue;
+  /* #655 (С67, «почему все передатчики не распознаны») — КРАЖА СЛОВА.
+     Разбор на хадисе Ахмад 17: у شعبة в нисбе значится البجلي; это слово в тексте есть, но принадлежит
+     ДРУГОМУ равию той же цепи — أوسط البجلي. Кандидат-нисба срабатывал первым: подсвечивалось чужое
+     слово с карточкой شعبة, а само شعبة не подсвечивалось вовсе, и слот уходил в «не распознан».
+     Лечение: нисбу берём в кандидаты, ТОЛЬКО если в этой цепи она больше ни у кого не встречается —
+     ни в нисбе, ни в имени. Спорную нисбу пропускаем, и равий ловится своим именем (wo[0]).
+     Карточки цепи заодно читаем один раз вперёд — дальше берём из этой карты, лишних запросов нет. */
+  const _cardOf={};
+  for(const id of _order){ try{ _cardOf[id]=await _narrCard(id); }catch(e){ _cardOf[id]=null; } }
+  const _nisBusy={};
+  for(const id of _order){ const c=_cardOf[id]; if(!c) continue;
+    const _bag=new Set(String(c[1]||'').split(/\s+/).concat(String(c[3]||'').split(/\s+/)).filter(Boolean).map(x=>_norm(x)));
+    _bag.forEach(t=>{ if(t) _nisBusy[t]=(_nisBusy[t]||0)+1; }); }
+  for(const id of _order){ let c=_cardOf[id]; if(!c||!c[1]) continue;
     if(!_iset.has(String(id)) && +c[4]>360) continue;   // n-добор: поздний (>360 г.х.) = цепь передачи КНИГИ/издателя (الجنزروذي/الشحامي…), не иснад хадиса
     const cands=[], wo=String(c[1]).split(/\s+/).filter(Boolean);
     for(let L=Math.min(wo.length,7);L>=2;L--) cands.push(wo.slice(0,L).join(' '));                           // префиксы полного имени (длинные → короткие)
     if(c[2]) cands.push(String(c[2]).split(/\s+/).slice(0,2).join(' '));                                     // кунья (أبو هريرة)
-    if(c[3]) String(c[3]).split(/\s+/).forEach(t=>{ if(t.length>=4&&/^ال/.test(t)&&!_STOPNIS.has(t)) cands.push(t); });   // нисба-токены (الزهري), без титулов
+    if(c[3]) String(c[3]).split(/\s+/).forEach(t=>{ if(t.length>=4&&/^ال/.test(t)&&!_STOPNIS.has(t)&&(_nisBusy[_norm(t)]||0)<=1) cands.push(t); });   // нисба-токены (الزهري), без титулов и без спорных (#655)
     if(_nph[String(id)]){ const tp=stripDiac(_nph[String(id)]).split(/حدثنا|حدثني|حدثناه|اخبرنا|اخبرني|انبانا|انباني|سمعت|\sعن\s|قال|يقول|⦗|«|\?/)[0]||''; if(tp.trim().split(/\s+/).length<=5) cands.push(tp.trim()); }  // запасной якорь: фраза n до имени
     if(wo[0] && _norm(wo[0]).length>=4) cands.push(wo[0]);   // одиночное имя (سفيان/مالك/شعبة) — ПОСЛЕДНИЙ приоритет
     let pick=null, pos=-1;
@@ -13691,15 +13955,28 @@ async function _codifNarrPairs(rec, text){
     const _haveNm=out.map(p=>_narrCanon(p[0])); const _haveId=new Set(out.map(p=>String(p[1])));
     for(const _s0 of (_isnadSlots(text)||[])){
       const _s=String(_s0).split(/\s+/).slice(0,5).join(' ').trim();
-      const _cs=_narrCanon(_s); if(_cs.length<4) continue;
+      const _cs=_narrCanon(_s); if(!_cs) continue;
       const _safe = (_guar[_cs]!=null) || (_shu[_cs]!=null);   // форма В гарант/шухра = ОДНОЗНАЧНА (مالك→б.Анаса, قتادة→ас-Садуси, ابن عباس) → берём даже краткую
+      /* #655 (С67): порог «короче 4 символов» стоял ДО обращения к картам — и выбрасывал формы, для которых
+         id давно лежит в narr_guar.json: روح ×509, انس ×464, ليث ×343, بهز ×283, علي ×184, عطا ×97, عوف ×85.
+         Теперь сперва спрашиваем карту: есть однозначный id — берём, даже если форма короткая. Тёзка-риска
+         тут нет по построению карты; порог остаётся для форм, которых в карте нет. */
+      if(_cs.length<4 && !_safe) continue;
       const _conf = _safe || (_cs.split(' ').filter(Boolean).length>=3 && /(?:^| )(?:بن|ابن)(?: |$)/.test(' '+_cs+' '));   // иначе только специфичное «X بن Y» (бара-кунья/علي/يونس = тёзка → НЕ берём)
       if(!_conf) continue;
       if(_haveNm.some(h=>h && (h.indexOf(_cs)>=0||_cs.indexOf(h)>=0))) continue;
       let _mid=null; if(_safe){ _mid=(_guar[_cs]!=null?_guar[_cs]:_shu[_cs]); } else { try{ _mid=await _narrLookup(_s); }catch(e){} }
-      if(_mid!=null && !_haveId.has(String(_mid))){
+      if(_mid!=null){
+        /* #655 (С67): раньше здесь стоял гард «id ещё не занят» — и слово ТЕРЯЛОСЬ, если тот же равий уже
+           подсвечен другим написанием (اسراييل ×333, ابي سعيد الخدري ×276, زايده ×144, شعبه ×126, الزهري ×118…).
+           Владелец видит текст, а не список id: непокрытое слово для него = «передатчик не распознан».
+           Теперь второе НАПИСАНИЕ того же равия тоже идёт в подсветку — берём его РОВНО в том виде, в каком
+           оно стоит в тексте (иначе подсветке нечего искать). В списке передатчиков дубля не будет:
+           потребитель сводит формы по id (см. ourMids/ourNames). */
+        const _dup=_haveId.has(String(_mid));
         let _c=null; try{ _c=await _narrCard(_mid); }catch(e){}
-        const _disp=((_c&&_c[1])? String(_c[1]).split(/\s+/).slice(0,4).join(' ') : _s).replace(/\s+(?:بن|ابن)$/,'').trim();   // С38: ЧИСТОЕ имя из базы (не текст-слот с матн-хвостом موقوف); без висячего «بن»
+        const _disp=_dup ? _s.replace(/\s+(?:بن|ابن)$/,'').trim()
+                         : ((_c&&_c[1])? String(_c[1]).split(/\s+/).slice(0,4).join(' ') : _s).replace(/\s+(?:بن|ابن)$/,'').trim();   // С38: ЧИСТОЕ имя из базы (не текст-слот с матн-хвостом موقوف); без висячего «بن»
         // #473 (С50, «порядок передатчиков нарушаешь»): позиция для сортировки — ищем СЕГМЕНТ ТЕКСТА (_cs, реально
         // встреченный в isnadSlots), а не _disp (каноничное имя типа «سليمان بن مهران», которого в тексте может не быть,
         // если равий назван лакабом «الأعمش») — иначе позиция не найдётся и запись снова уедет в конец.
@@ -13831,7 +14108,9 @@ async function verifyNarr(card, place, text){
         if(recNa){ const seen=new Set(); const dedupN=[]; for(const pr of recNa){ const id=String(pr[1]); if(!seen.has(id)){ seen.add(id); dedupN.push(pr); } } ourMids=[...seen]; ourNames=dedupN.map(x=>x[0]); }
         else if(rec.i||rec.n){   // С38: не-5 книги — «приложение» = РОВНО то, что подсветили (общий _codifNarrPairs), а не сырой n (тащил матн/цепь книги)
           try{ cleanPairs=await _codifNarrPairs(rec, text); }catch(e){ cleanPairs=[]; }
-          const seen=new Set(); for(const pr of (cleanPairs||[])){ const id=String(pr[1]); if(!seen.has(id)) seen.add(id); } ourMids=[...seen]; ourNames=(cleanPairs||[]).map(x=>x[0]); } } }catch(e){}
+          /* #655 (С67): подсветка теперь может дать ДВА написания одного равия (второе — как в тексте),
+             а в списке передатчиков он должен остаться ОДИН: сводим формы по id, первая — основная. */
+          const seen=new Set(); const _nm=[]; for(const pr of (cleanPairs||[])){ const id=String(pr[1]); if(!seen.has(id)){ seen.add(id); _nm.push(pr[0]); } } ourMids=[...seen]; ourNames=_nm; } } }catch(e){}
     // v1076 (852b, риваят 2/6 красный): у Муслим-риваята N>1 с ПО-БУКВЕННЫМ эталоном verify (854b и т.п.) юнион-цепь codif.na
     // принадлежит риваяту 1 (химера) — НЕ авторитет ЭТОГО текста → сбрасываем recNa и идём веткой эталона (auth=verify, сверка с DOM).
     try{ if(recNa && place.riw>1 && String(place.bid)==='1727'){ const _vL=await _verifyChain(place.bid,place.num,place.riw); if(_vL && _vL._letter){ recNa=null; recGap=null; ourMids=[]; ourNames=[]; } } }catch(e){}
@@ -15587,7 +15866,8 @@ document.getElementById('goBtn').onclick=()=>{ hap('medium'); try{ _lateQuiet(70
 (function(){ var qb=document.getElementById('qBack'); if(qb) qb.onclick=()=>{ try{ hap('light'); }catch(e){} qBack(); }; })();
 // M254: кнопка очистки поиска ✕
 (function(){ var qc=document.getElementById('qClear'), qi=document.getElementById('q'); if(!qc||!qi) return;
-  var upd=()=>{ qc.style.display=qi.value?'block':'none'; }; qi.addEventListener('input',upd); upd();
+  var upd=()=>{ qc.style.display=qi.value?'block':'none'; try{ _syncSearchBar(); }catch(e){} };   /* #663 (С67): ✕ появилась/пропала → пересчитать отступ поля, чтобы текст не уезжал под неё */
+  qi.addEventListener('input',upd); upd();
   qc.onclick=()=>{ _seq++; qi.value=''; upd(); var r=document.getElementById('res'); if(r) r.innerHTML=''; try{setStatus('');}catch(e){}
     try{ qi.style.height='auto'; }catch(e){}                                   // схлопнуть авторост textarea
     try{ hideNarrSugg(); }catch(e){}                                           // R46: подсказки равиев тоже закрыть
@@ -16437,7 +16717,7 @@ try{ document.documentElement.setAttribute('data-jsok', (typeof APPVER!=='undefi
 <style id="urStyles">
 .ur-modal{position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg);color:var(--text);z-index:10010;display:flex;flex-direction:column;overflow:hidden}
 .ur-modal.hidden{display:none}
-.ur-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(0,0,0,.2);border-bottom:1px solid rgba(255,255,255,.05);flex-shrink:0}
+.ur-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;padding-top:calc(14px + var(--tgTop,0px) + env(safe-area-inset-top,0px));background:rgba(0,0,0,.2);border-bottom:1px solid rgba(255,255,255,.05);flex-shrink:0}   /* #657/#659 (С67): единая читалка занимает весь экран (top:0) — верх шапки срезала панель Telegram */
 .ur-back-btn{background:none;border:none;color:var(--text);font-size:24px;padding:0;cursor:pointer;margin-right:12px}
 .ur-title{flex-grow:1;font-weight:600;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
 .ur-page-indicator{font-size:14px;color:var(--hint);margin-left:12px;cursor:pointer;min-width:40px;text-align:right}
@@ -16700,7 +16980,7 @@ function openUnifiedReader(code, fromNum){
 <style id="mpStyles">
 .mp-modal{position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg);z-index:10008;display:none;flex-direction:column}
 .mp-modal.active{display:flex}
-.mp-header{padding:12px 15px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,.08);color:var(--text);flex-shrink:0}
+.mp-header{padding:12px 15px;padding-top:calc(14px + var(--tgTop,0px) + env(safe-area-inset-top,0px));display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,.08);color:var(--text);flex-shrink:0}   /* #657/#659 (С67): окно во весь экран (top:0) — его шапка была ПОД панелью Telegram */
 .mp-close-btn{background:none;border:1px solid rgba(255,255,255,.15);color:var(--text);padding:5px 12px;border-radius:8px;cursor:pointer}
 .mp-map-container{flex:1;position:relative;overflow:hidden;background:radial-gradient(circle at center,#1a2030 0%,#0b0e16 100%);touch-action:none}
 .mp-svg{width:100%;height:100%;display:block}
