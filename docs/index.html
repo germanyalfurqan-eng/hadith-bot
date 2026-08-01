@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1272</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1273</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1478,7 +1478,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1272';
+const APPVER = 'v1273';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -14887,6 +14887,44 @@ function _isnadForms(text){
   const out=[]; let m; while((m=VERB.exec(c))) out.push(m[1]);
   return out;
 }
+/* #678 (пачка 10, С67, продолжение приёмки на проде). Замер показал: ленивая сборка сняла стартовый залп
+   (33 блока сверки → 2), но список всё равно уезжал под пальцем — опорная карточка при 12 шагах прокрутки
+   сдвигалась на 3 226 px, потому что каждый доехавший блок сверки прибавляет карточке ~500 px.
+   Лечение — не откладывать блок, а сделать его МАЛЕНЬКИМ: заголовок сверки уже несёт главное (сошлось /
+   расхождение / нет данных — словом и цветом), а всё остальное прячем под «▸ подробнее». Прирост
+   становится ~30 px вместо ~500.
+   Почему это не прячет важное: строка вердикта остаётся НА ВИДУ и окрашена (🔴 расхождение видно, не
+   разворачивая), там же счётчики «эталон : приложение». Под кнопку уходит разбор — цепь, звенья, доводы.
+   Разворот запоминается на сессию: развернул одну карточку — раскрываются все в этой выдаче и все
+   следующие, чтобы не жать на каждой.
+   Сделано ПОСЛЕ сборки innerHTML, чистой перестановкой узлов: генерацию разметки не трогаем, поэтому
+   ничего из содержимого не теряется и обработчики ниже по коду по-прежнему находят свои элементы. */
+let _vbРазвёрнуто=false;   // память на сессию: развернул один раз — дальше разворачиваем сразу
+function _vbПрименитьКоВсем(){
+  /* селекторы нарочно ПРОСТЫЕ (без `:scope >`): на проверке в проде составной селектор не находил
+     переключатель в части блоков — шапка бывает вложена глубже, и часть карточек оставалась свёрнутой
+     при общем «развернуть». Ищем по всему поддереву блока — промахнуться уже не на чем. */
+  try{ document.querySelectorAll('.verifyBox').forEach(b=>{
+    const d=b.querySelector('.vbDet'), t=b.querySelector('.vbTg');
+    if(d) d.style.display=_vbРазвёрнуто?'':'none';
+    if(t) t.textContent=_vbРазвёрнуто?'▾ скрыть разбор':'▸ подробнее';
+  }); }catch(e){}
+}
+function _vbСвернуть(box){
+  const шапка=box.firstElementChild; if(!шапка) return;
+  const det=document.createElement('div'); det.className='vbDet';
+  while(шапка.nextSibling) det.appendChild(шапка.nextSibling);
+  if(!det.childNodes.length) return;            // сворачивать нечего — блок и так в одну строку
+  box.appendChild(det);
+  const tg=document.createElement('span'); tg.className='vbTg';
+  tg.style.cssText='cursor:pointer;color:var(--link);font-size:12px;white-space:nowrap;text-decoration:underline dotted;flex:none';
+  tg.title='Показать разбор сверки: цепь передатчиков, звенья и доводы';
+  tg.onclick=(e)=>{ e.stopPropagation(); try{ hap('light'); }catch(_e){}
+    _vbРазвёрнуто=!_vbРазвёрнуто; _vbПрименитьКоВсем(); };
+  шапка.appendChild(tg);
+  det.style.display=_vbРазвёрнуто?'':'none';
+  tg.textContent=_vbРазвёрнуто?'▾ скрыть разбор':'▸ подробнее';
+}
 async function verifyNarr(card, place, text){
   try{
     if(card.dataset.verifyOn) return; card.dataset.verifyOn='1';
@@ -15257,6 +15295,7 @@ async function verifyNarr(card, place, text){
     // УКАЗ 11.07: неполный вердикт нейротахкика — честная отметка, ЧТО и КАК будет доделано (опознание цепей неканона идёт)
     try{ if(h.indexOf('неполный расчёт')>=0){ const _dn2=await _devNote('neuro_incomplete'); if(_dn2) h+=_devNoteHtml(_dn2); } }catch(e){}
     box.innerHTML=h;
+    try{ _vbСвернуть(box); }catch(e){}   /* #678 (пачка 10, С67): блок сверки — сразу свёрнутым, деталь по кнопке */
     try{ box.querySelectorAll('.nvWk').forEach(el=>{ el.onclick=async(ev)=>{ ev.stopPropagation(); try{ const _m=+el.dataset.mid; const c=await _narrCard(_m); openNarratorRijal((c&&c[1])||'', _m); }catch(_e){} }; }); }catch(e){}
     // владелец 02.07: «пишешь матрук — но КТО сказал?» — асинхронно дописываем имена критиков-свидетелей джарха в строку
     try{ box.querySelectorAll('.nvWho').forEach(async el=>{ try{
