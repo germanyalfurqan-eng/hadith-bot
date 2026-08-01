@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1271</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1272</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1478,7 +1478,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1271';
+const APPVER = 'v1272';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -9985,9 +9985,15 @@ function _ragFb(card, q, bid, num, score){
       const r=await fetch(BACKEND_URL+'/rag_feedback',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({initData:INITDATA, q:String(q||'').slice(0,300), verdict:вердикт,
           bid:String(bid||''), num:String(num||''), score:Number(score)||0, comment:String(комментарий||'').slice(0,600)})});
-      if(r.status===429){ итог('⏱ слишком часто'); toast('Отметок принимаю не больше 20 за 10 минут — чуть позже'); return; }
-      if(r.status===403){ итог('⚠️ нет доступа'); toast('Отметки сейчас недоступны'); return; }
+      /* Приёмка на проде (С67): бэкенд на отказе отдаёт ВНЯТНОЕ русское объяснение — например
+         «Отметка засчитывается только из приложения в Telegram.» (403, error=anon для анонимов из браузера).
+         Фронт его выбрасывал и показывал своё казённое «Отметки сейчас недоступны»: человек видел отказ,
+         но не понимал, что делать. Теперь говорим ровно то, что сказал сервер, а своя фраза — только
+         когда сервер промолчал. */
       const j=await r.json().catch(()=>null);
+      const серв=(j && typeof j.message==='string' && j.message.trim()) ? j.message.trim().slice(0,160) : '';
+      if(r.status===429){ итог('⏱ слишком часто'); toast(серв||'Отметок принимаю не больше 20 за 10 минут — чуть позже'); return; }
+      if(r.status===403){ итог('⚠️ не засчитано'); toast(серв||'Отметки сейчас недоступны'); return; }
       if(r.ok && j && j.ok){
         итог(вердикт==='мимо'?'👎 записал':'👍 записал');
         try{ hap('light'); }catch(e){}
