@@ -672,7 +672,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1259</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1260</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1464,7 +1464,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1259';
+const APPVER = 'v1260';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -12537,8 +12537,26 @@ async function renderTestimoniesCard(mid, host){
        window._ttForAI=_сбор; }catch(e){ window._ttForAI=[]; }
   _eord.forEach((key,idx)=>{ const cr=_emap[key].ar; const items=_emap[key].items; const terms=[...new Set(items.map(c=>c[1]))];
     let scv=items.reduce((s,c)=>s+(_ttScore(c[1])||0),0);
+    /* #654 (С67): владелец — «че за бардак?»: на скрине красный бейдж «⚠ джарх принят» стоит рядом с
+       оценкой ثقة («надёжен»), рамка цитаты красная, а подпись под ней — своя же «≈ Надёжный».
+       Разобрано ПО ДАННЫМ (59 936 пар равий×критик): словарь НЕ виноват, там ثقة = +3, как и должно.
+       Виновата арифметика показа. У одного критика об одном равии бывает НЕСКОЛЬКО записей (разные
+       книги, разные слова), и они схлопывались в АЛГЕБРАИЧЕСКУЮ СУММУ: ثقة (+3) и متروك (−4) дают −1,
+       и знак «порицание» ложится на всю строку. А показывается при этом ТОЛЬКО ПЕРВАЯ запись — из неё
+       берётся и цитата (c0[3]), и русский вердикт (c0[9]). Вот и картинка владельца: на экране похвала,
+       а бейдж, рамка и цвет — от второй записи, которой на экране нет. Таких пар в базе 349.
+       Лечим по правде и ничего не пряча: похвалы и порицания считаем ОТДЕЛЬНО — ровно так же, как это
+       делает _ttNeuro, который кладёт такого критика И в tadil, И в jarh. Если у него есть и то и другое,
+       не выдаём одно за другое, а прямо пишем «джарх + таусик» и перечисляем обе оценки словами.
+       Цвет цитаты берём по ТОЙ записи, что видна на экране, — тогда похвала не сидит в красной рамке. */
+    const _posN=items.filter(c=>(_ttScore(c[1])||0)>0).length;
+    const _negN=items.filter(c=>(_ttScore(c[1])||0)<0).length;
+    const _mixed=(_posN>0 && _negN>0);
     // владелец 02.07: длинные цитаты (sunnah/تهذيب) не в точном словаре _TT_SCORE → полярность по паттернам, чтобы джарх был КРАСНЫМ
-    if(scv===0){ let _qt=stripDiac(fold(terms.join(' ')));
+    // #654 (С67): условие было `scv===0`, но ноль даёт и ВЗАИМНОЕ ГАШЕНИЕ (+3 и −3) — тогда паттерны
+    // переписывали знак у записей, которые словарь как раз распознал. Теперь фолбэк включается только
+    // когда не распозналась НИ ОДНА запись, как и было задумано.
+    if(!_posN && !_negN){ let _qt=stripDiac(fold(terms.join(' ')));
       // ⛔ СУРОВЫЙ ЗАКОН владельца 26.07.2026: «не должно быть написано ни одного свидетельства,
       // которое не проверено тобой! Как Ахмад может поставить джарх на Малике?? Ну-ка докажи».
       // Он поймал прямую ложь: у Малика стояло «⚠ джарх принят» от Ахмада ибн Ханбаля, а слова Ахмада
@@ -12554,7 +12572,9 @@ async function renderTestimoniesCard(mid, host){
              .replace(/لم\s*يثبت[^.،]{0,30}ضعف\S*/g,' ')
              .replace(/(اخطا|وهم|شذ)[^.،]{0,25}(اذ\s*)?ضعف\S*/g,' ');
       if(/متروك|كذاب|وضاع|ضعيف|منكر|ليس بشيء|متهم|واه|ساقط|يخطي|غفله|لين|تركوه|لا يكتب|سيء الحفظ|لم يحفظ|قليل الحفظ/.test(_qt)) scv=-1; else if(/ثقه|ثبت|حجه|حافظ|احفظ|صدوق|لا باس|مامون|صالح|متقن/.test(_qt)) scv=1; }
-    const vcol=scv>0?'#7ee08a':(scv<0?'#ff9b7a':'#9aa7b5');
+    // #654 (С67): цвет — по ЗНАКУ ПОКАЗАННОЙ записи, а не по сумме всех (сумма красила похвалу в красный)
+    const _shownSc=_mixed?(_ttScore((items[0]||[])[1])||0):scv;
+    const vcol=_shownSc>0?'#7ee08a':(_shownSc<0?'#ff9b7a':'#9aa7b5');
     const row=document.createElement('div'); row.dataset.ttRow='1'; row.style.cssText='border-top:1px solid #20302a;padding-top:11px;margin-top:11px'; if(idx>=_TT_TOP) row.style.display='none';
     const yr=_yrOf(cr); const c0=items[0]; const ruv=((c0[9]&&String(c0[9]).trim())||_ruVerdict(terms));
     const _isMuta=_isMutasahil(cr)&&_critOk(cr);   // ПР-3: мутасахиль — джарх принят, таусик нет
@@ -12562,7 +12582,12 @@ async function renderTestimoniesCard(mid, host){
     let _kcl=null; try{ if(_tcl && items.length>1){ const _nk=String(cr||'').replace(/\s+/g,' ').trim(); const _cc=_tcl[_nk];
       if(_cc && _cc.c && _cc.c.length>1) _kcl=_cc; } }catch(e){}
     // #490 (владелец): зелёная «✓ принят» одинаково висела и на таусике, и на джархе от муʿтабара — звучит как «признан надёжным» (таусик), путает. Джарх теперь своя красная отметка «⚠ джарх принят».
-    const _badge=(_isMut(cr)&&_critOk(cr))
+    /* #654 (С67): у критика с оценками РАЗНОГО знака ни «джарх принят», ни «принят» не были правдой —
+       обе прячут половину сказанного им. Такому даём свой честный бейдж «джарх + таусик»; обе оценки
+       перечислены строкой ниже, а в свод (_ttNeuro) он и так входит обеими сторонами. */
+    const _badge=_mixed && ((_isMut(cr)&&_critOk(cr)) || _isMuta)
+      ? " <span style=\"font-size:10px;background:rgba(224,192,122,.16);color:#e0c07a;border:1px solid #6b5c33;border-radius:5px;padding:0 5px;cursor:help\" title=\"У этого учёного об этом равии есть и порицание, и похвала — они перечислены ниже. В своде учтены обе стороны, поэтому одну отметку поставить нельзя.\">⚠ джарх + таусик</span>"
+      : (_isMut(cr)&&_critOk(cr))
       ? (scv<0
         ? " <span style=\"font-size:10px;background:rgba(226,75,74,.16);color:#ff9b9b;border:1px solid #a33;border-radius:5px;padding:0 5px;cursor:help\" title=\"Один из муʿтабаров — его ДЖАРХ (порицание) засчитывается (нужно ≥2)\">⚠ джарх принят</span>"
         : " <span style=\"font-size:10px;background:rgba(46,160,67,.16);color:#7ee08a;border:1px solid #2d6a45;border-radius:5px;padding:0 5px;cursor:help\" title=\"Один из муʿтабаров — его таусик засчитывается (нужно ≥2)\">✓ принят</span>")
@@ -12577,6 +12602,19 @@ async function renderTestimoniesCard(mid, host){
     // которых нет подчёркивания). Убрано, имя чуть светлее фона для отличия от простого текста.
     row.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span class="critNameCl" style="font-size:14.5px;cursor:pointer" title="Открыть карточку этого учёного"><span style="color:#dbe3eb;font-weight:600">'+esc(_ruName(cr))+((_ruName(cr)!==cr)?(' <span dir="rtl" style="font-size:13px;color:#8fa0b0;'+_AF+'">'+esc(cr)+'</span>'):'')+'</span>'+_badge+(yr?(' <span style="color:#7c8b9c;font-size:12.5px">ум. '+yr+' г.х.</span>'):'')+'</span>'+(c0[3]?'':('<span dir="rtl" style="font-size:15.5px;'+_AF+';color:'+vcol+'">'+esc(terms.join('، '))+'</span>'))+'</div>';
     try{ const _cnEl=row.querySelector('.critNameCl'); if(_cnEl) _cnEl.onclick=(e)=>{ e.stopPropagation(); try{ openNarratorRijal(cr); }catch(_e){} }; }catch(e){}   // #владелец 01.07.2026: имена критиков тоже кликабельны — своя биография/книги/вики
+    /* #654 (С67): на экране видна ОДНА запись критика, а бейдж «джарх + таусик» вырос из всех. Без этой
+       строки отметка выглядела бы взявшейся ниоткуда — ровно та же беда, на которую владелец и указал.
+       Поэтому обе стороны называем прямо: что он сказал в похвалу и что в порицание. */
+    if(_mixed){ try{
+      const _pt=[...new Set(items.filter(c=>(_ttScore(c[1])||0)>0).map(c=>c[1]))];
+      const _nt=[...new Set(items.filter(c=>(_ttScore(c[1])||0)<0).map(c=>c[1]))];
+      const mx=document.createElement('div');
+      mx.style.cssText='margin-top:5px;font-size:11.5px;color:#e0c07a;line-height:1.6;border:1px dashed #6b5c33;border-radius:8px;padding:5px 9px';
+      mx.innerHTML='⚖ У этого учёного об этом равии <b>разные</b> оценки — засчитываются обе: '
+        +'похвала <span dir="rtl" style="'+_AF+';color:#7ee08a">'+esc(_pt.join('، '))+'</span>'
+        +' и порицание <span dir="rtl" style="'+_AF+';color:#ff9b7a">'+esc(_nt.join('، '))+'</span>. '
+        +'<span style="color:#8a7d5a">Ниже показана одна из записей.</span>';
+      row.appendChild(mx); }catch(e){} }
     if(_kcl){ const kb=document.createElement('div'); kb.style.cssText='margin-top:5px;font-size:12px;color:#c9b8ff;background:rgba(122,90,248,.08);border:1px solid #4a3a8a;border-radius:8px;padding:5px 9px';
       const _lbls=(_kcl.l||[]).map((L,li)=>'<span style="white-space:nowrap"><span style="display:inline-flex;width:15px;height:15px;border-radius:50%;background:#2a2050;color:#c9b8ff;font-size:9.5px;align-items:center;justify-content:center;vertical-align:middle;margin-left:3px">'+(li+1)+'</span> <span dir="rtl" style="'+_AF+'">'+esc(String(L).slice(0,60))+'</span></span>').join(' · ');
       kb.innerHTML='⚖ у этого учёного <b>'+_kcl.c.length+'</b> разных суждения по источникам'+(_lbls?(': '+_lbls):'')+' <span style="color:#8593a2;font-size:10.5px">(сгруппировано ИИ-сменой، формулировки — из первоисточников)</span>';
@@ -12587,7 +12625,7 @@ async function renderTestimoniesCard(mid, host){
       const vw=document.createElement('div'); vw.style.cssText='margin-top:6px';
       const _vhdr=document.createElement('div'); _vhdr.style.cssText='font-size:11px;color:#9aa7b5;margin-bottom:3px'; _vhdr.textContent='передачи его мнения ('+_vars.length+') — в разное время/разными путями:'; vw.appendChild(_vhdr);
       _vars.forEach((v,vi)=>{ const b=document.createElement('div'); b.dir='rtl';
-        var _qb2=(scv<0?'border:1px solid #A32D2D;background:rgba(226,75,74,.07)':(scv>0?'border:1px solid #2d6a45;background:rgba(63,185,80,.06)':'border:1px solid #3a434d;background:rgba(122,134,147,.06)'));
+        var _qb2=(_shownSc<0?'border:1px solid #A32D2D;background:rgba(226,75,74,.07)':(_shownSc>0?'border:1px solid #2d6a45;background:rgba(63,185,80,.06)':'border:1px solid #3a434d;background:rgba(122,134,147,.06)'));   // #654 (С67): по знаку ПОКАЗАННОЙ записи, не по сумме
         b.style.cssText='font-size:16.5px;'+_AF+';color:#eaf2ea;'+_qb2+';border-radius:8px;padding:5px 9px;margin-top:4px;line-height:1.7';
         b.innerHTML='<span style="display:inline-flex;width:17px;height:17px;border-radius:50%;background:#1c2b44;color:#9cc3f0;font-size:10.5px;align-items:center;justify-content:center;margin-left:6px;vertical-align:middle">'+(vi+1)+'</span>'+esc(v);
         vw.appendChild(b); });
@@ -12596,7 +12634,7 @@ async function renderTestimoniesCard(mid, host){
     }
     if(!_vars && c0[3]){ const q=document.createElement('div'); q.dir='rtl';
       // владелец 02.07 (скрин «джарх в зелёной рамке»): рамка/фон цитаты — ПО ПОЛЯРНОСТИ вердикта: джарх ВСЕГДА красным, таусик зелёным, нейтральное серым
-      var _qb=(scv<0?'border:1px solid #A32D2D;background:rgba(226,75,74,.09)':(scv>0?'border:1px solid #2d6a45;background:rgba(63,185,80,.07)':'border:1px solid #3a434d;background:rgba(122,134,147,.07)'));
+      var _qb=(_shownSc<0?'border:1px solid #A32D2D;background:rgba(226,75,74,.09)':(_shownSc>0?'border:1px solid #2d6a45;background:rgba(63,185,80,.07)':'border:1px solid #3a434d;background:rgba(122,134,147,.07)'));   // #654 (С67): по знаку ПОКАЗАННОЙ записи — иначе похвала ثقة сидела в красной рамке
       q.style.cssText='font-size:18px;'+_AF+';color:#eaf2ea;'+_qb+';border-radius:8px;padding:6px 10px;margin-top:6px;line-height:1.75';
       // #486 (владелец, «сливается» — низкий контраст полупрозрачной подсветки на тёмном фоне): плотный светлый/бежевый
       // фон + почти чёрный текст (высокий контраст, читаемо), цвет фона по полярности (зелёный/красный/бежевый оттенок).
@@ -14140,8 +14178,15 @@ async function verifyNarr(card, place, text){
           const rM=new Set(authMids.map(String));
           const missV=vM.filter(m=>!rM.has(m));
           const extraR=[...rM].filter(m=>vM.indexOf(m)<0);
-          if(missV.length||extraR.length){ _vMis={missV,extraR,vCount:vM.length}; }
-          _vMis=_vMis||{ok:true};   // эталон проверен
+          /* #648 (С67): вторая половина той же правки, что уже сделана строкой выше про '?'.
+             Звенья эталона, где мост не назвал id ('?'), выкинуты из vM — и правильно, «не хватает»
+             из них не сделаешь. Но обратную сторону не закрыли: НАШ опознанный равий, стоящий ровно
+             на таком месте, оказывался «лишним», и приложение поднимало красное «РАСХОЖДЕНИЕ» там,
+             где sunnah.com просто промолчал. Прогон по всем verify+codif: 384 хадиса ровно с этим.
+             Правило: не хватает 0, а лишние укладываются в число молчащих звеньев — расхождения нет. */
+          const _vUnres=vRows.filter(r=>r[2]==null||String(r[2])==='?').length;
+          if((missV.length||extraR.length) && !(missV.length===0 && extraR.length<=_vUnres)){ _vMis={missV,extraR,vCount:vM.length}; }
+          _vMis=_vMis||{ok:true,vUnres:_vUnres,vCovered:extraR.length};   // эталон проверен
         }
       }catch(e){}
     } else {
@@ -14287,7 +14332,23 @@ async function verifyNarr(card, place, text){
     const _alarmShow = alarm && !_riwSplitDiff && !_subsetOnly;   // разная нарезка риваятов — не тревога, красным не красим
     const _bc = idMode ? (_alarmShow?'#e0796a':(softGap?'#d8a85a':'#3a8a5a')) : (_authText?'#3a8a5a':'#3a4a66'); const _bg = idMode ? (_alarmShow?'rgba(224,121,106,.10)':(softGap?'rgba(216,168,90,.10)':'rgba(58,138,90,.08)')) : (_authText?'rgba(58,138,90,.08)':'rgba(90,120,170,.08)');
     box.style.cssText='margin-top:9px;border-radius:10px;padding:9px 11px;font-size:12px;border:1px solid '+_bc+';background:'+_bg+';';
-    const _hdr = !idMode ? (_authText?'🟢 Цепь этого риваята · текст = sunnah.com (передатчики подлинные)':'🔵 Сверка по базе Мактабы (передатчики опознаны по тексту)') : (alarm?('🔴 СВЕРКА: РАСХОЖДЕНИЕ с sunnah.com'+(_nameMis?(' — '+(_nameMis.dom?'НА ЭКРАНЕ':'пер-id')+': эталон '+_nameMis.vCount+', у нас лишних '+_nameMis.extraR.length+', не хватает '+_nameMis.missV.length+(_nameMis.dom?' (подсветка в тексте не совпала с эталоном)':'')):'')):(softGap?('🟡 Сверка: почти совпадает — '+gapList.length+' равия'+(gapList.length===1?'':'/-ев')+' мост не привязал по краткой форме'):((recNa&&_vMis&&_vMis.ok)?'🟢 Сверка: пер-id совпадает с эталоном sunnah.com':'🟢 Сверка: звенья согласованы (число и мост)')));   // фикс по диагнозу Хермеса 05.07
+    /* #648 (С67): владелец прислал скрин, где в ОДНОЙ рамке стоит «эталон 5» (заголовок) и «эталон 6»
+       (плашка справа). Он справедливо не поверил ни одной цифре. Разобрано по данным: обе цифры верны,
+       но это РАЗНЫЕ ВЕЛИЧИНЫ, названные одним словом:
+         · в заголовке — сколько id назвал эталон sunnah.com (звенья с '?' туда не входят);
+         · в плашке   — сколько ЗВЕНЬЕВ в нашей цепи (codif.na + непривязанные мостом gap).
+       Прогон по всей базе: 7259 карточек из 36290 показывают под словом «эталон» два разных числа,
+       и в 2247 из них данные при этом сошлись полностью. То есть беда была в ПОДПИСИ, не в сверке.
+       Лечим подписью: каждое число говорит, откуда оно, и одно слово больше не значит две вещи. */
+    const _misTxt = !_nameMis ? '' : (_nameMis.dom
+      ? (' — НА ЭКРАНЕ: в цепи звеньев '+_nameMis.vCount+', не подсвечено '+_nameMis.missV.length+', лишних подсветок '+_nameMis.extraR.length+' (подсветка в тексте не совпала с цепью)')
+      : (' — пер-id: у sunnah.com опознано id '+_nameMis.vCount+', у нас лишних '+_nameMis.extraR.length+', не хватает '+_nameMis.missV.length));
+    const _okTxt = (recNa&&_vMis&&_vMis.ok)
+      ? ((_vMis.vUnres&&_vMis.vCovered)
+          ? ('🟢 Сверка: расхождений нет · '+_vMis.vUnres+' звен'+(_vMis.vUnres===1?'о':'ьев')+' эталона sunnah.com без id — сверено по остальным')
+          : '🟢 Сверка: пер-id совпадает с эталоном sunnah.com')
+      : '🟢 Сверка: звенья согласованы (число и мост)';
+    const _hdr = !idMode ? (_authText?'🟢 Цепь этого риваята · текст = sunnah.com (передатчики подлинные)':'🔵 Сверка по базе Мактабы (передатчики опознаны по тексту)') : (alarm?('🔴 СВЕРКА: РАСХОЖДЕНИЕ с sunnah.com'+_misTxt):(softGap?('🟡 Сверка: почти совпадает — '+gapList.length+' равия'+(gapList.length===1?'':'/-ев')+' мост не привязал по краткой форме'):_okTxt));   // фикс по диагнозу Хермеса 05.07
     const _hcol = !idMode ? (_authText?'#7fd3a0':'#6fb0e0') : (_alarmShow?'#e0796a':(softGap?'#e0c07a':'#7fd3a0'));
     let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b style="color:'+_hcol+'">'+_hdr+'</b>'
       // 🔴 25.07.2026 (владелец: «почему на скринах формат разный карточек хадиса? в чём логика?»):
@@ -14295,7 +14356,9 @@ async function verifyNarr(card, place, text){
       // мустахраджи) — от этого менялся сам скелет карточки, и она выглядела как из другого приложения.
       // Теперь строка всегда на месте: где эталона нет, там прямо написано «эталона нет», а не пустота.
       +'<span style="color:var(--hint)">'
-        +(idMode ? ('эталон ('+srcLbl+'): <b>'+authCount+'</b> · ')
+        /* #648 (С67): было «эталон (…): N» — то же слово, что в заголовке, но величина другая (там id
+           эталона, тут звенья нашей цепи). Называем вещь своим именем и объясняем разницу в подсказке. */
+        +(idMode ? ('<span title="Все звенья цепи этого хадиса по нашей разметке (мост sunnah.com → Мактаба), включая те, что мост не привязал по имени. В заголовке — другое число: сколько id назвал сам эталон sunnah.com. Оттого числа и не обязаны совпадать.">звеньев в цепи ('+srcLbl+'): <b>'+authCount+'</b></span> · ')
                  : ('<span title="У sunnah.com нет разметки цепей для этого сборника — сверяем по базе Мактабы">эталон sunnah.com: <b>нет</b></span> · '))
         +'приложение: <b style="color:'+(cntMis&&idMode?'#e0796a':'inherit')+'">'+ourCount+'</b></span></div>';
     if(_subsetOnly && !_riwSplitDiff){
@@ -14361,7 +14424,8 @@ async function verifyNarr(card, place, text){
       h+='<div class="vDet" style="margin-top:7px;color:#e0c07a;font-size:11px">🟡 Эталон sunnah.com: <b>'+authCount+'</b> равиев, у нас привязано по id <b>'+ourCount+'</b>. Краткой формой мост не сопоставил: <b>'+gn+'</b>. Это <b>пробел нашего моста</b> (id-связка), а НЕ ошибка текста или sunnah.com — состав цепи и хадис верны.</div>'; }
     if(alarm && idMode){ h+='<div class="vDet" style="margin-top:7px;color:#e0b3a8;font-size:11px">';
       if(missing.length){ const gn=(recNa?gapList:[]).map(g=>esc(g[0])+(g[1]==null?' (мост не опознал)':'')).join('، ');
-        h+='🚨 Эталон (sunnah.com/Мактаба): <b>'+authCount+'</b> передатчиков, опознано приложением <b>'+ourCount+'</b>. НЕ опознано <b>'+missing.length+'</b>'+(gn?(': '+gn):'')+'. Строгий стандарт (#158): зелёным — только когда опознаны ВСЕ как в sunnah.com.<br>'; }
+        // #648 (С67): та же путаница слов, что и в шапке — здесь считаются ЗВЕНЬЯ нашей цепи, а не id эталона. Называем прямо.
+        h+='🚨 Звеньев в цепи (sunnah.com/Мактаба): <b>'+authCount+'</b>, опознано приложением <b>'+ourCount+'</b>. НЕ опознано <b>'+missing.length+'</b>'+(gn?(': '+gn):'')+'. Строгий стандарт (#158): зелёным — только когда опознаны ВСЕ как в sunnah.com.<br>'; }
       if(extra.length) h+='🚨 id ПРИСВОЕН, но в эталоне Мактабы его НЕТ: <b>'+extra.length+'</b> (id '+extra.join(', ')+') — возможно НЕВЕРНАЯ карточка (клик откроет не того передатчика). #142';
       h+='</div>'; }
     else if(alarm){ h+='<div style="margin-top:7px;color:#e0b3a8;font-size:11px">⚠️ По тексту передатчиков <b>'+authCount+'</b>, а приложение подсветило <b>'+ourMids.length+'</b> — расхождение в количестве.</div>'; }
@@ -16092,6 +16156,21 @@ function _hasText(){ // A+/A− в читалках (Коран/книга) И �
   if(_visModals().length) return false;   // открыт другой модал — не мешаем
   const r=document.getElementById('res'); return !!(r && r.children && r.children.length); }
 function updateFloatTools(){ try{ const w=document.getElementById('floatTools'); if(!w) return;
+  /* #663 (С67): владелец — «кнопку поиск перекрывает постоянно справа кнопка». Прошлый заход чинил
+     не ту кнопку (разводил ✕/↩ ВНУТРИ поля в _syncSearchBar) — перекрывает не они, а вот эта панель.
+     Корень: круги Aa/⬇ стоят position:fixed и отсчитывают `bottom` от LAYOUT viewport. На iOS при
+     открытой клавиатуре layout viewport не меняется, а видимая область сжимается вдвое — панель
+     честно держится «внизу страницы», но на экране оказывается в середине, ровно на кнопке «Искать».
+     Лечим двумя ходами, оба про класс целиком, а не про один экран (З-40):
+       ① пока палец в поле ввода — панель не нужна вовсе (ни размер шрифта, ни стрелки), прячем;
+       ② низ считаем от VISUAL viewport, чтобы панель держалась у реально видимого низа экрана.
+     Тем же закрываются #680/#671/#314 — там эти же круги наезжали на арабский текст и на сверку. */
+  try{ const _ae=document.activeElement;
+    if(_ae && ['INPUT','TEXTAREA'].indexOf(_ae.tagName)>=0 && !_ae.readOnly && !_ae.disabled){ w.style.display='none'; return; } }catch(_e){}
+  try{ const vv=window.visualViewport;
+    // сколько экрана съедено снизу (клавиатура): на десктопе и без клавиатуры это 0 → прежние 74px
+    const _eaten = vv ? Math.max(0, Math.round(window.innerHeight-(vv.offsetTop+vv.height))) : 0;
+    const _bot=(_eaten+74)+'px'; if(w.style.bottom!==_bot) w.style.bottom=_bot; }catch(_e){}
   // #498 (владелец: «кнопка шрифта настройки перекрывает кнопку найти»): плавающий «Aa» — position:fixed поверх
   // ВСЕЙ страницы (z-index:240), а панель поиска по книге (#bookFindPanel, кнопка «Найти») — обычный контент читалки;
   // когда панель поиска открыта, прячем плавающий «Aa», чтобы он гарантированно не перекрывал кнопку «Найти».
@@ -16112,6 +16191,14 @@ function updateFloatTools(){ try{ const w=document.getElementById('floatTools');
   if(up) up.style.display=canUp?'flex':'none';
   if(down) down.style.display=canDown?'flex':'none';
   w.style.display=(showSize||canUp||canDown)?'flex':'none';
+  /* #663 (С67), страховка от КЛАССА, а не от случая: даже если завтра появится ещё одна кнопка внизу
+     справа, панель не должна её накрыть. Сверяем свой прямоугольник с кнопкой «Найти» и, если задели,
+     поднимаемся ровно на высоту пересечения. Считается только когда панель видна — лишней работы нет. */
+  try{ if(w.style.display!=='none'){ const g=document.getElementById('goBtn');
+    if(g && g.offsetParent!==null){ const a=w.getBoundingClientRect(), b=g.getBoundingClientRect();
+      const ov=Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top);
+      if(ov>0 && Math.min(a.right,b.right)>Math.max(a.left,b.left)){
+        const _cur=parseFloat(w.style.bottom)||74; w.style.bottom=Math.round(_cur+ov+8)+'px'; } } } }catch(_e){}
 }catch(e){} }
 (function(){ const wrap=document.createElement('div'); wrap.id='floatTools';
   wrap.style.cssText='position:fixed;right:10px;left:auto;bottom:74px;z-index:240;display:none;flex-direction:column;gap:7px;align-items:center';
@@ -16149,6 +16236,11 @@ function updateFloatTools(){ try{ const w=document.getElementById('floatTools');
   document.body.appendChild(wrap); applyFontScale();
   // следим за прокруткой/изменениями, чтобы показывать кнопки только когда нужны
   ['scroll','wheel','touchmove'].forEach(ev=>window.addEventListener(ev,updateFloatTools,{passive:true,capture:true}));
+  /* #663 (С67): клавиатура меняет ТОЛЬКО visual viewport — обычный resize окна при этом не приходит.
+     Без этих двух подписок панель не узнаёт, что низ экрана уехал, и снова садится на «Искать».
+     focusin/focusout — чтобы панель пропадала в тот же миг, когда палец встал в поле, а не через тик. */
+  try{ const vv=window.visualViewport; if(vv){ ['resize','scroll'].forEach(ev=>vv.addEventListener(ev,updateFloatTools,{passive:true})); } }catch(e){}
+  ['focusin','focusout'].forEach(ev=>window.addEventListener(ev,updateFloatTools,{passive:true}));
   setInterval(updateFloatTools, 700); setTimeout(updateFloatTools, 300);
 })();
 try{ if(!localStorage.getItem('hint_home')){ setTimeout(()=>{ try{ toast('💡 Лого «Muslimoon» вверху — вернуться на главную / сбросить'); localStorage.setItem('hint_home','1'); }catch(e){} }, 2800); } }catch(e){}   // M245 одноразовый хинт
@@ -16477,11 +16569,32 @@ function _readFindStep(d){
 // Теперь читалка грузит ПОЛНЫЙ ПОТОК СТРАНИЦ печатного издания из нашей копии Мактабы (Бухари 10657
 // записей) и листает по ним подряд — как книга в руках. Номера хадисов сохранены, поиск по № работает.
 const _FULLREADER={bukhari:1,abudawud:1,ibnmajah:1,darimi:1,tirmidhi:1,nasai:1,muslim:1};
+/* Малик (С67, 01.08.2026) — почему его НЕТ в списке выше и трогать это нельзя.
+   В `reader/malik.json` лежит не Муватта, а современный трактат «يسألونك عن المعاملات المالية المعاصرة»
+   (302 записи вместо ~1800). Читалку это сейчас не задевает: `malik` в `_FULLREADER` не внесён, файл
+   не запрашивается ни разу и на Pages даже не выложен, а Малик читается из проверенного
+   `editions/ara-malik.min.json` — 1858 записей, риваят Яхьи аль-Лейси, 98% записей с иснадным зачином.
+   То есть чужой текст пользователю НЕ показывается, и убирать книгу из выдачи не нужно.
+   Опасность в другом: стоит однажды дописать сюда `malik:1` — и подмена уедет в прод молча. Поэтому
+   ниже стоит гард, который проверяет ЛЮБУЮ книгу из `reader/`, а не один этот случай (З-40).
+   Когда настоящая Муватта приедет: заменить файл и добавить `malik:1` — гард пропустит его сам. */
+function _readerLooksLikeHadith(a){ try{
+  // Сборник хадисов узнаётся по иснадным зачинам. Проба РАВНОМЕРНО по всей книге (не первые записи —
+  // там титул и вступление), огласовки снимаем. Замерено на живых файлах: настоящие своды дают 60-93%,
+  // подменённый malik.json — 5%. Порог 25% лежит в этом разрыве с запасом с обеих сторон.
+  if(!Array.isArray(a) || !a.length) return false;
+  const N=a.length, S=Math.min(60,N); let hit=0;
+  for(let i=0;i<S;i++){ const it=a[Math.floor(i*N/S)];
+    const t=String((it&&it.text)||'').replace(/[ً-ْٰـ]/g,'');
+    if(/حدثنا|حدثني|أخبرنا|اخبرنا|أنبأنا|انبأنا|عن مالك|ثنا/.test(t)) hit++; }
+  return hit*4>=S;
+}catch(e){ return true; } }   // сомнение толкуем в пользу книги: сбой пробы не должен гасить читалку
 async function _readLoad(code){
   if(_FULLREADER[code]){ try{
     const r=await fetch('./reader/'+code+'.json?v='+APPVER);
-    if(r.ok){ const a=await r.json(); if(Array.isArray(a)&&a.length) return a; }
-  }catch(e){} }   // файла нет или сеть подвела — падаем на прежний источник, читалка не остаётся пустой
+    if(r.ok){ const a=await r.json(); if(Array.isArray(a)&&a.length && _readerLooksLikeHadith(a)) return a;
+      try{ console.warn('reader/'+code+'.json не похож на сборник хадисов — беру проверенный источник'); }catch(_e){} }
+  }catch(e){} }   // файла нет, сеть подвела или книга не та — падаем на прежний источник, читалка не остаётся пустой
   const C=COLLECTIONS.find(x=>x.code===code); const X=EXTRA_MAP[code];
   if(code==='muhaymin'){ const a=await loadMuhaymin(); return a.map(x=>({num:x.n,n:x.n,text:x.text,rv:x.rv,rc:x.rc,b:x.b,c:x.c})); }   // #265-след/скрин «не удалось загрузить»: ридер грузил ./editions/muhaymin.json (нет такого файла) → теперь надёжный loadMuhaymin (корень ./muhaymin.json, 3 ретрая)
   if(code==='ahmad') return await loadAhmad();
