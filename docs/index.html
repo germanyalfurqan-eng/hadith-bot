@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1269</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1270</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1478,7 +1478,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1269';
+const APPVER = 'v1270';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -9969,6 +9969,100 @@ function _ragFb(card, q, bid, num, score){
   wrap.appendChild(bad); wrap.appendChild(good);
   return wrap;
 }
+/* #689 (С67, владелец из чата @jamaat_ru: «Раг Бухари: некий человек сказал, что дела не входят в иман —
+   обеспечь. В Бухари это ЕСТЬ»). Материал в индексе правда лежит, а рубит его порог: файл калибровки
+   `rag/bukhari.porog.json` сам предупреждает — «⚠️ ОБЛАСТИ ПЕРЕКРЫЛИСЬ… нужен второй признак: совпадение слов».
+   Второй признак берём НЕ из тела хадиса, а из НАЗВАНИЯ ГЛАВЫ (باب). Это разметка самого сборника, то есть
+   готовый тематический указатель: на вопрос «входят ли дела в иман» отвечает не столько матн, сколько
+   заголовок «باب من قال إن الإيمان هو العمل» («кто сказал, что вера — это дело»). Померил: слово «ايمان»
+   встречается в 92 матнах, но в 64 главах — сигнал по главам заметно чище.
+   Порог руками НЕ трогаем и основную выдачу не меняем ни на одно место: спасённые идут ОТДЕЛЬНЫМ разделом,
+   подписаны как более слабые, и их не больше шести. Поэтому шум в основной выдаче вырасти не может
+   по построению — там всё осталось как было.
+   Русский запрос переводим по маленькому мосту терминов (иман→ايمان, дела→عمل…): по русскому переводу
+   ловить бесполезно — «вера/уверует» стоит в тысячах мест (померил: 2 848 кандидатов, мусор). */
+const _RAG_МОСТ={'иман':'إيمان','имана':'إيمان','вера':'إيمان','веры':'إيمان','веру':'إيمان','убеждени':'إيمان',
+  'дела':'عمل','дело':'عمل','делам':'عمل','деяни':'عمل','поступк':'عمل','труд':'عمل',
+  'молитв':'صلاه','намаз':'صلاه','закят':'زكاه','милостын':'صدقه','пост':'صوم','ураза':'صوم','хадж':'حج',
+  'стыд':'حياء','стыдлив':'حياء','знани':'علم','наук':'علم','терпени':'صبر','намерени':'نيه','искренност':'اخلاص'};
+/* ⚠️ Хамзу НЕ схлопываем. Первый прогон это показал живьём: при «أإآ→ا» слово «الأَيْمَان» (КЛЯТВЫ)
+   становится неотличимо от «الإِيمَان» (ВЕРА), и в спасённые полезли главы про ложную клятву и намерение
+   в клятвах. Разница между верой и клятвой — не мелочь оформления, поэтому أ и إ остаются разными;
+   схлопываем только آ/ٱ (те же алифы с надстрочными знаками) и обычные ى/ة/ؤ/ئ. */
+function _ragНорм(s){ return String(s||'').replace(/[ً-ْٰـ]/g,'').replace(/[آٱ]/g,'ا').replace(/ى/g,'ي')
+  .replace(/ة/g,'ه').replace(/ؤ/g,'و').replace(/ئ/g,'ي'); }
+function _ragТермины(q){
+  const араб=/[؀-ۿ]/.test(String(q||''));
+  const стоп=new Set(['هل','من','في','على','عن','ما','هو','هي','ان','ذلك','هذا','كان','что','это','как','для','был','быть','есть','его','или','ли','входят','входит','считается']);
+  const слова=(араб?_ragНорм(q):String(q||'').toLowerCase().replace(/ё/g,'е')).split(/[^a-zа-яء-ي0-9]+/i)
+    .filter(w=>w.length>=3 && !стоп.has(w));
+  const из=[];
+  for(const w of слова){
+    if(араб){ из.push(_ragНорм(w).replace(/^ال/,'')); continue; }
+    // русское слово → арабский термин по мосту (по началу слова, чтобы ловить падежи: «делам», «молитвы»)
+    for(const k in _RAG_МОСТ){ if(w.indexOf(k)===0 || k.indexOf(w)===0){ из.push(_ragНорм(_RAG_МОСТ[k])); break; } }
+  }
+  return [...new Set(из)].filter(Boolean);
+}
+/* Спасение: идём по ранжиру НИЖЕ порога, берём места, у которых термин запроса стоит в названии главы.
+   Сортировка — сперва по числу совпавших терминов, потом по близости; кап 6; ниже 0.40 не смотрим вовсе
+   (там уже не «слабое совпадение», а случайность). Скан ограничен, чтобы не тормозить выдачу. */
+function _ragСпасение(ранж, порог, запрос){
+  try{
+    const терм=_ragТермины(запрос); if(!терм.length) return [];
+    const мета=_RAG['мета']; const канд=[]; let скан=0;
+    for(const [cid,s] of ранж){
+      if(s>=порог) continue;
+      if(s<0.40 || ++скан>1200) break;
+      const c=мета[cid]; if(!c || !c.g) continue;
+      const g=_ragНорм(c.g); let n=0;
+      for(const w of терм) if(g.indexOf(w)>=0) n++;
+      if(n>0) канд.push({cid, s, n, c});
+    }
+    канд.sort((a,b)=>(b.n-a.n)||(b.s-a.s));
+    return канд.slice(0,6);
+  }catch(e){ return []; }
+}
+/* #689 (С67): отрисовка спасённого раздела. Нарочно ОТДЕЛЬНО и с честной подписью: это места, которые
+   поиск по смыслу отсёк, и мы возвращаем их только потому, что совпала тема главы. Человек должен видеть
+   разницу между «нашлось» и «похоже по теме, проверьте сами» — иначе мы просто тихо опустим порог,
+   а от этого и предостерегает файл калибровки. */
+function _ragРисоватьСпасение(res, спас, порог, запрос){
+  try{
+    if(!спас || !спас.length) return;
+    const h=document.createElement('div');
+    h.style.cssText='font-size:12.5px;color:#e0c07a;margin:14px 0 4px;font-weight:600';
+    h.textContent='⚖️ Ниже порога, но тема главы совпала — '+спас.length;
+    res.appendChild(h);
+    const п=document.createElement('div'); п.className='hint';
+    п.style.cssText='font-size:11.5px;margin:0 0 8px;line-height:1.55';
+    п.textContent='Поиск по смыслу оценил эти места ниже порога '+порог.toFixed(3)+', но слово из вашего вопроса стоит в НАЗВАНИИ ГЛАВЫ сборника. Это более слабое совпадение — смотрите сами, ничего не утверждаем.';
+    res.appendChild(п);
+    спас.forEach(({cid,s,c})=>{
+      const card=document.createElement('div'); card.className='card'; card.style.cssText='margin-bottom:7px;border-color:#6b5a2e';
+      const top=document.createElement('div'); top.style.cssText='display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px';
+      top.innerHTML='<b style="color:var(--link)">'+(c.n?('№'+c.n):('стр. '+(c.p||'—')))+'</b>';
+      const прав=document.createElement('span'); прав.style.cssText='display:inline-flex;align-items:center;gap:6px;flex:0 0 auto';
+      const бл=document.createElement('span'); бл.style.cssText='color:var(--hint);font-size:11px';
+      бл.textContent='близость '+s.toFixed(3)+(c.p?(' · стр. '+c.p):'');
+      прав.appendChild(бл);
+      прав.appendChild(_ragFb(card, запрос, 'bukhari', (c.n||('стр.'+(c.p||'—'))), s));   // #671: отметки качества и здесь — этот раздел калибровать важнее всего
+      top.appendChild(прав); card.appendChild(top);
+      if(c.g){ const g=document.createElement('div'); g.dir='rtl';
+        g.style.cssText='font-size:13px;'+_AF+';color:#e8c35a;margin-top:4px;line-height:1.7'; g.textContent='📑 '+c.g; card.appendChild(g); }
+      if(c.a){ const a=document.createElement('div'); a.dir='rtl'; a.className='ar';
+        a.style.cssText='font-size:16px;line-height:1.95;margin-top:5px'; a.textContent=c.a; card.appendChild(a); }
+      if(c.r){ const rr=document.createElement('div');
+        rr.style.cssText='font-size:13px;color:#c3cedb;margin-top:5px;line-height:1.55;'+_RF; rr.textContent=c.r; card.appendChild(rr); }
+      if(c.n){ const b=document.createElement('div');
+        b.style.cssText='margin-top:6px;font-size:12.5px;color:#7ee08a;cursor:pointer;font-weight:600';
+        b.textContent='📖 Открыть №'+c.n+' в читалке';
+        b.onclick=()=>{ try{ hap('light'); }catch(e){} try{ openReader('bukhari', String(c.n)); }catch(e){} };
+        card.appendChild(b); }
+      res.appendChild(card);
+    });
+  }catch(e){}
+}
 async function ragSearch(qRaw, seq, shownQ){
   const res=document.getElementById('res'); res.innerHTML='';
   const head=document.createElement('div'); head.className='hint'; head.style.cssText='color:#cdb8ff;font-size:13px;margin:0 0 8px';
@@ -10018,11 +10112,14 @@ async function ragSearch(qRaw, seq, shownQ){
     группы[ключ].push({cid, s, c});
   }
   const всего=группы.хадис.length+группы.глава.length+группы.муалляк.length;
+  const спас=_ragСпасение(ранж, порог, shownQ||qRaw);   // #689 (С67): второй признак — тема главы
   if(!всего){
     head.textContent='🧠 RAG: в Сахих аль-Бухари подходящего нет.';
     const p=document.createElement('div'); p.className='hint'; p.style.cssText='font-size:12.5px;line-height:1.6;margin-top:6px';
     p.textContent='Самое близкое совпадение — '+(ранж.length?ранж[0][1].toFixed(3):'0')+', это ниже порога '+порог.toFixed(2)+'. Показывать не стал: это был бы мусор, а не ответ. Попробуй сформулировать иначе или поищи обычным поиском.';
-    res.appendChild(p); return;
+    res.appendChild(p);
+    _ragРисоватьСпасение(res, спас, порог, shownQ||qRaw);   // #689: но если тема совпала по названию главы — покажем отдельно
+    return;
   }
   head.textContent='🧠 RAG по Сахих аль-Бухари · найдено мест: '+всего
     +'  (хадисов '+группы.хадис.length+' · глав '+группы.глава.length+' · вне нумерации '+группы.муалляк.length+')';
@@ -10064,6 +10161,7 @@ async function ragSearch(qRaw, seq, shownQ){
     });
   };
   рисовать('📗 ХАДИСЫ','хадис'); рисовать('📑 ГЛАВЫ','глава'); рисовать('📄 ВНЕ НУМЕРАЦИИ (муалляки, слова автора)','муалляк');
+  _ragРисоватьСпасение(res, спас, порог, shownQ||qRaw);   // #689 (С67): отдельный раздел «ниже порога, но тема главы совпала»
   try{ _ragLimShow(); }catch(e){}   // #673 (С67): после поиска остаток стал на один меньше — показываем свежую цифру, а не вчерашнюю
   return;
 }
