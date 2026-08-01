@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1267</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1268</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1478,7 +1478,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1267';
+const APPVER = 'v1268';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2021,10 +2021,13 @@ let _appReport=function(){};
       .replace(/file:\/\/\/[A-Za-z]:\/Users\/[^/]+\//gi, 'локально/')
       .replace(/[A-Za-z]:\\Users\\[^\\]+\\/gi, 'локально\\')
       .replace(/\/(?:home|Users)\/[^/]+\//g, 'локально/'); }catch(e){ return String(s||''); } }
-  function _report(msg, where, stack){ try{ if(!BACKEND_URL||!msg||_cnt>12) return; if(_benign(msg, where)) return; const k=(msg+'|'+where).slice(0,160); if(_sent[k]) return; _sent[k]=1; _cnt++;
+  /* #677-③ (С67): возвращаем ПРИЗНАК отправки. Раньше функция молчала, и вызывающий не мог честно
+     сказать человеку «отчёт ушёл» — а он мог и не уйти (штатный сетевой шум, дубль, лимит 12 за сессию).
+     Обещать записанное, когда ничего не записано, нельзя: журнал — это доказательство, а не вежливость. */
+  function _report(msg, where, stack){ try{ if(!BACKEND_URL||!msg||_cnt>12) return false; if(_benign(msg, where)) return false; const k=(msg+'|'+where).slice(0,160); if(_sent[k]) return false; _sent[k]=1; _cnt++;
     msg=_безЛичного(msg); where=_безЛичного(where); stack=_безЛичного(stack);
     const simple=_безЛичного(_simplifyError(msg, where));
-    fetch(BACKEND_URL+'/errlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:String(msg).slice(0,300),where:String(where||'').slice(0,120),stack:String(stack||'').slice(0,600),simple:simple,ver:(typeof APPVER!=='undefined'?APPVER:''),initData:INITDATA})}).catch(()=>{}); }catch(e){} }
+    fetch(BACKEND_URL+'/errlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:String(msg).slice(0,300),where:String(where||'').slice(0,120),stack:String(stack||'').slice(0,600),simple:simple,ver:(typeof APPVER!=='undefined'?APPVER:''),initData:INITDATA})}).catch(()=>{}); return true; }catch(e){ return false; } }
   window.addEventListener('error', e=>{ try{ _report(e.message||'error',(e.filename||'').split('/').pop()+':'+(e.lineno||''), e.error&&e.error.stack); }catch(_){} });
   window.addEventListener('unhandledrejection', e=>{ try{ const r=e.reason; _report((r&&r.message)||String(r)||'promise rejection','unhandledrejection', r&&r.stack); }catch(_){} });
   _appReport=_report;   // экспонируем для логгера зависших загрузок
@@ -3438,6 +3441,13 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.datas
   // Теперь идущий поиск отменяется ПЕРВЫМ действием: все его циклы проверяют seq!==_seq и выходят,
   // отрисовка прекращается, индикаторы гаснут — и переключение отрабатывает сразу.
   try{ _seq++; _goBusy(false); _skelOff(); }catch(e){}
+  /* #677-② (С67, владелец: «на такие кнопки надо делать вибро чувствительность, чтобы отдавала вибрацией
+     при выборе»). Помощник hap() в приложении уже есть — с троттлом, отключением в ⚙️ Настройках и
+     авто-выключением после сбоев, — но на ПЕРЕКЛЮЧЕНИЕ РЕЖИМА его не звали ни разу (проверил: в обработчике
+     чипов не было ни одного вызова). Ставим ровно сюда: отклик только на осознанный выбор режима,
+     на прокрутке и наборе ничего не дребезжит. Вне Telegram hap() сам падает на navigator.vibrate,
+     а где нет и его — молча ничего не делает. */
+  try{ hap('light'); }catch(e){}
   if(m==='neuro'){ modes.neuro=!modes.neuro; ch.classList.toggle('on',modes.neuro);
     document.getElementById('neuroBox').style.display=modes.neuro?'block':'none'; return; }
   modes[m]=!modes[m]; ch.classList.toggle('on',modes[m]);
@@ -9212,7 +9222,18 @@ function isnadNarrators(text){
         p=p.split(/\s+(?:قال|قالت|قالا|قالوا|يقول|تقول|فقال|أن|أنه|أنها|كان|رضي|رضى)\s+/)[0]
            .replace(/\s+(?:قال|يقول|أنه|قالت|رضي|رضى)$/,'').trim();
         const w=p.split(' ').filter(Boolean).length;
-        if(p.length>3 && w>=1 && (w<=6 || (w===7 && / بن | ابن /.test(' '+p+' '))) && !/رسول الله|النبي|صلى الله|وسلم/.test(p)) parts.push(p); }); });   // #паритет: имена-цепочки «X بن Y بن Z بن W» = 7 слов (напр. عبيد الله بن عبد الله بن عتبة) — разрешаем 7, но только при наличии بن (матн-обрывки его не содержат)
+        /* #682-② (С67, владелец про Адаб аль-Муфрад: «почему не все выделены»). Разобрал по данным:
+           у этой записи разобранной цепи нет вовсе (codifChain('9647','0') пуст), поэтому имена ищет
+           эвристика — а она отбрасывала ВСЁ короче четырёх букв (p.length>3). Ровно под это правило
+           попадает «عَلِيٌّ» — первое звено иснада, и вместе с ним целый класс: أنس، عمر، زيد، سعد.
+           Пропускаем трёхбуквенное имя, но ТОЛЬКО когда оно стоит одним словом и его признаёт _keepNarr —
+           тот же гейт, которым все вызывающие и так фильтруют результат (индекс равиев + стоп-список).
+           Проверено на живых словах: علي/أنس/عمر/زيد/سعد проходят, قال/كان/ثنا/هذا — нет. */
+        /* ⚠️ и сразу отсекаем ОДИНОЧНЫЕ приставки-родственники: «أبي» (мой отец), «عبد», «ابن» — _keepNarr их
+           пропускает, потому что ждёт продолжения имени («أبي مالك», «عبد الله»). Сами по себе это не имена:
+           первый прогон подсветил «سَمِعْتُ أَبِي» как передатчика — родственные звенья ведёт отдельный
+           highlightRelationalInDiv (#246), не мы. */
+        if((p.length>3 || (w===1 && p.length===3 && _keepNarr(p) && !/^(?:أبو|أبي|أبا|أم|أمي|عبد|عبيد|ابن|بن|جد|جده|عم|عمه|خال)$/.test(p))) && w>=1 && (w<=6 || (w===7 && / بن | ابن /.test(' '+p+' '))) && !/رسول الله|النبي|صلى الله|وسلم/.test(p)) parts.push(p); }); });   // #паритет: имена-цепочки «X بن Y بن Z بن W» = 7 слов (напр. عبيد الله بن عبد الله بن عتبة) — разрешаем 7, но только при наличии بن (матн-обрывки его не содержат)
   });
   // паритет sunnah.com (#654): сподвижник, ЦИТИРУЕМЫЙ в начале матна через двойное «قال: قال [СПОДВИЖНИК]:»
   // (напр. «عن أبي الأحوص قال: قال عبد الله:») — splitIsnad относит его к матну, цепь недобирает. Ловим ТОЛЬКО
@@ -14833,9 +14854,9 @@ async function verifyNarr(card, place, text){
         +'Сопоставление разбивок изданий — в очереди работ.</div>';
     }
     // #119/#111: текст-уровневая тревога — показан только матн, а эталон знает иснад (≥2 передатчика)
-    if(idMode && textWithoutIsnad && authCount>=2) h+='<div style="margin-top:7px;color:#e0b3a8;font-size:11.5px;border-top:1px dashed rgba(224,121,106,.35);padding-top:6px">⚠️ <b>ТЕКСТ:</b> показан только матн (начинается с «قال…»), а по эталону у хадиса есть иснад из <b>'+authCount+'</b> передатчиков — иснад в этом показе отсутствует/сокращён (расхождение в самом ТЕКСТЕ, не только в числе).</div>';
+    if(idMode && textWithoutIsnad && authCount>=2) h+='<div style="margin-top:7px;color:#e0b3a8;font-size:12.5px;border-top:1px dashed rgba(224,121,106,.35);padding-top:6px">⚠️ <b>ТЕКСТ:</b> показан только матн (начинается с «قال…»), а по эталону у хадиса есть иснад из <b>'+authCount+'</b> передатчиков — иснад в этом показе отсутствует/сокращён (расхождение в самом ТЕКСТЕ, не только в числе).</div>';
     // СХЕМА-ЦЕПЬ передатчиков с подписанными id и формой передачи между ними (наглядно для сверки)
-    h+='<div style="margin-top:8px;color:var(--hint);font-size:10.5px;direction:ltr">⛓ Цепь передатчиков (иснад) — справа налево, как в хадисе; стрелка ←عن← это форма передачи между двумя передатчиками:</div>';   // #186: русская легенда (что за арабские строки внизу)
+    h+='<div style="margin-top:8px;color:var(--hint);font-size:12.5px;direction:ltr">⛓ Цепь передатчиков (иснад) — справа налево, как в хадисе; стрелка ←عن← это форма передачи между двумя передатчиками:</div>';   // #186: русская легенда (что за арабские строки внизу)
     // владелец 02.07 (скрин «если слабое — рисуй красным, а не будто маджхуль ничего страшного»): чип цепи КРАСИТСЯ по вердикту нейротахкика
     let _NVD={}; try{ if(!window._narrVerdP) window._narrVerdP=fetch('./narr_verdicts.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); _NVD=await window._narrVerdP; }catch(e){}
     // владелец 03.07 («каша все вместе, нумеруй звенья первый сподвижник и далее»): №1 = самый ранний (ближе к
@@ -14869,21 +14890,21 @@ async function verifyNarr(card, place, text){
       // #182: дедуп по id (один и тот же равий не считается дважды — «два Абдулла лишний»); порядок цепи сохраняем (#187)
       const _seenOk=new Set(); const okList=auth.filter(r=>{ const mid=r[2]?String(r[2]):null; if(!(mid && ourSet.has(mid))) return false; if(_seenOk.has(mid)) return false; _seenOk.add(mid); return true; });
       if(okList.length){
-        let lh='<div style="margin-top:8px;color:var(--hint);font-size:11px;direction:rtl;text-align:right;line-height:1.6"><b>Передатчики ('+okList.length+'):</b> <span style="direction:rtl">';
+        let lh='<div style="margin-top:8px;color:var(--hint);font-size:12.5px;direction:rtl;text-align:right;line-height:1.6"><b>Передатчики ('+okList.length+'):</b> <span style="direction:rtl">';
         okList.forEach((r,i)=>{ const nm=r[1], mid=String(r[2]); lh+=(i>0?' · ':'')+'<span style="font-family:\'Traditional Arabic\',serif">'+esc(nm)+'</span> <span style="cursor:pointer;color:#5b87b5;text-decoration:underline;direction:ltr;display:inline-block" onclick="try{openLink(\'https://shamela.ws/narrator/'+esc(mid)+'\');}catch(_e){}">id'+esc(mid)+'</span>'; });
         lh+='</span></div>'; h+=lh;
       }
     }
-    if(!idMode) h+='<div style="margin-top:6px;color:var(--hint);font-size:11px">👤 Передатчики опознаны по нашей базе Мактабы موسوعة الرواة (18 989 равиев) — клик откроет карточку. Доп. сверка с sunnah.com доступна для 7 сборников (Бухари·Муслим·Насаи·Абу-Дауд·Ибн-Маджа·Тирмизи·Дарими), где их цепи размечены пофамильно; для остальных эталон — Мактаба.</div>';   // #238/#239: честно почему 5, без «краул идёт»
+    if(!idMode) h+='<div style="margin-top:6px;color:var(--hint);font-size:12.5px;line-height:1.55">👤 Передатчики опознаны по нашей базе Мактабы موسوعة الرواة (18 989 равиев) — клик откроет карточку. Доп. сверка с sunnah.com доступна для 7 сборников (Бухари·Муслим·Насаи·Абу-Дауд·Ибн-Маджа·Тирмизи·Дарими), где их цепи размечены пофамильно; для остальных эталон — Мактаба.</div>';   // #238/#239: честно почему 5, без «краул идёт»
     if(softGap && idMode){ const gn=gapList.map(g=>esc(g[0])).join('، ');
-      h+='<div class="vDet" style="margin-top:7px;color:#e0c07a;font-size:11px">🟡 Эталон sunnah.com: <b>'+authCount+'</b> равиев, у нас привязано по id <b>'+ourCount+'</b>. Краткой формой мост не сопоставил: <b>'+gn+'</b>. Это <b>пробел нашего моста</b> (id-связка), а НЕ ошибка текста или sunnah.com — состав цепи и хадис верны.</div>'; }
+      h+='<div class="vDet" style="margin-top:7px;color:#e0c07a;font-size:12.5px">🟡 Эталон sunnah.com: <b>'+authCount+'</b> равиев, у нас привязано по id <b>'+ourCount+'</b>. Краткой формой мост не сопоставил: <b>'+gn+'</b>. Это <b>пробел нашего моста</b> (id-связка), а НЕ ошибка текста или sunnah.com — состав цепи и хадис верны.</div>'; }
     if(alarm && idMode){ h+='<div class="vDet" style="margin-top:7px;color:#e0b3a8;font-size:11px">';
       if(missing.length){ const gn=(recNa?gapList:[]).map(g=>esc(g[0])+(g[1]==null?' (мост не опознал)':'')).join('، ');
         // #648 (С67): та же путаница слов, что и в шапке — здесь считаются ЗВЕНЬЯ нашей цепи, а не id эталона. Называем прямо.
         h+='🚨 Звеньев в цепи (sunnah.com/Мактаба): <b>'+authCount+'</b>, опознано приложением <b>'+ourCount+'</b>. НЕ опознано <b>'+missing.length+'</b>'+(gn?(': '+gn):'')+'. Строгий стандарт (#158): зелёным — только когда опознаны ВСЕ как в sunnah.com.<br>'; }
       if(extra.length) h+='🚨 id ПРИСВОЕН, но в эталоне Мактабы его НЕТ: <b>'+extra.length+'</b> (id '+extra.join(', ')+') — возможно НЕВЕРНАЯ карточка (клик откроет не того передатчика). #142';
       h+='</div>'; }
-    else if(alarm){ h+='<div style="margin-top:7px;color:#e0b3a8;font-size:11px">⚠️ По тексту передатчиков <b>'+authCount+'</b>, а приложение подсветило <b>'+ourMids.length+'</b> — расхождение в количестве.</div>'; }
+    else if(alarm){ h+='<div style="margin-top:7px;color:#e0b3a8;font-size:12.5px">⚠️ По тексту передатчиков <b>'+authCount+'</b>, а приложение подсветило <b>'+ourMids.length+'</b> — расхождение в количестве.</div>'; }
     // #246 (владелец: «где код цепи чтобы перейти и смотреть какие ещё хадисы этой цепочкой»): КОД ЦЕПИ прямо в боксе сверки → База иснадов
     let _cidHtml='';
     try{ const _full=await dzChainFull(place.bid, place.num);
@@ -16429,11 +16450,45 @@ let toastT; function toast(t){const el=document.getElementById('toast');el.textC
   else пуск();
 })();
 
+/* #677-③ (С67, владелец: «журнал подробных логов вплоть того, что если человек нажал кнопку и не появился
+   результат — он там должен ошибку показывать и скидывать в журнал рабочий и тебе передавать в очередь»).
+   Нашёл ровно эту дыру: у кнопки «Найти» стоял .then БЕЗ .catch. Падал поиск — человек не получал ничего:
+   ни результата, ни объяснения, а в журнал уходила безымянная «promise rejection» от глобального
+   перехватчика, по которой не понять даже, что сорвался именно поиск.
+   Теперь сбой ВИДЕН, назван словами и отделён от честного «ничего не найдено», а технический отчёт уходит
+   существующей ручкой /api/errlog (у неё уже есть дедуп по тексту, лимит 8/мин на сервере, кап 12 за сессию
+   и обезличивание домашних путей) — новой ручки не потребовалось.
+   Условие владельца «если это не ухудшит работу приложения» соблюдено: блок появляется ТОЛЬКО при реальном
+   срыве; пустая выдача, отменённый поиск и штатный сетевой шум сюда не попадают, в норме — ни строки. */
+function _сбойПоиска(e){
+  try{ _goBusy(false); }catch(_){} try{ _skelOff(); }catch(_){} try{ setStatus(''); }catch(_){}
+  const текст=String((e&&(e.message||e.name))||'неизвестный сбой').slice(0,160);
+  let записано=false; try{ записано=!!_appReport('поиск не выполнился: '+текст, 'goBtn/runSearch', e&&e.stack); }catch(_){}
+  try{ hap('err'); }catch(_){}
+  const res=document.getElementById('res'); if(!res) return;
+  const d=document.createElement('div'); d.className='card';
+  d.style.cssText='border:1px solid #b3502e;background:rgba(179,80,46,.10);animation:fadeInUp .25s ease-out both';
+  d.innerHTML='<div style="font-size:13.5px;line-height:1.6">⚠️ <b>Поиск не выполнился.</b> Это сбой приложения, а не «ничего не найдено».'
+    +'<div style="color:var(--hint);font-size:12.5px;margin-top:4px">Что произошло: '+esc(текст)+'</div></div>';
+  const row=document.createElement('div'); row.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-top:9px';
+  const again=document.createElement('button'); again.className='mini'; again.textContent='🔄 Повторить';
+  again.onclick=()=>{ try{ hap('light'); }catch(_){} try{ runSearch(true); }catch(_){} };
+  const rep=document.createElement('button'); rep.className='mini'; rep.style.color='var(--link)'; rep.textContent='✍️ Сообщить нам';
+  rep.onclick=()=>{ try{ hap('light'); }catch(_){} try{ openFeedback('сбой поиска: '+текст.slice(0,80)); }catch(_){} };
+  row.appendChild(again); row.appendChild(rep); d.appendChild(row);
+  const note=document.createElement('div'); note.className='hint'; note.style.cssText='font-size:12px;margin-top:7px';
+  // говорим ровно то, что произошло на самом деле — см. признак отправки у _report
+  note.textContent=записано?'Отчёт об этом сбое ушёл в наш журнал ошибок — разберём.'
+                           :'Такие сбои мы записываем в журнал; этот уже отмечен ранее или связан с обрывом сети. Повторится — нажмите «Сообщить нам».';
+  d.appendChild(note);
+  res.innerHTML=''; res.appendChild(d);
+}
 /* ===================== СТАРТ ===================== */
 document.getElementById('goBtn').onclick=()=>{ hap('medium'); try{ _lateQuiet(700); }catch(e){}
   if(typeof modes!=='undefined'&&modes.chain){ if(_chainSel.length>=2) chainRun(); else toast('⛓ Выбери минимум двух передатчиков из подсказок'); return; }   // R45: одна кнопка на режим Цепь
   try{collapseBookSugg();}catch(e){} try{ var _qi=document.getElementById('q'); if(_qi){ _qi.style.height='auto'; _qi.style.overflowY='hidden'; } }catch(e){}   // #198: после запуска поиска схлопнуть авторост textarea обратно в компактную форму
-  Promise.resolve(runSearch(true)).then(()=>{ try{ hap((_results&&_results.length)?'ok':'err'); }catch(e){} }); };   // «Найти» → авто-свернуть подсказки книг
+  Promise.resolve(runSearch(true)).then(()=>{ try{ hap((_results&&_results.length)?'ok':'err'); }catch(e){} })
+    .catch(e=>{ try{ _сбойПоиска(e); }catch(_e){} }); };   // «Найти» → авто-свернуть подсказки книг · #677-③ (С67): срыв поиска больше не проваливается молча
 // M254: кнопка «↩ Назад» — вернуть предыдущий распознанный запрос
 (function(){ var qb=document.getElementById('qBack'); if(qb) qb.onclick=()=>{ try{ hap('light'); }catch(e){} qBack(); }; })();
 // M254: кнопка очистки поиска ✕
@@ -17140,7 +17195,12 @@ function _readRender(){
   // Оставляем то, что человеку нужно: номер хадиса и НАСТОЯЩУЮ печатную страницу. Порядковый номер
   // записи в потоке — техническая мелочь, убран в подсказку при наведении.
   const _pos=document.getElementById('readPos');
-  _pos.textContent=((h.num!=null)?('№'+h.num):(h.вид==='китаб'?'📕 китаб':h.вид==='глава'?'📑 глава':'📄 без номера'))
+  /* #682-③ (С67): «№0» жил ещё и ЗДЕСЬ. Страж _номТекст закрыл подпись под текстом, а строку положения
+     наверху читалки — нет: она проверяла только `num!=null`, а ноль не null. Владелец на скрине снял
+     именно читалку Адаб аль-Муфрад. Считаем ноль отсутствием номера, как и везде: показываем то, что есть
+     (страницу печати), а не выдуманный номер хадиса. */
+  const _hn=String(h.num==null?'':h.num).trim(), _hnОк=(_hn && _hn!=='0' && _hn!=='٠');
+  _pos.textContent=(_hnОк?('№'+_hn):(h.вид==='китаб'?'📕 китаб':h.вид==='глава'?'📑 глава':'📄 без номера'))
     +(h.стр?('  ·  стр. '+h.стр):'');
   _pos.title='Запись '+(_readIdx+1)+' из '+_readArr.length+' в книге'+(h.стр?(' · страница '+h.стр+' печатного издания'):'');
   const body=document.getElementById('readBody'); body.innerHTML='';
@@ -17207,6 +17267,13 @@ async function _readOpen(code,fromNum){
   var _rf=document.getElementById('readFind'); if(_rf) _rf.value=''; var _rfi=document.getElementById('readFindInfo'); if(_rfi) _rfi.textContent='';
   document.getElementById('readPick').style.display='none';
   document.getElementById('readView').style.display='block';
+  /* #682-① (С67, владелец: «сверху какая надобность так переносить имя книги, чтобы написать непонятное
+     „сообщить об ошибке“»). Проверил обе кнопки: конверт в шапке и «✍️ Сообщить нам» на карточке зовут
+     ОДНУ И ТУ ЖЕ openFeedback — разница только в контексте, и у карточки он точнее (называет сам хадис,
+     а не книгу целиком). Две кнопки об одном на одном экране и есть та «непонятная надпись».
+     Поэтому в режиме чтения хадиса конверт убираем — имя книги забирает всю ширину. На экране ВЫБОРА
+     сборника карточки нет, там конверт возвращаем (не теряем путь техподдержки из читалки, #276). */
+  try{ var _rfb0=document.getElementById('readFbBtn'); if(_rfb0) _rfb0.style.display='none'; }catch(e){}
   document.getElementById('readTitle').textContent='📖 '+(ruTitle(code)||code);
   const body=document.getElementById('readBody'); body.innerHTML='<div class="hint" style="text-align:center;padding:14px">Загружаю сборник…</div>';
   try{ await loadReverse(); }catch(e){}
@@ -17224,7 +17291,8 @@ async function _readOpen(code,fromNum){
   if(fromNum){ const qn=String(parseInt(fromNum,10)); const i=_readArr.findIndex(x=>String(x.num)===qn); if(i>=0)_readIdx=i; }
   _readRender();
 }
-function _readToPick(){ document.getElementById('readView').style.display='none'; document.getElementById('readPick').style.display='block'; }
+function _readToPick(){ document.getElementById('readView').style.display='none'; document.getElementById('readPick').style.display='block';
+  try{ var _rfb1=document.getElementById('readFbBtn'); if(_rfb1) _rfb1.style.display=''; }catch(e){} }   /* #682-① (С67): на экране выбора сборника карточки с её кнопкой нет — конверт возвращаем */
 function openReader(code,fromNum){
   const sel=document.getElementById('readSel');
   if(sel && !sel.options.length){ READABLE.forEach(r=>{ const o=document.createElement('option'); o.value=r.code; o.textContent=r.ru; sel.appendChild(o); }); }
