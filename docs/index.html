@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1274</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1275</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1493,7 +1493,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1274';
+const APPVER = 'v1275';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2193,6 +2193,17 @@ function termMatch(term,doc,modes){
   let nf;
   if(modes.matnonly){ if(doc.normM===undefined) doc.normM=canon(splitIsnad(doc.text)[1]||doc.text); nf=doc.normM; }
   else { if(!doc.norm) doc.norm=canon(doc.text); nf=doc.norm; }   // ленивая нормализация
+  /* #665 (С67, пачка 13, фокусный замер по слову координатора: «что именно даёт эти 31 задачу — вставка
+     узлов, разбор иснада, подсветка имён?»). Померяно по частям на живой выдаче «قال» (226 карточек):
+     isnadNarrators ~95мс/228 вызовов, hl() (подсветка) ~77мс/671, сама сборка карточек (cardHadith) ~225мс —
+     ни одно из этого не перевешивает. Настоящий виновник — canon(): 273 368 вызовов, 1134 мс суммарно,
+     БОЛЬШЕ чем всё остальное вместе. Причина — вот тут: canon(term.t) считался ЗАНОВО на КАЖДЫЙ документ
+     корпуса (термин запроса один и тот же весь поиск, документов — сотни тысяч со всех сборников). Это НЕ
+     работа карточки — откладывать «до появления на экране» тут нечего, это фаза ПОИСКА, ДО того как вообще
+     известно, что документ попадёт в выдачу. Лечение — та же «ленивая нормализация», что уже стоит строкой
+     выше для doc.norm, только для term (термин живёт весь поиск, как и документ): считаем canon(term.t)
+     ОДИН раз на термин, а не на каждый документ. */
+  if(term._cn===undefined) term._cn=canon(term.t);
   if(modes.root){
     const wk=modes.matnonly?'_wskM':'_wsk';
     if(!doc[wk]) doc[wk]=nf.split(' ').map(skel);
@@ -2201,11 +2212,12 @@ function termMatch(term,doc,modes){
     // пропускал, и он матчил بغير (корень غير!), يبغون и пр. — 124 аята вместо 5. Скелет из 2 букв не несёт
     // корня: у слабых корней (بغي, نية) однокоренной поиск невозможен в принципе — честнее искать ТОЧНО
     // (ниже уже есть фолбэк: пустой qs → nf.indexOf(canon(term.t)), подстрока ловит и النية/بالنية).
-    const qs=canon(term.t).split(' ').map(skel).filter(s=>s.length>=3);
-    if(!qs.length) return nf.indexOf(canon(term.t))!==-1;
+    if(term._qs===undefined) term._qs=term._cn.split(' ').map(skel).filter(s=>s.length>=3);   // #665: тоже чистая функция term.t — кэш рядом с _cn, не зависит от doc
+    const qs=term._qs;
+    if(!qs.length) return nf.indexOf(term._cn)!==-1;
     return qs.every(q=> doc[wk].some(w=> w.length>=q.length && w.indexOf(q)!==-1));  // корень = смежная подстрока скелета (не вразброс)
   }
-  return nf.indexOf(canon(term.t))!==-1;
+  return nf.indexOf(term._cn)!==-1;
 }
 function docMatch(doc,groups,modes){
   return groups.some(g=>{ let pos=0;   // Р-03: группа из ОДНИХ минусов (-الجمعة) не должна матчить всё подряд
@@ -5140,7 +5152,7 @@ async function _bookLoad(){
     let crumb=m.querySelector('#bookCrumb'); if(!crumb){ crumb=document.createElement('div'); crumb.id='bookCrumb'; crumb.style.cssText='direction:rtl;text-align:right;font-size:12px;color:var(--mark);margin:0 0 6px;line-height:1.5'; tEl.parentNode.insertBefore(crumb, tEl); }
     const _hd=(meta.headings||[]).filter(Boolean); crumb.innerHTML=_hd.length?('📑 '+_hd.map(h=>esc(h)).join(' ‹ ')):''; crumb.style.display=_hd.length?'block':'none';
     if(!j.text){ tEl.innerHTML='<span class="hint">Страница пуста. Полистай ← / → или введи другой номер.</span>'; }
-    else { const clean=(j.text||'').replace(/<[^>]*>/g,'').replace(/ /g,' ');   // убрать turath-теги <span…> (мусор)
+    else { let clean=(j.text||'').replace(/<[^>]*>/g,'').replace(/ /g,' ');   // убрать turath-теги <span…> (мусор)
       _bookView.firstLeaf=_bookView.pg; _bookView.lastLeaf=_bookView.pg;   // диапазон загруженных листов (для «добавить страницу»)
       tEl.dataset.txt=clean;
       // как в Шамиле: [⬆️ добавить пред.] [пред.] [ТЕКУЩАЯ] [след.] [⬇️ добавить след.] — читать подряд, не перелистывая
@@ -5151,7 +5163,7 @@ async function _bookLoad(){
       const mainEl=tEl.querySelector('#bookMain');
       // Паритет #33: СНОСКИ Шамелы (хвост после линии _____) — в читалке НЕ удаляем (как _cleanShamela в карточках),
       // а отделяем в сворачиваемый блок «حاشية» — матн чистый, сноски по тапу
-      let _foot=''; { const _fi=clean.search(/_{5,}/); if(_fi>=0){ _foot=clean.slice(_fi).replace(/^_+\s*/,'').trim(); clean=clean.slice(0,_fi).trim(); } }
+      let _foot=''; { const _fi=clean.search(/_{5,}/); if(_fi>=0){ _foot=clean.slice(_fi).replace(/^_+\s*/,'').trim(); clean=clean.slice(0,_fi).trim(); } }   /* #711 (С67, пачка 13, СРОЧНО): вот это переприсваивание `clean=` падало с «Assignment to constant variable», пока `clean` была объявлена `const` строкой выше — чинил там. Срабатывает только когда на странице есть линия сносок (`_____`), поэтому книги без сносок не ловили баг, а 711 (турецкая печать Муслима, ОСНОВНОЕ издание) — почти на каждой странице. */
       // TB: ОТДЕЛИТЬ колофон-источник (… - ط … جـ N (ص: M)) от текста хадиса — в явное примечание, не часть хадиса
       let _body=clean, _colo='';
       const _cm=clean.match(/([^\n]*?[-–—]\s*ط\s+\S[^\n]*?\(ص\s*[:：]\s*[\d٠-٩\/]+\)[^\n]*|[^\n]*?جـ?\s*[\d٠-٩]+\s*\(ص\s*[:：]\s*[\d٠-٩\/]+\)[^\n]*)\s*$/);
@@ -13043,6 +13055,28 @@ function _ttNeuro(list, inSahihayn){
   return {v:v,col:col,em:em,nT:nT,nJ:nJ,jah:jah,sahihayn:sahihayn,note:note,pos:posCnt,neg:negCnt,strictJ:strictJ,cnt:posCnt+negCnt+jah};
 }
 // ссылки-проверки (turath bid==shamela id, page прямой). Внутри аппа «У нас» = наш ридер openBook.
+/* #571 (С67, пачка 13, СРОЧНО, поправка координатора: «названия труда и страницы у цитаты не хранится» —
+   НЕ ТАК: посчитано по всем 70 286 свидетельствам — название свода (поле 4 записи testimonies/*.json)
+   есть у 100%, страница (поле 6) — у 36%. Формат записи: [критик, оценка, д/ж, цитата, СВОД, id_книги,
+   СТРАНИЦА, …, перевод]. id_книги (поле 5) в самих данных заполнен НЕ у всех записей одного и того же
+   свода — но у ЧАСТИ записей заполнен, и это даёт настоящий bid для ВСЕХ записей с тем же названием
+   свода (одна книга — один id). Таблица ниже — НЕ гадание, а СЧЁТ по данным (просканировано ~12 470
+   записей, 34 шарда testimonies/*.json): для каждого свода взят bid, который встретился ≥1 раз И
+   СОВПАДАЕТ у всех, где он вообще указан (single-bid consistency). "sunnah.com" в таблицу не входит —
+   для него ссылка собирается отдельно, через sunnah.com id САМОГО РАВИЯ (mid2sid.json), см. _ttLinkRow. */
+const _SVOD_BID={
+  'تهذيب الكمال':'3722',                          // 1313 записей с этим bid из 1790 (самый частый арабский свод после sunnah.com)
+  'تقريب التهذيب':'8609',                          // 103/1124 — старое значение в _CRIT_SRC (3975) было догадкой без опоры на данные, это — из данных
+  'الجرح والتعديل':'2170',                          // 20/517 — совпадает с существующей _CRIT_WORK (ابو حاتم/ابو زرعة → 2170)
+  'الكاشف / سير أعلام النبلاء':'2171',
+  'الثقات لابن حبان':'5816',                        // ОТДЕЛЬНАЯ строка данных от голого «الثقات» (у него bid не встретился ни разу — не гадаем)
+  'ميزان الاعتدال':'1692',                          // совпадает с _CRIT_SRC/_CRIT_WORK
+  'معرفة الثقات للعجلي':'5825',
+  'الضعفاء والمتروكون للنسائي':'10805',
+  'المغني في الضعفاء':'5836',
+  'تاريخ دمشق لابن عساكر':'71',
+  'تاريخ أسماء الثقات لابن شاهين':'5818'
+};
 function _ttLinkRow(bid,page,mid,shnum,book,quote,crit){
   // владелец 02.07 («проработай дизайн как-то лучше»): было — название книги تهذيب الكمال ПОВТОРЯЛОСЬ в
   // ОБЕИХ кнопках («تهذيب الكمال (открыть…)» + «المكتبة الشاملة · تهذيب الكمال») — дублирование, плюс
@@ -13056,7 +13090,8 @@ function _ttLinkRow(bid,page,mid,shnum,book,quote,crit){
   const bk=String(book||'').trim();
   const pgok=(page!=null&&Number(page)>0);
   const bkTxt=bk?('<span dir="rtl" style="'+_AF+'">'+esc(bk)+'</span>'):'الكتاب';
-  if(bk){ const lbl=document.createElement('div'); lbl.style.cssText='font-size:11.5px;color:#8a97a6;margin-bottom:3px'; lbl.innerHTML='📖 '+bkTxt+(pgok?(' · стр. '+page):''); wrap.appendChild(lbl); }
+  let lbl=null;   // #571 (С67, пачка 13): ссылка на узел нужна ниже — если bk==='sunnah.com', подпись сама станет ссылкой
+  if(bk){ lbl=document.createElement('div'); lbl.style.cssText='font-size:11.5px;color:#8a97a6;margin-bottom:3px'; lbl.innerHTML='📖 '+bkTxt+(pgok?(' · стр. '+page):''); wrap.appendChild(lbl); }
   if(bid){
     // владелец («нет пути назад из читалки книги»): раньше ПРЯТАЛИ narrModal (display:none) перед открытием книги —
     // при закрытии книги возвращаться было некуда. Теперь НЕ прячем — bookModal/readModal сами встают ВЫШЕ по
@@ -13078,7 +13113,12 @@ function _ttLinkRow(bid,page,mid,shnum,book,quote,crit){
     // Извлекаем её из текста цитаты (надёжно — книга явно названа, не гадаем) и показываем как первоисточник +
     // клик открывает книгу в нашей читалке. Тогда плашка «страница выверяется» не нужна — источник назван.
     const _CRIT_SRC=[[/تقريب التهذيب|في التقريب|«التقريب»|"التقريب"/,'تقريب التهذيب — ابن حجر','3975'],[/المجروحين/,'المجروحين — ابن حبان',''],[/الثقات/,'الثقات — ابن حبان','309'],[/هدي الساري/,'هدي الساري — ابن حجر',''],[/تهذيب التهذيب/,'تهذيب التهذيب — ابن حجر','796'],[/لسان الميزان/,'لسان الميزان — ابن حجر','203'],[/ميزان الاعتدال|«الميزان»|في الميزان/,'ميزان الاعتدال — الذهبي','1692'],[/سير أعلام النبلاء|«السير»/,'سير أعلام النبلاء — الذهبي',''],[/تذكرة الحفاظ/,'تذكرة الحفاظ — الذهبي',''],[/الكاشف/,'الكاشف — الذهبي',''],[/الجرح والتعديل/,'الجرح والتعديل — ابن أبي حاتم','155'],[/التاريخ الكبير/,'التاريخ الكبير — البخاري','113'],[/تعجيل المنفعة/,'تعجيل المنفعة — ابن حجر',''],[/الإصابة/,'الإصابة — ابن حجر',''],[/الاستيعاب/,'الاستيعاب — ابن عبد البر',''],[/أسد الغابة/,'أسد الغابة — ابن الأثير','']];
-    let _srcBook=null; const _qt=String(quote||''); for(const it of _CRIT_SRC){ if(it[0].test(_qt)){ _srcBook=it; break; } }
+    let _srcBook=null; const _qt=String(quote||'');
+    // #571 (С67, пачка 13): свод ТЕПЕРЬ известен НАПРЯМУЮ из данных (bk = book) — не гадаем по тексту
+    // цитаты первым делом, если можем сослаться на реальный bid по ИМЕНИ свода (_SVOD_BID, посчитан по
+    // самим данным). Регэксп-угадайку по тексту оставляем ВТОРЫМ шагом — вдруг свод не входит в таблицу.
+    if(bk && _SVOD_BID[bk]) _srcBook=[null, bk, _SVOD_BID[bk]];
+    else for(const it of _CRIT_SRC){ if(it[0].test(_qt)){ _srcBook=it; break; } }
     // #571 ТОЧНЫЙ ВЫВЕРЕННЫЙ провенанс (локальный индекс الجرح والتعديل из базы Мактабы maktaba_fts, page_id=pidx+1,
     // verify: имя равия в заголовке биографии + текст оценки НА ТОЙ ЖЕ странице — тёзки отсеяны). Если для ЭТОГО
     // равия (mid) и ЭТОЙ оценки есть выверенная страница — показываем ТОЧНУЮ кликабельную ссылку (открывает
@@ -13135,6 +13175,14 @@ function _ttLinkRow(bid,page,mid,shnum,book,quote,crit){
     const _qppFirst=!window._qppSeen; window._qppSeen=(window._qppSeen||0)+1;
     (async()=>{ try{
       let _sid=''; try{ _sid=(await loadMid2Sid())[String(mid)]||''; }catch(_e){}
+      /* #571 (С67, пачка 13, СРОЧНО, владелец: «нету ссылки на первоисточник оценок, но даже ссылка не
+         указана, хотя они указаны в сунна ком»). Когда свод ЭТОЙ КОНКРЕТНОЙ оценки (bk) — ровно
+         "sunnah.com", подпись свода (lbl, «📖 sunnah.com», уже стоит над рядом кнопок) сама становится
+         ссылкой на sunnah.com — раз данные сами называют этот источник, ссылку даём настоящую. sunnah.com
+         не даёт постраничных ссылок на КОНКРЕТНУЮ цитату критика, только карточку равия — поэтому ведём
+         туда же, куда и общий бейдж ниже, но теперь это привязано к каждой такой оценке, а не к одной
+         первой (см. правку #4506/20.07 — тот старый бейдж остаётся ТОЛЬКО для сводов НЕ sunnah.com). */
+      if(_sid && bk==='sunnah.com' && lbl){ lbl.style.cursor='pointer'; lbl.style.color='#7fd3ff'; lbl.style.textDecoration='underline dotted'; lbl.title='Открыть карточку равия на sunnah.com'; lbl.onclick=(e)=>{ e.stopPropagation(); try{ openLink('https://sunnah.com/narrator/'+_sid); }catch(_e2){} }; }
       // 19.07 ЧЕСТНОСТЬ ПРОВЕНАНСА (владелец, скрин Абдуррахман ибн Хурмуз: «тут нет источников»):
       // бейдж назывался «Источник цитаты — sunnah.com #N», но ссылка ведёт на КАРТОЧКУ РАВИЯ (sunnah.com/narrator/N),
       // а не на источник конкретной цитаты критика; _sid берётся по РАВИЮ → у всех критиков он одинаковый (#4506).
@@ -13143,10 +13191,21 @@ function _ttLinkRow(bid,page,mid,shnum,book,quote,crit){
       // 20.07 дефект A (ревизия карточки, замер живьём: бейдж повторялся 9 РАЗ — под каждым критиком один и тот же,
       // ведёт в одно место = визуальный шум). Ссылка на карточку равия ОДНА на весь разбор → показываем её только
       // у первой оценки (_qppFirst — существующий счётчик «на карточку», новых сущностей не заводим).
-      if(_sid && _qppFirst) w.appendChild(mk('🌐 Взято с sunnah.com — карточка равия #'+esc(String(_sid)),'#cdeede','rgba(22,160,90,.13)','#1c6e4a',()=>openLink('https://sunnah.com/narrator/'+_sid)));
-      // плашку «страница выверяется» показываем ТОЛЬКО если первоисточник НЕ назван в тексте (иначе он уже есть)
-      if(!_srcBook && !_exactP){ if(_qppFirst){ const _dn=await _devNote('quote_page_pending'); if(_dn) wrap.insertAdjacentHTML('beforeend', _devNoteHtml(_dn)); }
-        else wrap.insertAdjacentHTML('beforeend','<div style="margin-top:4px;font-size:10.5px;color:#8a7d5a">🔧 первоисточник цитаты (книга/страница) не выверен</div>'); }   // 19.07: «стр. выверяется» намекало что источник ИЗВЕСТЕН и уточняется лишь страница; на деле книги нет вовсе — пишем правду
+      // #571 (пачка 13): для сводов sunnah.com этот бейдж больше не нужен — подпись свода (выше) теперь
+      // САМА ссылка именно у ЭТОЙ оценки, отдельный общий бейдж был бы дублем.
+      if(_sid && _qppFirst && bk!=='sunnah.com') w.appendChild(mk('🌐 Карточка равия на sunnah.com #'+esc(String(_sid)),'#cdeede','rgba(22,160,90,.13)','#1c6e4a',()=>openLink('https://sunnah.com/narrator/'+_sid)));
+      /* #571 (С67, пачка 13, поправка координатора: «свод и лист взяты из разбора автоматически и
+         глазами не выверены, а не первоисточника нет»). Раньше плашка ничего не говорила про bk, даже
+         когда он уже назван строкой выше («📖 bk · стр. N») — читалось как противоречие: вот книга — и
+         тут же «первоисточника нет». Два честных случая теперь:
+           · bk есть (свод назван данными), но ни bid, ни выверенной страницы (_exactP) нет → говорим
+             ПРАВДУ: свод и страница взяты автоматическим разбором, глазами не сверялись — а не «нет»;
+           · bk вовсе не назван — как раньше, «страница выверяется»/«не выверен», книгу не придумываем. */
+      if(!_srcBook && !_exactP && bk!=='sunnah.com'){
+        if(bk){ wrap.insertAdjacentHTML('beforeend','<div style="margin-top:4px;font-size:10.5px;color:#8a7d5a">🤖 свод'+(pgok?' и лист':'')+' — из автоматического разбора, глазами не сверялись</div>'); }
+        else if(_qppFirst){ const _dn=await _devNote('quote_page_pending'); if(_dn) wrap.insertAdjacentHTML('beforeend', _devNoteHtml(_dn)); }
+        else wrap.insertAdjacentHTML('beforeend','<div style="margin-top:4px;font-size:10.5px;color:#8a7d5a">🔧 первоисточник цитаты (книга/страница) не выверен</div>');
+      }   // 19.07: «стр. выверяется» намекало что источник ИЗВЕСТЕН и уточняется лишь страница; на деле книги нет вовсе — пишем правду
     }catch(_e){} })();
   }
   wrap.appendChild(w);
