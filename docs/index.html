@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1275</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1276</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1493,7 +1493,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1275';
+const APPVER = 'v1276';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -8923,7 +8923,18 @@ function addTr(meta,card,text,ayah,fav){
   if(ayah){ const tf=document.createElement('button');tf.className='tr-btn';tf.textContent=t('📖 Тафсир','📖 Tafsir');tf.title=t('Тафсир аята в отдельном окне (Ибн Касир/Табари/Саади/Мухтасар/Куртуби/Багави)','Tafsir of the ayah in a separate window (Ibn Kathir/Tabari/Saadi/Mukhtasar/Qurtubi/Baghawi)');
     tf.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
     tf.onclick=()=>openTafsir(ayah.s,ayah.a);
-    meta.appendChild(tf); }
+    meta.appendChild(tf);
+    // #519 (С67): та же кнопка «спросить своё» уже стоит в попапе аята (openAyahCard/ahAsk) — здесь тот же
+    // приём для карточки аята в ВЫДАЧЕ ПОИСКА (другой путь показа, тот же аят): без неё нашедший аят текстом
+    // человек мог задать вопрос только через отдельного «Помощника» БЕЗ контекста. Тратит тот же лимит ИИ
+    // (openAssistant → /assistant → тот же _ai_quota, что и «Объяснить»/RAG) — второго счётчика не заводим.
+    const aq=document.createElement('button'); aq.className='tr-btn'; aq.textContent=t('🧠 Спросить своё','🧠 Ask your own');
+    aq.title=t('Задать свой вопрос об этом аяте помощнику ИИ (контекст подставится сам)','Ask the AI assistant your own question about this ayah (context is pre-filled)');
+    aq.style.cssText='background:#3a2d5e;border:1px solid #6c5ce7;color:#e0d7ff;padding:6px 11px';
+    aq.onclick=()=>{ const _snip=String(text||'').replace(/\s+/g,' ').trim().slice(0,300);
+      const _ctx='Коран '+ayah.s+':'+ayah.a+(_snip?(' — «'+_snip+'»'):'')+'\n\n'+t('Мой вопрос: ','My question: ');
+      try{ openAssistant(_ctx); }catch(e){} };
+    meta.appendChild(aq); }
   if(!ayah){
     if(isVocalized(text)){
       // огласовки РЕАЛЬНО есть (по доле) → простая бесплатная кнопка «убрать/вернуть» (без ИИ)
@@ -10496,6 +10507,7 @@ async function chainRun(){
   const resBox=document.createElement('div');
   out.appendChild(hd); out.appendChild(prog); out.appendChild(resBox);
   const namesLbl='⛓ '+_chainSel.map(c=>String(c.nm||'').split(' ').slice(0,2).join(' ')).join(' + ')+(adj?' — РЯДОМ в иснаде':' — вместе в иснаде');
+  const allIds=[].concat(...groups);   // #594/#653 (С67): все выбранные передатчики (+ их алиасы) — обводим ВСЕХ разом в выдаче
   let found=0;
   for(let k=0;k<anchor.length;k++){
     if(k%20===0){ prog.textContent='🔎 Сканирую размеченные иснады 64 печатей: '+k+'/'+anchor.length+' ('+Math.round(k*100/Math.max(1,anchor.length))+'%) · найдено '+found+'…'; await new Promise(r=>setTimeout(r,0)); }
@@ -10506,7 +10518,9 @@ async function chainRun(){
     if(idxs.some(x=>x<0)) continue;
     if(adj){ const s=[...idxs].sort((a,b)=>a-b); let ok=true; for(let t=1;t<s.length;t++) if(s[t]-s[t-1]!==1){ ok=false; break; } if(!ok) continue; }
     found++;
-    if(found<=200) resBox.appendChild(_dzPlaceRow(bid,num,leaf));   // показываем СРАЗУ (#29/#34)
+    // #594/#653 (С67, «карточка хадиса + подсветка передатчика»): было _dzPlaceRow (книга+№, клик→сырой ридер) — та же
+    // дыра, что чинили в «Охвате»/#692. Тот же приём: полная cardHadith() + обводка по id (_dzPlaceCard).
+    if(found<=200) resBox.appendChild(_dzPlaceCard(bid,num,leaf,allIds));   // показываем СРАЗУ (#29/#34)
     hd.textContent=namesLbl+': хадисов '+found;
   }
   hd.textContent=namesLbl+': хадисов '+found; prog.textContent='';
@@ -10519,6 +10533,7 @@ async function chainRun(){
 async function chainRunSeq(out){
   out.innerHTML='<div class="hint">⏳ Ищу конструкцию по реестру цепей…</div>';
   const groups=await Promise.all(_chainSel.map(c=>_aliasGroup(c.id)));
+  const allIds=[].concat(...groups);   // #594/#653 (С67): все звенья конструкции — обводим разом в карточках мест
   let cids=null;
   for(let i=0;i<groups.length-1;i++){
     let lst=[];
@@ -10582,7 +10597,8 @@ async function chainRunSeq(out){
       const lst=document.createElement('div'); lst.style.cssText='display:none;margin-top:4px';
       pl.onclick=()=>{ if(lst.style.display!=='none'){ lst.style.display='none'; return; } lst.style.display='block';
         if(lst.dataset.b) return; lst.dataset.b='1';
-        (rc.ex||[]).forEach(p=>lst.appendChild(_dzPlaceRow(p[0],p[1],null))); };
+        // #594/#653 (С67): полная карточка (_dzPlaceCard/#692) вместо строки-ссылки на сырой ридер
+        (rc.ex||[]).forEach(p=>lst.appendChild(_dzPlaceCard(p[0],p[1],p[2],allIds))); };
       d.appendChild(pl); d.appendChild(lst); out.insertBefore(d, more);
     });
     shown=Math.min(recs.length, shown+step);
@@ -10802,8 +10818,10 @@ async function openNarrHadiths(mid, name, places){
   let edges={}; try{ edges=await _edgesGet(mid)||{}; }catch(e){}
   const nbr=Object.keys(edges).sort((a,b)=>edges[b]-edges[a]).slice(0,40);
   let nbrName={}; try{ if(typeof _narrNameById==='function') nbr.forEach(x=>{ nbrName[x]=_narrNameById(x)||('равий '+x); }); }catch(e){}
+  // #594/#653 (С67): id-группа алиасов равия — строки ниже раскрываются ПОЛНОЙ карточкой (_dzPlaceCard/#692) с обводкой именно его
+  let meIds=null; try{ meIds=await _aliasGroup(mid); }catch(e){ meIds=(mid!=null)?[mid]:[]; }
 
-  _nhState={rows, fBook:'', fGrade:'', fUniq:'', fNbr:'', fTy:'', q:'', shown:0, mid:mid, nbrCache:{}};
+  _nhState={rows, fBook:'', fGrade:'', fUniq:'', fNbr:'', fTy:'', q:'', shown:0, mid:mid, meIds:meIds, nbrCache:{}};
 
   // ── панель фильтров
   const byBook={}; rows.forEach(r=>{ byBook[r.bid]=(byBook[r.bid]||0)+1; });
@@ -10914,8 +10932,17 @@ function _nhRender(){
           +(r.uniq?'':' <span style="color:#9fb6d6">🔁 '+esc(Object.keys(r.d||{}).slice(0,3).join(', '))+'</span>')
         +'</span></span>'
         +'<span style="flex:none;font-size:12px;color:#7fb3ff;text-align:left">№'+esc(String(r.num))+(r.leaf?('<span style="display:block;font-size:10.5px">📖 лист '+esc(String(r.leaf))+'</span>'):'')+'</span>';
-      d.onclick=()=>{ try{ const src=_dzPlaceRow(r.bid, r.num, r.leaf); src.onclick(); }catch(e){} };
-      wrap.appendChild(d); });
+      wrap.appendChild(d);
+      // #594/#653 (С67): было — клик сразу уносил в сырой ридер печати, хадиса и равия в нём не видно.
+      // Стало — клик раскрывает ПОД строкой ту же карточку, что в поиске/«Охвате» (_dzPlaceCard/#692), с обводкой
+      // ИМЕННО этого равия. Строку-сводку (грейд/тип/№) не убираем — ради неё и открыто окно R-03 (фильтры/скан 700+ мест).
+      const exp=document.createElement('div'); exp.style.cssText='display:none;padding:2px 0 9px'; wrap.appendChild(exp);
+      d.onclick=()=>{ try{ hap('light'); }catch(e){}
+        const open=exp.dataset.open==='1'; exp.dataset.open=open?'':'1';
+        if(open){ exp.style.display='none'; return; }
+        exp.style.display='block';
+        if(!exp.dataset.built){ exp.dataset.built='1'; try{ exp.appendChild(_dzPlaceCard(r.bid, r.num, r.leaf, S.meIds)); }catch(e){} }
+      }; });
     sh=Math.min(list.length, sh+n);
     more.textContent='⬇️ Показать ещё ('+(list.length-sh)+')';
     more.style.display=sh>=list.length?'none':'block'; };
@@ -11044,7 +11071,8 @@ async function openUCard(code){
     const list=document.createElement('div'); body.appendChild(list);
     let shown=0; const step=25;
     const more=document.createElement('button'); more.className='mini'; more.style.cssText='margin-top:8px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px';
-    const draw=()=>{ part.slice(shown, shown+step).forEach(p=>list.appendChild(_dzPlaceRow(p[0],p[1],p[2]))); shown=Math.min(part.length, shown+step);
+    // #594/#653 (С67): форма пока не отождествлена с id → обводить некого, но карточку хадиса вместо голой строки показываем
+    const draw=()=>{ part.slice(shown, shown+step).forEach(p=>list.appendChild(_dzPlaceCard(p[0],p[1],p[2],[]))); shown=Math.min(part.length, shown+step);
       more.textContent='⬇️ Показать ещё ниже ('+(part.length-shown)+')'; more.style.display=shown>=part.length?'none':''; };
     more.onclick=draw; draw(); body.appendChild(more);
   }
@@ -11318,6 +11346,7 @@ async function dzChainInto(host, bid, num){
       const info=await _isnadInfo(seq||codes, (full&&full.forms)||forms);
       if(info){
         const idn=dispFromNa?codes.length:codes.filter(c=>typeof c==='number').length;
+        const _numIds=codes.filter(c=>typeof c==='number');   // #594/#653 (С67): опознанные звенья ЭТОЙ цепи — обводка в карточках мест ниже (хребет/«та же цепь ещё»)
         const ci=document.createElement('div'); ci.style.cssText='margin-top:7px;font-size:12.5px;color:var(--hint);display:flex;gap:10px;align-items:center;flex-wrap:wrap';   /* #682 (С67): вторая строка того же блока — выровнена по той же шкале, что подпись выше */
         ci.innerHTML='<span title="Вечный код этой цепи передачи (M449) — одинаков у всех хадисов с этим иснадом">⛓ Код цепи: <b style="color:#bcd0ff;font-family:monospace;cursor:pointer;text-decoration:underline" onclick="openIsnadBase(\''+esc(info.cid)+'\')" title="Открыть таблицу цепей и найти эту цепь — где ещё встречается">'+esc(info.cid)+' ↗</b> <span class="ciCpy" title="Копировать код цепи" style="cursor:pointer">📋</span></span>'
           +'<span title="Сколько звеньев цепи опознано по базе равиев (остальные — U-коды коротких форм, ждут дизамбигуации Э1.1)" style="color:'+(idn===codes.length?'#9fd3a8':'#e0b34a')+'">опознано '+idn+'/'+codes.length+'</span>'
@@ -11356,7 +11385,7 @@ async function dzChainInto(host, bid, num){
             bp.onclick=async()=>{ if(blst.style.display!=='none'){ blst.style.display='none'; return; } blst.style.display='block';
               if(blst.dataset.b) return; blst.dataset.b='1';
               try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){}
-              (bbi.ex||[]).slice(0,40).forEach(p=>blst.appendChild(_dzPlaceRow(p[0],p[1],null)));
+              (bbi.ex||[]).slice(0,40).forEach(p=>blst.appendChild(_dzPlaceCard(p[0],p[1],p[2],_numIds)));   // #594/#653 (С67)
               if(bbi.n>(bbi.ex||[]).length){ const mo=document.createElement('div'); mo.className='hint'; mo.style.cssText='font-size:10.5px;margin-top:3px'; mo.textContent='… показаны первые '+(bbi.ex||[]).length+' из '+bbi.n; blst.appendChild(mo); } };
             bb.appendChild(bp); box.appendChild(bb); box.appendChild(blst);
           }
@@ -11373,7 +11402,7 @@ async function dzChainInto(host, bid, num){
             lst.style.display='block';
             if(lst.dataset.built) return; lst.dataset.built='1';
             try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){}
-            others.slice(0,40).forEach(p=>lst.appendChild(_dzPlaceRow(p[0], p[1], null)));
+            others.slice(0,40).forEach(p=>lst.appendChild(_dzPlaceCard(p[0], p[1], p[2], _numIds)));   // #594/#653 (С67)
             if((info.n-1)>others.length){ const mo=document.createElement('div'); mo.className='hint'; mo.style.cssText='font-size:10.5px;margin-top:3px'; mo.textContent='… и ещё '+((info.n-1)-others.length)+' (показаны первые '+others.length+')'; lst.appendChild(mo); }
           };
         }
@@ -11401,7 +11430,7 @@ async function ibDoSearch(q, focusEl, listEl){
     const lst=document.createElement('div'); lst.style.cssText='display:none;margin-top:4px';
     pl.onclick=async()=>{ if(lst.style.display!=='none'){ lst.style.display='none'; return; } lst.style.display='block'; if(lst.dataset.b) return; lst.dataset.b='1';
       try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){}
-      (bi.ex||[]).slice(0,40).forEach(p=>lst.appendChild(_dzPlaceRow(p[0],p[1],null)));
+      (bi.ex||[]).slice(0,40).forEach(p=>lst.appendChild(_dzPlaceCard(p[0],p[1],p[2],bi.ids||[])));   // #594/#653 (С67)
       if(bi.n>(bi.ex||[]).length){ const mo=document.createElement('div'); mo.className='hint'; mo.style.cssText='font-size:10.5px;margin-top:3px'; mo.textContent='… показаны первые '+(bi.ex||[]).length+' из '+bi.n; lst.appendChild(mo); } };
     d.appendChild(pl); d.appendChild(lst); focusEl.appendChild(d);
     return;
@@ -11481,7 +11510,7 @@ async function openIsnadBase(focusCid){
         try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){}
         let bi=null; try{ bi=await _backInfo(ch.ids); }catch(e){}
         const ex=(bi&&bi.ex)||[];
-        ex.slice(0,40).forEach(p=>lst.appendChild(_dzPlaceRow(p[0],p[1],null)));
+        ex.slice(0,40).forEach(p=>lst.appendChild(_dzPlaceCard(p[0],p[1],p[2],ch.ids||[])));   // #594/#653 (С67)
         if(ch.n>ex.length){ const mo=document.createElement('div'); mo.className='hint'; mo.style.cssText='font-size:10.5px;margin-top:3px'; mo.textContent='… показаны первые '+ex.length+' из '+ch.n; lst.appendChild(mo); } };
       d.appendChild(pl); d.appendChild(lst); return d;
     }
@@ -11501,7 +11530,8 @@ async function openIsnadBase(focusCid){
       try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){}
       let inf=null; try{ inf=await _isnadInfo(ch.seq, ch.f); }catch(e){}
       const ex=(inf&&inf.ex)||[];
-      ex.slice(0,40).forEach(p=>lst.appendChild(_dzPlaceRow(p[0],p[1],null)));
+      const _seqIds=ch.seq.filter(x=>typeof x==='number');
+      ex.slice(0,40).forEach(p=>lst.appendChild(_dzPlaceCard(p[0],p[1],p[2],_seqIds)));   // #594/#653 (С67)
       if(ch.n>ex.length){ const mo=document.createElement('div'); mo.className='hint'; mo.style.cssText='font-size:10.5px;margin-top:3px'; mo.textContent='… показаны первые '+ex.length; lst.appendChild(mo); } };
     d.appendChild(pl); d.appendChild(lst); return d;
   };
@@ -12596,6 +12626,7 @@ async function narrOpen(nm){
     try{
       const id=await _narrLookup(nm);
       if(id==null){ _narrBypass=true; const q=document.getElementById('q'); q.value='"'+shortNm+'"'; hideNarrSugg(); runSearch(true); return; }   // фолбэк: цепь-код не найден → поиск по тексту имени (одна кнопка)
+      let _meIds=null; try{ _meIds=await _aliasGroup(id); }catch(e){ _meIds=[id]; }   // #594/#653 (С67): id-группа для точной подсветки ниже (как в _dzPlaceCard, #692)
       let places=await dzPart(id);
       // №527 (бот, 05.07): канонический приоритет — Бухари → Муслим → Абу Дауд → Тирмизи → Насаи → Ибн Маджа → Малик → Ахмад, остальные после
       try{ const _ord={'bukhari':0,'muslim':1,'abudawud':2,'tirmidhi':3,'nasai':4,'ibnmajah':5,'ibnmaja':5,'malik':6,'ahmad':7};
@@ -12646,7 +12677,9 @@ async function narrOpen(nm){
           try{ const _bid=String(p[0]); const code=(typeof _BID2READ!=='undefined'&&_BID2READ[_bid])||(typeof _BID2SLUG!=='undefined'&&_BID2SLUG[_bid]);
             if(code){ getOne(code,p[1]).then(h=>{ if(h&&h.text){
                 // #скрин05.07 (владелец): результаты участия = ПОЛНОЦЕННЫЕ карточки как в поиске (все инструменты)
-                try{ const full=cardHadith({code:code,h:h},[[{t:_hlName,phrase:false,neg:false}]]); card.innerHTML=''; card.appendChild(full); return; }catch(_e){}
+                try{ const full=cardHadith({code:code,h:h},[[{t:_hlName,phrase:false,neg:false}]]); card.innerHTML=''; card.appendChild(full);
+                  try{ _dzMarkNarr(card,_meIds); }catch(_e3){}   // #594/#653 (С67): плюс точная обводка ПО ID (getOne достаёт больше изданий, чем _dzPlaceCard — оставляем её, id-подсветку просто докручиваем поверх)
+                  return; }catch(_e){}
                 let _t=h.text.replace(/\s+/g,' ').trim(); mt.innerHTML=_partSnip(_t).html; } else mt.remove(); }).catch(()=>{mt.remove();}); }
             else if(p[2] && typeof BACKEND_URL!=='undefined' && BACKEND_URL){ mt.textContent='⏳…'; bjson(BACKEND_URL+'/book_page?id='+_bid+'&pg='+p[2]+'&initData='+encodeURIComponent(INITDATA),15000).then(j=>{ if(j&&j.text){ let _t=String(j.text).replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim(); if(_t){ mt.innerHTML=_partSnip(_t).html; } else mt.remove(); } else mt.remove(); }).catch(()=>{mt.remove();}); }
             else { mt.remove(); }
@@ -13202,7 +13235,7 @@ function _ttLinkRow(bid,page,mid,shnum,book,quote,crit){
              ПРАВДУ: свод и страница взяты автоматическим разбором, глазами не сверялись — а не «нет»;
            · bk вовсе не назван — как раньше, «страница выверяется»/«не выверен», книгу не придумываем. */
       if(!_srcBook && !_exactP && bk!=='sunnah.com'){
-        if(bk){ wrap.insertAdjacentHTML('beforeend','<div style="margin-top:4px;font-size:10.5px;color:#8a7d5a">🤖 свод'+(pgok?' и лист':'')+' — из автоматического разбора, глазами не сверялись</div>'); }
+        if(bk){ wrap.insertAdjacentHTML('beforeend','<div style="margin-top:4px;font-size:10.5px;color:#8a7d5a">🤖 свод'+(pgok?' и лист':'')+' — из автоматического разбора. Проверка 02.08.2026: из 12 ссылок на лист НИ ОДНА не привела к самой цитате — открывается либо чужая страница, либо другой человек. Пока считайте лист подсказкой, а не адресом</div>'); }
         else if(_qppFirst){ const _dn=await _devNote('quote_page_pending'); if(_dn) wrap.insertAdjacentHTML('beforeend', _devNoteHtml(_dn)); }
         else wrap.insertAdjacentHTML('beforeend','<div style="margin-top:4px;font-size:10.5px;color:#8a7d5a">🔧 первоисточник цитаты (книга/страница) не выверен</div>');
       }   // 19.07: «стр. выверяется» намекало что источник ИЗВЕСТЕН и уточняется лишь страница; на деле книги нет вовсе — пишем правду
@@ -14127,12 +14160,17 @@ async function showNarratorBio(name, out){
     const _byText=()=>{ try{hap('light');}catch(e){} const q=document.getElementById('q'); if(q) q.value='"'+short2+'"'; _narrBypass=true;
       try{ const nM=document.getElementById('narrModal'); if(nM) nM.style.display='none'; }catch(e){} runSearch(true); };
     let _places=null; if(c){ try{ _places=await dzPart(c[0]); }catch(e){} }   // кэш-шард (уже грузился для счётчика) — дёшево
+    // #594/#653 (С67): это ПЕРВОЕ, что видит владелец, открыв равия по имени (narrOpen→showNarratorBio) —
+    // топ-5 «sunnah.com-стиль» список висел строкой-заглушкой _dzPlaceRow (книга+№+«Шамела», клик = сырой ридер),
+    // хотя тот же самый путь (_dzPlaceCard+_dzMarkNarr, #692) уже красит места равия ПОЛНОЙ карточкой в «Охвате»/
+    // «Сахихайн». Здесь тот же приём: id-группа алиасов посчитана один раз, карточка та же cardHadith().
+    let _meIds=null; if(c){ try{ _meIds=await _aliasGroup(c[0]); }catch(e){ _meIds=[c[0]]; } }
     if(_places && _places.length){
       try{ await loadBooksMap(); }catch(e){}
       try{ const _byBk={}; _places.forEach(function(p){ _byBk[p[0]]=(_byBk[p[0]]||0)+1; }); const _ord=Object.keys(_byBk).sort(function(a,b){return _byBk[b]-_byBk[a];}); if(_ord.length){ const cs=document.createElement('div'); cs.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px'; const _ht=document.createElement('div'); _ht.style.cssText='font-size:11.5px;color:var(--hint);width:100%;margin-bottom:2px'; _ht.textContent='📊 Чаще всего в книгах (по иснадам):'; cs.appendChild(_ht); _ord.slice(0,10).forEach(function(bid){ var nm=(bookName(bid)||('кн.'+bid)); var sp=document.createElement('span'); sp.style.cssText='font-size:12px;color:#cdd6e0;background:#161b22;border:1px solid var(--border);border-radius:8px;padding:3px 10px'; sp.innerHTML=esc(String(nm).slice(0,24))+' <b style="color:#bcd2ff">'+_byBk[bid]+'</b>'; cs.appendChild(sp); }); pw.appendChild(cs); } }catch(e){}
       const ls=document.createElement('div'); pw.appendChild(ls);   // подпись хадисов теперь в заголовке аккордеона (без дубля)
       let sh=0; const mr=document.createElement('button'); mr.className='mini'; mr.style.cssText='margin-top:6px;width:100%;padding:8px;border:1px solid var(--border);border-radius:9px;font-size:12.5px';
-      const draw=(n)=>{ _places.slice(sh,sh+n).forEach(p=>ls.appendChild(_dzPlaceRow(p[0],p[1],p[2]))); sh=Math.min(_places.length,sh+n);
+      const draw=(n)=>{ _places.slice(sh,sh+n).forEach(p=>ls.appendChild(_dzPlaceCard(p[0],p[1],p[2],_meIds))); sh=Math.min(_places.length,sh+n);
         mr.textContent='⬇️ Показать ещё ('+(_places.length-sh)+')'; mr.style.display=sh>=_places.length?'none':'block'; };
       mr.onclick=()=>draw(30); draw(5);   // топ-5 сразу видно, дальше по 30
       pw.appendChild(mr);
