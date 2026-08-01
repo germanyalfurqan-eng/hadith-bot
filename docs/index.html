@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1266</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1267</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -975,6 +975,11 @@
   .skCard{ border-bottom:1px solid var(--border); padding:10px 2px }
   /* П-1/П-4/П-2: плавное появление готового контента */
   .fadeIn{ animation:fadeInUp .34s ease-out both }
+  /* #692 (С67): в списке мест карточки равия обводим ИМЕННО того передатчика, чью карточку открыли.
+     Привязка по id (data-id), а не по строке — тёзок в риджале десятки, по имени подсветился бы чужой.
+     !important обязателен: .nhl красится инлайном (и позже перекрашивается «сподвижником») — без него
+     обводка исчезала бы через секунду после появления. */
+  .nhlMe{ box-shadow:0 0 0 2px #7fb3ff, 0 0 12px rgba(127,179,255,.55) !important; border-radius:6px !important }
   /* Совет 8 (GPT, макет «Плавность»): ступенчатое появление — лента ОЖИВАЕТ, а не падает пластом.
      Ступенька только у первых 7 карточек (выдача бывает под 200 — задерживать всю ленту нельзя,
      это била бы по оперативности). Шаг 45мс, хвост 270мс — заметно глазу, но ждать не заставляет.
@@ -1473,7 +1478,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1266';
+const APPVER = 'v1267';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2634,7 +2639,10 @@ function _muslimStripApparatus(t){ if(!t) return t;
 async function loadCollection(code){
   if(cache[code]) return cache[code];
   if(code==='muslim'){   // Муслим — нумерация Абд аль-Баки (как sunnah.com): 2363=пальмы. fw = номер fawazahmed0 для готового перевода
-    setStatus('Загружаю Сахих Муслим (Абд аль-Баки)…');
+    /* #690 (С67, владелец: «мы ушли от издания баки. Муслим не баки, запомни»): надпись называла изданием
+       то, от чего мы ушли. Матн грузим из ТУРЕЦКОЙ печати (ط التركية, УКАЗ-3 от 16.06), а Абд аль-Баки у нас —
+       только НУМЕРАЦИЯ (та же, что на sunnah.com). Пишем это разделённо, чтобы надпись не спорила с делом. */
+    setStatus('Загружаю Сахих Муслим (турецкая печать · нумерация как на sunnah.com)…');
     // A-033/A-137: 8.4МБ на медленной сети рвётся → 2 попытки по 180с + Cache Storage (повтор мгновенно); 60с не хватало
     let j; try{ j=await cachedFetchJSON('./muslim_baqi.json',180000,{silent:true}); }
     catch(_e){ j=await cachedFetchJSON('./muslim_baqi.json',180000); }
@@ -3398,6 +3406,28 @@ if(_qel2){ _qel2.addEventListener('input', ()=>{ hideRecent(); });   // M256: н
 var _rclr=document.getElementById('recentClr'); if(_rclr) _rclr.onclick=()=>{ try{ localStorage.removeItem(_recentKey()); }catch(e){} hideRecent(); };
 var _rcls=document.getElementById('recentClose'); if(_rcls) _rcls.onclick=()=>{ _recClosed=true; var b=document.getElementById('recentBox'); if(b) b.style.display='none'; };
 var _pcls=document.getElementById('popClose'); if(_pcls) _pcls.onclick=()=>{ _popClosed=true; var p=document.getElementById('popularBox'); if(p) p.style.display='none'; };
+/* #677 (С67, владелец: «раг кнопка в приложении часто тоже не нажимается не выбирается»).
+   Первая причина — занятый поток — снята ниже (отмена идущего поиска ПЕРВЫМ действием). Замерил вторую,
+   она видна цифрами: прошёл сеткой по площади чипа RAG через elementFromPoint — в переключение режима
+   попадают лишь 89% точек. 8% забирает знак «?» внутри пилюли (его обработчик гасит событие и открывает
+   справку), ещё 4% проваливаются в пустоту СКРУГЛЁННЫХ УГЛОВ, где верхним элементом оказывается сам
+   контейнер .modes, а не чип. Итог — примерно каждый двенадцатый тап режим не переключает: это и есть «часто».
+   Чиним углы, и сразу для ВСЕХ чипов (З-40 — лечим класс, а не случай): если тап пришёлся по контейнеру,
+   но точка лежит внутри рамки чипа, считаем его тапом по этому чипу. Поведение чипов не меняем — только
+   перестаём терять попадания в углы. (Долю знака «?» руками не трогаю: контракт «тап по знаку — справка»
+   задан владельцем в #59-RAG, менять его молча нельзя — вынесено в отчёт.) */
+try{ document.querySelectorAll('.modes').forEach(row=>{
+  row.addEventListener('click', e=>{
+    try{
+      if(e.target!==row) return;                      // попали в саму пилюлю — обычный путь, не вмешиваемся
+      const x=e.clientX, y=e.clientY; if(x==null||y==null) return;
+      let hit=null;
+      row.querySelectorAll('.chip').forEach(c=>{ const r=c.getBoundingClientRect();
+        if(x>=r.left && x<=r.right && y>=r.top && y<=r.bottom) hit=c; });
+      if(hit) hit.click();
+    }catch(_e){}
+  }, true);
+}); }catch(e){}
 document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.dataset.mode;
   if(!m) return;   // чипы без режима (⚙️ ещё, журналы) имеют свои обработчики
   // #677 (владелец: «раг кнопка часто не нажимается не выбирается потому что параллельно грузит поиск»).
@@ -7177,6 +7207,9 @@ async function openNarratorRijal(name, forceId){
   try{
     const _vid2=await _narrLookup(name);
     if(_vid2!=null){
+      // #692 (С67): id-группа ЭТОГО равия (он сам + его alias-дубли) — по ней в карточках мест обводим
+      // именно его. Считаем один раз здесь: ниже она нужна и спискам мест, и охвату (не считаем дважды).
+      let _meIds=[+_vid2]; try{ _meIds=await _aliasGroup(+_vid2); }catch(e){}
       const cc=await _narrCard(_vid2);
       if(cc){ const gb=_genBadge(cc[5]||'', cc[4]);
         _isSahForRj=!!(gb && gb[0]==='صحابي');
@@ -7199,8 +7232,9 @@ async function openNarratorRijal(name, forceId){
             if(open){ lst.innerHTML=''; return; }
             lst.innerHTML='<div class="hint" style="font-size:11px">⏳…</div>';
             try{ await loadBooksMap(); }catch(e){}
-            lst.innerHTML='<div class="hint" style="font-size:11px;margin-bottom:3px">'+label+' — мест '+arr.length+(arr.length>80?' (первые 80)':'')+':</div>';
-            arr.slice(0,80).forEach(n=>lst.appendChild(_dzPlaceRow(bid,n,null)));
+            /* #692 (С67): места — полноценными карточками (как в поиске), с обводкой этого равия. */
+            lst.innerHTML='<div class="hint" style="font-size:11px;margin-bottom:3px">'+label+' — мест '+arr.length+(arr.length>80?' (первые 80)':'')+' · <span style="color:#7fb3ff">он подсвечен в каждом иснаде</span>:</div>';
+            arr.slice(0,80).forEach(n=>lst.appendChild(_dzPlaceCard(bid,n,null,_meIds)));
           };
           wrap.appendChild(chip);
         };
@@ -7209,7 +7243,7 @@ async function openNarratorRijal(name, forceId){
         body.appendChild(sb);
       }
       // #313: 📊 ОХВАТ — в скольких хадисах/книгах участвует (точная dz-разметка иснадов, не текст-поиск)
-      try{ let part=null; try{ const _grp=await _aliasGroup(+_vid2); const _pp=await Promise.all(_grp.map(i=>dzPart(i).catch(()=>null))); part=_pp.filter(Boolean).flat(); }catch(e){ part=await dzPart(+_vid2); }   // M454: дубль-id того же человека — суммируем участие (как в режиме «Цепь»)
+      try{ let part=null; try{ const _pp=await Promise.all(_meIds.map(i=>dzPart(i).catch(()=>null))); part=_pp.filter(Boolean).flat(); }catch(e){ part=await dzPart(+_vid2); }   /* #692 (С67): alias-группа уже посчитана выше (_meIds) — второй раз не считаем */   // M454: дубль-id того же человека — суммируем участие (как в режиме «Цепь»)
         if(part && part.length){ try{ await loadBooksMap(); }catch(e){}
           const byb={}; part.forEach(p=>{ const b=String(p[0]); (byb[b]=byb[b]||[]).push(p); });
           // #594 (владелец, повторно): «сахих Бухари после Табарани — значит нет настройки приоритета».
@@ -7229,8 +7263,10 @@ async function openNarratorRijal(name, forceId){
               wrap.querySelectorAll('span[data-open]').forEach(c=>c.dataset.open='');
               chip.dataset.open=open?'':'1'; lst.innerHTML='';
               if(open) return;
-              lst.innerHTML='<div class="hint" style="font-size:11px;margin-bottom:3px"><span dir="rtl">'+esc(nm)+'</span> — мест '+arr.length+(arr.length>60?' (первые 60)':'')+':</div>';
-              arr.slice(0,60).forEach(p=>lst.appendChild(_dzPlaceRow(bid,p[1],p[2]))); };
+              /* #692 (С67): «тут открываться должны карточки такие же, как в поиске, с выделением того, что мы ищем» —
+                 место = та же cardHadith, что и результат поиска; этот равий обведён по id. */
+              lst.innerHTML='<div class="hint" style="font-size:11px;margin-bottom:3px"><span dir="rtl">'+esc(nm)+'</span> — мест '+arr.length+(arr.length>60?' (первые 60)':'')+' · <span style="color:#7fb3ff">он подсвечен в каждом иснаде</span>:</div>';
+              arr.slice(0,60).forEach(p=>lst.appendChild(_dzPlaceCard(bid,p[1],p[2],_meIds))); };
             wrap.appendChild(chip); };
           bids.slice(0,5).forEach(mkChip);
           if(bids.length>5){ const more=document.createElement('span'); more.style.cssText='cursor:pointer;font-size:12px;color:var(--link);align-self:center;text-decoration:underline'; more.textContent='ещё '+(bids.length-5)+' ▸';
@@ -8946,6 +8982,16 @@ function _ttSrcOf(ref){ let s=ref.source; if(s==='ibnmaja') s='ibnmajah'; if(_TT
 // клик по месту тахриджа → открыть хадис по НАШЕМУ (sunnah) номеру через читалку (openReader), а НЕ страницу Мактабы (её нумерация другая → открывался ЧУЖОЙ хадис, жалоба владельца). bid печати → код читалки.
 const _BID2READ={'1681':'bukhari','1727':'muslim','829':'nasai','8361':'nasaikubra','1198':'ibnmajah','25794':'ahmad','654':'abudawud','1726':'abudawud','117359':'abudawud','1363':'tirmidhi','1435':'tirmidhi','7895':'tirmidhi','8140':'malik','9944':'ibnabishayba'};   // 711 (Муслим тур.печать) НЕ тут — его номера другие, клик идёт через openByCodeNum (_mListSheet конвертирует)
 // #263/#316 (ревизия С55, ОТЧЁТ_ТАХРИДЖ_263.md): '1733':'darimi' УДАЛЁН — bid 1733 = المعجم الكبير Табарани, карта открывала его номера в ДАРИМИ (сверка: 20157 совпадений с Табарани vs 25 с Дарими). Настоящий Дарими = bid 21795. Клик теперь идёт резервным путём в f40c/1733 = правильный Табарани.
+/* #690 (С67, владелец: «мы ушли от издания баки. Муслим не баки, запомни»): в ССЫЛКАХ на хадисы Муслим
+   у нас один — турецкая печать (ط التركية, bid 711). Ключ 1727 в наших индексах означает НУМЕРАЦИЮ
+   Абд аль-Баки (ту же, что у sunnah.com и в нашей читалке), а не издание, — но подписывался он именем
+   чужой книги, и владелец видел в тахридже ровно то, от чего мы ушли.
+   Поэтому имя книги для таких ссылок берём у нашей печати. Сам ключ не меняем: по нему работают клик
+   (_ttOpenPlace→openReader) и карта листов (_mListSheet), а у сырого 711 номера вообще не хадисные.
+   ⚠️ Каталог Мактабы этим НЕ трогаем: там 1727 — реальная отдельная книга, и звать её турецкой печатью
+   было бы враньём в другую сторону. Правило узкое: только подпись ссылки на хадис. */
+function _refBookName(bid){ const b=String(bid);
+  return (typeof bookName==='function' && bookName(b==='1727'?'711':b)) || ('книга '+b); }
 function _ttOpenPlace(bid,num){ const code=_BID2READ[String(bid)]; if(code && typeof isReadable==='function' && isReadable(code)){ try{ openReader(code, +num); return; }catch(e){} } try{ openByCodeNum(String(bid), +num); }catch(e){ try{ openBook(String(bid), +num); }catch(_e){} } }
 // кросс-сборники для хадиса (по M495 place2su→su→места): bid→[номера], кроме самого хадиса. Лёгкий индекс (шарды 6-88К), полные издания НЕ грузим.
 async function _ttCrossPlaces(ref){ try{ const _pl=_codifPlace(ref)||{bid:String((ref&&ref.bid)||'1681'),num:String(ref.num)}; if(!_pl||_pl.num==null) return {};
@@ -8954,7 +9000,25 @@ async function _ttCrossPlaces(ref){ try{ const _pl=_codifPlace(ref)||{bid:String
     if(!su) return {};
     const pls=await _thPlaces(su); const out={};
     pls.forEach(([bb,nn])=>{ if(String(bb)===String(_pl.bid)) return; (out[String(bb)]=out[String(bb)]||[]).push(nn); });
-    if(out['1727'] && out['711']) delete out['711'];   // дубль Муслима: Абд аль-Баки (1727) приоритетнее турецкой печати (711)
+    /* #690 (С67, владелец 01.08.2026: «ты что забыл что мы ушли от издания баки. Муслим не баки, запомни»).
+       Было: `if(out['1727'] && out['711']) delete out['711']` — в тахридже Муслим показывался КНИГОЙ Абд аль-Баки,
+       от которой мы ушли. Наше издание Муслима — ط التركية, shamela bid 711 (поправка владельца 06.07.2026);
+       Абд аль-Баки у нас остаётся ТОЛЬКО нумерацией (она же у sunnah.com и у учёных — её не трогаем).
+       ⚠️ Имя файла `muslim_baqi.json` историческое и обманывает: внутри матн ИМЕННО турецкой печати (УКАЗ-3, 16.06).
+
+       НО простое «оставить 711, удалить 1727» сломало бы номер, и это видно ПО ДАННЫМ, а не по догадке.
+       Померил шарды `tahrij/sp_*.json`: под ключом 1727 лежат настоящие номера хадисов Муслима — 2536 разных,
+       максимум 3033 (ровно объём сборника по Абд аль-Баки). Под ключом 711 номеров всего 484, максимум 522,
+       причём «№316» повторяется 23 567 раз — это не номер хадиса, а мусор печати (лист/раздел). Показать его
+       значило бы двадцать тысяч раз сослаться на конкретный чужой хадис.
+       Поэтому: НОМЕР берём из 1727 (наша сквозная нумерация Муслима, её понимают и читалка, и _mListSheet),
+       а КНИГУ подписываем нашей — 711. Сырые записи 711 выбрасываем как непригодные для ссылки.
+       Все прочие пути приложения так и работают (openShamela/openShamelaCodeNum: `if(b==='1727') b='711'`
+       + _mListSheet(номер Абд аль-Баки) → лист книги 711), этот тахридж был единственным исключением.
+       Контроль после правки: Муслим №2363 обязан оставаться хадисом о пальмах (يُلَقِّحُونَ). */
+    if(out['711']) delete out['711'];   // сырые 711: их «номер» — не номер хадиса, ссылка была бы ложной. Молчим, а не врём
+    // ключ оставляем 1727 (это НУМЕРАЦИЯ, её понимают _ttOpenPlace→openReader и _mListSheet), а КНИГУ
+    // подписываем нашей турецкой печатью при отрисовке — см. пометку #690 ниже по коду у bookName.
     return out;
   }catch(e){ return {}; } }
 const _TT_RANK={'1681':1,'1727':2,'711':2,'654':3,'1726':3,'117359':3,'7895':4,'1435':4,'1363':4,'829':5,'8361':5,'1198':6,'28107':7,'25794':8};
@@ -8975,7 +9039,7 @@ async function renderTTtakhrij(ref, box){
       +'<div style="font-size:12.5px;font-weight:600;color:#d6b85a;margin-bottom:4px">🔖 Где ещё передаётся этот хадис <span style="opacity:.7;font-weight:400">· التخريج</span></div>';
     if(e&&e.a&&e.a.length) html+='<div dir="rtl" style="font-size:14px;line-height:1.95;margin:1px 0"><span style="color:#9fd3a8;font-weight:600">صحيح البخاري</span> <span style="color:var(--hint);font-size:11px">(أطراف)</span>: '+e.a.slice().sort((a,b)=>a-b).map(n=>'<span class="ttN" data-n="'+n+'" style="color:var(--link);cursor:pointer;text-decoration:underline dotted">'+n+'</span>').join('، ')+'</div>';
     crossKeys.sort((x,y)=>((_TT_RANK[x]||90)-(_TT_RANK[y]||90))||(x-y)).forEach(bb=>{
-      const nm=(typeof bookName==='function'&&bookName(String(bb)))||('книга '+bb);
+      const nm=_refBookName(bb);   /* #690 (С67): Муслим подписываем нашей турецкой печатью, а не изданием Абд аль-Баки */
       const nums=[...new Set(cross[bb])].sort((a,b)=>a-b).map(n=>'<span class="ttX" data-b="'+bb+'" data-n="'+n+'" style="color:var(--link);cursor:pointer;text-decoration:underline dotted">'+n+'</span>').join('، ');
       html+='<div dir="rtl" style="font-size:14px;line-height:1.95;margin:1px 0"><span style="color:#9fd3a8;font-weight:600">'+esc(nm)+'</span>: '+nums+'</div>';
     });
@@ -9098,7 +9162,7 @@ async function doTakhrij(text, ref, out, btn, force){
   const _RANK={'1681':1,'1727':2,'654':3,'1726':3,'117359':3,'7895':4,'1435':4,'829':5,'8361':5,'1198':6,'28107':7,'25794':8,'98139':8,'21795':9,'1456':10,'9647':11,'13037':12,'537':20,'1446':21,'1424':22,'18144':23,'8493':24,'12520':30,'12981':31,'1733':32,'748':33,'13159':34,'10631':35,'9615':36,'13122':37,'13136':38,'4407':39,'278':40,'1613':41,'8218':42,'13027':43,'21545':44,'13028':45,'3610':46,'5562':47,'13155':48};
   const _sb=_self?String(_self.bid):null;
   Object.keys(byb).sort((x,y)=>{ const sx=(x===_sb)?0:1, sy=(y===_sb)?0:1; if(sx!==sy) return sx-sy; return ((_RANK[x]||90)-(_RANK[y]||90))||(x-y); }).forEach(bb=>{ const row=document.createElement('div'); row.style.cssText='direction:rtl;font-size:14px;margin:2px 0';
-    const bn=(typeof bookName==='function'&&bookName(String(bb)))||('книга '+bb);
+    const bn=_refBookName(bb);   /* #690 (С67): подпись ссылки на хадис — наша печать Муслима */
     row.appendChild(Object.assign(document.createElement('span'),{textContent:bn+': ',style:'color:var(--hint)'}));
     byb[bb].sort((x,y)=>x-y).forEach((nn,i2)=>{ const a=document.createElement('span'); a.textContent='№'+nn; a.style.cssText='color:var(--link);cursor:pointer'; a.title='Открыть в читалке';
       a.onclick=()=>_ttOpenPlace(String(bb),nn);   // ФИКС: открыть по НАШЕМУ номеру (openReader), а не страницу Мактабы (был тот же баг клика, что в أطраф)
@@ -9658,10 +9722,25 @@ async function anyTextSearch(qRaw, seq){
         const meta=(window._catTr&&_catTr.map&&_catTr.map[bn])||{};
         const _rawSnip=String(x.snip||x.text||'');
         d.innerHTML='<div style="direction:rtl;text-align:right;font-weight:700;color:var(--link);font-size:14.5px;cursor:pointer" class="anyOpen">📖 '+esc((meta.voc)||bn)+'</div>'
-          +(_rawSnip?('<div style="direction:rtl;text-align:right;font-size:13.5px;line-height:1.9;margin-top:5px">'+clampHtml(_cleanTurathSnip(_rawSnip.slice(0,240)), (_rawSnip.length>252?_cleanTurathSnip(_rawSnip):''))+'</div>'):'')   // #23: убраны сырые теги turath, совпадение подсвечено · #670 (С67): длинный сниппет разворачивается кнопкой (clampHtml — чтобы не порвать подсветку)
-          +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center"><button class="mini anyGo" style="font-size:12px;padding:5px 11px">📖 Открыть страницу</button>'+(_rawSnip?'<button class="mini anyTr" style="font-size:12px;padding:5px 11px;color:var(--link)">🌐 Перевести</button>':'')+_shamChip(bid, x.page_id)+'</div><div class="anyTrOut" style="display:none;margin-top:6px;font-size:13px;line-height:1.6;border-top:1px dashed var(--border);padding-top:6px"></div>';   // #23: кнопка перевода
+          /* #691 (С67, владелец: «почему карточки хадисов отличаются от наших»). Померил разницу: отрывок книги
+             рисовался обычным <div> с зашитыми font-size:13.5px/line-height:1.9, тогда как ВЕСЬ арабский текст
+             в приложении живёт в .ar — а это и другой кегль (19px), и выбранный арабский шрифт, и, главное,
+             --txtScale от кнопки «Aa». То есть книжный отрывок НЕ слушался ни настройки шрифта, ни размера,
+             и рядом с нашей карточкой выглядел мельче и «чужим». Отдаём его в .ar, как у sunnah-карточки
+             (wideCard) и у карточки хадиса: инлайн-кегль убран, иначе он бьёт класс. */
+          +(_rawSnip?('<div class="ar" style="margin-top:5px">'+clampHtml(_cleanTurathSnip(_rawSnip.slice(0,240)), (_rawSnip.length>252?_cleanTurathSnip(_rawSnip):''))+'</div>'):'')   // #23: убраны сырые теги turath, совпадение подсвечено · #670 (С67): длинный сниппет разворачивается кнопкой (clampHtml — чтобы не порвать подсветку)
+          /* #691 (С67): ⧉ «копировать» есть у КАЖДОЙ нашей карточки, а у книжной не было — а это чистая
+             работа с текстом, для неё книге не нужны ни номер, ни иснад. Даём. Остальные различия
+             (номер, достоверность, тахридж, передатчики, sunnah.com) держатся на данных, которых у страницы
+             книги физически нет, — их не выдумываем, разбор различий целиком в отчёте. */
+          +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center"><button class="mini anyGo" style="font-size:12px;padding:5px 11px">📖 Открыть страницу</button>'+(_rawSnip?'<button class="mini anyCp" style="font-size:12px;padding:5px 11px" title="Копировать отрывок">⧉</button>':'')+(_rawSnip?'<button class="mini anyTr" style="font-size:12px;padding:5px 11px;color:var(--link)">🌐 Перевести</button>':'')+_shamChip(bid, x.page_id)+'</div><div class="anyTrOut" style="display:none;margin-top:6px;font-size:13px;line-height:1.6;border-top:1px dashed var(--border);padding-top:6px"></div>';   // #23: кнопка перевода
         const go=()=>{ try{ _actPush({t:'book', bid:bid, pg:x.page_id}); }catch(e){} openBook(bid, x.page_id); };
         d.querySelector('.anyOpen').onclick=go; d.querySelector('.anyGo').onclick=go;
+        /* #691 (С67): те же две вещи, что и у карточки хадиса и у sunnah-карточки — копирование с подписью
+           и тап по слову (Arabus). Обе работают от одного текста, никаких данных хадиса им не нужно. */
+        try{ const _cp=d.querySelector('.anyCp'); if(_cp) _cp.onclick=()=>{ try{ hap('light'); }catch(e){}
+          copyWithSig(_cleanTurathSnip(_rawSnip).replace(/<\/?mark>/g,'')+'\n— '+(meta.voc||bn)); }; }catch(e){}
+        try{ const _arb=d.querySelector('.ar'); if(_arb){ enableArabusTap(_arb); if(_arabusOn) _arb.style.cursor='pointer'; } }catch(e){}
         const _trb=d.querySelector('.anyTr'); if(_trb) _trb.onclick=async()=>{ const o=d.querySelector('.anyTrOut'); if(!o) return;   // #23: перевод сниппета через /translate
           if(o.dataset.done){ o.style.display=o.style.display==='none'?'block':'none'; return; }
           if(!BACKEND_URL){ toast('Перевод работает на сервере'); return; }
@@ -10569,8 +10648,11 @@ function _dzPlaceRow(bid,num,leaf){
   const wiki=((window._wikiT)||{})[id];
   const ar=meta.voc||((typeof bookName==='function'&&bookName(id))||'');
   const ru=meta.ru||((wiki&&/[А-Яа-яЁё]/.test(wiki.name||''))?wiki.name:'');
-  const d=document.createElement('div'); d.style.cssText='display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 4px;border-bottom:1px solid var(--border);cursor:pointer';
-  d.innerHTML='<span style="flex:1;min-width:0">'
+  /* #692 (С67, скрин владельца): на узком экране в одну строку не влезали четыре блока сразу, и название книги
+     ужималось до пары букв — «سنن أبي داود ت محي الدين عبد الحميد» рассыпалось по слову на строку, столбиком.
+     Разрешаем перенос и отдаём названию ВСЮ ширину: кнопки и номер уходят на вторую строку. */
+  const d=document.createElement('div'); d.style.cssText='display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:6px 4px;border-bottom:1px solid var(--border);cursor:pointer';
+  d.innerHTML='<span style="flex:1 1 100%;min-width:0">'
     +'<span class="dzBn" data-b="'+esc(id)+'" style="display:block;direction:rtl;text-align:right;font-size:13.5px;color:var(--text)">'+esc(ar||('книга №'+id))+'</span>'
     +(ru?('<span style="display:block;text-align:right;font-size:11px;color:#bcd0ff">'+esc(ru)+'</span>'):'')+'</span>'
     +((wiki&&wiki.url)?('<span class="dzW" title="Википедия о книге" style="flex:none;cursor:pointer;font-size:11px;color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px;white-space:nowrap"><b style="font-family:Georgia,serif">W</b> Википедия ↗</span>'):'')
@@ -10588,6 +10670,75 @@ function _dzPlaceRow(bid,num,leaf){
   const w=d.querySelector('.dzW'); if(w) w.onclick=(e)=>{ e.stopPropagation(); try{ openLink(wiki.url); }catch(_e){ window.open(wiki.url,'_blank'); } };
   if(!ar){ try{ loadBooksMap().then(()=>{ const el=d.querySelector('.dzBn'); const nm=bookName(id); if(el&&nm) el.textContent=nm; }); }catch(e){} }   // страховка: карта догрузилась — имя дописать (не оставлять «книга №»)
   return d;
+}
+/* #692 (С67, владелец 01.08.2026 со скрином, дословно: «ну сколько раз говорить что тут открываться должна
+   карточки такие же как в поиске с выделением того что мы ищем в данном случае передатчика»).
+   Было: список мест в «📊 Охвате» и в «📗 Сахихайн» рисовался строкой-заглушкой _dzPlaceRow — название книги,
+   «W Википедия», «ش Шамела», «№3 · лист 6». Ни текста хадиса, ни имени равия, ни подсветки: человек открывал
+   охват на 1685 мест и видел столбик ссылок, а не хадисы.
+   Стало: место рисуется ТОЙ ЖЕ cardHadith(), что и результат поиска. Второй отрисовки не заводим (R-45):
+   различаются данные, а не карточка — значит и функция одна. Подсветка передатчиков приезжает сама
+   (autoHighlightNarr внутри карточки), а нашего равия дополнительно обводим по id.
+   Данные достаём из САМОЙ записи охвата: bid → наш сборник по _BID2SLUG (та же карта, по которой эта строка
+   уже умеет открывать читалку — то есть доверие к нумерации ровно то же), num → хадис в нашей базе.
+   Книги вне карты (чужие печати, где номер не наш) остаются строкой-ссылкой: собрать карточку по чужой
+   нумерации значит показать НЕ ТОТ хадис — этого не делаем.
+   Карточки строятся ЛЕНИВО, когда строка доезжает до экрана: 60 полных карточек разом — это 60 разборов
+   иснада и codif-запросов, приложение бы село. */
+function _dzMarkNarr(card, ids){
+  try{
+    if(!ids || !ids.length) return;
+    const set=new Set(ids.map(x=>String(x)));
+    let tries=0;
+    const tick=()=>{
+      let n=0;
+      try{
+        card.querySelectorAll('.nhl[data-id]').forEach(sp=>{
+          if(!set.has(String(sp.dataset.id))) return;
+          n++; sp.classList.add('nhlMe');
+          if(!sp.dataset.meTip){ sp.dataset.meTip='1'; sp.title=(sp.title||'')+' · 👤 это он — тот, чью карточку вы открыли'; }
+        });
+      }catch(e){}
+      // подсветка имён приезжает асинхронно (codif/эталон), да ещё может перекраситься «сподвижником» —
+      // поэтому не ждём один раз, а несколько секунд переспрашиваем DOM. Класс .nhlMe стоит !important,
+      // так что поздняя перекраска сподвижника нашу обводку не съедает.
+      if(tries++<10) setTimeout(tick, 400);
+    };
+    setTimeout(tick, 150);
+  }catch(e){}
+}
+function _dzPlaceCard(bid, num, leaf, ids){
+  const wrap=document.createElement('div');
+  wrap.appendChild(_dzPlaceRow(bid, num, leaf));
+  const slug=_BID2SLUG[String(bid)];
+  if(!slug || num==null || String(num)==='') return wrap;   // чужая печать — честно оставляем ссылку
+  let started=false;
+  const upgrade=async()=>{
+    if(started) return; started=true;
+    try{
+      const ec=(slug==='ibnmajah')?'ibnmaja':slug;   // у нас файл называется ibnmaja (как в _maktUpgrade)
+      const arr=await loadByCode(ec); if(!arr) return;
+      const h=arr.find(x=>String(x.num)===String(num)); if(!h) return;   // номера нет в нашей базе — заглушка честнее выдумки
+      const card=cardHadith({code:slug, h:h}, []);
+      if(!card) return;
+      wrap.innerHTML=''; wrap.appendChild(card);
+      wrap.style.animation='fadeInUp .25s ease-out both';
+      // лист печати есть только в записи охвата — на карточке поиска этого поля нет, а он ведёт на точную страницу
+      if(leaf){ const lf=document.createElement('div');
+        lf.style.cssText='font-size:11.5px;color:var(--hint);cursor:pointer;margin:-2px 0 8px 2px';
+        lf.textContent='📖 лист '+leaf+' — открыть страницу печати';
+        lf.onclick=()=>{ try{ hap('light'); }catch(e){} try{ openBook(String(bid), leaf); }catch(e){} };
+        wrap.appendChild(lf); }
+      _dzMarkNarr(wrap, ids);
+    }catch(e){}
+  };
+  try{
+    if('IntersectionObserver' in window){
+      const io=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting){ io.disconnect(); upgrade(); } }); }, {rootMargin:'250px'});
+      io.observe(wrap);
+    } else setTimeout(upgrade, 0);
+  }catch(e){ setTimeout(upgrade, 0); }
+  return wrap;
 }
 async function openUCard(code){
   let m=document.getElementById('uModal');
@@ -11097,7 +11248,7 @@ async function openTahrijTable(){
       const pl=await _thPlaces(su); const byb={}; pl.forEach(([b,n])=>{ (byb[b]=byb[b]||[]).push(n); });
       lst.innerHTML='<div class="hint" style="font-size:11px;margin-bottom:2px">📚 Версии этого хадиса по сборникам ('+pl.length+'):</div>';
       Object.keys(byb).forEach(b=>{ const row=document.createElement('div'); row.style.cssText='direction:rtl;font-size:13px;margin:2px 0';
-        const bn=(typeof bookName==='function'&&bookName(String(b)))||('книга '+b);
+        const bn=_refBookName(b);   /* #690 (С67): подпись ссылки на хадис — наша печать Муслима */
         row.appendChild(Object.assign(document.createElement('span'),{textContent:bn+': ',style:'color:var(--hint)'}));
         byb[b].sort((x,y)=>x-y).forEach((n,i)=>{ const a=document.createElement('span'); a.textContent='№'+n; a.style.cssText='color:var(--link);cursor:pointer'; a.onclick=(e)=>{ e.stopPropagation(); _ttOpenPlace(String(b),n); };   /* Р-01 фикс: наша нумерация (openReader), не страница Мактабы */
           row.appendChild(a); if(i<byb[b].length-1) row.appendChild(Object.assign(document.createElement('span'),{textContent:'، '})); });
@@ -11252,7 +11403,7 @@ async function openHadithTable(){
   const rowEl=(r)=>{
     const [g,b,n,cid,v,u,dup,su,nv]=r;
     const d=document.createElement('div'); d.style.cssText='padding:7px 4px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12.5px';
-    const bn=(typeof bookName==='function'&&bookName(String(b)))||('книга '+b);
+    const bn=_refBookName(b);   /* #690 (С67): подпись ссылки на хадис — наша печать Муслима */
     d.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;align-items:center">'
       +'<span style="color:'+(dup?'#e0b34a':'#9fd3a8')+';font-weight:700;flex:none">'+(dup?('копияв.'+v):('№'+Math.abs(g)))+'</span>'
       +'<span dir="rtl" style="flex:1;text-align:right;color:var(--link);font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(bn)+' · №'+n+'</span></div>'
