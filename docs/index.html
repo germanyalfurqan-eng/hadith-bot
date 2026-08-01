@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1268</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1269</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1478,7 +1478,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1268';
+const APPVER = 'v1269';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2818,7 +2818,7 @@ async function loadHadithRu(silent){ if(hadithRu)return hadithRu; if(hadithRuP) 
   return hadithRuP; }
 // арабский оригинал хадиса по коду+номеру (для русских карточек: тахридж/передатчики/Arabus/огласовки)
 async function getArabicHadith(code,num){
-  try{ const arr=await loadByCode(code); const h=arr.find(x=>String(x.num)===String(num)); return h?(h.text||''):''; }catch(e){ return ''; }
+  try{ const h=await _хадисПоНомеру(code, num); return h?(h.text||''):''; }catch(e){ return ''; }   /* #675 (С67): один хадис — через шард, а не весь сборник (Ахмад 25 МБ) */
 }
 // #682 (владелец: «как может быть хадис номер 0») — СТРАЖ НУМЕРАЦИИ.
 // Нулевой номер в наших книгах = артефакт разбора: под него попадали редакторские приписки
@@ -4751,6 +4751,21 @@ function renderResultsView(){
 let _darimiCache=null,_darimiP=null;
 function loadDarimi(){ if(_darimiCache) return Promise.resolve(_darimiCache); if(_darimiP) return _darimiP;
   _darimiP=fetch('./editions/darimi.json?v='+APPVER).then(r=>r.ok?r.json():[]).then(j=>{ _darimiCache=Array.isArray(j)?j:[]; return _darimiCache; }).catch(()=>{ _darimiCache=[]; return _darimiCache; }); return _darimiP; }
+/* #675 (С67, ошибка A-139, приложение зарегистрировало само: «ahmad-full: Полная загрузка Ахмада (25 МБ)»).
+   Шардинг у Ахмада ЕСТЬ (loadAhmadOne → ahmad/<num//1000>.json, ~900 КБ) и getOne им пользуется —
+   но мимо getOne осталось пять мест, которые берут ОДИН хадис по номеру через loadByCode(code)+find,
+   то есть тянут весь сборник целиком. Для семи книг это терпимо, для Муснада Ахмада — 25 МБ, и на
+   мобильной сети такая загрузка рвётся (ровно то, на что жалуется ошибка).
+   Самый вредный из пяти был на горячем пути поиска — блок «⚡ наше издание (стандартная нумерация)»:
+   он строится ПРЯМО во время выдачи, и на хадисе Ахмада запускал 25 МБ посреди сборки списка.
+   Помощник ниже меняет только Ахмада: шард по номеру, а если в шарде пусто — прежний полный путь,
+   чтобы ни один хадис не пропал. Остальные книги идут как шли. */
+async function _хадисПоНомеру(code, num){
+  const ec=(code==='ibnmajah')?'ibnmaja':code;
+  if(ec==='ahmad'){ try{ const x=await loadAhmadOne(num); if(x) return x; }catch(e){} }
+  const arr=await loadByCode(ec); if(!arr) return null;
+  return arr.find(x=>String(x.num)===String(num))||null;
+}
 async function getOne(code,num){
   if(code==='muslim'){ return await loadMuslimOne(num); }   // Муслим — шард ~1МБ по номеру (не весь 15МБ); если полный массив в кэше — loadMuslimOne берёт оттуда
   if(code==='darimi'){ const a=await loadDarimi(); const x=a.find(y=>String(y.num)===String(num)); return x?{num:String(x.num),text:(x.ar||'').replace(/\s+/g,' ').trim(),grade:'',norm:''}:null; }   // #151: Дарими — первоисточник, грузим из локального darimi.json (CDN 403)
@@ -5697,9 +5712,9 @@ async function maktabaByNum(seq, n){
   CANON.forEach(code=>{ if(typeof selCols!=='undefined' && selCols.size && !selCols.has(code)) return;   // #506 (владелец): выбрал чип «Муслим» + номер → получал ВСЕ 8 канонов (в т.ч. Бухари); канон-блок игнорировал chip-фильтр, хотя ниже (доп.печати) он уже уважался
     var _cskel=document.createElement('div'); _cskel.className='skCard'; _cskel.innerHTML='<div class="sk" style="width:38%"></div><div class="sk"></div><div class="sk" style="width:82%"></div>'; try{ canonSlots[code].appendChild(_cskel); }catch(e){}   // #666: шиммер-скелет в слоте источника, пока грузится издание (убирается в finally по приходу/отсутствию)
     (async()=>{ try{
-    const ec=(code==='ibnmajah')?'ibnmaja':code;
-    const arr=await loadByCode(ec); if(seq!==_seq) return;
-    const hh=(arr||[]).find(x=>String(x.num)===String(n)); if(!hh) return;
+    /* #675 (С67): САМОЕ вредное место — блок «наше издание» строится во время выдачи,
+       и на хадисе Ахмада тянул 25 МБ прямо посреди сборки списка. Теперь шард по номеру. */
+    const hh=await _хадисПоНомеру(code, n); if(seq!==_seq) return; if(!hh) return;
     try{ _stdTxt[code]=canon(stripDiac(hh.text||'').replace(/ـ/g,'')); }catch(e){}
     const wrap=document.createElement('div'); wrap.className='canonStd';
     const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:11px;margin:2px 0 3px;color:#7fb3ff'; lbl.textContent='⚡ наше издание (стандартная нумерация) — мгновенно';
@@ -6169,9 +6184,7 @@ async function _maktUpgrade(x){
     const code=_maktBid2CodeMap()[String(x.book_id)]; if(!code) return null;
     const sn=_cleanMaktabaSnip((x.snip||'').replace(/<[^>]*>/g,'')); const n=_extractHnoFromSnip(sn);
     if(!n || !(n>0)) return null;
-    const ec=(code==='ibnmajah')?'ibnmaja':code;
-    const arr=await loadByCode(ec); if(!arr) return null;
-    const hh=arr.find(h=>String(h.num)===String(n)); if(!hh) return null;
+    const hh=await _хадисПоНомеру(code, n); if(!hh) return null;   /* #675 (С67): один хадис — через шард, а не весь сборник (Ахмад 25 МБ) */
     return cardHadith({code:code, h:hh}, []);
   }catch(e){ return null; }
 }
@@ -6223,6 +6236,27 @@ async function appendMaktaba(seq, q, primary){
   finally{ _srchWaitOff(seq); }   /* #669 (С67): Мактаба ответила (нашла, не нашла, упала) — «ищу…» гасим ВСЕГДА, из единственной точки выхода */
 }
 
+/* #678 (С67): выполнить работу, когда элемент ПОДЪЕЗЖАЕТ к экрану, а не при сборке списка.
+   Запас 400 px — примерно пол-экрана: к моменту, когда карточка реально видна, всё уже посчитано,
+   и человек не замечает разницы с прежним «сразу». Наблюдатель снимается после первого срабатывания.
+   Нарочно БЕЗ запасного таймера «сделать всем через N секунд»: он вернул бы ровно ту беду, от которой
+   уходим, — разом выросшие полсотни карточек. Не доехала до экрана — значит и не нужна.
+   Нет IntersectionObserver (совсем старый webview) — делаем сразу, как было. */
+function _приБлизости(el, fn, запас){
+  try{
+    if(!('IntersectionObserver' in window) || !el || !el.nodeType){ fn(); return; }
+    let сделано=false;
+    const io=new IntersectionObserver(es=>{
+      for(const e of es){ if(e.isIntersecting && !сделано){ сделано=true; try{ io.disconnect(); }catch(_){} fn(); break; } }
+      /* Запас ТОЛЬКО ВНИЗ ('0px 0px Npx 0px'), а не по кругу. Разница принципиальная: карточка,
+         которая дорастает НИЖЕ экрана, двигает только невидимое; карточка, дорастающая ВЫШЕ экрана,
+         толкает вниз ровно то, что человек в этот момент читает. Chrome такое сам гасит якорением
+         прокрутки (overflow-anchor), но в webview Telegram на iPhone якорения НЕТ — а владелец именно
+         оттуда и жалуется на дёрганье. Поэтому вверх не заглядываем. */
+    }, {rootMargin:'0px 0px '+(запас==null?400:запас)+'px 0px'});
+    io.observe(el);
+  }catch(e){ try{ fn(); }catch(_e){} }
+}
 function cardHadith(d,groups){
   const {code,h}=d;
   // #78/R54: Муслим (Абд аль-Баки) — несколько риваятов одного номера (⚬) = СТРОГО ОТДЕЛЬНЫЕ карточки (свой текст/инструменты/перевод/избранное), не блоки в одной
@@ -8820,7 +8854,16 @@ function addTr(meta,card,text,ayah,fav){
     const nbout=document.createElement('div');nbout.className='tr-out';
     nb.onclick=()=>{ if(nbout.dataset.loaded==='1'){ const vis=nbout.style.display!=='none'; nbout.style.display=vis?'none':'block'; try{hap('light');}catch(e){} return; } openIsnadTree(text, nbout, refOf(fav)); nbout.dataset.loaded='1'; };   // повторный клик — свернуть/развернуть; ref → Э2.2-карта версий
     meta.appendChild(nb); card.appendChild(nbout);
-    try{ autoHighlightNarr(text, card, nbout, refOf(fav)); }catch(e){} }   // A: подсветить передатчиков СРАЗУ (точно по таблице codif; кликабельны без нажатия кнопки)
+    /* #678 (С67, владелец: «ужасно долго, медленно и как будто глюченная игра собирается поиск»).
+       Померил на живой выдаче по «666»: карточек 52, и для 33 из них СРАЗУ строился блок сверки.
+       Одна карточка при этом росла 255 → 688 → 1228 px за секунду (в 4,8 раза): сперва приезжала цепь,
+       следом блок сверки на 531 px. Всё, что ниже, уезжало вниз сотнями пикселей — это и есть
+       «собирается на глазах». Плюс 16 пропущенных кадров с провалом 193 мс: поток занят разбором
+       иснадов для карточек, до которых человек, скорее всего, не долистает.
+       Лечим не скорость, а ПОРЯДОК: тяжёлый хвост (codif-подсветка + сверка) считаем не при сборке
+       списка, а когда карточка подъезжает к экрану. Видимая карточка получает всё то же самое и так же
+       быстро, а список перестаёт перекладываться под пальцем. */
+    try{ _приБлизости(card, ()=>{ try{ autoHighlightNarr(text, card, nbout, refOf(fav)); }catch(e){} }); }catch(e){ try{ autoHighlightNarr(text, card, nbout, refOf(fav)); }catch(_e){} } }   // A: подсветить передатчиков (точно по таблице codif; кликабельны без нажатия кнопки)
   // R-заявка 14.06: ссылка на страницу хадиса в Мактабе (turath/الشاملة) на КАЖДОЙ карточке. Тумблер cfg.maktabaBtn (по умолчанию вкл).
   if(!ayah && cfg.maktabaBtn!==false){ try{ const _r0=refOf(fav); let _bid=null, _num=null;
     if(_r0){ _num=_r0.num;
@@ -10737,9 +10780,7 @@ function _dzPlaceCard(bid, num, leaf, ids){
   const upgrade=async()=>{
     if(started) return; started=true;
     try{
-      const ec=(slug==='ibnmajah')?'ibnmaja':slug;   // у нас файл называется ibnmaja (как в _maktUpgrade)
-      const arr=await loadByCode(ec); if(!arr) return;
-      const h=arr.find(x=>String(x.num)===String(num)); if(!h) return;   // номера нет в нашей базе — заглушка честнее выдумки
+      const h=await _хадисПоНомеру(slug, num); if(!h) return;   /* #675 (С67): один хадис — через шард, а не весь сборник (Ахмад 25 МБ) */   // номера нет в нашей базе — заглушка честнее выдумки
       const card=cardHadith({code:slug, h:h}, []);
       if(!card) return;
       wrap.innerHTML=''; wrap.appendChild(card);
@@ -11389,7 +11430,7 @@ async function openHTableV2(slug){
     _trBtn.style.cssText='margin-top:5px;font-size:11px;padding:3px 10px;border:1px solid var(--border);border-radius:8px;color:var(--link);background:transparent';
     const _trOut=document.createElement('div'); _trOut.style.cssText='margin-top:4px';
     _trBtn.onclick=async()=>{ if(_trOut.dataset.done){ _trOut.style.display=(_trOut.style.display==='none')?'block':'none'; return; }
-      let txt=e.t||''; try{ const arr=await loadByCode(sg); const h=(arr||[]).find(x=>String(x.num)===String(num)); if(h&&h.text) txt=h.text; }catch(_e){}
+      let txt=e.t||''; try{ const h=await _хадисПоНомеру(sg, num); if(h&&h.text) txt=h.text; }catch(_e){}   /* #675 (С67): один хадис — через шард, а не весь сборник (Ахмад 25 МБ) */
       try{ await doTranslate(txt, _trOut, _trBtn, {source:sg,num:String(num)}); if((_trOut.textContent||'').trim()) _trOut.dataset.done='1'; }catch(_e){} };
     d.appendChild(_trBtn); d.appendChild(_trOut);
     return d;
@@ -14541,6 +14582,14 @@ async function _codifHighlight(text, card, out, place){
         highlightNarratorsInDiv(ad, names, async nm=>{ const id=f2id[nm]; out.style.display='block'; let c=null; try{ c=await _narrCard(id); }catch(e){}
           openNarratorRijal((c&&c[1])||nm, id); }, f2id);   /* id-first: короткие имена (سمي) тоже открывают карточку */ }
         try{ highlightRelationalInDiv(ad); }catch(e){} }); }catch(e){} }, 60);   // 60мс: пусть ранний пустой прогон закончится ДО нас — мы перекрываем
+      /* #686 (С67): последнее звено авторитетной цепи — сподвижник. В большинстве изданий он стоит уже
+         за границей матна (после «أن» или внутри кавычки), куда обычная подсветка намеренно не заходит.
+         Помечаем его отдельным проходом по id из codif — после основной подсветки, чтобы не спорить с ней. */
+      try{ const _посл=rec.na[rec.na.length-1];
+        if(_посл && _посл[0] && _посл[1]!=null){
+          setTimeout(()=>{ try{ _подсветитьСподвижника(card, _посл[0], _посл[1], async (nm,id)=>{
+            out.style.display='block'; let c=null; try{ c=await _narrCard(+id); }catch(e){}
+            openNarratorRijal((c&&c[1])||nm, id); }); }catch(e){} }, 220); } }catch(e){}
       return true;
     }
   }
@@ -14554,6 +14603,58 @@ async function _codifHighlight(text, card, out, place){
       openNarratorRijal((c&&c[1])||nm); }, f2id);   /* не рвём карточку хадиса — равий открывается модалкой (как в поиске), указ владельца */ }
     try{ highlightRelationalInDiv(ad); }catch(e){} }); }catch(e){} }, 0);
   return true;
+}
+/* #686 (С67, владелец: «сверка не работают, потому что Ибн Умар не отмечен и не определён»).
+   Разобрал на его же хадисе — Бухари 666 со скрина #678. Опознание имени НИ ПРИ ЧЁМ: авторитетная цепь
+   codif несёт все четыре звена, включая «ابْنَ عُمَرَ#3807» — и id верный, тот самый выверенный вручную.
+   Причина в ПОДСВЕТКЕ: с 25.07.2026 она идёт только по иснаду, до начала матна, а граница матна ловится
+   в том числе по открывающей кавычке «. В этом издании текст такой:
+       … عَنْ نَافِعٍ : «أَنَّ ابْنَ عُمَرَ أَذَّنَ …
+   — сподвижник стоит ВНУТРИ кавычки, то есть уже за границей, и подсветка до него не доходит. Правило само
+   по себе верное (без него зеленели десятки имён из аппарата тахкика), ломать его нельзя.
+   Поэтому не трогаем правило, а добавляем ОДНО исключение: последнее звено авторитетной цепи (сподвижник),
+   у которого есть id из codif, помечаем отдельным проходом — ровно одно имя, ровно первое вхождение,
+   и только если оно ещё не помечено. Ни на что другое проход не смотрит.
+   Класс широкий: так устроены тысячи хадисов вида «عن نافع: «أن ابن عمر…» — сподвижник всегда у границы матна. */
+function _подсветитьСподвижника(card, имя, id, onClick){
+  try{
+    if(!card || !имя || id==null) return false;
+    if([...card.querySelectorAll('.nhl[data-id]')].some(sp=>String(sp.dataset.id)===String(id))) return false;   // уже подсвечен обычным путём
+    const цель=stripDiac(String(имя)).replace(/ـ/g,'').replace(/\s+/g,' ').trim();
+    if(цель.length<3) return false;
+    const ad=card.querySelector('.ar'); if(!ad) return false;
+    const walker=document.createTreeWalker(ad, NodeFilter.SHOW_TEXT, null); const nodes=[];
+    while(walker.nextNode()) nodes.push(walker.currentNode);
+    for(const node of nodes){
+      try{ if(node.parentElement && node.parentElement.closest && node.parentElement.closest('.nhl')) continue; }catch(e){}
+      const raw=node.nodeValue||''; if(raw.length<3) continue;
+      // карта «позиция без огласовок → позиция в исходном тексте»: искать надо по скелету (в цепи и в тексте
+      // огласовки расставлены по-разному), а оборачивать — ровно тот кусок, что видит человек.
+      let flat='', map=[];
+      for(let i=0;i<raw.length;i++){ const ch=raw[i];
+        if(/[ً-ْٰـ]/.test(ch)) continue;   // огласовки и татвиль пропускаем
+        flat+=ch; map.push(i); }
+      const p=flat.indexOf(цель); if(p<0) continue;
+      const s0=map[p], s1=(p+цель.length<map.length)?map[p+цель.length]:raw.length;
+      const span=document.createElement('span'); span.className='nhl'; span.textContent=raw.slice(s0,s1);
+      span.dataset.nm=String(имя); span.dataset.id=String(id);
+      span.style.cssText='cursor:pointer;color:#ffeaae;background:#1e3a28;border-radius:5px;padding:3px 3px;margin:-3px 0;-webkit-box-decoration-break:clone;box-decoration-break:clone;box-shadow:0 0 0 1px rgba(90,180,120,.45)';
+      span.title='id'+id+' · Нажми: кто это + слова учёных';
+      span.onclick=(e)=>{ e.stopPropagation(); try{ onClick&&onClick(String(имя), String(id)); }catch(_e){ try{ openNarratorRijal(String(имя), String(id)); }catch(__e){} } };
+      const frag=document.createDocumentFragment();
+      if(s0>0) frag.appendChild(document.createTextNode(raw.slice(0,s0)));
+      frag.appendChild(span);
+      if(s1<raw.length) frag.appendChild(document.createTextNode(raw.slice(s1)));
+      node.parentNode.replaceChild(frag, node);
+      // ⭐ сподвижник — тот же золотой стиль, что и у обычной подсветки (#503), спрашиваем карточку по id
+      try{ _narrCard(+id).then(v=>{ if(!v) return;
+        const gb=_genBadge((v[5]||'')+' '+(v[6]||'')+' '+(v[7]||''), v[4]);
+        if(gb && gb[0]==='صحابي'){ span.style.color='#3a2a05'; span.style.background='linear-gradient(135deg,#ffd76a,#e8b632)';
+          span.style.boxShadow='0 0 0 1px #c9962b'; span.title+=' · ⭐ сподвижник'; } }); }catch(e){}
+      return true;
+    }
+  }catch(e){}
+  return false;
 }
 // A: авто-подсветка передатчиков в карточке. Сперва — ТОЧНАЯ по таблице (codif); нет данных по хадису → старый эвристический путь.
 function autoHighlightNarr(text, card, out, ref){
