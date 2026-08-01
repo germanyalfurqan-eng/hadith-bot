@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1270</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1271</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1478,7 +1478,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1270';
+const APPVER = 'v1271';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3241,7 +3241,8 @@ function updateTranslitSugg(){
     if(((document.getElementById('q').value||'').trim())!==v) return;   // успел поменяться
     let ws=[], phrase=''; try{ ws=await translitSuggest(v,true); phrase=await translitPhrase(v,true); }catch(e){}   // true=строгий (без мусора на рус.словах)
     if(((document.getElementById('q').value||'').trim())!==v) return;
-    const ruAr=(!ws.length && !phrase) ? _ruToAr(v) : '';   // УКАЗ-2: правило-транслит, когда словарь молчит (джильбаб→جلباب)
+    let ruAr=(!ws.length && !phrase) ? _ruToAr(v) : '';   // УКАЗ-2: правило-транслит, когда словарь молчит (джильбаб→جلباب)
+    if(ruAr && !_ruАрПравдоподобенФраза(v, ruAr)) ruAr='';   /* #676 (С67): негодный подбор по звучанию («иудеи»→«اود») не показываем вовсе */
     if(!ws.length && !phrase && !ruAr){ box.style.display='none'; box.innerHTML=''; return; }
     const pick=(val)=>{ const q=document.getElementById('q'); q.value=val; box.style.display='none'; box.innerHTML='';
       try{hideRecent();}catch(e){} updateQuranHelper(); runSearch(true); };
@@ -4331,6 +4332,7 @@ async function runSearch(explicit){
         try{ const _tw=await translitSuggest(shown.trim()); let _ar=[...new Set((_tw||[]).filter(x=>isArabic(x)&&canon(x).replace(/\s/g,'').length>=3))].slice(0,3);
           let _ruleAr='';   // УКАЗ-2: правило-транслит-фолбэк (джильбаб→جلباب), когда словарь молчит
           if(!_ar.length){ try{ _ruleAr=_ruToAr(shown.trim()); }catch(e){} }
+          if(_ruleAr && !_ruАрПравдоподобенФраза(shown.trim(), _ruleAr)) _ruleAr='';   /* #676 (С67): лучше промолчать, чем подсказать бессмыслицу */
           // Слово владельца 25.07 («пишешь пример "Абу Хурайра" — надо, чтобы подсказкой всплывала КАРТОЧКА Абу Хурайры»):
     // механизм #85 (_narrHintNormal) для этого уже есть, но он срабатывал только по ВВОДУ с клавиатуры —
     // при поиске из подсказки-примера, из истории или по кнопке подсказка не появлялась. Дёргаем её и после поиска.
@@ -6420,6 +6422,13 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
   }catch(e){}
   meta.innerHTML='<span class="src'+(canRead?' srcnav':'')+'"'+(canRead?' title="Открыть в читалке на этом хадисе">📖 ':'>')+vocOf(code)+_номТекст(h.num)+'</span>'+_riwL;   /* #37: название С ОГЛАСОВКАМИ; #682 (С67): «как может быть хадис номер 0» — у части печатей номера в издании нет, и вместо него подставлялся ноль. Помощник _номТекст (он уже гасил «№0» на русской карточке) теперь стоит и здесь: номера нет — строка просто без номера, выдумывать «№0» нечего. */
   meta.innerHTML+=authBadge(code, h.grade, (h.num||h.n));
+  /* УКАЗ 11.07 + #682-④ (С67): «⏳ ожидается наша проверка» — правда, но человеку непонятно, ЧЕГО ждать.
+     Померил по данным: оценки есть только у Ахмада (25 960 из 27 087), у Абу Дауда/Ибн Маджи/Насаи/Малика/
+     Тирмизи/Дарими/Адаб аль-Муфрада — ноль. Значит это наша недоделка, а не свойство хадиса, и она обязана
+     нести отметку «что и почему будет доделано». Вешаем ТОЛЬКО туда, где реально стоит «ожидается»:
+     у Бухари/Муслима значка нет вовсе, у Ахмада стоит настоящая оценка. */
+  try{ if(meta.innerHTML.indexOf('ожидается наша проверка')>=0){
+    _devNote('hukm_pending').then(dn=>{ try{ if(dn) meta.insertAdjacentHTML('beforeend', _devNoteHtml(dn)); }catch(e){} }); } }catch(e){}
   if(_riwNote) meta.innerHTML += _riwNote;
   { const _rl=_ruSrcLine(code); if(_rl) meta.innerHTML+='<span class="srcru" style="display:block;width:100%;font-size:11.5px;color:var(--hint);margin-top:1px;direction:ltr;text-align:left">'+esc(_rl)+'</span>'; }   // #37: рус. название + автор
   try{ ourHukmBadge(code, (h.num||h.n), meta, card); }catch(e){}
@@ -7190,6 +7199,48 @@ async function _renderTlinkLinks(id, host, onPick){
   return true;
 }
 function _cleanNarrName(nm){ const ws=String(nm||"").trim().split(/ +/); const st={"وقيل":1,"ويقال":1,"يقال":1,"وقال":1,"قال":1,"او":1}; const o=[]; for(const w of ws){ if(st[stripDiac(w)]) break; o.push(w); if(o.length>=9) break; } return o.join(" ")||nm; }
+/* #684 (С67, владелец про «أبي الشعثاء المحاربي»: «почему так»). Карточка неопознанного равия была
+   тупиком: одна строка «Не удалось опознать передатчика точно» и три кнопки. Пустое окно — худший ответ,
+   потому что человек не понимает ни что случилось, ни что делать дальше.
+   Показываем то, что у нас РЕАЛЬНО есть, даже когда имя не привязано к записи в базе:
+     ① само имя, как оно стоит в цепи (часто в родительном падеже — «أبي…» вместо «أبو…», это и мешает поиску);
+     ② по чему мы искали — скелет имени без огласовок, чтобы было видно, что искали именно это;
+     ③ куда идти дальше: найти хадисы с этим именем обычным поиском, собрать по нему цепь, посмотреть в Шамеле;
+     ④ честную отметку «не опознан — вот почему и что будет доделано» (dev_notes: narr_unknown).
+   Чего НЕ делаем: не гадаем, кто это. Ниже по карточке остаются кнопки «что сказали критики» и свод ИИ —
+   они работают от строки имени и без опознания. */
+function _narrНеОпознан(body, name){
+  try{
+    const имя=String(name||'').trim();
+    const скелет=(function(){ try{ return _narrCanon(имя)||''; }catch(e){ return ''; } })();
+    body.innerHTML='';
+    const w=document.createElement('div');
+    w.style.cssText='border:1px dashed #6b5c33;border-radius:12px;padding:11px 13px;background:rgba(107,92,51,.08)';
+    w.innerHTML='<div style="font-size:13.5px;color:#e0c07a;font-weight:600">🔍 Пока не опознан — вот что мы о нём знаем</div>'
+      +(имя?('<div dir="rtl" style="'+_AF+';font-size:19px;margin-top:7px;color:var(--text)">'+esc(имя)+'</div>'):'')
+      +'<div class="hint" style="font-size:12px;margin-top:5px;line-height:1.55">Так он записан в цепи этого хадиса.'
+      +(скелет&&скелет!==имя?(' Искали по написанию без огласовок: <b dir="rtl">'+esc(скелет)+'</b>.'):'')
+      +' В цепях имя часто стоит в косвенной форме («أبي…» вместо «أبو…») или сокращено — из-за этого привязка к записи и не сходится.</div>';
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;gap:7px;flex-wrap:wrap;margin-top:9px';
+    const кн=(txt,ttl,fn)=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=txt; b.title=ttl;
+      b.style.cssText='border:1px solid var(--border);border-radius:9px;padding:6px 11px;font-size:12.5px;cursor:pointer;color:var(--link);background:transparent';
+      b.onclick=()=>{ try{ hap('light'); }catch(e){} try{ fn(); }catch(e){} }; row.appendChild(b); };
+    кн('🔎 Найти хадисы с этим именем','Обычный поиск по тексту: покажет хадисы, где встречается это имя',()=>{
+      try{ const m=document.getElementById('narrModal'); if(m) m.style.display='none'; }catch(e){}
+      const qi=document.getElementById('q'); if(qi){ qi.value=имя; try{ runSearch(true); }catch(e){} } });
+    кн('⛓ Собрать цепь по имени','Режим «Цепь»: найдёт хадисы, где это имя стоит в иснаде рядом с другими',()=>{
+      try{ const m=document.getElementById('narrModal'); if(m) m.style.display='none'; }catch(e){}
+      const qi=document.getElementById('q'); if(qi) qi.value=имя;
+      try{ const c=document.querySelector('.chip[data-mode="narr"]'); if(c) c.click(); }catch(e){} });
+    кн('ش Поискать в Шамеле','Открыть поиск по этому имени в библиотеке Мактаба аш-Шамиля',()=>{
+      const u='https://shamela.ws/search?q='+encodeURIComponent(имя);
+      try{ openLink(u); }catch(e){ try{ window.open(u,'_blank'); }catch(_e){} } });
+    w.appendChild(row);
+    body.appendChild(w);
+    try{ _devNote('narr_unknown').then(dn=>{ try{ if(dn) w.insertAdjacentHTML('beforeend', _devNoteHtml(dn)); }catch(e){} }); }catch(e){}
+  }catch(e){ try{ body.innerHTML='<div class="hint">Не удалось опознать передатчика точно.</div>'; }catch(_e){} }
+}
 async function openNarratorRijal(name, forceId){
   if(!name && forceId==null) return;
   let m=document.getElementById('narrModal');
@@ -7226,7 +7277,7 @@ async function openNarratorRijal(name, forceId){
   try{ Array.prototype.slice.call(body.children).forEach(function(ch){ if(ch!==_realBox) ch.remove(); }); _realBox.style.display=''; }catch(e){}
   if(!_cardShown){   // фолбэк на старое поведение — если полная карточка не построилась (имя не резолвится), хотя бы «Оценки» локально
     body.innerHTML='<div class="hint">📜 Загружаю оценки учёных…</div>';
-    try{ let _v=(forceId!=null&&forceId!=='')?String(forceId):await _narrLookup(name); if(_v!=null){ body.innerHTML=''; await renderTestimoniesCard(_v, body); } else body.innerHTML='<div class="hint">Не удалось опознать передатчика точно.</div>'; }catch(e){ body.innerHTML='<div class="hint">Не удалось опознать передатчика точно.</div>'; }
+    try{ let _v=(forceId!=null&&forceId!=='')?String(forceId):await _narrLookup(name); if(_v!=null){ body.innerHTML=''; await renderTestimoniesCard(_v, body); } else _narrНеОпознан(body, name); }catch(e){ _narrНеОпознан(body, name); }
   }
   if(!BACKEND_URL) return;
   // 10.07 (владелец, Абу Хурайра: «какой-то свод ИИ непонятный — зачем он тут?»): у СПОДВИЖНИКА джарх-ва-тадиль
@@ -10036,8 +10087,14 @@ function _ragРисоватьСпасение(res, спас, порог, зап�
     res.appendChild(h);
     const п=document.createElement('div'); п.className='hint';
     п.style.cssText='font-size:11.5px;margin:0 0 8px;line-height:1.55';
-    п.textContent='Поиск по смыслу оценил эти места ниже порога '+порог.toFixed(3)+', но слово из вашего вопроса стоит в НАЗВАНИИ ГЛАВЫ сборника. Это более слабое совпадение — смотрите сами, ничего не утверждаем.';
+    /* УКАЗ 11.07 + пачка 8: подпись обязана объяснять НЕ ТОЛЬКО «слабее», но и ПОЧЕМУ так вышло —
+       раздел новый и непривычный, без объяснения он читается как «приложение притащило что попало». */
+    п.innerHTML='Сборник огромный, и точного совпадения по смыслу на ваш вопрос не нашлось: поиск оценил эти места ниже порога '
+      +esc(порог.toFixed(3))+'. Но слово из вопроса стоит в <b>названии главы</b>, а главу составлял сам автор сборника — значит тема та же. '
+      +'Это более слабое совпадение: смотрите сами, мы ничего не утверждаем.';
     res.appendChild(п);
+    // отметка «будет доделано»: раздел временный, его снимет пересборка указателя с названиями глав
+    try{ _devNote('rag_below_threshold').then(dn=>{ try{ if(dn) п.insertAdjacentHTML('afterend', _devNoteHtml(dn)); }catch(e){} }); }catch(e){}
     спас.forEach(({cid,s,c})=>{
       const card=document.createElement('div'); card.className='card'; card.style.cssText='margin-bottom:7px;border-color:#6b5a2e';
       const top=document.createElement('div'); top.style.cssText='display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px';
@@ -11158,6 +11215,24 @@ async function dzChainInto(host, bid, num){
     box.appendChild(lbl);
     const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl;align-items:flex-start'; box.appendChild(row);
     _dzChips(codes, row, forms);
+    /* #682-② → пачка 8 (УКАЗ 11.07): цепочка и подсветка показывают РАЗНОЕ число имён, и для человека это
+       выглядит противоречием («почему не все выделены»). Числа считаются по-разному: в цепочке — только
+       опознанные в базе равиев (у каждого есть карточка), в тексте — все имена, найденные по написанию.
+       Подписываем ОБА числа словами, чтобы разница читалась сама; отметку «будет доделано» вешаем только
+       когда числа реально разошлись — на совпадении она была бы шумом. */
+    try{
+      setTimeout(()=>{ try{
+        const вЦепи=row.querySelectorAll('[data-mid],.dzChip,span').length ? codes.length : codes.length;
+        const карточка=box.closest ? box.closest('.card') : null;
+        const вТексте=карточка ? карточка.querySelectorAll('.ar .nhl').length : 0;
+        const п=document.createElement('div'); п.className='hint';
+        п.style.cssText='font-size:11.5px;margin-top:5px;line-height:1.5';
+        п.textContent='В цепочке '+вЦепи+' — столько передатчиков мы опознали в базе равиев (у каждого открывается карточка).'
+          +(вТексте?(' В тексте подсвечено '+вТексте+' — это все имена, найденные по написанию, даже если карточки для них ещё нет.'):'');
+        box.appendChild(п);
+        if(вТексте && вТексте!==вЦепи){ _devNote('chain_vs_highlight').then(dn=>{ try{ if(dn) box.insertAdjacentHTML('beforeend', _devNoteHtml(dn)); }catch(e){} }); }
+      }catch(e){} }, 900);   // ждём авто-подсветку: она приезжает позже цепи
+    }catch(e){}
     // M449: вечный КОД ЦЕПИ этого хадиса + «та же цепь ещё в N хадисах» (ткни пальцем → код цепи). cid из dz-seq (реестр), если есть.
     try{
       const info=await _isnadInfo(seq||codes, (full&&full.forms)||forms);
@@ -15775,6 +15850,41 @@ function _ruToAr(query){
   if(!toks.length) return '';
   const parts=toks.map(_ruToArWord).filter(x=>x.length>=2);
   return parts.length?parts.join(' '):'';
+}
+/* #676 (С67, владелец: «иудеи и арабское слово вообще не связано»). На «Иудеи» подсказка предлагала «اود» —
+   это не перевод, а подбор по звучанию (И→ا, у→و, д→د), и звучит он бессмыслицей. Настоящее лечение —
+   словарь «русское слово → арабское», которого у нас нет (разбор ушёл в очередь отдельной полосой).
+   Что можно СЕЙЧАС, не выдумывая словаря: не показывать заведомо негодный подбор.
+   Признак негодности — потеря букв: подбор по звучанию съедает гласные, и от «иудеи» (5 букв) остаётся
+   3 знака. Настоящий арабизм так не теряет: «иман»→«ايمان», «джильбаб»→«جلباب», «тахарат»→«طهارة».
+   Правило: арабских букв должно быть не меньше 4 и не меньше, чем русских минус одна. Иначе молчим —
+   промолчать лучше, чем подсказать не то (слово владельца). Словарную проверку «есть ли такое слово
+   в корпусе» добавим вместе со словарём: сейчас её нечем делать, честного индекса слов у нас нет. */
+function _ruArПравдоподобен(рус, ар){
+  try{
+    const р=String(рус||'').toLowerCase().replace(/ё/g,'е').replace(/[^а-я]/g,'');
+    const а=String(ар||'').replace(/[^ء-ي]/g,'');
+    if(!р || !а) return false;
+    if(а.length<4) return false;                          // «اود», «ورا» — короткий огрызок, а не слово
+    if(а.length < Math.ceil(р.length*0.6)) return false;   // потеряно больше 40% — подбор рассыпался
+    // ключевой признак: в арабском письме смысл несут СОГЛАСНЫЕ, а ا/و/ي здесь чаще всего протезы под
+    // русские гласные. «جلباب» (джильбаб) — 4 согласных, настоящее слово; «اود» (иудеи) — одна, пустышка.
+    const согл=(а.match(/[^اويى]/g)||[]).length;
+    if(согл<3) return false;
+    return true;
+  }catch(e){ return false; }
+}
+/* Фразовая обёртка: _ruToAr переводит по словам и склеивает пробелом, поэтому и проверяем по словам.
+   Достаточно одному слову оказаться огрызком — подсказка целиком негодна, показывать её нельзя. */
+function _ruАрПравдоподобенФраза(рус, ар){
+  try{
+    const рт=String(рус||'').toLowerCase().replace(/ё/g,'е').split(/[^а-я]+/).filter(t=>t.length>=2);
+    const ат=String(ар||'').split(/\s+/).filter(Boolean);
+    if(!рт.length || !ат.length) return false;
+    if(ат.length!==рт.length) return _ruArПравдоподобен(рт.join(''), ат.join(''));   // слова слиплись/выпали — сверяем целиком
+    for(let i=0;i<рт.length;i++) if(!_ruArПравдоподобен(рт[i], ат[i])) return false;
+    return true;
+  }catch(e){ return false; }
 }
 function neuroLocal(meaning){
   const toks=meaning.toLowerCase().split(/[\s.,;:!?()"'«»\/\-]+/).filter(t=>t.length>=3);
