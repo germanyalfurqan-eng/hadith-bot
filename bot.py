@@ -9025,7 +9025,9 @@ async def _app_channel_watcher(application):
                 if isinstance(queue, list) and queue:
                     j = _journal_load()
                     posted_ids = set(j.get("app_post_ids") or [])
-                    pending = [x for x in queue if isinstance(x, dict) and x.get("id") and x.get("note") and x["id"] not in posted_ids]
+                    _stuck = set(j.get("app_post_stuck") or [])   # отложены после 3 неудач — не дёргаем каждые 5 мин
+                    pending = [x for x in queue if isinstance(x, dict) and x.get("id") and x.get("note")
+                               and x["id"] not in posted_ids and x["id"] not in _stuck]
                     posted_now = 0
                     for item in pending[:8]:   # предохранитель: не больше 8 постов за один тик (не заспамить канал разом)
                         # 04.07.2026 (владелец поймал дубли ЧЕТЫРЕ РАЗА, несмотря на 2 предыдущих фикса —
@@ -9095,19 +9097,45 @@ async def _app_channel_watcher(application):
                                 _data_atomic_mutate("journal.json", _откат0, "почищено до пустышки: " + item["id"])
                             except Exception:
                                 pass
-                            _t = ("НЕ публикую %s в @muslimoonapp: после чистки осталось %d знаков из %d, "
-                                  "в канал ушла бы пустышка вместо обновления.\n\nИсходный текст:\n%s\n\n"
-                                  "Перепиши без длинных цитат в ёлочках и без служебных слов — опубликую."
-                                  % (item["id"], len(_чист), len(_сыро), _сыро[:1500]))
-                            for _ч in (OWNER_ID, LOG_CHAT_ID):
-                                try:
-                                    await application.bot.send_message(_ч, _t)
-                                except Exception:
-                                    pass
+                            # БЕЗ СПАМА (владелец: «это че за спам?»): состояние повторяется каждые
+                            # 5 минут, поэтому сообщаем ОДИН раз на версию, а не на каждой проверке.
+                            _уже = ((_journal_cache or {}).get("app_post_fail_n") or {}).get(item["id"], 0)
+                            def _счёт(obj, _id=item["id"]):
+                                obj = obj or {}
+                                c = obj.get("app_post_fail_n") or {}
+                                c[_id] = int(c.get(_id, 0)) + 1
+                                obj["app_post_fail_n"] = c
+                                return obj
+                            try:
+                                _ok_c, _nj = _data_atomic_mutate("journal.json", _счёт, "счётчик пустышки " + item["id"])
+                                if _ok_c and _nj is not None and _journal_cache is not None:
+                                    _journal_cache["app_post_fail_n"] = _nj.get("app_post_fail_n", {})
+                            except Exception:
+                                pass
+                            if _уже == 0:
+                                _t = ("НЕ публикую %s в @muslimoonapp: после чистки осталось %d знаков из %d, "
+                                      "в канал ушла бы пустышка вместо обновления.\n\nИсходный текст:\n%s\n\n"
+                                      "Перепиши без длинных цитат в ёлочках и без служебных слов — опубликую. "
+                                      "Об этом сообщаю ОДИН раз, повторов не будет."
+                                      % (item["id"], len(_чист), len(_сыро), _сыро[:1500]))
+                                for _ч in (OWNER_ID, LOG_CHAT_ID):
+                                    try:
+                                        await application.bot.send_message(_ч, _t)
+                                    except Exception:
+                                        pass
                             continue
                         try:
                             await _post_app_channel(application.bot, item["note"])
                             posted_now += 1
+                            def _сброс(obj, _id=item["id"]):     # вышло — счётчик неудач обнуляем
+                                obj = obj or {}
+                                c = obj.get("app_post_fail_n") or {}
+                                c.pop(_id, None)
+                                obj["app_post_fail_n"] = c
+                                obj["app_post_stuck"] = [x for x in (obj.get("app_post_stuck") or []) if x != _id]
+                                return obj
+                            try: _data_atomic_mutate("journal.json", _сброс, "успех, счётчик сброшен " + item["id"])
+                            except Exception: pass
                         except Exception as _e_post:
                             def _откат(obj, _id=item["id"], _note=item["note"]):
                                 obj = obj or {}
@@ -9126,14 +9154,47 @@ async def _app_channel_watcher(application):
                                     _journal_cache["app_post_ids"] = [x for x in (_journal_cache.get("app_post_ids") or []) if x != item["id"]]
                             except Exception:
                                 pass
-                            _txt_fail = ("🔴 НЕ СМОГ опубликовать обновление %s в @muslimoonapp.\n\n"
-                                         "Причина: %s\n\n"
-                                         "Заявку откатил — попробую снова через 5 минут. Если повторится, "
-                                         "проверь, остаётся ли бот администратором канала с правом публикации."
-                                         % (item["id"], str(_e_post)[:300]))
-                            for _чат in (OWNER_ID, LOG_CHAT_ID):
-                                try: await application.bot.send_message(_чат, _txt_fail)
-                                except Exception: pass
+                            # БЕЗ СПАМА (владелец 01.08: «это че за спам? обеспечь чтобы каждое смс
+                            # тут было продуктивным»). Провал отправки — это СОСТОЯНИЕ, повторяющееся
+                            # каждые 5 минут, а не событие. Сообщаем ОДИН раз при входе в него; после
+                            # трёх неудач перестаём и пытаться, чтобы не дёргать Telegram вхолостую.
+                            _n_бывш = ((_journal_cache or {}).get("app_post_fail_n") or {}).get(item["id"], 0)
+                            def _счёт2(obj, _id=item["id"]):
+                                obj = obj or {}
+                                c = obj.get("app_post_fail_n") or {}
+                                c[_id] = int(c.get(_id, 0)) + 1
+                                obj["app_post_fail_n"] = c
+                                if c[_id] >= 3:
+                                    st = obj.get("app_post_stuck") or []
+                                    if _id not in st:
+                                        st.append(_id)
+                                    obj["app_post_stuck"] = st
+                                return obj
+                            try:
+                                _ok_c2, _nj2 = _data_atomic_mutate("journal.json", _счёт2, "счётчик провалов " + item["id"])
+                                if _ok_c2 and _nj2 is not None and _journal_cache is not None:
+                                    _journal_cache["app_post_fail_n"] = _nj2.get("app_post_fail_n", {})
+                                    _journal_cache["app_post_stuck"] = _nj2.get("app_post_stuck", [])
+                            except Exception:
+                                pass
+                            if _n_бывш == 0:
+                                _txt_fail = ("НЕ смог опубликовать обновление %s в @muslimoonapp.\n\n"
+                                             "Причина: %s\n\n"
+                                             "Заявку откатил, попробую ещё дважды. Сообщаю об этом ОДИН раз — "
+                                             "повторов каждые 5 минут не будет. Если не выйдет и с третьей "
+                                             "попытки, версия отложится и я скажу отдельно."
+                                             % (item["id"], str(_e_post)[:300]))
+                                for _чат in (OWNER_ID, LOG_CHAT_ID):
+                                    try: await application.bot.send_message(_чат, _txt_fail)
+                                    except Exception: pass
+                            elif _n_бывш == 2:
+                                _txt_fail = ("Обновление %s отложено: три неудачных попытки публикации подряд. "
+                                             "Больше не пробую, чтобы не занимать канал вхолостую. "
+                                             "Последняя причина: %s\n\nПроверь, остаётся ли бот администратором "
+                                             "@muslimoonapp с правом публикации." % (item["id"], str(_e_post)[:300]))
+                                for _чат in (OWNER_ID, LOG_CHAT_ID):
+                                    try: await application.bot.send_message(_чат, _txt_fail)
+                                    except Exception: pass
                             continue   # соседние версии не теряем — идём дальше по очереди
                         await asyncio.sleep(2)   # пауза между постами — не флудить Telegram API
             except Exception as e:
