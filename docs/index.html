@@ -672,7 +672,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1263</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1264</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1464,7 +1464,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1263';
+const APPVER = 'v1264';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5767,7 +5767,11 @@ async function maktabaByNum(seq, n){
         if(!txt) txt=t.slice(0,1200);
         fb.style.display='none';
         const ar=document.createElement('div'); ar.className='ar'; ar.style.cssText='font-size:16px;line-height:2;margin-top:7px;border-top:1px dashed var(--border);padding-top:7px';
-        ar.textContent=txt.slice(0,2500); card.appendChild(ar);
+        /* #670 (С67): было ar.textContent=txt.slice(0,2500) — длинный хадис обрывался БЕЗ единого знака,
+           даже без многоточия: человек дочитывал до середины фразы и думал, что так и есть в книге.
+           Теперь показываем 2500 знаков + «▾ развернуть», полный текст лежит рядом. innerHTML безопасен:
+           clampTx уже экранирует, а enableArabusTap работает по текстовым узлам (не переписывает разметку). */
+        ar.innerHTML=clampTx(txt,2500); card.appendChild(ar);
         const meta2=document.createElement('div'); meta2.className='meta';
         addTr(meta2, card, txt.slice(0,2500), null, {k:'mk|'+bid+'|'+n, type:'h', coll:bn, label:bn+' №'+n, text:txt.slice(0,200)});
         card.appendChild(meta2);
@@ -12845,7 +12849,9 @@ async function renderTestimoniesCard(mid, host){
           const vb=document.createElement('div'); vb.style.cssText='margin-top:10px;background:rgba(224,121,106,.10);border:1px solid #6a3a2d;border-radius:9px;padding:9px 12px';
           vb.innerHTML='<div style="font-size:13px;color:#e0796a;font-weight:700">🚨 Сверка с sunnah.com: не хватает '+_missing.length+' оцен'+(_missing.length===1?'ки':(_missing.length<5?'ок':'ок'))+'</div>'
             +'<div style="font-size:12px;color:#e0b3a8;margin-top:4px">У sunnah.com есть оценка от критиков, которых нет в нашем своде:</div>'
-            +'<div style="font-size:13px;margin-top:5px;line-height:1.7" dir="rtl">'+_missing.slice(0,20).map(s=>esc(s)).join('، ')+(_missing.length>20?' …':'')+'</div>'
+            /* #670 (С67): список недостающих критиков обрывался на 20-м именем с немым «…» — сколько ещё
+               и кто именно, узнать было нельзя. Теперь остаток раскрывается кнопкой «▾ развернуть». */
+            +'<div style="font-size:13px;margin-top:5px;line-height:1.7" dir="rtl">'+clampHtml(_missing.slice(0,20).map(s=>esc(s)).join('، '), (_missing.length>20?_missing.map(s=>esc(s)).join('، '):''), {more:'ещё '+(_missing.length-20)})+'</div>'
             // владелец 01.07.2026: кнопка «привести в соответствие» — подтянуть недостающие оценки sunnah.com С ТЕКСТАМИ прямо в карточку
             +(isOwner?'<div id="_snPull_'+_sid+'" style="margin-top:8px"><span class="snPullBtn" data-sid="'+esc(String(_sid))+'" style="display:inline-block;cursor:pointer;font-size:12px;font-weight:600;color:#bff5d4;background:rgba(46,155,91,.14);border:1px solid #2e9b5b;border-radius:9px;padding:5px 12px">🔄 Привести в соответствие с sunnah.com (подтянуть '+_missing.length+' оцен'+(_missing.length<5?'ки':'ок')+')</span></div>':'');
           bd.appendChild(vb);
