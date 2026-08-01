@@ -672,7 +672,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1260</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1261</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1464,7 +1464,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1260';
+const APPVER = 'v1261';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2487,7 +2487,9 @@ function _refreshNoteBtns(){ try{ document.querySelectorAll('.noteBtn').forEach(
 /* ===================== 🤖 ПОМОЩНИК Muslimoon (#214) — ИИ-ответы по проекту с правилами ===================== */
 function _assistHist(){ try{ return JSON.parse(sessionStorage.getItem('muslimoon_assist')||'[]'); }catch(e){ return []; } }
 function _assistSave(a){ try{ sessionStorage.setItem('muslimoon_assist', JSON.stringify((a||[]).slice(-30))); }catch(e){} }
-function openAssistant(){
+/* #519 (С67): необязательный `prefill` — чтобы позвать помощника С КОНТЕКСТОМ (из карточки аята).
+   Все прежние вызовы `openAssistant()` работают как работали: без аргумента поле остаётся пустым. */
+function openAssistant(prefill){
   let m=document.getElementById('assistModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='assistModal';
     m.innerHTML='<div class="panel" style="max-width:640px;padding-top:0;display:flex;flex-direction:column;max-height:88vh">'
@@ -2506,6 +2508,10 @@ function openAssistant(){
   }
   modalTop(m); m.style.display='flex';
   _assistRender(m);
+  // #519 (С67): подставляем заготовку и ставим курсор В КОНЕЦ — пользователю остаётся дописать вопрос
+  if(prefill){ try{ const _pi=m.querySelector('#assistInput'); _pi.value=prefill;
+    _pi.style.height='auto'; _pi.style.height=Math.min(120,_pi.scrollHeight)+'px';
+    setTimeout(()=>{ try{ _pi.setSelectionRange(_pi.value.length,_pi.value.length); }catch(e){} },80); }catch(e){} }
   setTimeout(()=>{ try{ m.querySelector('#assistInput').focus(); }catch(e){} },60);
 }
 function _assistRender(m){ const box=m.querySelector('#assistMsgs'); const h=_assistHist();
@@ -2976,6 +2982,12 @@ function renderCols(){
     if(inScope){ d.style.boxShadow='0 0 8px rgba(46,155,91,.8)'; d.style.borderColor='#2e9b5b'; d.title='🎯 Выбран в рамке поиска (Мактаба) — нажми, чтобы убрать из рамки'; }
     else if(_scopeIds){ d.title='🎯 Идёт поиск по выбранным книгам — нажми, чтобы добавить этот сборник в рамку'; }
     d.textContent=c.ru;
+    /* #544 (С67): чипы подписаны ИМЕНАМИ АВТОРОВ (Бухари, Муслим…), и для семи из восьми это читается
+       как книга. Выпадает «Малик»: его свод зовётся «аль-Муватта», а само имя чаще встречается внутри
+       цепей как обычный передатчик — отсюда и вопрос владельца, что это за Малик. Полное название у нас
+       уже есть в RU_TITLE и показывается в читалке; здесь его просто не было. Даём его всем чипам разом
+       (R45 — единообразие), не трогая видимую подпись: ряд по авторам остаётся ровным. */
+    try{ if(!d.title) d.title=(typeof RU_TITLE!=='undefined' && RU_TITLE[c.code])||c.ru; }catch(_e){}
     d.onclick=()=>{ if(_scopeIds){ _collScopeToggle(c.code); return; } selCols.has(c.code)?selCols.delete(c.code):selCols.add(c.code); renderCols(); };
     box.appendChild(d); });
   // выбранные доп. сборники — отдельными чипами (нажал = убрать)
@@ -7972,6 +7984,9 @@ async function openAyahCard(s,a,_isFollow){ s=+s; a=+a; if(!s||!a) return;
       +'<button id="ahPlay" class="ahPlayBig" title="' + t('Слушать','Listen') + '">\u25B6</button>'
       +'<button id="ahFav" class="ahAct ahFavBtn' + (isF?' on':'') + '" title="' + t('В избранное','Add to favorites') + '">' + (isF?'\u2605':'\u2606') + '</button>'
     +'</div></div>';
+  /* #519 (С67): в карточке аята были только Поделиться/Тафсир/Закладка/Слушать/Избранное — спросить про
+     сам аят было негде: помощник открывался пустым и не знал, о чём речь. Кнопку дорисовываем в ряд
+     действий отдельно (ниже), чтобы не трогать разметку с юникод-экранированиями выше. */
   const _press=function(el){ try{ el.style.transform='scale(.82)'; setTimeout(function(){ try{el.style.transform='';}catch(e){} },130); }catch(e){} };   // #80: видимый отклик нажатия
   m.style.display='flex';
   // #183: word-tap в попапе аята (как в читалке) — тап по слову → корень/Arabus/перевод
@@ -7980,6 +7995,16 @@ async function openAyahCard(s,a,_isFollow){ s=+s; a=+a; if(!s||!a) return;
     try{ enableArabusTap(_ahAr); if(_arabusOn) _ahAr.style.cursor='pointer'; }catch(e){} }
   m.querySelector('#ahClose').onclick=()=>{ m.style.display='none'; try{ if(window._ahPlayTimer){ clearInterval(window._ahPlayTimer); window._ahPlayTimer=null; } window._ahFollow=false; }catch(e){} };   // #184: закрытие — стоп синхрона/следования
   m.querySelector('#ahTafsir').onclick=()=>{ try{ openTafsir(s,a); }catch(e){} };
+  // #519 (С67): кнопка «спросить ИИ об этом аяте» — тем же помощником, но с уже подставленным контекстом
+  try{ const _bar=m.querySelector('.ahBar');
+    if(_bar && !_bar.querySelector('#ahAsk')){
+      const _ask=document.createElement('button'); _ask.id='ahAsk'; _ask.className='ahAct';
+      _ask.title=t('Спросить ИИ об этом аяте','Ask AI about this ayah'); _ask.textContent='🧠';
+      _ask.onclick=function(){ _press(this);
+        // подставляем ссылку и перевод (араб. текст помощник получит по ссылке) — вопрос дописывает человек
+        const _ctx='Коран '+s+':'+a+(ru?(' — «'+String(ru).slice(0,300)+'»'):'')+'\n\n'+t('Мой вопрос: ','My question: ');
+        try{ openAssistant(_ctx); }catch(e){} };
+      _bar.appendChild(_ask); } }catch(e){}
   m.querySelector('#ahShare').onclick=()=>{ try{ copyWithSig((txt||'')+'\n— '+t('Коран','Quran')+' '+s+':'+a+(ru?('\n'+ru):'')); }catch(e){} };
   const _ahSync=()=>{ try{ const b=document.getElementById('ahPlay'); if(!b) return; const au=window._qrAudio, cur=window._qrCur; b.textContent=(au&&!au.paused&&!au.ended&&cur&&cur.s===s&&cur.a===a)?'⏸':'▶'; }catch(e){} };   // #184: иконка play↔pause синхронно с реальным аудио
   m.querySelector('#ahPlay').onclick=function(){ _press(this); window._ahFollow=true; try{ _qrToggle(s,a); }catch(e){} setTimeout(_ahSync,200); };   // #184: запуск из попапа = следовать за аудио
@@ -13052,7 +13077,12 @@ async function showNarratorCardLocal(name, host, forceId){
       // v1089 (аудит ②-1): вторая классическая степень — сводный вердикт аз-Захаби (الكاشف), наши testimonies
       +((_dhb&&!_isSah)?('<span dir="rtl" style="font-size:12.5px;color:#cfc3e8;background:#191426;border:1px solid #4a3d6b;border-radius:8px;padding:4px 10px;'+_AF+'" title="Сводный вердикт аз-Захаби в «الكاشف» — из наших выверенных свидетельств (полная запись — в «Поздних сводах» ниже)">🔖 الذهبي: '+esc(_dhb)+' <span style="opacity:.7;font-size:10.5px">الكاشف</span></span>'):'')
       +((_nx&&_nx.r)?('<span style="font-size:12px;color:#cdd6e0;background:#161b22;border:1px solid var(--border);border-radius:8px;padding:4px 10px;'+_AF+'">📍 '+esc(_nx.r)+'</span>'):'')
-      +(_hc>0?('<span class="partCount" title="Мест в НАШЕЙ разметке цепей — не общее число хадисов от него (у сподвижников-мукассиров их реально многие тысячи, мы размечаем постепенно)" style="font-size:12px;color:#bcd2ff;background:rgba(46,107,155,.15);border:1px solid #2e6b9b;border-radius:8px;padding:4px 10px;cursor:pointer">⛓ участвует в цепях (наша разметка): '+_hc+' — показать ↓</span>'):'')
+      /* #563 (С67): владелец про карточку Ибн Умара — «тут все правильно считаешь?»: у сподвижника,
+         передавшего тысячи хадисов, стояло «участвует в цепях: 19». Проверено по данным — цифра ЧЕСТНАЯ:
+         _hc считает только те цепи, что размечены НАМИ (dzPart), а не все хадисы от него. То есть беда
+         снова не в счёте, а в показе: пояснение лежало в `title`, а его на телефоне никто не видит —
+         в Telegram WebView подсказка по наведению не всплывает вовсе. Выносим смысл в видимый текст. */
+      +(_hc>0?('<span class="partCount" title="Мест в НАШЕЙ разметке цепей — не общее число хадисов от него (у сподвижников-мукассиров их реально многие тысячи, мы размечаем постепенно)" style="font-size:12px;color:#bcd2ff;background:rgba(46,107,155,.15);border:1px solid #2e6b9b;border-radius:8px;padding:4px 10px;cursor:pointer">⛓ в размеченных нами цепях: '+_hc+' — это не все его хадисы · показать ↓</span>'):'')
     +'</div>';
   // владелец («шрифты разные, некрасиво»): биография была ОДНИМ div на смешанный рус+араб текст с ОДНИМ font-family
   // на весь блок — браузер сам подбирал шрифт под кириллицу внутри (то Amiri, то системный, по вкусу браузера).
