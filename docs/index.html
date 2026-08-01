@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1265</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1266</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -724,6 +724,7 @@
     <button id="qClear" title="Очистить поиск" style="display:none;position:absolute;right:94px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--hint);font-size:20px;cursor:pointer;padding:4px 8px;z-index:10">✕</button>
     <button class="go" id="goBtn" title="Искать по запросу">Найти</button>
   </div>
+  <div id="ragLim" class="hint" style="display:none;margin:-2px 0 7px;font-size:11.5px;line-height:1.5"></div><!-- #673 (С67): остаток запросов RAG — виден ДО поиска, а не после отказа -->
   <div id="qHelper" class="hint" style="display:none;margin:-2px 0 6px;color:var(--link)"></div>
   <div id="tlSugg" style="display:none;margin:-2px 0 8px"></div>
   <div id="bookSugg" style="display:none;margin:-2px 0 8px;flex-wrap:wrap;gap:6px;align-items:center"></div>
@@ -1472,7 +1473,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1265';
+const APPVER = 'v1266';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3455,7 +3456,9 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ const m=ch.datas
       // владелец не успевал дописать мысль. Теперь чип только переключает режим; поиск идёт по «Найти».
       toast(inp.value.trim() ? '🧠 RAG включён — допиши вопрос и нажми «Найти»'
                              : '🧠 RAG: спроси тему своими словами — покажу все места из нашей базы');
+      try{ _ragLimShow(); }catch(e){}   // #673 (С67): включил режим — сразу видно, сколько запросов осталось (а не после отказа)
     } else { modes.rag=false; const rc=document.querySelector('.chip[data-mode="rag"]'); if(rc) rc.classList.remove('on');   // v1069: повторный тап гарантированно СНИМАЕТ режим
+      try{ _ragLimHide(); }catch(e){}   // #673: режим выключен — строка остатка не висит над чужим поиском
       inp.placeholder=(tab==='hadith'?t('Слова, фраза или № хадиса…','Word, phrase or hadith #…'):t('Слова, фраза или № (2:255)…','Word, phrase or 2:255…')); }
     return; }
   // #677: пересчёт — СЛЕДУЮЩИМ кадром, а не в этом же обработчике. Синхронный вызов забирал поток
@@ -3656,7 +3659,7 @@ function relaxBanner(dropped, used){
   b.innerHTML='🔎 По всем словам точного совпадения нет — показываю без: <b>'+dropped.map(esc).join(', ')+'</b>'
     + (used.length?(' (искал: '+used.map(esc).join(' ')+')'):'')
     + ' · <span class="strictGo" style="cursor:pointer;text-decoration:underline;white-space:nowrap">🔒 искать строго как ввёл</span>';
-  res.insertBefore(b, res.children[1]||null);
+  res.insertBefore(_сводIn(b), res.children[1]||null);   /* #635 (С67): плавный приезд баннера над выдачей */
   const sg=b.querySelector('.strictGo'); if(sg) sg.onclick=()=>{ _strictSearch=true; runSearch(true); };
 }
 /* ===== M173: автоисправление опечаток БЕЗ ИИ (Яндекс-стиль «возможно, вы искали…») ===== */
@@ -4507,6 +4510,14 @@ function resFilterEl(){ const w=document.createElement('span'); w.id='resFilter'
       c.style.display=c._ftx.indexOf(q)!==-1?'':'none'; });
     i.style.borderColor=q?'var(--btn)':'var(--border)'; };
   w.appendChild(i); return w; }
+/* #635 (С67, владелец: «вот это сверху своды они появляются с опозданием и без анимации»):
+   своды НАД результатами — «🎯 по релевантности», «⭐ уникальные», «📚 сгруппировать», «📤 поделиться»,
+   баннеры-подсказки — считаются по всей выдаче и потому приезжают ПОЗЖЕ карточек. Резкая вставка сверху
+   двигает уже прочитанный список вниз, и это читается как рывок вёрстки. Убрать саму задержку нельзя
+   (счёт идёт по всем найденным), а вот приезд делаем плавным.
+   Анимируем ТОЛЬКО ДОБАВЛЕНИЕ свода (ensure*-путь). При полной перерисовке выдачи (тап по тому же своду)
+   мигание всех плашек разом было бы хуже задержки — там анимации нет. */
+function _сводIn(el){ try{ if(el&&el.style) el.style.animation='fadeInUp .28s ease-out both'; }catch(e){} return el; }
 function relToggleEl(){ const t=document.createElement('div'); t.id='relToggle';
   t.style.cssText='display:inline-block;margin:2px 0 8px 8px;font-size:13px;color:var(--link);cursor:pointer;user-select:none;border:1px solid '+(relMode?'#2f7be6':'var(--border)')+';border-radius:12px;padding:3px 10px';
   t.textContent=relMode?'🎯 По релевантности (вкл)':'🎯 По релевантности';
@@ -4561,7 +4572,7 @@ function ensureMoreBtn(seq){
 }
 function ensureRelToggle(){ const res=document.getElementById('res'); if(!res.firstChild||document.getElementById('relToggle')||!_results.length||!_lastQueryTerms.length) return;
   const anchor=document.getElementById('uniqToggle')||document.getElementById('shareBtn')||document.getElementById('grpToggle');
-  if(anchor&&anchor.parentNode) anchor.parentNode.insertBefore(relToggleEl(), anchor.nextSibling); else res.insertBefore(relToggleEl(), res.children[1]||null);
+  if(anchor&&anchor.parentNode) anchor.parentNode.insertBefore(_сводIn(relToggleEl()), anchor.nextSibling); else res.insertBefore(_сводIn(relToggleEl()), res.children[1]||null);   /* #635 (С67): плавный приезд свода */
   try{ if(!document.getElementById('resFilter')){ const rt=document.getElementById('relToggle'); if(rt&&rt.parentNode) rt.parentNode.insertBefore(resFilterEl(), rt); } }catch(e){} }
 function _matnText(d){ return d.type==='hr'?(d.ru||''):((d.h&&d.h.text)||(d.v&&d.v.text)||''); }
 // ХАДИС = матн (хвост текста, после иснада): разные иснады одного матна свернуть в ОДИН хадис
@@ -4599,7 +4610,7 @@ function ensureUniqToggle(){ const res=document.getElementById('res'); if(!res.f
   // прятали в Аятах по его замечанию (строка ~2523) — здесь просто забыли.
   if(typeof tab!=='undefined' && tab!=='hadith') return;
   const anchor=document.getElementById('shareBtn')||document.getElementById('grpToggle');
-  if(anchor&&anchor.parentNode) anchor.parentNode.insertBefore(uniqToggleEl(), anchor.nextSibling); else res.insertBefore(uniqToggleEl(), res.children[1]||null); }
+  if(anchor&&anchor.parentNode) anchor.parentNode.insertBefore(_сводIn(uniqToggleEl()), anchor.nextSibling); else res.insertBefore(_сводIn(uniqToggleEl()), res.children[1]||null); }   /* #635 (С67): плавный приезд свода */
 // Переключатель «по источникам» РЯДОМ с результатами (опция, по умолчанию список). Вставляется после заголовка.
 function grpToggleEl(){
   const t=document.createElement('div'); t.id='grpToggle';
@@ -4610,7 +4621,7 @@ function grpToggleEl(){
 }
 function ensureGrpToggle(){ const res=document.getElementById('res'); if(!res.firstChild || document.getElementById('grpToggle')) return;
   const grp=new Set(_results.map(srcKeyOf)); if(grp.size<2) return;   // группировка только когда есть 2+ источника/суры (иначе не мозолит глаза)
-  res.insertBefore(grpToggleEl(), res.children[1]||null); }
+  res.insertBefore(_сводIn(grpToggleEl()), res.children[1]||null); }   /* #635 (С67): плавный приезд свода */
 // M227: поделиться результатами поиска (с ЛИМИТОМ — не зависнуть — + промо бота)
 function shareResults(){
   if(!_results||!_results.length){ toast('Сначала найди что-нибудь'); return; }
@@ -4634,6 +4645,7 @@ function ensureShareBtn(){ const res=document.getElementById('res'); if(!res.fir
   const b=document.createElement('span'); b.id='shareBtn';
   b.style.cssText='display:inline-block;margin:2px 0 8px 8px;font-size:13px;color:var(--link);cursor:pointer;user-select:none;border:1px solid var(--border);border-radius:12px;padding:3px 10px';
   b.textContent='📤 Поделиться найденным'; b.title='Отправить подборку найденного (что искал + совпадения помечены ‹…›) со ссылкой на приложение'; b.onclick=shareResults;
+  _сводIn(b);   /* #635 (С67): плавный приезд свода «поделиться найденным» */
   const gt=document.getElementById('grpToggle'); if(gt&&gt.parentNode) gt.parentNode.insertBefore(b, gt.nextSibling); else res.insertBefore(b, res.children[1]||null); }
 // #2b: кнопка «Читать библиотеку Мактаба» не должна торчать МЕЖДУ поиском и результатами.
 // Когда есть результаты — уводим её ВНИЗ (под результаты); когда пусто — возвращаем наверх (под поиск).
@@ -5602,7 +5614,7 @@ async function maktabaByNum(seq, n){
     bar.style.cssText='display:block;width:100%;margin:0 0 8px;padding:9px;border:1px solid #6c5ce7;color:#d9ccff;background:rgba(108,92,231,.10);border-radius:10px;font-size:13px;cursor:pointer;text-align:right;direction:rtl';
     bar.innerHTML='👤 Это номер ПЕРЕДАТЧИКА? Открыть карточку <b>#'+(+n)+'</b> — '+esc(cc[1].split(' ').slice(0,5).join(' '))+' ←';
     bar.onclick=()=>{ try{ hap('light'); }catch(e){} narrOpen(cc[1]); };
-    res.insertBefore(bar, head.nextSibling);
+    res.insertBefore(_сводIn(bar), head.nextSibling);   /* #635 (С67): плавный приезд баннера над выдачей */
   }catch(e){} })(); }
   try{ loadBooksMap(); }catch(e){} try{ loadBookTr(); }catch(e){} try{ loadWikiTitles(); }catch(e){}
   // 🎯 фильтр по ВЫБРАННЫМ ЧИПАМ сборников (замечание: «выделил Бухари — значит только Бухари №5590»)
@@ -7304,7 +7316,7 @@ async function maybeNarratorChip(q){ try{
   const _disp=cand.nm||v;   // показываем имя из базы (то, что реально нашли)
   c.innerHTML='👤 Ищете <b>передатчика</b> «'+esc(_disp.slice(0,40))+'»? Открыть, что говорят о нём учёные (ильм риджаль)';
   c.onclick=()=>openNarratorRijal(v);
-  res.insertBefore(c, res.firstChild);
+  res.insertBefore(_сводIn(c), res.firstChild);   /* #635 (С67): плавный приезд баннера над выдачей */
 }catch(e){} }
 // 🎲 #4: случайный ДОСТОВЕРНЫЙ хадис (Сахихайн — Бухари/Муслим, достоверны по консенсусу; исключаем помеченные нами недостоверными). Кнопка на старт-экране — «не знаешь что искать».
 async function randomHadith(){
@@ -9681,7 +9693,8 @@ async function anyTextSearch(qRaw, seq){
    Считаем В БРАУЗЕРЕ. Сервер даёт только вектор ВОПРОСА (/api/rag_embed, ~1 КБ): в браузере модели нет,
    а ключ Cloudflare в приложение класть нельзя — он тут же станет общим достоянием.
    ═══════════════════════════════════════════════════════════════════════════════════════════════ */
-const _RAG={загружено:false, ids:null, поля:null, векторы:null, мета:null, порог:0.52, dim:0};
+const _RAG={загружено:false, ids:null, поля:null, векторы:null, мета:null, порог:0.52, dim:0,
+  лимиты:null, ответ:null};   // #673 (С67): последний ответ /rag_embed и цифры остатка — чтобы объяснять отказ словами, а не «сервер не ответил»
 async function _ragLoad(onProgress){
   if(_RAG.загружено) return true;
   try{
@@ -9699,14 +9712,119 @@ async function _ragLoad(onProgress){
     return true;
   }catch(e){ return false; }
 }
+/* #673 (С67, владелец: «если раг нажатие идёт, то почему не показывает лимиты») + #671.
+   Раньше исчерпанная квота выглядела как поломка: пользователь видел «сервер не ответил на запрос
+   вектора» и думал, что сломалось приложение. Лимит — не поломка, и сказать о нём надо ЗАРАНЕЕ,
+   до того как человек набрал вопрос. Источник цифр без траты запроса — /api/rag_limits.
+   Поля ответа: осталось/всего (личный суточный), без_лимита, опознан, нейронов_осталось/потолок (общий пул). */
+function _ragLimFmt(j){
+  if(!j) return '';
+  const ост=(typeof j['осталось']==='number')?j['осталось']:null;
+  const всего=(typeof j['всего']==='number')?j['всего']:null;
+  let s='';
+  if(j['без_лимита']) s='🧠 RAG: ограничения по числу запросов на тебя не распространяются.';
+  else if(ост!==null && всего!==null) s=(ост>0?('🧠 RAG: осталось '+ост+' из '+всего+' запросов на сегодня.')
+                                             :('🧠 RAG: запросы на сегодня закончились (было '+всего+'). Счётчик сбрасывается раз в сутки.'));
+  else if(всего!==null) s='🧠 RAG: суточный лимит — '+всего+' запросов.';
+  // общий пул нейронов Cloudflare показываем ТОЛЬКО когда он реально поджимает: иначе это цифра,
+  // которая человеку ничего не говорит и лишь пугает.
+  try{
+    const но=j['нейронов_осталось'], нп=j['нейронов_потолок'];
+    if(typeof но==='number' && typeof нп==='number' && нп>0 && но<нп*0.1)
+      s+=(s?' ':'')+'⚠️ Общий запас на всех почти исчерпан ('+но+' из '+нп+').';
+  }catch(e){}
+  return s;
+}
+async function _ragLimShow(){
+  const el=document.getElementById('ragLim'); if(!el) return;
+  if(!BACKEND_URL){ el.style.display='none'; return; }
+  el.style.display=''; el.textContent='🧠 RAG: смотрю, сколько запросов осталось…';
+  try{
+    const r=await fetch(BACKEND_URL+'/rag_limits',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({initData:INITDATA})});
+    const j=await r.json().catch(()=>null);
+    _RAG.лимиты=j||null;
+    const s=_ragLimFmt(j);
+    if(s){ el.textContent=s; el.style.animation='fadeInUp .25s ease-out both'; }
+    else el.style.display='none';   // сервер цифр не дал — молчим, а не пишем «неизвестно»
+  }catch(e){ el.style.display='none'; }
+}
+function _ragLimHide(){ const el=document.getElementById('ragLim'); if(el){ el.style.display='none'; el.textContent=''; } }
 async function _ragQueryVec(q){
   if(!BACKEND_URL) return null;
   try{
     const r=await fetch(BACKEND_URL+'/rag_embed',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({q:String(q||'').slice(0,600), initData:INITDATA})});
     const j=await r.json().catch(()=>null);
+    // #673: ответ вектора несёт и состояние лимита — запоминаем, чтобы объяснить отказ словами
+    // и обновить строку остатка, не тратя на это отдельный поход к серверу.
+    _RAG.ответ=j||null;
+    try{ if(j && (typeof j['лимит']==='object' && j['лимит'])) { _RAG.лимиты=j['лимит'];
+      const el=document.getElementById('ragLim'); const s=_ragLimFmt(j['лимит']);
+      if(el && s){ el.style.display=''; el.textContent=s; } } }catch(e){}
     return (j&&j.v&&j.v.length)?j.v:null;
-  }catch(e){ return null; }
+  }catch(e){ _RAG.ответ=null; return null; }
+}
+/* #671 (С67, владелец 26.07.2026 дословно: «вот пример, когда вообще не туда? Выстрой журнал и интерфейс,
+   когда мы можем отмечать, что точно не туда»): у КАЖДОГО результата RAG — две отметки качества,
+   прямо рядом с показателем близости (там, где человек и видит, насколько «попало»).
+   Почему ОБЕ, а не одна «не туда»: порог отсечки мусора (#672) подобран на запросах, которые придумал я сам.
+   👎 показывает, где порог пропустил мусор, 👍 — ниже какой близости опускать его уже нельзя. Односторонний
+   журнал границу не даёт, поэтому кнопки только парой.
+   Куда уходит: POST /api/rag_feedback → ветка data, файл rag_feedback.json; 👎 бэкенд сразу пушит владельцу.
+   Лимит сервера — 20 отметок за 10 минут (429), это состояние показываем словами, а не молча гасим кнопку. */
+function _ragFb(card, q, bid, num, score){
+  const wrap=document.createElement('span');
+  wrap.style.cssText='display:inline-flex;align-items:center;gap:4px;flex:0 0 auto';
+  if(!BACKEND_URL) return wrap;   // отправлять некуда — кнопок не рисуем вовсе, чтобы не обещать того, чего не будет
+  const mk=(txt,ttl)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=txt; b.title=ttl;
+    b.style.cssText='background:transparent;border:1px solid var(--border);border-radius:8px;padding:2px 7px;'
+      +'font-size:12px;line-height:1.25;cursor:pointer;color:var(--hint);min-height:26px';
+    return b; };
+  const bad=mk('👎','Не туда: отметка попадёт в журнал качества поиска — порог подкрутим по живым запросам');
+  const good=mk('👍','В точку: по таким отметкам видно, ниже какой близости порог опускать нельзя');
+  const итог=(txt)=>{ wrap.innerHTML=''; const sp=document.createElement('span');
+    sp.style.cssText='font-size:11px;color:var(--hint)'; sp.textContent=txt; wrap.appendChild(sp); };
+  const send=async(вердикт, комментарий)=>{
+    итог('⏳ отправляю…');
+    try{
+      const r=await fetch(BACKEND_URL+'/rag_feedback',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({initData:INITDATA, q:String(q||'').slice(0,300), verdict:вердикт,
+          bid:String(bid||''), num:String(num||''), score:Number(score)||0, comment:String(комментарий||'').slice(0,600)})});
+      if(r.status===429){ итог('⏱ слишком часто'); toast('Отметок принимаю не больше 20 за 10 минут — чуть позже'); return; }
+      if(r.status===403){ итог('⚠️ нет доступа'); toast('Отметки сейчас недоступны'); return; }
+      const j=await r.json().catch(()=>null);
+      if(r.ok && j && j.ok){
+        итог(вердикт==='мимо'?'👎 записал':'👍 записал');
+        try{ hap('light'); }catch(e){}
+        toast(вердикт==='мимо'?'👎 Записал «не туда» — поиск поправлю':'👍 Записал «в точку» — спасибо');
+        return;
+      }
+      итог('⚠️ не записал'); toast('Сервер не принял отметку — попробуй позже');
+    }catch(e){ итог('⚠️ нет связи'); toast('Не отправилось: нет связи с сервером'); }
+  };
+  good.onclick=()=>{ try{ hap('light'); }catch(e){} send('в точку',''); };
+  bad.onclick=()=>{
+    try{ hap('light'); }catch(e){}
+    // 👎 ценно и без пояснения, но одна фраза «что ждал вместо этого» экономит час разбора,
+    // поэтому спрашиваем строкой с двумя выходами: написал — отправится с комментарием, не написал — просто отметка.
+    if(card.querySelector('.ragFbC')) return;
+    const row=document.createElement('div'); row.className='ragFbC';
+    row.style.cssText='display:flex;gap:6px;margin-top:7px;animation:fadeInUp .2s ease-out both';
+    const inp=document.createElement('input'); inp.type='text'; inp.maxLength=200;
+    inp.placeholder='что ждал вместо этого? (можно пропустить)';
+    inp.style.cssText='flex:1;min-width:0;background:var(--card);border:1px solid var(--border);border-radius:8px;'
+      +'color:var(--text);font-size:12.5px;padding:6px 8px';
+    const ok=document.createElement('button'); ok.type='button'; ok.textContent='Отметить';
+    ok.style.cssText='border:1px solid #6c5ce7;color:#d9ccff;background:rgba(108,92,231,.12);border-radius:8px;'
+      +'padding:6px 12px;font-size:12.5px;cursor:pointer;white-space:nowrap';
+    ok.onclick=()=>{ const c=inp.value.trim(); row.remove(); send('мимо', c); };
+    inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); ok.click(); } });
+    row.appendChild(inp); row.appendChild(ok); card.appendChild(row);
+    try{ inp.focus(); }catch(e){}
+  };
+  wrap.appendChild(bad); wrap.appendChild(good);
+  return wrap;
 }
 async function ragSearch(qRaw, seq, shownQ){
   const res=document.getElementById('res'); res.innerHTML='';
@@ -9717,7 +9835,24 @@ async function ragSearch(qRaw, seq, shownQ){
   if(!ок){ head.textContent='🧠 RAG: не удалось загрузить книгу. Обнови приложение и попробуй ещё раз.'; return; }
   const qv=await _ragQueryVec(qRaw);
   if(seq!==undefined && seq!==_seq) return;
-  if(!qv){ head.textContent='🧠 RAG: сервер не ответил на запрос вектора — поиск по смыслу сейчас недоступен. Ничего не выдумываю; попробуй обычный поиск.'; return; }
+  if(!qv){
+    /* #673 (С67): «кончился лимит» и «сервер сломался» — РАЗНЫЕ беды, а показывали их одним текстом,
+       из-за чего исчерпанная квота читалась как поломка приложения. Разбираем по ответу сервера:
+       есть его собственное сообщение — показываем дословно (оно точнее моих догадок),
+       выбита квота — говорим про лимит и когда вернётся, иначе — честная «сервер не ответил». */
+    const j=_RAG.ответ;
+    let txt='🧠 RAG: сервер не ответил на запрос вектора — поиск по смыслу сейчас недоступен. Ничего не выдумываю; попробуй обычный поиск.';
+    try{
+      if(j && j['сообщение']) txt='🧠 RAG: '+String(j['сообщение']).slice(0,400);
+      else if(j && j['квота_выбита']) txt='🧠 RAG: запросы по смыслу на сегодня исчерпаны — это лимит, а не поломка. '
+        +'Счётчик сбрасывается раз в сутки; обычный поиск по словам работает как обычно.';
+    }catch(e){}
+    head.textContent=txt;
+    try{ const s=_ragLimFmt(_RAG.лимиты); const el=document.getElementById('ragLim');
+      if(el && s){ el.style.display=''; el.textContent=s; } }catch(e){}
+    try{ _ragLimShow(); }catch(e){}   // цифры остатка после отказа — сразу, чтобы не гадать «сколько же было»
+    return;
+  }
   // нормируем вопрос: дальше косинус = простое скалярное произведение
   let nq=0; for(let i=0;i<qv.length;i++) nq+=qv[i]*qv[i]; nq=Math.sqrt(nq)||1;
   const Q=new Float32Array(qv.length); for(let i=0;i<qv.length;i++) Q[i]=qv[i]/nq;
@@ -9759,8 +9894,17 @@ async function ragSearch(qRaw, seq, shownQ){
     группы[ключ].forEach(({s,c})=>{
       const card=document.createElement('div'); card.className='card'; card.style.marginBottom='7px';
       const top=document.createElement('div'); top.style.cssText='display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px';
-      top.innerHTML='<b style="color:var(--link)">'+(c.n?('№'+c.n):('стр. '+(c.p||'—')))+'</b>'
-        +'<span style="color:var(--hint);font-size:11px">близость '+s.toFixed(3)+(c.p?(' · стр. '+c.p):'')+'</span>';
+      top.innerHTML='<b style="color:var(--link)">'+(c.n?('№'+c.n):('стр. '+(c.p||'—')))+'</b>';
+      // #671 (С67): справа — сначала сама близость, вплотную к ней отметки 👎/👍. Одним блоком,
+      // чтобы на 375px они не разъезжались по разным краям строки и читались как одно целое «оценка результата».
+      const прав=document.createElement('span');
+      прав.style.cssText='display:inline-flex;align-items:center;gap:6px;flex:0 0 auto';
+      const бл=document.createElement('span');
+      бл.style.cssText='color:var(--hint);font-size:11px';
+      бл.textContent='близость '+s.toFixed(3)+(c.p?(' · стр. '+c.p):'');
+      прав.appendChild(бл);
+      прав.appendChild(_ragFb(card, (shownQ||qRaw), 'bukhari', (c.n||('стр.'+(c.p||'—'))), s));
+      top.appendChild(прав);
       card.appendChild(top);
       if(c.g){ const g=document.createElement('div'); g.dir='rtl';
         g.style.cssText='font-size:13px;'+_AF+';color:#e8c35a;margin-top:4px;line-height:1.7'; g.textContent='📑 '+c.g; card.appendChild(g); }
@@ -9777,6 +9921,7 @@ async function ragSearch(qRaw, seq, shownQ){
     });
   };
   рисовать('📗 ХАДИСЫ','хадис'); рисовать('📑 ГЛАВЫ','глава'); рисовать('📄 ВНЕ НУМЕРАЦИИ (муалляки, слова автора)','муалляк');
+  try{ _ragLimShow(); }catch(e){}   // #673 (С67): после поиска остаток стал на один меньше — показываем свежую цифру, а не вчерашнюю
   return;
 }
 async function _ragSearchOld(qRaw, seq, shownQ){
@@ -15210,7 +15355,7 @@ function _layoutFix(q){ q=String(q||''); if(!_isQwertyLayout(q)) return q;
 function _layoutFixBanner(orig, fixed){ try{ const res=document.getElementById('res');
   const b=document.createElement('div'); b.className='hint'; b.style.cssText='color:var(--link);font-size:13px;margin:2px 0 8px';
   b.innerHTML='🌐 Похоже, раскладка переключена — показаны результаты для <b>'+esc(fixed)+'</b> · <span class="lfGo" style="cursor:pointer;text-decoration:underline;white-space:nowrap">искать «'+esc(orig)+'»</span>';
-  res.insertBefore(b, res.children[1]||res.firstChild);
+  res.insertBefore(_сводIn(b), res.children[1]||res.firstChild);   /* #635 (С67): плавный приезд баннера над выдачей */
   const g=b.querySelector('.lfGo'); if(g) g.onclick=()=>{ window._noLayoutFix=true; document.getElementById('q').value=orig; runSearch(true); }; }catch(e){} }
 async function translitSuggest(query, live){
   if(_hasRuStop(query)) return [];   // русская фраза → не транскрипция
@@ -16173,7 +16318,11 @@ document.getElementById('goBtn').onclick=()=>{ hap('medium'); try{ _lateQuiet(70
   el.addEventListener('blur',()=>{ try{ el.style.height='auto'; el.style.overflowY='hidden'; }catch(e){} });
   el.addEventListener('input',()=>{ clearTimeout(t); const v=el.value.trim();
     if(v.length<2){ if(!v){_seq++;document.getElementById('res').innerHTML='';setStatus('');} const _nh=document.getElementById('narrHint'); if(_nh) _nh.style.display='none'; const _ih0=document.getElementById('isnadHint'); if(_ih0) _ih0.style.display='none'; return; }
-    if(modes.ai) return;   // режим «По смыслу (ИИ)»: НЕ дёргать ИИ на каждую букву (тратит ключ) — только по «Найти»/Enter
+    // #668 (С67, владелец: «сделай, чтобы в режиме раг поиск автоматом не начинался по введённому»):
+    // защита от автозапуска стояла ТОЛЬКО у «По смыслу (ИИ)», а RAG в неё не входил — и поиск улетал
+    // через 500 мс после каждой буквы, съедая лимит вектора (/rag_embed) на недописанном вопросе.
+    // Оба режима платные и оба ждут ЗАКОНЧЕННУЮ мысль → одинаковое правило: только «Найти»/Enter.
+    if(modes.ai||modes.rag) return;   // режимы «По смыслу (ИИ)» и «RAG»: НЕ дёргать ИИ на каждую букву (тратит ключ/лимит)
     if(!v.trim()){ try{ hideNarrSugg(); }catch(e){} }   // R46: пустое поле — подсказки равиев закрываются сами
     try{ const _ih=document.getElementById('isnadHint');   // УКАЗ С40: вставлен полный иснад → предложить разбор в цепь (в обычном поиске и в режиме Цепь)
       if(tab==='hadith' && !modes.ai && !modes.any && _isnadDetect(v)) _isnadHintShow(v);
