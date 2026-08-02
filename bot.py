@@ -3,7 +3,7 @@
 # запушен — и нельзя было отличить «фикс не работает» от «Railway ещё не передеплоился». Теперь
 # у бэкенда есть паспорт: GET /api/version отдаёт эту метку и время старта. Меняем при каждом
 # изменении bot.py — тогда любой спор о том, дошёл ли код до прода, решается одним запросом.
-СБОРКА = 'b1254-pochemu-chistka-ne-vyshla'
+СБОРКА = 'b1255-vremya-v-zhurnale-oshibok'
 import time as _time_boot
 _СТАРТ = _time_boot.time()
 from concurrent.futures import ThreadPoolExecutor as _TPE
@@ -5790,8 +5790,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for _sc, _bid, _nm, _au in _c324:
                 _lbl = ("📖 " + _nm[:38] + (" — " + _au.split()[-1] if _au else ""))[:60]
                 _kb324.append([InlineKeyboardButton(_lbl, url=f"https://t.me/muslimoontt_bot?startapp=b_{_bid}_{_n324}")])
+            # #613 (владелец: «разберись че за баг, на что ответ» — в группе @jamaat_ru ответ пришёл
+            # БЕЗ видимого вопроса и читался как случайный; сам reply_text и так технически «в ответ» на
+            # чужое сообщение (quote=True по умолчанию в группах), но при пересылке/логировании эта связь
+            # терялась). Теперь называем ЗАПРОС прямо в тексте — понятно и без контекста чата.
             await update.message.reply_text(
-                f"📚 Нашёл в каталоге Мактабы — открыть №{_n324} в приложении:"
+                f"📚 По запросу «{text}» нашёл в каталоге Мактабы — открыть №{_n324} в приложении:"
                 + ("" if len(_c324) == 1 else "\n(если не та книга — выбери из кандидатов)"),
                 reply_markup=InlineKeyboardMarkup(_kb324))
             return
@@ -8155,12 +8159,15 @@ async def _api_serve(application=None):
             if existing:
                 existing['count'] = (existing.get('count', 1)) + 1
                 existing['last_ver'] = ver
+                existing['last_t'] = _now_msk()   # #664 (С67, владелец: «подвисло в 11:26, проверь логи» — записи оказались БЕЗ времени вообще,
+                                                   # сверить с моментом жалобы было нечем, кроме истории коммитов ветки data): время последнего повтора.
             else:
                 # M304: сквозной номер ошибки приложения — A-001, A-002… (A = App). Не повторяется.
                 _seq = max([e.get('seq', 0) for e in cur] or [0]) + 1
                 _eid = 'A-%03d' % _seq
                 cur.append({'key': key, 'msg': msg, 'where': where, 'ver': ver, 'stack': stack,
-                            'uid': str(uid)[:24], 'count': 1, 'fixed': False, 'seq': _seq, 'eid': _eid})
+                            'uid': str(uid)[:24], 'count': 1, 'fixed': False, 'seq': _seq, 'eid': _eid,
+                            't': _now_msk()})   # #664 (С67): время первого появления — формат как у заявок (_now_msk, единая для всего проекта)
                 cur = cur[-400:]
                 _enote = f"🐞 НОВАЯ ОШИБКА {_eid} (app {ver})\n{where}: {msg}\n(открыта; всего в журнале: {len(cur)} · решить: «ошибка решена {_eid}»)"
                 try:
@@ -10114,6 +10121,7 @@ async def _on_error(update, context):
             if e.get('key') == key: existing = e; break
         if existing:
             existing['count'] = existing.get('count', 1) + 1
+            existing['last_t'] = _now_msk()   # #664 (С67): тот же приём, что в errlog() — время последнего повтора
             eid = existing.get('eid', '')
         else:
             _seq = max([e.get('bseq', 0) for e in cur] or [0]) + 1
@@ -10121,7 +10129,8 @@ async def _on_error(update, context):
             try: _where = (update and getattr(update, 'effective_chat', None) and str(update.effective_chat.id)) or 'bot'
             except Exception: _where = 'bot'
             cur.append({'key': key, 'msg': err[:500], 'where': _where, 'ver': 'bot', 'stack': '',
-                        'uid': '', 'count': 1, 'fixed': False, 'bseq': _seq, 'eid': eid})
+                        'uid': '', 'count': 1, 'fixed': False, 'bseq': _seq, 'eid': eid,
+                        't': _now_msk()})   # #664 (С67): время первого появления — как в errlog()
             cur = cur[-400:]
         _data_put("errors.json", cur, f"boterr: {err[:40]}")
     except Exception:
