@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1280</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1281</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1512,7 +1512,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1280';
+const APPVER = 'v1281';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3903,7 +3903,16 @@ function _flushRender(){ _flushT=null; const res=document.getElementById('res');
   const сколько=Math.max(3, Math.min(40, Math.round(_ЦЕЛЬ_ЗАДАЧИ_МС/_ценаКарточки)));   // минимум 3 — чтобы очередь гарантированно двигалась
   _тикНачат=performance.now(); _тикНарисовал=0;
   const t0=_тикНачат;
-  while(_renderQ.length && _тикНарисовал<сколько && (_тикНарисовал<3 || performance.now()-t0<_RENDER_BUDGET_MS*4)){ try{ res.appendChild(makeCard(_renderQ.shift())); }catch(e){} _тикНарисовал++; }
+  /* #665 (С67, 02.08.2026): «интерфейс подвисает при поиске, перестаёт реагировать на нажатия».
+     БЫЛО `_тикНарисовал<3` — первые ТРИ карточки рисовались БЕЗУСЛОВНО, время не проверялось
+     вовсе. Смысл был добрый: гарантировать, что очередь сдвинется хотя бы на три штуки. Но у
+     тяжёлой карточки (длинный арабский текст + подсветка + тахридж) цена доходит до сотен
+     миллисекунд, и три такие подряд давали ПОЛСЕКУНДЫ И БОЛЬШЕ полной блокировки — а тики идут
+     один за другим через setTimeout(0), то есть залипание выходило почти непрерывным.
+     СТАЛО `<1`: гарантия движения очереди сохранена (одна карточка за тик пройдёт всегда), а
+     худший случай урезан втрое. На лёгких карточках ничего не изменилось: там порцию задаёт
+     `сколько` (до 40 штук), и до этого условия дело не доходит. */
+  while(_renderQ.length && _тикНарисовал<сколько && (_тикНарисовал<1 || performance.now()-t0<_RENDER_BUDGET_MS*4)){ try{ res.appendChild(makeCard(_renderQ.shift())); }catch(e){} _тикНарисовал++; }
   if(_renderQ.length) _flushT=setTimeout(_flushRender,0); else { _тикНачат=0; _тикНарисовал=0; } }
 function _clearRenderQ(){ _renderQ=[]; if(_flushT){ clearTimeout(_flushT); _flushT=null; } _тикНачат=0; _тикНарисовал=0;   /* #678 (С67): новый поиск — замер прошлой порции к нему не относится */
   if(_rvT){ _craf(_rvT); _rvT=null; } }   // #678 (С67): гасим и дорисовку renderResultsView — иначе карточки прошлого запроса падают в новый список
