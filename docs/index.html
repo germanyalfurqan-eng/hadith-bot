@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1279</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1280</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1512,7 +1512,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1279';
+const APPVER = 'v1280';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6840,9 +6840,79 @@ function enrichWbwInline(arEl, sa){ try{
       w.parentNode.insertBefore(c,w); c.appendChild(w); c.appendChild(g); });
   }catch(e){} }
 
+/* ═══════════ M165 · СЛОВО В АЯТЕ → ЕГО МЕСТО В РУССКОМ ПЕРЕВОДЕ ═══════════
+   Заявка владельца: «Слово в аяте → выделять СООТВЕТСТВУЮЩЕЕ слово в РУС. переводе;
+   если опущено по стилю — указать».
+
+   Делается БЕЗ ИИ: у нас уже есть пословный перевод (quran_wbw_ru.json, 6236 аятов).
+   Тапнул арабское слово → знаем его глоссу («Милостивый») → ищем её в переводе Кулиева
+   и подсвечиваем найденное.
+
+   Сравниваем по общему НАЧАЛУ слов, а не по точному совпадению: глосса даёт начальную форму
+   («Милостивый»), а в переводе слово склоняется («Милостивому»). Требуем совпадения не менее
+   четырёх букв и не менее 60 % длины короткого — иначе «мир» цеплялся бы к «Милостивому».
+
+   ⛔ Не нашли — так и говорим: «в переводе передано иначе». Это ЧАСТАЯ и НОРМАЛЬНАЯ вещь:
+   перевод не подстрочник, служебные слова и предлоги там растворяются в обороте. Молча
+   ничего не подсвечивать было бы хуже — человек решил бы, что сломалось. */
+function _общееНачало(a,b){
+  let i=0; while(i<a.length && i<b.length && a[i]===b[i]) i++;
+  return i;
+}
+function _подсветитьВПереводе(глосса, блокАята){
+  try{
+    if(!глосса || !блокАята) return null;
+    const цель=String(глосса).toLowerCase().replace(/ё/g,'е').replace(/[^а-я]/g,'');
+    if(цель.length<3) return null;
+    let нашли=null;
+    блокАята.querySelectorAll('.qrTr').forEach(стр=>{
+      if(нашли) return;
+      const исходный=стр.dataset.orig || стр.textContent;
+      стр.dataset.orig=исходный;
+      const части=исходный.split(/([А-Яа-яЁё]+)/);
+      let лучший=-1, лучшаяДлина=0;
+      части.forEach((ч,i)=>{
+        if(!/^[А-Яа-яЁё]+$/.test(ч)) return;
+        const сл=ч.toLowerCase().replace(/ё/g,'е');
+        const общ=_общееНачало(цель, сл);
+        /* Порог совпадения. Был жёстко «не меньше 4 букв» — и короткие слова срывались:
+           «мира» и «миров» имеют общее начало «мир», всего 3 буквы, и подсветка не срабатывала
+           на живой Фатихе. Теперь порог зависит от длины: у коротких слов хватает трёх букв
+           (но не меньше — иначе «мир» цеплялся бы к «Милостивому»), у длинных требуем
+           60 % длины, чтобы не ловить однокоренную случайность. */
+        const кратчайшее=Math.min(цель.length, сл.length);
+        const порог=Math.max(3, Math.min(4, кратчайшее-1), Math.ceil(кратчайшее*0.6));
+        if(общ>=порог && общ>лучшаяДлина){ лучшаяДлина=общ; лучший=i; }
+      });
+      if(лучший>=0){
+        стр.innerHTML=части.map((ч,i)=> i===лучший
+          ? '<mark style="background:#4ade8033;color:inherit;border-bottom:2px solid #4ade80;border-radius:3px;padding:0 2px">'+esc(ч)+'</mark>'
+          : esc(ч)).join('');
+        нашли=части[лучший];
+      }
+    });
+    return нашли;
+  }catch(e){ return null; }
+}
+function _снятьПодсветкуПеревода(){
+  document.querySelectorAll('.qrTr[data-orig]').forEach(с=>{ с.textContent=с.dataset.orig; });
+}
+
 async function onWordTap(word, el, ctx){
   // режим «по словам»: в читалке Корана тап по слову = озвучить ТОЛЬКО это слово (без попапа)
   if(window._qrWordMode && el && el.classList && el.classList.contains('qw') && el.closest && el.closest('#qrBody')){ if(_qrSayWord(el)) return; }
+  // M165: тапнули слово в читалке → подсветить его место в русском переводе этого же аята
+  try{
+    _снятьПодсветкуПеревода();
+    if(el && el.classList && el.classList.contains('qw')){
+      const блок=el.closest && el.closest('.qrAyah');
+      const глосса=_wbwWord(el);
+      if(блок && глосса){
+        const нашли=_подсветитьВПереводе(глосса, блок);
+        if(!нашли) toast('«'+глосса+'» — в переводе передано иначе (перевод не подстрочник)');
+      }
+    }
+  }catch(e){}
   const R=await loadRoots(); let e=R.f[rootKey(word)];
   if(!e || !e[0]){ const base=canon(word).replace(/[^ء-ي]/g,'').replace(/^(وال|بال|كال|فال|لل|ال)/,'');
     const cands=[]; const add=c=>{ if(c && c.length>=3 && c.length<=5 && cands.indexOf(c)===-1) cands.push(c); };
