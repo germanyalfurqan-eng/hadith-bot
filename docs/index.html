@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1277</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1278</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -797,6 +797,25 @@
     <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
       <button class="go" id="neuroRun" style="padding:8px 14px">Подобрать (ИИ)</button>
       <span class="hint" style="margin:0;color:#e0b34a">⚠️ «Подобрать» = новый запрос к ИИ (тратит ключ). Можно поправить фразы и искать без ИИ.</span>
+    </div>
+    <!-- M103 (владелец): раньше подобранные фразы вставлялись СРАЗУ в строку поиска одной
+         кашей вида «"фраза" | "фраза" | "фраза"» — и поиск запускался немедленно. Убрать
+         лишнее оттуда руками тяжело: надо целиться в кавычки и палки среди арабского текста.
+         Теперь фразы становятся кнопками ЗДЕСЬ, внизу: нажал — выключил (гаснет и черкается),
+         нажал ещё — вернул. Свою фразу можно дописать. Поиск идёт только по включённым и
+         только по кнопке — сам не срывается. -->
+    <div id="neuroPhrases" style="display:none;margin-top:10px">
+      <div style="font-size:12px;color:var(--hint);margin-bottom:6px">
+        Подобранные фразы — нажми, чтобы выключить ненужную:
+      </div>
+      <div id="neuroChips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      <div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">
+        <input id="neuroAdd" placeholder="добавить свою фразу"
+               style="flex:1;min-width:140px;padding:7px 10px;border-radius:9px;border:1px solid var(--border);background:var(--bg);color:var(--fg);font-size:13.5px">
+        <button class="mini" id="neuroAddBtn" style="padding:7px 12px">＋ добавить</button>
+        <button class="go" id="neuroSearch" style="padding:8px 14px">🔍 Искать по выбранным</button>
+      </div>
+      <div id="neuroCount" style="font-size:11.5px;color:var(--hint);margin-top:6px"></div>
     </div>
   </div>
 
@@ -1493,7 +1512,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1277';
+const APPVER = 'v1278';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -16134,9 +16153,58 @@ async function neuroRun(){
     applyPhrases(ph);
   } finally { btn.disabled=false; btn.textContent=prev; setStatus(''); }
 }
+/* M103 (заявка владельца): «сейчас вставляет арабские фразы прямо в строку — вручную править
+   тяжело. Надо как у форм: панель вариантов ВНИЗУ, нажал = оставить, ✕ = исключить, плюс
+   возможность добавлять».
+   Было: все фразы одной строкой в поле поиска («"а" | "б" | "в"») и немедленный запуск.
+   Стало: каждая фраза — кнопка в панели. Выключенная гаснет и зачёркивается, но не пропадает —
+   её видно и можно вернуть. Строка поиска собирается только при нажатии «Искать по выбранным».
+   Почему не удалять выключенные совсем: подбор стоит запроса к ИИ, и случайно убранную фразу
+   иначе пришлось бы подбирать заново. */
+let _neuroPh = [];      // [{текст, вкл}]
+
+function _neuroНарисовать(){
+  const короб=document.getElementById('neuroPhrases'), место=document.getElementById('neuroChips');
+  if(!короб||!место) return;
+  короб.style.display = _neuroPh.length ? 'block' : 'none';
+  место.innerHTML='';
+  _neuroPh.forEach(function(ф,i){
+    const к=document.createElement('div');
+    к.className='chip';
+    к.style.cssText='cursor:pointer;direction:rtl;font-size:14.5px;'
+      + (ф.вкл ? 'border-color:#3ba55d;color:#c9f0d4;background:#17301f'
+               : 'opacity:.5;text-decoration:line-through;border-color:#8a3a3a;color:#e7b7b7;background:#2a1618');
+    к.textContent = ф.текст;
+    к.title = ф.вкл ? 'нажми, чтобы исключить из поиска' : 'нажми, чтобы вернуть в поиск';
+    к.onclick=function(){ _neuroPh[i].вкл = !_neuroPh[i].вкл; _neuroНарисовать(); };
+    место.appendChild(к);
+  });
+  const вкл=_neuroPh.filter(function(ф){return ф.вкл;}).length;
+  const счёт=document.getElementById('neuroCount');
+  if(счёт) счёт.textContent = вкл ? ('в поиск пойдут: '+вкл+' из '+_neuroPh.length)
+                                  : '⚠️ все фразы выключены — искать нечего';
+}
+
 function applyPhrases(ph){
-  document.getElementById('q').value = ph.map(p=> p.indexOf(' ')!==-1?('"'+p+'"'):p).join(' | ');
-  toast('Подобрал: '+ph.join(' · ')+' — можешь дописать свои через | и нажать Найти'); runSearch();
+  _neuroPh = (ph||[]).map(function(p){ return {текст:p, вкл:true}; });
+  _neuroНарисовать();
+  toast('Подобрал '+_neuroPh.length+' фраз — лишние выключи нажатием, потом «Искать по выбранным»');
+}
+
+function _neuroИскать(){
+  const вкл=_neuroPh.filter(function(ф){return ф.вкл;}).map(function(ф){return ф.текст;});
+  if(!вкл.length){ toast('Все фразы выключены — включи хотя бы одну'); return; }
+  document.getElementById('q').value = вкл.map(function(p){
+    return p.indexOf(' ')!==-1 ? ('"'+p+'"') : p; }).join(' | ');
+  runSearch();
+}
+
+function _neuroДобавить(){
+  const поле=document.getElementById('neuroAdd'); if(!поле) return;
+  const т=(поле.value||'').trim();
+  if(!т){ toast('Впиши фразу'); return; }
+  if(_neuroPh.some(function(ф){ return ф.текст===т; })){ toast('Такая фраза уже есть'); поле.value=''; return; }
+  _neuroPh.push({текст:т, вкл:true}); поле.value=''; _neuroНарисовать();
 }
 
 /* ===================== ПЕРЕВОД ===================== */
@@ -17073,6 +17141,13 @@ document.getElementById('goBtn').onclick=()=>{ hap('medium'); try{ _lateQuiet(70
     t=setTimeout(()=>{ runSearch(true); if(tab!=='quran'){ try{ _narrHintNormal(v); }catch(e){} } },500); });   // M334: 350→500мс — меньше тяжёлых перезапусков при наборе (плавность поля) · #85: подсказка карточки равия
 })();
 document.getElementById('neuroRun').onclick=neuroRun;
+/* M103: обработчики панели подобранных фраз */
+(function(){
+  const и=document.getElementById('neuroSearch'); if(и) и.onclick=_neuroИскать;
+  const д=document.getElementById('neuroAddBtn'); if(д) д.onclick=_neuroДобавить;
+  const п=document.getElementById('neuroAdd');
+  if(п) п.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); _neuroДобавить(); } });
+})();
 // v1095 (закон владельца 17.07): ЛЮБОЙ уход из приложения наружу (Википедия, sunnah.com, Шамиля…) —
 // сперва ПРЕДУПРЕДИТЬ и спросить. Раньше openLink уводил молча. Единая точка выхода на весь апп.
 const _EXT_NAMES=[[/(^|\.)wikipedia\.org/i,'Википедия','🌐'],[/(^|\.)sunnah\.com/i,'sunnah.com','📗'],[/(^|\.)shamela\.ws/i,'المكتبة الشاملة (Шамиля)','📚'],
