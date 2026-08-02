@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1276</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1277</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1493,7 +1493,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1276';
+const APPVER = 'v1277';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -15294,7 +15294,16 @@ async function verifyNarr(card, place, text){
     // #386 (заявка владельца «Муслим не сверен с sunnah.com»): доп.риваят 5 verify-сборников (Бухари/Муслим/Насаи/АбуДауд/ИбнМаджа) — текст=sunnah.com 1:1, цепь подлинная. НЕ нейтральная «Мактаба», а честный 🟢: структурного эталона на доп.риваяте нет (он только на основном), но передатчики ИЗ подлинного текста sunnah.com.
     const _authText = !idMode && _abbrevRiw && VERIFY_BIDS.indexOf(String(place.bid))>=0;
     const _alarmShow = alarm && !_riwSplitDiff && !_subsetOnly;   // разная нарезка риваятов — не тревога, красным не красим
-    const _bc = idMode ? (_alarmShow?'#e0796a':(softGap?'#d8a85a':'#3a8a5a')) : (_authText?'#3a8a5a':'#3a4a66'); const _bg = idMode ? (_alarmShow?'rgba(224,121,106,.10)':(softGap?'rgba(216,168,90,.10)':'rgba(58,138,90,.08)')) : (_authText?'rgba(58,138,90,.08)':'rgba(90,120,170,.08)');
+    /* #648-② (С67): владелец прислал скрин ИМЕННО этой карточки (Муслим 654a, код цепи Cdecfb2acd8) — открыл
+       «подробнее» и увидел ДВЕ противоречащие фразы в одной рамке: заголовок красным «🔴 СВЕРКА: РАСХОЖДЕНИЕ»
+       (шёл от сырого `alarm`, который не знает про _subsetOnly), а строкой ниже зелёным-жёлтым «Опознали не
+       все звенья… противоречия нет» (от _subsetOnly, который уже красит РАМКУ в зелёный через _alarmShow,
+       но текст заголовка эту переменную не проверял вовсе). Тот же класс бага, что в исходном #648 (два числа
+       под одним словом) — здесь два СООБЩЕНИЯ под одной рамкой говорят разное. Правило уже было сформулировано
+       строками выше (25.07, пятая правка): «тревогу не поднимаем» для подмножества — просто заголовок забыли
+       перевести на него. Заголовок/цвет теперь смотрят на ОДНУ переменную. */
+    const _subsetSoft = _subsetOnly && !_riwSplitDiff;
+    const _bc = idMode ? (_alarmShow?'#e0796a':((softGap||_subsetSoft)?'#d8a85a':'#3a8a5a')) : (_authText?'#3a8a5a':'#3a4a66'); const _bg = idMode ? (_alarmShow?'rgba(224,121,106,.10)':((softGap||_subsetSoft)?'rgba(216,168,90,.10)':'rgba(58,138,90,.08)')) : (_authText?'rgba(58,138,90,.08)':'rgba(90,120,170,.08)');   /* #648-② (С67): рамка уже была зелёной при _subsetOnly — делаем её жёлтой (как softGap), раз заголовок теперь тоже говорит «не всё опознано», а не «ок» */
     box.style.cssText='margin-top:9px;border-radius:10px;padding:9px 11px;font-size:12px;border:1px solid '+_bc+';background:'+_bg+';';
     /* #648 (С67): владелец прислал скрин, где в ОДНОЙ рамке стоит «эталон 5» (заголовок) и «эталон 6»
        (плашка справа). Он справедливо не поверил ни одной цифре. Разобрано по данным: обе цифры верны,
@@ -15312,8 +15321,8 @@ async function verifyNarr(card, place, text){
           ? ('🟢 Сверка: расхождений нет · '+_vMis.vUnres+' звен'+(_vMis.vUnres===1?'о':'ьев')+' эталона sunnah.com без id — сверено по остальным')
           : '🟢 Сверка: пер-id совпадает с эталоном sunnah.com')
       : '🟢 Сверка: звенья согласованы (число и мост)';
-    const _hdr = !idMode ? (_authText?'🟢 Цепь этого риваята · текст = sunnah.com (передатчики подлинные)':'🔵 Сверка по базе Мактабы (передатчики опознаны по тексту)') : (alarm?('🔴 СВЕРКА: РАСХОЖДЕНИЕ с sunnah.com'+_misTxt):(softGap?('🟡 Сверка: почти совпадает — '+gapList.length+' равия'+(gapList.length===1?'':'/-ев')+' мост не привязал по краткой форме'):_okTxt));   // фикс по диагнозу Хермеса 05.07
-    const _hcol = !idMode ? (_authText?'#7fd3a0':'#6fb0e0') : (_alarmShow?'#e0796a':(softGap?'#e0c07a':'#7fd3a0'));
+    const _hdr = !idMode ? (_authText?'🟢 Цепь этого риваята · текст = sunnah.com (передатчики подлинные)':'🔵 Сверка по базе Мактабы (передатчики опознаны по тексту)') : (_alarmShow?('🔴 СВЕРКА: РАСХОЖДЕНИЕ с sunnah.com'+_misTxt):(softGap?('🟡 Сверка: почти совпадает — '+gapList.length+' равия'+(gapList.length===1?'':'/-ев')+' мост не привязал по краткой форме'):(_subsetSoft?('🟡 Сверка: опознаны не все звенья ('+ourCount+' из '+authCount+') — противоречий нет, недостающее есть в эталоне'):_okTxt)));   // фикс по диагнозу Хермеса 05.07 · #648-② (С67): было alarm (сырой) — заголовок красил РАСХОЖДЕНИЕ мимо _subsetOnly, хотя рамка уже зелёная/жёлтая
+    const _hcol = !idMode ? (_authText?'#7fd3a0':'#6fb0e0') : (_alarmShow?'#e0796a':((softGap||_subsetSoft)?'#e0c07a':'#7fd3a0'));
     let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b style="color:'+_hcol+'">'+_hdr+'</b>'
       // 🔴 25.07.2026 (владелец: «почему на скринах формат разный карточек хадиса? в чём логика?»):
       // раньше счётчик «эталон : приложение» ПРОПАДАЛ у сборников без эталона sunnah.com (Баззар, Дарими,
@@ -15386,13 +15395,13 @@ async function verifyNarr(card, place, text){
     if(!idMode) h+='<div style="margin-top:6px;color:var(--hint);font-size:12.5px;line-height:1.55">👤 Передатчики опознаны по нашей базе Мактабы موسوعة الرواة (18 989 равиев) — клик откроет карточку. Доп. сверка с sunnah.com доступна для 7 сборников (Бухари·Муслим·Насаи·Абу-Дауд·Ибн-Маджа·Тирмизи·Дарими), где их цепи размечены пофамильно; для остальных эталон — Мактаба.</div>';   // #238/#239: честно почему 5, без «краул идёт»
     if(softGap && idMode){ const gn=gapList.map(g=>esc(g[0])).join('، ');
       h+='<div class="vDet" style="margin-top:7px;color:#e0c07a;font-size:12.5px">🟡 Эталон sunnah.com: <b>'+authCount+'</b> равиев, у нас привязано по id <b>'+ourCount+'</b>. Краткой формой мост не сопоставил: <b>'+gn+'</b>. Это <b>пробел нашего моста</b> (id-связка), а НЕ ошибка текста или sunnah.com — состав цепи и хадис верны.</div>'; }
-    if(alarm && idMode){ h+='<div class="vDet" style="margin-top:7px;color:#e0b3a8;font-size:11px">';
+    if(_alarmShow && idMode){ h+='<div class="vDet" style="margin-top:7px;color:#e0b3a8;font-size:11px">';   /* #648-② (С67): было `alarm` — печатало этот же красный «🚨 НЕ опознано» блок и при _subsetOnly, ПРЯМО НАД зелёным «противоречия нет» чуть выше. Теперь тот же гейт, что у заголовка. */
       if(missing.length){ const gn=(recNa?gapList:[]).map(g=>esc(g[0])+(g[1]==null?' (мост не опознал)':'')).join('، ');
         // #648 (С67): та же путаница слов, что и в шапке — здесь считаются ЗВЕНЬЯ нашей цепи, а не id эталона. Называем прямо.
         h+='🚨 Звеньев в цепи (sunnah.com/Мактаба): <b>'+authCount+'</b>, опознано приложением <b>'+ourCount+'</b>. НЕ опознано <b>'+missing.length+'</b>'+(gn?(': '+gn):'')+'. Строгий стандарт (#158): зелёным — только когда опознаны ВСЕ как в sunnah.com.<br>'; }
       if(extra.length) h+='🚨 id ПРИСВОЕН, но в эталоне Мактабы его НЕТ: <b>'+extra.length+'</b> (id '+extra.join(', ')+') — возможно НЕВЕРНАЯ карточка (клик откроет не того передатчика). #142';
       h+='</div>'; }
-    else if(alarm){ h+='<div style="margin-top:7px;color:#e0b3a8;font-size:12.5px">⚠️ По тексту передатчиков <b>'+authCount+'</b>, а приложение подсветило <b>'+ourMids.length+'</b> — расхождение в количестве.</div>'; }
+    else if(_alarmShow){ h+='<div style="margin-top:7px;color:#e0b3a8;font-size:12.5px">⚠️ По тексту передатчиков <b>'+authCount+'</b>, а приложение подсветило <b>'+ourMids.length+'</b> — расхождение в количестве.</div>'; }
     // #246 (владелец: «где код цепи чтобы перейти и смотреть какие ещё хадисы этой цепочкой»): КОД ЦЕПИ прямо в боксе сверки → База иснадов
     let _cidHtml='';
     try{ const _full=await dzChainFull(place.bid, place.num);
