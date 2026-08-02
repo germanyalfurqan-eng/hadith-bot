@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1278</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1279</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1512,7 +1512,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1278';
+const APPVER = 'v1279';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6604,6 +6604,126 @@ function qWordsHTML(text, groups, rootHi){
     if(!hit && rootHi && _roots && _roots.f){ const e=_roots.f[c.replace(/[^ء-ي]/g,'')]; if(e && e[0]===rootHi) hit=true; }
     return '<span class="qw'+(hit?' hit':'')+'">'+esc(w)+'</span>'; }).join(' ');
 }
+/* ═══════════ M269 · ЦВЕТНОЙ ТАДЖВИД (заявка владельца) ═══════════
+   «Таджвид: кнопка цветного таджвида (разноцветные правила) в инструменты».
+
+   ⚠️ ЧЕМ ЭТО НЕ ЯВЛЯЕТСЯ. Это ПОДСКАЗКА ГЛАЗУ, а не замена обучению у устаза. Раскрашиваем
+   ТОЛЬКО те правила, которые определяются однозначно по буквам и огласовкам самого текста —
+   без догадок. Правила, зависящие от манеры чтения (риваята), длины мадда в харакятах, пауз
+   и намерения чтеца, НЕ трогаем вовсе: неверная раскраска хуже, чем никакой, потому что
+   человек поверит цвету и заучит ошибку.
+
+   Сам текст Корана НЕ меняется ни на один знак — буквы только оборачиваются в span.
+
+   Что размечаем и почему это однозначно:
+   • ГУННА — ن или م с шаддой. Видно по самой шадде, разночтений нет.
+   • ИДГАМ — نْ или танвин, а следом буква из «يرملون». Определяется парой букв.
+   • ИКЛЯБ — نْ или танвин, следом ب. Одна буква, однозначно.
+   • ИХФА — نْ или танвин, следом одна из пятнадцати оставшихся букв.
+   • ИЗХАР — نْ или танвин, следом горловая (ء ه ع ح غ خ): читается чисто, НЕ красим,
+     и это правильно — отсутствие цвета здесь тоже смысл.
+   • КАЛЬКАЛЯ — буквы «قطبجد» с сукуном.
+   • МАДД обязательный — только знак мадды (آ ـٓ), он проставлен в самом тексте.
+     Естественные долготы НЕ красим: их длительность зависит от чтения. */
+const ТДЖ = {
+  сукун: 'ْ', шадда: 'ّ', мадда: 'ٓ',
+  танвин: 'ًٌٍ',
+  идгам: 'يرملون',
+  ихфа: 'تثجدذزسشصضطظفقك',
+  калькаля: 'قطبجد',
+  горло: 'ءهعحغخ'
+};
+const ТДЖ_ЦВЕТ = {
+  гунна:    ['#5ad18a', 'Гунна — тянуть в нос два счёта (ن и م с шаддой)'],
+  идгам:    ['#b48ef0', 'Идгам — сливается со следующей буквой'],
+  икляб:    ['#5aa9f0', 'Икляб — ن звучит как م перед ب'],
+  ихфа:     ['#f0a95a', 'Ихфа — произносится приглушённо, с призвуком в нос'],
+  калькаля: ['#f07a7a', 'Калькаля — буква отскакивает (قطبجد с сукуном)'],
+  мадд:     ['#f0d95a', 'Мадд — долгий звук']
+};
+
+function _тдж_буквы(w){
+  /* Слово → массив «буква + её огласовки». Огласовка не самостоятельна: она принадлежит
+     предыдущей букве, и разрывать их нельзя — иначе шадда потеряет хозяина. */
+  const из=[];
+  for(const ch of w){
+    if(/[ً-ْٰٕٓٔۖ-ۭ]/.test(ch)){
+      if(из.length) из[из.length-1].знаки+=ch; else из.push({б:'', знаки:ch});
+    } else из.push({б:ch, знаки:''});
+  }
+  return из;
+}
+
+function tajweedHTML(text){
+  /* Возвращает HTML аята с раскрашенными правилами. Разбор идёт по ВСЕЙ строке, потому что
+     нун в конце слова встречается со следующим словом — правило рождается на стыке. */
+  const слова=(text||'').split(/(\s+)/);
+  let все=[];
+  слова.forEach((кус,и)=>{
+    if(/^\s+$/.test(кус)){ все.push({пробел:кус, слово:и}); return; }
+    _тдж_буквы(кус).forEach(x=>все.push(Object.assign(x,{слово:и})));
+  });
+
+  const метка=new Array(все.length).fill(null);
+  for(let i=0;i<все.length;i++){
+    const у=все[i]; if(у.пробел) continue;
+    const б=у.б, зн=у.знаки||'';
+    /* Следующая ЗВУЧАЩАЯ буква. Пропускаем не только пробелы, но и алиф-васлу «ٱ»:
+       в слитном чтении она не произносится, и правило встречается с той буквой, что за ней.
+       Без этого «أَحَدٌ ٱللَّهُ» (танвин + ل = идгам) оставался неразмеченным — поймано на
+       суре Ихляс при живой проверке: памятка цветов есть, а текст почти весь белый. */
+    let j=i+1;
+    while(j<все.length && (все[j].пробел || !все[j].б || все[j].б==='ٱ')) j++;
+    const сл=(j<все.length)?все[j]:null;
+
+    if((б==='ن'||б==='م') && зн.indexOf(ТДЖ.шадда)!==-1){ метка[i]='гунна'; continue; }
+    if(зн.indexOf(ТДЖ.мадда)!==-1){ метка[i]='мадд'; continue; }
+
+    const нун_сакин = (б==='ن' && zнет(зн));
+    const есть_танвин = [...зн].some(c=>ТДЖ.танвин.indexOf(c)!==-1);
+    if((нун_сакин || есть_танвин) && сл && сл.б){
+      const с=сл.б;
+      if(ТДЖ.горло.indexOf(с)!==-1){ /* изхар — читается чисто, намеренно НЕ красим */ }
+      else if(с==='ب'){ метка[i]='икляб'; метка[j]='икляб'; }
+      else if(ТДЖ.идгам.indexOf(с)!==-1){ метка[i]='идгам'; метка[j]='идгам'; }
+      else if(ТДЖ.ихфа.indexOf(с)!==-1){ метка[i]='ихфа'; метка[j]='ихфа'; }
+      continue;
+    }
+    if(ТДЖ.калькаля.indexOf(б)!==-1 && зн.indexOf(ТДЖ.сукун)!==-1){ метка[i]='калькаля'; }
+  }
+
+  let из='', тек=null, буфер='';
+  const слить=()=>{ if(!буфер) return;
+    if(тек){ const [цв,подск]=ТДЖ_ЦВЕТ[тек];
+      из+='<span class="tjw" style="color:'+цв+'" title="'+подск+'">'+esc(буфер)+'</span>'; }
+    else из+=esc(буфер);
+    буфер=''; };
+  все.forEach((у,i)=>{
+    const м=у.пробел?null:метка[i];
+    if(м!==тек){ слить(); тек=м; }
+    буфер += у.пробел ? у.пробел : (у.б+у.знаки);
+  });
+  слить();
+  return из;
+}
+function zнет(зн){ /* буква без своей гласной = сакина: либо явный сукун, либо голая */
+  return зн.indexOf(ТДЖ.сукун)!==-1 ||
+         ![...зн].some(c=>'ًٌٍَُِّ'.indexOf(c)!==-1);
+}
+
+function tajweedLegend(){
+  return '<div id="tjwLegend" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;'
+    +'margin:6px 0 10px;font-size:12px;line-height:1.5">'
+    + Object.entries(ТДЖ_ЦВЕТ).map(([к,[цв,подск]])=>
+        '<span title="'+подск+'" style="color:'+цв+';border:1px solid '+цв+'44;border-radius:8px;padding:3px 8px">'
+        + к.charAt(0).toUpperCase()+к.slice(1)+'</span>').join('')
+    + '<span style="color:var(--hint);border:1px dashed var(--border);border-radius:8px;padding:3px 8px"'
+    + ' title="Изхар — читается чисто, без призвука. Отсутствие цвета здесь тоже правило.">Изхар — без цвета</span>'
+    + '<div style="width:100%;text-align:center;color:var(--hint);opacity:.85;margin-top:4px;font-size:11px">'
+    + 'Подсказка глазу, а не замена учителю. Размечены только правила, однозначные по тексту; '
+    + 'зависящие от манеры чтения — намеренно не трогаем.</div></div>';
+}
+
 function closeWordPopup(){ const p=document.getElementById('wordPop'); if(p) p.remove(); }
 /* Arabus-режим: тап по любому слову в тексте поста (включая хадисы) → определяем слово по точке тапа */
 function _wordAtPoint(x,y){
@@ -8442,6 +8562,9 @@ async function _qrLoad(){
   body.innerHTML='';
   const zw=document.createElement('div'); zw.id='qrZoom'; body.appendChild(zw);   // M357: масштаб живёт здесь, скроллер чистый
   try{ zw.style.zoom=(cfg.qrFontScale||1); }catch(e){}
+  // M269: включён таджвид → над текстом идёт памятка цветов. Без неё раскраска — просто пестрота:
+  // человек видит цвета, но не знает, что каждый означает.
+  if(cfg.tajweed){ const lg=document.createElement('div'); lg.innerHTML=tajweedLegend(); zw.appendChild(lg); }
   // басмала отдельной шапкой (кроме Фатихи=1 и Тауба=9) — она идёт ДО суры, не часть аята
   if(s!==1 && s!==9){ const bh=document.createElement('div'); bh.style.cssText='text-align:center;font-size:25px;'+_AF+';color:var(--mark);padding:8px 0 10px;border-bottom:1px solid var(--border);margin-bottom:6px;direction:rtl'; bh.textContent='بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ'; zw.appendChild(bh); }
   ayahs.forEach(v=>{ const blk=document.createElement('div'); blk.id='qr-'+v.a;
@@ -8455,7 +8578,11 @@ async function _qrLoad(){
     // Номер аята — служебный знак, а не текст Корана, поэтому рисуем его шрифтом, который его умеет, независимо от настроек.
     const _numMark = (s===1) ? '' : (' <span style="color:var(--mark);font-size:15px;font-family:Amiri,\'Noto Naskh Arabic\',serif">۝'+toAr(v.a)+'</span>');
     // #11: слова-кнопки как в результатах поиска — тап по слову → корень/места в Коране/Arabus/перевод
-    if(cfg.wordTap!==false){ try{ loadRoots(); }catch(e){} ar.innerHTML=qWordsHTML(_vtext,[],null)+_numMark;
+    // M269: при включённом таджвиде текст рисуется цветной разметкой правил. Тап по словам
+    // в этом режиме выключается намеренно: слово и правило — разные разбиения одной строки
+    // (правило живёт на стыке слов), и наложить их друг на друга нельзя без вранья в границах.
+    if(cfg.tajweed){ ar.innerHTML=tajweedHTML(_vtext)+_numMark; }
+    else if(cfg.wordTap!==false){ try{ loadRoots(); }catch(e){} ar.innerHTML=qWordsHTML(_vtext,[],null)+_numMark;
       if(cfg.wbwInline&&ar.dataset.sa){ (async()=>{ try{ await loadQuranWbw(); enrichWbwInline(ar, ar.dataset.sa); }catch(e){} })(); }   // M244: глосса под словами в читалке
       ar.addEventListener('click',e=>{ const sp=e.target.closest&&e.target.closest('.qw'); if(sp){ e.stopPropagation(); onWordTap(sp.textContent, sp, (ar.textContent||'').replace(/\s+/g,' ').trim().slice(0,200)); } });
     } else { ar.innerHTML=esc(_vtext)+_numMark; }
@@ -8511,6 +8638,22 @@ async function _qrLoad(){
     }catch(e){ _qrView={s:нов,a:0}; _qrLoad(); } };
   navBox.appendChild(mk('← пред. сура', ()=>_листать(s-1), s<=1));
   navBox.appendChild(mk('след. сура →', ()=>_листать(s+1), s>=114));
+  // M269 (заявка владельца): «Таджвид: кнопка цветного таджвида (разноцветные правила)».
+  // Кнопка-переключатель прямо в панели читалки: включил — текст раскрашен и над ним памятка
+  // цветов, выключил — обычное чтение с тапом по словам. Выбор запоминается.
+  const _тдж=document.createElement('button'); _тдж.className='mini';
+  const _тджВид=()=>{ const вкл=!!cfg.tajweed;
+    _тдж.textContent=(вкл?'🎨 Таджвид ✓':'🎨 Таджвид');
+    _тдж.title=вкл ? 'Цветная разметка правил включена — нажми, чтобы вернуть обычный текст с тапом по словам'
+                   : 'Раскрасить правила чтения: гунна, идгам, икляб, ихфа, калькаля, мадд';
+    _тдж.style.cssText='margin:4px 5px;padding:9px 15px;border-radius:10px;font-size:13.5px;font-weight:700;cursor:pointer;'
+      + (вкл ? 'border:1px solid #5ad18a;color:#0f2318;background:#5ad18a'
+             : 'border:1px solid #5ad18a;color:#9ce8bd;background:transparent'); };
+  _тджВид();
+  _тдж.onclick=()=>{ cfg.tajweed=!cfg.tajweed; saveCfg(cfg); _тджВид(); _qrLoad();
+    toast(cfg.tajweed ? '🎨 Таджвид включён — цвета над текстом объяснены в памятке'
+                      : '🎨 Таджвид выключен — вернул тап по словам'); };
+  navBox.appendChild(_тдж);
   // выбор суры списком (крутилка) — быстро перейти к любой суре
   const ss=document.createElement('select'); ss.style.cssText='background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px;font-size:14px;margin:5px 6px;max-width:230px';
   for(let i=1;i<=114;i++){ const o=document.createElement('option'); o.value=i; o.textContent=i+'. '+(SURA_NAMES[i-1]||''); if(i===s) o.selected=true; ss.appendChild(o); }
