@@ -970,6 +970,7 @@ DSOC_КОМАНДЫ = [
     ("DSOC что на полке?", "покажу оглавление полки знаний в рабочем журнале", "безопасно"),
     ("DSOC убери это из контекста", "ответом на сообщение — выкину его из памяти разговора", "безопасно"),
     ("DSOC вмешайся в диалог", "ответом на сообщение — восстановлю нить беседы, сверю со сводом правил и дам оценку", "безопасно"),
+    ("DSOC пришли файлом <тема>", "соберу справку и пришлю файлом .md, а не простынёй текста", "безопасно"),
     ("ботяра <вопрос>", "общий вопрос к ИИ бота", "безопасно"),
     ("переведи", "перевод — ответом на сообщение", "безопасно"),
     ("корень <слово>", "трёхбуквенный корень арабского слова", "безопасно"),
@@ -1181,6 +1182,14 @@ async def dsoc_инструмент(строка):
                 return ("Точного совпадения нет. Похожие в нашем указателе:\n" + _похожие
                         + "\nСпроси, кто именно нужен — тёзок путать нельзя.")
             return _ответ or ('В нашем указателе имени «%s» нет.' % _имя)
+        м = re.match(r'^файл\s+(.+)$', с, re.I)
+        if м:
+            _что = м.group(1).strip()
+            _текст = полка_взять(_что)
+            if not _текст or 'нет' == _текст[:3].lower():
+                return ("Файл собрать не из чего: на полке нет записи «%s». "
+                        "Посмотри оглавление вызовом «полка»." % _что)
+            return "ФАЙЛ ГОТОВ|%s|%s" % (_что.upper().replace(' ', '_'), _текст)
         if низ.startswith('полка') or низ.startswith('полку'):
             _м = re.sub(r'^полк[ауи]\s*', '', с, flags=re.I).strip()
             return полка_взять(_м or None)
@@ -1480,6 +1489,7 @@ def dsoc_системный():
         "ВЫЗОВ: книги                — список 41 первоисточника\n"
         "ВЫЗОВ: полка                — оглавление полки знаний в рабочем журнале\n"
         "ВЫЗОВ: полка <метка>        — взять с полки нужную запись целиком\n"
+        "ВЫЗОВ: файл <метка>         — прислать эту запись человеку ФАЙЛОМ (.md), а не текстом\n"
         "Бот выполнит вызов и пришлёт тебе настоящие данные — тогда и ответишь по ним. "
         "Ничего не выдумывай в ожидании: сперва вызов, потом ответ.\n"
         "Пример: «найди Мухэймин 35» → ты пишешь ровно «ВЫЗОВ: хадис 35».\n"
@@ -2292,6 +2302,21 @@ def аят_номером(сура, аят):
     if not (1 <= сура <= 114):
         return None
     return sum(_СУР_ДЛИНЫ[:сура - 1]) + аят
+
+
+async def отправить_файлом(bot, chat_id, имя_файла, текст, подпись=None, ответ_на=None):
+    """Отдать текст ФАЙЛОМ. Настоящее действие — это доведение дела до вещи, которую человек
+    унесёт с собой: файл можно переслать, открыть на другом устройстве, положить в архив.
+    Разговор испаряется, файл остаётся."""
+    try:
+        из_памяти = io.BytesIO((текст or '').encode('utf-8'))
+        из_памяти.name = имя_файла
+        await bot.send_document(chat_id, из_памяти, filename=имя_файла,
+                                caption=(подпись or '')[:1000], parse_mode='HTML',
+                                reply_to_message_id=ответ_на)
+        return True, ''
+    except Exception as e:
+        return False, str(e)[:200]
 
 
 async def отправить_аят(bot, chat_id, сура, аят, чтец='alafasy', ответ_на=None):
@@ -5070,6 +5095,24 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             данные = await dsoc_инструмент(_вз.group(1).strip())
             if not данные:
                 break
+            # Инструмент вернул не текст для модели, а готовый файл — отдаём его человеку сразу
+            # и разговор не продолжаем: дело сделано, пересказывать файл словами незачем.
+            if isinstance(данные, str) and данные.startswith('ФАЙЛ ГОТОВ|'):
+                _, _метка, _содержимое = данные.split('|', 2)
+                ок, беда = await отправить_файлом(
+                    context.bot, chat_id, '%s.md' % _метка.lower(), _содержимое,
+                    подпись='📄 <b>%s</b> — из полки знаний помощника' % _метка,
+                    ответ_на=update.message.message_id)
+                try:
+                    await живое.edit_text('📄 Прислал файлом: %s' % _метка if ок
+                                          else '🔴 Файл не ушёл: %s' % беда)
+                except Exception:
+                    pass
+                реплики.append({"role": "assistant",
+                                "content": "(прислал файл %s)" % _метка, "t": time.time()})
+                DSOC_ПАМЯТЬ[chat_id] = реплики
+                dsoc_сохранить(силой=True)
+                return
             реплики.append({"role": "assistant", "content": собрано})
             реплики.append({"role": "user",
                             "content": "ДАННЫЕ ИЗ НАШЕЙ БАЗЫ (отвечай строго по ним, ничего не "
@@ -9484,6 +9527,27 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True,
                                         'новые': [з for з in сп if not з.get('взято')]}))
 
+    async def fayl(r):
+        """Отдать текст файлом в чат — тем же ходом, что и помощник."""
+        if not application or not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            return _cors(web.json_response({'error': 'bad_json'}, status=400))
+        if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        текст = str(body.get('текст', ''))
+        имя = str(body.get('имя') or 'file.md')
+        if not текст.strip():
+            return _cors(web.json_response({'error': 'нужен текст'}, status=400))
+        _ч = body.get('чат')
+        чат = _ч if isinstance(_ч, str) and _ч.startswith('@') else int(_ч or LOG_CHAT_ID)
+        ок, беда = await отправить_файлом(application.bot, чат, имя, текст,
+                                          str(body.get('подпись') or ''),
+                                          int(body['ответ_на']) if body.get('ответ_на') else None)
+        return _cors(web.json_response({'ok': ок, 'error': беда}))
+
     async def oc_balans(r):
         """Остаток на счёте OpenCode — по данным самого OpenCode, а не нашего журнала.
 
@@ -11442,7 +11506,7 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True}))
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/ochered', ochered), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ochered', ochered), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
