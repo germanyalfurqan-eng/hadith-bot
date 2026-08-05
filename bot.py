@@ -4670,7 +4670,50 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
+    # 🔴 ЗОВ ТЕХНАДЗОРА ЛОВИТСЯ ПЕРВЫМ, ДО ВСЕХ ПРОЧИХ ПУТЕЙ.
+    # 05.08.2026: владелец написал «передай технадзору…» — и ответил ему Groq: «я этого не
+    # умею». Честно, но не по адресу: передать было некому, потому что до меня это не дошло.
+    # Слово-ключ ловилось только внутри разбора помощника, то есть если разговор с ним уже
+    # шёл. Обращение ко мне не должно зависеть от того, разговаривал ли владелец перед этим
+    # с кем-то ещё: ключ есть — дверь открывается.
+    if text and is_owner(update) and re.search(
+            r'(передай|скажи|сообщи)\s+(технадзор|клод|разработчик)|'
+            r'^\s*(технадзор|клод)\b', text.strip().lower()):
+        try:
+            _чид = getattr(update.effective_chat, 'id', 0)
+            _отм = {}
+            _рп = update.message.reply_to_message
+            if _рп:
+                _отм = {'смс': _рп.message_id,
+                        'кто': (getattr(getattr(_рп, 'from_user', None), 'first_name', '')
+                                or 'кто-то'),
+                        'текст': ((getattr(_рп, 'text', None)
+                                   or getattr(_рп, 'caption', None) or '')[:1200])}
+            _н = dsoc_позвать_клода(_чид, update.message.message_id, text.strip(),
+                                    getattr(update.effective_user, 'first_name', ''),
+                                    отмечено=_отм)
+            await context.bot.send_message(
+                LOG_CHAT_ID,
+                "📣 <b>ВЛАДЕЛЕЦ ЗОВЁТ ТЕХНАДЗОРА</b> (обращение #%s)\n%s\n"
+                "Ответ ждут здесь: https://t.me/c/%s/%s"
+                % (_н, text.strip()[:900], str(_чид).replace('-100', ''),
+                   update.message.message_id), parse_mode='HTML',
+                disable_web_page_preview=True)
+            await update.message.reply_text(
+                "📣 Передал технадзору — обращение #%s. Он ответит прямо здесь." % _н)
+        except Exception:
+            pass
+        return
+
     _dsoc = parse_dsoc(text)
+    # Первая половина слияния (владелец 05.08.2026: «нам ботяра зачем отдельно тогда?»):
+    # у ВЛАДЕЛЬЦА слово «ботяра» ведёт к тому же помощнику — с памятью, полкой и вызовами.
+    # Двух помощников с разными правилами быть не должно. Чужим бесплатный путь пока оставлен:
+    # он их и обслуживает, и не тратит деньги владельца — второй шаг требует его слова.
+    if _dsoc is None and text and is_owner(update):
+        _мб = re.match(r'^\s*(ботяра|botyara)\b[\s,:—-]*(.*)$', text.strip(), re.I | re.S)
+        if _мб:
+            _dsoc = (_мб.group(2) or '').strip()
     # 🔴 05.08.2026, владелец: «если смс отправил DSOC, то следующее взаимодействие с ним
     # как DSOC идёт». Он ответил на ответ ассистента обычным вопросом — и отозвался СТАРЫЙ
     # ИИ бота (Groq), потому что слова DSOC во втором сообщении не было.
