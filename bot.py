@@ -3406,6 +3406,114 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
     text = text.strip()
 
+    # ═══════════════════════════════════════════════════════════════════════════════
+    #  🟩 DSOC — прямой разговор с DeepSeek через подписку OpenCode. 05.08.2026.
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # Стоит ПЕРЕД разбором «ботяры»: обращение прямое и однозначное, перехватывать его
+    # другим правилам незачем.
+    _dsoc = parse_dsoc(text)
+    if _dsoc is not None:
+        if not OPENCODE_KEY:
+            await update.message.reply_text(
+                "🔑 Ключ OpenCode боту не выдан.\n"
+                "Добавь на Railway переменную OPENCODE_ZEN_API_KEY и передеплой — "
+                "и DSOC заработает.")
+            return
+        if not _dsoc:
+            await update.message.reply_text(
+                "Я на связи. Пиши: DSOC <что сделать>.\n"
+                "Помню весь наш разговор в этом чате (до миллиона токенов, дальше ужимаю сам).\n"
+                "Ответом на любое сообщение — возьму его в работу вместе с вопросом.")
+            return
+
+        реплики = dsoc_память(chat_id)
+        # Ответил на чьё-то сообщение — оно идёт в дело вместе с вопросом. Владелец:
+        # «могу также ему добавить, отметив ответом, другое чужое смс — и он учитывает».
+        цитата = ""
+        try:
+            r = update.message.reply_to_message
+            если_текст = (getattr(r, "text", None) or getattr(r, "caption", None)) if r else None
+            if если_текст:
+                кто = (getattr(getattr(r, "from_user", None), "first_name", "") or "кто-то")
+                цитата = "\n\n[Сообщение, на которое отвечают — от %s]:\n%s" % (кто, если_текст[:4000])
+        except Exception:
+            pass
+
+        реплики.append({"role": "user", "content": _dsoc + цитата})
+        if dsoc_размер(реплики) > DSOC_СЖИМАТЬ_ОТ:
+            реплики = dsoc_ужать(реплики)
+            DSOC_ПАМЯТЬ[chat_id] = реплики
+
+        # Пустое сообщение, которое будем ДОПИСЫВАТЬ на глазах — владелец просил, чтобы
+        # было видно, как набирается ответ, а не ждать молча.
+        шапка = "💬 DSOC думает…"
+        живое = await update.message.reply_text(шапка)
+        начало = time.time()
+        собрано, последняя_правка, вх, вых = "", 0.0, 0, 0
+        try:
+            тело = {"model": OPENCODE_MODEL,
+                    "messages": ([{"role": "system", "content":
+                                   "Ты — DSOC, помощник в чате джамаата. Отвечай по-русски, "
+                                   "по делу, без вступлений. Если просят перевести — переводи "
+                                   "точно. Если просят пересказать видео или аудио — давай "
+                                   "структурно, с таймкодами, если они есть."}] + реплики[-60:]),
+                    "max_tokens": 8000, "temperature": 0.4, "stream": True}
+            о = requests.post(OPENCODE_URL, json=тело, stream=True, timeout=600,
+                              headers={"Content-Type": "application/json",
+                                       "Authorization": "Bearer " + OPENCODE_KEY})
+            for строка in о.iter_lines(decode_unicode=True):
+                if not строка or not строка.startswith("data: "):
+                    continue
+                кусок = строка[6:]
+                if кусок == "[DONE]":
+                    break
+                try:
+                    j = json.loads(кусок)
+                except Exception:
+                    continue
+                вы = (j.get("choices") or [{}])[0]
+                д = (вы.get("delta") or {}).get("content")
+                if д:
+                    собрано += д
+                u = j.get("usage") or {}
+                вх = u.get("prompt_tokens") or вх
+                вых = u.get("completion_tokens") or вых
+                # правим сообщение не чаще чем раз в 2,5 секунды: Telegram ругается на
+                # частые правки, а глазу и так довольно
+                if собрано and time.time() - последняя_правка > 2.5:
+                    последняя_правка = time.time()
+                    try:
+                        await живое.edit_text(собрано[-3900:] + " ▌")
+                    except Exception:
+                        pass
+        except Exception as e:
+            try:
+                await живое.edit_text("🔴 DSOC не ответил: %s" % str(e)[:200])
+            except Exception:
+                pass
+            return
+
+        сек = time.time() - начало
+        вых = вых or (len(собрано) // 3)
+        вх = вх or dsoc_размер(реплики)
+        цена = dsoc_стоимость(вх, вых)
+        DSOC_РАСХОД.append((time.time(), цена))
+        реплики.append({"role": "assistant", "content": собрано})
+        DSOC_ПАМЯТЬ[chat_id] = реплики
+        dsoc_сохранить()
+
+        подпись = ("\n\n— 🟩 DSOC · %s · вход %d · выход %d ток · ⏱ %.1fс · ⚡ %.0f ток/с\n"
+                   "💰 $%.5f · 📊 %s\n🧠 разговор: %d из 1 000 000 токенов (%.1f%%)"
+                   % (OPENCODE_MODEL, вх, вых, сек, (вых / сек if сек else 0), цена,
+                      dsoc_остаток_строкой(), dsoc_размер(реплики),
+                      dsoc_размер(реплики) / DSOC_ОКНО * 100))
+        try:
+            await живое.edit_text((собрано or "(пусто)")[:3800] + подпись)
+        except Exception:
+            await update.message.reply_text((собрано or "(пусто)")[:3800] + подпись)
+        return
+
+
     # #опросы-13.07: если владелец выбрал «✍️ Свой вариант», ловим его следующий текст как ответ на опрос (а не в ИИ)
     if is_owner(update) and text and not text.startswith('/'):
         try:
@@ -5372,113 +5480,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 save_memory(memory)
                 new_id = len(memory)
                 await update.message.reply_text(f"✅ Запись #{new_id} [{today()}]\n📝 {formatted}\n\n✏️ Исправить: исправь память {new_id}: текст")
-            return
-
-        # ═══════════════════════════════════════════════════════════════════════════════
-        #  🟩 DSOC — прямой разговор с DeepSeek через подписку OpenCode. 05.08.2026.
-        # ═══════════════════════════════════════════════════════════════════════════════
-        # Стоит ПЕРЕД разбором «ботяры»: обращение прямое и однозначное, перехватывать его
-        # другим правилам незачем.
-        _dsoc = parse_dsoc(text)
-        if _dsoc is not None:
-            if not OPENCODE_KEY:
-                await update.message.reply_text(
-                    "🔑 Ключ OpenCode боту не выдан.\n"
-                    "Добавь на Railway переменную OPENCODE_ZEN_API_KEY и передеплой — "
-                    "и DSOC заработает.")
-                return
-            if not _dsoc:
-                await update.message.reply_text(
-                    "Я на связи. Пиши: DSOC <что сделать>.\n"
-                    "Помню весь наш разговор в этом чате (до миллиона токенов, дальше ужимаю сам).\n"
-                    "Ответом на любое сообщение — возьму его в работу вместе с вопросом.")
-                return
-
-            реплики = dsoc_память(chat_id)
-            # Ответил на чьё-то сообщение — оно идёт в дело вместе с вопросом. Владелец:
-            # «могу также ему добавить, отметив ответом, другое чужое смс — и он учитывает».
-            цитата = ""
-            try:
-                r = update.message.reply_to_message
-                если_текст = (getattr(r, "text", None) or getattr(r, "caption", None)) if r else None
-                if если_текст:
-                    кто = (getattr(getattr(r, "from_user", None), "first_name", "") or "кто-то")
-                    цитата = "\n\n[Сообщение, на которое отвечают — от %s]:\n%s" % (кто, если_текст[:4000])
-            except Exception:
-                pass
-
-            реплики.append({"role": "user", "content": _dsoc + цитата})
-            if dsoc_размер(реплики) > DSOC_СЖИМАТЬ_ОТ:
-                реплики = dsoc_ужать(реплики)
-                DSOC_ПАМЯТЬ[chat_id] = реплики
-
-            # Пустое сообщение, которое будем ДОПИСЫВАТЬ на глазах — владелец просил, чтобы
-            # было видно, как набирается ответ, а не ждать молча.
-            шапка = "💬 DSOC думает…"
-            живое = await update.message.reply_text(шапка)
-            начало = time.time()
-            собрано, последняя_правка, вх, вых = "", 0.0, 0, 0
-            try:
-                тело = {"model": OPENCODE_MODEL,
-                        "messages": ([{"role": "system", "content":
-                                       "Ты — DSOC, помощник в чате джамаата. Отвечай по-русски, "
-                                       "по делу, без вступлений. Если просят перевести — переводи "
-                                       "точно. Если просят пересказать видео или аудио — давай "
-                                       "структурно, с таймкодами, если они есть."}] + реплики[-60:]),
-                        "max_tokens": 8000, "temperature": 0.4, "stream": True}
-                о = requests.post(OPENCODE_URL, json=тело, stream=True, timeout=600,
-                                  headers={"Content-Type": "application/json",
-                                           "Authorization": "Bearer " + OPENCODE_KEY})
-                for строка in о.iter_lines(decode_unicode=True):
-                    if not строка or not строка.startswith("data: "):
-                        continue
-                    кусок = строка[6:]
-                    if кусок == "[DONE]":
-                        break
-                    try:
-                        j = json.loads(кусок)
-                    except Exception:
-                        continue
-                    вы = (j.get("choices") or [{}])[0]
-                    д = (вы.get("delta") or {}).get("content")
-                    if д:
-                        собрано += д
-                    u = j.get("usage") or {}
-                    вх = u.get("prompt_tokens") or вх
-                    вых = u.get("completion_tokens") or вых
-                    # правим сообщение не чаще чем раз в 2,5 секунды: Telegram ругается на
-                    # частые правки, а глазу и так довольно
-                    if собрано and time.time() - последняя_правка > 2.5:
-                        последняя_правка = time.time()
-                        try:
-                            await живое.edit_text(собрано[-3900:] + " ▌")
-                        except Exception:
-                            pass
-            except Exception as e:
-                try:
-                    await живое.edit_text("🔴 DSOC не ответил: %s" % str(e)[:200])
-                except Exception:
-                    pass
-                return
-
-            сек = time.time() - начало
-            вых = вых or (len(собрано) // 3)
-            вх = вх or dsoc_размер(реплики)
-            цена = dsoc_стоимость(вх, вых)
-            DSOC_РАСХОД.append((time.time(), цена))
-            реплики.append({"role": "assistant", "content": собрано})
-            DSOC_ПАМЯТЬ[chat_id] = реплики
-            dsoc_сохранить()
-
-            подпись = ("\n\n— 🟩 DSOC · %s · вход %d · выход %d ток · ⏱ %.1fс · ⚡ %.0f ток/с\n"
-                       "💰 $%.5f · 📊 %s\n🧠 разговор: %d из 1 000 000 токенов (%.1f%%)"
-                       % (OPENCODE_MODEL, вх, вых, сек, (вых / сек if сек else 0), цена,
-                          dsoc_остаток_строкой(), dsoc_размер(реплики),
-                          dsoc_размер(реплики) / DSOC_ОКНО * 100))
-            try:
-                await живое.edit_text((собрано or "(пусто)")[:3800] + подпись)
-            except Exception:
-                await update.message.reply_text((собрано or "(пусто)")[:3800] + подпись)
             return
 
         # Очистить память (с подтверждением)
