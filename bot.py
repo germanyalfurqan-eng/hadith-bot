@@ -1314,7 +1314,7 @@ DSOC_ПРИЗНАКИ_СРОЧНОГО = ('ошибаеш', 'ошибка', 'н�
                           'передай', 'не работает', 'не отвеча', 'жду')
 
 
-def dsoc_позвать_клода(chat_id, msg_id, текст, кто="", важность="срочно"):
+def dsoc_позвать_клода(chat_id, msg_id, текст, кто="", важность="срочно", отмечено=None):
     """Положить обращение в очередь технадзора. Клод читает её и отвечает В ТОТ ЖЕ ЧАТ.
 
     важность: «срочно» — ответ обязателен; «к сведению» — просто чтобы я видел, о чём речь.
@@ -1323,8 +1323,13 @@ def dsoc_позвать_клода(chat_id, msg_id, текст, кто="", ва�
     try:
         сп = _data_get(DSOC_ОЧЕРЕДЬ_ФАЙЛ, []) or []
         н = (max([int(з.get('n') or 0) for з in сп], default=0) + 1) if сп else 1
+        # Отмеченное сообщение едет ВМЕСТЕ с обращением: показать пальцем и сказать «вот с
+        # этим разберись» — обычный человеческий способ, и терять жест значит терять половину
+        # смысла. Раньше в очередь шло только «передай технадзору», а на что показывали —
+        # пропадало.
         сп.append({'n': н, 'd': _now_msk(), 'чат': chat_id, 'смс': msg_id, 'важность': важность,
-                   'текст': (текст or '')[:1500], 'кто': кто[:60], 'взято': False})
+                   'текст': (текст or '')[:1500], 'кто': кто[:60], 'взято': False,
+                   'отмечено': (отмечено or {})})
         _data_put(DSOC_ОЧЕРЕДЬ_ФАЙЛ, сп[-60:], 'очередь технадзора +#%d' % н)
         return н
     except Exception:
@@ -4523,15 +4528,31 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                      for с in DSOC_ЗОВ_КЛОДА)
         _тревожно = any(с in _низ_зов for с in DSOC_ПРИЗНАКИ_СРОЧНОГО)
         if is_owner(update) and (_прямо or _тревожно):
+            _отм = {}
+            try:
+                _р = update.message.reply_to_message
+                if _р:
+                    _отм = {'смс': _р.message_id,
+                            'кто': (getattr(getattr(_р, 'from_user', None), 'first_name', '')
+                                    or 'кто-то'),
+                            'текст': ((getattr(_р, 'text', None)
+                                       or getattr(_р, 'caption', None) or '')[:1200])}
+            except Exception:
+                _отм = {}
             _н = dsoc_позвать_клода(chat_id, update.message.message_id, _dsoc,
-                                    getattr(update.effective_user, 'first_name', ''))
+                                    getattr(update.effective_user, 'first_name', ''),
+                                    отмечено=_отм)
             try:
                 await context.bot.send_message(
                     LOG_CHAT_ID,
-                    "📣 <b>ВЛАДЕЛЕЦ ЗОВЁТ ТЕХНАДЗОРА</b> (обращение #%s)\n%s\n\n"
+                    "📣 <b>ВЛАДЕЛЕЦ ЗОВЁТ ТЕХНАДЗОРА</b> (обращение #%s)\n%s\n%s\n"
                     "Ответ ждут здесь: https://t.me/c/%s/%s"
-                    % (_н, (_dsoc or '')[:900], str(chat_id).replace('-100', ''),
-                       update.message.message_id),
+                    % (_н, (_dsoc or '')[:900],
+                       ("\n<b>Отмечено им:</b> «%s» — %s\nhttps://t.me/c/%s/%s\n"
+                        % ((_отм.get('текст') or '')[:400].replace('<', '&lt;'),
+                           _отм.get('кто') or '', str(chat_id).replace('-100', ''),
+                           _отм.get('смс'))) if _отм.get('текст') else '',
+                       str(chat_id).replace('-100', ''), update.message.message_id),
                     parse_mode='HTML', disable_web_page_preview=True)
             except Exception:
                 pass
