@@ -3413,6 +3413,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # другим правилам незачем.
     _dsoc = parse_dsoc(text)
     if _dsoc is not None:
+        # 🔴 05.08.2026, ошибка B-004: «cannot access local variable 'chat_id'».
+        # Перенося блок наверх, я не заметил, что chat_id вычисляется НИЖЕ по ходу handle(),
+        # и здесь его ещё нет. Питон в таких случаях не берёт глобальную переменную, а честно
+        # падает: имя уже «занято» присваиванием ниже, значит оно местное и пока пустое.
+        # Урок: перенося код, проверяй не только условия НАД ним, но и то, чем он пользуется —
+        # переменные тоже имеют своё «место рождения».
+        _chat = getattr(update.effective_chat, 'id', None)
+        chat_id = _chat if _chat is not None else getattr(update.message.chat, 'id', 0)
         if not OPENCODE_KEY:
             await update.message.reply_text(
                 "🔑 Ключ OpenCode боту не выдан.\n"
