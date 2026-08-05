@@ -4676,9 +4676,24 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Слово-ключ ловилось только внутри разбора помощника, то есть если разговор с ним уже
     # шёл. Обращение ко мне не должно зависеть от того, разговаривал ли владелец перед этим
     # с кем-то ещё: ключ есть — дверь открывается.
-    if text and is_owner(update) and re.search(
+    # Ответил НА МОЁ сообщение — значит спрашивает меня, какими бы словами и когда бы то ни
+    # было. 05.08.2026: это правило у меня уже было, но лежало ВНУТРИ разбора помощника — а
+    # туда сообщение без слова DSOC не доходит. Правило работает не там, где записано, а там,
+    # где проверяется. Поднимаю в самое начало.
+    _мой_ли_ответ = False
+    try:
+        if is_owner(update) and update.message.reply_to_message:
+            _цт = (getattr(update.message.reply_to_message, 'text', None)
+                   or getattr(update.message.reply_to_message, 'caption', None) or '')
+            _мой_ли_ответ = ('🧠 Клод' in _цт or 'Технадзор:' in _цт[:120]) and not re.match(
+                r'^\s*(спасибо|благодарю|понял|поняла|ок|окей|ага|хорошо|принял|ясно|\+|👍)'
+                r'\s*[!.)]*\s*$', (text or '').strip().lower())
+    except Exception:
+        _мой_ли_ответ = False
+
+    if text and is_owner(update) and (_мой_ли_ответ or re.search(
             r'(передай|скажи|сообщи)\s+(технадзор|клод|разработчик)|'
-            r'^\s*(технадзор|клод)\b', text.strip().lower()):
+            r'^\s*(технадзор|клод)\b', text.strip().lower())):
         try:
             _чид = getattr(update.effective_chat, 'id', 0)
             _отм = {}
@@ -5136,10 +5151,37 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except Exception:
                         pass
         except Exception as e:
+            # ПОДСТРАХОВКА (владелец 05.08.2026: «может, на резерв поставишь API ключи, они
+            # подстрахуют?»). Молчание вместо ответа — худший исход. Отвечаем с бесплатных
+            # каналов и ЧЕСТНО пишем, что отвечал резерв: подменять исполнителя молча нельзя.
+            собрано = ''
             try:
-                await живое.edit_text("🔴 DSOC не ответил: %s" % str(e)[:200])
+                _рез = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: ask_ai(_dsoc[:3000], dsoc_системный(), True, 1500))
+                if _рез and not str(_рез).startswith('⚠️'):
+                    собрано = (re.sub(r'⚡ \*Модель:\*.*|🆓.*|📊 осталось.*', '', _рез).strip()
+                               + '\n\n⚠️ <i>Отвечал резерв: OpenCode не отозвался '
+                                 '(%s). Ответ мог выйти проще обычного.</i>' % str(e)[:80])
             except Exception:
-                pass
+                собрано = ''
+            if not собрано:
+                try:
+                    await живое.edit_text(
+                        "🔴 Не ответил ни OpenCode, ни резерв: %s" % str(e)[:200])
+                except Exception:
+                    pass
+                await dsoc_неудача(context.bot, chat_id, _dsoc, '', 'молчат все каналы')
+                return
+            try:
+                await живое.edit_text(собрано[:3800], parse_mode='HTML')
+            except Exception:
+                try:
+                    await живое.edit_text(re.sub(r'<[^>]+>', '', собрано)[:3800])
+                except Exception:
+                    pass
+            реплики.append({"role": "assistant", "content": собрано, "t": time.time()})
+            DSOC_ПАМЯТЬ[chat_id] = реплики
+            dsoc_сохранить(силой=True)
             return
 
         # ── ИНСТРУМЕНТЫ: модель просит данные — идём и приносим. ДО ТРЁХ КРУГОВ ──────
