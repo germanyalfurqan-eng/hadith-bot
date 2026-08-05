@@ -5227,17 +5227,40 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                              (р.get('content') or '')[:1500]))
                 for р in dsoc_чистые(реплики[-40:]))
             _запрос_рез = (_вся_беседа[-90000:] + "\n\nОтветь на последнюю реплику владельца.")
+            # 🚨 ТРЕВОГА ПРИ ПЕРВОЙ ЖЕ ПОДМЕНЕ (слово владельца 05.08.2026: «отметку делай
+            # сразу, тревогу»). Подмена спасает разговор — и именно поэтому о ней надо
+            # кричать: молчаливая подмена это когда всё «работает», а счёт растёт из другого
+            # кармана и никто не знает почему.
+            _чем_ответили = ''
             try:
+                await context.bot.send_message(
+                    LOG_CHAT_ID,
+                    "🚨 <b>OPENCODE НЕ ОТВЕТИЛ — ушли на резерв</b>\n"
+                    "причина: %s\nчат: %s · время: %s\n"
+                    "Сейчас отвечает платный DeepSeek API (наш), при его отказе — бесплатные."
+                    % (str(e)[:200], chat_id, _now_msk()), parse_mode='HTML')
+            except Exception:
+                pass
+            try:
+                # ② наш платный DeepSeek — та же семья моделей, ответ не просядет
                 _рез = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: (ask_gemini(_запрос_рез, dsoc_системный())
-                                   if GEMINI_API_KEY else None))
+                    None, lambda: (ask_deepseek(_запрос_рез[:60000], dsoc_системный(), 1500)
+                                   if DEEPSEEK_API_KEY else None))
+                _чем_ответили = 'платный DeepSeek API (наш)'
+                if not _рез or str(_рез).startswith('⚠️'):
+                    # ③ бесплатные, Gemini первым — у него тоже миллион контекста
+                    _рез = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: (ask_gemini(_запрос_рез, dsoc_системный())
+                                       if GEMINI_API_KEY else None))
+                    _чем_ответили = 'Gemini (бесплатный)'
                 if not _рез or str(_рез).startswith('⚠️'):
                     _рез = await asyncio.get_event_loop().run_in_executor(
                         None, lambda: ask_ai(_запрос_рез[:60000], dsoc_системный(), True, 1500))
+                    _чем_ответили = 'бесплатная цепочка'
                 if _рез and not str(_рез).startswith('⚠️'):
                     собрано = (re.sub(r'⚡ \*Модель:\*.*|🆓.*|📊 осталось.*', '', _рез).strip()
-                               + '\n\n⚠️ <i>Отвечал резерв: OpenCode не отозвался '
-                                 '(%s). Ответ мог выйти проще обычного.</i>' % str(e)[:80])
+                               + '\n\n⚠️ <i>Отвечал резерв — %s. OpenCode не отозвался (%s).</i>'
+                               % (_чем_ответили, str(e)[:80]))
             except Exception:
                 собрано = ''
             if not собрано:
