@@ -1141,6 +1141,24 @@ async def dsoc_инструмент(строка):
 
 DSOC_ПОЛКА_ФАЙЛ = "dsoc_polka.json"
 DSOC_ВЫГОВОРЫ_ФАЙЛ = "dsoc_vygovory.json"
+DSOC_ОЧЕРЕДЬ_ФАЙЛ = "claude_queue.json"
+# Слова, которыми владелец зовёт живого разработчика, а не помощника. Список короткий и
+# явный: угадывать тут нельзя — «позвать человека» должно срабатывать по прямому слову,
+# а не по догадке, иначе половина обычных вопросов уйдёт в очередь и утонет.
+DSOC_ЗОВ_КЛОДА = ('клод', 'клоду', 'технадзор', 'технадзору', 'разработчик', 'разработчику')
+
+
+def dsoc_позвать_клода(chat_id, msg_id, текст, кто=""):
+    """Положить обращение в очередь технадзора. Клод читает её и отвечает В ТОТ ЖЕ ЧАТ."""
+    try:
+        сп = _data_get(DSOC_ОЧЕРЕДЬ_ФАЙЛ, []) or []
+        н = (max([int(з.get('n') or 0) for з in сп], default=0) + 1) if сп else 1
+        сп.append({'n': н, 'd': _now_msk(), 'чат': chat_id, 'смс': msg_id,
+                   'текст': (текст or '')[:1500], 'кто': кто[:60], 'взято': False})
+        _data_put(DSOC_ОЧЕРЕДЬ_ФАЙЛ, сп[-60:], 'очередь технадзора +#%d' % н)
+        return н
+    except Exception:
+        return None
 
 
 def dsoc_выговоры_строкой():
@@ -4198,6 +4216,28 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Ответом на любое сообщение — возьму его в работу вместе с вопросом.")
             return
 
+        # ⚡ ОПЕРАТИВНЫЙ КАНАЛ: владелец через помощника зовёт живого технадзора.
+        # Срабатывает по ПРЯМОМУ слову, а не по догадке — иначе обычные вопросы утонут в очереди.
+        _низ_зов = _dsoc.lower()
+        if is_owner(update) and any(_низ_зов.startswith(с) or (' ' + с + ' ') in (' ' + _низ_зов + ' ')
+                                    for с in DSOC_ЗОВ_КЛОДА):
+            _н = dsoc_позвать_клода(chat_id, update.message.message_id, _dsoc,
+                                    getattr(update.effective_user, 'first_name', ''))
+            try:
+                await context.bot.send_message(
+                    LOG_CHAT_ID,
+                    "📣 <b>ВЛАДЕЛЕЦ ЗОВЁТ ТЕХНАДЗОРА</b> (обращение #%s)\n%s\n\n"
+                    "Ответ ждут здесь: https://t.me/c/%s/%s"
+                    % (_н, (_dsoc or '')[:900], str(chat_id).replace('-100', ''),
+                       update.message.message_id),
+                    parse_mode='HTML', disable_web_page_preview=True)
+            except Exception:
+                pass
+            await update.message.reply_text(
+                "📣 Передал технадзору — обращение #%s. Он ответит прямо здесь, ответом на это "
+                "сообщение." % _н)
+            return
+
         реплики = dsoc_память(chat_id)
         # Ответил на чьё-то сообщение — оно идёт в дело вместе с вопросом. Владелец:
         # «могу также ему добавить, отметив ответом, другое чужое смс — и он учитывает».
@@ -4281,25 +4321,40 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
             return
 
-        # ── ИНСТРУМЕНТ: модель попросила данные — идём и приносим ────────────────────
-        _вз = re.search(r'^\s*ВЫЗОВ:\s*(.+)$', собрано or '', re.M)
-        if _вз:
+        # ── ИНСТРУМЕНТЫ: модель просит данные — идём и приносим. ДО ТРЁХ КРУГОВ ──────
+        # Один круг оказался мало: по короткому прозвищу «аль-Амаш» база не нашла, модель
+        # разумно решила попробовать полное имя — а выполнять её второй вызов было уже некому,
+        # и черновик уехал владельцу. Поиск редко укладывается в один заход.
+        for _круг in range(3):
+            _вз = re.search(r'^\s*ВЫЗОВ:\s*(.+)$', собрано or '', re.M)
+            if not _вз:
+                break
             try:
                 await живое.edit_text("🔎 Достаю из базы: %s…" % _вз.group(1).strip()[:80])
             except Exception:
                 pass
             данные = await dsoc_инструмент(_вз.group(1).strip())
-            if данные:
-                реплики.append({"role": "assistant", "content": собрано})
-                реплики.append({"role": "user",
-                                "content": "ДАННЫЕ ИЗ НАШЕЙ БАЗЫ (отвечай строго по ним, "
-                                           "ничего не добавляя от себя):\n" + данные[:7000]})
-                второй, _в2, _вых2 = await asyncio.get_event_loop().run_in_executor(
-                    None, dsoc_запрос,
-                    [{"role": "system", "content": dsoc_системный()}] + реплики[-60:])
-                if второй:
-                    собрано = второй
-                    вх += _в2; вых += _вых2
+            if not данные:
+                break
+            реплики.append({"role": "assistant", "content": собрано})
+            реплики.append({"role": "user",
+                            "content": "ДАННЫЕ ИЗ НАШЕЙ БАЗЫ (отвечай строго по ним, ничего не "
+                                       "добавляя от себя). Если этого мало — можешь сделать ещё "
+                                       "один ВЫЗОВ, но не больше:\n" + данные[:7000]})
+            второй, _в2, _вых2 = await asyncio.get_event_loop().run_in_executor(
+                None, dsoc_запрос,
+                [{"role": "system", "content": dsoc_системный()}] + реплики[-60:])
+            if not второй:
+                break
+            собрано = второй
+            вх += _в2; вых += _вых2
+
+        # Последняя защита: если строка вызова всё равно осталась — читателю её не показываем.
+        # Внутренняя кухня не должна попадать наружу ни при какой поломке.
+        if re.search(r'^\s*ВЫЗОВ:', собрано or '', re.M):
+            собрано = re.sub(r'^\s*ВЫЗОВ:.*$', '', собрано, flags=re.M).strip()
+            собрано += ("\n\n🔎 Дальше достать из базы не вышло — скажи имя точнее "
+                        "(полное имя с отцом, либо по-арабски), и найду.")
 
         # ИНИЦИАТИВА: модель могла закончить строкой «ЗАЯВКА: …». Вырезаем её из ответа и
         # превращаем в предложение владельцу — подаём только по его «да».
@@ -8654,6 +8709,64 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'ok': ok, 'model': OPENAI_MODEL, 'seconds': dt, 'reply': str(resp)[:300]}))
         except Exception as e:
             return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}))
+    async def ochered(r):
+        """Очередь «владелец зовёт технадзора» — забрать и пометить разобранным.
+
+        Владелец 05.08.2026: «можешь построить оперативный канал, чтобы я через DSOC обращался
+        и ты мог оперативно реагировать? Вот я например жду сейчас тут». Раньше он писал в
+        чат, а я узнавал об этом случайно и с опозданием — то есть канала не было вовсе, была
+        удача."""
+        if not application or not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            body = {}
+        if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        сп = _data_get(DSOC_ОЧЕРЕДЬ_ФАЙЛ, []) or []
+        готово = body.get('готово')
+        if готово is not None:
+            for з in сп:
+                if int(з.get('n') or 0) == int(готово):
+                    з['взято'] = True
+            _data_put(DSOC_ОЧЕРЕДЬ_ФАЙЛ, сп[-60:], 'очередь технадзора: #%s разобрано' % готово)
+            return _cors(web.json_response({'ok': True}))
+        return _cors(web.json_response({'ok': True,
+                                        'новые': [з for з in сп if not з.get('взято')]}))
+
+    async def skazat(r):
+        """Сказать в конкретный чат, при желании — ответом на конкретное сообщение.
+        Понадобилось четвёртый раз за день; каждый раз приспосабливать чужой эндпоинт —
+        плодить сущности там, где нужна одна честная (З-33)."""
+        if not application or not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            return _cors(web.json_response({'error': 'bad_json'}, status=400))
+        if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        текст = str(body.get('текст', '')).strip()
+        чат = int(body.get('чат') or LOG_CHAT_ID)
+        ответ_на = body.get('ответ_на')
+        if not текст:
+            return _cors(web.json_response({'error': 'нужен текст'}, status=400))
+        try:
+            м = await application.bot.send_message(
+                чат, текст[:4000], parse_mode='HTML', disable_web_page_preview=True,
+                reply_to_message_id=int(ответ_на) if ответ_на else None)
+            return _cors(web.json_response({'ok': True, 'пост': getattr(м, 'message_id', None)}))
+        except Exception as e:
+            try:
+                м = await application.bot.send_message(
+                    чат, re.sub(r'<[^>]+>', '', текст)[:4000],
+                    reply_to_message_id=int(ответ_на) if ответ_на else None)
+                return _cors(web.json_response({'ok': True, 'пост': getattr(м, 'message_id', None),
+                                                'разметка': 'снята: ' + str(e)[:120]}))
+            except Exception as e2:
+                return _cors(web.json_response({'ok': False, 'error': str(e2)[:250]}, status=500))
+
     async def upd_post(r):
         """ЗАКОН ОБ ИСПРАВЛЕНИИ (владелец 05.08.2026). Ошиблись в опубликованном посте — не
         правим тихо: дописываем UPD, ЗАЧЁРКИВАЕМ неверную фразу и отдельным сообщением-ответом
@@ -10479,7 +10592,7 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True}))
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/ochered', ochered), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
