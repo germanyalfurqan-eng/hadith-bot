@@ -454,7 +454,42 @@ def muhaymin_crossref_note(code, number):
 TOKEN = os.environ.get("TOKEN")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+# 🔴 Слово владельца 02.08.2026: «дипсик теперь вышел новый флэш, именно поэтому все задачи
+# по умолчанию пока на ФЛЭШ делай, а не про», «установи в приложение дипсик именно флаш чтобы
+# выбирало, а не про, при ВСЕХ функциях нейросети».
+# Было `deepseek-chat` — прежнее поколение. Официальный выпуск DeepSeek-V4-Flash-0731 (31.07.2026)
+# сильнее прежнего на агентских задачах и заметно дешевле линейки Pro, а нам важны оба довода:
+# у бота платный ключ с ограниченным остатком, и каждый лишний цент виден в журнале трат.
+# Переменной окружения по-прежнему можно перебить — но по умолчанию теперь Flash.
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash")
+# ═══════════════════════════════════════════════════════════════════════════════════════
+#  🟩 DSOC — прямой разговор с DeepSeek через платную подписку OpenCode Go. 05.08.2026.
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# Заявка владельца: «сделай мне, чтобы я в jamaat_ru мог напрямую апи опенкод пользоваться
+# дипсиком. Обращение пусть будет DSOC. Например: DSOC переведи — и он переводит. Контекст
+# пусть по умолчанию берёт из переписки в чате, набирая до миллиона, потом автоматом сжимая.
+# И пиши расходы: токены входные, выходные, скорость, время на ответ, лимиты и остаток».
+#
+# ПОЧЕМУ НАПРЯМУЮ, А НЕ ЧЕРЕЗ НАШ РОУТЕР. Бот живёт на Railway, в облаке. Роутер стоит на
+# домашнем компьютере по адресу 127.0.0.1 — из облака туда хода нет. Поэтому здесь свой,
+# прямой вызов OpenCode, и ключ должен лежать в переменных Railway.
+#
+# АДРЕС ДОБЫТ ЖИВЬЁМ 05.08.2026: документация зовёт на /zen/v1, но там ДРУГОЙ кошелёк (Zen,
+# оплата по факту) и вечное «Insufficient balance». Подписка Go живёт на /zen/go/v1 — это
+# выяснилось из файла авторизации самого приложения OpenCode, а не из бумаг.
+OPENCODE_KEY = os.environ.get("OPENCODE_ZEN_API_KEY", "") or os.environ.get("OPENCODE_API_KEY", "")
+OPENCODE_URL = "https://opencode.ai/zen/go/v1/chat/completions"
+OPENCODE_MODEL = os.environ.get("OPENCODE_MODEL", "deepseek-v4-flash")
+# Настоящие потолки — сервер назвал их САМ в ответе на заведомый перебор:
+#   «maximum context length is 1048576 tokens» · «valid range of max_tokens is [1, 393216]»
+DSOC_ОКНО = 1_048_576
+DSOC_ВЫВОД_МАКС = 393_216
+DSOC_СЖИМАТЬ_ОТ = 900_000        # набрали столько — ужимаем историю, не дожидаясь отказа
+# Цены OpenCode ($/1М): вход, выход, кэшированное чтение. У долгой переписки кэш — 95% входа,
+# и без этой поправки расход завышается в полсотни раз.
+DSOC_ЦЕНА = (0.14, 0.28, 0.0028)
+DSOC_ЛИМИТЫ = [("5ч", 5 * 3600, 12.0), ("неделя", 7 * 86400, 30.0), ("месяц", 30 * 86400, 60.0)]
+
 # GPT (OpenAI) для особых задач. Читаем под несколькими именами — чтобы сработало как ни назвал переменную на Railway.
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY") or os.environ.get("GPT_API_KEY") or os.environ.get("OPENAI_KEY") or os.environ.get("CHATGPT_API_KEY") or ""
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
@@ -807,6 +842,81 @@ def parse_botyara(text):
         if t.startswith(p): return t[len(p):].strip()
     if t in ["ботяра", "botyara"]: return ""
     return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
+#  🟩 DSOC: разбор обращения, память разговора, расход
+# ═══════════════════════════════════════════════════════════════════════════════════════
+DSOC_ПАМЯТЬ = {}          # chat_id → список реплик [{role, content}]
+DSOC_РАСХОД = []          # (когда, стоимость) — для остатка лимитов
+DSOC_ФАЙЛ = "dsoc_context.json"
+
+
+def parse_dsoc(text):
+    """«DSOC переведи» → «переведи». Не к нему обращаются → None.
+
+    Пишется как угодно: DSOC, dsoc, ДСОС — владелец печатает быстро и с телефона,
+    придираться к регистру и раскладке значит ломать ему работу на ровном месте.
+    """
+    t = (text or "").strip()
+    for p in ("dsoc", "дсос", "дсок"):
+        н = t.lower()
+        if н.startswith(p):
+            хвост = t[len(p):].lstrip(" ,:—-")
+            return хвост.strip()
+    return None
+
+
+def dsoc_память(chat_id):
+    if chat_id not in DSOC_ПАМЯТЬ:
+        try:
+            вся = json.load(open(DSOC_ФАЙЛ, encoding="utf-8"))
+            DSOC_ПАМЯТЬ[chat_id] = вся.get(str(chat_id), [])
+        except Exception:
+            DSOC_ПАМЯТЬ[chat_id] = []
+    return DSOC_ПАМЯТЬ[chat_id]
+
+
+def dsoc_сохранить():
+    try:
+        json.dump({str(k): v for k, v in DSOC_ПАМЯТЬ.items()},
+                  open(DSOC_ФАЙЛ, "w", encoding="utf-8"), ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def dsoc_размер(реплики):
+    """Грубая, но честная оценка в токенах: для русского с арабским ≈ 3 знака на токен."""
+    return sum(len(r.get("content") or "") for r in реплики) // 3
+
+
+def dsoc_ужать(реплики):
+    """Разговор дорос до потолка — ужимаем СЕРЕДИНУ, а не хвост.
+
+    Начало держит уговор о том, как работать; конец — то, о чём говорим сейчас. Резать надо
+    середину: там пересказ уже случившегося, и его не жалко свернуть в краткую выжимку.
+    """
+    if len(реплики) < 12:
+        return реплики
+    голова, хвост = реплики[:4], реплики[-8:]
+    середина = реплики[4:-8]
+    свод = " · ".join((r.get("content") or "")[:120] for r in середина[-40:])
+    return голова + [{"role": "system",
+                      "content": "Кратко о том, что обсуждалось раньше: " + свод[:6000]}] + хвост
+
+
+def dsoc_стоимость(вх, вых):
+    цв, цо, цк = DSOC_ЦЕНА
+    return round((вх * 0.05 * цв + вх * 0.95 * цк + вых * цо) / 1e6, 6)
+
+
+def dsoc_остаток_строкой():
+    сейчас = time.time()
+    части = []
+    for имя, окно, потолок in DSOC_ЛИМИТЫ:
+        потрачено = sum(c for к, c in DSOC_РАСХОД if сейчас - к <= окно)
+        части.append("%s осталось $%.2f из %.0f" % (имя, max(0.0, потолок - потрачено), потолок))
+    return " · ".join(части)
 
 # #450 (заявка владельца 02.07.2026, @jamaat_ru): «ботяра дай карточку <равий>» → ссылка на нашу карточку +
 # sunnah.com + ИИ-описание СТРОГО ИЗ НАШИХ ДАННЫХ (не общий ИИ-домысел, R37 суверенность). Кэш индекса равиев
@@ -5262,6 +5372,113 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 save_memory(memory)
                 new_id = len(memory)
                 await update.message.reply_text(f"✅ Запись #{new_id} [{today()}]\n📝 {formatted}\n\n✏️ Исправить: исправь память {new_id}: текст")
+            return
+
+        # ═══════════════════════════════════════════════════════════════════════════════
+        #  🟩 DSOC — прямой разговор с DeepSeek через подписку OpenCode. 05.08.2026.
+        # ═══════════════════════════════════════════════════════════════════════════════
+        # Стоит ПЕРЕД разбором «ботяры»: обращение прямое и однозначное, перехватывать его
+        # другим правилам незачем.
+        _dsoc = parse_dsoc(text)
+        if _dsoc is not None:
+            if not OPENCODE_KEY:
+                await update.message.reply_text(
+                    "🔑 Ключ OpenCode боту не выдан.\n"
+                    "Добавь на Railway переменную OPENCODE_ZEN_API_KEY и передеплой — "
+                    "и DSOC заработает.")
+                return
+            if not _dsoc:
+                await update.message.reply_text(
+                    "Я на связи. Пиши: DSOC <что сделать>.\n"
+                    "Помню весь наш разговор в этом чате (до миллиона токенов, дальше ужимаю сам).\n"
+                    "Ответом на любое сообщение — возьму его в работу вместе с вопросом.")
+                return
+
+            реплики = dsoc_память(chat_id)
+            # Ответил на чьё-то сообщение — оно идёт в дело вместе с вопросом. Владелец:
+            # «могу также ему добавить, отметив ответом, другое чужое смс — и он учитывает».
+            цитата = ""
+            try:
+                r = update.message.reply_to_message
+                если_текст = (getattr(r, "text", None) or getattr(r, "caption", None)) if r else None
+                if если_текст:
+                    кто = (getattr(getattr(r, "from_user", None), "first_name", "") or "кто-то")
+                    цитата = "\n\n[Сообщение, на которое отвечают — от %s]:\n%s" % (кто, если_текст[:4000])
+            except Exception:
+                pass
+
+            реплики.append({"role": "user", "content": _dsoc + цитата})
+            if dsoc_размер(реплики) > DSOC_СЖИМАТЬ_ОТ:
+                реплики = dsoc_ужать(реплики)
+                DSOC_ПАМЯТЬ[chat_id] = реплики
+
+            # Пустое сообщение, которое будем ДОПИСЫВАТЬ на глазах — владелец просил, чтобы
+            # было видно, как набирается ответ, а не ждать молча.
+            шапка = "💬 DSOC думает…"
+            живое = await update.message.reply_text(шапка)
+            начало = time.time()
+            собрано, последняя_правка, вх, вых = "", 0.0, 0, 0
+            try:
+                тело = {"model": OPENCODE_MODEL,
+                        "messages": ([{"role": "system", "content":
+                                       "Ты — DSOC, помощник в чате джамаата. Отвечай по-русски, "
+                                       "по делу, без вступлений. Если просят перевести — переводи "
+                                       "точно. Если просят пересказать видео или аудио — давай "
+                                       "структурно, с таймкодами, если они есть."}] + реплики[-60:]),
+                        "max_tokens": 8000, "temperature": 0.4, "stream": True}
+                о = requests.post(OPENCODE_URL, json=тело, stream=True, timeout=600,
+                                  headers={"Content-Type": "application/json",
+                                           "Authorization": "Bearer " + OPENCODE_KEY})
+                for строка in о.iter_lines(decode_unicode=True):
+                    if not строка or not строка.startswith("data: "):
+                        continue
+                    кусок = строка[6:]
+                    if кусок == "[DONE]":
+                        break
+                    try:
+                        j = json.loads(кусок)
+                    except Exception:
+                        continue
+                    вы = (j.get("choices") or [{}])[0]
+                    д = (вы.get("delta") or {}).get("content")
+                    if д:
+                        собрано += д
+                    u = j.get("usage") or {}
+                    вх = u.get("prompt_tokens") or вх
+                    вых = u.get("completion_tokens") or вых
+                    # правим сообщение не чаще чем раз в 2,5 секунды: Telegram ругается на
+                    # частые правки, а глазу и так довольно
+                    if собрано and time.time() - последняя_правка > 2.5:
+                        последняя_правка = time.time()
+                        try:
+                            await живое.edit_text(собрано[-3900:] + " ▌")
+                        except Exception:
+                            pass
+            except Exception as e:
+                try:
+                    await живое.edit_text("🔴 DSOC не ответил: %s" % str(e)[:200])
+                except Exception:
+                    pass
+                return
+
+            сек = time.time() - начало
+            вых = вых or (len(собрано) // 3)
+            вх = вх or dsoc_размер(реплики)
+            цена = dsoc_стоимость(вх, вых)
+            DSOC_РАСХОД.append((time.time(), цена))
+            реплики.append({"role": "assistant", "content": собрано})
+            DSOC_ПАМЯТЬ[chat_id] = реплики
+            dsoc_сохранить()
+
+            подпись = ("\n\n— 🟩 DSOC · %s · вход %d · выход %d ток · ⏱ %.1fс · ⚡ %.0f ток/с\n"
+                       "💰 $%.5f · 📊 %s\n🧠 разговор: %d из 1 000 000 токенов (%.1f%%)"
+                       % (OPENCODE_MODEL, вх, вых, сек, (вых / сек if сек else 0), цена,
+                          dsoc_остаток_строкой(), dsoc_размер(реплики),
+                          dsoc_размер(реплики) / DSOC_ОКНО * 100))
+            try:
+                await живое.edit_text((собрано or "(пусто)")[:3800] + подпись)
+            except Exception:
+                await update.message.reply_text((собрано or "(пусто)")[:3800] + подпись)
             return
 
         # Очистить память (с подтверждением)
