@@ -849,7 +849,25 @@ def parse_botyara(text):
 # ═══════════════════════════════════════════════════════════════════════════════════════
 DSOC_ПАМЯТЬ = {}          # chat_id → список реплик [{role, content}]
 DSOC_ЗАЯВКА_ЖДЁТ = {}     # chat_id → предложение, ждущее «да» от владельца
-DSOC_ПОСЛЕДНИЙ = {}       # chat_id → когда помощник отвечал в последний раз
+def dsoc_чистые(реплики):
+    """Модели уходит только role и content: служебные метки — наше дело, не её."""
+    return [{"role": р.get("role"), "content": р.get("content")} for р in (реплики or [])]
+
+
+def dsoc_когда_отвечал(chat_id):
+    """Когда помощник отвечал в этом чате в последний раз.
+
+    🔴 Метка живёт ВНУТРИ переписки, а не в отдельном словаре в памяти процесса. Прежний
+    вариант обнулялся каждой выкаткой, и через минуту после деплоя бот уже не помнил, что
+    разговор идёт с помощником, — реплику подхватывал старый путь на Groq. Третий случай
+    одного класса за час; чиню класс: метка едет вместе с тем, к чему относится."""
+    try:
+        for р in reversed(dsoc_память(chat_id) or []):
+            if р.get("role") == "assistant" and р.get("t"):
+                return float(р["t"])
+    except Exception:
+        pass
+    return 0
 DSOC_РАСХОД = []          # (когда, стоимость) — для остатка лимитов
 DSOC_ФАЙЛ = "dsoc_context.json"
 
@@ -4385,7 +4403,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # человек назвал инструмент прямо, и подменять его выбор нельзя.
     if _dsoc is None and text and is_owner(update):
         try:
-            _пос = DSOC_ПОСЛЕДНИЙ.get(getattr(update.effective_chat, 'id', 0), 0)
+            _пос = dsoc_когда_отвечал(getattr(update.effective_chat, 'id', 0))
             _низт = text.strip().lower()
             _явно_другому = _низт.startswith(('ботяра', 'botyara', 'раг ', 'рag ', 'найди хадис',
                                               'коран', 'карточка', 'переведи', 'корень ',
@@ -4548,7 +4566,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # dsoc_системный() со списком команд, и её никто не звал. Ассистент поэтому не знал
             # ни одной нашей команды, хотя весь смысл затеи был в том, чтобы он их подсказывал.
             тело = {"model": OPENCODE_MODEL,
-                    "messages": ([{"role": "system", "content": dsoc_системный()}] + реплики[-60:]),
+                    "messages": ([{"role": "system", "content": dsoc_системный()}]
+                                 + dsoc_чистые(реплики[-60:])),
                     "max_tokens": 8000, "temperature": 0.4, "stream": True}
             о = requests.post(OPENCODE_URL, json=тело, stream=True, timeout=600,
                               headers={"Content-Type": "application/json",
@@ -4624,7 +4643,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                        "один ВЫЗОВ, но не больше:\n" + данные[:7000]})
             второй, _в2, _вых2 = await asyncio.get_event_loop().run_in_executor(
                 None, dsoc_запрос,
-                [{"role": "system", "content": dsoc_системный()}] + реплики[-60:])
+                [{"role": "system", "content": dsoc_системный()}] + dsoc_чистые(реплики[-60:]))
             if not второй:
                 break
             собрано = второй
@@ -4650,13 +4669,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if предложение:
             DSOC_ЗАЯВКА_ЖДЁТ[chat_id] = (куда, предложение)
 
-        DSOC_ПОСЛЕДНИЙ[chat_id] = time.time()
         сек = time.time() - начало
         вых = вых or (len(собрано) // 3)
         вх = вх or dsoc_размер(реплики)
         цена = dsoc_стоимость(вх, вых)
         dsoc_расход_записать(цена)
-        реплики.append({"role": "assistant", "content": собрано})
+        реплики.append({"role": "assistant", "content": собрано, "t": time.time()})
         DSOC_ПАМЯТЬ[chat_id] = реплики
         dsoc_сохранить()
 
