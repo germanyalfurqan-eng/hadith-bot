@@ -3551,8 +3551,16 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             о = requests.post(OPENCODE_URL, json=тело, stream=True, timeout=600,
                               headers={"Content-Type": "application/json",
                                        "Authorization": "Bearer " + OPENCODE_KEY})
-            for строка in о.iter_lines(decode_unicode=True):
-                if not строка or not строка.startswith("data: "):
+            # 🔴 05.08.2026: было decode_unicode=True — и владелец получил «ÐÐµÑÐµÐ²Ð¾Ð´»
+            # вместо «Перевод». В этом режиме библиотека берёт кодировку из заголовка ответа,
+            # а поток событий её не объявляет — и русские байты молча разбираются как латиница.
+            # И модель, и сеть отработали безупречно: испортилось на последнем шаге, у нас.
+            # Лечение: не доверять угадыванию, разбирать байты самим и всегда в utf-8.
+            for сырое in о.iter_lines(decode_unicode=False):
+                if not сырое:
+                    continue
+                строка = сырое.decode("utf-8", "replace") if isinstance(сырое, bytes) else сырое
+                if not строка.startswith("data: "):
                     continue
                 кусок = строка[6:]
                 if кусок == "[DONE]":
