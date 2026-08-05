@@ -3494,6 +3494,19 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Стоит ПЕРЕД разбором «ботяры»: обращение прямое и однозначное, перехватывать его
     # другим правилам незачем.
     _dsoc = parse_dsoc(text)
+    # 🔴 05.08.2026, владелец: «если смс отправил DSOC, то следующее взаимодействие с ним
+    # как DSOC идёт». Он ответил на ответ ассистента обычным вопросом — и отозвался СТАРЫЙ
+    # ИИ бота (Groq), потому что слова DSOC во втором сообщении не было.
+    # Так и должно быть по-человечески: разговор ведут с тем, кто говорил, а не называют
+    # собеседника по имени в каждой реплике. Узнаём свои ответы по подписи «— 🟩 DSOC».
+    if _dsoc is None and text:
+        try:
+            _пред = update.message.reply_to_message
+            _пт = (getattr(_пред, "text", None) or getattr(_пред, "caption", None) or "") if _пред else ""
+            if "🟩 DSOC" in _пт or "— 🟩" in _пт:
+                _dsoc = text.strip()
+        except Exception:
+            pass
     if _dsoc is not None:
         # 🔴 05.08.2026, ошибка B-004: «cannot access local variable 'chat_id'».
         # Перенося блок наверх, я не заметил, что chat_id вычисляется НИЖЕ по ходу handle(),
