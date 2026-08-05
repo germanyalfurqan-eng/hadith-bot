@@ -2227,7 +2227,7 @@ def _язык_текста(s):
     return "ru" if рус else "en"
 
 
-async def озвучить(текст, путь):
+async def озвучить(текст, путь, голос=None):
     """Текст → mp3. Возвращает путь либо None. Сперва edge-tts (живой голос), потом gTTS."""
     чистый = _ЧИСТКА_ДЛЯ_ГОЛОСА.sub(' ', текст or '')
     чистый = re.sub(r'[\U0001F300-\U0001FAFF\u2600-\u27BF]', ' ', чистый)
@@ -2235,9 +2235,12 @@ async def озвучить(текст, путь):
     if len(чистый) < 2:
         return None
     яз = _язык_текста(чистый)
+    # Голос можно назвать явно: русских голосов у edge-tts всего два, зато мультиязычные
+    # (Andrew, Ava, Florian…) говорят по-русски заметно живее — их и сравниваем на слух.
+    выбранный_голос = голос or ГОЛОСА.get(яз, ГОЛОСА["ru"])
     try:
         import edge_tts
-        await edge_tts.Communicate(чистый, ГОЛОСА.get(яз, ГОЛОСА["ru"])).save(путь)
+        await edge_tts.Communicate(чистый, выбранный_голос).save(путь)
         if os.path.getsize(путь) > 800:
             return путь
     except Exception:
@@ -9397,7 +9400,7 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'error': 'нужен текст'}, status=400))
         путь = os.path.join("/tmp", "golos_api_%d.mp3" % int(time.time()))
         try:
-            if not await озвучить(текст, путь):
+            if not await озвучить(текст, путь, str(body.get("голос") or "") or None):
                 return _cors(web.json_response(
                     {'ok': False, 'error': 'озвучка не собралась: ни edge-tts, ни gTTS'}))
             ок, замечание = await отправить_звук(application.bot, чат, путь,
