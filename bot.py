@@ -969,6 +969,7 @@ DSOC_КОМАНДЫ = [
     ("DSOC голосом <вопрос>", "отвечу не текстом, а голосовым сообщением", "безопасно"),
     ("DSOC что на полке?", "покажу оглавление полки знаний в рабочем журнале", "безопасно"),
     ("DSOC убери это из контекста", "ответом на сообщение — выкину его из памяти разговора", "безопасно"),
+    ("DSOC вмешайся в диалог", "ответом на сообщение — восстановлю нить беседы, сверю со сводом правил и дам оценку", "безопасно"),
     ("ботяра <вопрос>", "общий вопрос к ИИ бота", "безопасно"),
     ("переведи", "перевод — ответом на сообщение", "безопасно"),
     ("корень <слово>", "трёхбуквенный корень арабского слова", "безопасно"),
@@ -1204,6 +1205,52 @@ DSOC_ВЫГОВОРЫ_ФАЙЛ = "dsoc_vygovory.json"
 DSOC_ОЧЕРЕДЬ_ФАЙЛ = "claude_queue.json"
 DSOC_СНИМКИ_ФАЙЛ = "dsoc_snapshots.json"
 DSOC_НЕУДАЧИ_ФАЙЛ = "dsoc_neudachi.json"
+DSOC_ЛЕНТА_ФАЙЛ = "dsoc_lenta.json"
+ЧАТ_ЛЕНТА = {}            # chat_id → последние сообщения [{i, кто, т}]
+_ЛЕНТА_ГРЯЗНО = [0]
+
+
+def лента_запомнить(update):
+    """Короткая лента последних сообщений чата — только текст, только последние 400.
+
+    Telegram не даёт боту читать историю: «пять сообщений до и после» взять неоткуда, если не
+    запомнить их заранее. Зато в момент прихода бот сообщение ВИДИТ. Храним скупо: чужую
+    переписку целиком держать и лишне, и нечестно, а для окна ±5 короткой ленты довольно.
+    """
+    try:
+        м = update.message
+        ч = getattr(update.effective_chat, 'id', None)
+        т_ = (getattr(м, 'text', None) or getattr(м, 'caption', None) or '').strip()
+        if not ч or not т_ or getattr(update.effective_chat, 'type', '') == 'private':
+            return
+        л = ЧАТ_ЛЕНТА.setdefault(ч, [])
+        л.append({'i': м.message_id,
+                  'кто': (getattr(getattr(м, 'from_user', None), 'first_name', '') or '?')[:40],
+                  'т': т_[:900]})
+        if len(л) > 400:
+            del л[:-400]
+        _ЛЕНТА_ГРЯЗНО[0] += 1
+        if _ЛЕНТА_ГРЯЗНО[0] >= 20:
+            _ЛЕНТА_ГРЯЗНО[0] = 0
+            _data_put(DSOC_ЛЕНТА_ФАЙЛ, {str(k): v[-200:] for k, v in ЧАТ_ЛЕНТА.items()},
+                      'лента чата')
+    except Exception:
+        pass
+
+
+def лента_окно(chat_id, msg_id, вокруг=5):
+    """Отмеченное сообщение и его соседи. Пусто — значит бот их не застал."""
+    try:
+        л = ЧАТ_ЛЕНТА.get(chat_id)
+        if not л:
+            л = (_data_get(DSOC_ЛЕНТА_ФАЙЛ, {}) or {}).get(str(chat_id)) or []
+            ЧАТ_ЛЕНТА[chat_id] = list(л)
+        поз = next((i for i, з in enumerate(л) if int(з.get('i') or 0) == int(msg_id)), None)
+        if поз is None:
+            return []
+        return л[max(0, поз - вокруг):поз + вокруг + 1]
+    except Exception:
+        return []
 
 # Мост «прозвище → полное имя». В указателе имён (18 989 записей) прозвищ НЕТ: на «аль-Амаш»
 # находится только «Абу Рибъи аль-Амаш» — другой человек, а нужный Сулейман ибн Михран под
@@ -3198,6 +3245,36 @@ async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except: pass
 
 
+async def on_ctx(update, context):
+    """Судьба контекста после разбора: сохранить, сжать или убрать. Решает владелец.
+
+    Автоматика тут была бы вредна: разбор бывает и нужным надолго, и одноразовым, и знать это
+    может только тот, кто его заказывал."""
+    q = update.callback_query
+    if (q.from_user.id if q.from_user else 0) != OWNER_ID:
+        await q.answer("Эта кнопка — владельца.", show_alert=True)
+        return
+    try:
+        _, что, ключ = (q.data or '').split(':', 2)
+        chat_id = int(ключ.split('_')[0])
+        реплики = dsoc_память(chat_id)
+        if что == 'keep':
+            итог = "💾 Оставил разбор в памяти разговора."
+        elif что == 'squeeze':
+            DSOC_ПАМЯТЬ[chat_id] = dsoc_ужать(реплики)
+            dsoc_сохранить(силой=True)
+            итог = ("🗜 Сжал: было %d ток, стало %d."
+                    % (dsoc_размер(реплики), dsoc_размер(DSOC_ПАМЯТЬ[chat_id])))
+        else:
+            DSOC_ПАМЯТЬ[chat_id] = реплики[:-2] if len(реплики) >= 2 else []
+            dsoc_сохранить(силой=True)
+            итог = "✂️ Убрал разбор из памяти. Вернуть — кнопкой под снимком выше."
+        await q.answer(итог[:190])
+        await q.edit_message_text(итог)
+    except Exception as e:
+        await q.answer("Не вышло: " + str(e)[:150], show_alert=True)
+
+
 async def on_neudacha(update, context):
     """Кнопка «Разобрать» под неудачей: кладёт её в очередь технадзора — ту же, через которую
     владелец зовёт живого разработчика. Один канал, а не второй такой же (З-33)."""
@@ -4471,6 +4548,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ═══════════════════════════════════════════════════════════════════════════════
     # Стоит ПЕРЕД разбором «ботяры»: обращение прямое и однозначное, перехватывать его
     # другим правилам незачем.
+    try:
+        лента_запомнить(update)
+    except Exception:
+        pass
+
     _dsoc = parse_dsoc(text)
     # 🔴 05.08.2026, владелец: «если смс отправил DSOC, то следующее взаимодействие с ним
     # как DSOC идёт». Он ответил на ответ ассистента обычным вопросом — и отозвался СТАРЫЙ
@@ -4544,6 +4626,74 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Я на связи. Пиши: DSOC <что сделать>.\n"
                 "Помню весь наш разговор в этом чате (до миллиона токенов, дальше ужимаю сам).\n"
                 "Ответом на любое сообщение — возьму его в работу вместе с вопросом.")
+            return
+
+        # 🧩 «ВМЕШАЙСЯ В ДИАЛОГ» — восстановить нить вокруг отмеченного сообщения.
+        if re.search(r'вмеша|вмеща|разбери\s+диалог|что тут происходит', _dsoc.lower()):
+            _пред = update.message.reply_to_message
+            if not _пред:
+                await update.message.reply_text(
+                    "🧩 Отметь сообщение, в диалог вокруг которого нужно вмешаться, — иначе я не "
+                    "знаю, о каком разговоре речь. В чате их идёт несколько сразу.")
+                return
+            глубже = bool(re.search(r'глубже|подробн|шире', _dsoc.lower()))
+            окно = лента_окно(chat_id, _пред.message_id, 15 if глубже else 5)
+            if not окно:
+                await update.message.reply_text(
+                    "🧩 Соседних сообщений у меня нет: бот не читает историю чата, он помнит "
+                    "только то, что видел при мне. Это сообщение старше моей ленты.\n"
+                    "Дальше буду помнить — лента ведётся с этой минуты.")
+                return
+            свод = полка_взять('ПОЛКА-18') or '(свод правил ещё не заведён)'
+            беседа = "\n".join("[%s] %s: %s" % (з['i'], з['кто'], з['т']) for з in окно)
+            задача = (
+                "ВМЕШАЙСЯ В ДИАЛОГ. Вот кусок беседы из чата; отмеченное сообщение — №%s.\n\n"
+                "%s\n\n=== СВОД ПРАВИЛ ПРОЕКТА ===\n%s\n\n"
+                "Сделай ровно четыре вещи, каждую с заголовком:\n"
+                "1. О ЧЁМ РАЗГОВОР — в двух предложениях, чтобы человек понял без чтения.\n"
+                "2. СВЕРКА С ПРАВИЛАМИ — что здесь сказано согласно своду, а что ему "
+                "противоречит. Ссылайся на конкретное правило.\n"
+                "3. ОЦЕНКА — по существу: где верно, где ошибка, чего не хватает. Без "
+                "вежливого тумана.\n"
+                "4. ЧЕГО НЕТ В СВОДЕ — если разговор вскрыл правило, которого в своде нет, "
+                "сформулируй его одной строкой. Нечего добавить — так и скажи.\n"
+                % (_пред.message_id, dsoc_обезличить(беседа)[:9000], свод[:4000]))
+            реплики = dsoc_память(chat_id)
+            реплики.append({"role": "user", "content": задача})
+            _ст = await update.message.reply_text("🧩 Восстанавливаю диалог (%d сообщений)…"
+                                                  % len(окно))
+            ответ, _вх, _вых = await asyncio.get_event_loop().run_in_executor(
+                None, dsoc_запрос,
+                [{"role": "system", "content": dsoc_системный()}] + dsoc_чистые(реплики[-40:]))
+            if not ответ:
+                await _ст.edit_text("🧩 Не вышло разобрать — модель промолчала.")
+                await dsoc_неудача(context.bot, chat_id, _dsoc, '', 'вмешательство: пустой ответ')
+                return
+            реплики.append({"role": "assistant", "content": ответ, "t": time.time()})
+            DSOC_ПАМЯТЬ[chat_id] = реплики
+            dsoc_сохранить(силой=True)
+            dsoc_расход_записать(dsoc_стоимость(_вх, _вых))
+            _кл = "%d_%d" % (chat_id, int(time.time()))
+            try:
+                _сн = _data_get(DSOC_СНИМКИ_ФАЙЛ, {}) or {}
+                _сн[_кл] = list(реплики)[-160:]
+                _data_put(DSOC_СНИМКИ_ФАЙЛ, {k: v for k, v in list(_сн.items())[-8:]},
+                          'снимок перед решением о контексте')
+            except Exception:
+                pass
+            _хвост = ("\n\n<blockquote expandable>вход %d · выход %d ток · %s</blockquote>"
+                      % (_вх, _вых, dsoc_остаток_строкой()))
+            try:
+                await _ст.edit_text(dsoc_в_html(ответ[:3300]) + _хвост, parse_mode='HTML',
+                                    disable_web_page_preview=True)
+            except Exception:
+                await _ст.edit_text(ответ[:3800])
+            # Судьба контекста — решает владелец, а не я за него.
+            await update.message.reply_text(
+                "🧩 Что сделать с этим разбором в памяти разговора?",
+                reply_markup=_КЛ([[_КБ("💾 Сохранить", callback_data="ctx:keep:" + _кл),
+                                   _КБ("🗜 Сжать", callback_data="ctx:squeeze:" + _кл),
+                                   _КБ("✂️ Убрать", callback_data="ctx:drop:" + _кл)]]))
             return
 
         # ✂️ ТОЧЕЧНАЯ ЧИСТКА КОНТЕКСТА ПО ОТМЕЧЕННОМУ СООБЩЕНИЮ.
@@ -11933,6 +12083,7 @@ app.add_handler(CallbackQueryHandler(on_rag_help, pattern='^rag_help$'))
 app.add_handler(CallbackQueryHandler(on_moderate, pattern=r'^mod:'))
 app.add_handler(CallbackQueryHandler(on_dsoc_back, pattern=r'^dsocback:'))
 app.add_handler(CallbackQueryHandler(on_neudacha, pattern=r'^neud:'))
+app.add_handler(CallbackQueryHandler(on_ctx, pattern=r'^ctx:'))
 app.add_handler(CommandHandler("start", start_cmd))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
