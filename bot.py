@@ -4736,6 +4736,23 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
+    # 🔴 06.08.2026. АНОНИМНЫЙ АДМИН — ЭТО ТОЖЕ ВЛАДЕЛЕЦ.
+    # В чате джамаата владелец пишет от имени группы: у такого сообщения from_user — служебный
+    # GroupAnonymousBot, а настоящий отправитель спрятан в sender_chat. Все мои проверки
+    # «это владелец?» смотрели на from_user и для анонимных сообщений отвечали «нет».
+    # Отсюда разом: и «почему отвечает Groq», и «почему зов не дошёл», и «почему ботяра не
+    # ведёт к помощнику». Правила были верные — до них не доходило дело.
+    # Чужой анонимом писать не может: право говорить от имени группы есть только у админов.
+    def _хозяин(u):
+        try:
+            if is_owner(u):
+                return True
+            _sc = getattr(u.message, 'sender_chat', None)
+            _ch = getattr(u.effective_chat, 'id', None)
+            return bool(_sc and _ch and getattr(_sc, 'id', None) == _ch)
+        except Exception:
+            return False
+
     # 🔴 ЗОВ ТЕХНАДЗОРА ЛОВИТСЯ ПЕРВЫМ, ДО ВСЕХ ПРОЧИХ ПУТЕЙ.
     # 05.08.2026: владелец написал «передай технадзору…» — и ответил ему Groq: «я этого не
     # умею». Честно, но не по адресу: передать было некому, потому что до меня это не дошло.
@@ -4748,7 +4765,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # где проверяется. Поднимаю в самое начало.
     _мой_ли_ответ = False
     try:
-        if is_owner(update) and update.message.reply_to_message:
+        if _хозяин(update) and update.message.reply_to_message:
             _цт = (getattr(update.message.reply_to_message, 'text', None)
                    or getattr(update.message.reply_to_message, 'caption', None) or '')
             _мой_ли_ответ = ('🧠 Клод' in _цт or 'Технадзор:' in _цт[:120]) and not re.match(
@@ -4757,7 +4774,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         _мой_ли_ответ = False
 
-    if text and is_owner(update) and (_мой_ли_ответ or re.search(
+    if text and _хозяин(update) and (_мой_ли_ответ or re.search(
             r'(передай|скажи|сообщи)\s+(технадзор|клод|разработчик)|'
             r'^\s*(технадзор|клод)\b', text.strip().lower())):
         try:
@@ -4791,7 +4808,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # у ВЛАДЕЛЬЦА слово «ботяра» ведёт к тому же помощнику — с памятью, полкой и вызовами.
     # Двух помощников с разными правилами быть не должно. Чужим бесплатный путь пока оставлен:
     # он их и обслуживает, и не тратит деньги владельца — второй шаг требует его слова.
-    if _dsoc is None and text and is_owner(update):
+    if _dsoc is None and text and _хозяин(update):
         _мб = re.match(r'^\s*(ботяра|botyara)\b[\s,:—-]*(.*)$', text.strip(), re.I | re.S)
         if _мб:
             _dsoc = (_мб.group(2) or '').strip()
