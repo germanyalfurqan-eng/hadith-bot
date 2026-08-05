@@ -869,19 +869,42 @@ def parse_dsoc(text):
 
 
 def dsoc_память(chat_id):
+    """Память разговора. 🔴 05.08.2026: лежала в файле на диске контейнера Railway, а он
+    стирается КАЖДЫМ деплоем — и разговор молча начинался заново. Владелец увидел это как
+    «контекст был 4282, стал меньше — куда исчез?». Не исчез: его стёрли выкаткой.
+    Тот же класс, что и у счётчика трат (Н-176), — и я тогда починил частный случай вместо
+    класса. Теперь память в ветке data: деплой ей не страшен."""
     if chat_id not in DSOC_ПАМЯТЬ:
+        вся = None
         try:
-            вся = json.load(open(DSOC_ФАЙЛ, encoding="utf-8"))
-            DSOC_ПАМЯТЬ[chat_id] = вся.get(str(chat_id), [])
+            вся = _data_get(DSOC_ФАЙЛ, None)
         except Exception:
-            DSOC_ПАМЯТЬ[chat_id] = []
+            вся = None
+        if вся is None:                       # запасной путь: старый локальный файл
+            try:
+                вся = json.load(open(DSOC_ФАЙЛ, encoding="utf-8"))
+            except Exception:
+                вся = {}
+        DSOC_ПАМЯТЬ[chat_id] = (вся or {}).get(str(chat_id), [])
     return DSOC_ПАМЯТЬ[chat_id]
 
 
-def dsoc_сохранить():
+_ДСОС_ПАМ_ГРЯЗНО = [0, 0.0]
+
+
+def dsoc_сохранить(силой=False):
+    """Пишем пачкой: запись в ветку — коммит, и делать его на каждое сообщение незачем.
+    Но первую запись после старта — сразу, иначе короткая жизнь процесса всё потеряет."""
+    _ДСОС_ПАМ_ГРЯЗНО[0] += 1
+    пора = (силой or _ДСОС_ПАМ_ГРЯЗНО[0] >= 3
+            or time.time() - _ДСОС_ПАМ_ГРЯЗНО[1] > 240 or _ДСОС_ПАМ_ГРЯЗНО[1] == 0.0)
+    if not пора:
+        return
     try:
-        json.dump({str(k): v for k, v in DSOC_ПАМЯТЬ.items()},
-                  open(DSOC_ФАЙЛ, "w", encoding="utf-8"), ensure_ascii=False)
+        _data_put(DSOC_ФАЙЛ, {str(k): v[-120:] for k, v in DSOC_ПАМЯТЬ.items()},
+                  "память разговоров DSOC")
+        _ДСОС_ПАМ_ГРЯЗНО[0] = 0
+        _ДСОС_ПАМ_ГРЯЗНО[1] = time.time()
     except Exception:
         pass
 
@@ -1142,6 +1165,7 @@ async def dsoc_инструмент(строка):
 DSOC_ПОЛКА_ФАЙЛ = "dsoc_polka.json"
 DSOC_ВЫГОВОРЫ_ФАЙЛ = "dsoc_vygovory.json"
 DSOC_ОЧЕРЕДЬ_ФАЙЛ = "claude_queue.json"
+DSOC_СНИМКИ_ФАЙЛ = "dsoc_snapshots.json"
 # Слова, которыми владелец зовёт живого разработчика, а не помощника. Список короткий и
 # явный: угадывать тут нельзя — «позвать человека» должно срабатывать по прямому слову,
 # а не по догадке, иначе половина обычных вопросов уйдёт в очередь и утонет.
@@ -2956,6 +2980,37 @@ async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except: pass
 
 
+async def on_dsoc_back(update, context):
+    """Кнопка «Вернуть как было» под уведомлением о сжатии разговора."""
+    q = update.callback_query
+    try:
+        ключ = (q.data or "").split(":", 1)[1]
+        chat_id = int(ключ.split("_")[0])
+    except Exception:
+        try:
+            await q.answer()
+        except Exception:
+            pass
+        return
+    if (q.from_user.id if q.from_user else 0) != OWNER_ID:
+        await q.answer("Эта кнопка — владельца.", show_alert=True)
+        return
+    try:
+        сн = _data_get(DSOC_СНИМКИ_ФАЙЛ, {}) or {}
+        реплики = сн.get(ключ)
+        if not реплики:
+            await q.answer("Снимок уже не хранится.", show_alert=True)
+            return
+        DSOC_ПАМЯТЬ[chat_id] = list(реплики)
+        dsoc_сохранить(силой=True)
+        await q.answer("Вернул разговор целиком.")
+        await q.edit_message_text(
+            (q.message.text or "") + "\n↩️ Возвращено владельцем: разговор снова целиком (%d ток)."
+            % dsoc_размер(реплики))
+    except Exception as e:
+        await q.answer("Не вышло: " + str(e)[:150], show_alert=True)
+
+
 async def on_moderate(update, context):
     """#614/#660: кнопки «Забанить»/«Ограничить» под уведомлением о входе.
 
@@ -4253,8 +4308,31 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         реплики.append({"role": "user", "content": _dsoc + цитата})
         if dsoc_размер(реплики) > DSOC_СЖИМАТЬ_ОТ:
+            # Владелец: «удаление части точно ненужного контекста автоматом — дело хорошее, но
+            # тогда мне в рабочий журнал должно приходить уведомление с кнопкой, если надо
+            # вернуть обратно». Он прав: автоматика хороша ровно до тех пор, пока она на глазах
+            # и обратима. Молча ужимать чужую память — то же, что молча выбрасывать чужие бумаги.
+            _до = dsoc_размер(реплики)
+            _снимок = list(реплики)
             реплики = dsoc_ужать(реплики)
             DSOC_ПАМЯТЬ[chat_id] = реплики
+            try:
+                _кл = "%d_%d" % (chat_id, int(time.time()))
+                _сн = _data_get(DSOC_СНИМКИ_ФАЙЛ, {}) or {}
+                _сн[_кл] = _снимок[-160:]
+                _data_put(DSOC_СНИМКИ_ФАЙЛ, {k: v for k, v in list(_сн.items())[-8:]},
+                          "снимок памяти до сжатия")
+                await context.bot.send_message(
+                    LOG_CHAT_ID,
+                    "🗜 <b>Разговор помощника сжат</b>\n"
+                    "было %d ток → стало %d ток (свернул середину, начало и последние реплики "
+                    "целы).\nЕсли свернулось нужное — верну целиком одной кнопкой."
+                    % (_до, dsoc_размер(реплики)),
+                    parse_mode="HTML",
+                    reply_markup=_КЛ([[_КБ("↩️ Вернуть как было",
+                                           callback_data="dsocback:" + _кл)]]))
+            except Exception:
+                pass
 
         # Пустое сообщение, которое будем ДОПИСЫВАТЬ на глазах — владелец просил, чтобы
         # было видно, как набирается ответ, а не ждать молча.
@@ -11418,7 +11496,11 @@ async def on_rag_help(update, context):
 app.add_handler(CallbackQueryHandler(on_rag_help, pattern='^rag_help$'))
 # #614/#660: кнопки бана/ограничения под уведомлением о входе. Шаблон строгий — чужие
 # callback_data сюда не попадут, а свои разбираются по формату mod:<действие>:<чат>:<кого>.
-app.add_handler(CallbackQueryHandler(on_moderate, pattern=r'^mod:(ban|mute):-?\d+:\d+$'))
+# 🔴 05.08.2026: шаблон был r'^mod:(ban|mute):-?\d+:\d+$' — и новые кнопки меню ограничений
+# (mod:m_media, mod:m_voice, mod:m_all1h…) до обработчика бы НЕ ДОШЛИ: Telegram молча
+# проглотил бы нажатие. Кнопку сделал, а дверь ей не открыл. Расширяю до всего семейства mod:.
+app.add_handler(CallbackQueryHandler(on_moderate, pattern=r'^mod:'))
+app.add_handler(CallbackQueryHandler(on_dsoc_back, pattern=r'^dsocback:'))
 app.add_handler(CommandHandler("start", start_cmd))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
