@@ -4370,7 +4370,18 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         except Exception:
             _расш = None
-        if _расш and parse_dsoc(_расш) is not None:
+        # 🔴 05.08.2026. Было: «любое голосовое, кроме обращения к помощнику, — это поиск
+        # хадиса». Владелец спросил голосом «ты голосовые сообщения понимаешь?» и получил
+        # «такого хадиса в базе нет». Умолчание стояло не у того: помощник понимает больше,
+        # значит всё неопределённое — ему, а в поиск хадиса уходит лишь то, где хадис ЯВНО
+        # слышен: арабская речь или прямые слова о хадисе и передаче.
+        _про_хадис = False
+        if _расш:
+            _н = _расш.lower()
+            _про_хадис = bool(re.search(r'[\u0621-\u064A]{6,}', _расш)) or any(
+                с in _н for с in ('хадис', 'передал', 'рассказал нам', 'сообщил нам',
+                                  'сказал посланник', 'пророк сказал', 'со слов'))
+        if _расш and (parse_dsoc(_расш) is not None or not _про_хадис):
             text = _расш.strip()                  # дальше отработает разбор DSOC
             _голосом_просили = True
         elif getattr(update.effective_chat, "type", "") != "private":
@@ -9073,6 +9084,11 @@ async def _api_serve(application=None):
                 reply_to_message_id=int(ответ_на) if ответ_на else None)
             return _cors(web.json_response({'ok': True, 'пост': getattr(м, 'message_id', None)}))
         except Exception as e:
+            # 🔴 05.08.2026: повторяли при ЛЮБОЙ ошибке — и один ответ ушёл владельцу дважды
+            # (посты 725412 и 725413). Повтор уместен, только если Telegram отверг именно
+            # разметку; всё прочее могло случиться уже ПОСЛЕ отправки, и тогда повтор — дубль.
+            if 'parse' not in str(e).lower() and 'entities' not in str(e).lower():
+                return _cors(web.json_response({'ok': False, 'error': str(e)[:250]}, status=500))
             try:
                 м = await application.bot.send_message(
                     чат, re.sub(r'<[^>]+>', '', текст)[:4000],
