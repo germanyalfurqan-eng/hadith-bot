@@ -2269,23 +2269,81 @@ async def озвучить(текст, путь, голос=None):
         return None
 
 
-async def отправить_звук(bot, chat_id, путь, ответ_на=None):
+# 📖 ЧТЕЦЫ КОРАНА. Синтез не знает таджвида — протяжений, слияний, остановок; он читает
+# буквы. Менять ему голос бессмысленно: выбираешь лишь акцент, с которым будет неправильно.
+# Поэтому аяты звучат голосом настоящего чтеца. Оба адреса проверены живьём 05.08.2026.
+ЧТЕЦЫ = {'alafasy': ('Мишари аль-Афаси', 'ar.alafasy'),
+         'muaiqly': ('Махер аль-Муайкали', 'ar.mahermuaiqly')}
+_КОРАН_CDN = 'https://cdn.islamic.network/quran/audio/128/%s/%d.mp3'
+_СУР_ДЛИНЫ = None
+
+
+def аят_номером(сура, аят):
+    """Глобальный номер аята (1..6236) — им адресуются записи чтецов."""
+    global _СУР_ДЛИНЫ
+    if _СУР_ДЛИНЫ is None:
+        _СУР_ДЛИНЫ = [7, 286, 200, 176, 120, 165, 206, 75, 129, 109, 123, 111, 43, 52, 99, 128,
+                      111, 110, 98, 135, 112, 78, 118, 64, 77, 227, 93, 88, 69, 60, 34, 30, 73,
+                      54, 45, 83, 182, 88, 75, 85, 54, 53, 89, 59, 37, 35, 38, 29, 18, 45, 60,
+                      49, 62, 55, 78, 96, 29, 22, 24, 13, 14, 11, 11, 18, 12, 12, 30, 52, 52,
+                      44, 28, 28, 20, 56, 40, 31, 50, 40, 46, 42, 29, 19, 36, 25, 22, 17, 19,
+                      26, 30, 20, 15, 21, 11, 8, 8, 19, 5, 8, 8, 11, 11, 8, 3, 9, 5, 4, 7, 3, 6,
+                      3, 5, 4, 5, 6]
+    if not (1 <= сура <= 114):
+        return None
+    return sum(_СУР_ДЛИНЫ[:сура - 1]) + аят
+
+
+async def отправить_аят(bot, chat_id, сура, аят, чтец='alafasy', ответ_на=None):
+    """Прислать запись настоящего чтеца — с подписью, кто читает."""
+    имя, код = ЧТЕЦЫ.get(чтец, ЧТЕЦЫ['alafasy'])
+    н = аят_номером(int(сура), int(аят))
+    if not н:
+        return False, 'нет такой суры'
+    путь = os.path.join("/tmp", "ayat_%d_%d.mp3" % (int(сура), int(аят)))
+    try:
+        r = requests.get(_КОРАН_CDN % (код, н), timeout=40,
+                         headers={'User-Agent': 'Mozilla/5.0'})
+        if r.status_code != 200 or len(r.content) < 2000:
+            return False, 'запись не отдалась (%s)' % r.status_code
+        open(путь, 'wb').write(r.content)
+        with open(путь, 'rb') as ф:
+            await bot.send_audio(chat_id, ф, title='Коран %d:%d' % (int(сура), int(аят)),
+                                 performer=имя,
+                                 caption='📖 Коран %d:%d · читает <b>%s</b>'
+                                         % (int(сура), int(аят), имя),
+                                 parse_mode='HTML', reply_to_message_id=ответ_на)
+        return True, имя
+    except Exception as e:
+        return False, str(e)[:150]
+    finally:
+        try:
+            os.remove(путь)
+        except Exception:
+            pass
+
+
+async def отправить_звук(bot, chat_id, путь, ответ_на=None, подпись=None):
     """Каскад: голосовым → аудио-файлом. И ни в коем случае не молча.
 
     🔴 05.08.2026: Telegram принимает ГОЛОСОВЫЕ только в OGG/OPUS, а озвучка отдаёт MP3 —
     отправка отвергалась. Мой код глушил это молча («озвучка дело второстепенное»), и
     второстепенное сломалось так, что не увидел никто: ни владелец, ни я.
     """
+    # Владелец 05.08.2026: «почему тут нет описания, кто пишет? Всегда пиши, кто пишет».
+    # Голосовое без подписи в чате, где звучит несколько голосов, — загадка вместо ответа.
     беды = []
     try:
         with open(путь, "rb") as ф:
-            await bot.send_voice(chat_id, ф, reply_to_message_id=ответ_на)
+            await bot.send_voice(chat_id, ф, reply_to_message_id=ответ_на,
+                                 caption=подпись, parse_mode='HTML' if подпись else None)
         return True, ''
     except Exception as e:
         беды.append('голосом: ' + str(e)[:120])
     try:
         with open(путь, "rb") as ф:
             await bot.send_audio(chat_id, ф, title="Ответ помощника",
+                                 caption=подпись, parse_mode='HTML' if подпись else None,
                                  reply_to_message_id=ответ_на)
         return True, 'ушло аудио-файлом (голосовым Telegram не принял)'
     except Exception as e:
@@ -2299,8 +2357,10 @@ async def сказать_голосом(update, текст, context=None):
     try:
         if not await озвучить(текст, путь):
             raise RuntimeError('озвучка не собралась (edge-tts и gTTS оба молчат)')
-        ок, замечание = await отправить_звук(бот, update.effective_chat.id, путь,
-                                             update.message.message_id)
+        ок, замечание = await отправить_звук(
+            бот, update.effective_chat.id, путь, update.message.message_id,
+            подпись='🔊 озвучено синтезом · голос <b>%s</b>'
+                    % ГОЛОСА.get(_язык_текста(текст), ГОЛОСА['ru']))
         if not ок:
             raise RuntimeError(замечание)
     except Exception as e:
@@ -9414,13 +9474,27 @@ async def _api_serve(application=None):
         ответ_на = body.get('ответ_на')
         if not текст:
             return _cors(web.json_response({'error': 'нужен текст'}, status=400))
+        # Просят аят — отдаём запись настоящего чтеца, а не синтез.
+        _аят = str(body.get('аят') or '').strip()
+        if _аят and ':' in _аят:
+            try:
+                _с, _а = _аят.split(':')[:2]
+                ок, что = await отправить_аят(application.bot, чат, int(_с), int(_а),
+                                              str(body.get('чтец') or 'alafasy'),
+                                              int(ответ_на) if ответ_на else None)
+                return _cors(web.json_response({'ok': ок, 'чтец': что}))
+            except Exception as e:
+                return _cors(web.json_response({'ok': False, 'error': str(e)[:250]}))
         путь = os.path.join("/tmp", "golos_api_%d.mp3" % int(time.time()))
         try:
             if not await озвучить(текст, путь, str(body.get("голос") or "") or None):
                 return _cors(web.json_response(
                     {'ok': False, 'error': 'озвучка не собралась: ни edge-tts, ни gTTS'}))
-            ок, замечание = await отправить_звук(application.bot, чат, путь,
-                                                 int(ответ_на) if ответ_на else None)
+            _г = str(body.get('голос') or '') or ГОЛОСА.get(_язык_текста(текст), ГОЛОСА['ru'])
+            ок, замечание = await отправить_звук(
+                application.bot, чат, путь, int(ответ_на) if ответ_на else None,
+                подпись=str(body.get('подпись') or
+                            ('🔊 озвучено синтезом · голос <b>%s</b>' % _г)))
             # Возвращаем, КАКИМ голосом озвучено: 05.08.2026 владелец сказал «это одинаковые
             # голоса», и он был прав — образцы ушли раньше выкатки. Доказывать различие надо
             # фактом, а не уверением.
