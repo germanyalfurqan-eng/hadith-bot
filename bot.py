@@ -4926,9 +4926,16 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # отвечать не обязан. Пока настраиваем, полная видимость дороже тишины.
         if is_owner(update) and not (_прямо or _тревожно):
             try:
-                dsoc_позвать_клода(chat_id, update.message.message_id, _dsoc,
-                                   getattr(update.effective_user, 'first_name', ''),
-                                   важность="к сведению")
+                _нс = dsoc_позвать_клода(chat_id, update.message.message_id, _dsoc,
+                                         getattr(update.effective_user, 'first_name', ''),
+                                         важность="к сведению")
+                # 🔴 05.08.2026, владелец: «ты должен такие вещи регистрировать как обращения
+                # же, с номером?» Он прав: раньше «к сведению» уходило ко мне молча, и со
+                # стороны это выглядело так, будто сказанное пропало. Номер видят оба — и он,
+                # и я; спросить «а что с номером таким-то» теперь можно про ЛЮБОЕ его слово.
+                if _нс:
+                    await update.message.reply_text(
+                        "📝 Записал технадзору к сведению — №%s (ответа не требует)." % _нс)
             except Exception:
                 pass
 
