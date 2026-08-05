@@ -1166,6 +1166,45 @@ DSOC_ПОЛКА_ФАЙЛ = "dsoc_polka.json"
 DSOC_ВЫГОВОРЫ_ФАЙЛ = "dsoc_vygovory.json"
 DSOC_ОЧЕРЕДЬ_ФАЙЛ = "claude_queue.json"
 DSOC_СНИМКИ_ФАЙЛ = "dsoc_snapshots.json"
+DSOC_НЕУДАЧИ_ФАЙЛ = "dsoc_neudachi.json"
+# Признаки, по которым ответ считается несостоявшимся. Ловим САМИ, не дожидаясь жалобы:
+# неудача, о которой никто не сказал, повторится столько раз, сколько понадобится.
+DSOC_ПРИЗНАКИ_НЕУДАЧИ = ('не нашёл', 'не нашлось', 'не найдено', 'не могу найти', 'не знаю',
+                         'не удалось', 'нет данных', 'ничего не нашлось', 'не смог')
+
+
+async def dsoc_неудача(bot, chat_id, вопрос, ответ, причина):
+    """Записать несостоявшийся ответ: с цитатой запроса и ответа — без контекста разбирать
+    нечего. В системный промт НЕ идёт (владелец: «держать в промте не нужно»), но и не
+    теряется: нумерованный пост в рабочем журнале плюс кнопка «Разобрать»."""
+    try:
+        сп = _data_get(DSOC_НЕУДАЧИ_ФАЙЛ, []) or []
+        н = (max([int(з.get('n') or 0) for з in сп], default=0) + 1) if сп else 1
+        сп.append({'n': н, 'd': _now_msk(), 'чат': chat_id, 'причина': причина[:120],
+                   'вопрос': (вопрос or '')[:700], 'ответ': (ответ or '')[:700],
+                   'разобрано': False})
+        _data_put(DSOC_НЕУДАЧИ_ФАЙЛ, сп[-200:], 'неудача помощника #%d' % н)
+    except Exception:
+        return None
+    try:
+        текст = ("🔻 <b>НЕУДАЧА ПОМОЩНИКА №%d</b> · %s\n"
+                 "<b>причина:</b> %s\n\n"
+                 "<b>спрашивали:</b>\n<blockquote>%s</blockquote>\n"
+                 "<b>ответил:</b>\n<blockquote expandable>%s</blockquote>"
+                 % (н, _now_msk(), причина[:120],
+                    (вопрос or '—')[:500].replace('<', '&lt;'),
+                    (ответ or '—')[:900].replace('<', '&lt;')))
+        подсказка = ''
+        if len([з for з in сп if not з.get('разобрано')]) >= 5:
+            подсказка = ("\n\n⚠️ Неразобранных неудач уже %d. Пять однотипных промахов — это не "
+                         "случайность, а недостающее знание или кривой инструмент."
+                         % len([з for з in сп if not з.get('разобрано')]))
+        await bot.send_message(LOG_CHAT_ID, текст + подсказка, parse_mode='HTML',
+                               reply_markup=_КЛ([[_КБ("🔎 Разобрать",
+                                                      callback_data="neud:%d" % н)]]))
+    except Exception:
+        pass
+    return н
 # Слова, которыми владелец зовёт живого разработчика, а не помощника. Список короткий и
 # явный: угадывать тут нельзя — «позвать человека» должно срабатывать по прямому слову,
 # а не по догадке, иначе половина обычных вопросов уйдёт в очередь и утонет.
@@ -2980,6 +3019,32 @@ async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except: pass
 
 
+async def on_neudacha(update, context):
+    """Кнопка «Разобрать» под неудачей: кладёт её в очередь технадзора — ту же, через которую
+    владелец зовёт живого разработчика. Один канал, а не второй такой же (З-33)."""
+    q = update.callback_query
+    if (q.from_user.id if q.from_user else 0) != OWNER_ID:
+        await q.answer("Эта кнопка — владельца.", show_alert=True)
+        return
+    try:
+        н = int((q.data or '').split(':', 1)[1])
+        сп = _data_get(DSOC_НЕУДАЧИ_ФАЙЛ, []) or []
+        з = next((x for x in сп if int(x.get('n') or 0) == н), None)
+        if not з:
+            await q.answer("Не нашёл эту запись.", show_alert=True)
+            return
+        з['разобрано'] = True
+        _data_put(DSOC_НЕУДАЧИ_ФАЙЛ, сп[-200:], 'неудача #%d отдана в разбор' % н)
+        dsoc_позвать_клода(з.get('чат') or LOG_CHAT_ID, None,
+                           "РАЗБОР НЕУДАЧИ №%d. Причина: %s\nСпрашивали: %s\nОтветил: %s"
+                           % (н, з.get('причина'), (з.get('вопрос') or '')[:500],
+                              (з.get('ответ') or '')[:500]), 'владелец')
+        await q.answer("Отдал технадзору на разбор.")
+        await q.edit_message_text((q.message.text or '') + "\n\n🔎 Отдано технадзору на разбор.")
+    except Exception as e:
+        await q.answer("Не вышло: " + str(e)[:150], show_alert=True)
+
+
 async def on_dsoc_back(update, context):
     """Кнопка «Вернуть как было» под уведомлением о сжатии разговора."""
     q = update.callback_query
@@ -4271,6 +4336,18 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Ответом на любое сообщение — возьму его в работу вместе с вопросом.")
             return
 
+        # Владелец пометил ответ помощника неудачным — записываем с цитатой того ответа.
+        if is_owner(update) and _dsoc.strip().lower().rstrip('!.') in (
+                'неудача', 'не то', 'плохой ответ', 'мимо', 'не ответил'):
+            _пред = update.message.reply_to_message
+            _цитата = (getattr(_пред, 'text', None) or getattr(_пред, 'caption', None) or '') if _пред else ''
+            _н = await dsoc_неудача(context.bot, chat_id, '(помечено владельцем вручную)',
+                                    _цитата, 'владелец: ответ не годится')
+            await update.message.reply_text(
+                "🔻 Записал как неудачу №%s — с цитатой того ответа. Разберу и превращу в "
+                "знание, правку или выговор." % _н)
+            return
+
         # ⚡ ОПЕРАТИВНЫЙ КАНАЛ: владелец через помощника зовёт живого технадзора.
         # Срабатывает по ПРЯМОМУ слову, а не по догадке — иначе обычные вопросы утонут в очереди.
         _низ_зов = _dsoc.lower()
@@ -4469,6 +4546,21 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                    % (OPENCODE_MODEL, вх, вых, сек, (вых / сек if сек else 0), цена,
                       dsoc_остаток_строкой(), _сист + _перепис,
                       (_сист + _перепис) / DSOC_ОКНО * 100, _сист, _перепис))
+        # Неудача ловится САМА: осталась строка вызова, пустой ответ или признание «не нашёл».
+        try:
+            _низ_отв = (собрано or '').lower()
+            _прич = None
+            if not (собрано or '').strip():
+                _прич = 'ответ пустой'
+            elif 'Дальше достать из базы не вышло' in (собрано or ''):
+                _прич = 'инструмент не принёс данных'
+            elif any(п in _низ_отв for п in DSOC_ПРИЗНАКИ_НЕУДАЧИ):
+                _прич = 'помощник не смог ответить по существу'
+            if _прич:
+                await dsoc_неудача(context.bot, chat_id, _dsoc, собрано, _прич)
+        except Exception:
+            pass
+
         if предложение:
             подпись = ("\n📨 Предлагаю записать %s: «%s»\nОтветь «да» — запишу."
                        % ("в журнал помощника" if куда == "помощник" else "заявкой технадзору",
@@ -11501,6 +11593,7 @@ app.add_handler(CallbackQueryHandler(on_rag_help, pattern='^rag_help$'))
 # проглотил бы нажатие. Кнопку сделал, а дверь ей не открыл. Расширяю до всего семейства mod:.
 app.add_handler(CallbackQueryHandler(on_moderate, pattern=r'^mod:'))
 app.add_handler(CallbackQueryHandler(on_dsoc_back, pattern=r'^dsocback:'))
+app.add_handler(CallbackQueryHandler(on_neudacha, pattern=r'^neud:'))
 app.add_handler(CommandHandler("start", start_cmd))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
