@@ -9424,7 +9424,10 @@ async def _api_serve(application=None):
         if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
             return _cors(web.json_response({'error': 'auth'}, status=403))
         текст = str(body.get('текст', '')).strip()
-        чат = int(body.get('чат') or LOG_CHAT_ID)
+        # Чат может быть и числом, и @именем канала: Telegram принимает оба, а раньше мы
+        # насильно приводили к числу — и написать в канал по имени было нельзя вовсе.
+        _ч = body.get('чат')
+        чат = _ч if isinstance(_ч, str) and _ч.strip().startswith('@') else int(_ч or LOG_CHAT_ID)
         ответ_на = body.get('ответ_на')
         if not текст:
             return _cors(web.json_response({'error': 'нужен текст'}, status=400))
