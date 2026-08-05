@@ -9683,6 +9683,25 @@ async def _req_imgs_export(application):
         print("req imgs export failed:", e)
 
 async def _setup(application):
+    # 📢 05.08.2026, заявка владельца: «можешь в рабочий журнал слать, когда деплоится на
+    # Railway и когда закончено? а то чтобы посмотреть, деплоится ли, надо постоянно
+    # открывать Railway и смотреть».
+    # Накладно ли — нет. «Деплой начался» из облака узнать нечем и незачем, а вот «деплой
+    # ЗАКОНЧЕН» бот знает точнее всех: он в этот самый миг и просыпается. Одно сообщение
+    # при старте — и открывать Railway больше не нужно. Стоит это ноль.
+    try:
+        _вер = os.environ.get("RAILWAY_GIT_COMMIT_SHA", "")[:7] or "—"
+        _сообщ = os.environ.get("RAILWAY_GIT_COMMIT_MESSAGE", "").split(chr(10))[0][:120]
+        _строки = ["🚀 БОТ ПОДНЯЛСЯ ПОСЛЕ ДЕПЛОЯ",
+                   "🕐 " + _now_msk(),
+                   "🔖 сборка " + _вер]
+        if _сообщ:
+            _строки.append("📝 " + _сообщ)
+        _строки.append("Открывать Railway не нужно: пришло это сообщение — значит деплой "
+                       "закончен и бот жив.")
+        await application.bot.send_message(LOG_CHAT_ID, chr(10).join(_строки))
+    except Exception:
+        pass
     try:
         await _req_imgs_export(application)
     except Exception:
