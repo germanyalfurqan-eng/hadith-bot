@@ -4653,7 +4653,26 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                               'коран', 'карточка', 'переведи', 'корень ',
                                               'видео', 'заявка', 'память', 'запомни',
                                               'анонс', '/', 'надзиратель', 'дипсик'))
-            if _пос and (time.time() - _пос) < 900 and not _явно_другому:
+            # 🔴 05.08.2026, владелец: «я тебя не звал, почему ты ответил?». Правило «15 минут
+            # всё идёт помощнику» починило одно (чужие модели не влезают) и сломало другое:
+            # он стал отвечать и на реплики В СТОРОНУ. Внутри окна он теперь отвечает, только
+            # если обратились К НЕМУ: ответом на его сообщение, по имени, вопросом или прямой
+            # просьбой. Замечание в сторону остаётся без ответа — молчание тоже бывает
+            # правильным ответом.
+            _к_нему = False
+            try:
+                _рп = update.message.reply_to_message
+                _рт = ((getattr(_рп, 'text', None) or getattr(_рп, 'caption', None) or '')
+                       if _рп else '')
+                _к_нему = ('🟩 DSOC' in _рт or '🧠 Клод' in _рт
+                           or '?' in text
+                           or bool(re.match(r'^\s*(дай|найди|покажи|скажи|сделай|переведи|'
+                                            r'объясни|расскажи|прочитай|озвучь|проверь|сравни|'
+                                            r'вмешайся|убери|забудь|сожми|продолж)',
+                                            text.strip().lower())))
+            except Exception:
+                _к_нему = '?' in text
+            if _пос and (time.time() - _пос) < 900 and not _явно_другому and _к_нему:
                 _dsoc = text.strip()
         except Exception:
             pass
@@ -9458,6 +9477,45 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True,
                                         'новые': [з for з in сп if not з.get('взято')]}))
 
+    async def oc_balans(r):
+        """Остаток на счёте OpenCode — по данным самого OpenCode, а не нашего журнала.
+
+        Владелец 05.08.2026: «ты должен иметь доступ к остаткам баланса OpenCode». Он прав:
+        наш журнал знает лишь то, что потратили МЫ; о деньгах на счёте он не знает ничего —
+        владелец мог пополнить, могла списаться подписка. Спрашивать надо у источника."""
+        if not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            body = {}
+        if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        итог = {'ok': True, 'по_нашему_журналу': None, 'у_провайдера': None}
+        try:
+            сп = _data_get(DSOC_ФАЙЛ_ТРАТ, []) or []
+            итог['по_нашему_журналу'] = {
+                'вызовов': len(сп), 'потрачено': round(sum(float(x[1]) for x in сп), 6)}
+        except Exception:
+            pass
+        # У OpenCode нет описанного эндпоинта баланса; пробуем известные и честно говорим, что
+        # ответил каждый — гадать о деньгах нельзя.
+        попытки = {}
+        for адрес in ('https://opencode.ai/zen/go/v1/balance',
+                      'https://opencode.ai/zen/v1/balance',
+                      'https://opencode.ai/api/billing/balance'):
+            try:
+                о = requests.get(адрес, timeout=25,
+                                 headers={'Authorization': 'Bearer ' + (OPENCODE_KEY or '')})
+                попытки[адрес] = {'код': о.status_code, 'ответ': о.text[:200]}
+                if о.status_code == 200:
+                    итог['у_провайдера'] = о.text[:400]
+                    break
+            except Exception as e:
+                попытки[адрес] = {'ошибка': str(e)[:120]}
+        итог['попытки'] = попытки
+        return _cors(web.json_response(итог))
+
     async def golos(r):
         """Озвучить текст и отправить в чат. Нужен мне, чтобы ПРОВЕРЯТЬ озвучку живьём, а не
         докладывать «починил» вслепую — сегодня я на этом обжёгся трижды."""
@@ -9472,10 +9530,13 @@ async def _api_serve(application=None):
         текст = str(body.get('текст', '')).strip()
         чат = int(body.get('чат') or LOG_CHAT_ID)
         ответ_на = body.get('ответ_на')
-        if not текст:
-            return _cors(web.json_response({'error': 'нужен текст'}, status=400))
-        # Просят аят — отдаём запись настоящего чтеца, а не синтез.
+        # 🔴 Проверка «нужен текст» стояла ВЫШЕ ветки с аятом — и просьба прочитать аят
+        # отвергалась, хотя текста там и не должно быть. Порядок проверок оказался важнее их
+        # содержания: сначала разбираем, ЧТО просят, потом требуем нужное для этого.
         _аят = str(body.get('аят') or '').strip()
+        if not текст and not _аят:
+            return _cors(web.json_response({'error': 'нужен текст или аят'}, status=400))
+        # Просят аят — отдаём запись настоящего чтеца, а не синтез.
         if _аят and ':' in _аят:
             try:
                 _с, _а = _аят.split(':')[:2]
@@ -11374,7 +11435,7 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True}))
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/golos', golos), web.post('/api/ochered', ochered), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/ochered', ochered), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
