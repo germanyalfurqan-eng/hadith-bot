@@ -4814,10 +4814,32 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _про_хадис = bool(re.search(r'[\u0621-\u064A]{6,}', _расш)) or any(
                 с in _н for с in ('хадис', 'передал', 'рассказал нам', 'сообщил нам',
                                   'сказал посланник', 'пророк сказал', 'со слов'))
+        # 🔴 ЗОВ ВЛАДЕЛЬЦА #50 (06.08.2026): «не влазить». В группе бот лез в КАЖДОЕ голосовое —
+        # качал, расшифровывал и при неудаче отвечал «не разобрал речь» человеку, который его не
+        # звал. Разговор чужой, бот в нём лишний; хуже того, ответ приходил именно тогда, когда
+        # бот НЕ справился, — то есть влезал, чтобы сообщить о собственной неудаче.
+        # Теперь в группе отвечаем на голосовое, ТОЛЬКО когда к боту обратились: ответом на его
+        # сообщение, обращением в подписи или обращением слышно в самой речи. Расшифровку не
+        # отменяем — иначе пропадёт возможность позвать помощника голосом; молчим именно ответом.
+        _группа = getattr(update.effective_chat, "type", "") != "private"
+        _звали = True
+        if _группа:
+            try:
+                _пред = update.message.reply_to_message
+                _звали = bool(_пред and getattr(_пред, 'from_user', None)
+                              and _пред.from_user.id == context.bot.id)
+            except Exception:
+                _звали = False
+            if not _звали:
+                _звали = parse_dsoc(update.message.caption or '') is not None
+            if not _звали and _расш:
+                _звали = parse_dsoc(_расш) is not None
+            if not _звали:
+                return                       # чужой разговор — молчим совсем, даже об ошибке
         if _расш and (parse_dsoc(_расш) is not None or not _про_хадис):
             text = _расш.strip()                  # дальше отработает разбор DSOC
             _голосом_просили = True
-        elif getattr(update.effective_chat, "type", "") != "private":
+        elif _группа:
             try:
                 await аудио_в_хадис(update, context, _гол.file_id, update.message.caption or "")
             except Exception as _e:
