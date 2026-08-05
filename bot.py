@@ -2202,14 +2202,50 @@ async def озвучить(текст, путь):
         return None
 
 
-async def сказать_голосом(update, текст):
-    путь = os.path.join("/tmp", "golos_%s.mp3" % update.message.message_id)
+async def отправить_звук(bot, chat_id, путь, ответ_на=None):
+    """Каскад: голосовым → аудио-файлом. И ни в коем случае не молча.
+
+    🔴 05.08.2026: Telegram принимает ГОЛОСОВЫЕ только в OGG/OPUS, а озвучка отдаёт MP3 —
+    отправка отвергалась. Мой код глушил это молча («озвучка дело второстепенное»), и
+    второстепенное сломалось так, что не увидел никто: ни владелец, ни я.
+    """
+    беды = []
     try:
-        if await озвучить(текст, путь):
-            with open(путь, "rb") as ф:
-                await update.message.reply_voice(ф)
-    except Exception:
-        pass
+        with open(путь, "rb") as ф:
+            await bot.send_voice(chat_id, ф, reply_to_message_id=ответ_на)
+        return True, ''
+    except Exception as e:
+        беды.append('голосом: ' + str(e)[:120])
+    try:
+        with open(путь, "rb") as ф:
+            await bot.send_audio(chat_id, ф, title="Ответ помощника",
+                                 reply_to_message_id=ответ_на)
+        return True, 'ушло аудио-файлом (голосовым Telegram не принял)'
+    except Exception as e:
+        беды.append('аудио: ' + str(e)[:120])
+    return False, ' · '.join(беды)
+
+
+async def сказать_голосом(update, текст, context=None):
+    путь = os.path.join("/tmp", "golos_%s.mp3" % update.message.message_id)
+    бот = (context.bot if context else None) or update.get_bot()
+    try:
+        if not await озвучить(текст, путь):
+            raise RuntimeError('озвучка не собралась (edge-tts и gTTS оба молчат)')
+        ок, замечание = await отправить_звук(бот, update.effective_chat.id, путь,
+                                             update.message.message_id)
+        if not ок:
+            raise RuntimeError(замечание)
+    except Exception as e:
+        # Не молчим. Владелец должен видеть, что голос не вышел и почему, а не гадать.
+        try:
+            await update.message.reply_text("🔇 Озвучить не вышло: %s" % str(e)[:200])
+        except Exception:
+            pass
+        try:
+            await бот.send_message(LOG_CHAT_ID, "🔇 Озвучка не удалась: %s" % str(e)[:300])
+        except Exception:
+            pass
     finally:
         try:
             os.remove(путь)
@@ -4790,7 +4826,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Спросили голосом или прямо просят озвучить — отвечаем ещё и речью.
         if собрано and (_голосом_просили
                         or re.search(r'\bголос|озвучь|скажи вслух|прочитай вслух', _dsoc, re.I)):
-            await сказать_голосом(update, собрано)
+            await сказать_голосом(update, собрано, context)
         return
 
 
@@ -9112,6 +9148,38 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True,
                                         'новые': [з for з in сп if not з.get('взято')]}))
 
+    async def golos(r):
+        """Озвучить текст и отправить в чат. Нужен мне, чтобы ПРОВЕРЯТЬ озвучку живьём, а не
+        докладывать «починил» вслепую — сегодня я на этом обжёгся трижды."""
+        if not application or not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            return _cors(web.json_response({'error': 'bad_json'}, status=400))
+        if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        текст = str(body.get('текст', '')).strip()
+        чат = int(body.get('чат') or LOG_CHAT_ID)
+        ответ_на = body.get('ответ_на')
+        if not текст:
+            return _cors(web.json_response({'error': 'нужен текст'}, status=400))
+        путь = os.path.join("/tmp", "golos_api_%d.mp3" % int(time.time()))
+        try:
+            if not await озвучить(текст, путь):
+                return _cors(web.json_response(
+                    {'ok': False, 'error': 'озвучка не собралась: ни edge-tts, ни gTTS'}))
+            ок, замечание = await отправить_звук(application.bot, чат, путь,
+                                                 int(ответ_на) if ответ_на else None)
+            return _cors(web.json_response({'ok': ок, 'замечание': замечание}))
+        except Exception as e:
+            return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}))
+        finally:
+            try:
+                os.remove(путь)
+            except Exception:
+                pass
+
     async def skazat(r):
         """Сказать в конкретный чат, при желании — ответом на конкретное сообщение.
         Понадобилось четвёртый раз за день; каждый раз приспосабливать чужой эндпоинт —
@@ -10974,7 +11042,7 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True}))
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/ochered', ochered), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/golos', golos), web.post('/api/ochered', ochered), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
