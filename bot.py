@@ -925,6 +925,7 @@ DSOC_КОМАНДЫ = [
     ("найди хадис <текст/номер>", "ищет хадис в наших 41 первоисточнике", "безопасно"),
     ("(просто пришли голосовое)", "расшифрую речь и найду оригинал хадиса в нашей базе", "безопасно"),
     ("DSOC голосом <вопрос>", "отвечу не текстом, а голосовым сообщением", "безопасно"),
+    ("DSOC что на полке?", "покажу оглавление полки знаний в рабочем журнале", "безопасно"),
     ("ботяра <вопрос>", "общий вопрос к ИИ бота", "безопасно"),
     ("переведи", "перевод — ответом на сообщение", "безопасно"),
     ("корень <слово>", "трёхбуквенный корень арабского слова", "безопасно"),
@@ -1111,6 +1112,9 @@ async def dsoc_инструмент(строка):
         м = re.match(r'^карточк[аиу]\s+(.+)$', с, re.I)
         if м:
             return await narr_card_reply_text(м.group(1).strip(), '')
+        if низ.startswith('полка') or низ.startswith('полку'):
+            _м = re.sub(r'^полк[ауи]\s*', '', с, flags=re.I).strip()
+            return полка_взять(_м or None)
         if низ.startswith('книг'):
             return "41 первоисточник нашей базы: " + КНИГИ_БАЗЫ
         м = re.match(r'^поиск\s+(.+)$', с, re.I)
@@ -1125,6 +1129,32 @@ async def dsoc_инструмент(строка):
     except Exception as e:
         return "Инструмент не отработал: " + str(e)[:200]
     return None
+
+
+DSOC_ПОЛКА_ФАЙЛ = "dsoc_polka.json"
+
+
+def полка_взять(метка=None):
+    """Оглавление полки либо одна запись. Читает ветку data — там машинная копия постов
+    рабочего журнала (сам журнал бот перечитать не может: истории чата ботам не выдают)."""
+    try:
+        п = _data_get(DSOC_ПОЛКА_ФАЙЛ, {}) or {}
+    except Exception:
+        return None
+    if not п:
+        return "Полка пока пуста."
+    if not метка:
+        return ("На полке %d записей:\n" % len(п)) + "\n".join(
+            "• %s — %s" % (к, (з.get("заголовок") or "")[:90]) for к, з in sorted(п.items()))
+    к = метка.strip().upper()
+    з = п.get(к) or п.get(метка.strip())
+    if not з:
+        близкие = [x for x in п if к in x.upper()]
+        if len(близкие) == 1:
+            з = п[близкие[0]]
+        else:
+            return "Записи «%s» на полке нет. Есть: %s" % (метка, ", ".join(sorted(п))[:600])
+    return "%s — %s\n\n%s" % (к, з.get("заголовок") or "", (з.get("текст") or "")[:7000])
 
 
 DSOC_ЖУРНАЛ_ПОМОЩНИКА = "dsoc_zayavki.json"
@@ -1173,6 +1203,8 @@ def dsoc_системный():
         "Мактаба, Википедия, наше приложение)\n"
         "ВЫЗОВ: поиск <арабские слова> — найти хадис в базе по тексту\n"
         "ВЫЗОВ: книги                — список 41 первоисточника\n"
+        "ВЫЗОВ: полка                — оглавление полки знаний в рабочем журнале\n"
+        "ВЫЗОВ: полка <метка>        — взять с полки нужную запись целиком\n"
         "Бот выполнит вызов и пришлёт тебе настоящие данные — тогда и ответишь по ним. "
         "Ничего не выдумывай в ожидании: сперва вызов, потом ответ.\n"
         "Пример: «найди Мухэймин 35» → ты пишешь ровно «ВЫЗОВ: хадис 35».\n"
@@ -1181,6 +1213,11 @@ def dsoc_системный():
         "книга, какой из тёзок) — сперва переспроси одним коротким вопросом, и только потом "
         "вызывай. Переспрашивать по ясному — тратить чужое время; догадываться по "
         "двусмысленному — приносить не то.\n\n"
+        "ПОЛКА ЗНАНИЙ. Всё, что тебе может понадобиться, но незачем держать в голове — "
+        "инструкции, разборы, списки, скрипты — лежит на полке в рабочем журнале под метками "
+        "вида ПОЛКА-01. Не помнишь подробность — не выдумывай и не извиняйся: посмотри "
+        "оглавление «ВЫЗОВ: полка», возьми нужное «ВЫЗОВ: полка ПОЛКА-01». Взял, ответил — и "
+        "можешь забыть: полка никуда не денется.\n\n"
         "41 ПЕРВОИСТОЧНИК НАШЕЙ БАЗЫ: " + КНИГИ_БАЗЫ + "\n"
         "«Мухэймин» — наша основная книга (الموحد المهيمن على الدين) имама Муршида ибн Юсуфа; "
         "у каждого хадиса есть авторский номер, а рядом — метка первоисточника, откуда он "
@@ -1202,12 +1239,57 @@ def dsoc_системный():
     )
 
 
+# 💵 Кошелёк OpenCode: сколько живых денег внесено. Лимиты подписки говорят «сколько
+# можно», кошелёк — «на сколько хватит»; в отчёте нужны обе цифры.
+DSOC_КОШЕЛЁК = 5.0
+DSOC_ФАЙЛ_ТРАТ = "dsoc_spend.json"
+_ДСОС_ГРЯЗНО = [0, 0.0]        # [сколько записей не сброшено, когда сбрасывали в последний раз]
+
+
+def dsoc_расход_поднять():
+    """Поднять журнал трат из ветки data. Вызывается лениво, при первом обращении."""
+    if DSOC_РАСХОД:
+        return
+    try:
+        for з in (_data_get(DSOC_ФАЙЛ_ТРАТ, []) or []):
+            DSOC_РАСХОД.append((float(з[0]), float(з[1])))
+    except Exception:
+        pass
+
+
+def dsoc_расход_записать(цена):
+    """Учесть трату и, когда накопится, сбросить журнал в ветку data.
+
+    Сбрасываем пачкой, а не каждую: запись в ветку — это коммит, и стучать в GitHub на каждое
+    сообщение незачем. Первую трату после старта пишем сразу — чтобы журнал не потерялся
+    целиком, если процесс проживёт недолго.
+    """
+    dsoc_расход_поднять()
+    DSOC_РАСХОД.append((time.time(), цена))
+    _ДСОС_ГРЯЗНО[0] += 1
+    пора = (_ДСОС_ГРЯЗНО[0] >= 5 or time.time() - _ДСОС_ГРЯЗНО[1] > 300
+            or _ДСОС_ГРЯЗНО[1] == 0.0)
+    if пора:
+        try:
+            свежие = [[round(к, 1), round(c, 6)] for к, c in DSOC_РАСХОД
+                      if time.time() - к <= 31 * 86400][-4000:]
+            _data_put(DSOC_ФАЙЛ_ТРАТ, свежие, "траты DSOC (%d записей)" % len(свежие))
+            _ДСОС_ГРЯЗНО[0] = 0
+            _ДСОС_ГРЯЗНО[1] = time.time()
+        except Exception:
+            pass
+
+
 def dsoc_остаток_строкой():
+    dsoc_расход_поднять()
     сейчас = time.time()
     части = []
     for имя, окно, потолок in DSOC_ЛИМИТЫ:
         потрачено = sum(c for к, c in DSOC_РАСХОД if сейчас - к <= окно)
         части.append("%s осталось $%.2f из %.0f" % (имя, max(0.0, потолок - потрачено), потолок))
+    всего = sum(c for _, c in DSOC_РАСХОД)
+    части.append("💵 кошелёк: потрачено $%.4f из $%.2f, ОСТАЛОСЬ $%.4f"
+                 % (всего, DSOC_КОШЕЛЁК, max(0.0, DSOC_КОШЕЛЁК - всего)))
     return " · ".join(части)
 
 # #450 (заявка владельца 02.07.2026, @jamaat_ru): «ботяра дай карточку <равий>» → ссылка на нашу карточку +
@@ -2359,8 +2441,8 @@ def ask_opencode(prompt, system, max_tokens=None):
             return None
         try:
             u = j.get("usage") or {}
-            DSOC_РАСХОД.append((time.time(), dsoc_стоимость(u.get("prompt_tokens") or 0,
-                                                            u.get("completion_tokens") or 0)))
+            dsoc_расход_записать(dsoc_стоимость(u.get("prompt_tokens") or 0,
+                                                u.get("completion_tokens") or 0))
         except Exception:
             pass
         return ответ.replace("\n\n\n", "\n\n")
@@ -4155,7 +4237,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         вых = вых or (len(собрано) // 3)
         вх = вх or dsoc_размер(реплики)
         цена = dsoc_стоимость(вх, вых)
-        DSOC_РАСХОД.append((time.time(), цена))
+        dsoc_расход_записать(цена)
         реплики.append({"role": "assistant", "content": собрано})
         DSOC_ПАМЯТЬ[chat_id] = реплики
         dsoc_сохранить()
@@ -8470,6 +8552,47 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'ok': ok, 'model': OPENAI_MODEL, 'seconds': dt, 'reply': str(resp)[:300]}))
         except Exception as e:
             return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}))
+    async def polka_put(r):
+        """Положить запись на полку: и постом в рабочий журнал (для глаз владельца), и в
+        ветку data (для рук помощника). Авторизация тем же BACKUP_SECRET — токен бота
+        наружу не выдаётся."""
+        if not application:
+            return _cors(web.json_response({'error': 'no_app'}, status=503))
+        if not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            return _cors(web.json_response({'error': 'bad_json'}, status=400))
+        if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        метка = str(body.get('метка', '')).strip().upper()
+        заголовок = str(body.get('заголовок', '')).strip()
+        текст = str(body.get('текст', '')).strip()
+        if not метка or not текст:
+            return _cors(web.json_response({'error': 'нужны метка и текст'}, status=400))
+        try:
+            п = _data_get(DSOC_ПОЛКА_ФАЙЛ, {}) or {}
+            п[метка] = {'заголовок': заголовок, 'текст': текст[:20000], 'когда': _now_msk()}
+            _data_put(DSOC_ПОЛКА_ФАЙЛ, п, 'полка: ' + метка)
+        except Exception as e:
+            return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}, status=500))
+        мид = None
+        try:
+            пост = ('📚 <b>%s</b> — %s\n\n%s' % (метка, заголовок, текст[:3300]))
+            м = await application.bot.send_message(LOG_CHAT_ID, пост, parse_mode='HTML',
+                                                  disable_web_page_preview=True)
+            мид = getattr(м, 'message_id', None)
+        except Exception:
+            try:
+                м = await application.bot.send_message(
+                    LOG_CHAT_ID, '📚 %s — %s\n\n%s' % (метка, заголовок, текст[:3300]))
+                мид = getattr(м, 'message_id', None)
+            except Exception:
+                pass
+        return _cors(web.json_response({'ok': True, 'метка': метка, 'пост': мид,
+                                        'на_полке': len(_data_get(DSOC_ПОЛКА_ФАЙЛ, {}) or {})}))
+
     async def claude_notify(r):
         """#claude-notify-05.07 (владелец: «мне не важно как, просто скинь мне в личку то, что я попросил»):
         Клод шлёт себе сообщение в личку владельца через бота — токен НЕ передаётся Клоду, он остаётся
@@ -10186,7 +10309,7 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True}))
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
