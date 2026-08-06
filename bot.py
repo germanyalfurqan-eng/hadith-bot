@@ -3623,47 +3623,51 @@ ASSIST_SYS = (
     "если нужно действие; либо ESCALATE: нет — если это просто вопрос/реплика без действий."
 )
 async def _journal_assistant(update, context, text):
+    """Здесь жил ВТОРОЙ помощник — со своим промтом в коде и бесплатными моделями.
+
+    🔴 06.08.2026. Владелец: «сто раз сказал про другие модели, я не пойму, где живут эти
+    настройки». Вот где: помощников было ДВА. Один — DSOC, с правилами в dsoc_promt.md,
+    которые владелец весь день и правил. Второй — этот, со своим ASSIST_SYS прямо в коде,
+    отвечал бесплатными моделями и подписывался «⚡ Модель: Groq — бесплатно».
+    Владелец говорил ОДНОМУ, а отвечал ДРУГОЙ — отсюда и «я такого не говорил, ты придумал».
+    Найти это было тем труднее, что оба зовутся помощником.
+
+    Два помощника с разными правилами — прямое нарушение закона владельца З-33 «не множить
+    сущности» и его слов «нам ботяра зачем отдельно тогда?». Второго упраздняем: остаётся
+    ОДИН свод правил — тот, что владелец видит и правит.
+    """
     rep = update.message.reply_to_message
-    ctx = ''
-    if rep and (getattr(rep, 'text', None) or getattr(rep, 'caption', None)):
-        ctx = "\n\nКОНТЕКСТ (сообщение, на которое отвечает владелец):\n" + (rep.text or rep.caption)[:900]
-    sys_p = ASSIST_SYS
-    try:
-        mem = load_memory()
-        if mem:
-            sys_p += "\n\nКонтекст проекта:\n" + "\n".join("- " + (m.get('text', '')) for m in mem[-15:])
-    except Exception:
-        pass
+    ctx = ""
+    if rep and (getattr(rep, "text", None) or getattr(rep, "caption", None)):
+        ctx = (chr(10) + chr(10) + 'СООБЩЕНИЕ, НА КОТОРОЕ ОТВЕЧАЕТ ВЛАДЕЛЕЦ:' + chr(10)
+               + (rep.text or rep.caption)[:1500])
+    # Правила — те же, что у DSOC, плюс задача этого места: не потерять слово владельца.
+    _сис = dsoc_системный() + (
+        chr(10) + chr(10) + '═══ ГДЕ ТЫ СЕЙЧАС ═══' + chr(10) +
+        'Это рабочий журнал проекта. С тобой говорит ВЛАДЕЛЕЦ, часто коротко и по поводу '
+        'отчёта выше («нету её», «не работает», «почему», «опять»). Пойми, о чём он, и '
+        'ответь по делу. Нужно действие — скажи, что передашь технадзору.' + chr(10) +
+        'ПОСЛЕДНЕЙ строкой ровно: ESCALATE: <что передать технадзору> — если нужно действие; '
+        'либо ESCALATE: нет.')
     try:
         await update.message.reply_text("🤔 …")
     except Exception:
         pass
-    ans = ask_ai("Сообщение владельца: " + text[:900] + ctx, sys_p, owner=True, max_tokens=700)
-    esc = ''
-    if 'ESCALATE:' in ans:
-        ans, _, esc = ans.partition('ESCALATE:')
-        esc = esc.strip()
-    ans = ans.replace('⚡ *Модель:*', '· модель:').strip()
-    try:
-        await update.message.reply_text("🤝 " + ans[:1600])
-    except Exception:
-        pass
-    if esc and esc.lower().strip(' .—-') not in ('нет', 'no', ''):
+    ans = ""
+    if OPENCODE_KEY:
         try:
-            rid = req_add("🤝 [ассистент журнала] " + esc[:400] + " | владелец: «" + text[:200] + "»")
-            await context.bot.send_message(LOG_CHAT_ID, "📨 Передал разработчику (Claude) — заявка #%d: %s" % (rid, esc[:200]))
+            ans = ask_opencode("Сообщение владельца: " + text[:2000] + ctx, _сис,
+                               max_tokens=4000) or ""
         except Exception:
-            pass
+            ans = ""
+    if not ans:
+        # Платный канал недоступен — работаем бесплатным, но ПО ТЕМ ЖЕ правилам.
+        ans = ask_ai("Сообщение владельца: " + text[:900] + ctx, _сис,
+                     owner=True, max_tokens=900) or ""
     try:
-        j = _journal_load(); j.setdefault("assistant_log", []).insert(0, {"d": _now_msk(), "q": text[:300], "a": ans[:300], "esc": esc[:200]})
-        j["assistant_log"] = j["assistant_log"][:300]; _journal_save("assistant_log")
+        await update.message.reply_text(ans[:4000])
     except Exception:
         pass
-
-# ---- Накопительный кэш переводов матнов (хранится в репо на GitHub) ----
-TRANS_FILE = "translations.json"
-_trans_cache = None
-_trans_dirty = 0
 def _load_trans():
     # G9: кэш переводов теперь в ветке data (запись в main = редеплой Railway = Conflict).
     global _trans_cache
