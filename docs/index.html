@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1293</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1294</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1512,7 +1512,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1293';
+const APPVER = 'v1294';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -1799,11 +1799,23 @@ document.addEventListener('pointerdown', function(e){
       const q=(document.getElementById('q')||{}).value||'';
       if(!q.trim()) return;                       // пустой запрос — молчание законно
       const now=Date.now(); if(now-_последний<30000) return;   // не чаще раза в 30 с, чтобы не спамить
-      const было=_слепок(), где=(t.id||t.dataset.mode||'кнопка');
+      const было=_слепок(), где=(t.id||t.dataset.mode||'кнопка'), _клик=now;
       setTimeout(()=>{
         try{
           if(_слепок()!==было) return;            // что-то изменилось — всё в порядке
           if(document.querySelector('.btnBusy,.miniSpin,#_skel')) return;   // ещё работает — не тревога
+          /* 🔴 A-224 (06.08.2026, заявка 705). Сторож поднял ложную тревогу на РАБОТАЮЩЕМ поиске.
+             Воспроизвёл в живом браузере: запрос «Аяты о единобожии» нашёл аят 25:73, всё
+             отрисовалось. Нажал ТО ЖЕ САМОЕ второй раз — выдача, естественно, вышла точь-в-точь
+             такая же, слепок (число узлов + длина текста) совпал до знака, и сторож объявил
+             «нажатие без отклика».
+             Ошибка была в мерке: «изменился ли текст» — это не то же самое, что «сработало ли».
+             Повтор удачного действия по определению не меняет текста. Судить надо по САМОМУ
+             ДЕЙСТВИЮ: поиск отмечает завершение в __поискЗавершён (см. _goBusy). Отметка после
+             нашего нажатия — значит отработал, и тревожить владельца не о чем.
+             Урок общий: сторож, который меряет следствие вместо события, рано или поздно
+             обвинит исправное. Ложная тревога хуже молчания — на неё тратят время. */
+          if((window.__поискЗавершён||0)>=_клик) return;
           _последний=Date.now();
           try{ toast('Не получилось — записал в журнал, разберёмся'); }catch(_t){}
           try{ _appReport('Нажатие без отклика: '+где+' · запрос: '+q.slice(0,60), 'отклик'); }catch(_r){}
@@ -4136,7 +4148,12 @@ function qBack(){ if(_qHist.length<2){ toast('Больше некуда возв
 function _goBusy(on){ try{ const b=document.getElementById('goBtn'); if(!b) return;
   if(on){ if(!b._t) b._t=b.textContent; b.classList.add('btnBusy'); b.setAttribute('aria-busy','1');
           b.innerHTML='<span class="miniSpin"></span>'+t('ищу','searching'); }
-  else { b.classList.remove('btnBusy'); b.removeAttribute('aria-busy'); b.textContent=b._t||t('Найти','Search'); }
+  else { b.classList.remove('btnBusy'); b.removeAttribute('aria-busy'); b.textContent=b._t||t('Найти','Search');
+         /* A-224: отметка «поиск ДОШЁЛ ДО КОНЦА». Сторож отклика (см. #677) раньше судил о
+            работе по длине текста в выдаче — и повторный тот же запрос, отработавший идеально,
+            выглядел для него как замерший экран. Здесь единственная точка, где поиск сообщает
+            о завершении, — по ней и судим. */
+         try{ window.__поискЗавершён=Date.now(); }catch(_e){} }
   _syncSearchBar();   /* #663 (С67): текст кнопки сменился → ширина другая → развести ✕/↩ заново */
 }catch(e){} }
 /* ===== v1096 (закон владельца 17.07: «применить КО ВСЕМ кнопкам ИИ»): единый ИИ-ожидатель =====
