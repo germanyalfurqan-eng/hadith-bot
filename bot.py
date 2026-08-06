@@ -13085,6 +13085,29 @@ async def _app_channel_watcher(application):
                     j = _journal_load()
                     posted_ids = set(j.get("app_post_ids") or [])
                     _stuck = set(j.get("app_post_stuck") or [])   # отложены после 3 неудач — не дёргаем каждые 5 мин
+                    # 🔴 06.08.2026, ЗАСТРЯВШАЯ ЗАЯВКА. v1293 числился запощенным и не выходил
+                    # никогда. Разбор: заявка (claim) ставится ДО поста. Если между заявкой и
+                    # постом процесс умирает — а он умирает при КАЖДОЙ выкатке, я выкатывал
+                    # трижды за двадцать минут, — то заявка остаётся, поста нет, и откат уже
+                    # некому выполнить: его делает тот же процесс, которого не стало.
+                    # Дальше id навсегда в posted_ids, версия навсегда мимо очереди.
+                    # ЛЕЧИМ НЕ СЛУЧАЙ, А КЛАСС: заявка без НОМЕРА ПОСТА — это не публикация,
+                    # а брошенный замок. Номер присваивает Telegram, подделать его нельзя,
+                    # поэтому он и есть единственное доказательство (закон З-47).
+                    # Числится запощенным, а номера нет → считаем НЕзапощенным и пробуем снова.
+                    _мид = j.get("app_post_msgids") or {}
+                    _брошено = [x for x in posted_ids if x not in _мид and str(x).startswith("v")]
+                    if _брошено:
+                        posted_ids = posted_ids - set(_брошено)
+                        try:
+                            await application.bot.send_message(
+                                OWNER_ID,
+                                "🔁 Нашёл брошенные заявки на публикацию: %s. "
+                                "Они числились запощенными, а номера поста от Telegram у них "
+                                "нет — значит в канал не выходили. Публикую заново."
+                                % ", ".join(sorted(_брошено)[:10]))
+                        except Exception:
+                            pass
                     pending = [x for x in queue if isinstance(x, dict) and x.get("id") and x.get("note")
                                and x["id"] not in posted_ids and x["id"] not in _stuck]
                     posted_now = 0
@@ -13099,7 +13122,11 @@ async def _app_channel_watcher(application):
                             # (не просто гонка id), даём знать владельцу по-человечески, не жаргоном.
                             last_posted_note = (_journal_cache or {}).get("app_post", {}).get("note", "") if _journal_cache else ""
                             sim = difflib.SequenceMatcher(None, (item["note"] or "").strip(), (last_posted_note or "").strip()).ratio() if last_posted_note else 0.0
-                            if sim >= 0.90 and item["id"] not in (set(_journal_cache.get("app_post_ids") or []) if _journal_cache else set()):
+                            # ...и «похоже на уже запощенное» верно только если то, похожее,
+                            # РЕАЛЬНО вышло. Брошенная заявка тоже оставляет свой текст в
+                            # app_post.note и глушила бы повтор навечно.
+                            _есть_номер = bool((_journal_cache or {}).get("app_post_msgids", {}))
+                            if sim >= 0.90 and _есть_номер and item["id"] not in (set(_journal_cache.get("app_post_ids") or []) if _journal_cache else set()):
                                 def _mk_alert(obj, _item=item, _sim=sim):
                                     obj = obj or {}
                                     alerts = obj.get("dup_alerts") or []
