@@ -13312,6 +13312,30 @@ async def _app_channel_watcher(application):
                                 if str(x).startswith("v") and x not in _мид and _номер(x) > _порог]
                     if _брошено:
                         posted_ids = posted_ids - set(_брошено)
+                        # ⛔ ГОВОРИМ ОДИН РАЗ НА ВЕРСИЮ. Владелец через минуты: «ты мне в личку
+                        # спамишь, четыре смс одинаковых». Он прав: находка повторяется КАЖДЫЕ
+                        # ПЯТЬ МИНУТ, потому что это СОСТОЯНИЕ, а не событие, — а я слал о ней
+                        # как о новости. Тот же класс, из-за которого он ругался на подписи
+                        # роутера сегодня утром. Состояние сообщают однажды; повтор — это шум,
+                        # в котором тонет настоящее сообщение.
+                        _сказано = set((_journal_cache or {}).get("app_post_broshen_skazano") or [])
+                        _новые_брошенные = [x for x in _брошено if x not in _сказано]
+                        if _новые_брошенные:
+                            def _пометить(obj, _сп=_новые_брошенные):
+                                obj = obj or {}
+                                obj["app_post_broshen_skazano"] = list(
+                                    set(obj.get("app_post_broshen_skazano") or []) | set(_сп))[-200:]
+                                return obj
+                            try:
+                                _ok_b, _nb = _data_atomic_mutate("journal.json", _пометить,
+                                                                 "брошенные: сказано один раз")
+                                if _ok_b and _nb is not None and _journal_cache is not None:
+                                    _journal_cache["app_post_broshen_skazano"] = _nb.get(
+                                        "app_post_broshen_skazano", [])
+                            except Exception:
+                                pass
+                        _брошено = _новые_брошенные
+                    if _брошено:
                         try:
                             await application.bot.send_message(
                                 OWNER_ID,
