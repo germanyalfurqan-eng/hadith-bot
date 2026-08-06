@@ -680,7 +680,7 @@
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1292</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1293</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1512,7 +1512,7 @@
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1292';
+const APPVER = 'v1293';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2621,8 +2621,34 @@ async function _assistSend(m){ const inp=m.querySelector('#assistInput'); const 
 const cache={}; let reverse=null, quran=null, muh=null;
 async function loadReverse(){ if(reverse)return reverse; try{ reverse=await fetchJSON(REVERSE_INDEX_URL, 45000, {silent:true}); }catch(e){ reverse={}; } return reverse; }   // QA-свип: таймаут (обратный индекс ~5МБ не виснет вечно)
 function gradeOf(h){ const g=h.grades&&h.grades[0]; return g?(g.grade||'').toString():''; }
+// 🔴 Заявка #532. Оценки Албани (19 081) и Арнаута (6 413) ЛЕЖАЛИ в данных и не показывались:
+// gradeOf брала grades[0] и выбрасывала имя учёного. «صحيح» без имени — это чьё-то мнение,
+// выданное за общее; а когда двое разошлись, строка молча выбирала первого и делала вид,
+// что второго нет. Возвращаем ВСЕ оценки С ИМЕНАМИ — по закону о полных свидетельствах.
+function gradesAll(h){ const a=(h&&h.grades)||[]; const из=[]; const было={};
+  for(const g of a){ if(!g) continue;
+    const оц=((g.grade||'')+'').trim(); if(!оц) continue;
+    const кто=((g.name||g.scholar||g.grader||'')+'').trim();
+    const ключ=кто+'|'+оц; if(было[ключ]) continue; было[ключ]=1;
+    из.push({оценка:оц, учёный:кто}); }
+  return из; }
+// Согласны ли учёные между собой. Расхождение — это ФАКТ, который надо показать,
+// а не сгладить: читатель должен видеть, что мнения разошлись, и чьи именно.
+function gradesSpor(h){ const сп=gradesAll(h); if(сп.length<2) return false;
+  const св=/صحيح|حسن|متفق|ثابت|محفوظ|جيد/, сл=/ضعيف|منكر|شاذ|موضوع|باطل|متروك|لا يصح/;
+  let есть_св=false, есть_сл=false;
+  for(const г of сп){ if(св.test(г.оценка)) есть_св=true; if(сл.test(г.оценка)) есть_сл=true; }
+  return есть_св && есть_сл; }
 // Степень достоверности из источника (учёные/sunnah) — ПОМЕЧАЕМ, что это НЕ наша проверка.
 const GRADE_NOTE='Оценка указана по источнику (учёные / sunnah.com), не нашей редакцией. Наша проверка будет добавлена позже.';
+// Все оценки с именами учёных + честная пометка, если учёные разошлись (#532).
+function gradesBadges(h){ const сп=gradesAll(h); if(!сп.length) return '';
+  let из=сп.map(function(г){ const б=gradeBadge(г.оценка);
+    return г.учёный ? б.replace('</span>', ' <span style="opacity:.72;font-size:.86em">— '+esc(г.учёный)+'</span></span>') : б;
+  }).join(' ');
+  if(gradesSpor(h)) из += ' <span class="grade" title="Учёные разошлись во мнении — показаны все оценки" '
+    + 'style="border:1px solid #c9a227;background:rgba(201,162,39,.12);color:#e8c860">⚖️ учёные разошлись</span>';
+  return из; }
 function gradeBadge(g){ if(!g) return '';
   // единый понятный бейдж: оценка + ЯВНАЯ привязка, что это оценка источника (не нашей редакции). КЛИКАБЕЛЕН → объяснение степени.
   // #374 (заявка владельца): ЦВЕТ по достоверности — منكر/موضوع/شاذ/ضعيف جدا сразу КРАСНЫМ (отвергаемый), ضعيف/مرسل янтарным (слабый), صحيح/حسن зелёным. Как у 3 баз — видно сходу.
@@ -2669,9 +2695,12 @@ function ourGradeBadge(c){
   else if(c.soon) h+=' <span style="color:var(--hint);font-size:11px">· разбор скоро</span>';
   return h; }
 /* Достоверность: НАША оценка (приоритет) → Бухари/Муслим без значка (общеизвестно достоверны) → оценка источника → «ожидается». */
-function authBadge(code, grade, num){
+function authBadge(code, grade, num, h){
   const c=CUSTOM_GRADES[code+'|'+String(num)]; if(c) return ourGradeBadge(c);
   if(SAHIHAYN.indexOf(code)!==-1) return '';   // аль-Бухари/Муслим — достоверность общеизвестна, значок не нужен
+  // #532: если у хадиса есть оценки С ИМЕНАМИ — показываем ВСЕ. Одна строка без имени
+  // выдавала мнение одного учёного за общее, а расхождение прятала совсем.
+  if(h && h.grades && h.grades.length) return gradesBadges(h);
   if(grade) return gradeBadge(grade);
   return '<span class="srcchk" title="'+NOGRADE_NOTE+'" style="border:1px dashed #6b5a2e;border-radius:8px;padding:1px 6px">⏳ ожидается наша проверка</span>'; }
 // #226 (слово владельца «النووي… что делает это в сахих муслиме»): чистый матн Муслима (изд.711) местами тянет аппарат редактора
@@ -2702,7 +2731,7 @@ async function loadCollection(code){
   setStatus('Загружаю: '+nameOf(code)+'…');
   const j=await fetchEdition(code);
   cache[code]=(j.hadiths||[]).map(h=>{ const raw=(h.text||'').replace(/\s+/g,' ').trim();
-    return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),norm:''}; });
+    return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),grades:gradesAll(h),norm:''}; });
   return cache[code];
 }
 // A-002: jsdelivr отдаёт 403 на отдельные файлы (ara-ibnmaja) → фолбэк на НАШЕ зеркало в docs/editions/
@@ -2747,7 +2776,7 @@ async function loadLocal(code,file){ if(_local[code])return _local[code]; setSta
   _local[code]=(Array.isArray(j)?j:[]).map(x=>{ const raw=_muslimStripApparatus((x.ar||x.t||'').replace(/\s+/g,' ').trim()); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }   /* F3(аудит): guard массива */   // v1062: чистка аппарата (Заваид и др.) для локальных изданий
 async function loadExtra(code){ if(_local[code])return _local[code]; const e=EXTRA_MAP[code]; setStatus('Загружаю '+(e?e.short:code)+'…');
   if(e&&e.cdn){ const j=await fetchEdition(code);
-    _local[code]=(j.hadiths||[]).map(h=>({num:String(h.hadithnumber),text:_muslimStripApparatus((h.text||'').replace(/\s+/g,' ').trim()),grade:gradeOf(h),norm:''})); return _local[code]; }
+    _local[code]=(j.hadiths||[]).map(h=>({num:String(h.hadithnumber),text:_muslimStripApparatus((h.text||'').replace(/\s+/g,' ').trim()),grade:gradeOf(h),grades:gradesAll(h),norm:''})); return _local[code]; }
   // A-126 (25.07.2026, ошибка пришла ко мне сторожем): «Загрузка книги не удалась (таймаут 90с): darimi.json».
   // Проверил ассет напрямую — 3.77 МБ, отдаётся с Pages за 1.2 секунды, HTTP 200. Значит виноват не файл:
   // запрос либо стоял в очереди за другими крупными загрузками, либо оборвался на слабой сети. Одна попытка
@@ -4857,7 +4886,7 @@ async function getOne(code,num){
   try{ const _X=EXTRA_MAP[code]; if(_X && (_X.file || (!_X.soon && !_X.muhaymin))){ const a=await loadByCode(code); const x=a.find(y=>String(y.num)===String(num)); if(x) return {num:String(x.num),text:(x.text||x.ar||'').replace(/\s+/g,' ').trim(),grade:x.grade||'',norm:''}; } }catch(e){}   // #171: прочие локальные первоисточники/издания (Ибн Хиббан, Насаи-Кубра, Абу Я‘ля…) — из наших editions, не с CDN
   try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-'+code+'/'+num+'.min.json')).json();
     const h=(j.hadiths||[])[0]; if(h){ const raw=(h.text||'').replace(/\s+/g,' ').trim();
-      return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),norm:''}; } }catch(e){}
+      return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),grades:gradesAll(h),norm:''}; } }catch(e){}
   return null;
 }
 function info(t){const d=document.createElement('div');d.className='hint';d.style.textAlign='center';d.textContent=t;return d;}
@@ -6504,7 +6533,7 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
     }
   }catch(e){}
   meta.innerHTML='<span class="src'+(canRead?' srcnav':'')+'"'+(canRead?' title="Открыть в читалке на этом хадисе">📖 ':'>')+vocOf(code)+_номТекст(h.num)+'</span>'+_riwL;   /* #37: название С ОГЛАСОВКАМИ; #682 (С67): «как может быть хадис номер 0» — у части печатей номера в издании нет, и вместо него подставлялся ноль. Помощник _номТекст (он уже гасил «№0» на русской карточке) теперь стоит и здесь: номера нет — строка просто без номера, выдумывать «№0» нечего. */
-  meta.innerHTML+=authBadge(code, h.grade, (h.num||h.n));
+  meta.innerHTML+=authBadge(code, h.grade, (h.num||h.n), h);
   /* УКАЗ 11.07 + #682-④ (С67): «⏳ ожидается наша проверка» — правда, но человеку непонятно, ЧЕГО ждать.
      Померил по данным: оценки есть только у Ахмада (25 960 из 27 087), у Абу Дауда/Ибн Маджи/Насаи/Малика/
      Тирмизи/Дарими/Адаб аль-Муфрада — ноль. Значит это наша недоделка, а не свойство хадиса, и она обязана
@@ -13402,7 +13431,7 @@ function _ttLinkRow(bid,page,mid,shnum,book,quote,crit){
     // НАЗЫВАЕТ книгу-первоисточник в своём тексте («قال في التقريب», «ذكره في الثقات», «هدي الساري»…).
     // Извлекаем её из текста цитаты (надёжно — книга явно названа, не гадаем) и показываем как первоисточник +
     // клик открывает книгу в нашей читалке. Тогда плашка «страница выверяется» не нужна — источник назван.
-    const _CRIT_SRC=[[/تقريب التهذيب|في التقريب|«التقريب»|"التقريب"/,'تقريب التهذيب — ابن حجر','3975'],[/المجروحين/,'المجروحين — ابن حبان',''],[/الثقات/,'الثقات — ابن حبان','309'],[/هدي الساري/,'هدي الساري — ابن حجر',''],[/تهذيب التهذيب/,'تهذيب التهذيب — ابن حجر','796'],[/لسان الميزان/,'لسان الميزان — ابن حجر','203'],[/ميزان الاعتدال|«الميزان»|في الميزان/,'ميزان الاعتدال — الذهبي','1692'],[/سير أعلام النبلاء|«السير»/,'سير أعلام النبلاء — الذهبي',''],[/تذكرة الحفاظ/,'تذكرة الحفاظ — الذهبي',''],[/الكاشف/,'الكاشف — الذهبي',''],[/الجرح والتعديل/,'الجرح والتعديل — ابن أبي حاتم','155'],[/التاريخ الكبير/,'التاريخ الكبير — البخاري','113'],[/تعجيل المنفعة/,'تعجيل المنفعة — ابن حجر',''],[/الإصابة/,'الإصابة — ابن حجر',''],[/الاستيعاب/,'الاستيعاب — ابن عبد البر',''],[/أسد الغابة/,'أسد الغابة — ابن الأثير','']];
+    const _CRIT_SRC=[[/تقريب التهذيب|في التقريب|«التقريب»|"التقريب"/,'تقريب التهذيب — ابن حجر','8609'],[/المجروحين/,'المجروحين — ابن حبان',''],[/الثقات/,'الثقات — ابن حبان','5816'],[/هدي الساري/,'هدي الساري — ابن حجر',''],[/تهذيب التهذيب/,'تهذيب التهذيب — ابن حجر','796'] /* ⚠️ 796 — НЕ выверено счётом: в _SVOD_BID этой книги нет. Проверить по данным, прежде чем доверять ссылке. */,[/لسان الميزان/,'لسان الميزان — ابن حجر','203'] /* ⚠️ 203 — НЕ выверено счётом, см. выше. */,[/ميزان الاعتدال|«الميزان»|في الميزان/,'ميزان الاعتدال — الذهبي','1692'],[/سير أعلام النبلاء|«السير»/,'سير أعلام النبلاء — الذهبي',''],[/تذكرة الحفاظ/,'تذكرة الحفاظ — الذهبي',''],[/الكاشف/,'الكاشف — الذهبي',''],[/الجرح والتعديل/,'الجرح والتعديل — ابن أبي حاتم','2170'],[/التاريخ الكبير/,'التاريخ الكبير — البخاري','113'],[/تعجيل المنفعة/,'تعجيل المنفعة — ابن حجر',''],[/الإصابة/,'الإصابة — ابن حجر',''],[/الاستيعاب/,'الاستيعاب — ابن عبد البر',''],[/أسد الغابة/,'أسد الغابة — ابن الأثير','']];
     let _srcBook=null; const _qt=String(quote||'');
     // #571 (С67, пачка 13): свод ТЕПЕРЬ известен НАПРЯМУЮ из данных (bk = book) — не гадаем по тексту
     // цитаты первым делом, если можем сослаться на реальный bid по ИМЕНИ свода (_SVOD_BID, посчитан по
