@@ -3771,10 +3771,20 @@ async def _journal_assistant(update, context, text):
         # Платный канал недоступен — работаем бесплатным, но ПО ТЕМ ЖЕ правилам.
         ans = ask_ai("Сообщение владельца: " + text[:900] + ctx, _сис,
                      owner=True, max_tokens=900) or ""
+    # 🔴 МОЛЧАНИЕ — ХУДШИЙ ИСХОД. Владелец: «🤔 Думаю... и молчит». Пустой ответ уходил в
+    # reply_text(''), Telegram его отвергал, исключение глушилось — и человек оставался с
+    # «Думаю…» навсегда. Механизм, который обещал ответить и пропал, хуже механизма, который
+    # честно сказал «не смог»: первого ждут, второго переспрашивают.
+    if not (ans or '').strip():
+        ans = ('⚠️ Не смог ответить: оба канала молчат — и платный, и бесплатный. '
+               'Повтори через минуту, а если повторится — скажи, я посмотрю логи.')
     try:
         await update.message.reply_text(ans[:4000])
     except Exception:
-        pass
+        try:
+            await update.message.reply_text(re.sub(r'<[^>]+>', '', ans)[:4000])
+        except Exception:
+            pass
 def _load_trans():
     # G9: кэш переводов теперь в ветке data (запись в main = редеплой Railway = Conflict).
     global _trans_cache
