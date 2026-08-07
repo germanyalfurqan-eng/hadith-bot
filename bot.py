@@ -1008,6 +1008,38 @@ def dsoc_чёрный_добавить(ид, имя, чей="владелец"):
     return len(ч)
 
 
+def _это_команда_бота(text):
+    """Названа ли ПРЯМАЯ команда бота — «бухари 5590», «коран 2:255», «карточка …» и прочие.
+
+    Одна мерка на два места: её спрашивает старый путь в личке и она же решает, брать ли
+    реплику помощнику (обращения #53/#58 — «раздвоение личности»). Раньше список стоял
+    развёрнутым в одном месте; вторая копия неизбежно разошлась бы с первой, и вышло бы, что
+    одно и то же слово в двух ветках считается то командой, то разговором.
+    Человек назвал инструмент прямо — подменять его выбор нельзя, даже помощником.
+    """
+    try:
+        if parse_hadith_query(text)[0]: return True
+        if parse_browse(text)[0]: return True
+        if parse_source_query(text)[0] in SOURCE_ONLY_CODES: return True
+        if parse_quran_query(text)[0]: return True
+        if parse_search_query(text): return True
+        if parse_sunnah(text): return True
+        if parse_smart_sunnah(text): return True
+        if parse_transmitter(text): return True
+        if parse_translate(text): return True
+        if parse_tafsir_query(text)[0]: return True
+        if parse_registry_command(text): return True
+        if (text or '').lower() in ("память", "помощь", "справка", "команды"): return True
+        if (text or '').lower().startswith(("запомни", "удали память", "исправь память",
+                                            "очистить память", "бахни mp3", "корень ")): return True
+        if parse_botyara(text) is not None: return True
+    except Exception:
+        # Разбор споткнулся — считаем разговором, а не командой: помощник хотя бы ответит
+        # по-человечески, а молчание команды выглядит как поломка.
+        return False
+    return False
+
+
 def parse_dsoc(text):
     """«DSOC переведи» → «переведи». Не к нему обращаются → None.
 
@@ -6302,6 +6334,22 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if (_пос and (time.time() - _пос) < 900 and not _явно_другому and _к_нему
                     and not _публикация):
                 _dsoc = text.strip()
+            # 🔴 07.08.2026, обращения #53 и #58 («раздвоение личности», «мы же убрали голые
+            # ответы моделей — только ассистент отвечает, личность с обвязкой промтом»).
+            # В ЛИЧКЕ владельца второй собеседник жив до сих пор: всё, что не команда, уходило
+            # в ask_ai_with_memory — голую модель без промта, без полки, без вызовов. Владелец
+            # это видел прямо: помощник здоровается «💬 DSOC думает…», а тут вдруг «🤔 Думаю…».
+            # Два разных существа под одним именем — он и назвал это раздвоением.
+            # В личке собеседник ОДИН, и по умолчанию это помощник; окно в 15 минут ему тут не
+            # нужно — с кем ещё владелец разговаривает в своей личной переписке с ботом.
+            # Явные команды (бухари 5590, коран 2:255, карточка …) при этом идут своим путём:
+            # человек назвал инструмент прямо, подменять его выбор нельзя. Проверку «это
+            # команда?» берём ТУ ЖЕ, что стоит ниже у старого ИИ, — чтобы два места не разошлись
+            # в понимании того, что считать командой (З-33: не плодить вторую мерку).
+            if (_dsoc is None and not _явно_другому and not _публикация
+                    and getattr(update.effective_chat, 'type', '') == 'private'
+                    and not _это_команда_бота(text)):
+                _dsoc = text.strip()
         except Exception:
             pass
 
@@ -7128,10 +7176,30 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
+        # 🔴 07.08.2026, обращения #61, #62, #34. Здесь помощник ПРЕДЛАГАЛ записать заявку и
+        # ждал «да». Владелец на это: «не надо в таких случаях спрашивать — тут очевидно, я
+        # несколько раз уже спросил» (#61), «тут не написан номер заявки, разберись» (#62),
+        # «ты должен такие вещи регистрировать как обращения, с номером» (#34).
+        # Он прав: предложение без номера ничего не весит. Человек его пролистывает, «да» не
+        # пишет — и просьба растворяется, хотя помощник САМ уже понял, что дело есть.
+        # Записываем СРАЗУ и называем номер. Ошибка тут дёшева в одну сторону и дорога в
+        # другую: лишняя запись стоит строки в журнале, потерянная просьба — повторного круга.
         if предложение:
-            подпись = ("\n📨 Предлагаю записать %s: «%s»\nОтветь «да» — запишу."
-                       % ("в журнал помощника" if куда == "помощник" else "заявкой технадзору",
-                          предложение[:300])) + подпись
+            _зн = None
+            if куда != "помощник" and is_owner(update):
+                try:
+                    _зн = dsoc_позвать_клода(chat_id, update.message.message_id,
+                                             (предложение or '')[:900],
+                                             кто='помощник', важность='к сведению')
+                except Exception:
+                    _зн = None
+            if _зн:
+                подпись = ("\n📥 Записал заявкой технадзору — <b>обращение #%s</b>: «%s»\n"
+                           "Спрашивать не стал: дело очевидное." % (_зн, предложение[:300])) + подпись
+            else:
+                подпись = ("\n📨 Предлагаю записать %s: «%s»\nОтветь «да» — запишу."
+                           % ("в журнал помощника" if куда == "помощник" else "заявкой технадзору",
+                              предложение[:300])) + подпись
         # Владелец: «подпись про остатки лучше отправлять в цитату, которая сворачивается».
         # Она нужна каждый раз, но каждый раз занимает пол-экрана — сворачиваемая цитата
         # ровно для такого: цифры на месте, глаза свободны.
@@ -9210,22 +9278,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # AI в личке на любое сообщение
         if chat_type == "private":
             # Проверяем не команда ли это
-            is_command = False
-            if parse_hadith_query(text)[0]: is_command = True
-            if parse_browse(text)[0]: is_command = True
-            if parse_source_query(text)[0] in SOURCE_ONLY_CODES: is_command = True
-            if parse_quran_query(text)[0]: is_command = True
-            if parse_search_query(text): is_command = True
-            if parse_sunnah(text): is_command = True
-            if parse_smart_sunnah(text): is_command = True
-            if parse_transmitter(text): is_command = True
-            if parse_translate(text): is_command = True
-            if parse_tafsir_query(text)[0]: is_command = True
-            if parse_registry_command(text): is_command = True
-            if text.lower() in ["память", "помощь", "справка", "команды"]: is_command = True
-            if text.lower().startswith(("запомни", "удали память", "исправь память", "очистить память", "бахни mp3")): is_command = True
-            if text.lower().startswith("корень "): is_command = True
-            if parse_botyara(text) is not None: is_command = True
+            # Мерка вынесена в _это_команда_бота: её спрашивает и помощник, решая, его ли это
+            # реплика. Две копии одного списка — это два будущих разных ответа на один вопрос.
+            is_command = _это_команда_бота(text)
 
             if not is_command:
                 await update.message.reply_text("🤔 Думаю...")
