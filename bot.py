@@ -14268,12 +14268,26 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'error': 'disabled', 'message': 'BACKUP_SECRET не задан в env Railway'}, status=503))
         try:
             secret = ''; caption = ''; filename = 'Muslimoon_RECOVERY.zip'; data = None
+            куда_чат = None; вид = 'документ'
             reader = await r.multipart()
             async for part in reader:
                 if part.name == 'secret':
                     secret = (await part.text()).strip()
                 elif part.name == 'caption':
                     caption = (await part.text()).strip()
+                # 🔴 07.08.2026, обращение #79. Владелец: «я же в ЧАТЕ просил, он должен быть
+                # исполнен в чате». Ролик собрался, а отправить его было нечем: эта точка
+                # входа всегда слала в две зашитые точки — журнал и личку владельца.
+                # Не завожу вторую точку рядом (З-33): она отличалась бы одной строкой, и
+                # завтра мы правили бы обе, а послезавтра забыли бы про одну. Расширяю эту:
+                # «куда» и «вид». Без них поведение прежнее, до буквы.
+                elif part.name == 'чат':
+                    try:
+                        куда_чат = int((await part.text()).strip())
+                    except Exception:
+                        куда_чат = None
+                elif part.name == 'вид':
+                    вид = (await part.text()).strip().lower()
                 elif part.name == 'file':
                     filename = part.filename or filename
                     data = await part.read(decode=False)
@@ -14285,10 +14299,26 @@ async def _api_serve(application=None):
                 return _cors(web.json_response({'error': 'too_big', 'size': len(data)}, status=413))
             kb = round(len(data) / 1024)
             cap = ("📦 БЭКАП Muslimoon · " + (caption or ("свежий " + filename)) + (" (%d КБ)" % kb)) + "\n🗄 Резервная копия (журналы+bot.py+index.html). Приватно (R42) — не пересылать."
+            # Названный чат — вместо двух зашитых, и подпись тогда своя: приписка «резервная
+            # копия, не пересылать» уместна для бэкапа и нелепа под роликом в общем чате.
+            цели = (куда_чат,) if куда_чат else (LOG_CHAT_ID, OWNER_ID)
+            подпись = (caption[:1000] if куда_чат else cap[:1000])
             sent = []
-            for chat in (LOG_CHAT_ID, OWNER_ID):
+            for chat in цели:
                 try:
-                    await application.bot.send_document(chat, document=bytes(data), filename=filename, caption=cap[:1000])
+                    if вид in ('видео', 'video'):
+                        # supports_streaming: иначе Telegram отдаёт ролик файлом, и его надо
+                        # скачивать, чтобы посмотреть. Для вертикального ролика это убивает
+                        # весь смысл — его смотрят на ходу, не скачивая.
+                        await application.bot.send_video(chat, video=bytes(data),
+                                                         filename=filename, caption=подпись,
+                                                         supports_streaming=True)
+                    elif вид in ('аудио', 'audio'):
+                        await application.bot.send_audio(chat, audio=bytes(data),
+                                                         filename=filename, caption=подпись)
+                    else:
+                        await application.bot.send_document(chat, document=bytes(data),
+                                                            filename=filename, caption=подпись)
                     sent.append(chat)
                 except Exception:
                     pass
