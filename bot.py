@@ -1643,9 +1643,34 @@ def лента_запомнить(update):
                   'т': т_[:900]})
         if len(л) > 400:
             del л[:-400]
+        # 🔴 07.08.2026, владелец: «обеспечь, чтобы ты прочёл все сообщения, касающиеся
+        # конкретного диалога». Он дал ссылку на своё сообщение #726201, а лента,
+        # видимая технадзору, обрывалась на #726192 — отставала на девять.
+        #
+        # ПРИЧИНА БЫЛА ЗДЕСЬ: выгрузка наружу шла раз в двадцать срабатываний. Сообщения
+        # лежали в памяти бота и ждали очереди. Со стороны это неотличимо от «бот их не
+        # видел», и надзор оказывался слеп ровно там, где нужен: на свежей жалобе.
+        #
+        # ЧИНИМ ТРЕМЯ ПРАВИЛАМИ, по убыванию важности:
+        # ① слово ВЛАДЕЛЬЦА выгружаем НЕМЕДЛЕННО. Он пишет редко и всегда по делу; ждать
+        #    девятнадцать чужих реплик, чтобы его слова стали видны, — прямая потеря надзора.
+        # ② обращение К ПОМОЩНИКУ — тоже немедленно: за ним обычно и следует разбор.
+        # ③ прочее — каждые пять, а не двадцать. Дороже по записям, но лента больше не
+        #    отстаёт настолько, чтобы разговор нельзя было восстановить.
+        _срочно = False
+        try:
+            _ид = getattr(getattr(м, 'from_user', None), 'id', 0)
+            _срочно = (_ид == OWNER_ID) or (parse_dsoc(т_) is not None)
+        except Exception:
+            pass
         _ЛЕНТА_ГРЯЗНО[0] += 1
-        if _ЛЕНТА_ГРЯЗНО[0] >= 20:
+        if _срочно or _ЛЕНТА_ГРЯЗНО[0] >= 5:
             _ЛЕНТА_ГРЯЗНО[0] = 0
+            # глубину НЕ раздуваем: лента идёт в контекст помощника, и каждая лишняя сотня
+            # сообщений — это токены на КАЖДЫЙ его ответ. Владелец 07.08: «лента целиком —
+            # лишняя трата токенов, надо обеспечить возможность читать любое смс когда надо».
+            # Возможность даёт ручка /api/prochti ниже: достаёт ЛЮБОЕ сообщение по номеру,
+            # ничего не храня. Лента остаётся короткой — для беглого взгляда, не для архива.
             _data_put(DSOC_ЛЕНТА_ФАЙЛ, {str(k): v[-200:] for k, v in ЧАТ_ЛЕНТА.items()},
                       'лента чата')
     except Exception:
@@ -11191,6 +11216,71 @@ async def _api_serve(application=None):
             except Exception:
                 pass
 
+    async def prochti(r):
+        """Прочитать ЛЮБОЕ сообщение чата по номеру — по требованию, ничего не храня.
+
+        🔴 07.08.2026. Владелец дал ссылку на своё сообщение #726201 и потребовал разобрать
+        его вместе с соседними. Лента, видимая технадзору, обрывалась на #726192, и я ответил
+        «не могу прочесть». Владелец: «меня не устраивают такие тупые ответы».
+
+        Он прав дважды. Во-первых, отказ — не работа. Во-вторых, его же поправка о том, КАК
+        чинить: «лента целиком — лишняя трата токенов, надо обеспечить возможность читать
+        любое смс тогда, когда надо». Раздувать хранилище было бы неверно: лента идёт в
+        контекст помощника, и каждая лишняя сотня сообщений — токены на КАЖДЫЙ его ответ.
+
+        КАК ЭТО РАБОТАЕТ. Telegram не даёт боту читать историю напрямую, но даёт ПЕРЕСЛАТЬ
+        сообщение — и ответ на пересылку содержит его текст целиком. Пересылаем в служебный
+        архив (владельцу в ленту не сорим) и возвращаем содержимое. Хранить не надо ничего:
+        достаём ровно то, что спросили, ровно тогда, когда спросили.
+
+        Диапазон: можно попросить окно ±N вокруг номера — «пять сообщений до и после», как
+        владелец обычно и просит. Пропущенные номера (удалённые, служебные) тихо пропускаем:
+        дырка в нумерации — норма, а не ошибка.
+        """
+        if not application or not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            return _cors(web.json_response({'error': 'bad_json'}, status=400))
+        if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        чат = body.get('чат')
+        try:
+            чат = int(чат)
+        except Exception:
+            return _cors(web.json_response({'error': 'нужен числовой id чата'}, status=400))
+        try:
+            номер = int(body.get('номер'))
+        except Exception:
+            return _cors(web.json_response({'error': 'нужен номер сообщения'}, status=400))
+        окно = max(0, min(int(body.get('окно') or 0), 25))   # ±25 хватает на любой разбор
+        куда = int(body.get('куда') or АРХИВ_КАНАЛ)
+        собрано, промахи = [], 0
+        for н in range(номер - окно, номер + окно + 1):
+            try:
+                м = await application.bot.forward_message(chat_id=куда, from_chat_id=чат,
+                                                          message_id=н)
+                собрано.append({
+                    'номер': н,
+                    'кто': ((getattr(getattr(м, 'forward_from', None), 'first_name', None)
+                             or getattr(getattr(м, 'forward_sender_name', None), '__str__',
+                                        lambda: None)()
+                             or getattr(м, 'forward_sender_name', None) or '?'))[:60],
+                    'текст': (getattr(м, 'text', None) or getattr(м, 'caption', None) or '')[:4000],
+                    'есть_вложение': bool(getattr(м, 'photo', None) or getattr(м, 'document', None)),
+                })
+                # прибираем за собой: служебный архив не должен зарастать пересылками
+                try:
+                    await application.bot.delete_message(chat_id=куда, message_id=м.message_id)
+                except Exception:
+                    pass
+            except Exception:
+                промахи += 1
+        return _cors(web.json_response({'ok': True, 'найдено': len(собрано),
+                                        'пропущено': промахи, 'сообщения': собрано},
+                                       dumps=lambda o: json.dumps(o, ensure_ascii=False)))
+
     async def skazat(r):
         """Сказать в конкретный чат, при желании — ответом на конкретное сообщение.
         Понадобилось четвёртый раз за день; каждый раз приспосабливать чужой эндпоинт —
@@ -13093,7 +13183,7 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True}))
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ochered', ochered), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ochered', ochered), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
