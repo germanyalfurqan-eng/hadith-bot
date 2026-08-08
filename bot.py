@@ -16753,6 +16753,38 @@ async def _post_app_channel(bot, note, note_id=None):
             _data_atomic_mutate("journal.json", _зап, "app_post_msgids: запомнили номер поста " + вер)
     except Exception:
         pass
+    # 🔴 08.08.2026, зов #170: «не забывай обновления в чат джамаат отправлять».
+    # Обновления шли ТОЛЬКО в @muslimoonapp. В джамаате отправка была — но совсем другая:
+    # разовое объявление по маркеру `jamaat_note.txt`, к очереди обновлений отношения не
+    # имеющее. То есть путь выглядел существующим и им не был.
+    # Зеркалим сюда, а не заводим второй вотчер (З-33): нота одна, и публиковаться она
+    # должна из одного места — иначе два расписания однажды разойдутся, и в одном чате
+    # будет версия, которой нет в другом.
+    # Сбой джамаата основной путь НЕ роняет: канал — окно владельца в работу, и потерять
+    # его из-за второго адресата нельзя. Номер поста запоминаем так же, как для канала:
+    # без номера от Telegram доставка не доказана (З-47).
+    # Здесь под рукой `bot`, а не `application`: функция принимает именно его. И `вер`
+    # рождается ВНУТРИ разбора выше — если пост не удался, имени просто нет, поэтому
+    # берём его заново, а не надеемся, что оно доехало.
+    _в = str(note_id or '').strip()[:12] or 'v?'
+    try:
+        if _отпр is not None and JAMAAT_RU_CHAT_ID:
+            _дж = await bot.send_message(JAMAAT_RU_CHAT_ID, body, parse_mode="HTML",
+                                         disable_web_page_preview=True)
+
+            def _зап_дж(o):
+                o.setdefault('jamaat_post_msgids', {})[_в] = _дж.message_id
+                return o
+            _data_atomic_mutate("journal.json", _зап_дж,
+                                "jamaat_post_msgids: обновление " + _в + " ушло в джамаат")
+    except Exception as _e:
+        try:
+            await bot.send_message(
+                OWNER_ID, "⚠️ Обновление %s в канал вышло, а в джамаат НЕ ушло: %s"
+                          % (_в, str(_e)[:120]))
+        except Exception:
+            pass
+
 
 async def _app_channel_watcher(application):
     """Фон: раз в 5 мин публикует новую update_note.txt в @muslimoonapp (см. _setup).
