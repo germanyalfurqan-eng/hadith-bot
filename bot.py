@@ -12425,7 +12425,9 @@ def app_hit(user):
     global _app_dirty
     j = _journal_load(); a = j["app"]
     a["opens"] = a.get("opens", 0) + 1
-    uid = str((user or {}).get("id") or "")
+    # Отпечаток вместо id — см. разбор у usage_log. Счёт открытий по людям сохраняется,
+    # сами люди из открытого файла исчезают.
+    uid = _отпечаток((user or {}).get("id"))
     if uid:
         bu = a["by_user"]; bu[uid] = bu.get(uid, 0) + 1
     day = datetime.now().strftime("%d.%m.%Y")
@@ -12785,14 +12787,37 @@ def was_translated(text):
         return _trans_key(text) in _load_trans()
     except Exception:
         return False
+# 🔴 08.08.2026, мандат владельца: «сделай как считаешь нужным, только без меня, но
+# безопасность обеспечь». Повод — проверка чужими глазами: ветка данных нашего репозитория
+# открыта всему интернету (репозиторий публичный ради бесплатных Pages, а бот пишет состояние
+# в его же ветку). В journal.json оттуда доставались 185 чисел вида telegram-id и 70 @-ников
+# ЖИВЫХ ЛЮДЕЙ из чата. Это не наши данные — это данные тех, кто нам доверился.
+# Обезличиваем НА ЗАПИСИ: вместо id и ника пишем короткий отпечаток. Учёт по людям сохраняется
+# (один человек — один отпечаток, квоты считаются как раньше), а кто это — по файлу не узнать.
+# Соль берём из секрета Railway: без неё отпечаток не развернуть обратно перебором id.
+def _отпечаток(значение):
+    """Короткий необратимый отпечаток пользователя. Пусто — если и значения нет."""
+    з = str(значение or "").strip()
+    if not з:
+        return ""
+    try:
+        import hashlib
+        соль = (BACKUP_SECRET or "muslimoon")[:32]
+        return "u" + hashlib.sha256((соль + з).encode("utf-8")).hexdigest()[:10]
+    except Exception:
+        return "u?"
+
 def usage_log(user, feat, fresh, length=0, src="", num=""):
     """Журнал расхода ИИ: кто/когда/функция/свежий(потрачен ключ) или из базы (бесплатно)."""
     j = _journal_load(); u = j["usage"]; t = u["totals"]
     t["calls"] = t.get("calls", 0) + 1
     t["fresh"] = t.get("fresh", 0) + (1 if fresh else 0)
     t["cached"] = t.get("cached", 0) + (0 if fresh else 1)
-    uid = str((user or {}).get("id") or "аноним")
-    name = ("@" + user["username"]) if (user and user.get("username")) else uid
+    uid = _отпечаток((user or {}).get("id")) or "аноним"
+    # Имя больше не пишем вовсе: для счёта расхода оно не нужно ни разу, а в открытом файле
+    # это прямое указание на человека. Где имя действительно нужно (ответ владельцу) — оно
+    # берётся из живого сообщения, а не из журнала.
+    name = uid
     bu = t["by_user"].setdefault(uid, {"name": name, "calls": 0, "fresh": 0})
     bu["calls"] += 1; bu["fresh"] += (1 if fresh else 0); bu["name"] = name
     u["recent"].insert(0, {"d": datetime.now().strftime("%d.%m.%Y %H:%M:%S"), "u": name, "id": uid, "f": feat,
@@ -13656,6 +13681,65 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True, 'счёт': счёт, 'всего': len(поз),
                                         'позиции': поз}))
 
+    async def obezlichit(r):
+        """Разовая чистка уже записанного: id и ники → отпечатки (мандат владельца 08.08.2026).
+
+        Обезличивание на записи поставлено, но старые записи лежат в открытой ветке и никуда
+        сами не денутся. Чистим ТУТ, а не снаружи: журнал непрерывно пишется ботом, и правка
+        чужой рукой затёрла бы то, что он записал секунду назад. Здесь используется тот же
+        load/save, что и у всех прочих записей, — значит правка встаёт в общую очередь.
+
+        Публичные каналы проекта (@jamaat_ru, @muslimoonapp, @hadis_isnad) НЕ трогаем: это
+        не люди. Access-файл тоже не трогаем — там id нужны боту, чтобы узнавать владельца.
+        """
+        if not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            body = {}
+        if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        _ид = re.compile(r'\b[1-9]\d{8,10}\b')
+        _ник = re.compile(r'@[A-Za-z][A-Za-z0-9_]{4,31}')
+        _наши = ('@jamaat_ru', '@muslimoonapp', '@hadis_isnad', '@muslimoontt_bot')
+
+        def _маска(т):
+            т = _ид.sub(lambda m: _отпечаток(m.group(0)), т)
+            return _ник.sub(lambda m: (m.group(0) if m.group(0) in _наши
+                                       else _отпечаток(m.group(0))), т)
+        try:
+            j = _journal_load()
+            _счёт = len(set(_ид.findall(json.dumps(j, ensure_ascii=False))))
+            u = j.get('usage') or {}
+            _bu = ((u.get('totals') or {}).get('by_user')) or {}
+            if _bu:
+                _нов = {}
+                for к, v in _bu.items():
+                    _нк = _отпечаток(к) if _ид.fullmatch(str(к)) else к
+                    if isinstance(v, dict):
+                        v = dict(v); v['name'] = _нк
+                    _нов[_нк] = v
+                u['totals']['by_user'] = _нов
+            for з in (u.get('recent') or []):
+                if isinstance(з, dict) and _ид.fullmatch(str(з.get('id') or '')):
+                    з['id'] = _отпечаток(з.get('id')); з['u'] = з['id']
+            a = j.get('app') or {}
+            if a.get('by_user'):
+                a['by_user'] = {(_отпечаток(к) if _ид.fullmatch(str(к)) else к): v
+                                for к, v in a['by_user'].items()}
+            for з in (j.get('requests') or []):
+                if isinstance(з, dict) and з.get('t'):
+                    з['t'] = _маска(str(з['t']))
+            for _разд in ('feedback', 'searches'):
+                if j.get(_разд):
+                    j[_разд] = json.loads(_маска(json.dumps(j[_разд], ensure_ascii=False)))
+            _после = len(set(_ид.findall(json.dumps(j, ensure_ascii=False))))
+            _journal_save('обезличивание: id %d → %d' % (_счёт, _после))
+            return _cors(web.json_response({'ok': True, 'было_id': _счёт, 'стало_id': _после}))
+        except Exception as e:
+            return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}, status=500))
+
     async def samotest(r):
         """Прогнать ЗРЕНИЕ и СЛУХ на присланной пробе — тем же кодом, что работает с людьми.
 
@@ -14147,7 +14231,25 @@ async def _api_serve(application=None):
                 мид = getattr(м, 'message_id', None)
             except Exception:
                 pass
+        # 🔴 08.08.2026, закон владельца #134: «любая вещь, которую приобрели мы как навык или
+        # пользу, должна также уходить в архив облачный канал и записываться в журнал
+        # накоплений. Из накопления он должен брать следующий раз, если спросят то же самое,
+        # а не тратить токены».
+        # Раньше полка уходила только в рабочий журнал — туда владелец заглядывает по делу,
+        # а накопленное должно лежать там, где хранится готовое. Возвращаем и ссылку: «где это
+        # записано» должно отвечаться нажатием, а не поиском по каналу (тот же урок, что #131).
+        ссылка_а = ''
+        try:
+            _ма = await application.bot.send_message(
+                АРХИВ_КАНАЛ, '📚 <b>НАКОПЛЕНО: %s</b> — %s\n\n%s'
+                % (метка, заголовок, текст[:3300]), parse_mode='HTML',
+                disable_web_page_preview=True)
+            ссылка_а = 'https://t.me/c/%s/%s' % (str(АРХИВ_КАНАЛ).replace('-100', '', 1),
+                                                 _ма.message_id)
+        except Exception:
+            pass
         return _cors(web.json_response({'ok': True, 'метка': метка, 'пост': мид,
+                                        'архив': ссылка_а,
                                         'на_полке': len(_data_get(DSOC_ПОЛКА_ФАЙЛ, {}) or {})}))
 
     async def claude_notify(r):
@@ -15896,7 +15998,7 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True}))
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/samotest', samotest), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/samotest', samotest), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
