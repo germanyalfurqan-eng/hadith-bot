@@ -481,6 +481,50 @@ DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash")
 # оплата по факту) и вечное «Insufficient balance». Подписка Go живёт на /zen/go/v1 — это
 # выяснилось из файла авторизации самого приложения OpenCode, а не из бумаг.
 OPENCODE_KEY = os.environ.get("OPENCODE_ZEN_API_KEY", "") or os.environ.get("OPENCODE_API_KEY", "")
+# 🔴 08.08.2026, срочное слово владельца: «используй опенкод-дипсики, там валом лимитов,
+# они скоро дороже станут — а простаивают. Немедленно обеспечь РАВНОМЕРНОЕ использование».
+# Он прав по факту и по времени: DeepSeek объявил 06.08.2026 «значительное» подорожание API
+# (Bloomberg/TechNode; точных ставок и даты пока нет), а до того, в середине июля, ввёл
+# дневной и ночной тариф. Пока дёшево — надо расходовать оба кошелька, а не один.
+# У нас ДВЕ подписки: рабочая и вторая, с суффиксом _M_ (аккаунт Muslimoon). Бот всё это
+# время знал только про первую — вторая простаивала целиком.
+# Равномерность считаем по ЧИСЛУ ВЫЗОВОВ за сутки и берём тот кошелёк, где их меньше:
+# чередование через раз сбивается при перезапуске (счётчик в памяти обнуляется), а счёт
+# в журнале переживает и перезапуск, и смену сборки.
+OPENCODE_KEY_2 = (os.environ.get("OPENCODE_ZEN_M_API_KEY", "")
+                  or os.environ.get("OPENCODE_M_API_KEY", ""))
+OPENCODE_КЛЮЧИ = [(к, и) for к, и in ((OPENCODE_KEY, 'основной'),
+                                      (OPENCODE_KEY_2, 'второй (M)')) if к]
+
+def opencode_ключ():
+    """Ключ, на котором сегодня меньше вызовов. Возвращает (ключ, имя_для_журнала)."""
+    if len(OPENCODE_КЛЮЧИ) < 2:
+        return (OPENCODE_КЛЮЧИ[0] if OPENCODE_КЛЮЧИ else (OPENCODE_KEY, 'основной'))
+    try:
+        сег = datetime.now().strftime('%d.%m.%Y')
+        j = _journal_load()
+        сч = ((j.get('usage') or {}).get('opencode_by_key') or {}).get(сег) or {}
+        return min(OPENCODE_КЛЮЧИ, key=lambda п: int(сч.get(п[1]) or 0))
+    except Exception:
+        return OPENCODE_КЛЮЧИ[0]
+
+def opencode_отметить(имя):
+    """Записать вызов на этот кошелёк — по этой записи и считается равномерность."""
+    try:
+        сег = datetime.now().strftime('%d.%m.%Y')
+        j = _journal_load()
+        u = j.setdefault('usage', {})
+        по = u.setdefault('opencode_by_key', {})
+        д = по.setdefault(сег, {})
+        д[имя] = int(д.get(имя) or 0) + 1
+        # Храним неделю: больше незачем, а файл лежит в открытой ветке и его лишний вес
+        # достаётся всем, кто его тянет.
+        if len(по) > 7:
+            for _ст in sorted(по)[:-7]:
+                по.pop(_ст, None)
+        _journal_save('opencode: вызов на кошелёк «%s»' % имя)
+    except Exception:
+        pass
 OPENCODE_URL = "https://opencode.ai/zen/go/v1/chat/completions"
 OPENCODE_MODEL = os.environ.get("OPENCODE_MODEL", "deepseek-v4-flash")
 # Настоящие потолки — сервер назвал их САМ в ответе на заведомый перебор:
@@ -1342,9 +1386,11 @@ def dsoc_в_html(t):
 def dsoc_запрос(сообщения, потолок=3000):
     """Обычный (не потоковый) заход к модели — нужен для второго круга с данными на руках."""
     try:
+        _кл, _имя_кл = opencode_ключ()      # равномерно по двум подпискам (слово владельца)
+        opencode_отметить(_имя_кл)
         о = requests.post(OPENCODE_URL, timeout=180,
                           headers={"Content-Type": "application/json",
-                                   "Authorization": "Bearer " + OPENCODE_KEY},
+                                   "Authorization": "Bearer " + _кл},
                           json={"model": OPENCODE_MODEL, "messages": сообщения,
                                 "max_tokens": потолок, "temperature": 0.4})
         if о.status_code != 200:
@@ -1751,6 +1797,65 @@ async def журнал_контекста(бот, что, текст, убыло
             await бот.send_message(АРХИВ_ГРУППА, _сообщение, parse_mode="HTML")
         except Exception:
             pass
+
+async def _досверить(сообщение, тело, хвост, сборник, номер):
+    """Сверка приведённого по памяти хадиса с нашей базой (закон владельца #152).
+
+    Помощник отвечает быстро и по памяти — это разрешено, чтобы человек не ждал. Но память
+    ошибается, а хадис ошибок не терпит. Поэтому следом идёт ДОКАЗАТЕЛЬСТВО из наших данных:
+    наш текст, иснад с кликабельными передатчиками, ссылка на тахридж в приложении и разбор
+    цепи. Владелец оговорил отдельно: по аль-Бухари нейротахкик не делается.
+
+    Если в базе такого номера нет — так и пишем. Промолчать здесь нельзя: тогда «идёт сверка»
+    останется висеть, и человек решит, что сверка прошла успешно.
+    """
+    _код = _нейро_сборник(сборник) or (сборник or '').strip().lower()
+    _ар = _тр = ''
+    try:
+        _ар, _тр, _яз, _гр = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: (get_ahmad_hadith(номер) if _код == 'ahmad_local'
+                           else get_hadith(_код, номер)))
+    except Exception:
+        _ар = _тр = ''
+    части = []
+    if _ар:
+        части.append('✅ <b>Сверено с нашей базой</b> — %s №%d. Наш текст:'
+                     % (esc(NAMES.get(_код, сборник)), номер))
+        части.append(esc(_ар[:1400]))
+        if _тр:
+            части.append('🌍 ' + esc(_тр[:900]))
+    else:
+        # Честнее пустоты: назвать, ГДЕ искали и чего не нашли.
+        части.append('⚠️ <b>Сверка не подтвердила</b>: %s №%d в нашей базе не нашёлся. '
+                     'Значит приведённое выше — по памяти и без нашего подтверждения; '
+                     'проверьте, прежде чем ссылаться.' % (esc(str(сборник)), номер))
+    try:
+        _исн = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: _иснад_строкой(_код, номер))
+        if _исн:
+            части.append('')
+            части.append(_исн)
+    except Exception:
+        pass
+    try:
+        _тк = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: _тахкик_цитатой(_код, номер))
+        if _тк:
+            части.append('')
+            части.append(_тк)
+    except Exception:
+        pass
+    # Ссылки на само место и на тахридж в приложении — владелец просил их отдельной строкой.
+    _ссыл = ('https://t.me/muslimoontt_bot?startapp=r_%s_%d'
+             % ({'ahmad_local': 'ahmad'}.get(_код, _код), номер))
+    части.append('')
+    части.append('🔗 <a href="%s">Открыть в приложении</a> · '
+                 '<a href="%s">тахридж — кто ещё это привёл</a>' % (_ссыл, _ссыл))
+    готово = (тело.replace('⏳ <b>Приведено по памяти, идёт сверка с приложением.</b> '
+                           'Выверенное допишу сюда же.\n\n', '')
+              + '\n\n' + chr(10).join(части))
+    await сообщение.edit_text((готово + '\n\n' + хвост)[:4000], parse_mode='HTML',
+                              disable_web_page_preview=True)
 
 def _чем_занят(вызов):
     """Строка вызова → что сказать ждущему человеку. Без имён механизмов (обращение #118).
@@ -5417,12 +5522,14 @@ def ask_opencode(prompt, system, max_tokens=None):
     Значит порядок такой: сперва бесплатные, потом этот, и только если и он молчит —
     прямой DeepSeek.
     """
-    if not OPENCODE_KEY:
+    if not OPENCODE_КЛЮЧИ:
         return None
     try:
+        _кл, _имя_кл = opencode_ключ()
+        opencode_отметить(_имя_кл)
         о = requests.post(OPENCODE_URL, timeout=120,
                           headers={"Content-Type": "application/json",
-                                   "Authorization": "Bearer " + OPENCODE_KEY},
+                                   "Authorization": "Bearer " + _кл},
                           json={"model": OPENCODE_MODEL,
                                 "messages": [{"role": "system", "content": system},
                                              {"role": "user", "content": prompt}],
@@ -8418,9 +8525,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # max_tokens — это ПОТОЛОК, а не задание: модель останавливается, когда
                     # сказала всё. Высокий потолок ничего не стоит, а низкий режет по живому.
                     "max_tokens": DSOC_ВЫВОД_МАКС, "temperature": 0.4, "stream": True}
+            _кл, _имя_кл = opencode_ключ()      # ← сюда уходит основной расход помощника
+            opencode_отметить(_имя_кл)
             о = requests.post(OPENCODE_URL, json=тело, stream=True, timeout=600,
                               headers={"Content-Type": "application/json",
-                                       "Authorization": "Bearer " + OPENCODE_KEY})
+                                       "Authorization": "Bearer " + _кл})
             # 🔴 05.08.2026: было decode_unicode=True — и владелец получил «ÐÐµÑÐµÐ²Ð¾Ð´»
             # вместо «Перевод». В этом режиме библиотека берёт кодировку из заголовка ответа,
             # а поток событий её не объявляет — и русские байты молча разбираются как латиница.
@@ -8891,7 +9000,22 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Разделяем: КТО ГОВОРИТ — всегда на виду, отдельной строкой. СКОЛЬКО СТОИЛО — под
         # сгибом, как он и просил. В чате несколько голосов; не знать, кто из них сейчас
         # ответил, — хуже, чем видеть лишнюю строку.
+        # 🔴 08.08.2026, закон владельца #152. «Когда у него просят хадис, он может от себя
+        # привести оригинал, перевод и источник, чтобы не терять время на начальном этапе.
+        # Но он ОБЯЗАТЕЛЬНО на видном месте поста указывает, что идёт сверка с приложением,
+        # и ты обязан этот хадис сверять: делая кликабельными ссылки передатчиков, оставляя
+        # ссылку на тахридж в приложении и нейротахкик (для Бухари нейротахкик не нужен)».
+        # Помощник помечает такой ответ строкой «СВЕРИТЬ: <сборник> <номер>» — по ней мы и
+        # знаем, что именно сверять. Строку из видимого текста убираем: это наша кухня.
+        _свр = re.search(r'^\s*СВЕРИТЬ:\s*([^\s]+)\s+(\d{1,6})\s*$', собрано or '', re.M)
+        if _свр:
+            собрано = re.sub(r'^\s*СВЕРИТЬ:.*$', '', собрано, flags=re.M).strip()
         _тело = dsoc_в_html((собрано or "(пусто)")[:3400])
+        if _свр:
+            # Предупреждение стоит НАД ответом, а не под ним: человек должен увидеть его
+            # прежде, чем поверит тексту, а не после.
+            _тело = ("⏳ <b>Приведено по памяти, идёт сверка с приложением.</b> "
+                     "Выверенное допишу сюда же.\n\n" + _тело)
         _кто = "\n\n<b>— 🟩 DSOC</b>, помощник"
         # 🔴🔴 07.08.2026, 14:54. Владелец прислал ссылку на сообщение в джамаате со словами
         # «ну что это за бардак». Посмотрел — и он прав вдвойне.
@@ -8932,6 +9056,20 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await живое.edit_text((собрано or "(пусто)")[:3600] + подпись)
             except Exception:
                 await update.message.reply_text((собрано or "(пусто)")[:3600] + подпись)
+        # 🔴 #152: ответ ушёл — теперь СВЕРЯЕМ его с нашей базой и дописываем выверенное.
+        # Порядок именно такой: сперва человек получает ответ, потом получает доказательство.
+        # Обещание «допишу» обязано чем-то кончиться — не вышло, скажем прямо (урок #63).
+        if _свр:
+            try:
+                await _досверить(живое, _тело, _хвост, _свр.group(1), int(_свр.group(2)))
+            except Exception as _есв:
+                try:
+                    await живое.edit_text(
+                        _тело + "\n\n⚠️ <i>Сверку с приложением довести не вышло: %s</i>\n\n%s"
+                        % (esc(str(_есв)[:120]), _хвост), parse_mode="HTML",
+                        disable_web_page_preview=True)
+                except Exception:
+                    pass
         # Спросили голосом, прямо просят озвучить — или действует режим «дублируй голосом»
         # (#22/#25: владелец включает его словами на назначенный срок).
         if собрано and (_голосом_просили
@@ -13464,7 +13602,28 @@ async def _api_serve(application=None):
     def _uid(user, r):
         return str(user.get('id')) if user else ('ip:' + (r.remote or '?'))
 
-    async def health(r): return _cors(web.json_response({'ok': True, 'ai': {'groq': bool(GROQ_API_KEY), 'gemini': bool(GEMINI_API_KEY), 'openrouter': bool(OPENROUTER_API_KEY), 'deepseek': bool(DEEPSEEK_API_KEY), 'nvidia_nim': bool(NVIDIA_NIM_API_KEY)}}))   # индикатор какие ИИ-ключи в env (без значений; диагностик-вызовы ИИ убраны — риск абуза)
+    async def health(r):
+        # Индикатор: какие ИИ-ключи есть в env. БЕЗ ЗНАЧЕНИЙ — эта дверь открыта всем,
+        # а сам факт наличия ключа секретом не является.
+        # 🔴 08.08.2026 добавлен счёт по кошелькам OpenCode: владелец велел расходовать обе
+        # подписки равномерно, и «равномерно» должно быть ВИДНО, а не только заявлено.
+        # Ровно по этой причине сегодня же вскрылась мёртвая карта промта — цифра была на
+        # виду и не сходилась, но её никто не сверял.
+        _по_кош = {}
+        try:
+            _сег = datetime.now().strftime('%d.%m.%Y')
+            _по_кош = (((_journal_load().get('usage') or {})
+                        .get('opencode_by_key') or {}).get(_сег) or {})
+        except Exception:
+            pass
+        return _cors(web.json_response({
+            'ok': True,
+            'ai': {'groq': bool(GROQ_API_KEY), 'gemini': bool(GEMINI_API_KEY),
+                   'openrouter': bool(OPENROUTER_API_KEY), 'deepseek': bool(DEEPSEEK_API_KEY),
+                   'nvidia_nim': bool(NVIDIA_NIM_API_KEY)},
+            'opencode': {'кошельков': len(OPENCODE_КЛЮЧИ),
+                         'какие': [и for _к, и in OPENCODE_КЛЮЧИ],
+                         'вызовов_сегодня': _по_кош}}))
     async def nvidia_test(r):
         """#NVIDIA-NIM-05.07: живая диагностика без раскрытия ключа — пройден/нет + модель + ЗАГОЛОВКИ ЛИМИТОВ + список доступных моделей."""
         if not NVIDIA_NIM_API_KEY:
