@@ -1812,7 +1812,14 @@ async def dsoc_инструмент(строка, бот=None, чат=None):
         # Поэтому «аят» без номера берёт аят аль-Курси: он известен всем и годится как образец.
         if re.match(r'^(?:аят|коран|прочитай аят|зачитай)\s*$', с, re.I):
             с = 'аят 2:255'
-        м = re.match(r'^(?:аят|коран|сура)\s+(\d{1,3})\s*[:\-\s]\s*(\d{1,3})\s*$', с, re.I)
+        # 🔴 08.08.2026, 09:01, обращение #110. Владелец увидел английский в аяте и спросил:
+        # «Английский то зачем?». Затем, что он сам просил его 05.08 (#23) — я исполнил буквально.
+        # Но по существу он прав: проект русскоязычный, и лишняя строка в каждом аяте не нужна,
+        # как и лишний запрос к зеркалу. Английский теперь ПО СПРОСУ: «аят 2:255 английский».
+        # Урок общий: просьбу, сказанную один раз про один случай, не превращать в постоянство.
+        _нужен_анг = bool(re.search(r'\b(?:англ|english|по-английски)', с, re.I))
+        м = re.match(r'^(?:аят|коран|сура)\s+(\d{1,3})\s*[:\-\s]\s*(\d{1,3})'
+                     r'(?:\s+(?:англ\S*|english|по-английски))?\s*$', с, re.I)
         if м:
             _с, _а = int(м.group(1)), int(м.group(2))
             if not (1 <= _с <= 114):
@@ -1830,6 +1837,8 @@ async def dsoc_инструмент(строка, бот=None, чат=None):
             # зеркале адрес не работает — 404, брать нечего).
             _ан = ''
             try:
+                if not _нужен_анг:
+                    raise StopIteration     # английский не просили — и запрос не шлём
                 _о = await asyncio.get_event_loop().run_in_executor(
                     None, lambda: requests.get(
                         'https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/'
@@ -1852,11 +1861,14 @@ async def dsoc_инструмент(строка, бот=None, чат=None):
                         else ' Запись чтеца прислать не вышло (%s) — скажи об этом прямо.' % _чей
                 except Exception as _еа:
                     _прочли = ' Запись чтеца прислать не вышло (%s).' % str(_еа)[:80]
-            return ('КОРАН %d:%d — ЭТАЛОННЫЙ ТЕКСТ, приводи его дословно и не правь.\n'
-                    'Арабский: %s\nПеревод (Кулиев): %s\nEnglish (Yusuf Ali): %s\n'
-                    'Разбирать смысл и язык можешь своими словами, но САМ АЯТ — только так.%s'
-                    % (_с, _а, _ар or '(нет)', _ру or '(нет русского перевода)',
-                       _ан or '(нет английского)', _прочли))
+            _стр_а = ['КОРАН %d:%d — ЭТАЛОННЫЙ ТЕКСТ, приводи его дословно и не правь.' % (_с, _а),
+                      'Арабский: %s' % (_ар or '(нет)'),
+                      'Перевод (Кулиев): %s' % (_ру or '(нет русского перевода)')]
+            if _нужен_анг:
+                _стр_а.append('English (Yusuf Ali): %s' % (_ан or '(нет английского)'))
+            _стр_а.append('Разбирать смысл и язык можешь своими словами, но САМ АЯТ — '
+                          'только так.%s' % _прочли)
+            return chr(10).join(_стр_а)
         м = re.match(r'^(?:ссылка|открой|прочитай ссылку|url)\s+(\S+)\s*$', с, re.I)
         if м:
             _url = м.group(1).strip().strip('<>«»"\'')
@@ -12917,6 +12929,55 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True, 'счёт': счёт, 'всего': len(поз),
                                         'позиции': поз}))
 
+    async def samotest(r):
+        """Прогнать ЗРЕНИЕ и СЛУХ на присланной пробе — тем же кодом, что работает с людьми.
+
+        🔴 08.08.2026, обращение #54. Владелец: «передай технадзору, чтобы обеспечил, чтобы ты
+        мог понимать распознавать картинки видео аудио мп3 файлы и всё что мы привыкли. И пусть
+        протестирует всё на стандартных вещах общеизвестных».
+
+        Проверить это было НЕЧЕМ. Картинку боту может прислать только человек из чата — значит
+        каждая проверка упиралась в владельца: пришлите скриншот, а я посмотрю. Так и вышло, что
+        глаза однажды ослепли молча (Gemini отвечал «location is not supported» на конкретной
+        модели), и узнали мы об этом от него, а не от себя.
+
+        Дверь принимает пробу и отдаёт РОВНО ТО, ЧТО РАЗОБРАЛ ПРОДАКШН-КОД: не «ok: true», а сам
+        распознанный текст — его можно сверить с эталоном. Проверка, которая не показывает
+        распознанное, доказывает лишь то, что запрос не упал.
+        """
+        if not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            return _cors(web.json_response({'error': 'bad_json'}, status=400))
+        if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        try:
+            биты = base64.b64decode(str(body.get('файл') or ''))
+        except Exception:
+            return _cors(web.json_response({'error': 'файл: нужен base64'}, status=400))
+        if not биты:
+            return _cors(web.json_response({'error': 'пустая проба'}, status=400))
+        вид = str(body.get('вид') or 'картинка').strip().lower()
+        имя = str(body.get('имя') or ('proba.png' if вид == 'картинка' else 'proba.ogg'))
+        нач = time.time()
+        try:
+            if вид.startswith('карт'):
+                итог = await dsoc_глаза(биты, str(body.get('подпись') or ''))
+                чем = 'зрение (Gemini → NVIDIA NIM)'
+            else:
+                итог = await dsoc_уши(биты, имя)
+                чем = 'слух (Whisper)'
+        except Exception as e:
+            return _cors(web.json_response({'ok': False, 'чем': вид,
+                                            'беда': str(e)[:300]}, status=200))
+        return _cors(web.json_response({
+            'ok': bool(итог), 'чем': чем, 'байт': len(биты),
+            'секунд': round(time.time() - нач, 1),
+            # Пусто — это ОТВЕТ, а не отсутствие ответа: значит модальность сейчас слепа/глуха.
+            'разобрано': итог or '(ничего не разобрано — смотри логи Railway, там названа причина)'}))
+
     async def fayl(r):
         """Отдать текст файлом в чат — тем же ходом, что и помощник."""
         if not application or not BACKUP_SECRET:
@@ -15108,7 +15169,7 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True}))
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/samotest', samotest), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
