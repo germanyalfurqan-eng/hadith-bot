@@ -13705,7 +13705,9 @@ async def _api_serve(application=None):
             body = {}
         if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
             return _cors(web.json_response({'error': 'auth'}, status=403))
-        _ид = re.compile(r'\b[1-9]\d{8,10}\b')
+        _ид = re.compile(r'\b[1-9]\d{6,10}\b')   # 7–11 цифр: у старых аккаунтов id короче,
+        # и восьмизначный проскочил мимо прежней мерки «девять и больше» — один живой
+        # человек так и остался в открытом файле после первой чистки.
         _ник = re.compile(r'@[A-Za-z][A-Za-z0-9_]{4,31}')
         _наши = ('@jamaat_ru', '@muslimoonapp', '@hadis_isnad', '@muslimoontt_bot')
 
@@ -13727,8 +13729,13 @@ async def _api_serve(application=None):
                     _нов[_нк] = v
                 u['totals']['by_user'] = _нов
             for з in (u.get('recent') or []):
-                if isinstance(з, dict) and _ид.fullmatch(str(з.get('id') or '')):
-                    з['id'] = _отпечаток(з.get('id')); з['u'] = з['id']
+                if isinstance(з, dict):
+                    # Поле «u» — это ИМЯ по определению. Чистим его всегда, не спрашивая,
+                    # похож ли соседний id на id: иначе имя переживает чистку из-за формата
+                    # чужого поля. Так и уцелел @Matrosk1n при восьмизначном номере.
+                    if з.get('id'):
+                        з['id'] = _отпечаток(з.get('id'))
+                    з['u'] = з.get('id') or _отпечаток(з.get('u'))
             a = j.get('app') or {}
             if a.get('by_user'):
                 a['by_user'] = {(_отпечаток(к) if _ид.fullmatch(str(к)) else к): v
