@@ -5018,16 +5018,34 @@ def аят_номером(сура, аят):
     return sum(_СУР_ДЛИНЫ[:сура - 1]) + аят
 
 
-async def отправить_файлом(bot, chat_id, имя_файла, текст, подпись=None, ответ_на=None):
+async def отправить_файлом(bot, chat_id, имя_файла, текст, подпись=None, ответ_на=None,
+                           мид_out=None):
     """Отдать текст ФАЙЛОМ. Настоящее действие — это доведение дела до вещи, которую человек
     унесёт с собой: файл можно переслать, открыть на другом устройстве, положить в архив.
-    Разговор испаряется, файл остаётся."""
+    Разговор испаряется, файл остаётся.
+
+    🔴 08.08.2026. `мид_out` — список, куда кладётся НОМЕР ПОСТА от Telegram. Поводом стала
+    ЛОКАЛКА 1: отправила файл в архив, получила `{"ok": true}` и честно сказала — «у меня
+    отправлено, а не опубликовано, доказательства нет». Она права по закону З-47: публикацию
+    доказывает номер, который присваивает сам Telegram, а `ok` говорит лишь, что вызов не
+    упал. Ровно на этом стоял выговор В-42: в журнале числилось запощенным то, чего в канале
+    не было.
+    Номер отдаём СПИСКОМ, а не третьим элементом кортежа: у функции семь мест вызова с
+    распаковкой `ок, беда = ...`, и расширение кортежа сломало бы их все разом. Приём тот
+    же, что у `translate_matn(model_out=...)` — не заводим вторую манеру там, где есть
+    принятая (З-33).
+    """
     try:
         из_памяти = io.BytesIO((текст or '').encode('utf-8'))
         из_памяти.name = имя_файла
-        await bot.send_document(chat_id, из_памяти, filename=имя_файла,
-                                caption=(подпись or '')[:1000], parse_mode='HTML',
-                                reply_to_message_id=ответ_на)
+        м = await bot.send_document(chat_id, из_памяти, filename=имя_файла,
+                                    caption=(подпись or '')[:1000], parse_mode='HTML',
+                                    reply_to_message_id=ответ_на)
+        if мид_out is not None:
+            try:
+                мид_out.append(getattr(м, 'message_id', None))
+            except Exception:
+                pass
         return True, ''
     except Exception as e:
         return False, str(e)[:200]
@@ -14162,10 +14180,18 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'error': 'нужен текст'}, status=400))
         _ч = body.get('чат')
         чат = _ч if isinstance(_ч, str) and _ч.startswith('@') else int(_ч or LOG_CHAT_ID)
+        _мид = []
         ок, беда = await отправить_файлом(application.bot, чат, имя, текст,
                                           str(body.get('подпись') or ''),
-                                          int(body['ответ_на']) if body.get('ответ_на') else None)
-        return _cors(web.json_response({'ok': ок, 'error': беда}))
+                                          int(body['ответ_на']) if body.get('ответ_на') else None,
+                                          мид_out=_мид)
+        # «пост» — номер от Telegram; только он доказывает публикацию (З-47). Раньше отсюда
+        # уходило одно «ok», и по нему нельзя было отличить «легло в канал» от «вызов не упал».
+        _n = (_мид[0] if _мид else None)
+        _ссылка = ('https://t.me/c/%s/%s' % (str(чат).replace('-100', '', 1), _n)
+                   if (_n and str(чат).startswith('-100')) else '')
+        return _cors(web.json_response({'ok': ок, 'error': беда, 'пост': _n,
+                                        'ссылка': _ссылка}))
 
     async def oc_balans(r):
         """Остаток на счёте OpenCode — по данным самого OpenCode, а не нашего журнала.
