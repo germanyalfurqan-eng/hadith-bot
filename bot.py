@@ -15923,7 +15923,15 @@ async def _api_serve(application=None):
         if not q or len(opts) < 2: return _cors(web.json_response({'error': 'need question+2options'}, status=400))
         opts = opts + ['✍️ Свой вариант (отвечу сообщением)']
         try:
-            msg = await application.bot.send_poll(OWNER_ID, q, opts, is_anonymous=False, allows_multiple_answers=False)
+            # #254 (владелец: «будем опросы делать, и опросник поставь, чтобы голосовали»):
+            # опрос обязан уходить ТУДА, ГДЕ ЛЮДИ. Раньше он всегда шёл в личку владельцу —
+            # голосовать было некому. Без поля «чат» поведение прежнее, до буквы (З-33).
+            _куда = body.get('чат') or OWNER_ID
+            try:
+                _куда = int(_куда)
+            except Exception:
+                _куда = OWNER_ID
+            msg = await application.bot.send_poll(_куда, q, opts, is_anonymous=False, allows_multiple_answers=False)
             pid = msg.poll.id
             pm = _data_get('poll_map.json', {}) or {}
             pm[pid] = {'ref': ref, 'q': q[:120], 'opts': opts, 'ts': _now_msk(), 'msg_id': msg.message_id}
@@ -17580,6 +17588,12 @@ async def _api_serve(application=None):
                         await application.bot.send_video(chat, video=bytes(data),
                                                          filename=filename, caption=подпись,
                                                          supports_streaming=True)
+                    elif вид in ('фото', 'картинка', 'photo', 'image'):
+                        # #255: образцы шрифтов и прочие картинки. Именно send_photo, а не
+                        # документом: документ надо скачать, чтобы увидеть, а картинку смотрят
+                        # прямо в ленте — для голосования это и есть весь смысл.
+                        await application.bot.send_photo(chat, photo=bytes(data),
+                                                         caption=подпись)
                     elif вид in ('аудио', 'audio'):
                         await application.bot.send_audio(chat, audio=bytes(data),
                                                          filename=filename, caption=подпись)
