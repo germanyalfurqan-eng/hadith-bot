@@ -1548,7 +1548,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1329';
+const APPVER = 'v1330';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -18619,6 +18619,11 @@ try{ document.documentElement.setAttribute('data-jsok', (typeof APPVER!=='undefi
   };
   UR._moreBtn=function(){
     var old=dom.content.querySelector('#urMoreBtn'); if(old) old.remove();
+    // 09.08.2026: гасим ПРЕЖНЕГО наблюдателя. Эту функцию зовут после каждой подгрузки, и без
+    // гашения наблюдатели копились бы по одному за порцию: кнопка старая удалена, наблюдатель
+    // за ней жив и никому не нужен. Рой этого шага не предложил — а без него получалась
+    // подтекающая память, то есть починка с подарком.
+    if(UR._ioMore){ try{ UR._ioMore.disconnect(); }catch(e){_тихо(e,"L18620")} UR._ioMore=null; }
     var a=state.adapter;
     if(!a||typeof a.more!=='function'||!(typeof a.hasMore==='function'&&a.hasMore())) return;
     var b=document.createElement('button'); b.id='urMoreBtn';
@@ -18626,6 +18631,19 @@ try{ document.documentElement.setAttribute('data-jsok', (typeof APPVER!=='undefi
     b.textContent='\u2B07 ещё 30';
     b.onclick=function(){ UR.loadMore(); };
     dom.content.appendChild(b);
+    // АВТОПОДГРУЗКА ПРИ ПРОКРУТКЕ (раздел задач «8»). Кнопка остаётся — она нужна и как
+    // видимый признак, что список не кончился, и как запасной путь. Но доскроллил до неё —
+    // порция подтянется сама, за 200 точек до появления, чтобы не было рывка на границе.
+    // ⚠️ Через проверку: наблюдателя за видимостью нет в части старых оболочек Telegram.
+    // Нет его — остаётся прежнее поведение с кнопкой, а не сломанная лента.
+    if('IntersectionObserver' in window){
+      try{
+        UR._ioMore=new IntersectionObserver(function(вх){
+          for(var i=0;i<вх.length;i++){ if(вх[i].isIntersecting){ UR.loadMore(); break; } }
+        },{rootMargin:'200px'});
+        UR._ioMore.observe(b);
+      }catch(e){_тихо(e,"L18632")}
+    }
   };
   UR.loadMore=function(){
     // 09.08.2026, находка роя: список кончился, а приложение продолжало спрашивать «есть ещё?»
