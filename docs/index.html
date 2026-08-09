@@ -1548,7 +1548,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1327';
+const APPVER = 'v1328';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2811,12 +2811,12 @@ async function loadAhmad(){ if(ahmadArr)return ahmadArr;
 // A-136 шардинг: открыть ОДИН хадис Ахмада по номеру → грузим шард ~900КБ (ahmad/<num//1000>.json), НЕ весь 25МБ
 const _ahmOne={};
 async function loadAhmadOne(num){ if(ahmadArr){ return ahmadArr.find(x=>x.num===String(num))||null; }   // если полный массив уже в памяти (поиск/читалка) — берём оттуда
-  const b=Math.floor((+num)/1000); if(!(b in _ahmOne)){ try{ _ahmOne[b]=await cachedFetchJSON('./ahmad/'+b+'.json', 60000, {silent:true}); }catch(e){ _ahmOne[b]=null; } }
+  const b=Math.floor((+num)/1000); if(!(b in _ahmOne)){ try{ _ahmOne[b]=await cachedFetchJSON('./ahmad/'+b+'.json', 60000, {silent:true}); }catch(e){ delete _ahmOne[b]; return null; } }   // провал не запоминаем: `b in _ahmOne` после null был бы true навсегда
   const m=_ahmOne[b]; const r=m&&m[String(num)]; return r?{num:String(num),text:r[0]||'',grade:r[1]||'',norm:''}:null; }
 // шардинг Сахих Муслима: открыть ОДИН хадис по номеру → шард ~1МБ (muslim/<num//500>.json {num:[raw,fw]}), не весь 15МБ (baqi 8.4+clean 6.8)
 const _musOne={};
 async function loadMuslimOne(num){ if(cache['muslim']){ return cache['muslim'].find(x=>x.num===String(num))||null; }   // полный массив в памяти (читалка/поиск) — оттуда
-  const b=Math.floor((+num)/500); if(!(b in _musOne)){ try{ _musOne[b]=await cachedFetchJSON('./muslim/'+b+'.json', 60000, {silent:true}); }catch(e){ _musOne[b]=null; } }
+  const b=Math.floor((+num)/500); if(!(b in _musOne)){ try{ _musOne[b]=await cachedFetchJSON('./muslim/'+b+'.json', 60000, {silent:true}); }catch(e){ delete _musOne[b]; return null; } }   // то же: провал не запоминаем
   const m=_musOne[b]; const r=m&&m[String(num)]; return r?{num:String(num),text:_muslimStripApparatus(r[0]||''),grade:'',fw:r[1]||null,norm:''}:null; }
 const _local={};
 async function loadLocal(code,file){ if(_local[code])return _local[code]; setStatus('Загружаю '+nameOf(code)+'…');
@@ -3085,7 +3085,9 @@ function _matnSnippet(text){
 // Причина: поиск «N -» попадал на номер РАЗДЕЛА → чужой лист. Карта muslim_lists.json (2976 номеров, выверена по turath 711: 145→427/стр.90, 372→982, 2408→7428) даёт точный лист книги 711.
 const _MUSLIM_SHAMELA_BID='711';
 let _mListsCache;
-async function _mListSheet(n){ if(_mListsCache===undefined){ try{ const r=await fetch('./muslim_lists.json?v='+APPVER); _mListsCache=r.ok?await r.json():{}; }catch(e){ _mListsCache={}; } } return _mListsCache[String(n)]||null; }
+// Провал НЕ запоминаем: `_mListsCache={}` снимал условие `===undefined` навсегда, и карта
+// листов Муслима не догружалась до конца жизни страницы — а от неё зависит точный лист книги.
+async function _mListSheet(n){ if(_mListsCache===undefined){ try{ const r=await fetch('./muslim_lists.json?v='+APPVER); _mListsCache=r.ok?await r.json():{}; }catch(e){ return null; } } return (_mListsCache||{})[String(n)]||null; }
 async function openMaktabaPage(bid, num, text){
   let b=String(bid==null?'':bid).replace(/[^0-9]/g,''); const n=String(num==null?'':num).replace(/[^0-9]/g,'');
   if(!b) return;
@@ -10104,7 +10106,12 @@ var _nbShard={}, _nbShardP={};
 async function _narrBio(id){ if(id==null) return null; const b=Math.floor(id/100); if(_nbShard[b]===undefined){ if(!_nbShardP[b]) _nbShardP[b]=fetch('./narrbio/'+b+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null); _nbShard[b]=await _nbShardP[b]; } return (_nbShard[b]||{})[String(id)]||null; }
 // доп-поля карточки (البلد/الإقامة·الرحلات·محل الوفاة) из موسوعة الرواة — аналог sunnah.com «Lived in / Places». Шарды narrx (build_narrx.py).
 var _narrXShard={};
-async function _narrX(id){ const b=Math.floor(id/100); if(_narrXShard[b]===undefined){ try{ _narrXShard[b]=await (await fetch('./narrx/'+b+'.json?v='+APPVER)).json(); }catch(e){ _narrXShard[b]=null; } } return (_narrXShard[b]||{})[String(id)]||null; }
+// ВОСЬМОЕ место того же класса (v1324 — три, v1327 — ещё четыре, теперь это).
+// Здесь провал запоминался особенно прочно: `_narrXShard[b]=null`, а проверка стоит на
+// `undefined` — то есть после первой же сетевой икоты условие «ещё не загружали» больше
+// НИКОГДА не выполнялось, и шард не пробовали загрузить до конца жизни страницы.
+// Считать надо было не «починил ли я», а «сколько таких мест всего»; считаю в третий раз.
+async function _narrX(id){ const b=Math.floor(id/100); if(_narrXShard[b]===undefined){ try{ _narrXShard[b]=await (await fetch('./narrx/'+b+'.json?v='+APPVER)).json(); }catch(e){ delete _narrXShard[b]; return null; } } return (_narrXShard[b]||{})[String(id)]||null; }
 /* ===== 🧬 M378b (Сессия 15): dz-СЛОЙ Э1.1 — КОДЫ передатчиков в интерфейсе =====
    dz/b<bid>_<num//500>.json {num:[код…]} — цепочка хадиса: код = id базы (число) ИЛИ 'U…' (наш код неопознанной формы, приказ M378)
    dz/u<sh>.json {U:[форма,частота,примеры]} + dz/un<sh>.json {U:[[bid,num,leaf]…]} — реестр/участие U-кодов, sh = md5(U)[:4]%64
