@@ -10459,7 +10459,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 if update.effective_chat.id != LOG_CHAT_ID:   # #41/#90: НЕ дублировать эхо в тот же чат (был тройной повтор)
                     await context.bot.copy_message(LOG_CHAT_ID, update.effective_chat.id, update.message.message_id)
-                    await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid} ({_now_msk()}): {(body or '(скрин)')[:300]}")
+                    await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid} ({_now_msk()}): {обрезать(body or '(скрин)', 300, 'полностью — в реестре')}")
             except Exception:
                 pass
             await update.message.reply_text(f"📥 Заявка #{rid} со скрином записана ✅ · 🤖 бот (уникальный № — ищи в журнале командой «заявки»).")   # M287
@@ -11415,11 +11415,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # #245: дубль ВЛАДЕЛЬЦУ В ЛС — все заявки в переписке с ботом (если команда не из самой ЛС)
             try:
                 if update.effective_chat.id != OWNER_ID:
-                    await context.bot.send_message(OWNER_ID, f"📥 Заявка #{rid}{from_chat} ({_now_msk()}):\n{body[:1500]}" + ("\n🖼 со скрином" if img_flag else ""))
+                    await context.bot.send_message(OWNER_ID, f"📥 Заявка #{rid}{from_chat} ({_now_msk()}):\n{обрезать(body, 1500, 'полностью — в реестре заявок')}" + ("\n🖼 со скрином" if img_flag else ""))
             except Exception: pass
             try:
                 if update.effective_chat.id not in (LOG_CHAT_ID, OWNER_ID):   # #41/#90: НЕ дублировать эхо в тот же чат
-                    await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid}{from_chat} ({_now_msk()}):\n{body[:1500]}")
+                    await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid}{from_chat} ({_now_msk()}):\n{обрезать(body, 1500, 'полностью — в реестре заявок')}")
             except Exception: pass
             await update.message.reply_text(f"📥 *Заявка #{rid}* записана ✅{from_chat} · 🤖 бот ({_now_msk()})\nПродублировал тебе в ЛС с ботом. Журнал — командой «заявки».", parse_mode="Markdown")   # M287: показываем место приёма
             return
@@ -12025,7 +12025,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     rid = req_add(vtxt)
                     try:
                         if update.effective_chat.id != LOG_CHAT_ID:
-                            await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid} (голосом, {_now_msk()}):\n{vtxt[:1500]}")
+                            await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid} (голосом, {_now_msk()}):\n{обрезать(vtxt, 1500, 'полностью — в реестре заявок')}")
                     except Exception:
                         pass
                     await update.message.reply_text(f"📥 Заявка #{rid} записана ✅ (голосом). Ищи в журнале командой «заявки».")
@@ -12334,7 +12334,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         rid = req_add(txt)
                         try:
                             if update.effective_chat.id != LOG_CHAT_ID:
-                                await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца (голосом) #{rid} ({_now_msk()}):\n{txt[:1500]}")
+                                await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца (голосом) #{rid} ({_now_msk()}):\n{обрезать(txt, 1500, 'полностью — в реестре заявок')}")
                         except Exception: pass
                         await update.message.reply_text(f"📥 *Заявка #{rid}* записана ✅ · 🤖 бот ({_now_msk()})", parse_mode="Markdown")   # M287
                 elif t_lower in ["нет", "не надо", "отмена", "no"]:
@@ -13827,6 +13827,27 @@ def tg_user_dict(update):
     if not u:
         return None
     return {"id": u.id, "username": u.username or ""}
+
+
+def обрезать(текст, предел, куда=''):
+    """Обрезать текст ДЛЯ ПОКАЗА — и сказать об этом прямо в самом тексте.
+
+    🔴 Правило подсказали ЛОКАЛКИ 1 (10.08.2026), и оно точное:
+    «Признак дурной обрезки ровно один: она ничем себя не выдаёт. Значит обрезающий обязан
+    ставить отметку САМ».
+    У них сторож зовов резал до 300 знаков молча: из 242 обращений владельца в предел упёрлось
+    151 — больше половины доходили половинками, и замечалось это лишь когда обрыв приходился
+    на середину слова. У нас в тот же день нашлось 15 таких записей, и две из них обрывались
+    ровно на границе предложения — то есть выглядели целыми и не нашлись бы никогда.
+
+    Резать ПОКАЗ можно и нужно: длинная простыня в уведомлении никому не помогает. Нельзя
+    только резать МОЛЧА — тогда читатель принимает половину за целое.
+    """
+    т = str(текст or '')
+    if len(т) <= предел:
+        return т
+    хвост = '\n\n⚠️ ОБРЕЗАНО для показа: всего %d знаков%s' % (len(т), (', ' + куда) if куда else '')
+    return т[:предел] + хвост
 
 
 def tg_full_user(update):
