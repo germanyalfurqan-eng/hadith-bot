@@ -1548,7 +1548,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1322';
+const APPVER = 'v1323';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -8582,7 +8582,11 @@ function _qrFastScrollSetup(){
   const b=document.getElementById('qrBody'); if(b && !b._fsScrollWired){ b._fsScrollWired=true; b.addEventListener('scroll',()=>{ try{_qrThumbSync();}catch(e){_тихо(e,"L8553")} }); }
   // #69: свайп влево/вправо = смена суры (выключаемо в Настройках, cfg.qrSwipe)
   if(b && !b._swipeWired){ b._swipeWired=true; var _sx=0,_sy=0,_stt=0;
-    b.addEventListener('touchstart',function(e){ if(e.touches.length!==1) return; _sx=e.touches[0].clientX; _sy=e.touches[0].clientY; _stt=Date.now(); },{passive:true});
+    // 09.08.2026, находка роя. Свайп начинался ДАЖЕ КОГДА человек выделяет текст: тянешь
+    // палец, чтобы выделить аят, — а приложение считает это жестом и перелистывает суру.
+    // Выделение при этом сбрасывается, и повторить его нельзя, пока не попадёшь коротким
+    // движением. Проверка одна: если выделение непустое, жест не начинаем вовсе.
+    b.addEventListener('touchstart',function(e){ if(e.touches.length!==1) return; try{ if(!window.getSelection().isCollapsed) return; }catch(_e){} _sx=e.touches[0].clientX; _sy=e.touches[0].clientY; _stt=Date.now(); },{passive:true});
     b.addEventListener('touchend',function(e){ if(cfg.qrSwipe===false) return; var t=e.changedTouches&&e.changedTouches[0]; if(!t||Date.now()-_stt>600) return;
       var dx=t.clientX-_sx, dy=t.clientY-_sy;
       if(Math.abs(dx)>70 && Math.abs(dx)>Math.abs(dy)*2){ var cur=(window._qrView&&_qrView.s)||1;
@@ -8667,7 +8671,7 @@ async function openQuranReader(s,a){
     m.innerHTML='<div class="panel" style="max-width:680px;padding-top:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:20;background:var(--card);margin:0 -16px 10px;padding:14px 16px 10px;border-bottom:1px solid var(--border)"><b id="qrTitle" style="font-size:14px">📖 Коран</b><span style="display:flex;gap:7px;flex:none"><button class="mini" id="qrMini" title="Свернуть читалку — звук продолжит играть в плеере снизу" style="flex:none;border:1px solid #2e9b5b;color:#bff5d4;background:transparent">🎧 свернуть</button><button class="mini" id="qrClose" style="flex:none">закрыть ✕</button></span></div>'
      +'<input id="qrSearch" placeholder="🔎 № суры · 2:255 · название (рус/араб) · слово в аяте…" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:2px solid var(--btn);border-radius:10px;padding:9px 11px;font-size:15px;margin-bottom:8px">'
      +'<div id="qrSugg" style="display:none;flex-wrap:wrap;gap:6px;margin:-3px 0 9px"></div>'
-     +'<div id="qrNav" style="display:flex;gap:6px;align-items:center;justify-content:center;margin:2px 0 10px;flex-wrap:wrap"></div><div id="qrBody" style="max-height:58vh;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch"></div></div>';
+     +'<div id="qrNav" style="display:flex;gap:6px;align-items:center;justify-content:center;margin:2px 0 10px;flex-wrap:wrap"></div><div id="qrBody" style="max-height:58vh;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y"></div></div>';
     document.body.appendChild(m);
     // закрытие читалки НЕ останавливает звук — он продолжает играть фоном (управление в мини-плеере)
     m.querySelector('#qrClose').onclick=()=>{ m.style.display='none'; try{_miniSync();}catch(e){_тихо(e,"L8644")} };
