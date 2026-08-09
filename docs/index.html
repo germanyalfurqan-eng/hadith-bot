@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1342</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1343</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1342';
+const APPVER = 'v1343';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -13669,6 +13669,25 @@ function _bidПоКритику(книга, критик){
   for(const [ре, bid] of прав){ if(ре.test(к)) return bid; }
   return '';   // критик не опознан — ссылку НЕ даём: чужая книга хуже, чем никакой
 }
+/* 🔴 10.08.2026, владелец: «цитат не нашёл в карточках, и карточки грузятся долго».
+   Замерил на проде — обе беды сошлись в одном файле. Выверенных мест стало 7737 вместо 388,
+   и prov_crit.json вырос до 926 КБ: карточка стала открываться 3,1 с вместо 0,7 с. То есть
+   моя работа по цитатам съела мою же работу по скорости.
+   Хуже другое: файл грузился БЕЗ ожидания — `fetch(...)` без await, — и на ПЕРВОЙ отрисовке
+   выверенных ссылок не было вовсе. Они появлялись со второй карточки. Владелец открыл первую
+   и честно не нашёл того, что мы делали два дня.
+   Лечим как у соседей (testimonies, narrbio, narr_edges): шарды по mid//100, promise-кэш,
+   и ЖДЁМ шард перед отрисовкой свода. Самый большой кусок — 30 КБ вместо 926. */
+var _провШард={}, _провШардП={};
+async function _провМеста(mid){
+  if(mid==null) return null;
+  const b=Math.floor(Math.abs(+mid)/100);
+  if(_провШард[b]===undefined){
+    if(!_провШардП[b]) _провШардП[b]=fetch('./prov/'+b+'.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({}));
+    _провШард[b]=await _провШардП[b];
+  }
+  return (_провШард[b]||{})[String(mid)]||null;
+}
 function _ttLinkRow(bid,page,mid,shnum,book,quote,crit){
   // владелец 02.07 («проработай дизайн как-то лучше»): было — название книги تهذيب الكمال ПОВТОРЯЛОСЬ в
   // ОБЕИХ кнопках («تهذيب الكمال (открыть…)» + «المكتبة الشاملة · تهذيب الكمال») — дублирование, плюс
@@ -13691,8 +13710,27 @@ function _ttLinkRow(bid,page,mid,shnum,book,quote,crit){
     // 11.07 (владелец: «ссылка открывает книгу с ПЕРВОЙ страницы — обеспечь переход РОВНО на цитату с подсветкой»):
     // старт = печатная стр., иначе shamela-стр. (shnum), иначе 1; ГЛАВНОЕ — quote уходит в _bookView.hl,
     // ридер сам находит цитату (_bookDoFind) и ПОДСВЕЧИВАЕТ её. Кнопка всегда зелёная и всегда ведёт к месту.
-    const _pg2 = pgok ? page : ((shnum && Number(shnum) > 0) ? Number(shnum) : 1);
-    w.appendChild(mk('📖 Читать у нас — к цитате','#9be7c4','rgba(46,160,67,.10)','#2d6a45',()=>{ openBook(bid,_pg2,false,quote,(pgok?Number(page):null)); }));
+    // 🔴 10.08.2026. Выверенное место искалось ТОЛЬКО в ветке «книги нет» — а вся наша
+    // выверка (7737 мест) делалась как раз для цитат, у которых КНИГА ЕСТЬ, а листа нет.
+    // То есть найденные страницы никуда не попадали: кнопка вела на shnum или на первую
+    // страницу, а рядом лежал точный лист. Два дня работы не показывались ни в одной
+    // карточке, и владелец честно сказал «цитат не нашёл».
+    var _вывер=null;
+    try{
+      var _пм=(_провШард[Math.floor(Math.abs(+mid)/100)]||{})[String(mid)];
+      if(_пм && _пм.length){
+        var _н=function(s){ return String(s||'').replace(/[ً-ْٰـ]/g,'')
+            .replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/\s+/g,' ').trim(); };
+        var _qq=_н(quote);
+        _вывер=_пм.find(function(x){ return x.q && x.pid && _qq.indexOf(_н(x.q))>=0; });
+      }
+    }catch(e){_тихо(e,"L13700")}
+    const _pg2 = (_вывер && _вывер.pid) ? Number(_вывер.pid)
+                 : (pgok ? page : ((shnum && Number(shnum) > 0) ? Number(shnum) : 1));
+    w.appendChild(mk((_вывер ? '📖 Читать у нас — ВЫВЕРЕНО, к самой цитате'
+                             : '📖 Читать у нас — к цитате'),
+                     '#9be7c4','rgba(46,160,67,.10)','#2d6a45',
+                     ()=>{ openBook((_вывер&&_вывер.bid)||bid,_pg2,false,quote,(pgok?Number(page):null)); }));
     // #641 (владелец: «кнопки оценок критиков не переводят на реальные страницы»). Замер 06.08.2026 по всем
     // 10 139 ссылкам свода: рабочих НОЛЬ — 8810 давали 404, 1329 открывали ЧУЖОЙ лист. Причина: в shnum лежит
     // внутренний номер turath, кодирующий лист как лист*10+8 (дамп from maktaba: стр. 6095 книги 3722 → num
@@ -13727,8 +13765,8 @@ function _ttLinkRow(bid,page,mid,shnum,book,quote,crit){
     // الجرح والتعديل на нужном листе + подсветка цитаты), с пометкой «выверено». Приоритет над общими ссылками.
     let _exactP=null;
     try{
-      if(window._provCrit===undefined){ window._provCrit='loading'; fetch('./prov_crit.json?v='+APPVER).then(function(r){return r.ok?r.json():{};}).then(function(j){window._provCrit=j||{};}).catch(function(){window._provCrit={};}); }
-      var _pj=(window._provCrit&&window._provCrit!=='loading')?window._provCrit[String(mid)]:null;
+      // шард уже загружен и ждать здесь нечего: его дождался renderTestimoniesCard
+      var _pj=(_провШард[Math.floor(Math.abs(+mid)/100)]||{})[String(mid)]||null;
       // 🔴 09.08.2026: сверять надо ОБЕ стороны одной меркой. Записанная цитата приходит
       // из сборщика выверки, а он снимает не только огласовки, но и разнобой алифов/'ة'.
       // Сравнение «как есть» теряло 810 выверенных мест из 6385 (12,7%) — молча: ссылка
@@ -13880,6 +13918,11 @@ function _narrAnchors(rebuild){
 }
 async function renderTestimoniesCard(mid, host){
   if(mid==null) return;
+  // 🔴 ЖДЁМ шард выверенных мест ДО отрисовки. Прежде файл грузился без ожидания, и на
+  // ПЕРВОЙ карточке ссылок «Первоисточник (выверено)» не было вовсе — они появлялись со
+  // второй. Владелец открыл первую и честно не нашёл того, что делалось два дня.
+  // Ждать теперь дёшево: шард ~10–30 КБ вместо 926 КБ целого файла.
+  try{ await _провМеста(mid); }catch(e){_тихо(e,"L13900")}
   window._qppSeen=0;   // v1088: счётчик заглушек «страница уточняется» — на карточку (полная заметка 1 раз, дальше компакт)
   try{ setTimeout(()=>_narrAnchors(false),1800); setTimeout(()=>_narrAnchors(true),4500); }catch(e){_тихо(e,"L13651")}   // v1089: якоря — двумя волнами (поздние секции)
   // ТРЕВОГА-фикс (владелец 04.07.2026, скрин Ибн Умара: «оценки критиков несуществующие, все карточки не совпадают
@@ -13911,11 +13954,12 @@ async function renderTestimoniesCard(mid, host){
      книга-носитель с листом (клик открывает страницу), ② книга есть, лист не выверен, ③ ссылки нет вовсе.
      Класс муътабаров (заявка #8) НАМЕРЕННО оставлен первым ключом: это религиозный вес свидетельства, его
      провенансом не перебить — поэтому провенанс сортирует ВНУТРИ класса, а не поверх него. */
-  try{ if(!window._provCrit || typeof window._provCrit!=='object'){ window._provCrit='loading';
-        window._provCrit=await fetch('./prov_crit.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); } }catch(_e){ window._provCrit={}; }
+  // 10.08.2026: и здесь тянулся ВЕСЬ файл выверки (905 КБ) — ради одного равия.
+  // Берём тот же шард, что и отрисовка: он уже загружен и лежит в памяти.
+  let _провЭтого=null; try{ _провЭтого=await _провМеста(mid); }catch(_e){ _провЭтого=null; }
   const _srcRankMemo={};
   const _srcRank=(cr)=>{ if(_srcRankMemo[cr]!==undefined) return _srcRankMemo[cr];
-    let best=3; const pj=(window._provCrit&&typeof window._provCrit==='object')?window._provCrit[String(mid)]:null;
+    let best=3; const pj=_провЭтого;
     (byc[cr]||[]).forEach(c=>{ let r=3;
       try{ if(pj&&pj.length){ const qn=String(c[3]||'').replace(/[ًٌٍَُِّْـ]/g,''); if(qn && pj.some(x=>x.q && qn.indexOf(x.q)>=0)) r=0; } }catch(_e){_тихо(_e,"L13687")}
       if(r>1 && c[5] && Number(c[5])>0) r=(c[6]!=null && Number(c[6])>0)?1:2;
@@ -13997,7 +14041,7 @@ async function renderTestimoniesCard(mid, host){
     // #654 (С67): цвет — по ЗНАКУ ПОКАЗАННОЙ записи, а не по сумме всех (сумма красила похвалу в красный)
     const _shownSc=_mixed?(_ttScore((items[0]||[])[1])||0):scv;
     const vcol=_shownSc>0?'#7ee08a':(_shownSc<0?'#ff9b7a':'#9aa7b5');
-    const row=document.createElement('div'); row.dataset.ttRow='1'; row.style.cssText='border-top:1px solid #20302a;padding-top:11px;margin-top:11px'; if(idx>=_TT_TOP) row.style.display='none';
+    const row=document.createElement('div'); row.dataset.ttRow='1'; row.style.cssText='border-top:1px solid #20302a;padding-top:11px;margin-top:11px'; /* 🔴 10.08.2026, владелец: «цитат не нашёл в карточках передатчиков». Они были — но с седьмой прятались под кнопкой «Показать всех учёных», и на экране оставалось шесть. Он открыл карточку, увидел несколько строк и честно решил, что цитат нет. Его же указ прямой: показывать ВСЕ оценки критиков. Значит по умолчанию — все, а кнопка теперь сворачивает, а не разворачивает. */
     const yr=_yrOf(cr); const c0=items[0]; const ruv=((c0[9]&&String(c0[9]).trim())||_ruVerdict(terms));
     const _isMuta=_isMutasahil(cr)&&_critOk(cr);   // ПР-3: мутасахиль — джарх принят, таусик нет
     // R-61 v1087: МЕЖЗАПИСНЫЕ варианты мнения этого учёного (кластеры смены): сводка «вариантов: N» с арабскими метками
@@ -14075,8 +14119,8 @@ async function renderTestimoniesCard(mid, host){
     bd.appendChild(row);
   });
   if(_eord.length>_TT_TOP){ const more=document.createElement('div'); more.style.cssText='text-align:center;font-size:13.5px;font-weight:600;color:#7ee08a;margin-top:11px;cursor:pointer;border:1px solid #2d6a45;border-radius:9px;padding:8px;background:rgba(63,185,80,.06)';
-    more.textContent='▾ Показать всех учёных ('+_eord.length+')'; let _op=false;
-    more.onclick=()=>{ _op=!_op; bd.querySelectorAll('[data-tt-row]').forEach((r,i)=>{ if(i>=_TT_TOP) r.style.display=_op?'block':'none'; }); more.textContent=_op?('▴ Свернуть'):('▾ Показать всех учёных ('+_eord.length+' ▾'); };
+    more.textContent='▴ Свернуть до первых '+_TT_TOP+' (всего '+_eord.length+')'; let _op=true;
+    more.onclick=()=>{ _op=!_op; bd.querySelectorAll('[data-tt-row]').forEach((r,i)=>{ if(i>=_TT_TOP) r.style.display=_op?'block':'none'; }); more.textContent=_op?('▴ Свернуть до первых '+_TT_TOP+' (всего '+_eord.length+')'):('▾ Показать всех учёных ('+_eord.length+')'); };
     bd.appendChild(more); }
   if(_late.length){ const lb=document.createElement('div'); lb.style.cssText='margin-top:12px;border-top:1px solid #20302a;padding-top:11px';
     lb.innerHTML='<div style="font-size:13px;color:#9aa7b5;margin-bottom:7px">📜 Поздние своды (справочно)</div>';
