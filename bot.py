@@ -7729,6 +7729,230 @@ def _rag_access_cmd(text):
                 'убрал' if rm else 'добавил', uid, arr or '—')
     return None
 
+# ===== 🛡 ФИЛЬТР РЕКЛАМЫ ОТ НОВИЧКОВ (заявка #178) =====
+# Владелец: «настроим с тобой фильтр спама рекламы; для этого надо будет следить за людьми,
+# которые зашли, и дня три следить за тем, что они пишут, вычислять и удалять. Механизм предложи».
+#
+# Три решения, за которые отвечаю отдельно:
+#
+# ① Трое суток считаем НЕ от входа в чат, а ОТ ПЕРВОГО НАПИСАННОГО СЛОВА. Спамер часто входит
+#    и молчит неделю; по дате входа он бы вышел из-под наблюдения, не написав ни строчки.
+#
+# ② Не одно правило, а СУММА примет с весами. Одно правило либо пропускает половину, либо
+#    режет своих. Слабые приметы (слова про заработок, латиница в имени) сами по себе НЕ
+#    срабатывают никогда — порог им недостижим в одиночку. В общинном чате «работа», «доход»,
+#    «помощь» — обычные слова живого разговора, и ловить по ним значит бить по своим.
+#
+# ③ БОТ НЕ УДАЛЯЕТ САМ. Удаление необратимо, а цена ошибки — человек, выгнанный из общины ни
+#    за что. Владельцу уходит само сообщение, кто (имя·ник·нажимаемый номер), когда зашёл,
+#    какие приметы сошлись — и кнопки. Одно касание вместо необратимой самодеятельности.
+СПАМ_ОКНО_ДНЕЙ = 3
+СПАМ_ПОРОГ = 3                     # сумма весов, при которой зовём владельца
+СПАМ_ФАЙЛ = "spam_watch.json"      # {чат:{человек:{первое: ISO, было: n}}}
+СПАМ_РЕШЕНИЯ = "spam_resolve.json"  # что владелец решил — по этому и считаем точность
+_СПАМ_ЭХО = {}                     # нормализованный текст -> [id новичков], кто это уже писал
+_СПАМ_СЛАБЫЕ = re.compile(
+    r'заработ|инвест|крипт|ставк|казино|доход\s*от|подработ|трейд|букмекер', re.I)
+_СПАМ_ССЫЛКА = re.compile(r'(https?://|t\.me/|@[A-Za-z]\w{3,}|wa\.me/|\+7\s*9\d{2})')
+# 🟢 СВОИ ССЫЛКИ. Поймано собственным самотестом до выкатки: новичок, чьё ПЕРВОЕ сообщение —
+# ссылка на наш же канал («вот тут разбор t.me/muslimoonapp»), набирал ровно порог и попадал
+# под подозрение. То есть человека, который привёл к нам людей, фильтр встречал как спамера.
+# Сюда же — источники, которыми в общинном чате делятся каждый день: они не улика.
+_СПАМ_СВОИ = re.compile(
+    r'(muslimoonapp|jamaat_ru|germanyalfurqan-eng\.github\.io|sunnah\.(com|one)|dorar\.net|'
+    r'shamela\.ws|islamweb\.net|quran\.com|turath\.io|hadith-bot)', re.I)
+
+
+def _спам_ключ(т):
+    """Текст без украшений: спам рассылают одним и тем же, меняя эмодзи и пробелы."""
+    return re.sub(r'\W+', ' ', (т or '').lower()).strip()[:200]
+
+
+_СПАМ_СОСТ = None      # состояние в ПАМЯТИ; ветка data — только долгая полка
+_СПАМ_ГРЯЗНО = False
+_СПАМ_СЛИТО = 0.0
+СПАМ_СЛИВ_СЕК = 300
+
+
+def _спам_состояние():
+    global _СПАМ_СОСТ
+    if _СПАМ_СОСТ is None:
+        try:
+            _СПАМ_СОСТ = _data_get(СПАМ_ФАЙЛ, {}) or {}
+        except Exception:
+            _СПАМ_СОСТ = {}
+    return _СПАМ_СОСТ
+
+
+def _спам_сохранить(силой=False):
+    """Сложить состояние в ветку data — но НЕ на каждое сообщение.
+
+    ⚠️ _data_put — это два запроса к GitHub и КОММИТ. Писать им на каждую реплику в группе
+    значило бы тысячи коммитов в сутки и лишнюю секунду задержки у каждого сообщения.
+    Держим в памяти, сливаем раз в пять минут. Потеря последних минут при перезапуске не
+    страшна: худшее последствие — человек ещё день побудет «новичком».
+    """
+    global _СПАМ_ГРЯЗНО, _СПАМ_СЛИТО
+    if not _СПАМ_ГРЯЗНО:
+        return
+    if not силой and (time.time() - _СПАМ_СЛИТО) < СПАМ_СЛИВ_СЕК:
+        return
+    try:
+        _data_put(СПАМ_ФАЙЛ, _спам_состояние(), "наблюдение за новичками")
+        _СПАМ_ГРЯЗНО = False
+        _СПАМ_СЛИТО = time.time()
+    except Exception:
+        pass
+
+
+def спам_приметы(update, текст):
+    """Какие приметы сошлись и на сколько тянут. Пусто — значит смотреть не на что."""
+    global _СПАМ_ГРЯЗНО
+    u = getattr(update, 'effective_user', None)
+    ч = getattr(update, 'effective_chat', None)
+    if not u or not ч or getattr(ч, 'type', '') == 'private' or u.id == OWNER_ID:
+        return 0, [], None
+    сп = _спам_состояние()
+    к, л = str(ч.id), str(u.id)
+    зап = (сп.get(к) or {}).get(л)
+    сейчас = datetime.now()
+    if not зап:
+        сп.setdefault(к, {})[л] = {"первое": сейчас.isoformat(timespec='seconds'), "было": 1}
+        первое, было = сейчас, 0
+    else:
+        try:
+            первое = datetime.fromisoformat(зап.get("первое"))
+        except Exception:
+            первое = сейчас
+        было = int(зап.get("было") or 0)
+        зап["было"] = было + 1
+    _СПАМ_ГРЯЗНО = True
+    _спам_сохранить()
+    if (сейчас - первое).days >= СПАМ_ОКНО_ДНЕЙ:
+        return 0, [], первое                      # отнаблюдали, человек свой
+
+    вес, приметы = 0, []
+    есть_ссылка = bool(_СПАМ_ССЫЛКА.search(текст or '')) and not _СПАМ_СВОИ.search(текст or '')
+    ключ = _спам_ключ(текст)
+    # 🔴 самая надёжная примета: ровно этот текст уже писал ДРУГОЙ новичок. Спам всегда
+    # рассылают пачкой, и совпадение по двум разным людям почти не бывает случайным.
+    if ключ and len(ключ) > 25:
+        кто_уже = _СПАМ_ЭХО.setdefault(ключ, [])
+        if any(x != u.id for x in кто_уже):
+            вес += 4
+            приметы.append('этот же текст уже писал другой новичок')
+        if u.id not in кто_уже:
+            кто_уже.append(u.id)
+        if len(_СПАМ_ЭХО) > 3000:
+            for _k in list(_СПАМ_ЭХО)[:1000]:
+                _СПАМ_ЭХО.pop(_k, None)
+    if есть_ссылка and было == 0:
+        вес += 3
+        приметы.append('ПЕРВОЕ сообщение — и сразу со ссылкой')
+    elif есть_ссылка:
+        вес += 1
+        приметы.append('ссылка от новичка')
+    if есть_ссылка and not (u.username or '').strip():
+        вес += 1
+        приметы.append('ссылка при пустом профиле (нет ника)')
+    # слабые: добавляют вес, но в одиночку порога не берут — так и задумано
+    if _СПАМ_СЛАБЫЕ.search(текст or ''):
+        вес += 1
+        приметы.append('слова про заработок (слабая примета)')
+    return вес, приметы, первое
+
+
+async def спам_осмотр(update, context, текст):
+    """Осмотреть сообщение новичка и, если приметы сошлись, позвать владельца.
+
+    Ничего не удаляет и не молчит про свои сомнения: показывает, что именно насторожило.
+    Любой сбой внутри не должен мешать обычной работе бота — потому всё в try.
+    """
+    try:
+        if not (текст or '').strip():
+            return
+        вес, приметы, первое = спам_приметы(update, текст)
+        if вес < СПАМ_ПОРОГ or not приметы:
+            return
+        from telegram import InlineKeyboardButton as _КБ, InlineKeyboardMarkup as _КЛ
+        u, ч, м = update.effective_user, update.effective_chat, update.message
+        _вх = ''
+        try:
+            _сп = _data_get('chat_members.json', []) or []
+            _наш = [z for z in _сп if str(z.get('id')) == str(u.id) and z.get('что') == 'вошёл']
+            if _наш:
+                _вх = _наш[-1].get('когда') or ''
+        except Exception:
+            pass
+        # чат:сообщение:человек — три числа, всё нужное для «удалить» и «забанить».
+        # В callback_data Telegram даёт 64 байта; три числа с двоеточиями укладываются с запасом.
+        _пм = '%d:%d:%d' % (ч.id, м.message_id, u.id)
+        await context.bot.send_message(
+            OWNER_ID,
+            ('🛡 <b>Похоже на рекламу от новичка</b> (вес %d)' % вес) + chr(10) + chr(10) +
+            '<b>Кто:</b> %s' % кто_с_id(u, вид='html') + chr(10) +
+            ('<b>Зашёл:</b> %s' % html.escape(_вх) + chr(10) if _вх else '') +
+            ('<b>Первое слово:</b> %s' % (первое.strftime('%d.%m.%Y, %H:%M') if первое else '—')) + chr(10) +
+            '<b>Где:</b> %s' % html.escape((ч.title or str(ч.id))[:50]) + chr(10) + chr(10) +
+            '<b>Сошлось:</b>' + chr(10) + chr(10).join('· ' + html.escape(п) for п in приметы) + chr(10) + chr(10) +
+            '<blockquote>%s</blockquote>' % html.escape((текст or '')[:600]),
+            parse_mode='HTML', disable_web_page_preview=True,
+            reply_markup=_КЛ([[_КБ('🗑 удалить', callback_data='spam:del:' + _пм),
+                               _КБ('🚫 удалить и забанить', callback_data='spam:ban:' + _пм)],
+                              [_КБ('✅ свой, не трогать', callback_data='spam:ok:' + _пм)]]))
+    except Exception:
+        pass
+
+
+async def on_spam(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Решение владельца по подозрению: удалить / удалить и забанить / свой.
+
+    Каждое решение записывается — по ним и считается честная точность фильтра. Без этого
+    сторож незаметно сползает в бесполезность, и заметить это будет нечем.
+    """
+    q = update.callback_query
+    try:
+        await q.answer()
+    except Exception:
+        pass
+    try:
+        if q.from_user.id != OWNER_ID:
+            return
+        _, что, хвост = q.data.split(':', 2)
+        чат, смс, кто = [int(x) for x in хвост.split(':')]
+        итог = []
+        if что in ('del', 'ban'):
+            try:
+                await context.bot.delete_message(chat_id=чат, message_id=смс)
+                итог.append('сообщение удалено')
+            except Exception as e:
+                итог.append('удалить не вышло: %s' % str(e)[:60])
+        if что == 'ban':
+            try:
+                await context.bot.ban_chat_member(chat_id=чат, user_id=кто)
+                итог.append('человек забанен')
+            except Exception as e:
+                итог.append('забанить не вышло: %s' % str(e)[:60])
+        if что == 'ok':
+            итог.append('оставлено — свой')
+        try:
+            def _зап(o):
+                сп = o if isinstance(o, list) else []
+                сп.append({'d': _now_msk(), 'чат': чат, 'смс': смс, 'кто': кто,
+                           'решение': {'del': 'спам', 'ban': 'спам+бан', 'ok': 'свой'}[что]})
+                return сп[-2000:]
+            _data_atomic_mutate(СПАМ_РЕШЕНИЯ, _зап, 'решение по подозрению: %s' % что)
+        except Exception:
+            pass
+        try:
+            await q.edit_message_reply_markup(reply_markup=None)
+            await q.message.reply_text('✅ ' + '; '.join(итог))
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         # ⭐ НИШТЯЧОК прямо В КАНАЛЕ (Muslim Live и т.п.): это update.channel_post, а не update.message —
@@ -7746,6 +7970,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text or ""
     text = text.strip()
+
+    # 🛡 #178: осмотр сообщений новичков на рекламу. Стоит РАНО и ничего не решает сам —
+    # только считает приметы и, если сошлись, зовёт владельца с кнопками. Ни одной ветки
+    # ниже не трогает: свой возврат не делает, исключения глотает у себя.
+    try:
+        await спам_осмотр(update, context, text)
+    except Exception:
+        pass
 
     # 🎤 ГОЛОСОВОЕ/АУДИО. Стоит ПЕРЕД разбором DSOC, и это принципиально: у голосового нет
     # текста, значит до разбора обращения оно не доживёт — сперва расшифровка, потом решаем.
@@ -17671,6 +17903,7 @@ app.add_handler(CallbackQueryHandler(on_moderate, pattern=r'^mod:'))
 app.add_handler(CallbackQueryHandler(on_dsoc_back, pattern=r'^dsocback:'))
 app.add_handler(CallbackQueryHandler(on_neudacha, pattern=r'^neud:'))
 app.add_handler(CallbackQueryHandler(on_ctx, pattern=r'^ctx:'))
+app.add_handler(CallbackQueryHandler(on_spam, pattern=r'^spam:'))   # #178: решение владельца по подозрению на рекламу
 app.add_handler(CommandHandler("start", start_cmd))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
