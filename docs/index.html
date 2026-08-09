@@ -1548,7 +1548,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1331';
+const APPVER = 'v1332';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -15043,7 +15043,16 @@ async function openIsnadVersions(text, out, ref){
   const isVer=(ct)=>wins.some(w=>ct.indexOf(w)!==-1);
   const anchor=wins[Math.floor(wins.length/2)]||wins[0];
   const mKey=(fullCanon)=>{ const i=fullCanon.indexOf(anchor); return i>=0?fullCanon.slice(i, i+90):fullCanon.slice(-90); };   // ключ матна для дедупа повторов
-  const COLS=['bukhari','muslim','abudawud','tirmidhi','nasai','ibnmaja','malik','ahmad','darimi'];
+  // 🔴 09.08.2026, ошибка приложения A-234 (сообщил сам аппарат): открытие версий цепи тянуло
+  // ПОЛНОГО Ахмада — 25 МБ на телефон, молча, за одно нажатие. Здесь сборники грузятся целиком,
+  // чтобы поискать в них совпадение матна, и для восьми из девяти это терпимо, а для Ахмада нет.
+  // Ахмад ИСКЛЮЧЁН из этого перебора, и потерять мы ничего не теряем: ниже уже есть кнопка
+  // «🌐 Ещё версии по ВСЕЙ Мактабе» — она ищет на СЕРВЕРЕ и покрывает в том числе Ахмада, не
+  // выкачивая его на телефон. То есть путь к тем же версиям остался, просто он не берёт с
+  // человека 25 мегабайт трафика без спроса.
+  // Тот же разбор, что и в v1316, где из прогрева поиска убраны два великана: платит за это
+  // не приложение, а человек — деньгами, батареей и той самой сетью, которая нужна прямо сейчас.
+  const COLS=['bukhari','muslim','abudawud','tirmidhi','nasai','ibnmaja','malik','darimi'];
   const versions=[{coll:'этот хадис', num:'', chain:isnadNarrators(text), mk:mKey(canon(flat))}];
   for(const code of COLS){ if(versions.length>=9) break;
     try{ const arr=await loadByCode(code); for(const h of arr){ const ct=canon(h.text); if(isVer(ct)){ const ch=isnadNarrators(h.text); if(ch.length){ versions.push({coll:arOf(code)||code, num:h.num, chain:ch, mk:mKey(ct)}); } break; } } }catch(e){_тихо(e,"L14960")} }
