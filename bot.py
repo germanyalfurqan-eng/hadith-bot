@@ -6744,12 +6744,39 @@ async def _снять_кнопки_модерации(bot, chat_id, message_id, 
         pass
 
 
+_ВХОД_ВИДЕЛИ = {}          # (чат, человек, статус) -> когда сказали. Против задвоения.
+
+
 async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         from telegram import InlineKeyboardButton as _КБ, InlineKeyboardMarkup as _КЛ
         chat = update.effective_chat
         member = update.chat_member
         user = member.new_chat_member.user
+        # 🔴 09.08.2026, владелец: «ты дублируешь, проверь в журнале». Проверил — и он прав:
+        # из последних входов ДЕВЯТЬ задвоены (один человек, то же событие, та же минута).
+        # Причина: мы смотрели только НОВЫЙ статус, а Telegram шлёт chat_member и тогда, когда
+        # статус не менялся (сменились права, звание, срок ограничения). Такое обновление —
+        # не событие, а уточнение, и объявлять по нему «вошёл» нельзя.
+        # Две заслонки, потому что одной мало:
+        #   ① переход: было НЕ членом → стало членом. Если было = стало, это не вход;
+        #   ② короткая память: тот же человек, тот же чат, тот же статус за 10 минут — молчим.
+        #      Она ловит настоящие повторы Telegram, которые ① не поймает (напр. left→member
+        #      приходит дважды подряд).
+        try:
+            _было = getattr(getattr(member, 'old_chat_member', None), 'status', None)
+            _стало = member.new_chat_member.status
+            if _было is not None and _было == _стало:
+                return
+            _клч = (chat.id if chat else 0, user.id, _стало)
+            _тепер = time.time()
+            for _k in [k for k, v in _ВХОД_ВИДЕЛИ.items() if _тепер - v > 3600]:
+                _ВХОД_ВИДЕЛИ.pop(_k, None)
+            if _тепер - _ВХОД_ВИДЕЛИ.get(_клч, 0) < 600:
+                return
+            _ВХОД_ВИДЕЛИ[_клч] = _тепер
+        except Exception:
+            pass
         now = datetime.now().strftime("%d.%m.%Y, %H:%M")
         name = user.full_name
         uid = user.id
@@ -6822,6 +6849,36 @@ async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                                    disable_web_page_preview=True, reply_markup=_kb)
         if _kb and _пост:
             asyncio.create_task(_снять_кнопки_модерации(context.bot, LOG_CHAT_ID, _пост.message_id))
+        # 🔴 ДОЛГ С 22.06.2026. Владелец просил это ПЯТЬ раз: #333 («чтобы бот Муслимун писал
+        # и внизу кнопку предлагал забанить сразу»), #570, #574 («до сих пор не сделано»),
+        # #614 («две кнопки, которые могут нажимать админы»), #660 («куда делись кнопки бана
+        # и ограничений тут»). Всё это время кнопки были — но ТОЛЬКО в его личном журнале.
+        # То есть банить мог он один, а любой другой админ чата — нет, хотя просили именно это.
+        # Теперь такое же сообщение с теми же кнопками уходит В САМ ЧАТ, откуда пришёл человек.
+        # Право нажать проверяется у Telegram по КАЖДОМУ нажатию (см. on_moderate): нажать
+        # может владелец и админ ТОГО чата, остальным — вежливый отказ.
+        # В чат идёт КОРОТКАЯ строка: там живые люди, а не журнал, и служебные теги им ни к чему.
+        if _kb and chat and chat.id != LOG_CHAT_ID:
+            try:
+                _вчат = await context.bot.send_message(
+                    chat_id=chat.id,
+                    text='👤 %s зашёл в чат.\n<i>Кнопки ниже — для админов.</i>' % _ник,
+                    parse_mode='HTML', disable_web_page_preview=True, reply_markup=_kb)
+                # держим рычаги СУТКИ, а не пять минут: админ не сидит в чате круглосуточно,
+                # и ровно на это была жалоба #660 — «куда делись кнопки».
+                asyncio.create_task(_снять_кнопки_модерации(context.bot, chat.id,
+                                                            _вчат.message_id, задержка=86400))
+            except Exception as e:
+                # молчать нельзя: если бот не может писать в чат, владелец должен знать причину,
+                # а не гадать, почему кнопок опять нет
+                try:
+                    await context.bot.send_message(
+                        LOG_CHAT_ID,
+                        '⚠️ Кнопки бана в сам чат «%s» не ушли: %s\n'
+                        'Обычно это значит, что боту не выдали право писать/банить в этом чате.'
+                        % (_чат_имя, str(e)[:160]))
+                except Exception:
+                    pass
     except: pass
 
 
