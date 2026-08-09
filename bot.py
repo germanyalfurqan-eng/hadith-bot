@@ -14977,6 +14977,81 @@ async def _api_serve(application=None):
         except Exception:
             return текст
 
+    async def anons_povtor(r):
+        """Отпустить заявку на публикацию версии, которая ТАК И НЕ ВЫШЛА в канал.
+
+        🔴 09.08.2026, v1338. Заявка (_channel_claim) ставится ДО поста — иначе не закрыть
+        гонку трёх путей. Значит между «застолбил» и «отправил» есть щель, и если в эту щель
+        контейнер перезапустится (а он перезапускается на КАЖДОЙ выкатке bot.py — у меня их
+        было три за полчаса), версия навсегда числится запощенной, а поста нет. Ровно то, за
+        что был выговор В-41/В-42: v1253…v1256 числились, а в канале стоял v1252.
+        Откатить это изнутри нельзя ничем: процесс убит, никакой except не сработает.
+
+        ПОЧЕМУ НЕ АВТОМАТОМ. Авто-переиздание брошенных заявок уже писали 06.08 — и оно за
+        сорок минут объявило брошенной всю историю, полезло публиковать v860 и девять раз
+        подряд написало владельцу одно и то же. Его вырезали с правилом: механизм, который САМ
+        решает что-то отправить в канал, должен быть ОДИН — очередь.
+        Здесь никто ничего не публикует. Эта ручка только СНИМАЕТ ЗАМОК с одной названной
+        версии, и публикует её потом та же самая очередь, обычным своим ходом.
+
+        ⚠️ Снять надо ТРИ следа, а не один: id из app_post_ids, текст из app_post_notes и —
+        главное — app_post.note, если там лежит он же. Иначе повторная заявка упрётся в
+        проверку схожести (совпадение 1.0 с «последней запощенной») и будет отвергнута.
+        Существующий откат пустышки этого третьего следа не снимает — ему и не надо было,
+        пустышку всё равно не публикуют.
+        """
+        if not application or not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            return _cors(web.json_response({'error': 'bad_json'}, status=400))
+        if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        вид = str(body.get('id', '')).strip()
+        if not вид:
+            return _cors(web.json_response({'error': 'нужен id версии'}, status=400))
+        j = _journal_load() or {}
+        номер = (j.get('app_post_msgids') or {}).get(вид)
+        if номер:
+            return _cors(web.json_response({'ok': False, 'причина': 'уже вышло',
+                                            'номер': номер}))
+        нота = ''
+        try:
+            rq = requests.get(
+                f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_notes_queue.json",
+                headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {},
+                timeout=10)
+            if rq.status_code == 200:
+                оч = json.loads(base64.b64decode(rq.json().get("content", "")).decode("utf-8") or "[]")
+                нота = next((x.get('note', '') for x in оч if x.get('id') == вид), '')
+        except Exception:
+            нота = ''
+        if not нота:
+            return _cors(web.json_response({'ok': False, 'причина': 'в очереди такой версии нет'}))
+
+        def _снять(obj, _id=вид, _n=нота):
+            obj = obj or {}
+            obj["app_post_ids"] = [x for x in (obj.get("app_post_ids") or []) if x != _id]
+            obj["app_post_notes"] = [x for x in (obj.get("app_post_notes") or [])
+                                     if (x or "").strip() != (_n or "").strip()]
+            ап = obj.get("app_post") or {}
+            if (ап.get("note") or "").strip() == (_n or "").strip():
+                ап["note"] = ""
+                obj["app_post"] = ап
+            return obj
+
+        try:
+            ок, новый = _data_atomic_mutate("journal.json", _снять, "снят замок публикации " + вид)
+        except Exception as e:
+            return _cors(web.json_response({'ok': False, 'причина': str(e)[:120]}))
+        if ок and новый is not None and _journal_cache is not None:
+            _journal_cache["app_post_ids"] = новый.get("app_post_ids", [])
+            _journal_cache["app_post_notes"] = новый.get("app_post_notes", [])
+            _journal_cache["app_post"] = новый.get("app_post", {})
+        return _cors(web.json_response({'ok': bool(ок), 'id': вид,
+                                        'дальше': 'очередь опубликует сама в ближайшие 5 минут'}))
+
     async def skazat(r):
         """Сказать в конкретный чат, при желании — ответом на конкретное сообщение.
         Понадобилось четвёртый раз за день; каждый раз приспосабливать чужой эндпоинт —
@@ -16981,7 +17056,7 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True}))
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/samotest', samotest), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/samotest', samotest), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
