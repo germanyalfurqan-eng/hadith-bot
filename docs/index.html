@@ -1548,7 +1548,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1332';
+const APPVER = 'v1333';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -15052,10 +15052,36 @@ async function openIsnadVersions(text, out, ref){
   // человека 25 мегабайт трафика без спроса.
   // Тот же разбор, что и в v1316, где из прогрева поиска убраны два великана: платит за это
   // не приложение, а человек — деньгами, батареей и той самой сетью, которая нужна прямо сейчас.
-  const COLS=['bukhari','muslim','abudawud','tirmidhi','nasai','ibnmaja','malik','darimi'];
+  const COLS=['bukhari','muslim','abudawud','tirmidhi','nasai','ibnmaja','malik','ahmad','darimi'];
   const versions=[{coll:'этот хадис', num:'', chain:isnadNarrators(text), mk:mKey(canon(flat))}];
+  // 🔴 09.08.2026, слово владельца (#229) после ошибки A-234: «когда поиск вбиваешь, должен
+  // открывать ВСЮ базу, просто по чуть-чуть. Дополнительно нажимать „искать в Мактабе“ не надо».
+  // Он прав, а мой первый заход был неверен: я убрал Ахмада из перебора и переложил работу на
+  // человека — лишнее нажатие. Убрать источник, чтобы не грузить его, — это не решение задачи,
+  // это отказ от неё.
+  // ПРАВИЛЬНО: тот же полный перебор, но ПО ЧАСТЯМ. Ахмад у нас уже нарезан на 28 кусков по
+  // ~900 КБ (ahmad/<номер//1000>.json, заведено при ошибке A-136). Берём их по одному, между
+  // кусками отдаём управление отрисовке — приложение не замирает, и 25 МБ разом никто не платит.
+  // Ранний выход на девяти версиях остаётся: обычно хватает первых кусков.
+  const _вер=(code, num, t)=>{ const ct=canon(t); if(!isVer(ct)) return false;
+    const ch=isnadNarrators(t); if(!ch.length) return false;
+    versions.push({coll:arOf(code)||code, num:String(num), chain:ch, mk:mKey(ct)}); return true; };
   for(const code of COLS){ if(versions.length>=9) break;
-    try{ const arr=await loadByCode(code); for(const h of arr){ const ct=canon(h.text); if(isVer(ct)){ const ch=isnadNarrators(h.text); if(ch.length){ versions.push({coll:arOf(code)||code, num:h.num, chain:ch, mk:mKey(ct)}); } break; } } }catch(e){_тихо(e,"L14960")} }
+    try{
+      if(code==='ahmad'){
+        for(let b=0; b<=27 && versions.length<9; b++){
+          let часть=null;
+          try{ часть=await cachedFetchJSON('./ahmad/'+b+'.json', 60000, {silent:true}); }
+          catch(e){ continue; }                      // одна часть не пришла — идём дальше
+          if(!часть) continue;
+          for(const n in часть){ if(_вер(code, n, (часть[n]||[])[0]||'')) break; }
+          await _yield();                            // дать приложению дышать между кусками
+        }
+        continue;
+      }
+      const arr=await loadByCode(code);
+      for(const h of arr){ if(_вер(code, h.num, h.text)) break; }
+    }catch(e){_тихо(e,"L14960")} }
   const st={uniqM:false, mkDone:false, busy:false, tree:false, treeMode:null};
   const render=()=>{
     // M329b (заявка: «уникальная версия — ГДЕ передаётся»): ОДИНАКОВЫЕ цепочки СЛИВАЮТСЯ в одну запись со списком источников
