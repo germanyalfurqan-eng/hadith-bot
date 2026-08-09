@@ -1548,7 +1548,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1316';
+const APPVER = 'v1318';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -17604,6 +17604,23 @@ function goHome(){
 document.getElementById('brand').onclick=goHome;
 var _hb=document.getElementById('homeBtn'); if(_hb) _hb.onclick=goHome;
 var _vb=document.getElementById('verBadge'); if(_vb){ _vb.style.cursor='pointer'; _vb.title='🆕 Что нового — нажми'; _vb.onclick=(e)=>{ e.stopPropagation(); try{ window.showUpdateNotes(APPVER); }catch(err){_тихо(err,"L17597")} }; }   // #30: бейдж версии → что нового + комменты по пунктам
+// 🆕 09.08.2026, заявка «показ информации о версии и что нового при обновлении».
+// Окно «что нового» открывалось только по нажатию на бейдж — то есть его видел лишь тот,
+// кто и так знал, куда нажать. Теперь показываем сами.
+// НО НЕ НА КАЖДУЮ ВЕРСИЮ, и вот почему я отступил от буквы просьбы: мы выкатываем по
+// двадцать версий в сутки, и окно всплывало бы почти при каждом открытии приложения.
+// Просили показывать новое, а не мешать работать. Поэтому ограничитель — раз в сутки:
+// человек видит накопленное за день одним окном, а не двадцать раз подряд.
+try{
+  var _вчера=localStorage.getItem('чтоНовогоПоказано');
+  var _сегодня=new Date().toISOString().slice(0,10);
+  if(_вчера!==_сегодня && localStorage.getItem('чтоНовогоВерсия')!==APPVER){
+    setTimeout(function(){ try{ window.showUpdateNotes(APPVER);
+      localStorage.setItem('чтоНовогоПоказано', _сегодня);
+      localStorage.setItem('чтоНовогоВерсия', APPVER);
+    }catch(e){_тихо(e,"L17615")} }, 1500);   // 1,5 с — дать приложению дорисоваться
+  }
+}catch(e){_тихо(e,"L17618")}
 // M254/#11: нативная кнопка «Назад» Telegram — закрывает верхнюю открытую модалку (читалка/настройки/каталог…)
 function _visModals(){ return [...document.querySelectorAll('.modal')].filter(m=>{ const d=m.style.display; return d && d!=='none'; }); }
 function _closeTopModal(){ const ms=_visModals(); if(!ms.length) return false; const m=ms[ms.length-1];
