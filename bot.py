@@ -52,6 +52,12 @@ import html                      # 27.07.2026: был только `from html im
 from html import unescape        # html.escape в ответе «раг» падал с NameError. ТРЕТИЙ случай
                                  # одного класса за два дня (math.sqrt, loop, html): имя используется,
                                  # а в области видимости его нет. Ловится статически — см. imya_storozh.py
+import math                     # 09.08.2026: сборка ролика делит текст на кадры (math.ceil)
+import tempfile                 # 09.08.2026: своя папка под кадры ролика, стирается после отправки
+import urllib.parse             # 09.08.2026: quote() для адреса картинки. Работало и так —
+#                                 urllib.request тянет parse за собой, — но держаться за
+#                                 побочный эффект чужого импорта нельзя: уберут строку выше,
+#                                 и мой вызов упадёт в месте, к которому не имеет отношения.
 import urllib.request           # 27.07.2026: сторож имён нашёл ЧЕТВЁРТЫЙ случай того же класса —
 from urllib.parse import parse_qsl   # в /api/qaudio зовётся urllib.request, а импортирован был
                                      # только urllib.parse. Аудио Корана упало бы с NameError.
@@ -5183,6 +5189,142 @@ async def озвучить(текст, путь, голос=None):
         return None
 
 
+# ===== 🎬 ВИДЕО ИЗ ТЕКСТА (заявки #234/#235, «дыра в умении») =====
+# Владельца просили: «сделай видео из этого, озвучь сам, картинки по теме сам подумай, для
+# ютуб шортса». Помощник ответил «не могу» — и был прав по факту, инструмента не было.
+# Владелец: «нужна не запись, а СПОСОБНОСТЬ».
+#
+# Собрано из того, что уже есть и уже проверено:
+#   · голос — наш же `озвучить()` (edge-tts, запасной gTTS);
+#   · картинки — image.pollinations.ai: бесплатно, без ключа, вертикальный кадр.
+#     Проверено живьём 09.08.2026 до того, как писать код: 200, image/jpeg, 40 КБ;
+#   · сборка — ffmpeg, он у нас уже стоит и используется для аудио.
+#
+# ⚠️ ЧТО РИСУЕМ — не вопрос вкуса. Картинки к исламскому тексту не должны изображать людей
+# и животных, и уж тем более пророков или сподвижников. Поэтому в подсказку жёстко зашиты
+# орнамент, каллиграфический мотив, силуэт минарета, свет, природа — и прямой запрет на
+# лица и фигуры. Это не украшение правила, а само правило: одна «красивая» картинка с
+# человеком превратит полезный ролик в то, что нельзя показывать.
+_ВИДЕО_ЗАПРЕТ = ('no people, no faces, no human figures, no animals, no idols, '
+                 'no text, no letters, no watermark')
+_ВИДЕО_СТИЛЬ = ('islamic geometric ornament, arabesque pattern, mosque silhouette at dusk, '
+                'soft green and gold light, calligraphic texture, serene, cinematic, vertical')
+
+
+def _видео_сцены(текст, сколько=5):
+    """Разбить текст на короткие сцены — по предложениям, а не по числу знаков.
+
+    Резать по знакам значило бы обрывать фразу на полуслове, и голос читал бы половину
+    мысли под одной картинкой, половину под другой.
+    """
+    куски = [к.strip() for к in re.split(r'(?<=[.!?…])\s+', (текст or '').strip()) if к.strip()]
+    if not куски:
+        return []
+    if len(куски) <= сколько:
+        return куски
+    # склеиваем соседние, пока не станет ровно `сколько` сцен: длинные остаются длинными
+    шаг = math.ceil(len(куски) / сколько)
+    return [' '.join(куски[i:i + шаг]) for i in range(0, len(куски), шаг)][:сколько]
+
+
+def _видео_картинка(подсказка, путь, ш=720, в=1280, таймаут=90):
+    """Одна картинка по описанию. None — если не вышло; звать будем по одной, без спешки."""
+    зпр = '%s, %s, %s' % (подсказка, _ВИДЕО_СТИЛЬ, _ВИДЕО_ЗАПРЕТ)
+    url = ('https://image.pollinations.ai/prompt/%s?width=%d&height=%d&nologo=true&safe=true'
+           % (urllib.parse.quote(зпр[:700]), ш, в))
+    try:
+        r = requests.get(url, timeout=таймаут)
+        if r.status_code == 200 and r.content and len(r.content) > 5000:
+            with open(путь, 'wb') as f:
+                f.write(r.content)
+            return путь
+    except Exception:
+        pass
+    return None
+
+
+def _видео_собрать(картинки, звук, длительности, путь):
+    """Слайд-шоу под звук. Возвращает путь либо None.
+
+    Длительность каждого кадра — по длине его текста: картинка обязана держаться ровно
+    столько, сколько про неё говорят, иначе видео разъезжается со звуком.
+    """
+    if not картинки:
+        return None
+    список = путь + '.txt'
+    with io.open(список, 'w', encoding='utf-8') as f:
+        for п, д in zip(картинки, длительности):
+            f.write("file '%s'\nduration %.2f\n" % (п.replace('\\', '/'), max(1.2, д)))
+        f.write("file '%s'\n" % картинки[-1].replace('\\', '/'))   # ffmpeg требует повтор последнего
+    цепь = ('scale=720:1280:force_original_aspect_ratio=increase,'
+            'crop=720:1280,format=yuv420p')
+    цмд = [_ffmpeg_bin(), '-y', '-f', 'concat', '-safe', '0', '-i', список,
+           '-i', звук, '-vf', цепь, '-r', '25',
+           '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26',
+           '-c:a', 'aac', '-b:a', '128k', '-shortest', путь]
+    try:
+        r = subprocess.run(цмд, capture_output=True, timeout=300)
+        if r.returncode == 0 and os.path.exists(путь) and os.path.getsize(путь) > 20000:
+            return путь
+        print('ffmpeg видео:', (r.stderr or b'').decode('utf-8', 'ignore')[-500:])
+    except Exception as e:
+        print('ffmpeg видео упал:', e)
+    return None
+
+
+async def сделать_видео(текст, папка, сообщить=None):
+    """Текст → вертикальный ролик со своей озвучкой и своими картинками.
+
+    Возвращает (путь_к_mp4, отчёт) либо (None, причина). Ничего не публикует сам.
+    `сообщить` — необязательная корутина для показа хода работы: без неё человек полторы
+    минуты смотрит в пустоту и решает, что бот умер.
+    """
+    сцены = _видео_сцены(текст)
+    if not сцены:
+        return None, 'нечего показывать — текст пустой'
+    if сообщить:
+        try:
+            await сообщить('🎬 Делаю ролик: %d кадров, свой голос, свои картинки. '
+                           'Займёт около полутора минут.' % len(сцены))
+        except Exception:
+            pass
+    звук = os.path.join(папка, 'video_voice.mp3')
+    if not await озвучить(текст, звук):
+        return None, 'озвучка не собралась'
+    try:
+        длина_звука = float(subprocess.run(
+            [_ffmpeg_bin().replace('ffmpeg', 'ffprobe'), '-v', 'error', '-show_entries',
+             'format=duration', '-of', 'csv=p=0', звук],
+            capture_output=True, timeout=60).stdout.decode().strip() or 0)
+    except Exception:
+        длина_звука = 0
+    знаков = sum(len(с) for с in сцены) or 1
+    # если длительность звука узнать не вышло — считаем по словам, а не бросаем работу
+    полная = длина_звука if длина_звука > 1 else max(8.0, знаков / 14.0)
+    длительности = [полная * len(с) / знаков for с in сцены]
+    картинки = []
+    for i, с in enumerate(сцены):
+        п = os.path.join(папка, 'video_%d.jpg' % i)
+        if _видео_картинка(с[:220], п):
+            картинки.append(п)
+        if сообщить and i == 0:
+            try:
+                await сообщить('🖼 Кадры рисуются… (%d из %d)' % (len(картинки), len(сцены)))
+            except Exception:
+                pass
+    if not картинки:
+        return None, 'ни одной картинки не нарисовалось'
+    # кадров может выйти меньше, чем сцен: тогда время делим между теми, что есть
+    if len(картинки) != len(сцены):
+        длительности = [полная / len(картинки)] * len(картинки)
+    путь = os.path.join(папка, 'shorts.mp4')
+    if not _видео_собрать(картинки, звук, длительности, путь):
+        return None, 'сборка не получилась'
+    return путь, ('🎬 Готово: %d кадров, %.0f сек, вертикально 720×1280.\n'
+                  '🖼 Картинки — орнамент и силуэты: людей и лиц в кадре нет намеренно.'
+                  % (len(картинки), полная))
+
+
 # 📖 ЧТЕЦЫ КОРАНА. Синтез не знает таджвида — протяжений, слияний, остановок; он читает
 # буквы. Менять ему голос бессмысленно: выбираешь лишь акцент, с которым будет неправильно.
 # Поэтому аяты звучат голосом настоящего чтеца. Оба адреса проверены живьём 05.08.2026.
@@ -7978,6 +8120,50 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await спам_осмотр(update, context, text)
     except Exception:
         pass
+
+    # 🎬 #234/#235: «видео <текст>» либо ответ на сообщение словом «видео» — вертикальный
+    # ролик со своей озвучкой и своими картинками. Пока только владельцу: рисование пяти
+    # кадров и сборка занимают около полутора минут машинного времени, и открывать это всем
+    # до того, как мы посмотрели на первые ролики, — значит узнать о нагрузке из аварии.
+    try:
+        _вм = re.match(r'^\s*видео\b[:\s]*(.*)$', text, re.I | re.S)
+        if _вм and update.effective_user and update.effective_user.id == OWNER_ID:
+            _исх = (_вм.group(1) or '').strip()
+            if not _исх and update.message.reply_to_message:
+                _r = update.message.reply_to_message
+                _исх = ((_r.text or _r.caption or '')).strip()
+            if len(_исх) < 20:
+                await update.message.reply_text(
+                    'Дай текст: «видео <текст>» либо ответь этим словом на сообщение, '
+                    'из которого делать ролик. Из двух слов ролика не выйдет.')
+                return
+            _папка = tempfile.mkdtemp(prefix='shorts_')
+            try:
+                async def _ход(с):
+                    try:
+                        await update.message.reply_text(с)
+                    except Exception:
+                        pass
+                _путь, _отчёт = await сделать_видео(_исх, _папка, _ход)
+                if not _путь:
+                    await update.message.reply_text('🎬 Не получилось: %s.' % _отчёт)
+                else:
+                    with open(_путь, 'rb') as _f:
+                        await context.bot.send_video(update.effective_chat.id, _f,
+                                                     caption=_отчёт[:1000],
+                                                     supports_streaming=True)
+            finally:
+                try:
+                    shutil.rmtree(_папка, ignore_errors=True)
+                except Exception:
+                    pass
+            return
+    except Exception as _e:
+        try:
+            await update.message.reply_text('🎬 Сорвалось на середине: %s' % str(_e)[:200])
+        except Exception:
+            pass
+        return
 
     # 🎤 ГОЛОСОВОЕ/АУДИО. Стоит ПЕРЕД разбором DSOC, и это принципиально: у голосового нет
     # текста, значит до разбора обращения оно не доживёт — сперва расшифровка, потом решаем.
