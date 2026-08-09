@@ -7979,8 +7979,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _рп = update.message.reply_to_message
             if _рп:
                 _отм = {'смс': _рп.message_id,
-                        'кто': (getattr(getattr(_рп, 'from_user', None), 'first_name', '')
-                                or 'кто-то'),
+                        # #232: раньше клали ОБРЫВОК имени — по нему человеку не написать.
+                        # Кладём его целиком, а называем одним общим правилом.
+                        'кто': кто_с_id(getattr(_рп, 'from_user', None), вид='plain') or 'кто-то',
                         'текст': ((getattr(_рп, 'text', None)
                                    or getattr(_рп, 'caption', None) or '')[:1200])}
             _н = dsoc_позвать_клода(_чид, update.message.message_id, text.strip(),
@@ -8027,18 +8028,16 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not _можно:
             try:
                 _кто = update.effective_user
-                _имя = ('@' + _кто.username) if (_кто and _кто.username) else (
-                    (_кто.first_name if _кто else '') or 'без имени')
-                _ид = _кто.id if _кто else 0
+                _имя = кто_с_id(_кто, вид='html')   # #232: имя · @ник · нажимаемый номер
                 await context.bot.send_message(
                     OWNER_ID,
                     ('🚫 <b>Не пустил к помощнику</b>' + '\\n\\n' +
-                     '<b>Кто:</b> %s · <code>%s</code>' + '\\n' +
+                     '<b>Кто:</b> %s' + '\\n' +
                      '<b>Причина:</b> %s' + '\\n' +
                      '<b>Просил:</b> %s' + '\\n\\n' +
                      'Пустить: ответь на его сообщение словами <b>DSOC пусти</b>.' + '\\n' +
                      'Закрыть навсегда: <b>DSOC запрети</b>.')
-                    % (_имя, _ид, _почему, (text or '')[:200]),
+                    % (_имя, _почему, (text or '')[:200]),
                     parse_mode='HTML')
             except Exception:
                 pass
@@ -8069,7 +8068,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if _ц is None:
                 await update.message.reply_text('Не вижу, чьё это сообщение — у него нет автора.')
                 return
-            _имя2 = ('@' + _ц.username) if _ц.username else (_ц.first_name or str(_ц.id))
+            _имя2 = кто_с_id(_ц, вид='plain')   # #232: имя · @ник · номер (тут разметки нет)
             _слово = _к.group(1).lower().replace(' ', '')
             # ⚠️ РЕШАЕМ ПО НАЧАЛУ СЛОВА, А НЕ ПО ТОЧНОМУ СОВПАДЕНИЮ. Прежний список ждал ровно
             # «пусти»/«разреши»/«вбелый»; стоило добавить живые формы — и «дай доступ» упало бы
@@ -8626,8 +8625,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _р = update.message.reply_to_message
                 if _р:
                     _отм = {'смс': _р.message_id,
-                            'кто': (getattr(getattr(_р, 'from_user', None), 'first_name', '')
-                                    or 'кто-то'),
+                            'кто': кто_с_id(getattr(_р, 'from_user', None), вид='plain') or 'кто-то',   # #232
                             'текст': ((getattr(_р, 'text', None)
                                        or getattr(_р, 'caption', None) or '')[:1200])}
             except Exception:
@@ -8643,7 +8641,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     % (_н, (_dsoc or '')[:900],
                        ("\n<b>Отмечено им:</b> «%s» — %s\nhttps://t.me/c/%s/%s\n"
                         % ((_отм.get('текст') or '')[:400].replace('<', '&lt;'),
-                           _отм.get('кто') or '', str(chat_id).replace('-100', ''),
+                           (_отм.get('кто') or '').replace('<', '&lt;'), str(chat_id).replace('-100', ''),
                            _отм.get('смс'))) if _отм.get('текст') else '',
                        str(chat_id).replace('-100', ''), update.message.message_id),
                     parse_mode='HTML', disable_web_page_preview=True)
@@ -8782,15 +8780,15 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             DSOC_ОТКАЗ_СКАЗАН[_ид_к] = _тепер
             try:
                 _кт = update.effective_user
-                _им = ('@' + _кт.username) if (_кт and _кт.username) else ((_кт.first_name if _кт else '') or 'без имени')
+                _им = кто_с_id(_кт, вид='html')   # #232: имя · @ник · нажимаемый номер
                 await context.bot.send_message(
                     OWNER_ID,
                     ('🚫 <b>Не пустил к помощнику</b>' + chr(10) + chr(10) +
-                     '<b>Кто:</b> %s · <code>%s</code>' + chr(10) +
+                     '<b>Кто:</b> %s' + chr(10) +
                      '<b>Причина:</b> %s' + chr(10) +
                      '<b>Просил:</b> %s' + chr(10) + chr(10) +
                      'Пустить: ответь на его сообщение «DSOC пусти».')
-                    % (_им, (_кт.id if _кт else 0), _пч, (text or '')[:200]),
+                    % (_им, _пч, (text or '')[:200]),
                     parse_mode='HTML')
             except Exception:
                 pass
@@ -12980,6 +12978,70 @@ def tg_user_dict(update):
         return None
     return {"id": u.id, "username": u.username or ""}
 
+
+def tg_full_user(update):
+    """То же, но С ИМЕНЕМ. tg_user_dict имя не берёт вовсе — он для журнала расхода, где
+    важен только счёт. А владельцу человека надо НАЗВАТЬ (#232), и по одному @нику без имени
+    в списке из двадцати строк не разберёшься."""
+    u = getattr(update, "effective_user", None)
+    if not u:
+        return None
+    return {"id": u.id, "username": u.username or "",
+            "first_name": getattr(u, "first_name", "") or "",
+            "last_name": getattr(u, "last_name", "") or ""}
+
+
+# 👤 КАК НАЗЫВАТЬ ЧЕЛОВЕКА В СООБЩЕНИЯХ ВЛАДЕЛЬЦУ (заявки #231/#232, 09.08.2026).
+# Владелец: «почему не показывает помимо имени id, причём кликабельно, чтобы я мог в личке
+# написать человеку» и следом — «ВЕЗДЕ, где отображаются имена пользователей».
+# Было три разных способа назвать человека, и ни один не годился целиком:
+#   · есть @username → «Имя @username» — ни id, ни ссылки: написать в личку не с чего,
+#     а команда `написать <ID>` требует именно числа;
+#   · нет @username → «[Имя](tg://user?id=…)» — нажать можно, но САМОГО ЧИСЛА не видно,
+#     а его надо скопировать в `написать` и `бан`;
+#   · запасной путь без разметки → голый id без имени.
+# Теперь один способ на всё: имя, @username если есть, и НОМЕР — видимый и нажимаемый.
+# Видимый нужен, чтобы скопировать; нажимаемый — чтобы открыть человека одним касанием.
+# Уходит это ТОЛЬКО в личный журнал владельца (LOG_CHAT_ID). Наружу id людей не показываем
+# нигде — это его же закон о персональных данных.
+def _мд_экран(с):
+    """Обезвредить имя для Markdown: у людей в именах бывают _ * [ ] ` — разметка ломается."""
+    return re.sub(r'([_*\[\]`])', r'\\\1', str(с or ''))
+
+
+def кто_с_id(user, вид="md"):
+    """Человек одной строкой: имя · @username · номер (видимый и нажимаемый).
+
+    user — dict (id/username/first_name/last_name) либо объект Telegram-пользователя.
+    вид: 'md' — Markdown, 'html' — HTML, 'plain' — без разметки (запасной путь, где
+    разметка отключена: сообщение важнее красоты).
+    Три вида, а не три функции: правило одно, отличается только одёжка (З-33).
+    """
+    if user is None:
+        return "аноним"
+    if not isinstance(user, dict):
+        user = {"id": getattr(user, "id", None),
+                "username": getattr(user, "username", "") or "",
+                "first_name": getattr(user, "first_name", "") or "",
+                "last_name": getattr(user, "last_name", "") or ""}
+    uid = user.get("id")
+    имя = ((user.get("first_name") or "") + " " + (user.get("last_name") or "")).strip()
+    ник = user.get("username") or ""
+    чист = {"md": _мд_экран, "html": html.escape}.get(вид, lambda s: s)
+    части = []
+    # ИМЯ — нажимаемое: одно касание открывает человека, и можно писать в личку.
+    if имя:
+        части.append({"md": "[%s](tg://user?id=%s)" % (чист(имя), uid),
+                      "html": '<a href="tg://user?id=%s">%s</a>' % (uid, чист(имя))}.get(вид, имя)
+                     if uid else чист(имя))
+    if ник:
+        части.append("@" + ник)
+    # НОМЕР — видимый и в блоке для копирования: он нужен руками, для `написать <ID>` и `бан <ID>`.
+    # Ссылка вместо числа тут не годится: скопировать из ссылки нечего.
+    if uid:
+        части.append({"md": "`%s`" % uid, "html": "<code>%s</code>" % uid}.get(вид, str(uid)))
+    return " · ".join(части) if части else "аноним"
+
 # ---- Rate-limit (в памяти, на пользователя+функцию) ----
 _rl = collections.defaultdict(list)
 # ---- ЧАСОВОЙ лимит ИИ (контроль расхода ключа): аноним << app-юзер < whitelist < владелец(∞) ----
@@ -13454,12 +13516,8 @@ async def log_bot_ai(update, context, feat="ботяра", ai_text=""):
         except Exception:
             pass
         uid = (user or {}).get("id")
-        if user and user.get("username"):
-            who = "@" + user["username"]
-        elif uid:
-            who = f"[{uid}](tg://user?id={uid})"
-        else:
-            who = "аноним"
+        # #232: было либо «@ник» без номера, либо номер без имени. Теперь всё сразу.
+        who = кто_с_id(tg_full_user(update) or user)
         ch = update.effective_chat
         where = ""
         if ch and getattr(ch, "type", "") != "private":
@@ -13945,14 +14003,7 @@ async def _api_serve(application=None):
         if not application:
             return
         uid = (user or {}).get("id")
-        _nm = ((user or {}).get("first_name", "") + " " + (user or {}).get("last_name", "")).strip()
-        _nm = re.sub(r"[*_`\[\]()]", "", _nm)   # #312: чистим Markdown-спецсимволы в имени
-        if user and user.get("username"):
-            who = (f"{_nm} " if _nm else "") + "@" + user["username"]   # #312: ИМЯ + @username
-        elif uid:
-            who = f"[{_nm or uid}](tg://user?id={uid})"   # #312: кликабельно — имя (или id) → человек
-        else:
-            who = "аноним"
+        who = кто_с_id(user)   # #231/#232: имя · @ник · НОМЕР — видимый (скопировать) и нажимаемый (открыть личку)
         # #414/#420 (повтор-жалоба владельца, скрин 01.07): раньше ЖЁСТКО писали «DeepSeek, ключ потрачен» для
         # ЛЮБОГО свежего ответа — даже когда реально ответил бесплатный Groq/Gemini. Теперь берём модель из ответа.
         if not fresh:
@@ -13983,7 +14034,7 @@ async def _api_serve(application=None):
         except Exception:
             # B-004 «can't parse entities»: спецсимвол (_ * [ ] ` ) в имени/запросе ломал Markdown → шлём БЕЗ разметки, сообщение НЕ теряем
             try:
-                who_plain = ("@" + user["username"]) if (user and user.get("username")) else (str(uid) if uid else "аноним")
+                who_plain = кто_с_id(user, вид="plain")   # #232: и без разметки называем полностью — имя и номер
                 await application.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} {feat}: {who_plain}{loc_plain} — {tag}{extra}{_qs}{_fr}")
             except Exception:
                 pass
@@ -15727,8 +15778,7 @@ async def _api_serve(application=None):
             # уведомление ВЛАДЕЛЬЦУ: ИИ-перевод слова — проверь (может ИИ ошибся, а Arabus прав)
             if application:
                 try:
-                    uid = (user or {}).get('id')
-                    who = ("@" + user["username"]) if (user and user.get("username")) else (f"[{uid}](tg://user?id={uid})" if uid else "аноним")
+                    who = кто_с_id(user)   # #232: имя · @ник · номер (виден и копируется), имя нажимаемо
                     await application.bot.send_message(
                         OWNER_ID,
                         f"#ии #слово 🔤 ИИ-перевод слова: *{word}*\nПеревод: {ru}\nКорень (ИИ): {root}\n"
