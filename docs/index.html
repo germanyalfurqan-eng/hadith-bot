@@ -1548,7 +1548,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1323';
+const APPVER = 'v1324';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -10037,13 +10037,24 @@ let _mudPromise=null;
 async function _loadMudallisin(){ if(window._MUDCACHE) return window._MUDCACHE;
   if(!_mudPromise) _mudPromise=fetch('mudallisin.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({}));
   return _mudPromise; }   // владелец 01.07.2026: тот же promise-кэш баг — mudallisin.json грузился 150+ раз параллельно
-let _shuhraMap=null, _guarMap=null, _shuhraPromise=null;
+// 09.08.2026, находка роя — один класс на три места. Неудачная загрузка КЭШИРОВАЛАСЬ НАВСЕГДА:
+// сеть икнула на секунду, промис лёг в кэш с пустым ответом, и дальше каждый вызов доставал из
+// кэша эту пустоту. Для человека это выглядело так, будто у равия просто нет ни шухры, ни
+// разбора тёзок — и не менялось до перезагрузки приложения, потому что повторить попытку было
+// уже некому. Одна секунда сети ломала возможность на всю сессию.
+// Лечим одинаково во всех трёх местах: провал НЕ запоминаем, следующий вызов пробует заново.
+let _shuhraMap=null, _guarMap=null, _shuhraPromise=null, _guarPromise=null;
 async function _loadShuhra(){ if(_shuhraMap!==null) return _shuhraMap;
-  if(!_shuhraPromise) _shuhraPromise=fetchJSON('./narr_shuhra.json?v='+APPVER, 20000, {silent:true}).catch(()=>({}));
+  if(!_shuhraPromise) _shuhraPromise=fetchJSON('./narr_shuhra.json?v='+APPVER, 20000, {silent:true}).catch(()=>{ _shuhraPromise=null; return {}; });   // провал не запоминаем: следующий вызов попробует заново
   // владелец 01.07.2026 («грузилось долго»): без promise-кэша каждый передатчик на экране успевал запустить СВОЙ fetch до того, как первый резолвился — narr_shuhra.json грузился 80+ раз параллельно вместо одного. Теперь все зовущие ждут ОДИН и тот же промис.
   _shuhraMap=await _shuhraPromise; return _shuhraMap; }   // QA-свип: таймаут (резолв имён не виснет)
 // #169/#170: ГАРАНТ-КАРТА канонических id (build_narr_guar.py из авторитетной na, доминирующий id на форму — namesake-safe).
-async function _loadGuar(){ if(_guarMap===null){ try{ _guarMap=await fetchJSON('./narr_guar.json?v='+APPVER, 20000, {silent:true}); }catch(e){ _guarMap={}; } } return _guarMap; }   // QA-свип: таймаут (гарант-карта тёзок не виснет)
+async function _loadGuar(){ if(_guarMap!==null) return _guarMap;
+  // общий промис: параллельные вызовы ждут ОДНУ загрузку, а не шлют её заново каждый
+  if(!_guarPromise) _guarPromise=fetchJSON('./narr_guar.json?v='+APPVER, 20000, {silent:true})
+    .then(j=>{ _guarMap=j||{}; return _guarMap; })
+    .catch(()=>{ _guarPromise=null; _guarMap=null; return {}; });   // провал не запоминаем
+  return _guarPromise; }   // QA-свип: таймаут (гарант-карта тёзок не виснет)
 async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.length) return null; const cn=_narrCanon(name); if(!cn) return null;
   // #169/#170 (тёзка-резолвер): ГАРАНТ знаменитых ПЕРВЫМ — лечит «مالك→ат-Таии вместо б.Анаса», «قتادة→ар-Рахави вместо ас-Садуси». Неоднозначные (2 Суфьяна) в карту НЕ попали → их решает контекст цепи.
   { try{ const g=await _loadGuar(); if(g && g[cn]!=null) return g[cn]; }catch(e){_тихо(e,"L10016")} }
@@ -10102,8 +10113,11 @@ let _dzBC={}, _dzUC={}, _dzUNC={}, _dzNC={};
 // каждая слала свой fetch (замерено: dz/b25794_* грузился по 3-9 раз за один поиск). Промис хранится В ТОМ ЖЕ cc
 // под ключом-префиксом, второй и далее вызовы ждут ТОТ ЖЕ fetch вместо нового.
 async function _dzFetch(cc,key,url){ if(!(key in cc)){ const pk='__p_'+key;
-    if(!cc[pk]) cc[pk]=fetch(url).then(r=>r.ok?r.json():null).catch(()=>null);
-    cc[key]=await cc[pk];
+    // 09.08.2026: `.catch(()=>null)` превращал сбой сети в НАВСЕГДА закэшированную пустоту.
+    // Теперь сбой роняет запись из кэша, и следующий вызов идёт в сеть. Честный ответ «нет
+    // такой страницы» (не ok) по-прежнему запоминаем — вот его переспрашивать незачем.
+    if(!cc[pk]) cc[pk]=fetch(url).then(r=>r.ok?r.json():null);
+    try{ cc[key]=await cc[pk]; }catch(e){ delete cc[pk]; delete cc[key]; return null; }
   } return cc[key]; }
 async function _dzRec(bid,num){ const k=String(bid)+'_'+Math.floor(+num/500); const m=await _dzFetch(_dzBC,k,'./dz/b'+k+'.json?v='+APPVER); return (m&&m[String(num)])||null; }   // С41: ?v= — после verify-фикса цепей отдаём свежий dz, не старый кэш
 // Э-И2: запись хадиса теперь {s:[коды], f:[формы передачи]}; старый формат — просто [коды]. dzChain отдаёт SEQ (совместимость).
