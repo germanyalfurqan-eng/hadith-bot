@@ -1548,7 +1548,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1326';
+const APPVER = 'v1327';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3055,17 +3055,20 @@ const _BK2RUSCODE=(function(){ const m={}; ['bukhari','muslim','abudawud'].forEa
 async function openByCodeNum(bid, num){
   let b=String(bid==null?'':bid).replace(/[^0-9]/g,''); const n=String(num==null?'':num).replace(/[^0-9]/g,'');
   if(!b) return;
-  if((b==='1727'||b==='711') && n){ try{ const sh=await _mListSheet(n); if(sh){ openBook('711', sh); return; } }catch(e){_тихо(e,"L3052")} b='711'; }   // Муслим → турецкое изд. 711 + точный лист из карты (все ссылки)
+  if((b==='1727'||b==='711') && n){ try{ const sh=await _mListSheet(n); if(sh){ openBook('711', sh, true); return; } }catch(e){_тихо(e,"L3052")} b='711'; }   // Муслим → турецкое изд. 711 + точный лист из карты (все ссылки)
   if(n && typeof BACKEND_URL!=='undefined' && BACKEND_URL){
     try{ toast('📖 Ищу №'+n+' в Мактабе…');
       const _an=n.replace(/[0-9]/g,function(d){ return '٠١٢٣٤٥٦٧٨٩'[+d]; });   // #64: в тексте turath номера АРАБСКИМИ цифрами (٥٥٥), латинские «555 -» давали 0 → страница не открывалась
       const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(_an+' -')+'&book='+b+'&page=1&initData='+encodeURIComponent(INITDATA));
       const j=await r.json().catch(()=>({})); const d=(j&&j.data)||[];
       const hit=d.find(x=>String(x.book_id)===b)||d[0];
-      if(hit){ openBook(b, hit.page_id||hit.page||1); return; }
+      if(hit){ openBook(b, hit.page_id||hit.page||1, true); return; }
     }catch(e){_тихо(e,"L3060")}
   }
-  openBook(b);   // #66: «Страница в Мактабе» ВСЕГДА открывает turath-страницу Мактабы (даже если точную не нашли — книгу с начала), НЕ наш локальный ридер (жалоба «подвязал читалку в приложении, а не мактаба»)
+  // 09.08.2026: третий флаг дописан по находке роя. Комментарий ниже обещал «ВСЕГДА Мактаба»
+  // с 2026-го, но обещание держалось на честном слове: без флага openBook при нашем локальном
+  // издании уводил в свою читалку. Пометка #66 и код расходились, и расходились молча.
+  openBook(b, null, true);   // #66: «Страница в Мактабе» ВСЕГДА открывает turath-страницу Мактабы (даже если точную не нашли — книгу с начала), НЕ наш локальный ридер (жалоба «подвязал читалку в приложении, а не мактаба»)
 }
 // #74: «Страница в Мактабе» = ВНЕШНИЙ сайт المكتبة الشاملة (shamela.ws/book/<bid>/<page>), а НЕ внутренняя читалка приложения (4-я жалоба владельца). turath bid == shamela id, page прямой (как _shamChip).
 // фраза-матн для резолва страницы (ИНВАРИАНТ между изданиями — номера у разных печатей РАЗНЫЕ!)
@@ -10046,7 +10049,7 @@ function loadNarrNames(){ if(_narrNames) return Promise.resolve(_narrNames); if(
 function _narrCanon(s){ s=(s||'').replace(/[ً-ْـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه'); return s.replace(/\s+/g,' ').trim(); }
 let _mudPromise=null;
 async function _loadMudallisin(){ if(window._MUDCACHE) return window._MUDCACHE;
-  if(!_mudPromise) _mudPromise=fetch('mudallisin.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({}));
+  if(!_mudPromise) _mudPromise=fetch('mudallisin.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>{_mudPromise=null; return {};});
   return _mudPromise; }   // владелец 01.07.2026: тот же promise-кэш баг — mudallisin.json грузился 150+ раз параллельно
 // 09.08.2026, находка роя — один класс на три места. Неудачная загрузка КЭШИРОВАЛАСЬ НАВСЕГДА:
 // сеть икнула на секунду, промис лёг в кэш с пустым ответом, и дальше каждый вызов доставал из
@@ -10083,14 +10086,14 @@ async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.lengt
     if(nm.indexOf(cn+' ')===0 && nm.length<prefLen){ pref=it[1]; prefLen=nm.length; }
     if(cn.indexOf(nm+' ')===0 && nm.length>coverLen && nm.indexOf(' ')>0){ cover=it[1]; coverLen=nm.length; } }
   return exact!=null?exact:(cover!=null?cover:pref); }
-async function _narrCard(id){ const b=Math.floor(id/100); if(!_narrShard[b]){ if(!_narrShardP[b]) _narrShardP[b]=fetch('./narr/'+b+'.json').then(r=>r.json()).catch(()=>({})); _narrShard[b]=await _narrShardP[b]; } return (_narrShard[b]||{})[String(id)]||null; }
+async function _narrCard(id){ const b=Math.floor(id/100); if(!_narrShard[b]){ if(!_narrShardP[b]) _narrShardP[b]=fetch('./narr/'+b+'.json').then(r=>r.json()).catch(()=>{ delete _narrShardP[b]; return null; }); _narrShard[b]=await _narrShardP[b]; } return (_narrShard[b]||{})[String(id)]||null; }
 // narr_disp.json (build_narr_disp.py): id→{ar,ru} КАНОНИЧЕСКОЕ отображаемое имя (вместо обрывка-родительного «أبي هريرة» / родословной поля[1]).
 let _ndCache=null,_ndP=null;
-async function _narrDisp(id){ if(id==null) return null; if(!_ndCache){ if(!_ndP) _ndP=fetch('./narr_disp.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); _ndCache=await _ndP; } return _ndCache[String(id)]||null; }
+async function _narrDisp(id){ if(id==null) return null; if(!_ndCache){ if(!_ndP) _ndP=fetch('./narr_disp.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>{ _ndP=null; return null; }); _ndCache=await _ndP; } return (_ndCache||{})[String(id)]||null; }
 function _narrDispName(id, fallback){ const d=_ndCache&&_ndCache[String(id)]; if(d&&d.ar) return d.ar; return fallback||''; }   // синхронный (после прогрева кэша)
 // narr_sun.json (данные страницы sunnah.com, 5890 равиев): id→{c:[сборники],g:оценка,ct:город,tb:табака,dt:вафат,sid}
 let _nsCache=null,_nsP=null;
-async function _narrSun(id){ if(id==null) return null; if(!_nsCache){ if(!_nsP) _nsP=fetch('./narr_sun.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); _nsCache=await _nsP; } return _nsCache[String(id)]||null; }
+async function _narrSun(id){ if(id==null) return null; if(!_nsCache){ if(!_nsP) _nsP=fetch('./narr_sun.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>{ _nsP=null; return null; }); _nsCache=await _nsP; } return (_nsCache||{})[String(id)]||null; }
 const _SUNCOL_RU={'al-Bukhari':'Бухари','Muslim':'Муслим','Abu Dawud':'Абу Дауд','al-Tirmidhi':'Тирмизи',"al-Nasa'i":'Насаи','Ibn Majah':'Ибн Маджа','Ahmad':'Ахмад','Malik':'Малик','al-Darimi':'Дарими'};
 // УКАЗ 11.07.2026: отметки «будет доделано» — каждая недоделка несёт ясную заметку в своём месте приложения (dev_notes.json)
 let _dnCache=null,_dnP=null;
