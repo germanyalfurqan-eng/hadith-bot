@@ -1548,7 +1548,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1330';
+const APPVER = 'v1331';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -10047,7 +10047,12 @@ function loadNarrNames(){ if(_narrNames) return Promise.resolve(_narrNames); if(
     try{ const S=new Set(), F=new Set(), N=new Set(); _narrNames.forEach(p=>{ const nm=p[0]||''; if(!nm) return; F.add(nm); const ws=nm.split(' '); const f=ws[0]; if(f&&f.length>1){ S.add(f); S.add(f.replace(/^ال/,'')); }
       const last=ws[ws.length-1]; if(last && last.length>=5 && /^ال/.test(last) && last!=='الله' && last!=='الذي' && last!=='التي') N.add(last);   // паритет sunnah.com: нисба-сет из ПОСЛЕДНИХ слов полных имён (الجريري/الناقد/الزهري) — чист от قال/في (те — first-words)
     }); window._narrKnownW=S; window._narrKnownF=F; window._narrKnownNisba=N; }catch(e){_тихо(e,"L10000")}
-    return _narrNames; }).catch(()=>{_narrNames=[];return _narrNames;}); return _narrNamesP; }
+    // ДВЕНАДЦАТОЕ место того же класса, и оно било больнее всех. Здесь индекс ИМЁН
+    // передатчиков — узкое место подсветки. `_narrNames=[]` после одной сетевой икоты делал
+    // проверку `if(_narrNames)` вечно истинной (пустой массив истинен), и подсветка имён не
+    // работала до перезагрузки. Выглядело так, будто в тексте просто нет известных
+    // передатчиков — то есть ошибка маскировалась под пустой результат работы.
+    return _narrNames; }).catch(()=>{_narrNames=null; _narrNamesP=null; return [];}); return _narrNamesP; }
 function _narrCanon(s){ s=(s||'').replace(/[ً-ْـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه'); return s.replace(/\s+/g,' ').trim(); }
 let _mudPromise=null;
 async function _loadMudallisin(){ if(window._MUDCACHE) return window._MUDCACHE;
@@ -11031,7 +11036,11 @@ function _parseIsnad(raw){
   // передают не реже, а притяжательная форма при этом другая.
   const REL=new Set(['ابيه','ابيها','امه','امها','جده','جدها','عمه','عمها','اخيه','ابي',
                      'اخته','اختها','اخيها','بنته','بنتها','ابنه','ابنها','ابنته',
-                     'خاله','خالها','عمته','عمتها']);
+                     // 09.08.2026, находка роя: в v1319 я дописывал недостающие формы и
+                     // оставил ту же асимметрию, которую чинил. Дед был — бабки не было;
+                     // дядя по матери был — тётки по матери не было.
+                     'خاله','خالها','عمته','عمتها',
+                     'جدته','جدتها','خالته','خالتها']);
   const links=[]; let curForm=''; let curNames=[]; let post=''; let hadHa=false;
   const flush=()=>{ if(curNames.length){ const nm=curNames.join(' '); links.push({form:curForm, name:nm, rel:REL.has(_isnNorm(nm))}); } curNames=[]; };
   for(let i=0;i<toks.length;i++){ const nt=_isnNorm(toks[i]);
