@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1316</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1335</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1334';
+const APPVER = 'v1335';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7697,6 +7697,7 @@ async function openNarratorRijal(name, forceId){
     +'<div style="display:flex;gap:7px"><div class="skel" style="height:24px;width:90px">.</div><div class="skel" style="height:24px;width:110px">.</div><div class="skel" style="height:24px;width:70px">.</div></div>'
     +'</div></div>'
     +'<div class="skel" style="height:13px;width:92%;margin:6px 0">.</div><div class="skel" style="height:13px;width:85%;margin:6px 0">.</div><div class="skel" style="height:13px;width:88%;margin:6px 0">.</div>';
+  try{ _прогревРавия(forceId, 'рано'); }catch(e){_тихо(e,"L7622")}   // ⚡ v1335: колодцы начинают наполняться ЗДЕСЬ, пока человек смотрит на скелетон, а не строкой ниже по очереди
   try{ const _dt=(forceId!=null)?await _narrDisp(forceId):null; m.querySelector('#narrTitle').textContent='👤 '+((_dt&&_dt.ar)||_cleanNarrName(name)); }catch(e){ m.querySelector('#narrTitle').textContent='👤 '+_cleanNarrName(name); }
   // ТРЕВОГА-фикс (владелец 01.07.2026, «карточка дохлая» — почему тут только «Оценки», а в других местах полная шапка):
   // раньше эта модалка (клик по имени в цепи хадиса) НЕ строила шапку (ID/кунья/нисба/вафат/Wikipedia/sunnah.com) —
@@ -10142,13 +10143,61 @@ function _devNoteHtml(d){ return d?('<div style="margin-top:7px;font-size:11.5px
 var _nbShard={}, _nbShardP={};
 async function _narrBio(id){ if(id==null) return null; const b=Math.floor(id/100); if(_nbShard[b]===undefined){ if(!_nbShardP[b]) _nbShardP[b]=fetch('./narrbio/'+b+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null); _nbShard[b]=await _nbShardP[b]; } return (_nbShard[b]||{})[String(id)]||null; }
 // доп-поля карточки (البلد/الإقامة·الرحلات·محل الوفاة) из موسوعة الرواة — аналог sunnah.com «Lived in / Places». Шарды narrx (build_narrx.py).
-var _narrXShard={};
+var _narrXShard={}, _narrXShardP={};
 // ВОСЬМОЕ место того же класса (v1324 — три, v1327 — ещё четыре, теперь это).
 // Здесь провал запоминался особенно прочно: `_narrXShard[b]=null`, а проверка стоит на
 // `undefined` — то есть после первой же сетевой икоты условие «ещё не загружали» больше
 // НИКОГДА не выполнялось, и шард не пробовали загрузить до конца жизни страницы.
 // Считать надо было не «починил ли я», а «сколько таких мест всего»; считаю в третий раз.
-async function _narrX(id){ const b=Math.floor(id/100); if(_narrXShard[b]===undefined){ try{ _narrXShard[b]=await (await fetch('./narrx/'+b+'.json?v='+APPVER)).json(); }catch(e){ delete _narrXShard[b]; return null; } } return (_narrXShard[b]||{})[String(id)]||null; }
+// v1335: + promise-кэш (как у _tlinkGet/_testimGet, заявка #497). Провал по-прежнему НЕ
+// запоминается: промис обнуляется, следующий зовущий пробует заново.
+async function _narrX(id){ const b=Math.floor(id/100);
+  if(_narrXShard[b]===undefined){
+    if(!_narrXShardP[b]) _narrXShardP[b]=fetch('./narrx/'+b+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
+    const j=await _narrXShardP[b];
+    if(j===null){ _narrXShardP[b]=null; return null; }
+    _narrXShard[b]=j;
+  }
+  return (_narrXShard[b]||{})[String(id)]||null; }
+
+/* ===== ⚡ v1335 · ПРОГРЕВ КАРТОЧКИ РАВИЯ (владелец: «карточки передатчиков грузятся долго») =====
+   Замерено в живом браузере, а не на глаз:
+     · первое открытие карточки — 8828 мс и 66 запросов;
+     · ПОВТОРНОЕ открытие той же карточки — 21 мс и НОЛЬ запросов.
+   Значит отрисовка не стоит ничего: все 8,8 секунды — ожидание сети. И ждём мы их в очередь:
+   28 первых запросов идут строго друг за другом (каждый следующий стартует после ответа
+   предыдущего), хотя между собой не связаны — просто каждый `await` стоит на своей строке
+   отрисовки, а строки идут сверху вниз. 28 × ~250 мс и есть те самые восемь секунд.
+   Лечение не в переписывании отрисовки (её легко сломать), а в том, чтобы колодцы начали
+   наполняться СРАЗУ, все разом: у каждого загрузчика уже есть promise-кэш, и тот же `await`
+   ниже по коду подхватывает УЖЕ ЛЕТЯЩИЙ запрос вместо того, чтобы начинать свой.
+   Двумя волнами — чтобы тяжёлое (одна только вики 470 КБ) не отбирало канал у имени и годов:
+   «рано» — то, без чего не показать первый экран; «поздно» — всё, что читают ниже по карточке. */
+function _словарь(ключ, url){   // один колодец на весь файл вместо копии guard-выражения в каждом месте (З-33)
+  if(!window[ключ]) window[ключ]=fetch(url+'?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({}));
+  return window[ключ]; }
+var _прогретоСлов=0;
+function _прогревСлов(волна){
+  const тихо=f=>{ try{ f(); }catch(e){} };
+  if(волна==='рано'){ if(_прогретоСлов&1) return; _прогретоСлов|=1;
+    тихо(()=>_loadGuar()); тихо(()=>loadNarrExt()); тихо(()=>loadNarrVoc()); тихо(()=>loadNarrFlags());
+    тихо(()=>loadMid2Sid()); тихо(()=>_narrDisp(1)); тихо(()=>_narrSun(1)); тихо(()=>_loadIdfix());
+    return; }
+  if(_прогретоСлов&2) return; _прогретоСлов|=2;
+  тихо(()=>loadNarrWiki()); тихо(()=>loadNarrWikiImg()); тихо(()=>loadNarrCurated()); тихо(()=>loadBooksMap());
+  тихо(()=>loadJarhGl()); тихо(()=>_loadMudallisin()); тихо(()=>loadNuances());
+  тихо(()=>_словарь('_narrVerdP','./narr_verdicts.json'));
+  тихо(()=>_словарь('_dhbP','./narr_dhahabi.json'));
+  тихо(()=>_словарь('_sahDalilP','./narr_sahabi_dalil.json'));
+}
+function _прогревРавия(mid, волна){
+  _прогревСлов(волна);
+  mid=+mid; if(!isFinite(mid)||mid<=0) return;
+  const тихо=f=>{ try{ f(); }catch(e){} };
+  if(волна==='рано'){ тихо(()=>_narrX(mid)); тихо(()=>_narrBio(mid)); return; }
+  тихо(()=>_testimGet(mid)); тихо(()=>_testimClusters(mid)); тихо(()=>_tlinkGet(mid)); тихо(()=>_edgesGet(mid));
+  тихо(()=>loadMid2Sid().then(m=>{ const sid=(m||{})[String(mid)]; if(sid!=null) _sunverdShard(sid); }).catch(()=>{}));
+}
 /* ===== 🧬 M378b (Сессия 15): dz-СЛОЙ Э1.1 — КОДЫ передатчиков в интерфейсе =====
    dz/b<bid>_<num//500>.json {num:[код…]} — цепочка хадиса: код = id базы (число) ИЛИ 'U…' (наш код неопознанной формы, приказ M378)
    dz/u<sh>.json {U:[форма,частота,примеры]} + dz/un<sh>.json {U:[[bid,num,leaf]…]} — реестр/участие U-кодов, sh = md5(U)[:4]%64
@@ -11606,9 +11655,17 @@ async function _tlinkGet(id){
   return m[String(id)]||null;
 }
 // число передач (рёбер) между равием и соседями — из narr_edges (посчитано по цепям codif)
-async function _edgesGet(mid){ if(mid==null) return {}; const b=Math.floor(Math.abs(+mid)/100); window._EDGECACHE=window._EDGECACHE||{};
-  if(!(b in window._EDGECACHE)){ try{ window._EDGECACHE[b]=await fetch('narr_edges/'+b+'.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); }catch(e){ window._EDGECACHE[b]={}; } }
+async function _edgesGet(mid){ if(mid==null) return {}; const b=Math.floor(Math.abs(+mid)/100);
+  window._EDGECACHE=window._EDGECACHE||{}; window._EDGECACHE_P=window._EDGECACHE_P||{};   // v1335: promise-кэш — без него прогрев и отрисовка слали бы ДВА запроса за один шард
+  if(!(b in window._EDGECACHE)){ try{
+      if(!window._EDGECACHE_P[b]) window._EDGECACHE_P[b]=fetch('narr_edges/'+b+'.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      window._EDGECACHE[b]=await window._EDGECACHE_P[b];
+    }catch(e){ window._EDGECACHE[b]={}; } }
   return (window._EDGECACHE[b]||{})[String(mid)]||{}; }
+// v1335: шард свода мнений sunnah.com — вынесен из отрисовки в общий загрузчик с promise-кэшем (прогрев зовёт его же)
+function _sunverdShard(sid){ const b=+sid%60; window._sunverdShardP=window._sunverdShardP||{};
+  if(!window._sunverdShardP[b]) window._sunverdShardP[b]=fetch('./sunverd/'+b+'.json').then(r=>r.ok?r.json():null).catch(()=>null);
+  return window._sunverdShardP[b]; }
 // отметки Сахихайн: места равия в صحيح البخاري(1681)/صحيح مسلم(1727) по нашей dz-разметке
 var _sahCache={};
 async function _sahGet(id){
@@ -12670,7 +12727,7 @@ const _GUARANTEED_SAHABA=new Set(['أبو هريرة','أبو هريرة عبد 
 async function _isSahById(mid){ if(mid==null) return false; try{
   // С56 (нюанс владельца): вердикт sahabi из рутины сверки с sunnah.com (345 сподвижников, у которых
   // в Такрибе нет слова صحابي — напр. «تأخر إسلامه» у 3222) — довод в narr_sahabi_dalil.json
-  try{ if(!window._narrVerdP) window._narrVerdP=fetch('./narr_verdicts.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({}));
+  try{ _словарь('_narrVerdP','./narr_verdicts.json');
     const _nv=await window._narrVerdP; if(_nv && _nv[String(mid)]==='sahabi') return true; }catch(e){_тихо(e,"L12553")}
   const c=await _narrCard(+mid); if(!c) return false;
   const _gb=_genBadge((c[5]||'')+' '+(c[6]||'')+' '+(c[7]||''), c[4]); if(_gb && _gb[0]==='صحابي') return true;
@@ -14003,7 +14060,7 @@ async function renderTestimoniesCard(mid, host){
       +'<div id="sahDalil" style="font-size:12.5px;color:#d9e2ec;margin-top:5px;direction:rtl;text-align:right"></div>';
     bd.appendChild(sb);
     try{
-      if(!window._sahDalilP) window._sahDalilP=fetch('./narr_sahabi_dalil.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      _словарь('_sahDalilP','./narr_sahabi_dalil.json');
       const _dal=(await window._sahDalilP)[String(mid)];
       const _el=sb.querySelector('#sahDalil');
       if(_dal&&_dal.length){ _el.innerHTML=_dal.map(d=>'<div style="margin-top:2px">• <b style="color:#c9b8ff">'+esc(d.src)+'</b>: '+esc(d.txt)+'</div>').join(''); }
@@ -14033,10 +14090,8 @@ async function renderTestimoniesCard(mid, host){
   try{
     const _sid=(await loadMid2Sid())[String(mid)];
     if(_sid){
-      const _shard=+_sid%60;
-      if(!window._sunverdShard) window._sunverdShard={};
-      if(window._sunverdShard[_shard]===undefined){ window._sunverdShard[_shard]=await fetch('./sunverd/'+_shard+'.json').then(r=>r.ok?r.json():null).catch(()=>null); }
-      const _snList=window._sunverdShard[_shard] ? (window._sunverdShard[_shard][String(_sid)]||null) : null;
+      const _sv=await _sunverdShard(_sid);   // v1335: общий загрузчик с promise-кэшем (его же греет _прогревРавия)
+      const _snList=_sv ? (_sv[String(_sid)]||null) : null;
       if(_snList && _snList.length){
         const _ourCanon=new Set(order.map(cr=>_mCanon(cr)));
         const _missing=[]; const _seenSn=new Set();
@@ -14240,7 +14295,7 @@ async function showNarratorCardLocal(name, host, forceId){
   }catch(e){_тихо(e,"L14119")}
   // v1089 (аудит DeepSeek ②-1, паритет sunnah.com: степени и от Ибн Хаджара, и от аз-Захаби): сводный вердикт
   // аз-Захаби из «الكاشف» (narr_dhahabi.json, 3593 равия, собран из НАШИХ testimonies — build_narr_dhahabi.py)
-  let _dhb=null; try{ if(!window._dhbP) window._dhbP=fetch('./narr_dhahabi.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); _dhb=(await window._dhbP)[String(id)]||null; }catch(e){_тихо(e,"L14122")}
+  let _dhb=null; try{ _словарь('_dhbP','./narr_dhahabi.json'); _dhb=(await window._dhbP)[String(id)]||null; }catch(e){_тихо(e,"L14122")}
   const _cleanFull=(nm)=>{ const ws=String(nm||'').trim().split(/\s+/); const st={'وقيل':1,'ويقال':1,'يقال':1,'وقال':1,'قال':1,'او':1}; const o=[]; for(const w of ws){ if(st[stripDiac(w)]) break; o.push(w); if(o.length>=9) break; } return o.join(' ')||nm; };   // #сподвижники (приказ С40): имя забито вариантами «عبد الرحمن بن صخر وقيل عبد الله بن غنم وقيل…» → обрезаем по первому وقيل/ويقال/قال, иначе транслит давал «...Вкил...»
   const _c1=_cleanFull(c[1]);   // чистое полное имя для показа и транслита
   // #сподвижники (С40): варианты «وقيل …», обрезанные из шапки, НЕ теряем — в сворачиваемый блок «другие варианты имени»
@@ -14579,6 +14634,7 @@ async function renderNuances(mid, host){ if(mid==null) return; let nz=null; try{
 }
 async function showNarratorBio(name, out){
   out.style.display='block'; out.innerHTML='';
+  try{ _прогревРавия(null, 'рано'); }catch(e){_тихо(e,"L14469a")}   // ⚡ v1335: карточку открывают и минуя openNarratorRijal — греем и отсюда (прогрев идемпотентен)
   // #611/#616 (владелец: «а где анимация загрузки карточки», «нет анимации срочно»): showNarratorCardLocal делает 6+ await
   // (lookup/card/глоссарий/ext/X/sun) ДО первой отрисовки — до этого карточка равия «открывалась пустой» без индикатора.
   // Показываем скелетон-шиммер (переиспользуем @keyframes skSh, R45), снимаем его сразу после прихода идентификации.
@@ -14599,6 +14655,7 @@ async function showNarratorBio(name, out){
     w.appendChild(h); w.appendChild(b); out.appendChild(w); return b; };
   // Идентификация (имя/كنية/نسب/وفاة/طبقة/رتبة + бейдж) — без джарха
   let c=null; try{ c=await showNarratorCardLocal(name, out); }catch(e){_тихо(e,"L14480")}
+  try{ _прогревРавия(c&&c[0], 'поздно'); }catch(e){_тихо(e,"L14480b")}   // ⚡ v1335: имя и годы на экране — теперь разом тянем всё, что читают ниже (свидетельства, цепи, вики, книги)
   // #625: скелетон снимаем ПЛАВНО (fade + схлопывание высоты), а не мгновенным remove — иначе контент «прыгает» вверх рывком (дёрганая анимация карточки равия)
   try{ if(_nSkel){ var _sk=_nSkel; _nSkel=null;
     _sk.style.overflow='hidden'; _sk.style.maxHeight=_sk.scrollHeight+'px';
@@ -15865,7 +15922,7 @@ async function verifyNarr(card, place, text){
     // СХЕМА-ЦЕПЬ передатчиков с подписанными id и формой передачи между ними (наглядно для сверки)
     h+='<div style="margin-top:8px;color:var(--hint);font-size:12.5px;direction:ltr">⛓ Цепь передатчиков (иснад) — справа налево, как в хадисе; стрелка ←عن← это форма передачи между двумя передатчиками:</div>';   // #186: русская легенда (что за арабские строки внизу)
     // владелец 02.07 (скрин «если слабое — рисуй красным, а не будто маджхуль ничего страшного»): чип цепи КРАСИТСЯ по вердикту нейротахкика
-    let _NVD={}; try{ if(!window._narrVerdP) window._narrVerdP=fetch('./narr_verdicts.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})); _NVD=await window._narrVerdP; }catch(e){_тихо(e,"L15702")}
+    let _NVD={}; try{ _словарь('_narrVerdP','./narr_verdicts.json'); _NVD=await window._narrVerdP; }catch(e){_тихо(e,"L15702")}
     // владелец 03.07 («каша все вместе, нумеруй звенья первый сподвижник и далее»): №1 = самый ранний (ближе к
     // сподвижнику/Пророку ﷺ, последний элемент auth[]) → №auth.length = ближе к собирателю (auth[0]). Нейротахкик
     // ниже ссылается на ЭТИ номера вместо повтора длинных имён — легче сопоставить звено цепи со «слабым звеном».
