@@ -8395,12 +8395,36 @@ async def on_moderate(update, context):
                 parse_mode='HTML')
         except Exception:
             pass      # запись в журнал не должна отменять уже совершённое действие
+        # 🔴 11.08.2026, обращения #380 («куда делись кнопки внизу») и #382 («после бана
+        # дописывать, что забанен админом, но не пиши каким»).
+        #
+        # ОДНА ПРИЧИНА НА ДВЕ ЖАЛОБЫ, и вот она. Приветствие уходит ВИДЕО с подписью, если
+        # владелец положил ролик. У сообщения с видео НЕТ текста — есть подпись. А мы звали
+        # edit_message_text: Telegram отвечает «there is no text in the message to edit», мы
+        # падали в запасной путь и снимали клавиатуру. Итог ровно тот, на который он смотрит:
+        # приписки «забанен админом» нет, и кнопки исчезли. Оба раза виноват не бан, а наш
+        # способ дописать строку.
+        #
+        # Правим по существу: у текста правим текст, у видео — ПОДПИСЬ. И клавиатуру НЕ
+        # снимаем ни при каком исходе: рычаги нужны и после (тем же снять бан, ограничить
+        # иначе), а исчезнувшая кнопка выглядит как поломка приложения.
+        #
+        # Имя нажавшего в чат НЕ идёт — прямое слово владельца #382. В строке стоит «админом»
+        # без имени; кто именно нажал, лежит в рабочем журнале и уходит владельцу в лог-чат.
         try:
-            await q.edit_message_text((q.message.text_html or q.message.text or "") + "\n" + _итог,
-                                      parse_mode="HTML", disable_web_page_preview=True)
+            if (getattr(q.message, 'text', None) or getattr(q.message, 'text_html', None)):
+                await q.edit_message_text(
+                    (q.message.text_html or q.message.text or "") + "\n" + _итог,
+                    parse_mode="HTML", disable_web_page_preview=True)
+            else:
+                _подп = (getattr(q.message, 'caption_html', None)
+                         or getattr(q.message, 'caption', None) or "")
+                await q.edit_message_caption(caption=(_подп + "\n" + _итог)[:1024],
+                                             parse_mode="HTML")
         except Exception:
-            try: await q.edit_message_reply_markup(reply_markup=None)
-            except Exception: pass
+            # Дописать не вышло — пусть так, но клавиатуру оставляем: снимать её здесь
+            # значило бы чинить одну беду созданием другой (см. #380).
+            pass
     except Exception as e:
         # #628: раньше отсюда всплывало «Не вышло: Not enough rights to restrict/unrestrict chat
         # member» — техническая фраза, по которой не понять ни причины, ни что делать. Причину
