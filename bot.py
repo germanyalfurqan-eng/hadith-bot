@@ -6674,6 +6674,20 @@ def ask_gemini(prompt, system=None):
     except Exception as e:
         return f"⚠️ Gemini недоступен: {e}"
 
+
+def _годен(о):
+    """Ответ модели или ОБЪЯСНЕНИЕ отказа? Находка локалок 10.08.2026.
+
+    Наши каналы возвращают либо текст, либо строку вида «⚠️ …» / «❌ …» — объяснение, почему
+    не вышло. Строка непустая, и наивная проверка `if not ответ:` читает её как успех: человек
+    получает «⚠️ 429 rate limit» вместо ответа и принимает это за слова помощника.
+
+    Тот же класс, что у них с озвучкой: функция вернула объяснение вместо результата, а
+    проверка «на истинность» сочла это удачей.
+    """
+    return bool(о) and not str(о).lstrip().startswith(('⚠', '❌', '⏸'))
+
+
 def ask_groq(prompt, system=None, max_tokens=None):
     """Groq — бесплатный, очень быстрый, OpenAI-совместимый. Ключ GROQ_API_KEY на Railway. Возвращает текст или None/⚠️."""
     if not GROQ_API_KEY:
@@ -7197,7 +7211,7 @@ def ask_ai_with_memory(prompt, owner=True):
     if OPENCODE_KEY:
         try:
             _о = ask_opencode(prompt, система, max_tokens=4000)
-            if _о:
+            if _годен(_о):
                 return _о
         except Exception:
             pass
@@ -7262,7 +7276,7 @@ async def _journal_assistant(update, context, text):
                                max_tokens=4000) or ""
         except Exception:
             ans = ""
-    if not ans:
+    if not _годен(ans):
         # Платный канал недоступен — работаем бесплатным, но ПО ТЕМ ЖЕ правилам.
         ans = ask_ai("Сообщение владельца: " + text[:900] + ctx, _сис,
                      owner=True, max_tokens=900) or ""
@@ -7379,7 +7393,7 @@ def translate_matn(arabic, src="", owner=False, force=False, model_out=None):
                   "Без вступлений, без пояснений, без кавычек, без указания модели — только перевод.")
     def _one(t):
         r = ask_ai("Переведи на русский:\n" + t, sysmsg, owner=owner, max_tokens=4000)
-        if not r or r.startswith("❌") or r.startswith("⏸"):
+        if not _годен(r) or r.startswith("❌") or r.startswith("⏸"):
             return None
         if model_out is not None:
             _mt = _neuroModelTag(r)
@@ -8041,7 +8055,7 @@ def _yt_summarize(tr, brief):
         sysp = "Подробный пересказ+перевод видео на русский: по разделам, с тайм-кодами [мин:сек] в начале каждого блока."
         pr = "Подробный русский пересказ и перевод этого видео по субтитрам (с тайм-кодами по разделам):\n\n" + body
     ans = ask_neuro(pr, sysp, max_tokens=3000)
-    if not ans:
+    if not _годен(ans):
         try: ans = ask_gemini(pr, sysp)
         except Exception: ans = None
     return ans
@@ -8183,7 +8197,7 @@ async def _nisht_finish(reply_msg, chat_id, context, messages, comment):
     pr = f"Материал:\n\n{raw}"
     if comment: pr += f"\n\nПояснение автора (что выделить/учесть): {comment}"
     ans = ask_ai(pr, sysp, owner=True, max_tokens=1200)
-    if not ans:
+    if not _годен(ans):
         await reply_msg.reply_text("❌ ИИ не смог обработать (все модели сейчас недоступны). Попробуй позже.")
         return
     model_name = _neuroModelTag(ans) or 'DeepSeek'
@@ -11812,7 +11826,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             usd = _yt_cost_est(tr)
             await update.message.reply_text(f"⚠️ Через DeepSeek ≈ ${usd:.3f} (~{usd*92:.1f}₽). Делаю {'кратко' if brief else 'подробно'}{' + озвучка' if want_audio else ''}…")
             ans = _yt_summarize(tr, brief)
-            if not ans:
+            if not _годен(ans):
                 await update.message.reply_text("⚠️ ИИ не ответил (DeepSeek и Gemini). Попробуй ещё раз позже.")
                 return
             _VIDEO_LAST[update.effective_user.id] = {"vid": _repv, "tr": tr}
@@ -11836,10 +11850,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 body = "\n".join(f"[{_fmt_ts(s)}] {t}" for s, t in last["tr"])[:45000]
                 pr = f"Вопрос по видео: {text}\n\nОтветь по-русски кратко и ОБЯЗАТЕЛЬНО укажи тайм-код [мин:сек], где это в видео.\n\nСубтитры:\n{body}"
                 a = ask_neuro(pr, "Отвечай строго по субтитрам видео, всегда указывай тайм-код [мин:сек].", max_tokens=1000)
-                if not a:
+                if not _годен(a):
                     try: a = ask_gemini(pr, "Отвечай по субтитрам, указывай тайм-код [мин:сек].")
                     except Exception: a = None
-                if a:
+                if _годен(a):
                     await send_long(update, "💬 " + a)
                     return
     # ===== Владельцу: баланс DeepSeek + ресурсы =====
@@ -12190,7 +12204,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _raw = "\n\n---\n\n".join(_texts)[:16000]
             _ans = ask_ai("Сделай краткое саммари этого диалога/переписки (100-200 слов, по-русски, по сути, без искажений):\n\n" + _raw,
                           "Ты — помощник, который кратко и точно суммаризирует диалоги.", owner=True, max_tokens=700)
-            if not _ans:
+            if not _годен(_ans):
                 await update.message.reply_text("❌ ИИ сейчас недоступен для саммари. Текст поймал (" + str(len(_texts)) + " сообщ.), попробуй позже ещё раз командой «саммари» с теми же ссылками.")
                 return
             _fail_note = f" (не поймано {_fail})" if _fail else ""
