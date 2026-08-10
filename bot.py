@@ -7859,10 +7859,23 @@ async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _кн_прив = _КЛ([
                     [_КБ('🕋 Кто мы и каков манхадж', url='https://t.me/muslims_ru/69')],
                     *(_kb.inline_keyboard if _kb else [])])
-                _вчат = await context.bot.send_message(
-                    chat_id=chat.id, text=_прив,
-                    parse_mode='HTML', disable_web_page_preview=True,
-                    reply_markup=_кн_прив)
+                # Ролик, если владелец его прислал: шлём видео с подписью — одним постом,
+                # а не двумя, иначе в чате снова будет лента служебных сообщений.
+                _рол = None
+                try:
+                    _рол = (_data_get('privet_video.json', None) or {}).get('file_id')
+                except Exception:
+                    _рол = None
+                if _рол:
+                    _вчат = await context.bot.send_video(
+                        chat_id=chat.id, video=_рол, caption=_прив[:1024],
+                        parse_mode='HTML', reply_markup=_кн_прив,
+                        supports_streaming=True)
+                else:
+                    _вчат = await context.bot.send_message(
+                        chat_id=chat.id, text=_прив,
+                        parse_mode='HTML', disable_web_page_preview=True,
+                        reply_markup=_кн_прив)
                 # держим рычаги СУТКИ, а не пять минут: админ не сидит в чате круглосуточно,
                 # и ровно на это была жалоба #660 — «куда делись кнопки».
                 asyncio.create_task(_снять_кнопки_модерации(context.bot, chat.id,
@@ -9725,6 +9738,35 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # другим правилам незачем.
     try:
         лента_запомнить(update)
+    except Exception:
+        pass
+
+    # 🎬 ВИДЕО ОТ ВЛАДЕЛЬЦА — ловим и запоминаем (обращения #341/#343)
+    #
+    # Владелец: «перешли просто видео, убрал адресата и описание, и скачай».
+    # Чужой файл взять нельзя — Telegram на пересылку того поста отвечает «Message to forward
+    # not found»: приветственные боты СВОИ посты через время удаляют, и к моему приходу его
+    # уже нет. А вот присланное САМИМ владельцем бот получает целиком.
+    # Поэтому: любое видео из его лички запоминаем сразу — не файлом, а его номером у
+    # Telegram (file_id). По этому номеру мы можем слать ролик сколько угодно раз, ничего не
+    # скачивая и не храня у себя.
+    try:
+        _вид = (getattr(update.message, 'video', None)
+                or getattr(update.message, 'animation', None)
+                or getattr(update.message, 'video_note', None))
+        if _вид and _хозяин(update) and getattr(update.effective_chat, 'type', '') == 'private':
+            _fid = getattr(_вид, 'file_id', '')
+            _сек = int(getattr(_вид, 'duration', 0) or 0)
+            _data_put('privet_video.json',
+                      {'file_id': _fid, 'секунд': _сек, 'когда': _now_msk(),
+                       'вид': ('кружок' if getattr(update.message, 'video_note', None)
+                               else 'видео')},
+                      'приветственный ролик от владельца')
+            await update.message.reply_text(
+                '🎬 Ролик принял и запомнил (%d сек). Теперь он уходит новичкам вместе с '
+                'приветствием — сам файл я не храню, шлю по номеру у Telegram.\n'
+                'Заменить — просто пришли другой.' % _сек)
+            return
     except Exception:
         pass
 
