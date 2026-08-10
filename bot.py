@@ -16767,7 +16767,25 @@ async def _api_serve(application=None):
                                         lambda: None)()
                              or getattr(м, 'forward_sender_name', None) or '?'))[:60],
                     'текст': (getattr(м, 'text', None) or getattr(м, 'caption', None) or '')[:4000],
-                    'есть_вложение': bool(getattr(м, 'photo', None) or getattr(м, 'document', None)),
+                    # 🔴 10.08.2026. Здесь смотрели ТОЛЬКО фото и документ — видео не
+                    # проверялось вовсе. Владелец переслал мне приветствие с роликом, а мой
+                    # же инструмент отчитался «вложения нет», и я поверил ему и сказал
+                    # владельцу неправду. Слепой прибор врёт увереннее незнания.
+                    'есть_вложение': bool(getattr(м, 'photo', None) or getattr(м, 'document', None)
+                                          or getattr(м, 'video', None) or getattr(м, 'animation', None)
+                                          or getattr(м, 'video_note', None) or getattr(м, 'audio', None)),
+                    'вид_вложения': ('видео' if getattr(м, 'video', None) else
+                                     'кружок' if getattr(м, 'video_note', None) else
+                                     'гифка' if getattr(м, 'animation', None) else
+                                     'фото' if getattr(м, 'photo', None) else
+                                     'документ' if getattr(м, 'document', None) else
+                                     'аудио' if getattr(м, 'audio', None) else ''),
+                    # Номер файла у Telegram: по нему ролик можно слать сколько угодно раз,
+                    # ничего не скачивая. Ради этого весь разговор про приветственное видео.
+                    'file_id': ((getattr(getattr(м, 'video', None), 'file_id', None)
+                                 or getattr(getattr(м, 'video_note', None), 'file_id', None)
+                                 or getattr(getattr(м, 'animation', None), 'file_id', None)
+                                 or getattr(getattr(м, 'document', None), 'file_id', None)) or ''),
                     # 10.08.2026: имя файла добавлено ради сторожа кодировки. Без него
                     # обойти архив и понять, ЧТО в постах лежит, нельзя — «есть вложение»
                     # говорит, что оно есть, и молчит о том, что это.
