@@ -16713,7 +16713,7 @@ async def _api_serve(application=None):
         #   АРХИВ_КАНАЛ (-1004401930494)       — ХРАНЕНИЕ ГОТОВОГО. Туда только итоги.
         # Служебная пересылка — это мусор по определению, значит ей место в ЧАТЕ.
         куда = int(body.get('куда') or АРХИВ_ГРУППА)
-        собрано, промахи = [], 0
+        собрано, промахи, причины = [], 0, []
         for н in range(номер - окно, номер + окно + 1):
             try:
                 м = await application.bot.forward_message(chat_id=куда, from_chat_id=чат,
@@ -16736,9 +16736,16 @@ async def _api_serve(application=None):
                     await application.bot.delete_message(chat_id=куда, message_id=м.message_id)
                 except Exception:
                     pass
-            except Exception:
+            except Exception as _е:
+                # 🔴 10.08.2026. Раньше промах молча увеличивал счётчик — и на вопрос «почему
+                # именно этот пост не достался» ответа не было вовсе. А причина у каждого
+                # промаха своя: нет такого номера, запрещена пересылка, чужой бот. Без неё
+                # я гадал вместо того, чтобы знать. Кладём причину рядом с номером.
                 промахи += 1
+                if len(причины) < 12:
+                    причины.append({'номер': н, 'почему': str(_е)[:140]})
         return _cors(web.json_response({'ok': True, 'найдено': len(собрано),
+                                        'причины': причины,
                                         'пропущено': промахи, 'сообщения': собрано},
                                        dumps=lambda o: json.dumps(o, ensure_ascii=False)))
 
