@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1350</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1351</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1350';
+const APPVER = 'v1351';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2142,6 +2142,7 @@ let _appReport=function(){};
     msg=_безЛичного(msg); where=_безЛичного(where); stack=_безЛичного(stack);
     const simple=_безЛичного(_simplifyError(msg, where));
     fetch(BACKEND_URL+'/errlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:String(msg).slice(0,300),where:String(where||'').slice(0,120),stack:String(stack||'').slice(0,600),simple:simple,ver:(typeof APPVER!=='undefined'?APPVER:''),initData:INITDATA})}).catch(()=>{}); return true; }catch(e){ return false; } }
+  window._репортОшибки=_report;   // наружу: замер загрузки шлёт свои находки этим же путём, второй канал заводить незачем
   window.addEventListener('error', e=>{ try{ _report(e.message||'error',(e.filename||'').split('/').pop()+':'+(e.lineno||''), e.error&&e.error.stack); }catch(_){_тихо(_,"L2118")} });
   window.addEventListener('unhandledrejection', e=>{ try{ const r=e.reason; _report((r&&r.message)||String(r)||'promise rejection','unhandledrejection', r&&r.stack); }catch(_){_тихо(_,"L2119")} });
   _appReport=_report;   // экспонируем для логгера зависших загрузок
@@ -12125,7 +12126,22 @@ async function openTahrijTable(){
 let _htMeta=undefined; const _htPage={};
 /* ===== 📊 v647 (С36): ТАБЛИЦА ХАДИСОВ в формате образца (построчно по звеньям) — U.V.P·C·S·достоверность·тахридж. Данные htable/<slug>_<seg>.json ===== */
 let _htbMeta=undefined; const _htbSh={};
-async function _htbLoad(slug,seg){ const k=slug+'_'+seg; if(!(k in _htbSh)){ try{ const r=await fetch('./htable/'+slug+'_'+seg+'.json?v='+APPVER); _htbSh[k]=r.ok?await r.json():null; }catch(e){ _htbSh[k]=null; } } return _htbSh[k]; }
+// 🐢 ЗАМЕР ЗАГРУЗКИ (обращение владельца #348: «Ибн Маджа постоянно грузится… почему логи
+// ошибки не шлёт сразу, когда грузится выше срока?»).
+// Он прав в главном: медленно — это тоже поломка, а молчащая поломка живёт вечно. С моего
+// компьютера всё быстро, а он смотрит с телефона в Телеграме — там другая сеть. Значит
+// мерить должен САМ ПРИЛОЖЕНИЕ у него, а не я у себя.
+// Порог 4 секунды: меньше — жизнь, больше — человек уже думает, что зависло.
+// Шлём в тот же журнал ошибок, что и всё остальное, — второй канал заводить незачем.
+const _МЕДЛЕННО_МС=4000; const _медлСказано={};
+function _замерЗагрузки(что,мс,кб){ try{
+  if(мс<_МЕДЛЕННО_МС) return;
+  if(_медлСказано[что]) return;            // одна жалоба на кусок за сеанс, а не поток
+  _медлСказано[что]=1;
+  (window._репортОшибки||function(){})('МЕДЛЕННО: '+что+' грузился '+Math.round(мс)+' мс'+(кб?(' ('+кб+' КБ)'):''),
+         'загрузка', 'порог '+(_МЕДЛЕННО_МС/1000)+' с');
+}catch(e){} }
+async function _htbLoad(slug,seg){ const k=slug+'_'+seg; if(!(k in _htbSh)){ const _t0=performance.now(); let _кб=0; try{ const r=await fetch('./htable/'+slug+'_'+seg+'.json?v='+APPVER); if(r.ok){ const _txt=await r.text(); _кб=Math.round(_txt.length/1024); _htbSh[k]=JSON.parse(_txt); } else _htbSh[k]=null; }catch(e){ _htbSh[k]=null; } _замерЗагрузки('htable/'+k, performance.now()-_t0, _кб); } return _htbSh[k]; }
 // 📄 С39: экспорт открытых строк таблицы в АЛЬБОМНУЮ HTML-таблицу (читать + Печать→Сохранить как PDF)
 async function exportHTableLandscape(){
   const rows=[...document.querySelectorAll('#htbList .htbRow')];
