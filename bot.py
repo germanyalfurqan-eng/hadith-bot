@@ -3024,7 +3024,11 @@ _ЛЕНТА_ГРЯЗНО = [0]
     # ⚠️ В приметах ЛОВИМ И СТАРЫЕ подписи: шаги уходили с меткой «🧬 70 Мини апп» в конце и
     # без метки «Клод» вовсе — именно на такие сообщения владелец и отвечал, а попадал к
     # помощнику. Реестр заполнится только для новых; старые должны узнаваться по хвосту.
-    'клод':     ('🧠 <b>Клод (технадзор)</b>', 'технадзор Клод',
+    # 🔴 #276: «ты когда себя выделил от рабочих сессий — ты от кого себя выделяешь? Сейчас
+    # технадзором актуальным является 70 Мини апп, разве не так?» Так. Технадзор — это
+    # ДОЛЖНОСТЬ, «70 Мини апп» — ИМЯ СМЕНЫ, и это одно лицо. Подпись обязана называть оба:
+    # без имени смены он не знает, с какой из моих смен говорит, а смены меняются.
+    'клод':     ('🧠 <b>Клод — технадзор</b>', 'технадзор Клод',
                  r'🧠\s*Клод|Технадзор:|🧬\s*(?:<b>)?\s*\d+\s*Мини\s*апп'),
     'локалки':  ('🖥 <b>Локалки (сессия локальных моделей)</b>', 'сессия «Локалки»',
                  r'🖥\s*Локалк|ЛОКАЛКИ\s*\d'),
@@ -15798,6 +15802,10 @@ async def _api_serve(application=None):
                              or getattr(м, 'forward_sender_name', None) or '?'))[:60],
                     'текст': (getattr(м, 'text', None) or getattr(м, 'caption', None) or '')[:4000],
                     'есть_вложение': bool(getattr(м, 'photo', None) or getattr(м, 'document', None)),
+                    # 10.08.2026: имя файла добавлено ради сторожа кодировки. Без него
+                    # обойти архив и понять, ЧТО в постах лежит, нельзя — «есть вложение»
+                    # говорит, что оно есть, и молчит о том, что это.
+                    'файл': (getattr(getattr(м, 'document', None), 'file_name', '') or ''),
                 })
                 # прибираем за собой: служебный архив не должен зарастать пересылками
                 try:
@@ -17928,6 +17936,47 @@ async def _api_serve(application=None):
                 return _cors(web.json_response({'error': 'no_file'}, status=400))
             if len(data) > 49 * 1024 * 1024:
                 return _cors(web.json_response({'error': 'too_big', 'size': len(data)}, status=413))
+            # ─────────────────────────────────────────────────────────────────
+            # 🔤 ЗАСЛОН ОТ ИЕРОГЛИФОВ. Высочайший указ владельца 10.08.2026:
+            # «ты сейчас опять в канал архивный скинул иероглифы… обеспечь, чтобы каждый
+            # файл там был проверен… обеспечь, чтобы иероглифы не шли, ужесточи закон,
+            # чтобы он исполнялся».
+            #
+            # ПОЧЕМУ ЗДЕСЬ, А НЕ В ПАМЯТИ ОТПРАВЛЯЮЩЕГО. Правило «класть в текстовый файл
+            # отметку кодировки» у меня записано давно, и я его знаю. Но жило оно в голове,
+            # а голова забывает — ровно как забыла про пути к файлам 07.08. Значит проверка
+            # обязана стоять НА ВЫХОДЕ, там, где файл превращается в сообщение. Мимо этой
+            # точки в Telegram не проходит ничего, что шлём мы сами.
+            #
+            # СУТЬ. Текст в UTF-8 без отметки в начале Telegram и Блокнот читают как cp1251 —
+            # владелец видит «РџСЂРёРІРµС‚» вместо «Привет».
+            # ⚠️ И обратное: в .json отметку ставить НЕЛЬЗЯ, разборщики о неё спотыкаются.
+            # Поэтому решает ТИП файла, а не «поставим везде, хуже не будет».
+            try:
+                _рас = ('.' + filename.rsplit('.', 1)[-1].lower()) if '.' in filename else ''
+                _ГЛАЗАМИ = ('.md', '.txt', '.csv', '.log', '.srt', '.ass', '.tsv', '.ini')
+                _МАШИНЕ = ('.json', '.jsonl', '.py', '.js', '.css', '.yml', '.yaml', '.xml',
+                           '.html', '.toml')
+                _BOM = b'\xef\xbb\xbf'
+                if _рас in _ГЛАЗАМИ and not data.startswith(_BOM):
+                    _проба = bytes(data[:200000])
+                    try:
+                        _т = _проба.decode('utf-8')
+                        _есть_кир = any('Ѐ' <= с <= 'ӿ' for с in _т)
+                    except UnicodeDecodeError:
+                        # Не UTF-8 вовсе — скорее всего cp1251. Переводим, иначе иероглифы
+                        # будут при любой отметке.
+                        try:
+                            data = _BOM + bytes(data).decode('cp1251').encode('utf-8')
+                        except Exception:
+                            pass
+                        _есть_кир = False
+                    if _есть_кир:
+                        data = _BOM + bytes(data)
+                elif _рас in _МАШИНЕ and data.startswith(_BOM):
+                    data = bytes(data)[len(_BOM):]
+            except Exception:
+                pass
             kb = round(len(data) / 1024)
             cap = ("📦 БЭКАП Muslimoon · " + (caption or ("свежий " + filename)) + (" (%d КБ)" % kb)) + "\n🗄 Резервная копия (журналы+bot.py+index.html). Приватно (R42) — не пересылать."
             # Названный чат — вместо двух зашитых, и подпись тогда своя: приписка «резервная
@@ -17963,6 +18012,63 @@ async def _api_serve(application=None):
         except Exception as e:
             return _cors(web.json_response({'error': str(e)[:160]}, status=500))
 
+    async def zamenit_fayl(r):
+        """Заменить ФАЙЛ в уже опубликованном посте, не создавая второго поста.
+
+        🔴 Высочайший указ владельца 10.08.2026: «если там иероглифы, как например последний
+        файл, то ты обязан его исправить, файл перезагрузить в посте — Телеграм это позволяет».
+
+        Он прав и по существу, и по способу. Удалить пост и выложить заново — значит порвать
+        ссылки: на архивные посты ссылаются реестр, журналы и другие посты, и все они станут
+        указывать в пустоту. Telegram умеет менять вложение НА МЕСТЕ (editMessageMedia) —
+        номер поста, дата и ссылки остаются теми же, меняется только содержимое.
+
+        Файл проходит тот же заслон от иероглифов, что и обычная отправка: чинить битую
+        кодировку и тут же положить её обратно было бы смешно.
+        """
+        if not application or not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            secret = ''; filename = 'file.txt'; data = None
+            чат = None; номер = None; подпись = None
+            reader = await r.multipart()
+            async for part in reader:
+                if part.name == 'secret':
+                    secret = (await part.text()).strip()
+                elif part.name == 'чат':
+                    чат = int((await part.text()).strip())
+                elif part.name == 'номер':
+                    номер = int((await part.text()).strip())
+                elif part.name == 'подпись':
+                    подпись = (await part.text()).strip()
+                elif part.name == 'file':
+                    filename = part.filename or filename
+                    data = await part.read(decode=False)
+            if secret.strip() != (BACKUP_SECRET or '').strip():
+                return _cors(web.json_response({'error': 'auth'}, status=403))
+            if not data or чат is None or номер is None:
+                return _cors(web.json_response({'error': 'нужны чат, номер и файл'}, status=400))
+            _BOM = b'\xef\xbb\xbf'
+            _рас = ('.' + filename.rsplit('.', 1)[-1].lower()) if '.' in filename else ''
+            if _рас in ('.md', '.txt', '.csv', '.log', '.srt', '.tsv', '.ini') \
+                    and not data.startswith(_BOM):
+                try:
+                    if any('Ѐ' <= с <= 'ӿ' for с in bytes(data[:200000]).decode('utf-8')):
+                        data = _BOM + bytes(data)
+                except UnicodeDecodeError:
+                    try:
+                        data = _BOM + bytes(data).decode('cp1251').encode('utf-8')
+                    except Exception:
+                        pass
+            from telegram import InputMediaDocument
+            м = InputMediaDocument(media=bytes(data), filename=filename,
+                                   caption=(подпись or None), parse_mode='HTML')
+            await application.bot.edit_message_media(chat_id=чат, message_id=номер, media=м)
+            return _cors(web.json_response({'ok': True, 'чат': чат, 'номер': номер,
+                                            'размер': len(data)}))
+        except Exception as e:
+            return _cors(web.json_response({'ok': False, 'error': str(e)[:250]}, status=500))
+
     async def hermes_hb(r):
         # 🌩 пульс ПК для Гермес-релея: klod_responder шлёт каждые ~2 мин; секрет = BACKUP_SECRET
         try:
@@ -17997,6 +18103,7 @@ async def _api_serve(application=None):
                   web.post('/api/devfeedback', devfeedback), web.post('/api/worklog', worklog),
                   web.post('/api/rag_feedback', rag_feedback),   # #671: отметка «не туда»/«в точку» у RAG-результата
                   web.post('/api/backup_push', backup_push),
+                  web.post('/api/zamenit_fayl', zamenit_fayl),
                   web.post('/api/hermes_hb', hermes_hb),
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
