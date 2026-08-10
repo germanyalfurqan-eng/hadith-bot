@@ -16661,6 +16661,18 @@ async def _api_serve(application=None):
         # 🎬 Поставить приветственный ролик по его номеру у Telegram (ОБР-341/343).
         # Кладём сюда же: озвучка и ролик — оба про «что бот шлёт», и заводить третью дверь
         # ради одного поля незачем (З-33).
+        # Прислать ролик по его номеру — проверка живьём, что пойманный файл рабочий.
+        # ⚠️ Стоит ДО выключателя озвучки: тумблер про голос, а не про видео. Первый заход я
+        # поставил ниже — и запрос честно отбило «озвучка выключена», хотя звук тут ни при чём.
+        if 'видео_id' in body:
+            try:
+                _м = await application.bot.send_video(
+                    int(body.get('чат') or OWNER_ID), video=str(body['видео_id']),
+                    caption=str(body.get('подпись') or '')[:1000], parse_mode='HTML',
+                    supports_streaming=True)
+                return _cors(web.json_response({'ok': True, 'пост': getattr(_м, 'message_id', None)}))
+            except Exception as _e:
+                return _cors(web.json_response({'ok': False, 'error': str(_e)[:200]}))
         if 'ролик' in body:
             _р = str(body.get('ролик') or '').strip()
             if not _р:
