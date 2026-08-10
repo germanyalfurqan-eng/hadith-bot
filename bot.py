@@ -7015,6 +7015,7 @@ async def _снять_кнопки_модерации(bot, chat_id, message_id, 
 
 
 _ВХОД_ВИДЕЛИ = {}          # (чат, человек, статус) -> когда сказали. Против задвоения.
+_ЛОВИМ_ПРИВЕТ = {}         # чат -> {до, кто, посты}: снимок приветствий после входа (ОБР-296)
 ВХОДЫ_ФАЙЛ = "vhody_videli.json"
 _ВХОДЫ_ГРЯЗНО = [0]
 
@@ -7084,6 +7085,18 @@ async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
             _ВХОД_ВИДЕЛИ[_клч] = _тепер
             _ВХОДЫ_ГРЯЗНО[0] = 1
+        except Exception:
+            pass
+        # 📸 СНИМОК ЧУЖИХ ПРИВЕТСТВИЙ (ОБР-295/296). Владелец: «дождись, пока в чате не
+        # появится при вступлении, и повтори такое же». Повторить дословно нельзя по
+        # пересылке — она срезает кнопки и вложения; а в живом чате эти посты не найти:
+        # приветственные боты удаляют их через время (297 последних постов — ни одного).
+        # Значит снимать надо В МОМЕНТ ВХОДА: сразу после него приветственные боты и пишут.
+        # Помечаем чат: следующие сообщения от ботов лягут в снимок для владельца.
+        try:
+            if chat and chat.id != LOG_CHAT_ID:
+                _ЛОВИМ_ПРИВЕТ[chat.id] = {'до': time.time() + 90,
+                                          'кто': (user.full_name or '')[:60], 'посты': []}
         except Exception:
             pass
         now = datetime.now().strftime("%d.%m.%Y, %H:%M")
@@ -9023,6 +9036,56 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # другим правилам незачем.
     try:
         лента_запомнить(update)
+    except Exception:
+        pass
+
+    # 📸 СНИМОК ПРИВЕТСТВИЙ (ОБР-295/296). Сразу после входа человека приветственные боты
+    # пишут свои посты, а через время удаляют. Пересылка их калечит — режет кнопки и
+    # вложения, — и я на этом дважды показал владельцу не тот макет. Поэтому снимаем ЗДЕСЬ,
+    # в момент появления: со ссылками, кнопками и признаком вложения.
+    try:
+        _лов = _ЛОВИМ_ПРИВЕТ.get(getattr(update.effective_chat, 'id', 0))
+        if _лов and time.time() < _лов['до']:
+            _от = getattr(update.effective_user, 'is_bot', False)
+            _тк = (getattr(update.message, 'text', None)
+                   or getattr(update.message, 'caption', None) or '')
+            if _от and _тк:
+                _кн = []
+                _мк = getattr(update.message, 'reply_markup', None)
+                for _ряд in (getattr(_мк, 'inline_keyboard', None) or []):
+                    for _б in _ряд:
+                        _кн.append('%s → %s' % (getattr(_б, 'text', ''),
+                                                getattr(_б, 'url', '') or 'callback'))
+                _лов['посты'].append({
+                    'кто': (getattr(update.effective_user, 'first_name', '') or '')[:40],
+                    'текст': _тк[:1500], 'кнопки': _кн,
+                    'вложение': bool(getattr(update.message, 'video', None)
+                                     or getattr(update.message, 'photo', None)
+                                     or getattr(update.message, 'animation', None)),
+                    'сущности': [getattr(_э, 'type', '') for _э
+                                 in (getattr(update.message, 'entities', None) or [])],
+                })
+        elif _лов:
+            # окно закрылось — отдаём владельцу ровно то, что видели, и забываем
+            _ЛОВИМ_ПРИВЕТ.pop(getattr(update.effective_chat, 'id', 0), None)
+            if _лов['посты']:
+                _куски = ['📸 <b>СНИМОК ПРИВЕТСТВИЙ</b> — вошёл(ла) %s\n'
+                          'Снято в момент появления: с кнопками и вложениями, как есть.'
+                          % html.escape(_лов['кто'])]
+                for _i, _п in enumerate(_лов['посты'], 1):
+                    _куски.append(
+                        '\n<b>Пост %d</b> (от «%s»%s)\n<pre>%s</pre>%s'
+                        % (_i, html.escape(_п['кто']),
+                           ', с вложением' if _п['вложение'] else '',
+                           html.escape(_п['текст'][:900]),
+                           ('\nкнопки: ' + html.escape('; '.join(_п['кнопки'])))
+                           if _п['кнопки'] else '\nкнопок нет'))
+                try:
+                    await context.bot.send_message(OWNER_ID, '\n'.join(_куски)[:4000],
+                                                   parse_mode='HTML',
+                                                   disable_web_page_preview=True)
+                except Exception:
+                    pass
     except Exception:
         pass
 
