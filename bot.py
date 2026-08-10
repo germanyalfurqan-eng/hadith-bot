@@ -19076,31 +19076,42 @@ async def _api_serve(application=None):
             цели = (куда_чат,) if куда_чат else (LOG_CHAT_ID, OWNER_ID)
             подпись = (caption[:1000] if куда_чат else cap[:1000])
             sent = []
+            # 🔢 НОМЕРА ПОСТОВ (З-47, 10.08.2026, сессия 70). Раньше ответ говорил только
+            # «ушло в такой-то чат» — а по закону доказательство доставки ровно одно: номер,
+            # который Telegram присваивает сам при удачной отправке. Без него отправляющий
+            # инструмент не мог ни напечатать доказательство, ни записать файл в опись архива,
+            # и получалось «отправил» со слов, а не по факту. Возвращаем номера наружу.
+            номера = {}
             for chat in цели:
                 try:
                     if вид in ('видео', 'video'):
                         # supports_streaming: иначе Telegram отдаёт ролик файлом, и его надо
                         # скачивать, чтобы посмотреть. Для вертикального ролика это убивает
                         # весь смысл — его смотрят на ходу, не скачивая.
-                        await application.bot.send_video(chat, video=bytes(data),
-                                                         filename=filename, caption=подпись,
-                                                         supports_streaming=True)
+                        _м = await application.bot.send_video(chat, video=bytes(data),
+                                                              filename=filename, caption=подпись,
+                                                              supports_streaming=True)
                     elif вид in ('фото', 'картинка', 'photo', 'image'):
                         # #255: образцы шрифтов и прочие картинки. Именно send_photo, а не
                         # документом: документ надо скачать, чтобы увидеть, а картинку смотрят
                         # прямо в ленте — для голосования это и есть весь смысл.
-                        await application.bot.send_photo(chat, photo=bytes(data),
-                                                         caption=подпись)
+                        _м = await application.bot.send_photo(chat, photo=bytes(data),
+                                                              caption=подпись)
                     elif вид in ('аудио', 'audio'):
-                        await application.bot.send_audio(chat, audio=bytes(data),
-                                                         filename=filename, caption=подпись)
+                        _м = await application.bot.send_audio(chat, audio=bytes(data),
+                                                              filename=filename, caption=подпись)
                     else:
-                        await application.bot.send_document(chat, document=bytes(data),
-                                                            filename=filename, caption=подпись)
+                        _м = await application.bot.send_document(chat, document=bytes(data),
+                                                                  filename=filename, caption=подпись)
                     sent.append(chat)
+                    try:
+                        номера[str(chat)] = _м.message_id
+                    except Exception:
+                        pass
                 except Exception:
                     pass
-            return _cors(web.json_response({'ok': bool(sent), 'sent': sent, 'size': len(data), 'filename': filename}))
+            return _cors(web.json_response({'ok': bool(sent), 'sent': sent, 'size': len(data),
+                                            'filename': filename, 'номера': номера}))
         except Exception as e:
             return _cors(web.json_response({'error': str(e)[:160]}, status=500))
 
