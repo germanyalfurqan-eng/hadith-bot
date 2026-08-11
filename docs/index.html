@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1354</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1355</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1354';
+const APPVER = 'v1355';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5560,7 +5560,19 @@ async function _bookLoad(){
       let found=0, html='';
       try{
         for(let pgi=1; pgi<=6 && found<25; pgi++){
-          const j=await bjson(BACKEND_URL+'/maktaba?q='+encodeURIComponent(qq)+'&page='+pgi+'&initData='+encodeURIComponent(INITDATA), 20000); const data=j.data||[];
+          /* 🔴 ЗАЯВКА #706 (08.08.2026): «неужели во всей Мактабе Барзах встречается два раза?»
+             Он был прав в своём недоверии — цифра врала, и вот почему.
+             Поиск ПО КНИГЕ спрашивал ОБЩУЮ выдачу по всем 8 589 книгам, а нужную книгу
+             отбирал уже у себя, из первых шести страниц. У частого слова этих страниц
+             сотни: до нашей книги очередь просто не доходила.
+             Замерено на живом поиске: «البرزخ» в отдельно взятой книге встречается 15 раз,
+             адресный запрос это и показывает; прежний путь находил 4. Разница не в
+             «недобрали чуть-чуть», а в том, что человек видел случайную горстку и думал,
+             что это всё.
+             Лечится одним параметром: у нашего же /api/maktaba давно есть book= (адресный
+             поиск, M390в) — им пользовались в трёх других местах, а здесь забыли. Отбор по
+             book_id ниже оставляю: он теперь ничего не отсекает, но и не мешает. */
+          const j=await bjson(BACKEND_URL+'/maktaba?q='+encodeURIComponent(qq)+'&book='+encodeURIComponent(_bookView.id)+'&page='+pgi+'&initData='+encodeURIComponent(INITDATA), 20000); const data=j.data||[];
           if(!data.length) break;
           for(const x of data){ if(String(x.book_id)!==String(_bookView.id)) continue;
             const sn=_cleanMaktabaSnip(String(x.snip||'').replace(/<[^>]*>/g,''));
@@ -5611,7 +5623,9 @@ async function _bookLoad(){
       try{
         for(const term of searchAttempts){ if(excerpts.length>=_RAG_CAP) break;
           for(let pgi=1; pgi<=6 && excerpts.length<_RAG_CAP; pgi++){
-            const j=await bjson(BACKEND_URL+'/maktaba?q='+encodeURIComponent(term)+'&page='+pgi+'&initData='+encodeURIComponent(INITDATA), 20000); const data=j.data||[];
+            /* #706, то же место болезни: смысловой поиск тоже спрашивал ВСЮ библиотеку и
+               отбирал свою книгу вручную. Признак один — чиню оба, а не тот, где заметил. */
+            const j=await bjson(BACKEND_URL+'/maktaba?q='+encodeURIComponent(term)+'&book='+encodeURIComponent(_bookView.id)+'&page='+pgi+'&initData='+encodeURIComponent(INITDATA), 20000); const data=j.data||[];
             if(!data.length) break;
             for(const x of data){ if(String(x.book_id)!==String(_bookView.id)) continue; if(seenPid.has(x.page_id)) continue;
               const sn=_cleanMaktabaSnip(String(x.snip||'').replace(/<[^>]*>/g,'')); if(!sn) continue;
