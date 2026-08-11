@@ -1568,7 +1568,38 @@ def dsoc_запрос(сообщения, потолок=3000):
             return None, 0, 0
         j = о.json()
         u = j.get("usage") or {}
-        return ((j.get("choices") or [{}])[0].get("message", {}).get("content"),
+        _м = (j.get("choices") or [{}])[0].get("message", {}) or {}
+        _текст = _м.get("content")
+        # 🔴 ПУСТОЙ ОТВЕТ ДУМАЮЩЕЙ МОДЕЛИ (обращения #366/#399, 11.08.2026).
+        #
+        # Владелец: «Ботяра голову потерял» — и показал наш честный ответ «модель вернула
+        # пустоту». Пустота настоящая: у думающей модели ответ и размышление идут В РАЗНЫХ
+        # полях, и когда потолок уходит на размышление, `content` остаётся пустым, а
+        # `reasoning_content` полон. Мы читали только первое — и получали «ничего» при живой
+        # работе модели, за которую уже заплачено.
+        #
+        # Это НЕ новое знание: тот же капкан описан в моих же заметках (Н-246, потолок 60
+        # токенов на думающей модели дал сорок пустых ответов). Знал и не перенёс сюда.
+        #
+        # Размышление наружу НЕ отдаём — человеку нужен ответ, а не наши черновики. Но оно
+        # служит уликой: модель работала, ей просто не хватило места договорить. Значит есть
+        # смысл переспросить ОДИН раз с потолком побольше, а не объявлять сбой.
+        if not (_текст or '').strip() and (_м.get("reasoning_content") or '').strip():
+            о2 = requests.post(OPENCODE_URL, timeout=240,
+                               headers={"Content-Type": "application/json",
+                                        "Authorization": "Bearer " + _кл},
+                               json={"model": OPENCODE_MODEL, "messages": сообщения,
+                                     "max_tokens": min(int(потолок) * 3, 16000),
+                                     "temperature": 0.4})
+            if о2.status_code == 200:
+                j2 = о2.json()
+                u2 = j2.get("usage") or {}
+                _т2 = ((j2.get("choices") or [{}])[0].get("message", {}) or {}).get("content")
+                if (_т2 or '').strip():
+                    return (_т2,
+                            (u.get("prompt_tokens") or 0) + (u2.get("prompt_tokens") or 0),
+                            (u.get("completion_tokens") or 0) + (u2.get("completion_tokens") or 0))
+        return (_текст,
                 u.get("prompt_tokens") or 0, u.get("completion_tokens") or 0)
     except Exception:
         return None, 0, 0
