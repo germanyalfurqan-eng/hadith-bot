@@ -63,6 +63,18 @@ from urllib.parse import parse_qsl   # в /api/qaudio зовётся urllib.requ
                                      # только urllib.parse. Аудио Корана упало бы с NameError.
                                      # Найдено ДО жалобы владельца — ради этого сторож и писался.
 from telegram import Update, ReplyKeyboardMarkup
+# 🔴🔴 12.08.2026. Короткие имена клавиатуры (_КБ/_КЛ) заводились МЕСТНЫМ импортом внутри
+# двух функций, а пользовались ими ЧЕТЫРЕ — и в остальных двух их не было вовсе. Каждое
+# такое место падало NameError: «💾 Сохранить» и «↩️ Вернуть как было» у помощника, весь
+# разбор кнопок модерации (восемь строк подряд) и сообщение о неудаче помощника.
+#
+# В журнале ошибок это лежало с 06.08.2026 записью «name '_КЛ' is not defined» — рядом с
+# такой же записью про перевод, и обе пролежали незамеченными. Нашлось не глазами: разбором
+# по всем употреблениям сверил, есть ли импорт в объемлющей функции ДО строки использования.
+#
+# Чиню классом: имена заводятся ОДИН раз на модуль. Местные импорты внутри функций оставлены
+# как есть — они дают то же самое и ничего не ломают.
+from telegram import InlineKeyboardButton as _КБ, InlineKeyboardMarkup as _КЛ
 from telegram.ext import CallbackQueryHandler, ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler, PollAnswerHandler, MessageReactionHandler
 
 # ============ АЛЬ-МУХАЙМИН (الموحد المهيمن) — наша выверенная база ============
