@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1353</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1354</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1353';
+const APPVER = 'v1354';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -17309,6 +17309,24 @@ function addNotFoundBtn(res, q){ try{ if(!res) return; const w=document.createEl
   w.appendChild(b); res.appendChild(w); }catch(e){_тихо(e,"L16966")} }
 function _fbImgReset(){ var fi=document.getElementById('fbImg'); if(fi) fi.value=''; var fp=document.getElementById('fbImgPrev'); if(fp) fp.style.display='none'; var fn=document.getElementById('fbImgName'); if(fn) fn.textContent=''; }
 function openFeedback(ctx){ _fbCtx=ctx||''; var c=document.getElementById('fbCtx'); if(c) c.textContent=ctx?('Контекст: '+ctx):'Общее замечание'; var t=document.getElementById('fbText'); if(t) t.value=''; _fbImgReset(); var m=document.getElementById('fbModal'); modalTop(m); m.style.display='flex'; }
+/* 🔴 ЗАЯВКА #708 (10.08.2026): «пробегись по приложению и поставь того, кто увидит такой
+   мусор типа <b> и прочее». Нашёл 12.08 своими глазами в живом приложении: окно «🆕 Что
+   нового» показывало «🔗 <b>Ещё 284 звена…</b>» — с тегами прямо в тексте.
+
+   ОТКУДА ЭТО. Одна и та же нота обновления идёт В ДВА МЕСТА: постом в канал, где Telegram
+   читает HTML, и сюда, в окно приложения. Здесь строка ставилась через textContent — то
+   есть «показать буквально», — и разметка, законная для канала, превращалась в сор.
+
+   ПОЧЕМУ НЕ «УБРАТЬ ТЕГИ ИЗ НОТЫ». Они там нужны: в канале ими выделено главное. Правильно
+   не обеднять источник, а научить показ понимать те немногие теги, которыми мы пишем.
+
+   ⚠️ innerHTML сырой строкой ставить нельзя, даже своей: текст приезжает по сети. Поэтому
+   сперва экранируем ВСЁ, потом возвращаем к жизни только белый список — b/i/u/s/code. Что
+   не в списке, останется видимым текстом, а не выполнится. */
+function _нотаВHtml(s){ try{
+  const э=String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return э.replace(/&lt;(\/?)(b|i|u|s|code|em|strong)&gt;/gi,'<$1$2>');
+}catch(e){ return String(s==null?'':s); } }
 // M30/#30: «Что нового» — пункты обновления, у каждого кнопка 💬 чтобы оставить замечание ПО ЭТОМУ пункту
 window.showUpdateNotes=async function(ver){
   ver=ver||APPVER;
@@ -17327,9 +17345,9 @@ window.showUpdateNotes=async function(ver){
   body.innerHTML='';
   if(!lines.length){ body.innerHTML='<div class="hint">Описание пунктов пока недоступно.</div>'; }
   lines.forEach(line=>{ const row=document.createElement('div'); row.style.cssText='display:flex;gap:8px;align-items:flex-start;border-bottom:1px solid var(--border);padding:8px 2px';
-    const tx=document.createElement('div'); tx.style.cssText='flex:1;font-size:13px;line-height:1.5'; tx.textContent=line.trim();
+    const tx=document.createElement('div'); tx.style.cssText='flex:1;font-size:13px;line-height:1.5'; tx.innerHTML=_нотаВHtml(line.trim());
     const cm=document.createElement('button'); cm.className='mini'; cm.textContent='💬'; cm.title='Замечание по этому пункту'; cm.style.flex='none';
-    cm.onclick=()=>{ m.style.display='none'; try{ openFeedback('по обновлению '+ver+' → «'+line.trim().slice(0,140)+'»'); }catch(e){_тихо(e,"L16989")} };
+    cm.onclick=()=>{ m.style.display='none'; try{ openFeedback('по обновлению '+ver+' → «'+line.trim().replace(/<\/?[a-z][^>]*>/gi,'').slice(0,140)+'»'); }catch(e){_тихо(e,"L16989")} };   /* #708: в замечание тоже уходила строка с тегами — человек цитировал бы сор */
     row.appendChild(tx); row.appendChild(cm); body.appendChild(row); });
 };
 async function sendFeedback(){
