@@ -751,6 +751,11 @@ def озвучка_задать(вкл=None, голос=None, кто=''):
     return д
 
 
+# Когда этот процесс поднялся. Нужно, чтобы по /api/health было видно, что бэкенд
+# ПЕРЕЗАПУСТИЛСЯ после выкатки, а не работает старым кодом со вчерашнего дня.
+_ЗАПУЩЕН_В = (datetime.utcnow() + timedelta(hours=3)).strftime('%d.%m.%Y %H:%M МСК')
+
+
 def _тревога_владельцу(текст):
     """Короткая тревога владельцу прямым запросом к Telegram, без очередей и без ожидания.
 
@@ -16902,8 +16907,27 @@ async def _api_serve(application=None):
                         .get('opencode_by_key') or {}).get(_сег) or {})
         except Exception:
             pass
+        # 🔴 12.08.2026. Выкатил три правки бота подряд — и не смог ответить на простейший
+        # вопрос: ДОЕХАЛИ ли они. У фронта для этого есть ver.txt, у бэкенда не было ничего,
+        # и «Railway передеплоился» оставалось верой. Между тем прецедент ровно об этом уже
+        # был: промт не доезжал до образа, потому что его не копировал Dockerfile, — и никто
+        # этого не видел, потому что смотреть было не на что.
+        # Отметку берём такую, которая НЕ МОЖЕТ разойтись с правдой: снимок кода от самого
+        # Railway, время правки файла и время запуска. Руками их не подкрутишь и забыть
+        # обновить нельзя — в отличие от номера версии, вписанного в код.
+        _код = {}
+        try:
+            _сн = (os.environ.get('RAILWAY_GIT_COMMIT_SHA')
+                   or os.environ.get('RAILWAY_DEPLOYMENT_ID') or '')
+            _код = {'снимок': _сн[:12] or 'не сказан',
+                    'файл_правлен': datetime.utcfromtimestamp(
+                        os.path.getmtime(__file__) + 3 * 3600).strftime('%d.%m.%Y %H:%M МСК'),
+                    'запущен': _ЗАПУЩЕН_В}
+        except Exception:
+            _код = {'снимок': 'не сказан'}
         return _cors(web.json_response({
             'ok': True,
+            'код': _код,
             'ai': {'groq': bool(GROQ_API_KEY), 'gemini': bool(GEMINI_API_KEY),
                    'openrouter': bool(OPENROUTER_API_KEY), 'deepseek': bool(DEEPSEEK_API_KEY),
                    'nvidia_nim': bool(NVIDIA_NIM_API_KEY)},
