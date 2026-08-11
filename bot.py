@@ -8496,14 +8496,31 @@ async def on_moderate(update, context):
         try:
             _чл = await context.bot.get_chat_member(_чат, _кого)
             if getattr(_чл, 'status', '') in ('kicked', 'left', 'restricted'):
+                # 🔴 ОБРАЩЕНИЕ ВЛАДЕЛЬЦА #411 (11.08.2026): «не надо писать отдельным постом,
+                # вписывай сведения в пост приветствия, как ты делаешь в случае бана. И пиши,
+                # что ОГРАНИЧЕН, а не забанен, когда ограничиваем».
+                #
+                # Он прав дважды. Во-первых, отдельный пост плодит в чате ленту служебных
+                # сообщений — ровно то, от чего мы уходили. Приписка должна лечь туда же, куда
+                # ложится обычная: в само приветствие. Во-вторых, слово брать надо от ТОГО,
+                # ЧТО НАЖАЛИ, а не от того, что вернул Telegram: человек мог быть ограничен
+                # раньше по другой причине, и назвать это «забанен» — соврать о своём действии.
+                _слово = ('забанен админом' if что == 'ban' else 'ограничен админом')
+                _пометка = ('✅ %s. (Внутри была заминка, но действие прошло — проверил у '
+                            'Telegram.)' % _слово.capitalize())
                 try:
-                    await q.message.reply_text(
-                        '✅ Сделано: %d сейчас %s. (Внутри была заминка, но действие прошло — '
-                        'проверил у Telegram.)'
-                        % (_кого, {'kicked': 'забанен', 'left': 'вне чата',
-                                   'restricted': 'ограничен'}[getattr(_чл, 'status')]))
+                    if (getattr(q.message, 'text', None)
+                            or getattr(q.message, 'text_html', None)):
+                        await q.edit_message_text(
+                            (q.message.text_html or q.message.text or '') + '\n' + _пометка,
+                            parse_mode='HTML', disable_web_page_preview=True)
+                    else:
+                        _п = (getattr(q.message, 'caption_html', None)
+                              or getattr(q.message, 'caption', None) or '')
+                        await q.edit_message_caption(caption=(_п + '\n' + _пометка)[:1024],
+                                                     parse_mode='HTML')
                 except Exception:
-                    pass
+                    pass      # дописать не вышло — клавиатуру всё равно не снимаем (#380)
                 return
         except Exception:
             pass
