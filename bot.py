@@ -5869,9 +5869,21 @@ def get_random_quran():
     return surah, ayah, a, r
 
 def search_hadith(query):
+    """Поиск по dorar.net. Вернёт СПИСОК находок либо None, если источник не ответил.
+
+    🔴 12.08.2026. Прежде функция на любую беду возвращала пустой список — и бот отвечал
+    человеку «❌ Ничего не найдено». Проверил живьём: dorar.net отдаёт нам **403 Forbidden**
+    (защита от роботов). То есть мы не «не нашли», мы вообще не искали — а человеку сказали,
+    что искали и не нашли.
+    Это прямо запрещено правилом самого владельца, записанным в промте помощника (Ж-4):
+    «"не нашёл" и "не искал" — разные ответы, путать их запрещено: первое знание, второе
+    бездействие, выданное за знание».
+    Поэтому теперь у неудачи ОТДЕЛЬНЫЙ ответ — None, и звонящий обязан сказать правду.
+    """
     try:
         r = requests.get(f"https://dorar.net/dorar_api.json?skey={query}&page=1", timeout=15)
-        if r.status_code != 200: return []
+        if r.status_code != 200:
+            return None                    # источник не пустил — это НЕ «ничего не найдено»
         html = r.json().get("ahadith", {}).get("result", "")
         if not html: return []
         t = re.sub(r'\s+', ' ', unescape(re.sub(r'<[^>]+>', ' ', html)))
@@ -5899,7 +5911,8 @@ def search_hadith(query):
             if text and len(text) > 10:
                 results.append({"text": text, "rawi": rawi, "muhaddith": muhaddith, "source": source, "page": page, "grade": grade})
         return results
-    except: return []
+    except Exception:
+        return None                         # сеть/разбор подвели — тоже «не искали», а не «не нашли»
 
 def search_similar_hadith(arabic_text):
     if not arabic_text or len(arabic_text) < 20: return []
@@ -14621,6 +14634,16 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if sq:
         await update.message.reply_text(f"🔍 Ищу: {sq}...")
         results = search_hadith(sq)
+        if results is None:
+            # Источник не ответил (dorar.net закрылся от роботов — проверено 12.08.2026:
+            # HTTP 403). Говорим ПРАВДУ и предлагаем то, что работает: своя база из 41
+            # первоисточника и Мактаба ищутся у нас, без чужого сайта.
+            await update.message.reply_text(
+                "🚧 Внешний поисковик (dorar.net) сейчас нас не пускает — это не «ничего не "
+                "найдено», это «не удалось поискать» ТАМ.\n\n"
+                "Своё работает: напиши слово или фразу в приложении — ищем по нашим 41 "
+                "первоисточнику и по библиотеке Мактаба.")
+            return
         if not results:
             await update.message.reply_text("❌ Ничего не найдено.")
             return
@@ -19374,7 +19397,13 @@ async def _api_serve(application=None):
         try:
             q = (r.query.get('q') or '')[:200]
             res = await loop.run_in_executor(None, search_hadith, q) if q else []
-            return _cors(web.json_response({'results': res or []}))
+            # None = источник не пустил. Отдаём это ОТДЕЛЬНЫМ полем, а не пустым списком:
+            # приложение должно уметь сказать человеку правду, а не «ничего не найдено».
+            if res is None:
+                return _cors(web.json_response(
+                    {'results': [], 'источник': 'не ответил',
+                     'почему': 'dorar.net закрыт для роботов (403)'}))
+            return _cors(web.json_response({'results': res}))
         except Exception as e:
             return _cors(web.json_response({'results': [], 'error': str(e)}))
 
