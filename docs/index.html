@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1359</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1360</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1359';
+const APPVER = 'v1360';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2846,6 +2846,81 @@ const _ahmOne={};
 async function loadAhmadOne(num){ if(ahmadArr){ return ahmadArr.find(x=>x.num===String(num))||null; }   // если полный массив уже в памяти (поиск/читалка) — берём оттуда
   const b=Math.floor((+num)/1000); if(!(b in _ahmOne)){ try{ _ahmOne[b]=await cachedFetchJSON('./ahmad/'+b+'.json', 60000, {silent:true}); }catch(e){ delete _ahmOne[b]; return null; } }   // провал не запоминаем: `b in _ahmOne` после null был бы true навсегда
   const m=_ahmOne[b]; const r=m&&m[String(num)]; return r?{num:String(num),text:r[0]||'',grade:r[1]||'',norm:''}:null; }
+
+/* 🚀 ЧИТАЛКА МУСНАДА БЕЗ ДВАДЦАТИ ПЯТИ МЕГАБАЙТ (сессия 71, 12.08.2026)
+
+   ЧТО БЫЛО. Самая частая запись в журнале ошибок приложения — «Полная загрузка Ахмада»:
+   81 раз из 242, треть всего журнала. Приходит она не из поиска (его мерили и оправдали), а
+   из ЧИТАЛКИ: у восьми книг из девяти есть готовый файл reader/<код>.json, а у Муснада его
+   на сайте нет — reader/ahmad.json отдаёт 404. Читалка падала в запасной путь и тянула весь
+   сборник.
+
+   ЗАМЕР НА ЖИВОМ САЙТЕ (настольный браузер, хорошая сеть, кэш снесён):
+     весь Муснад .......... 24,76 МБ ... 57,7 с
+     один шард ............  0,91 МБ ....  2,3 с
+     Бухари для сравнения .  9,28 МБ ... 16,7 с
+   Почти минута ожидания там, где человек хочет прочитать ОДИН хадис: читалка показывает
+   ровно одну запись (_readArr[_readIdx]), остальные 27 085 он не видит.
+
+   ЧТО НЕ ПОМОГЛО, И ЭТО ТОЖЕ ЗАМЕР. Тянуть 28 шардов разом (Promise.all) — 47 с против 57,7.
+   Выигрыш 18%: упирается в мегабайты, а не в число соединений. Значит лечить надо объём, а
+   не расторопность, — не грузить того, чего не читают.
+
+   ЧТО СТАЛО. Указатель номеров (ahmad_nums.json, 148 КБ, в сети ~42 КБ) даёт длину книги и
+   порядок записей — навигация и «Запись N из M» работают сразу. Текст приезжает шардом на
+   0,9 МБ: тем, в котором открытая запись. Соседние подтягиваются, когда до них долистают.
+
+   ⚠️ ЗАСЛОН ПЕРВЫЙ: урезанный Муснад не отдаём. Не сошёлся указатель или не дошёл первый
+   шард — возвращаем null, и работает прежний путь целиком. Показать книгу короче, чем она
+   есть, хуже, чем показать её медленно.
+   ⚠️ ЗАСЛОН ВТОРОЙ: поиск ВНУТРИ книги обходит все записи. По недогруженным он молча не нашёл
+   бы то, что в книге есть, — а «не нашёл» и «не искал» путать запрещено. Поэтому перед
+   поиском книга дочитывается целиком (_ahmВсё), и только потом ищем. */
+let _ahmNums=null; const _ahmШарды={};
+async function _ahmШард(b){
+  if(!ahmadArr) return false;
+  if(_ahmШарды[b]) return _ahmШарды[b];
+  return _ahmШарды[b]=(async function(){
+    let m=null;
+    try{ m=await cachedFetchJSON('./ahmad/'+b+'.json', 60000, {silent:true}); }catch(e){ m=null; }
+    if(!m || typeof m!=='object'){ delete _ahmШарды[b]; return false; }   // провал не запоминаем: иначе шард не переспросить никогда
+    for(let i=0;i<ahmadArr.length;i++){ const z=ahmadArr[i];
+      if(z && z._пусто && Math.floor((+z.num)/1000)===b){ const r=m[z.num];
+        if(r){ z.text=r[0]||''; z.grade=r[1]||''; z._пусто=false; } } }
+    return true;
+  })();
+}
+async function _ahmВсё(){          // дочитать книгу целиком — для поиска внутри неё
+  if(!ahmadArr) return false;
+  if(!ahmadArr.some(function(z){ return z && z._пусто; })) return true;
+  const б={}; ahmadArr.forEach(function(z){ if(z&&z._пусто) б[Math.floor((+z.num)/1000)]=1; });
+  const ок=await Promise.all(Object.keys(б).map(function(b){ return _ahmШард(+b); }));
+  return ок.every(Boolean);
+}
+async function loadAhmadLazy(){
+  if(ahmadArr) return ahmadArr;
+  try{
+    const nums=_ahmNums||(_ahmNums=await cachedFetchJSON('./ahmad_nums.json', 60000, {silent:true}));
+    if(!Array.isArray(nums)||nums.length<27000) return null;      // указатель не тот — уходим на прежний путь
+    ahmadArr=nums.map(function(n){ return {num:String(n),text:'',grade:'',norm:'',_пусто:true}; });
+    /* ⚠️ ХАДИС, КОТОРЫЙ ЕДВА НЕ ПРОПАЛ. Шарды разложены ПО НОМЕРУ, а в Муснаде номер 22293
+       стоит у ДВУХ разных хадисов (проверено сверкой ленивого пути с полным файлом: 27 086
+       против 27 087). По номеру помещается один — второй исчез бы из книги молча, и заметить
+       это было бы почти нельзя. Такие записи вынесены в ahmad_extra.json (1,2 КБ) и
+       вклеиваются на своё место. Не приехала добавка — отдаём null и работает прежний путь:
+       книга короче, чем она есть, недопустима ни на один хадис. */
+    let доб=null;
+    try{ доб=await cachedFetchJSON('./ahmad_extra.json', 30000, {silent:true}); }catch(e){ доб=null; }
+    if(!Array.isArray(доб)){ ahmadArr=null; return null; }
+    for(let d=0; d<доб.length; d++){ const z=доб[d]; const н=String(z.n);
+      let i=ahmadArr.findIndex(function(y){ return y.num===н; });
+      if(i<0) i=ahmadArr.length; else if(!z.перед) i=i+1;
+      ahmadArr.splice(i,0,{num:н,text:z.t||'',grade:z.g||'',norm:'',_пусто:false}); }
+    const первый=await _ahmШард(Math.floor((+ahmadArr[0].num)/1000));
+    if(!первый){ ahmadArr=null; return null; }                    // не дошёл даже первый шард — не показываем пустую книгу
+    return ahmadArr;
+  }catch(e){ ahmadArr=null; return null; }
+}
 // шардинг Сахих Муслима: открыть ОДИН хадис по номеру → шард ~1МБ (muslim/<num//500>.json {num:[raw,fw]}), не весь 15МБ (baqi 8.4+clean 6.8)
 const _musOne={};
 async function loadMuslimOne(num){ if(cache['muslim']){ return cache['muslim'].find(x=>x.num===String(num))||null; }   // полный массив в памяти (читалка/поиск) — оттуда
@@ -18506,6 +18581,18 @@ function _readDoFind(){
   const inp=document.getElementById('readFind'); const info=document.getElementById('readFindInfo');
   const q=canon((inp&&inp.value||'')); _readFindM=[]; _readFindPos=-1;
   if(!q || !_readArr){ if(info) info.textContent=''; return; }
+  /* 🚀 С71 ЗАСЛОН ЛЕНИВОЙ ЧИТАЛКИ. Муснад приезжает шардами, и по недогруженным записям этот
+     обход молча дал бы «0 совпадений» на хадис, который в книге ЕСТЬ. Это не медленно — это
+     неверно, а «не нашёл» и «не искал» путать запрещено. Поэтому сперва дочитываем книгу
+     целиком, и только потом ищем; не дочиталась — честно говорим, а не выдаём пустой ответ. */
+  if(_readCode==='ahmad' && _readArr.some(function(z){ return z && z._пусто; })){
+    if(info) info.textContent='дочитываю книгу, чтобы искать по всей…';
+    _ahmВсё().then(function(ок){
+      if(ок){ _readDoFind(); }
+      else if(info) info.textContent='книга дочиталась не вся — не ищу, чтобы не сказать «нет» о том, что есть';
+    });
+    return;
+  }
   // M330 (заявка «поиск однокоренных внутри книги»): при включённом тумблере сравниваем СКЕЛЕТЫ слов —
   // тот же skel(), что и в режиме «Однокоренные» основного поиска, так что результат предсказуемо одинаковый.
   const _rootOn = !!(document.getElementById('readRoot')||{}).checked;
@@ -18566,7 +18653,7 @@ async function _readLoad(code){
   }catch(e){_тихо(e,"L18124")} }   // файла нет, сеть подвела или книга не та — падаем на прежний источник, читалка не остаётся пустой
   const C=COLLECTIONS.find(x=>x.code===code); const X=EXTRA_MAP[code];
   if(code==='muhaymin'){ const a=await loadMuhaymin(); return a.map(x=>({num:x.n,n:x.n,text:x.text,rv:x.rv,rc:x.rc,b:x.b,c:x.c})); }   // #265-след/скрин «не удалось загрузить»: ридер грузил ./editions/muhaymin.json (нет такого файла) → теперь надёжный loadMuhaymin (корень ./muhaymin.json, 3 ретрая)
-  if(code==='ahmad') return await loadAhmad();
+  if(code==='ahmad'){ const _л=await loadAhmadLazy(); if(_л) return _л; return await loadAhmad(); }   /* 🚀 С71: шард на 0,9 МБ вместо всего Муснада на 24,8 МБ; не сложилось — прежний путь */
   if(X&&X.file) return await loadLocal(code,X.file);
   if(X) return await loadExtra(code);
   if(C&&C.file) return await loadLocal(code,C.file);
@@ -18589,6 +18676,15 @@ function _readRender(){
   if(!_readArr||!_readArr.length) return;
   if(_readIdx<0)_readIdx=0; if(_readIdx>=_readArr.length)_readIdx=_readArr.length-1;
   const h=_readArr[_readIdx];
+  /* 🚀 С71: запись Муснада ещё не подтянута (ленивая читалка) — тянем её шард и перерисовываем.
+     Пока едет, показываем ЧЕСТНУЮ строку «загружаю», а не пустое место: пустое читается как
+     «хадиса нет», и это ровно та ложь, которой в книге быть не должно. */
+  if(h && h._пусто && _readCode==='ahmad'){ const _был=_readIdx;
+    try{ const _b=document.getElementById('readBody');
+         if(_b) _b.innerHTML='<div style="padding:22px;text-align:center;opacity:.75">⏳ Загружаю страницу Муснада…</div>'; }catch(e){_тихо(e,"L18591")}
+    _ahmШард(Math.floor((+h.num)/1000)).then(function(ок){ if(ок && _readIdx===_был) _readRender(); });
+    if(h._пусто) return;
+  }
   // Владелец 26.07.2026: «непонятно что за цифры». Было «№5864 (8201 из 10657) · стр. 87778» —
   // три числа подряд, из них 87778 вообще внутренний номер записи Мактабы, а не страница книги.
   // Оставляем то, что человеку нужно: номер хадиса и НАСТОЯЩУЮ печатную страницу. Порядковый номер
