@@ -15660,15 +15660,52 @@ def _ensure_data_branch():
     return _data_branch_ready
 
 def _data_get(path, default=None):
-    """Прочитать JSON из ветки data через contents API (без CDN-кэша)."""
+    """Прочитать JSON из ветки data через contents API (без CDN-кэша).
+
+    🔴 12.08.2026, СРОЧНАЯ ПОЧИНКА. Владелец: «срочно телеграм исправь, не могу дописаться».
+    Бот отвечал ему: «Не смог записать обращение — реестр сейчас недоступен».
+
+    ЧТО БЫЛО НА САМОМ ДЕЛЕ. Файлы БОЛЬШЕ 1 МБ contents API отдаёт БЕЗ СОДЕРЖИМОГО: приходит
+    честный HTTP 200, в теле `"encoding": "none"` и пустая строка вместо `content`. Дальше
+    `b64decode("")` даёт пустоту, `json.loads` на ней падает, исключение гасится, и функция
+    возвращает default — то есть «реестра нет».
+    Реестр обращений владельца — append-only по закону (обрезать его нельзя: скользящее окно
+    уже однажды съедало обращения) — дорос до 1 049 349 байт. Ровно 1,00 МБ. И бот перестал
+    принимать обращения ВОВСЕ.
+
+    Причина не в сети, не в токене и не в GitHub — в ПРЕДЕЛЕ СПОСОБА ЧТЕНИЯ. Само же место
+    выше по коду трижды повторяет попытку с паузой, считая, что дело в сетевой икоте: три
+    повтора против предела не помогают ничем, они лишь делают отказ медленнее.
+
+    ПОЧИНКА. Не разобралось из contents — берём тот же файл через Git Blobs API по его sha
+    (sha приходит в ответе ВСЕГДА, даже когда содержимое не отдано). У blobs предел 100 МБ,
+    и он, как и contents, не кэшируется CDN — то есть отдаёт РОВНО ту версию, что в ветке.
+    Это важнее удобства: читаем мы перед тем, как дописать, и устаревшая копия означала бы
+    затёртые чужие записи.
+    Сырой файл (raw) остаётся третьим запасом — он кэшируется до пяти минут, поэтому идёт
+    последним, а не первым.
+    """
     try:
         if GITHUB_TOKEN:
+            заг = {"Authorization": f"token {GITHUB_TOKEN}"}
             api = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}?ref=data"
-            r = requests.get(api, headers={"Authorization": f"token {GITHUB_TOKEN}"}, timeout=8)
-            if r.status_code == 200:
-                return json.loads(base64.b64decode(r.json().get("content", "")).decode("utf-8"))
-            return default
-        r = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/data/{path}", timeout=8)
+            r = requests.get(api, headers=заг, timeout=8)
+            if r.status_code != 200:
+                return default
+            тело = r.json()
+            сырое = тело.get("content") or ""
+            if сырое.strip():
+                return json.loads(base64.b64decode(сырое).decode("utf-8"))
+            # содержимого нет — файл перерос предел contents. Берём по sha, точной версией.
+            sha = тело.get("sha")
+            if sha:
+                b = requests.get(
+                    f"https://api.github.com/repos/{GITHUB_REPO}/git/blobs/{sha}",
+                    headers=dict(заг, Accept="application/vnd.github.raw"), timeout=20)
+                if b.status_code == 200 and b.content:
+                    return json.loads(b.content.decode("utf-8"))
+        r = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/data/{path}",
+                         timeout=20)
         if r.status_code == 200:
             return r.json()
     except Exception:
