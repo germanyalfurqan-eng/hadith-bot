@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1357</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1358</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1357';
+const APPVER = 'v1358';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -1811,7 +1811,7 @@ const EXTRA = [
   {code:'ibnmubarak',   short:'Ибн аль-Мубарак',ru:'Ибн аль-Мубарак — Муснад',    ar:'مسند ابن المبارك',  author:'Ибн аль-Мубарак', kw:'ибн мубарак ibnmubarak муснад', n:272},
   /* тематические сборники (40 Навави / Кудси / Дехлеви) УБРАНЫ — здесь только первоисточники (ревизия владельца) */
   /* аль-Мухаймин — В КОНЦЕ: книга ещё НЕ обработана разработчиками (возможны ошибки) */
-  {code:'muhaymin',   muhaymin:true, warn:'⚠️ книга в обработке — возможны ошибки', short:'аль-Мухаймин', ru:'аль-Мухаймин (الموحد المهيمن) — Муршид', ar:'المهيمن', author:'مرشد بن يوسف', kw:'мухаймин мухэймин muhaymin муршид мухаймин', n:3307},
+  {code:'muhaymin',   muhaymin:true, warn:'⚠️ книга в обработке — возможны ошибки', short:'аль-Мухаймин', ru:'аль-Мухаймин (المهيمن) — Муршид', ar:'المهيمن', author:'مرشد بن يوسف', kw:'мухаймин мухэймин muhaymin муршид мухаймин', n:3307},
 ];
 const EXTRA_MAP={}; EXTRA.forEach(e=>EXTRA_MAP[e.code]=e);
 /* Названия сур (рус) — для группировки результатов Корана по сурам */
@@ -6763,6 +6763,13 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
   try{ if(riwNo<=1){ const _dzb=(COLL_BIDS[code]&&COLL_BIDS[code][0])||EXTRA_BIDS[code]; if(_dzb) dzChainLazy(card, _dzb, h.num); } }catch(e){_тихо(e,"L6648")}   // M496: ⛓ цепь и на риваятных (1-й риваят)
   return card;   // #234: позиция риваята → точная буква sunnah.com
 }
+/* Тахридж автора: {«номер|индекс риваята» → абзац}. Грузим один раз и лениво — 0,3 МБ,
+   и нужен он только когда на экране карточка Мухаймина. */
+let _муТахрП=null;
+function _муТахридж(){ if(_муТахрП) return _муТахрП;
+  _муТахрП=fetch('./muhaymin_tahrij.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({}));
+  return _муТахрП; }
+function m_ключ(м,h,i){ try{ return м[String(h.n)+'|'+i]||''; }catch(e){ return ''; } }
 function cardMuh(d,groups){
   const {h}=d; const card=document.createElement('div');card.className='card';
   const rv=(h.rv&&h.rv.length)?h.rv:[{t:h.text||'',s:''}];
@@ -6774,6 +6781,21 @@ function cardMuh(d,groups){
     cp.onclick=()=>copyWithSig(t+(s?('\n— '+s):'')+'\n(المهيمن №'+h.n+')');
     head.appendChild(lab); head.appendChild(cp); card.appendChild(head);
     const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(t,groups);card.appendChild(ar);
+    /* 🔴 ОБРАЩЕНИЕ #462 (12.08.2026): «найди также тахридж хадисов и вставь в приложение —
+       где какой хадис передаётся, особенно Мухэймина книгу».
+       Оказалось, искать далеко не надо: автор САМ сделал тахридж — абзац «أخرجه فلان...» —
+       и он лежал у нас в старой базе на 3808 риваятов. Приложение работает на новой
+       (переразбивка), где этого поля нет вовсе: при переразбивке тахридж потерялся.
+       Сшито по честному ключу (номер хадиса + метка источника автора), вернулось 2660.
+       ⚠️ Подписываем ИМЕНЕМ АВТОРА. Это его слова, а не наш вывод: наш собственный тахридж
+       по 64 печатям — отдельная вещь и живёт своей кнопкой «Где ещё передаётся». */
+    try{ _муТахридж().then(м=>{ const п=м&&m_ключ(м,h,i); if(!п) return;
+      const бл=document.createElement('details');
+      бл.style.cssText='margin:4px 0 2px;border:1px solid #4a5a3a;border-radius:9px;padding:6px 9px;background:rgba(90,140,70,.10)';
+      бл.innerHTML='<summary style="cursor:pointer;color:#bfe3a8;font-size:12px;font-weight:600">📜 تخريج — где ещё передаётся <span style="opacity:.75;font-weight:400">· по словам автора</span></summary>'
+        +'<div dir="rtl" style="font-size:13.5px;line-height:1.75;margin-top:6px">'+esc(п)+'</div>';
+      card.insertBefore(бл, ar.nextSibling);
+    }).catch(()=>{}); }catch(e){_тихо(e,"L6790")}
   });
   const warn=document.createElement('div'); warn.className='hint'; warn.style.cssText='margin:6px 0 0;color:#ffb74d;font-size:12px';
   warn.textContent='⚠️ Книга в обработке — возможны ошибки распознавания. Автор: مرشد بن يوسف.';
@@ -6781,7 +6803,12 @@ function cardMuh(d,groups){
   const meta=document.createElement('div');meta.className='meta';
   meta.innerHTML='<span class="badge muh srcnav" style="cursor:pointer" title="Открыть в читалке на этом хадисе">📖 الْمُهَيْمِن №'+h.n+' · مُرْشِد بن يُوسُف</span>'+
     '<span class="src" style="direction:rtl">'+esc(h.b||'')+' › '+esc(h.c||'')+'</span>'+
-    '<span class="srcru" style="display:block;width:100%;font-size:11.5px;color:var(--hint);margin-top:1px;direction:ltr;text-align:left">аль-Мухаймин (الموحد المهيمن على الدين) · Муршид ибн Юсуф</span>';   // #37: рус. название + автор
+    '<span class="srcru" style="display:block;width:100%;font-size:11.5px;color:var(--hint);margin-top:1px;direction:ltr;text-align:left">аль-Мухаймин (المهيمن) · Муршид ибн Юсуф</span>';   /* #37: рус. название + автор.
+    🔴 12.08.2026: здесь стояло «الموحد المهيمن على الدين». Проект выверил название ПО САМОЙ
+    КНИГЕ 05.08.2026: стр. 49, слова автора — «هذا الكتاب الذي بين يديك، اسمه: "المهيمن"»,
+    и на обложке то же имя. Слова «الموحد» в первых 60 страницах НЕТ. Правку внесли в
+    CLAUDE.md и в рабочую базу, а в приложении — на глазах у людей — осталось прежнее.
+    Ставим то, что подтверждено книгой. */
   if(rv.length>1) meta.innerHTML+='<span class="grade">риваятов: '+rv.length+'</span>';
   { const _sp=meta.querySelector('.srcnav'); if(_sp) _sp.onclick=()=>{ try{ openReader('muhaymin', String(h.n)); }catch(e){_тихо(e,"L6671")} }; }   // #319/#330: метка аль-Мухаймина кликабельна → читалка на этом хадисе (ридер muhaymin рабочий #265)
   try{ ourHukmBadge('muhaymin', h.n, meta, card); }catch(e){_тихо(e,"L6672")}   // #309/аудит: достоверность·разбор·материал и на карточке Мухэймина (единообразие с обычной; молча выходят без данных)
@@ -7422,7 +7449,7 @@ function _catFavDefaults(m, cat){
   let azBook=null; try{ azBook=cat.find(b=>canon(b.n||'').indexOf(canon('الجامع الكامل'))!==-1 && canon(b.a||'').indexOf(canon('الأعظمي'))!==-1); }catch(e){_тихо(e,"L7307")}
   const defs=[
     {k:'islamkamil', ru:'Ислам Камиль — الإسلام الكامل (наша книга)', soon:true},
-    {k:'muhaymin', ru:'аль-Мухаймин — الموحد المهيمن (Муршид)', open:()=>{ m.style.display='none'; try{ openReader('muhaymin'); const rm=document.getElementById('readModal'); if(rm) modalTop(rm); }catch(e){_тихо(e,"L7310")} }},
+    {k:'muhaymin', ru:'аль-Мухаймин — المهيمن (Муршид)', open:()=>{ m.style.display='none'; try{ openReader('muhaymin'); const rm=document.getElementById('readModal'); if(rm) modalTop(rm); }catch(e){_тихо(e,"L7310")} }},
     {k:'muqbil', ru:'Мукбиль — الصحيح المسند مما ليس في الصحيحين', open:()=>{ m.style.display='none'; try{ openReader('muqbil'); const rm=document.getElementById('readModal'); if(rm) modalTop(rm); }catch(e){_тихо(e,"L7311")} }},
     {k:'azami', ru:'аль-Аʿзами — الجامع الكامل في الحديث الصحيح', open: azBook?(()=>{ m.style.display='none'; openBook(azBook.i); }):null, miss:!azBook},
   ].filter(d=>hid.indexOf(d.k)===-1);
