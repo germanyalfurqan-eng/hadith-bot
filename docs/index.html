@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1360</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1361</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1360';
+const APPVER = 'v1361';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2896,6 +2896,55 @@ async function _ahmВсё(){          // дочитать книгу целик�
   const б={}; ahmadArr.forEach(function(z){ if(z&&z._пусто) б[Math.floor((+z.num)/1000)]=1; });
   const ок=await Promise.all(Object.keys(б).map(function(b){ return _ahmШард(+b); }));
   return ок.every(Boolean);
+}
+/* 🚀 ТО ЖЕ ЛЕКАРСТВО ОСТАЛЬНЫМ ВОСЬМИ КНИГАМ (сессия 71, З-40 — чинить класс, а не случай).
+   Муснад был самым тяжёлым, но не единственным: Бухари открывался за 16,7 с (9,3 МБ), и
+   каждая книга тянулась целиком ради одного показанного хадиса. Разложено так же:
+     rdx/<код>.json  — указатель: номер, вид записи (китаб/глава), печатная страница. Лёгкий,
+                       по нему сразу работают навигация, «Запись N из M» и подписи;
+     rsh/<код>/<k>.json — куски текста по 1000 записей, приезжают по мере чтения.
+   Открытие: Бухари 1,19 МБ вместо 9,3 · Муслим 1,46 вместо 8,5 · Тирмизи 1,02 вместо 5,6 и т.д.
+   ⚠️ Заслоны те же: не сошёлся указатель, не дошёл первый кусок или он не похож на сборник —
+   возвращаем null, и работает прежний путь целиком; поиск внутри книги сперва дочитывает её. */
+let _lazyCode='', _lazyArr=null; const _lazyЕсть={}, _rdxУказ={};
+const _RSH=1000;                                   // столько записей в куске (как при нарезке)
+async function _rshКусок(code,b){
+  const ключ=code+'#'+b;
+  if(_lazyЕсть[ключ]) return _lazyЕсть[ключ];
+  return _lazyЕсть[ключ]=(async function(){
+    let m=null;
+    try{ m=await cachedFetchJSON('./rsh/'+code+'/'+b+'.json', 60000, {silent:true}); }catch(e){ m=null; }
+    if(!Array.isArray(m)){ delete _lazyЕсть[ключ]; return false; }   // провал не запоминаем
+    if(_lazyCode!==code || !_lazyArr) return false;
+    const с=b*_RSH;
+    for(let i=0;i<m.length;i++){ const z=_lazyArr[с+i]; if(z && z._пусто){ z.text=m[i]||''; z._пусто=false; } }
+    return true;
+  })();
+}
+async function _rshВсё(code){                      // дочитать книгу целиком — для поиска по ней
+  if(_lazyCode!==code || !_lazyArr) return false;
+  if(!_lazyArr.some(function(z){ return z && z._пусто; })) return true;
+  const н=Math.ceil(_lazyArr.length/_RSH), сп=[];
+  for(let b=0;b<н;b++) сп.push(_rshКусок(code,b));
+  return (await Promise.all(сп)).every(Boolean);
+}
+async function loadReaderLazy(code){
+  if(code==='ahmad') return null;                  // у Муснада свой путь
+  try{
+    const ук=_rdxУказ[code]||(_rdxУказ[code]=await cachedFetchJSON('./rdx/'+code+'.json', 60000, {silent:true}));
+    if(!Array.isArray(ук) || !ук.length) return null;
+    _lazyCode=code;
+    _lazyArr=ук.map(function(z){
+      const o={num:(z && z.num!=null)?z.num:'', text:'', _пусто:true};
+      if(z){ if(z.вид!=null)o.вид=z.вид; if(z.стр!=null)o.стр=z.стр; if(z.вразделе!=null)o.вразделе=z.вразделе; }
+      return o; });
+    const ок=await _rshКусок(code,0);
+    if(!ок){ _lazyArr=null; _lazyCode=''; return null; }
+    // та же проба на подлинность, что и у целого файла: не сборник — уходим на прежний путь
+    if(!_readerLooksLikeHadith(_lazyArr.slice(0,_RSH).filter(function(z){ return !z._пусто; }))){
+      _lazyArr=null; _lazyCode=''; return null; }
+    return _lazyArr;
+  }catch(e){ _lazyArr=null; _lazyCode=''; return null; }
 }
 async function loadAhmadLazy(){
   if(ahmadArr) return ahmadArr;
@@ -18585,9 +18634,9 @@ function _readDoFind(){
      обход молча дал бы «0 совпадений» на хадис, который в книге ЕСТЬ. Это не медленно — это
      неверно, а «не нашёл» и «не искал» путать запрещено. Поэтому сперва дочитываем книгу
      целиком, и только потом ищем; не дочиталась — честно говорим, а не выдаём пустой ответ. */
-  if(_readCode==='ahmad' && _readArr.some(function(z){ return z && z._пусто; })){
+  if(_readArr.some(function(z){ return z && z._пусто; })){
     if(info) info.textContent='дочитываю книгу, чтобы искать по всей…';
-    _ahmВсё().then(function(ок){
+    ((_readCode==='ahmad')?_ahmВсё():_rshВсё(_readCode)).then(function(ок){
       if(ок){ _readDoFind(); }
       else if(info) info.textContent='книга дочиталась не вся — не ищу, чтобы не сказать «нет» о том, что есть';
     });
@@ -18646,6 +18695,7 @@ function _readerLooksLikeHadith(a){ try{
   return hit*4>=S;
 }catch(e){ return true; } }   // сомнение толкуем в пользу книги: сбой пробы не должен гасить читалку
 async function _readLoad(code){
+  if(code!=='ahmad'){ const _лз=await loadReaderLazy(code); if(_лз) return _лз; }   /* 🚀 С71: кусок вместо всей книги; не вышло — прежний путь ниже */
   if(_FULLREADER[code]){ try{
     const r=await fetch('./reader/'+code+'.json?v='+APPVER);
     if(r.ok){ const a=await r.json(); if(Array.isArray(a)&&a.length && _readerLooksLikeHadith(a)) return a;
@@ -18679,10 +18729,13 @@ function _readRender(){
   /* 🚀 С71: запись Муснада ещё не подтянута (ленивая читалка) — тянем её шард и перерисовываем.
      Пока едет, показываем ЧЕСТНУЮ строку «загружаю», а не пустое место: пустое читается как
      «хадиса нет», и это ровно та ложь, которой в книге быть не должно. */
-  if(h && h._пусто && _readCode==='ahmad'){ const _был=_readIdx;
+  if(h && h._пусто){ const _был=_readIdx;
     try{ const _b=document.getElementById('readBody');
-         if(_b) _b.innerHTML='<div style="padding:22px;text-align:center;opacity:.75">⏳ Загружаю страницу Муснада…</div>'; }catch(e){_тихо(e,"L18591")}
-    _ahmШард(Math.floor((+h.num)/1000)).then(function(ок){ if(ок && _readIdx===_был) _readRender(); });
+         if(_b) _b.innerHTML='<div style="padding:22px;text-align:center;opacity:.75">⏳ Загружаю страницу книги…</div>'; }catch(e){_тихо(e,"L18591")}
+    const _обещ = (_readCode==='ahmad')
+      ? _ahmШард(Math.floor((+h.num)/1000))
+      : _rshКусок(_readCode, Math.floor(_readIdx/_RSH));
+    _обещ.then(function(ок){ if(ок && _readIdx===_был) _readRender(); });
     if(h._пусто) return;
   }
   // Владелец 26.07.2026: «непонятно что за цифры». Было «№5864 (8201 из 10657) · стр. 87778» —
