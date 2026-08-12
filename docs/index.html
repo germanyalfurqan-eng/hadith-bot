@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1361</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1362</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1361';
+const APPVER = 'v1362';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2879,16 +2879,21 @@ async function loadAhmadOne(num){ if(ahmadArr){ return ahmadArr.find(x=>x.num===
 let _ahmNums=null; const _ahmШарды={};
 async function _ahmШард(b){
   if(!ahmadArr) return false;
-  if(_ahmШарды[b]) return _ahmШарды[b];
-  return _ahmШарды[b]=(async function(){
-    let m=null;
-    try{ m=await cachedFetchJSON('./ahmad/'+b+'.json', 60000, {silent:true}); }catch(e){ m=null; }
-    if(!m || typeof m!=='object'){ delete _ahmШарды[b]; return false; }   // провал не запоминаем: иначе шард не переспросить никогда
-    for(let i=0;i<ahmadArr.length;i++){ const z=ahmadArr[i];
-      if(z && z._пусто && Math.floor((+z.num)/1000)===b){ const r=m[z.num];
-        if(r){ z.text=r[0]||''; z.grade=r[1]||''; z._пусто=false; } } }
-    return true;
-  })();
+  // Кэш держит ДАННЫЕ, а не отметку «разложено» — по той же причине, что и у _rshКусок ниже:
+  // готовое обещание при новом массиве раскладывать нечего, и книга осталась бы пустой.
+  let обещ=_ahmШарды[b];
+  if(!обещ){
+    обещ=_ahmШарды[b]=(async function(){
+      try{ const m=await cachedFetchJSON('./ahmad/'+b+'.json', 60000, {silent:true});
+           return (m && typeof m==='object')?m:null; }catch(e){ return null; }
+    })();
+  }
+  const m=await обещ;
+  if(!m){ delete _ahmШарды[b]; return false; }   // провал не запоминаем: иначе шард не переспросить никогда
+  for(let i=0;i<ahmadArr.length;i++){ const z=ahmadArr[i];
+    if(z && z._пусто && Math.floor((+z.num)/1000)===b){ const r=m[z.num];
+      if(r){ z.text=r[0]||''; z.grade=r[1]||''; z._пусто=false; } } }
+  return true;
 }
 async function _ahmВсё(){          // дочитать книгу целиком — для поиска внутри неё
   if(!ahmadArr) return false;
@@ -2908,18 +2913,30 @@ async function _ahmВсё(){          // дочитать книгу целик�
    возвращаем null, и работает прежний путь целиком; поиск внутри книги сперва дочитывает её. */
 let _lazyCode='', _lazyArr=null; const _lazyЕсть={}, _rdxУказ={};
 const _RSH=1000;                                   // столько записей в куске (как при нарезке)
+/* ⚠️ КЭШ ХРАНИТ ДАННЫЕ, А НЕ ОТМЕТКУ «УЖЕ СДЕЛАНО» — иначе ВТОРАЯ открытая книга остаётся
+   пустой (поймано на проде v1361, сессия 71). Сперва здесь лежало обещание «кусок разложен»:
+   при повторном заходе оно возвращалось готовым, а раскладывать было уже некуда — массив к
+   тому времени построен НОВЫЙ, и все записи в нём пустые. Дальше проба «похоже на сборник»
+   получала пустоту, честно говорила «нет», и книга уходила на прежний тяжёлый путь: человек
+   открывал Муслима и снова качал 8,7 МБ.
+   ⚠️ И урок про мою же проверку: восемь книг я до того «сверил» — но в цикле сверки чистил
+   кэш между книгами. Человек его не чистит. Проверка, которая прибирает за собой то, чего в
+   жизни никто не прибирает, показывает не работу, а собственную аккуратность. */
 async function _rshКусок(code,b){
   const ключ=code+'#'+b;
-  if(_lazyЕсть[ключ]) return _lazyЕсть[ключ];
-  return _lazyЕсть[ключ]=(async function(){
-    let m=null;
-    try{ m=await cachedFetchJSON('./rsh/'+code+'/'+b+'.json', 60000, {silent:true}); }catch(e){ m=null; }
-    if(!Array.isArray(m)){ delete _lazyЕсть[ключ]; return false; }   // провал не запоминаем
-    if(_lazyCode!==code || !_lazyArr) return false;
-    const с=b*_RSH;
-    for(let i=0;i<m.length;i++){ const z=_lazyArr[с+i]; if(z && z._пусто){ z.text=m[i]||''; z._пусто=false; } }
-    return true;
-  })();
+  let обещ=_lazyЕсть[ключ];
+  if(!обещ){
+    обещ=_lazyЕсть[ключ]=(async function(){
+      try{ const m=await cachedFetchJSON('./rsh/'+code+'/'+b+'.json', 60000, {silent:true});
+           return Array.isArray(m)?m:null; }catch(e){ return null; }
+    })();
+  }
+  const m=await обещ;
+  if(!m){ delete _lazyЕсть[ключ]; return false; }                  // провал не запоминаем
+  if(_lazyCode!==code || !_lazyArr) return false;
+  const с=b*_RSH;
+  for(let i=0;i<m.length;i++){ const z=_lazyArr[с+i]; if(z && z._пусто){ z.text=m[i]||''; z._пусто=false; } }
+  return true;
 }
 async function _rshВсё(code){                      // дочитать книгу целиком — для поиска по ней
   if(_lazyCode!==code || !_lazyArr) return false;
