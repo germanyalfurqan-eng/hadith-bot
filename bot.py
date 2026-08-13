@@ -3,7 +3,7 @@
 # запушен — и нельзя было отличить «фикс не работает» от «Railway ещё не передеплоился». Теперь
 # у бэкенда есть паспорт: GET /api/version отдаёт эту метку и время старта. Меняем при каждом
 # изменении bot.py — тогда любой спор о том, дошёл ли код до прода, решается одним запросом.
-СБОРКА = 'b1256-reestr-chatov-i-knopka-vyhoda'
+СБОРКА = 'b1257-gruppy-tozhe-v-reestr'
 import time as _time_boot
 _СТАРТ = _time_boot.time()
 from concurrent.futures import ThreadPoolExecutor as _TPE
@@ -21449,6 +21449,35 @@ async def on_grp(update, context):
 app.add_handler(MessageHandler(filters.ChatType.CHANNEL, _chat_seen))
 app.add_handler(ChatMemberHandler(_bot_member, ChatMemberHandler.MY_CHAT_MEMBER))
 app.add_handler(CallbackQueryHandler(on_grp, pattern=r'^grp:'))   # ОБР-557: кнопка «выйти и запретить»
+
+
+async def _чат_в_реестр(update, context):
+    """Тихо записать чат в реестр при ЛЮБОМ сообщении из группы или канала (ОБР-557).
+
+    🔴 ЗАЧЕМ ОТДЕЛЬНАЯ ВЕТКА, А НЕ ПРАВКА `_chat_seen`. Я сказал владельцу: «как только в
+    чате появится сообщение, он тут же окажется в списке» — и это было бы НЕПРАВДОЙ.
+    `_chat_seen` подписан только на каналы (`filters.ChatType.CHANNEL`), да и до него дело
+    почти не доходит: все обработчики живут в одной группе 0, а `handle` выше ловит любой
+    текст первым и останавливает разбор. То есть группы в реестр не попадали бы вовсе.
+
+    Поэтому регистрируем в ОТДЕЛЬНОЙ группе обработчиков (group=9): она разбирается независимо
+    от нулевой, ничего у неё не отнимает и никого не подменяет. Это важнее аккуратности: чужой
+    обработчик, случайно съевший сообщение группы, сломал бы бота в чатах людей.
+
+    Пишем ОДИН раз на чат за жизнь процесса (`_seen_chats`) — реестр не должен становиться
+    источником постоянной записи в ветку данных на каждое сообщение."""
+    try:
+        ch = update.effective_chat
+        if not ch or ch.id in _seen_chats:
+            return
+        _seen_chats.add(ch.id)
+        _запомнить_чат(ch, "виден")
+    except Exception:
+        pass
+
+
+app.add_handler(MessageHandler(filters.ChatType.GROUPS | filters.ChatType.CHANNEL,
+                               _чат_в_реестр), group=9)
 async def _on_error(update, context):
     err = str(context.error); print("ERR:", err)
     if 'Conflict' in err:  # две копии бота — не спамим, settle сам
