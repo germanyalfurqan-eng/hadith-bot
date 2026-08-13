@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1364</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1365</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1364';
+const APPVER = 'v1365';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -10667,8 +10667,20 @@ const _RAG={загружено:false, ids:null, поля:null, векторы:nu
 async function _ragLoad(onProgress){
   if(_RAG.загружено) return true;
   try{
-    if(onProgress) onProgress('гружу книгу (30 МБ, один раз)…');
-    const [rv,rm]=await Promise.all([fetch('./rag/bukhari.vec.json?v='+APPVER), fetch('./rag/bukhari.meta.json?v='+APPVER)]);
+    /* 📉 ТЕКСТЫ ДЛЯ ПОКАЗА — ПО ТРЕБОВАНИЮ (сессия 71, 12.08.2026).
+       Замер на проде: чтобы задать РАG один вопрос, приложение качало 30,8 МБ. Из них 11,7 МБ —
+       `bukhari.meta.json`, тексты всех 7 484 мест книги; показываются же из них единицы.
+       ⚠️ Просто «грузить мету лениво» было НЕЛЬЗЯ: по ней идёт ещё и разбивка находок на хадис,
+       главу и муалляк. Записи без меты цикл молча пропускал бы (`if(!c) continue`) — то есть
+       часть настоящих находок исчезла бы, и человек увидел бы «нашлось меньше», а не «грузится».
+       Поэтому мета разрезана НАДВОЕ по назначению:
+         • `bukhari.vmap.json` (0,16 МБ) — вид записи и номер куска для КАЖДОГО места. Едет
+           всегда, поэтому разбивка полна и ни одна находка не теряется;
+         • `rag/bmeta/<k>.json` (38 кусков по ~0,3 МБ) — сами тексты, приезжают только для тех
+           мест, что реально показываются.
+       Итог: 30,8 МБ → около 20 МБ на первый вопрос. */
+    if(onProgress) onProgress('гружу книгу (19 МБ, один раз)…');
+    const [rv,rm]=await Promise.all([fetch('./rag/bukhari.vec.json?v='+APPVER), fetch('./rag/bukhari.vmap.json?v='+APPVER)]);
     if(!rv.ok||!rm.ok) return false;
     const v=await rv.json(), m=await rm.json();
     if(onProgress) onProgress('распаковываю…');
@@ -10676,10 +10688,36 @@ async function _ragLoad(onProgress){
     const body=new Int8Array(bin.length);
     for(let i=0;i<bin.length;i++) body[i]=(bin.charCodeAt(i)<<24)>>24;   // байт → знаковое int8
     _RAG.ids=v.id; _RAG.поля=v['поле']; _RAG.s=v.s; _RAG.body=body; _RAG.dim=dim; _RAG.n=n;
-    _RAG.мета=m['м']; _RAG.загружено=true;
+    _RAG.карта=m['к']; _RAG.мета=Object.create(null); _RAG.куски={}; _RAG.загружено=true;
     try{ const rp=await fetch('./rag/bukhari.porog.json?v='+APPVER); if(rp.ok){ const p=await rp.json(); if(p&&p['порог']) _RAG.порог=p['порог']; } }catch(e){_тихо(e,"L10299")}
     return true;
   }catch(e){ return false; }
+}
+/* Подтянуть тексты для перечисленных мест: качаем только те куски, в которых они лежат.
+   ⚠️ Возвращаем ЧЕСТНЫЙ признак: не дошёл кусок — false, и зовущий обязан сказать человеку
+   «не догрузилось», а не показать находку без текста и не выкинуть её молча. */
+async function _ragТексты(cids){
+  if(!_RAG.карта) return false;
+  const нужны=new Set();
+  for(const cid of cids){
+    if(_RAG.мета[cid]) continue;
+    const з=_RAG.карта[cid];
+    if(з) нужны.add(з[1]);
+  }
+  if(!нужны.size) return true;
+  let всеОк=true;
+  await Promise.all([...нужны].map(async b=>{
+    if(!_RAG.куски[b]){
+      _RAG.куски[b]=(async()=>{
+        try{ const r=await fetch('./rag/bmeta/'+b+'.json?v='+APPVER);
+             return r.ok ? await r.json() : null; }catch(e){ return null; }
+      })();
+    }
+    const сод=await _RAG.куски[b];
+    if(!сод){ delete _RAG.куски[b]; всеОк=false; return; }   // провал не запоминаем
+    for(const k in сод) _RAG.мета[k]=сод[k];
+  }));
+  return всеОк;
 }
 /* #673 (С67, владелец: «если раг нажатие идёт, то почему не показывает лимиты») + #671.
    Раньше исчерпанная квота выглядела как поломка: пользователь видел «сервер не ответил на запрос
@@ -10942,12 +10980,28 @@ async function ragSearch(qRaw, seq, shownQ){
   const ранж=Object.keys(лучшее).map(k=>[k,лучшее[k]]).sort((a,b)=>b[1]-a[1]);
   const порог=_RAG.порог;
   const группы={хадис:[], глава:[], муалляк:[]};
+  /* 📉 С71: вид записи берём из лёгкой карты — она есть для КАЖДОГО места, поэтому разбивка
+     полна и ни одна находка не пропадает. Тексты этих находок подтягиваем следом, одним
+     заходом. Прежний код брал вид из тяжёлой меты и на её отсутствии делал `continue` —
+     с ленивой загрузкой это тихо съедало бы настоящие результаты. */
+  const _отобраны=[];
   for(const [cid,s] of ранж){
     if(s<порог) break;
+    const з=_RAG.карта ? _RAG.карта[cid] : null; if(!з) continue;
+    if(_отобраны.length>=40) break;
+    _отобраны.push([cid, s, з[0]]);
+  }
+  const _текстыОк=await _ragТексты(_отобраны.map(x=>x[0]));
+  for(const [cid,s,вид] of _отобраны){
     const c=_RAG.мета[cid]; if(!c) continue;
-    const ключ=(c.v===0)?'хадис':(c.v===2?'муалляк':'глава');
-    if(группы.хадис.length+группы.глава.length+группы.муалляк.length>=40) break;
+    const ключ=(вид===0)?'хадис':(вид===2?'муалляк':'глава');
     группы[ключ].push({cid, s, c});
+  }
+  if(!_текстыОк){
+    try{ const _пред=document.createElement('div'); _пред.className='hint';
+         _пред.style.cssText='font-size:12.5px;color:#c77;margin-top:4px';
+         _пред.textContent='⚠️ Часть текстов не догрузилась — показано не всё, что нашлось. Повтори вопрос.';
+         res.appendChild(_пред); }catch(e){_тихо(e,"L_ragтексты")}
   }
   const всего=группы.хадис.length+группы.глава.length+группы.муалляк.length;
   const спас=_ragСпасение(ранж, порог, shownQ||qRaw);   // #689 (С67): второй признак — тема главы
