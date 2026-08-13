@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1367</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1368</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1367';
+const APPVER = 'v1368';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6874,6 +6874,13 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
   if(_riwNote) meta.innerHTML += _riwNote;
   { const _rl=_ruSrcLine(code); if(_rl) meta.innerHTML+='<span class="srcru" style="display:block;width:100%;font-size:11.5px;color:var(--hint);margin-top:1px;direction:ltr;text-align:left">'+esc(_rl)+'</span>'; }   // #37: рус. название + автор
   try{ ourHukmBadge(code, (h.num||h.n), meta, card); }catch(e){_тихо(e,"L6604")}
+  /* 🤖 Заявка #712, повтор владельца: «нейротахкик должен быть везде кроме Бухари и Муслим».
+     Раньше вердикт жил ТОЛЬКО внутри блока сверки цепи — то есть показывался, лишь когда включён
+     тумблер «🛡 сверка» И человек раскрыл «▸ подробнее». Два условия подряд, и оба по умолчанию
+     против показа: вердикт был посчитан для 176 423 хадисов и почти никому не виден.
+     Здесь он встаёт в общий ряд бейджей карточки — рядом с оценкой учёных, без тумблеров.
+     Запрет на Сахихайн сидит внутри neuroVerdict, отдельной проверки тут нет и быть не должно. */
+  try{ neuroBadgeCard(code, (h.num||h.n), meta); }catch(e){_тихо(e,"L6604n")}
   try{ razboryBadge(code, (h.num||h.n), meta, card); }catch(e){_тихо(e,"L6605")}   // обратная связь: «📿 наш разбор» если хадис разбирали на канале
   try{ ourMaterialBadge(code, (h.num||h.n), meta, card); }catch(e){_тихо(e,"L6606")}   // M52: отметка «от Muslimoon»
   if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp){ sp.style.cursor='pointer'; sp.onclick=()=>{ if(cfg.urBeta){ try{ openUnifiedReader(code,String(h.num)); return; }catch(e){_тихо(e,"L6607")} } openReader(code,String(h.num)); }; } }
@@ -16111,6 +16118,97 @@ function _vbСвернуть(box){
   det.style.display=_vbРазвёрнуто?'':'none';
   tg.textContent=_vbРазвёрнуто?'▾ скрыть разбор':'▸ подробнее';
 }
+/* 🤖 ЕДИНАЯ ДВЕРЬ НЕЙРОТАХКИКА — вердикт и запрет в одном месте на всё приложение (заявка #712).
+
+   ЗАЧЕМ ОТДЕЛЬНАЯ ФУНКЦИЯ, А НЕ ЕЩЁ ОДИН БЛОК РЯДОМ. Владелец повторил третий раз:
+   «нейротахкик должен быть везде кроме Бухари и Муслим». Повторять приходилось не потому, что
+   вердикта нет — он посчитан для 40 книг и 176 423 хадисов и лежит готовым в neuro/, — а потому
+   что ПОКАЗ жил ровно в одной функции (verifyNarr), а хадис человек видит в десятке мест: поиск,
+   читалка, выдача по номеру, таблица, тахридж.
+   Тот же разлад уже случался ВНУТРИ самой verifyNarr: запрет на Сахихайн поставили 01.07 в блок
+   тадлис-риска, 02.07 добавили рядом второй блок — и запрет туда не перенесли (заявка #453).
+   Догоняли правкой. Пока запрет и вердикт живут порознь, они будут расходиться снова.
+   Поэтому здесь ОДНА дверь: и чтение шарда, и запрет на Сахихайн — внутри неё. Новое место
+   показа получает вердикт и запрет разом, разойтись им негде.
+*/
+const _BM_BIDS=['1681','735','907','1284','1376','1727','711'];   // Бухари и Муслим во всех печатях
+window._neuroSh=window._neuroSh||{};
+
+async function neuroVerdict(bid,num){
+  // ⛔ Сахихайн: воля владельца 01.07.2026 — «бухари и муслим нейротахкики не делай никогда».
+  // Оба сборника уже иджма' сахих; алгоритмический разбор на них не наводим.
+  if(_BM_BIDS.includes(String(bid||''))) return null;
+  if(bid==null||num==null||num==='') return null;
+  const n=parseInt(num,10); if(!isFinite(n)) return null;
+  const k=String(bid)+'_'+Math.floor(n/500);
+  try{
+    if(window._neuroSh[k]===undefined){
+      window._neuroSh[k]=fetch('./neuro/'+k+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
+    }
+    const sh=await window._neuroSh[k];
+    return sh?(sh[String(n)]||null):null;
+  }catch(e){ return null; }
+}
+
+/* Расшифровка вердикта: значок · человеческие слова · цвет. ОДНА таблица на всё приложение —
+   раньше она стояла внутри verifyNarr, и второе место показа неизбежно завело бы вторую копию. */
+function neuroDecode(nv){
+  if(!nv) return null;
+  const T={sahih_isnad:['🟢','иснад сахих (по нашим правилам)','#7ee08a'],
+           hasan:['🟡','хасан (есть садук в цепи)','#ffd479'],
+           mukhtalaf:['🟠','мухталяф (спорные звенья)','#f8a07a'],
+           tadlis_risk:['🟠','тадлис-риск (мудаллис через عن)','#f8a07a'],
+           majhul_link:['⚪','маджхуль-звено (тавсик не установлен)','#c8d0da'],
+           daif:['🔴','даиф (слабое звено)','#ff9b7a'],
+           daif_matruk:['🔴','даиф/матрук (отвергнутое звено)','#ff8787'],
+           incomplete:['◻️','неполный расчёт (в цепи неопознанные звенья '+esc(nv.cov||'')+')','#8a93a0']};
+  return T[nv.v]||['❔',nv.v,'#9aa7b5'];
+}
+
+/* Компактный бейдж — для мест, где хадис показан строкой или карточкой без разбора цепи.
+   ⚠️ Слова короткие, но НЕ смягчённые: «даиф» остаётся «даиф». Приговор о хадисе нельзя
+   показывать мягче, чем он есть, ради вида списка. Обоснование — в блоке сверки цепи,
+   и подсказка на бейдже прямо говорит, где его искать. */
+function neuroBadge(nv){
+  const d=neuroDecode(nv); if(!d) return '';
+  return '<span class="ntBadge" title="Нейротахкик (БЕТА): '+esc(d[1])+'. Формула по нашим правилам ПР-1…5 (таусик — только от 48 муʿтабаров, нужно ≥2; джарх принимается шире), это не ИИ. Полный разбор — в блоке сверки цепи." '
+    +'style="display:inline-block;font-size:10.5px;font-weight:700;color:'+d[2]+';border:1px solid '+d[2]+'55;border-radius:7px;padding:1px 7px;background:rgba(108,92,231,.10);vertical-align:middle;white-space:nowrap">'
+    +'🤖 '+d[0]+' '+esc(d[1].split(' (')[0])+' <span style="font-size:8.5px;opacity:.75">БЕТА</span></span>';
+}
+
+/* Удобная связка для мест показа: дай bid+номер — получи готовый бейдж или пустую строку.
+   Пустая строка, а не null: вызывающий вставляет её в шаблон без проверок и не может забыть. */
+async function neuroBadgeFor(bid,num){
+  try{ return neuroBadge(await neuroVerdict(bid,num)); }catch(e){ return ''; }
+}
+
+/* Бейдж на САМОЙ карточке хадиса — рядом с оценкой учёных, а не за тумблером и не за «подробнее».
+
+   ⚠️ ПОЧЕМУ ТОЛЬКО ЧЕРЕЗ _SLUG2BID, А НЕ ПО ВСЕМ 37 КНИГАМ, ГДЕ ЛЕЖАТ ШАРДЫ.
+   Соблазн большой: шарды есть у Дарими, Таялиси, Ибн Аби Шейбы и ещё трёх десятков книг, и
+   казалось бы, достаточно расширить карту слагов. Но у _SLUG2BID своя, ЖЁСТКАЯ цена входа —
+   рядом с ней прямо написано: «только издания, где № совпадает с нашей таблицей». У Дарими
+   расхождение нумерации 8%, поэтому его туда и не внесли.
+   А вердикт достаётся ПО НОМЕРУ. Значит на книге с разъехавшейся нумерацией бейдж «даиф»
+   сядет на СОСЕДНИЙ хадис. Это не пробел в покрытии — это ложный приговор о религии, и он
+   хуже отсутствия бейджа: у владельца уже был разбор ровно этого класса (#649 «пишешь слабый,
+   а большинство сказали достоверный»).
+   Поэтому расширение покрытия идёт отдельным шагом и ТОЛЬКО с замером совпадения нумерации
+   по каждой книге. Здесь — лишь те издания, где соответствие уже доказано сверкой. */
+async function neuroBadgeCard(code, num, meta){
+  try{
+    if(!meta||num==null) return;
+    const bid=(typeof _SLUG2BID!=='undefined')?_SLUG2BID[String(code)]:null;
+    if(!bid) return;                                   // книга без доказанного соответствия номеров — молчим
+    const html=await neuroBadgeFor(bid, String(num).replace(/#.*/,'').replace(/[^0-9]/g,''));
+    if(!html) return;
+    const sp=document.createElement('span');
+    sp.style.cssText='margin-inline-start:6px';
+    sp.innerHTML=html;
+    meta.appendChild(sp);
+  }catch(e){ try{_тихо(e,"neuroBadgeCard");}catch(_e){} }
+}
+
 async function verifyNarr(card, place, text){
   let _phV=null;
   try{
@@ -16441,8 +16539,9 @@ async function verifyNarr(card, place, text){
     // 🤖 НЕЙРОТАХКИК — «обоснование»: почему цепь может быть под вопросом (владелец 01.07.2026, «объясняешь недостоверный например потому что амаш через ан»).
     // Мудаллис + форма передачи 'عن' (без явного تصريح بالسماع типа حدثنا/سمعت/أخبرنا) = тадлис-риск: возможен пропущенный передатчик.
     let _tdHtml='';
-    // владелец 01.07.2026: «бухари и муслим нейротахкики ине делай никогда» — оба сборника уже иджма' сахих, алгоритмический тадлис-риск на них не показываем (не подвергаем сомнению консенсус).
-    const _BM_BIDS=['1681','735','907','1284','1376','1727','711'];
+    // ⛔ Сахихайн исключён ОДНИМ списком на весь файл (объявлен рядом с neuroVerdict выше).
+    // Своей копии здесь больше нет: именно из-за второй копии запрет однажды разошёлся с
+    // показом и владельцу пришлось повторять (заявка #453).
     if(!_BM_BIDS.includes(String(place.bid||'')))
     try{
       window._MUDCACHE=await _loadMudallisin();
@@ -16471,16 +16570,12 @@ async function verifyNarr(card, place, text){
     // #453 (С50, повтор владельца «я же сказал бухари и муслим нейротахкики не нужен») — этот блок ДОБАВЛЕН 02.07, ПОЗЖЕ
     // исключения _BM_BIDS (01.07) для блока тадлис-риска выше, и не получил то же исключение. Синхронизирую.
     let _nvHtml='';
-    if(!_BM_BIDS.includes(String(place.bid||'')))
     try{
-      const _nk=place.bid+'_'+Math.floor(+place.num/500);
-      if(!window._neuroSh) window._neuroSh={};
-      if(window._neuroSh[_nk]===undefined){ window._neuroSh[_nk]=fetch('./neuro/'+_nk+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null); }
-      const _nsh=await window._neuroSh[_nk];
-      const _nv=_nsh?(_nsh[String(place.num)]||null):null;
+      // Вердикт и запрет на Сахихайн — через ЕДИНУЮ дверь neuroVerdict (заявка #712).
+      // Своего чтения шарда и своей таблицы расшифровки здесь больше нет.
+      const _nv=await neuroVerdict(place.bid, place.num);
       if(_nv){
-        const NV={sahih_isnad:['🟢','иснад сахих (по нашим правилам)','#7ee08a'],hasan:['🟡','хасан (есть садук в цепи)','#ffd479'],mukhtalaf:['🟠','мухталяф (спорные звенья)','#f8a07a'],tadlis_risk:['🟠','тадлис-риск (мудаллис через عن)','#f8a07a'],majhul_link:['⚪','маджхуль-звено (тавсик не установлен)','#c8d0da'],daif:['🔴','даиф (слабое звено)','#ff9b7a'],daif_matruk:['🔴','даиф/матрук (отвергнутое звено)','#ff8787'],incomplete:['◻️','неполный расчёт (в цепи неопознанные звенья '+esc(_nv.cov||'')+')','#8a93a0']};
-        const _d=NV[_nv.v]||['❔',_nv.v,'#9aa7b5'];
+        const _d=neuroDecode(_nv);
         // владелец 02.07 (5 замечаний): имена+рус+ссылки Мактаба/sunnah/🆔; ВСЕГДА «БЕТА»; «кто сказал матрук»; кнопка «развернуть разбор» — свидетели каждого + доказательство слышания пар
         const _WKRU={matruk:'матрук — отвергнут',daif:'даиф — слабый',majhul:'маджхуль — неизвестен',majhul_hal:'маджхуль аль-халь — тавсик не установлен',mukhtalaf:'мухталяф — спорный'};
         let _m2s={}; try{ _m2s=await loadMid2Sid(); }catch(e){_тихо(e,"L15805")}
