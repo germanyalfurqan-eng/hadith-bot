@@ -13838,13 +13838,35 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # ===== Режим групп =====
         if _tl in ("группы", "группа список", "список групп"):
+            # ОБР-557: владелец просил СПИСОК кликабельными, а не одни только команды.
             a = load_access(); mode = "ВСЕМ (любые группы)" if a.get("group_open", True) else "ТОЛЬКО разрешённые"
-            wl = a.get("group_wl", [])
-            await update.message.reply_text(
-                "👥 Режим групп: *" + mode + "*\nРазрешённые ("+str(len(wl))+"): " + (", ".join(wl) if wl else "—") +
-                "\n\nКоманды:\n• «группы только свои» — бот работает лишь в разрешённых\n• «группы всем» — в любых\n"
-                "• «группа разреши <id>» / «группа запрети <id>»\n• «покинь <id>» — выйти из группы\n• «бан <id>» — полностью игнорировать",
-                parse_mode="Markdown")
+            wl = a.get("group_wl", []); чс = [str(x) for x in (a.get("blacklist") or [])]
+            р = _data_get(РЕЕСТР_ЧАТОВ, None)
+            р = р if isinstance(р, dict) else {}
+            стр = ["👥 <b>Где состоит бот</b> — известно <b>%d</b>" % len(р)]
+            живые = [(к, в) for к, в in р.items()
+                     if (в.get("статус") or "") not in ("left", "kicked")]
+            for к, в in sorted(живые, key=lambda x: str(x[1].get("последнее") or ""), reverse=True):
+                имя = html.escape(str(в.get("имя") or "без названия"))
+                сс = в.get("ссылка") or ""
+                метка = "⛔ ЗАПРЕЩЁН " if к in чс else ""
+                стр.append("• %s%s · <code>%s</code>%s"
+                           % (метка, ('<a href="%s">%s</a>' % (сс, имя)) if сс else имя, к,
+                              ("\n   выйти: <code>покинь %s</code>" % к)))
+            if not живые:
+                стр.append("— пока пусто")
+            стр.append("")
+            стр.append("⚠️ <b>Список ведётся с 13.08.2026.</b> Telegram не отдаёт боту перечень "
+                       "чатов, где он состоит — такого запроса у них нет. Поэтому всё, куда его "
+                       "добавили РАНЬШЕ и где он с тех пор молчал, сюда не попало. Как только в "
+                       "таком чате появится сообщение или бота добавят заново — он тут же "
+                       "окажется в списке.")
+            стр.append("")
+            стр.append("Режим групп: <b>%s</b> · разрешённых: %d" % (mode, len(wl)))
+            стр.append("Команды: «группы только свои» · «группы всем» · «группа разреши &lt;id&gt;» · "
+                       "«покинь &lt;id&gt;» · «бан &lt;id&gt;»")
+            await update.message.reply_text("\n".join(стр), parse_mode="HTML",
+                                            disable_web_page_preview=True)
             return
         if _tl in ("группы только свои", "группы свои", "группы только разрешенные", "группы только разрешённые"):
             save_access({"group_open": False}); await update.message.reply_text("👥 Готово: бот работает ТОЛЬКО в разрешённых группах. Разреши нужные: «группа разреши <id>»."); return
@@ -21290,28 +21312,143 @@ async def handle_pinned(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 app.add_handler(MessageHandler(filters.StatusUpdate.PINNED_MESSAGE, handle_pinned))
 app.add_handler(ChatMemberHandler(track_member, ChatMemberHandler.CHAT_MEMBER))
+# ═══ 📋 РЕЕСТР ЧАТОВ БОТА (ОБР-557, слово владельца 13.08.2026) ═══
+#
+# «Скинь мне список групп/каналов, к которым добавили нашего бота, кликабельными. И присылай
+#  мне сразу, когда его добавляют. И облегчи мне механизм блока такого.»
+#
+# ЧЕГО НЕ БЫЛО. Списка не существовало вовсе: `_seen_chats` — множество В ПАМЯТИ, оно умирало
+# при каждом перезапуске контейнера. Бот годами не знал, где он состоит. Уведомление о
+# добавлении было, но уходило в служебный чат, куда владелец не смотрит, — то есть механизм
+# работал и молчал.
+#
+# ⚠️ ЧЕСТНОЕ ОГРАНИЧЕНИЕ, КОТОРОЕ НЕЛЬЗЯ ОБОЙТИ: Telegram НЕ ОТДАЁТ боту список чатов, где он
+# состоит, — такого запроса в их API нет. Поэтому реестр полон только с момента заведения:
+# восстановить прошлое неоткуда, и обещать полный список за прошлое было бы обманом.
+РЕЕСТР_ЧАТОВ = "chats_registry.json"
+
+
+def _ссылка_на_чат(ch):
+    """Кликабельная ссылка. У кого есть имя — по имени; у супергрупп без имени — внутренняя."""
+    try:
+        if getattr(ch, "username", None):
+            return "https://t.me/%s" % ch.username
+        ид = str(ch.id)
+        if ид.startswith("-100"):
+            return "https://t.me/c/%s" % ид[4:]
+    except Exception:
+        pass
+    return ""
+
+
+def _запомнить_чат(ch, статус=""):
+    """Записать чат в реестр. Пишем ВСЕГДА — и когда добавили, и когда просто увидели сообщение.
+
+    Реестр важнее одного уведомления: уведомление можно проспать, реестр остаётся."""
+    try:
+        р = _data_get(РЕЕСТР_ЧАТОВ, None)
+        if not isinstance(р, dict):
+            р = {}
+        к = str(ch.id)
+        было = р.get(к) or {}
+        р[к] = {
+            "имя": ch.title or было.get("имя") or "",
+            "тип": ch.type or было.get("тип") or "",
+            "ссылка": _ссылка_на_чат(ch) or было.get("ссылка") or "",
+            "статус": статус or было.get("статус") or "",
+            "впервые": было.get("впервые") or _now_msk(),
+            "последнее": _now_msk(),
+        }
+        if р != было:
+            _data_put(РЕЕСТР_ЧАТОВ, р, "реестр чатов: %s" % к)
+        return р[к]
+    except Exception:
+        return {}
+
+
 _seen_chats = set()
 async def _chat_seen(update, context):
     try:
         ch = update.effective_chat
         if ch and ch.id not in _seen_chats:
             _seen_chats.add(ch.id)
+            _запомнить_чат(ch, "виден")
             await context.bot.send_message(LOG_CHAT_ID, f"📡 Чат/канал: «{ch.title}» | id={ch.id} | type={ch.type}")
     except Exception:
         pass
 async def _bot_member(update, context):
     try:
         ch = update.effective_chat; st = update.my_chat_member.new_chat_member.status
+        _запомнить_чат(ch, st)
         info = f"🤖 Бот: {st} в «{ch.title}» (id={ch.id}, {ch.type})"
-        if st in ("member", "administrator") and ch.type in ("group", "supergroup"):
+        добавили = st in ("member", "administrator")
+        if добавили and ch.type in ("group", "supergroup", "channel"):
             a = load_access(); ok = a.get("group_open", True) or (str(ch.id) in (a.get("group_wl") or []))
             info += "\n" + ("✅ работает (группы открыты для всех)" if ok else "⛔ НЕ работает тут (режим «только свои группы»)")
             info += f"\n• Разрешить: `группа разреши {ch.id}`\n• Выйти: `покинь {ch.id}`\n• Бан: `бан {ch.id}`"
         await context.bot.send_message(LOG_CHAT_ID, info, parse_mode="Markdown")
+        # 🔴 ЛИЧНО ВЛАДЕЛЬЦУ И СРАЗУ — с кнопкой, а не с командой, которую надо набирать руками.
+        # Он просил «облегчи механизм блока»: раньше выход требовал скопировать id из служебного
+        # чата и написать «покинь -100…». Теперь один тап.
+        if добавили:
+            try:
+                сс = _ссылка_на_чат(ch)
+                тело = ("➕ <b>Бота добавили</b> в %s «%s»\n%s\nid: <code>%s</code>"
+                        % ("канал" if ch.type == "channel" else "группу",
+                           html.escape(ch.title or "без названия"),
+                           (сс + "\n") if сс else "", ch.id))
+                кл = _КЛ([[_КБ("🚪 Выйти и больше не пускать", callback_data="grp:out:%s" % ch.id)],
+                          [_КБ("✅ Оставить", callback_data="grp:ok:%s" % ch.id)]])
+                await context.bot.send_message(OWNER_ID, тело, parse_mode="HTML",
+                                               reply_markup=кл, disable_web_page_preview=True)
+            except Exception:
+                pass
     except Exception:
         pass
+
+
+async def on_grp(update, context):
+    """Кнопка под уведомлением: выйти и забанить — одним тапом (ОБР-557)."""
+    q = update.callback_query
+    try:
+        await q.answer()
+    except Exception:
+        pass
+    try:
+        if q.from_user.id != OWNER_ID:
+            return
+        _, что, ид = q.data.split(":", 2)
+        if что == "ok":
+            await q.edit_message_text(q.message.text_html + "\n\n✅ Оставлено.", parse_mode="HTML",
+                                      disable_web_page_preview=True)
+            return
+        # ⛔ Выйти И запретить возвращаться. Только выйти мало: добавят снова — и всё сначала,
+        # а владелец просил «не допускай его больше туда».
+        a = load_access()
+        чс = [str(x) for x in (a.get("blacklist") or [])]
+        if str(ид) not in чс:
+            чс.append(str(ид))
+        зам = dict(a.get("ban_notes") or {})
+        зам[str(ид)] = "выход по кнопке владельца %s" % _now_msk()
+        save_access({"blacklist": чс, "ban_notes": зам})
+        ушёл = True
+        try:
+            await context.bot.leave_chat(int(ид))
+        except Exception as e:
+            ушёл = False
+            подпись = "⚠️ Из чата выйти не вышло (%s), но он ЗАПРЕЩЁН — бот там молчит." % str(e)[:70]
+        if ушёл:
+            подпись = "🚪 Вышел и запретил. Добавят снова — бот там работать не будет."
+        await q.edit_message_text(q.message.text_html + "\n\n" + подпись, parse_mode="HTML",
+                                  disable_web_page_preview=True)
+    except Exception as e:
+        try:
+            await context.bot.send_message(OWNER_ID, "⚠️ Кнопка не сработала: %s" % str(e)[:120])
+        except Exception:
+            pass
 app.add_handler(MessageHandler(filters.ChatType.CHANNEL, _chat_seen))
 app.add_handler(ChatMemberHandler(_bot_member, ChatMemberHandler.MY_CHAT_MEMBER))
+app.add_handler(CallbackQueryHandler(on_grp, pattern=r'^grp:'))   # ОБР-557: кнопка «выйти и запретить»
 async def _on_error(update, context):
     err = str(context.error); print("ERR:", err)
     if 'Conflict' in err:  # две копии бота — не спамим, settle сам
