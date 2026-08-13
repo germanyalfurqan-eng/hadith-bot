@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1366</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1367</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1366';
+const APPVER = 'v1367';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4865,6 +4865,7 @@ async function runSearch(explicit){
           nb.textContent='👤 Искали ПЕРЕДАТЧИКА? Открыть в режиме «Передатчик»';
           nb.onclick=()=>{ try{hap('light');}catch(e){_тихо(e,"L4633")} modes.narr=true; const nc=document.querySelector('.chip[data-mode="narr"]'); if(nc) nc.classList.add('on'); document.getElementById('q').value=qn0; runSearch(true); };
           res.appendChild(nb); } }catch(e){_тихо(e,"L4634")}
+      try{ addRuNarrBtn(res, shown); }catch(e){_тихо(e,"L4635н")}   /* TB-17: русское имя передатчика → его карточка */
       try{ addRu2ArBtn(res, shown); }catch(e){_тихо(e,"L4635")}   // #404 патч ②: ru→ar транслит-кандидаты и здесь
       addNotFoundBtn(res, shown); }   // M173: не затирать баннер; +«сообщите нам»
   }
@@ -6657,6 +6658,7 @@ async function appendMaktaba(seq, q, primary){
         ab.textContent='🧠 Похоже, ты описал СМЫСЛ хадиса — искать по смыслу (ИИ)?';
         ab.onclick=()=>{ try{hap('light');}catch(e){_тихо(e,"L6388")} modes.ai=true; const ac=document.querySelector('.chip[data-mode="ai"]'); if(ac) ac.classList.add('on'); runSearch(true); };
         res.appendChild(ab); } }catch(e){_тихо(e,"L6389")}
+      try{ addRuNarrBtn(res, q); }catch(e){_тихо(e,"L6390н")}   /* TB-17: русское имя передатчика → его карточка */
       try{ addRu2ArBtn(res, q); }catch(e){_тихо(e,"L6390")}   // #404 патч ②: ru→ar кандидаты из обратного словаря
       try{ maktabaSunnahBtn(res,seq,q); addNotFoundBtn(res,q); }catch(e){_тихо(e,"L6391")} return; }
     await loadBooksMap();
@@ -13206,6 +13208,73 @@ function _ru2arCands(q){ const idx=_ru2arIndex(); const out=[]; const seen=new S
     if(w.length<3) continue; const hits=idx[w0]||idx[w]; if(!hits) continue;
     for(const a of hits.slice(0,2)){ if(!seen.has(a)){ seen.add(a); out.push(a); } } }
   return out.slice(0,6); }
+/* 👤 TB-17: НАБРАЛ ПЕРЕДАТЧИКА ПО-РУССКИ — ОТКРОЙ ЕГО КАРТОЧКУ (сессия 71, 12.08.2026)
+
+   Заявка: «поиск по русскому имени должен сразу находить известного передатчика». Раньше
+   человек писал «Абу Хурайра» и получал либо ничего, либо совет искать арабскую фразу — совет
+   для русского запроса бессмысленный.
+
+   ⚠️ Почему не понадобилось НИ ОДНОГО нового файла. Всё уже лежит в приложении: указатель имён
+   `narrators_names.json` (45 963 пары «арабское имя → номер») и `arNameRu()`, который те же
+   имена переводит на русский. Обратный ход строится из них один раз при первом русском
+   запросе и живёт в памяти. Заводить ещё один словарь значило бы завести ещё одно место,
+   которое рассохнется отдельно от первого.
+
+   ⚠️ Написания не совпадают, и это ожидаемо: словарь даёт «Абу Хурейра», человек пишет
+   «Абу Хурайра». Поэтому сверяем по огрублённому ключу — без мягких знаков, «й»→«и»,
+   «ё»→«е», и гласные приведены к одной. Сперва ищем точное совпадение, потом огрублённое,
+   и только потом начало имени: точное вперёд, чтобы не подсовывать похожего вместо нужного.
+
+   ⚠️ Тёзок НЕ выбираем за человека (П-05). Нашлось несколько — показываем сколько, и пусть
+   открывает список: подменить одного другим в науке о передатчиках хуже, чем не найти. */
+let _ruНаррИдx=null;
+function _ruКлюч(s){
+  return String(s||'').toLowerCase().replace(/ё/g,'е').replace(/й/g,'и')
+    .replace(/[ьъ]/g,'').replace(/[^а-я]/g,'');
+}
+function _ruКлючГрубо(s){ return _ruКлюч(s).replace(/[аоуыэеию]/g,'а'); }
+function _ruНаррИндекс(){
+  if(_ruНаррИдx) return _ruНаррИдx;
+  const точн=Object.create(null), груб=Object.create(null);
+  try{
+    for(const п of (_narrNames||[])){
+      const ар=п&&п[0], id=п&&п[1];
+      if(!ар||id==null) continue;
+      let ру=''; try{ ру=arNameRu(String(ар),5)||''; }catch(e){ continue; }
+      if(!/[А-Яа-яЁё]/.test(ру)) continue;
+      const k=_ruКлюч(ру); if(!k) continue;
+      (точн[k]||(точн[k]=[])).indexOf(id)<0 && точн[k].push(id);
+      const g=_ruКлючГрубо(ру);
+      (груб[g]||(груб[g]=[])).indexOf(id)<0 && груб[g].push(id);
+    }
+  }catch(e){_тихо(e,"L_ruНаррИндекс")}
+  return _ruНаррИдx={точн, груб};
+}
+function _ruНайтиРавия(q){
+  const и=_ruНаррИндекс(); const k=_ruКлюч(q); if(k.length<3) return [];
+  if(и.точн[k]) return и.точн[k].slice(0,8);
+  const g=_ruКлючГрубо(q); if(и.груб[g]) return и.груб[g].slice(0,8);
+  for(const кл in и.точн){ if(кл.length>=k.length && кл.indexOf(k)===0) return и.точн[кл].slice(0,8); }
+  return [];
+}
+function addRuNarrBtn(res, q){ try{
+  if(!q || isArabic(q) || !/[а-яё]/i.test(q)) return;
+  if(String(q).trim().split(/\s+/).length>4) return;      // фраза, а не имя
+  const ids=_ruНайтиРавия(q); if(!ids.length) return;
+  const b=document.createElement('button');
+  b.style.cssText='display:block;width:100%;max-width:520px;margin:8px auto;padding:12px;border-radius:12px;border:1px solid #7a5cc4;color:#dcd0ff;background:rgba(122,92,196,.16);font-size:13.5px;font-weight:700;cursor:pointer';
+  // «2 человек» режет глаз: склоняем по-русски (2–4 — человека, иначе — человек).
+  const _ч=(n)=>{ const о=n%10, с=n%100;
+    return (о===1&&с!==11) ? 'человек' : ((о>=2&&о<=4&&(с<12||с>14)) ? 'человека' : 'человек'); };
+  b.innerHTML= (ids.length===1)
+    ? '👤 Похоже на имя передатчика — открыть его карточку'
+    : ('👤 Похоже на имя передатчика — под ним '+ids.length+' '+_ч(ids.length)+', показать их');
+  b.title='Найдено по указателю имён приложения, без обращения к сети';
+  b.onclick=()=>{ try{hap('light');}catch(e){_тихо(e,"L_ruнаррhap")}
+    try{ openNarratorRijal(String(q), ids.length===1?ids[0]:undefined); }
+    catch(e){ _тихо(e,"L_ruнаррopen"); } };
+  res.appendChild(b);
+}catch(e){_тихо(e,"L_ruнаррbtn")} }
 function addRu2ArBtn(res, q){ try{
   if(!q || isArabic(q) || !/[а-яё]/i.test(q)) return; const cands=_ru2arCands(q); if(!cands.length) return;
   const b=document.createElement('button');
