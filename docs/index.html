@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1374</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1375</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1374';
+const APPVER = 'v1375';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -8031,17 +8031,56 @@ function _tabNum(t){ if(!t) return 0; const s=fold(stripDiac(String(t)));
   const ord={'الاولى':1,'الثانيه':2,'الثالثه':3,'الرابعه':4,'الخامسه':5,'السادسه':6,'السابعه':7,'الثامنه':8,'التاسعه':9,'العاشره':10,'الحاديه عشره':11,'الثانيه عشره':12};
   for(const k in ord){ if(s.indexOf(k)>=0) return ord[k]; }
   return 0; }
+/* 📇 ГОД СМЕРТИ + ПОКОЛЕНИЕ ОДНИМ ФАЙЛОМ (narr_dt.json — 11 920 записей, 127 КБ).
+
+   Заявка #694, замер на бою: карточка равия открывалась 71,9 с, и 64,4 с уходили на 72
+   запроса — почти все шарды `narr/<N>.json` по 128 КБ. Обернул `_narrCard` и собрал стеки:
+   60 вызовов приходили из хронологического гейта ниже. Гейту нужны ДВА ЧИСЛА — год смерти и
+   номер поколения, — а он ради них тянул полные карточки, до 7,6 МБ на одно открытие.
+   Теперь оба числа лежат отдельно. Сверено с самим приложением: 11 920 записей из 11 920,
+   расхождений 0 (build_narr_dt.py считает то же, что `_tabNum` в браузере).
+
+   Возвращает [год, поколение] либо null — «не знаю», и тогда зовущий берёт полную карточку,
+   как раньше. Молча подставлять нули нельзя: ноль здесь значит «сподвижник», и гейт принял
+   бы неизвестного за сподвижника. */
+let _dtПлоско=null, _dtP=null, _dtПлохо=false;
+async function _годПоколение(id){
+  if(id==null) return null;
+  if(!_dtПлоско && !_dtПлохо){
+    if(!_dtP) _dtP=fetch('./narr_dt.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
+    const а=await _dtP;
+    if(Array.isArray(а) && а.length){ _dtПлоско=new Map();
+      for(let i=0;i<а.length;i+=3) _dtПлоско.set(а[i], [а[i+1], а[i+2]]); }
+    else { _dtПлохо=true; _dtP=null; }
+  }
+  if(!_dtПлоско) return null;
+  return _dtПлоско.get(+id) || null;
+}
 async function _renderTlinkLinks(id, host, onPick){
   let _rec=null; try{ _rec=await _tlinkGet(id); }catch(e){_тихо(e,"L7506")}
   let _edg={}; try{ _edg=await _edgesGet(id); }catch(e){_тихо(e,"L7507")}
   const _cnt=(oid)=>(_edg&&_edg[String(oid)])||0;
   // КАМПАНИЯ карточки: объединяем تهذيب الكمال (авторитет.направление T/S) + narr_edges (реальные соседи из НАШИХ цепей, 56% покрытие vs tlink 38%). Направление соседа из цепей — по году смерти (старше=учитель). Год неизвестен → отдельный блок «связи» (не гадаем, В-01).
-  let _selfD=null,_selfT=0; try{ const _sc=await _narrCard(id); _selfD=_sc&&_sc[4]?parseInt(String(_sc[4]).replace(/[^0-9]/g,'')):null; _selfT=_tabNum(_sc&&_sc[7]); }catch(e){_тихо(e,"L7510")}
+  let _selfD=null,_selfT=0;
+  try{ const _sd=await _годПоколение(id);
+    if(_sd){ _selfD=_sd[0]||null; _selfT=_sd[1]||0; }
+    else { const _sc=await _narrCard(id); _selfD=_sc&&_sc[4]?parseInt(String(_sc[4]).replace(/[^0-9]/g,'')):null; _selfT=_tabNum(_sc&&_sc[7]); }
+  }catch(e){_тихо(e,"L7510")}
   const _teaM=new Map(),_stuM=new Map(),_neuM=new Map();
   if(_rec) for(const k in _rec){ const v=_rec[k]; const i2=v.indexOf(':'); const rz=i2>=0?v.slice(i2+1):''; (v[0]==='T'?_teaM:_stuM).set(parseInt(k),rz); }
   const _extra=Object.keys(_edg).map(Number).filter(o=>!_teaM.has(o)&&!_stuM.has(o)).sort((a,b)=>_cnt(b)-_cnt(a)).slice(0,60);
-  if(_extra.length){ const _cards=await Promise.all(_extra.map(o=>_narrCard(o).catch(()=>null)));
-    _extra.forEach((o,i)=>{ const nc=_cards[i]; const nd=nc&&nc[4]?parseInt(String(nc[4]).replace(/[^0-9]/g,'')):null; const nt=_tabNum(nc&&nc[7]);
+  if(_extra.length){
+    /* 🚀 #694: раньше здесь тянулись ПОЛНЫЕ карточки всех шестидесяти соседей — до шестидесяти
+       шардов по 128 КБ, — а нужны из них два числа. Берём их из narr_dt.json; за карточкой
+       идём только к тем, кого в указателе нет. */
+    const _пары=await Promise.all(_extra.map(o=>_годПоколение(o).catch(()=>null)));
+    const _добрать=_extra.filter((o,i)=>!_пары[i]);
+    const _докарт={};
+    if(_добрать.length){ const _cc=await Promise.all(_добрать.map(o=>_narrCard(o).catch(()=>null)));
+      _добрать.forEach((o,i)=>{ _докарт[o]=_cc[i]; }); }
+    _extra.forEach((o,i)=>{ const п=_пары[i]; const nc=п?null:_докарт[o];
+      const nd=п?(п[0]||null):(nc&&nc[4]?parseInt(String(nc[4]).replace(/[^0-9]/g,'')):null);
+      const nt=п?(п[1]||0):_tabNum(nc&&nc[7]);
       // ХРОНОЛОГИЯ-ГЕЙТ (В-01, заявка владельца #359 «الأعمش как ученик عائشة»): narr_edges = со-встречаемость в цепях, бывают ЛОЖНЫЕ дальние связи (через выпавшее звено/мурсаль). Прямой учитель↔ученик = соседние поколения. Отсекаем явно невозможное: разрыв ≥3 поколений (табака) ИЛИ ≥80 лет смерти. تهذيب-связи (выше) НЕ трогаем — авторитет аль-Мизи.
       const tabGap=(_selfT&&nt)?Math.abs(_selfT-nt):0; const dGap=(_selfD&&nd)?Math.abs(_selfD-nd):0;
       const _impossible=(_selfD&&nd)?(dGap>80):(tabGap>=4);   // год смерти точнее табаки: разрыв >80 лет (الأعمش↔عائشة=89 откинуть) ИЛИ ≥4 поколений (когда нет года). Реальные учители с разрывом ≤80/≤3 (الأعمش↔أبو وائل) остаются.
@@ -8061,7 +8100,9 @@ async function _renderTlinkLinks(id, host, onPick){
   const _tlBody=document.createElement('div'); _tlBody.style.cssText='display:none;margin-top:6px';
   _tlBody.innerHTML='<div style="font-size:11.5px;color:var(--hint);margin-bottom:5px">📜 N — число передач в нашей базе цепей · направление по году смерти · тап → карточка</div>';
   ts.appendChild(_tlBody); ts._tlBody=_tlBody;
-  ts.querySelector('.tlHdr').onclick=()=>{ const o=_tlBody.style.display!=='none'; _tlBody.style.display=o?'none':'block'; const tg=ts.querySelector('.tlTg'); if(tg) tg.textContent=o?'▸':'▾'; };
+  ts.querySelector('.tlHdr').onclick=()=>{ const o=_tlBody.style.display!=='none'; _tlBody.style.display=o?'none':'block'; const tg=ts.querySelector('.tlTg'); if(tg) tg.textContent=o?'▸':'▾';
+    // #694: раскрыли — наливаем имена ВИДИМЫХ строк (скрытые ждут «показать ещё»)
+    if(!o) try{ _tlBody.querySelectorAll('[data-tlrow]').forEach(r=>{ if(r.style.display!=='none' && r.__налить) r.__налить(); }); }catch(e){_тихо(e,"L7530l")} };
   const _mk=(arr,lbl)=>{ if(!arr.length) return; const d=document.createElement('div'); d.style.cssText='margin-top:7px';
     d.innerHTML='<div style="color:var(--hint);font-size:13.5px;margin-bottom:5px;font-weight:600">'+lbl+' ('+arr.length+'):</div>';
     const w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;gap:5px';
@@ -8070,15 +8111,22 @@ async function _renderTlinkLinks(id, host, onPick){
       const row=document.createElement('div'); row.dataset.tlrow='1'; row.style.cssText='cursor:pointer;border:1px solid var(--border);border-radius:9px;padding:6px 10px;background:rgba(255,255,255,.03)';
       if(ix>=_SHOWN) row.style.display='none';
       row.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="_tnm" style="font-size:15px;color:#cfe6d4;direction:rtl;text-align:right;font-weight:600;flex:1">#'+oid+'</span>'+(cnt?('<span style="flex-shrink:0;font-size:11.5px;color:#bcd2ff;background:rgba(46,107,155,.22);border:1px solid #2e6b9b;border-radius:7px;padding:1px 8px">📜 '+cnt+'</span>'):'')+'</div><div class="_tru" style="direction:ltr;text-align:left;font-size:11.5px;color:#8fa3c7;margin-top:2px"></div>';
-      _narrCard(oid).then(v=>{ if(v){ var _sh=''; try{ _sh=_shuhraOf(v[1],[v[3]]); }catch(e){ _sh=v[1].split(/\s+/).slice(0,4).join(' '); }   // ЗАКОН ИМЕНИ: узнаваемая шухра, не «первые 4 слова»
-        const _n=row.querySelector('._tnm'); if(_n&&v[1]) _n.textContent=_sh||v[1];
-        const _r=row.querySelector('._tru'); if(_r){ let ru=''; try{ ru=arNameRu(_sh||v[1],5); }catch(e){_тихо(e,"L7546")} const yr=v[4]?('ت '+v[4]+' هـ'):''; _r.textContent=[ru?('≈ '+ru):((_sh&&v[1]&&_sh!==v[1])?v[1]:''),yr].filter(Boolean).join('  ·  '); } } }).catch(()=>{});   // #510: пустой транслит → полное арабское имя, не пустота
+      /* 🚀 #694: имя строки достаётся ЛЕНИВО. Весь блок «Учители и ученики» по умолчанию
+         СВЁРНУТ, а строк в нём до тридцати при шести видимых — и на каждую тянулся шард
+         в 128 КБ. Пятьдесят шесть таких вызовов приходились на карточку, которую человек
+         ещё даже не раскрыл. Теперь наполнение висит на самой строке и срабатывает, когда
+         её показывают: раскрыли блок — наполнились видимые, нажали «показать ещё» —
+         наполнились остальные. */
+      row.__налить=()=>{ if(row.__налито) return; row.__налито=1;
+        _narrCard(oid).then(v=>{ if(v){ var _sh=''; try{ _sh=_shuhraOf(v[1],[v[3]]); }catch(e){ _sh=v[1].split(/\s+/).slice(0,4).join(' '); }   // ЗАКОН ИМЕНИ: узнаваемая шухра, не «первые 4 слова»
+          const _n=row.querySelector('._tnm'); if(_n&&v[1]) _n.textContent=_sh||v[1];
+          const _r=row.querySelector('._tru'); if(_r){ let ru=''; try{ ru=arNameRu(_sh||v[1],5); }catch(e){_тихо(e,"L7546")} const yr=v[4]?('ت '+v[4]+' هـ'):''; _r.textContent=[ru?('≈ '+ru):((_sh&&v[1]&&_sh!==v[1])?v[1]:''),yr].filter(Boolean).join('  ·  '); } } }).catch(()=>{}); };   // #510: пустой транслит → полное арабское имя, не пустота
       if(rz) row.title='зафиксировано (تهذيب الكمال): '+((typeof _ramzHuman==='function'&&_ramzHuman(rz))||rz);
       row.onclick=()=>{ _narrCard(oid).then(v=>{ if(v&&v[1]) onPick(v[1]); }).catch(()=>{}); };
       w.appendChild(row); });
     if(arr.length>_SHOWN){ const mr=document.createElement('button'); mr.className='mini'; mr.style.cssText='margin-top:5px;width:100%;padding:7px;border:1px solid var(--border);border-radius:9px;font-size:12px;color:var(--hint)';
       mr.textContent='▾ Показать ещё ('+(arr.length-_SHOWN)+')'; let _op=false;
-      mr.onclick=()=>{ _op=!_op; w.querySelectorAll('[data-tlrow]').forEach((r,i)=>{ if(i>=_SHOWN) r.style.display=_op?'block':'none'; }); mr.textContent=_op?'▴ Свернуть':('▾ Показать ещё ('+(arr.length-_SHOWN)+')'); };
+      mr.onclick=()=>{ _op=!_op; w.querySelectorAll('[data-tlrow]').forEach((r,i)=>{ if(i>=_SHOWN){ r.style.display=_op?'block':'none'; if(_op&&r.__налить) r.__налить(); } }); mr.textContent=_op?'▴ Свернуть':('▾ Показать ещё ('+(arr.length-_SHOWN)+')'); };
       w.appendChild(mr); }
     d.appendChild(w); (ts._tlBody||ts).appendChild(d); };
   // R-61 v6 (владелец 16.07): «روى عن» ≠ доказанная встреча (سماع) — «عن» может скрывать ирсаль/тадлис. Подписи честные: это ЗАПИСИ передач, не факт встречи.
@@ -10591,6 +10639,34 @@ async function _narrCard(id){ const b=Math.floor(id/100); if(!_narrShard[b]){ if
 let _ndCache=null,_ndP=null;
 async function _narrDisp(id){ if(id==null) return null; if(!_ndCache){ if(!_ndP) _ndP=fetch('./narr_disp.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>{ _ndP=null; return null; }); _ndCache=await _ndP; } return (_ndCache||{})[String(id)]||null; }
 function _narrDispName(id, fallback){ const d=_ndCache&&_ndCache[String(id)]; if(d&&d.ar) return d.ar; return fallback||''; }   // синхронный (после прогрева кэша)
+/* ⭐ СПИСОК СПОДВИЖНИКОВ ОДНИМ ФАЙЛОМ (narr_sah.json — 933 id, 4,6 КБ; build_narr_sah.py).
+
+   Заявка #694, замер на бою: карточка равия открывалась 71,9 с, и 64,4 с из них уходили на
+   72 запроса, почти все — шарды `narr/<N>.json` по 128 КБ. Тянулись они ради ОДНОЙ вещи:
+   отметить сподвижника золотым. Теперь признак лежит отдельно и весит 4,6 КБ.
+
+   ⚠️ Список собран НЕ отдельной формулой, а прогоном самого приложения (`_genBadge` плюс
+   запасная сверка по `_GUARANTEED_SAHABA`) по всем 227 шардам — 19 106 записей. Вторую
+   реализацию того же признака заводить нельзя: они разойдутся, и золотая отметка начнёт
+   врать о сподвижничестве, а это утверждение о религии.
+
+   Возвращает true / false / null. **null — это «не знаю», а не «нет»**: файл не приехал, и
+   зовущий обязан посчитать прежним способом. Иначе одна сетевая икота молча сняла бы
+   отметку со всех сподвижников разом — ровно тот класс беззвучных поломок, который мы
+   ловим весь день. */
+let _sahСписок=null, _sahP=null, _sahПлохо=false;
+async function _сподвижникПоСписку(id){
+  if(id==null) return null;
+  if(!_sahСписок && !_sahПлохо){
+    if(!_sahP) _sahP=fetch('./narr_sah.json?v='+APPVER)
+      .then(r=>r.ok?r.json():null).catch(()=>null);
+    const а=await _sahP;
+    if(Array.isArray(а) && а.length) _sahСписок=new Set(а.map(Number));
+    else { _sahПлохо=true; _sahP=null; }
+  }
+  if(!_sahСписок) return null;
+  return _sahСписок.has(+id);
+}
 // narr_sun.json (данные страницы sunnah.com, 5890 равиев): id→{c:[сборники],g:оценка,ct:город,tb:табака,dt:вафат,sid}
 let _nsCache=null,_nsP=null;
 async function _narrSun(id){ if(id==null) return null; if(!_nsCache){ if(!_nsP) _nsP=fetch('./narr_sun.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>{ _nsP=null; return null; }); _nsCache=await _nsP; } return (_nsCache||{})[String(id)]||null; }
@@ -12234,12 +12310,38 @@ function _dzChips(codes, row, forms, uResolved, numOverride){
     const ovr=(numOverride[i]!=null);   // числовой id перекрыт авторитетным (по сверке)
     const rid=ovr?Number(numOverride[i]):((typeof c==='number')?c:(uResolved[c]!=null?Number(uResolved[c]):null));   // #1/#4/#6: U-код/чужой id опознан через na/сверку (همام→6739, خالد 16274→1768)
     if(rid!=null){ b.textContent='#'+rid+' ✓'; b.style.color='#9fd3a8'; b.title='опознан — id базы '+rid+(typeof c==='number'?'':' (по сверке sunnah.com)');
-      _narrCard(rid).then(async v=>{ const _dn=await _narrDisp(rid); const _nm=(_dn&&_dn.ar)||(v&&v[1]&&_nmShort(v[1],3)); if(_nm) b.textContent=_nm+' ·#'+rid;
+      /* 🚀 #694 «передатчики долго грузятся» — ЗАМЕР, а не догадка. Карточка аль-Хасана
+         аль-Басри открывалась 71,9 с на боевом сайте. Разбор: сама карточка рисуется за
+         0,1 с, длинных задач ноль, «снов» в коде нет — а fetch-ей 72, и почти все это
+         `narr/<N>.json` по ~128 КБ, сумма их длительностей 64,4 с.
+         Виновата была ЭТА строка: ради каждого чипа звался `_narrCard(rid)`, а он тянет
+         ШАРД на сотню записей. Сорок разных равиев — сорок разных шардов, до 5 МБ.
+         А нужно оттуда было ровно две вещи: имя и золотая отметка сподвижника. Имя и так
+         берётся из `narr_disp.json` (общий файл, уже загружен), отметка вынесена в
+         `narr_sah.json` — 933 id, 4,6 КБ. Полная карточка теперь запрашивается ТОЛЬКО
+         если имени в disp не нашлось, и по клику. */
+      (async()=>{
+        const _dn=await _narrDisp(rid);
+        let _nm=(_dn&&_dn.ar)||'';
+        const _sp=await _сподвижникПоСписку(rid);
+        let _sah=(_sp===true);
+        if(!_nm || _sp===null){
+          // имени нет в общем указателе, либо список сподвижников не приехал — только тогда
+          // платим за шард. Отметку в этом случае считаем прежним способом, чтобы падение
+          // одного маленького файла не лишало людей золотой пометки.
+          let v=null; try{ v=await _narrCard(rid); }catch(e){_тихо(e,"L11543")}
+          if(v){
+            if(!_nm && v[1]) _nm=_nmShort(v[1],3);
+            if(_sp===null) try{
+              const _gb=_genBadge((v[5]||'')+' '+(v[6]||'')+' '+(v[7]||''), v[4]); _sah=!!(_gb&&_gb[0]==='صحابي');
+              if(!_sah && !(parseInt(v[4],10)>110)){ const _cn=stripDiac(v[1]||'').trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc&&(_cn===gc||_cn.startsWith(gc+' '))){ _sah=true; break; } } }   // С57: год смерти >110 гх = НЕ сподвижник (Хумейди ت219 ловился префиксом «عبد الله بن الزبير»)
+            }catch(e){_тихо(e,"L11543")}
+          }
+        }
+        if(_nm) b.textContent=_nm+' ·#'+rid;
         // владелец 03.07: «в цепях всегда везде выделяй сподвижников явно золотым»
-        try{ const _gb=_genBadge((v[5]||'')+' '+(v[6]||'')+' '+(v[7]||''), v[4]); let _sah=_gb&&_gb[0]==='صحابي';
-          if(!_sah && !(parseInt(v[4],10)>110)){ const _cn=stripDiac(v[1]||'').trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc&&(_cn===gc||_cn.startsWith(gc+' '))){ _sah=true; break; } } }   // С57: год смерти >110 гх = НЕ сподвижник (Хумейди ت219 ловился префиксом «عبد الله بن الزبير»)
-          if(_sah){ b.style.color='#e8c35a'; b.style.borderColor='#e8c35a'; b.style.background='rgba(232,195,90,.16)'; b.title+=' · ⭐ сподвижник'; }
-        }catch(e){_тихо(e,"L11543")} }).catch(()=>{});
+        if(_sah){ b.style.color='#e8c35a'; b.style.borderColor='#e8c35a'; b.style.background='rgba(232,195,90,.16)'; b.title+=' · ⭐ сподвижник'; }
+      })().catch(()=>{});
       b.onclick=()=>{ _narrCard(rid).then(v=>{ if(v&&v[1]) openNarratorRijal(v[1], rid); else openNarratorRijal('', rid); }).catch(()=>{ openNarratorRijal('', rid); }); };
     } else { b.textContent=String(c).slice(0,8); b.style.color='#ffce63';
       // #515 (владелец: «что за надписи абдуллах ибн?????? — что делать?»): жёлтый чип = КРАТКАЯ ФОРМА имени из иснада,
