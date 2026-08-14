@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1375</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1376</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1375';
+const APPVER = 'v1376';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -8198,6 +8198,16 @@ async function openNarratorRijal(name, forceId){
     +'</div></div>'
     +'<div class="skel" style="height:13px;width:92%;margin:6px 0">.</div><div class="skel" style="height:13px;width:85%;margin:6px 0">.</div><div class="skel" style="height:13px;width:88%;margin:6px 0">.</div>';
   try{ _прогревРавия(forceId, 'рано'); }catch(e){_тихо(e,"L7622")}   // ⚡ v1335: колодцы начинают наполняться ЗДЕСЬ, пока человек смотрит на скелетон, а не строкой ниже по очереди
+  /* ⚡ #694: ВТОРАЯ ВОЛНА — через мгновение после первой, а не «когда дойдёт очередь».
+     Замер ленты запросов на бою: первые тринадцать летят разом (как и задумано), а дальше
+     идёт РОВНАЯ ЦЕПОЧКА — глоссарий джарха, Захаби, вики, мудаллисы, портреты, вердикты —
+     по запросу каждые ~190 мс, каждый ждёт предыдущего. Файлы независимы, просто каждый
+     грузился «по требованию» того куска кода, до которого дошло исполнение.
+     Вторая волна ровно для них и написана, но срабатывала ПОЗЖЕ, чем эти куски успевали
+     попросить своё поодиночке. Пускаем её с малой задержкой: первая волна успевает занять
+     соединения именем и годами (ради этого волны и разделяли), а дальше семнадцать шагов
+     складываются в один. Прогрев идемпотентен — лишний вызов ничего не стоит. */
+  try{ setTimeout(function(){ try{ _прогревРавия(forceId, 'поздно'); }catch(e){} }, 120); }catch(e){_тихо(e,"L7622b")}
   try{ const _dt=(forceId!=null)?await _narrDisp(forceId):null; m.querySelector('#narrTitle').textContent='👤 '+((_dt&&_dt.ar)||_cleanNarrName(name)); }catch(e){ m.querySelector('#narrTitle').textContent='👤 '+_cleanNarrName(name); }
   // ТРЕВОГА-фикс (владелец 01.07.2026, «карточка дохлая» — почему тут только «Оценки», а в других местах полная шапка):
   // раньше эта модалка (клик по имени в цепи хадиса) НЕ строила шапку (ID/кунья/нисба/вафат/Wikipedia/sunnah.com) —
@@ -8213,6 +8223,17 @@ async function openNarratorRijal(name, forceId){
   const _realBox=document.createElement('div'); _realBox.style.display='none'; body.appendChild(_realBox);
   try{ const _rc=await showNarratorCardLocal(name, _realBox, forceId); if(_rc) _cardShown=true; }catch(e){_тихо(e,"L7636")}
   try{ Array.prototype.slice.call(body.children).forEach(function(ch){ if(ch!==_realBox) ch.remove(); }); _realBox.style.display=''; }catch(e){_тихо(e,"L7637")}
+  /* ⚡ #694, вторая половина: ВТОРАЯ ВОЛНА ПРОГРЕВА — здесь, а не «когда дойдёт очередь».
+     Замер ленты запросов на бою показал: после первых тринадцати (они летят разом, как и
+     задумано) идёт РОВНАЯ ЦЕПОЧКА из семнадцати — глоссарий джарха, Захаби, вики, мудаллисы,
+     портреты, вердикты, псевдонимы, книги… — по одному запросу каждые ~190 мс, то есть
+     каждый ждёт предыдущего. Файлы независимы и нужны все, просто каждый грузился «по
+     требованию» того куска кода, что до него дошёл.
+     Вторая волна как раз для них и написана, но срабатывала слишком поздно. Пускаем её
+     сразу, как карточка показана: имя и годы уже на экране, канал у них никто не отнимает,
+     а семнадцать шагов превращаются в один. Прогрев идемпотентен (сторожевые флаги внутри),
+     лишний вызов ничего не стоит. */
+  try{ _прогревРавия(forceId, 'поздно'); }catch(e){_тихо(e,"L7637b")}
   if(!_cardShown){   // фолбэк на старое поведение — если полная карточка не построилась (имя не резолвится), хотя бы «Оценки» локально
     body.innerHTML='<div class="hint">📜 Загружаю оценки учёных…</div>';
     try{ let _v=(forceId!=null&&forceId!=='')?String(forceId):await _narrLookup(name); if(_v!=null){ body.innerHTML=''; await renderTestimoniesCard(_v, body); } else _narrНеОпознан(body, name); }catch(e){ _narrНеОпознан(body, name); }
