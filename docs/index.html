@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1369</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1370</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1369';
+const APPVER = 'v1370';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2706,12 +2706,76 @@ function gradeOf(h){ const g=h.grades&&h.grades[0]; return g?(g.grade||'').toStr
 // gradeOf брала grades[0] и выбрасывала имя учёного. «صحيح» без имени — это чьё-то мнение,
 // выданное за общее; а когда двое разошлись, строка молча выбирала первого и делала вид,
 // что второго нет. Возвращаем ВСЕ оценки С ИМЕНАМИ — по закону о полных свидетельствах.
+/* 🔤 ИМЯ КРИТИКА И ЕГО ОЦЕНКА — ПО-ЧЕЛОВЕЧЕСКИ (R48 «меньшего сопротивления», заявка #712).
+
+   В изданиях отзыв записан латиницей: «Daif — Al-Albani». Для русскоязычного читателя это
+   чужое слово, и вдобавок оно ломало у нас две вещи разом: раскраска бейджа и окно «что
+   значит эта степень» настроены на АРАБСКОЕ написание (صحيح/ضعيف), а латиница не попадала ни
+   под одно правило — бейдж выходил серым, объяснение общим.
+   Переводим в ОДНОЙ точке разбора, чтобы поиск, читалка и все прочие места показывали
+   одинаково (З-33: второй словарь рассохнется с первым).
+   ⚠️ Незнакомое слово НЕ переводим и не выбрасываем: у Зубайра Али Заи попадаются целые
+   фразы вместо степени. Показать чужую фразу как есть — честно; подогнать её под похожую
+   степень — приговор о достоверности, которого критик не выносил. */
+const _КРИТИК_RU={'al-albani':'аль-Альбани','zubair ali zai':'Зубайр Али Заи',
+  'shuaib al arnaut':'Шуайб аль-Арнаут','abu ghuddah':'Абу Гудда',
+  'muhammad muhyi al-din abdul hamid':'Мухаммад Мухьи ад-Дин Абдульхамид',
+  'muhammad fouad abd al-baqi':'Мухаммад Фуад Абд аль-Баки',
+  'ahmad muhammad shakir':'Ахмад Мухаммад Шакир','bashar awad maarouf':'Башшар Аввад Маруф',
+  'salim al-hilali':'Салим аль-Хиляли'};
+function _критикПоНашему(н){ return _КРИТИК_RU[String(н||'').toLowerCase().trim()]||н; }
+const _СТЕПЕНЬ_TOK={sahih:'صحيح',hasan:'حسن',daif:'ضعيف',dhaif:'ضعيف',weak:'ضعيف',
+  munkar:'منكر',shadh:'شاذ',shaadh:'شاذ',mawdu:'موضوع',mawdoo:'موضوع',mauquf:'موقوف',
+  muquf:'موقوف',maqtu:'مقطوع',mursal:'مرسل',mutawatir:'متواتر',lighairihi:'لغيره',
+  matn:'متنه',hadith:''};
+function _оценкаПоНашему(en){
+  const s=String(en==null?'':en).trim(); if(!s) return s;
+  if(/[؀-ۿ]/.test(s)) return s;                 // уже по-арабски (и повторный проход) — не трогаем
+  const сл=s.toLowerCase().replace(/[^a-z\s-]/g,' ').split(/[\s-]+/).filter(Boolean);
+  if(!сл.length) return s;
+  let очень=false; const из=[], хвост=[];
+  for(const w of сл){
+    if(w==='very'){ очень=true; continue; }
+    if(w==='agreed'){ из.push('متفق عليه'); continue; }
+    if(w==='upon'||w==='and'||w==='hadith') continue;
+    if(w==='bukhari'){ хвост.push('(البخاري)'); continue; }
+    if(w==='muslim'){ хвост.push('(مسلم)'); continue; }
+    if(w==='isnaad'||w==='isnad'||w==='sanad'){ из.push(из.length?'الإسناد':'إسناده'); continue; }
+    const t=_СТЕПЕНЬ_TOK[w];
+    if(t===undefined) return s;                           // незнакомое — отдаём как есть
+    if(t) из.push(t); }
+  if(!из.length) return s;
+  if(очень) из.push('جدًا');
+  return из.concat(хвост).join(' '); }
+const _ГЛОССА=[[/موضوع/,'выдуманный'],[/منكر/,'отвергаемый'],[/شاذ/,'отклонённый'],
+  [/ضعيف/,'слабый'],[/حسن\s*صحيح/,'хороший-достоверный'],[/حسن/,'хороший'],
+  [/صحيح/,'достоверный'],[/متفق/,'согласованный']];
+function _глоссаОценки(ар){
+  let г=''; for(const п of _ГЛОССА){ if(п[0].test(ар)){ г=п[1]; break; } }
+  if(!г) return '';
+  /* Уточнения обязательны, иначе русское слово скажет больше, чем сказал критик:
+     «إسناده صحيح» — это «иснад достоверный», а не «хадис достоверный». Разница
+     существенная: у достоверного иснада матн бывает отклонённым. */
+  if(/إسناد/.test(ар)) г='иснад '+г;
+  else if(/موقوف/.test(ар)) г+=', слова сподвижника';
+  else if(/مقطوع/.test(ар)) г+=', слова таби‘ина';
+  else if(/مرسل/.test(ар)) г+=', мурсаль';
+  if(/لغيره/.test(ар)) г+=' (благодаря другим путям)';
+  if(/جدً?ا/.test(ар)) г='очень '+г;
+  return г; }
 function gradesAll(h){ const a=(h&&h.grades)||[]; const из=[]; const было={};
   for(const g of a){ if(!g) continue;
-    const оц=((g.grade||'')+'').trim(); if(!оц) continue;
-    const кто=((g.name||g.scholar||g.grader||'')+'').trim();
+    /* 🔴 #712, корень: запись бывает ДВУХ видов, и разбор знал только один. Издание отдаёт
+       {name, grade}, а loadCollection кладёт в карточку УЖЕ разобранное {учёный, оценка} —
+       и вторая прогонка по той же записи возвращала пусто: поля `grade` у неё нет.
+       Итог был беззвучный: у Абу Дауда, Насаи, Тирмизи, Ибн Маджи и Малика оценки лежали
+       в данных, `h.grades.length` был не ноль (значит authBadge считала, что оценки есть),
+       а бейджей на карточке не появлялось НИ ОДНОГО. Принимаем оба вида. */
+    const оц=((g.grade!=null?g.grade:g.оценка)||'').toString().trim();
+    if(!оц || оц==='-') continue;                          // «-» = критик промолчал, это не оценка
+    const кто=((g.name||g.scholar||g.grader||g.учёный||'')+'').toString().trim();
     const ключ=кто+'|'+оц; if(было[ключ]) continue; было[ключ]=1;
-    из.push({оценка:оц, учёный:кто}); }
+    из.push({оценка:_оценкаПоНашему(оц), учёный:_критикПоНашему(кто), ориг:оц}); }
   return из; }
 // Согласны ли учёные между собой. Расхождение — это ФАКТ, который надо показать,
 // а не сгладить: читатель должен видеть, что мнения разошлись, и чьи именно.
@@ -2724,20 +2788,76 @@ function gradesSpor(h){ const сп=gradesAll(h); if(сп.length<2) return false;
 const GRADE_NOTE='Оценка указана по источнику (учёные / sunnah.com), не нашей редакцией. Наша проверка будет добавлена позже.';
 // Все оценки с именами учёных + честная пометка, если учёные разошлись (#532).
 function gradesBadges(h){ const сп=gradesAll(h); if(!сп.length) return '';
-  let из=сп.map(function(г){ const б=gradeBadge(г.оценка);
-    return г.учёный ? б.replace('</span>', ' <span style="opacity:.72;font-size:.86em">— '+esc(г.учёный)+'</span></span>') : б;
+  const много=сп.length>1;
+  let из=сп.map(function(г){ const б=gradeBadge(г.оценка, много);
+    if(!г.учёный) return б;
+    // Имя критика — ПЕРЕД закрывающим тегом самого бейджа. Раньше здесь стояло
+    // `.replace('</span>', …)`, а оно меняет ПЕРВЫЙ закрывающий тег — то есть внутреннего
+    // span-а, а не бейджа. Пока внутренний был один, разницы не было; стоило добавить
+    // второй (русское слово рядом со степенью) — имя учёного встало бы в середину подписи.
+    const п=б.lastIndexOf('</span>');
+    const имя=' <span style="opacity:.72;font-size:.86em">— '+esc(г.учёный)+'</span>';
+    return п<0 ? б+имя : (б.slice(0,п)+имя+б.slice(п));
   }).join(' ');
   if(gradesSpor(h)) из += ' <span class="grade" title="Учёные разошлись во мнении — показаны все оценки" '
     + 'style="border:1px solid #c9a227;background:rgba(201,162,39,.12);color:#e8c860">⚖️ учёные разошлись</span>';
+  if(много) из += '<span style="display:block;width:100%;opacity:.72;font-size:11px;margin-top:2px">'
+    + '· оценки учёных источника, не наши · нажми на любую — что значит эта степень</span>';
   return из; }
-function gradeBadge(g){ if(!g) return '';
+/* 📥 УКАЗАТЕЛЬ ОЦЕНОК ПО НОМЕРУ — для мест, куда хадис приходит БЕЗ оценок (заявка #712).
+
+   Читалка берёт запись из reader/<код>.json, а там всего четыре поля: номер, текст, вид,
+   страница. Оценок нет вовсе — и на карточке загоралось «⏳ ожидается наша проверка», хотя
+   в издании оценки есть. Владелец прислал скрин ровно этого: Абу Дауд №777.
+   Тянуть ради значка всё издание (Абу Дауд — 6,6 МБ) нельзя: читают с телефона. Поэтому
+   лёгкий указатель grades/<код>.json — только номер, критик и оценка (build_grades_index.py,
+   от 27 до 213 КБ на книгу), и грузится он лишь тогда, когда оценки на карточке не оказалось. */
+const _GRIDX={}, _GRIDXP={};
+const _GRIDX_КОД={ibnmaja:'ibnmajah'};      // данные грузятся по ec, карточка живёт по коду UI
+async function _gradesByNum(code,num){
+  const c=_GRIDX_КОД[String(code)]||String(code);
+  if(!(c in _GRIDX)){
+    if(!_GRIDXP[c]) _GRIDXP[c]=fetch('./grades/'+c+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
+    _GRIDX[c]=await _GRIDXP[c];
+  }
+  const d=_GRIDX[c]; if(!d||!d.h) return null;
+  const пары=d.h[String(num).replace(/#.*/,'').replace(/[^0-9]/g,'')];
+  if(!пары||!пары.length) return null;
+  return пары.map(function(p){ return {name:d.s[p[0]], grade:d.g[p[1]]}; }); }
+/* Дописать оценку ТОЛЬКО туда, где стоит «ожидается». Одна дверь на все карточки: чиним
+   класс, а не то место, где заметили (З-40). Возвращает true, если оценка нашлась. */
+async function gradesTopUp(code, num, meta){
+  try{
+    if(!meta||num==null) return false;
+    if(meta.innerHTML.indexOf('ожидается наша проверка')<0) return false;   // оценка уже стоит
+    const gs=await _gradesByNum(code,num); if(!gs) return false;
+    const html=gradesBadges({grades:gs}); if(!html) return false;
+    /* ⚠️ УЗЕЛ ИЩЕМ ПОСЛЕ ОЖИДАНИЯ, А НЕ ДО. На этом я потерял проход: взял `.srcchk` в самом
+       начале, ушёл ждать указатель, а карточка тем временем ещё дважды дописывала себя через
+       `meta.innerHTML += …`. Это пересобирает всё поддерево заново, и мой узел оказывался
+       оторванным: parentNode == null, замена падала, и вместо оценки снова загоралось
+       «ожидается». Ошибка была беззвучной — исключение глоталось в catch. */
+    const пм=meta.querySelector('.srcchk'); if(!пм||!пм.parentNode) return false;
+    const box=document.createElement('span'); box.innerHTML=html;
+    пм.parentNode.replaceChild(box, пм);
+    return true;
+  }catch(e){ try{_тихо(e,'gradesTopUp');}catch(_e){} return false; } }
+/* `кратко` — не печатать в самом бейдже длинную приписку «оценка учёных источника, не наша».
+   Она нужна всегда (слово владельца 02.07: везде ЯВНО, чьё это мнение), но когда критиков
+   трое-четверо, повторённая у каждого она съедала пол-экрана телефона: на пробе Абу Дауда
+   №777 блок сведений вырастал до 401 px при высоте экрана 812. Поэтому при нескольких
+   оценках приписка ставится ОДИН раз под ними — см. gradesBadges. */
+function gradeBadge(g, кратко){ if(!g) return '';
   // единый понятный бейдж: оценка + ЯВНАЯ привязка, что это оценка источника (не нашей редакции). КЛИКАБЕЛЕН → объяснение степени.
   // #374 (заявка владельца): ЦВЕТ по достоверности — منكر/موضوع/شاذ/ضعيف جدا сразу КРАСНЫМ (отвергаемый), ضعيف/مرسل янтарным (слабый), صحيح/حسن зелёным. Как у 3 баз — видно сходу.
   var _gc='#9aa7b5',_gb='rgba(154,167,181,.10)';
   if(/موضوع|منكر|شاذ|باطل|مكذوب|متروك|لا يصح|ضعيف\s*جد/.test(g)){ _gc='#ff8d6e'; _gb='rgba(226,75,74,.14)'; }
   else if(/صحيح|حسن|متفق|ثابت|محفوظ|جيد/.test(g)){ _gc='#7fe0a0'; _gb='rgba(46,155,91,.14)'; }
   else if(/ضعيف|مرسل|منقطع|معلول|لين|مضطرب|فيه ضعف|لا يحتج/.test(g)){ _gc='#e6b45c'; _gb='rgba(224,176,96,.13)'; }
-  return '<span class="grade gradeClick" data-g="'+esc(g)+'" onclick="explainHukm(this)" style="cursor:pointer;border:1px solid '+_gc+';background:'+_gb+';color:'+_gc+';border-radius:7px;padding:1px 8px" title="'+esc(GRADE_NOTE)+' Нажми — что значит эта степень.">⚖️ '+esc(g)+' <span style="opacity:.72;font-weight:400;font-size:11px">· оценка учёных источника, не наша · ⓘ</span></span>'; }   // владелец 02.07: везде ЯВНО — это оценка учёных (издателя/мухаккика источника), НЕ Muslimoon
+  // #712: рядом с арабским термином — РУССКОЕ слово. Термин остаётся первым (по нему работают
+  // и раскраска выше, и окно объяснения), но человек читает степень, не зная арабского.
+  var _гл=''; try{ _гл=_глоссаОценки(g); }catch(e){}
+  return '<span class="grade gradeClick" data-g="'+esc(g)+'" onclick="explainHukm(this)" style="cursor:pointer;border:1px solid '+_gc+';background:'+_gb+';color:'+_gc+';border-radius:7px;padding:1px 8px" title="'+esc(GRADE_NOTE)+' Нажми — что значит эта степень.">⚖️ '+esc(g)+(_гл?(' <span style="opacity:.85;font-weight:400">· '+esc(_гл)+'</span>'):'')+(кратко?'':' <span style="opacity:.72;font-weight:400;font-size:11px">· оценка учёных источника, не наша · ⓘ</span>')+'</span>'; }   // владелец 02.07: везде ЯВНО — это оценка учёных (издателя/мухаккика источника), НЕ Muslimoon
 // Кликабельный хукм: статичное объяснение степени достоверности (без траты лимита ИИ)
 const HUKM_MEANINGS=[
   [/صحيح\s*لغيره/, 'صحيح لغيره (Сахих ли-гайрихи) — «достоверный благодаря другому»: сам по себе хасан, но усилен другими путями до уровня достоверного.'],
@@ -4803,7 +4923,7 @@ async function runSearch(explicit){
     if(count){ if(relMode && count>2){ renderResultsView(); } else { ensureGrpToggle(); ensureUniqToggle(); ensureRelToggle(); } try{ensureStructureBtn();}catch(e){_тихо(e,"L4570")} }
     if(!numMode && !(selCols.size||selExtra.size)) addLibMore();   // кнопка «искать ещё в большой библиотеке» (16 изданий + Мукбиль). v1052 #542: при ВЫБРАННОМ сборнике не предлагаем и не авто-грузим остальные издания — «выбрал = только в них» (семантика #50, как у Мактабы через _selNarrow)
   } else {
-    let relaxQ=null, corrQ=null;
+    let relaxQ=null, corrQ=null, _qRoot=null;   // #624: корень запроса нужен и ПОСЛЕ цикла — для точного блока над выдачей
     try{ const arr=await loadQuran(); if(seq!==_seq) return;
       const qn=q.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
       const mref=qn.match(/^(\d{1,3})\s*[:\s]\s*(\d{1,3})$/);
@@ -4827,7 +4947,6 @@ async function runSearch(explicit){
         // v1090 (#545 «почему не светятся корни в аятах»): d._root был протянут до qWordsHTML, но НИКТО его не
         // заполнял в обычном поиске — формы с инфиксами (انتصار при запросе نصر) не подсвечивались (подстрока
         // запроса в слове не находилась). Теперь в 🌱-режиме корень запроса уходит в каждый аят-результат.
-        let _qRoot=null;
         if(rootMode){ try{ const _rr=await loadRoots(); const _t0=(groups.flat().find(t=>!t.neg)||{}).t||'';
           _qRoot=((_rr&&_rr.f||{})[canon(_t0).split(' ')[0].replace(/[^ء-ي]/g,'')]||[])[0]||null; }catch(e){_тихо(e,"L4599")} }
         for(const v of relaxQ.hits){ add({type:'q',v,_root:_qRoot}); if(rootMode) collectForms(v.text,qSkels,rootForms); } }
@@ -4836,6 +4955,9 @@ async function runSearch(explicit){
     if(corrQ && corrQ.changed.length) autoCorrectBanner(shown, corrQ.corrected.join(' '));   // M173: «показаны результаты для X · искать как ввёл»
     if(window._layoutFixInfo){ try{ _layoutFixBanner(window._layoutFixInfo.orig, window._layoutFixInfo.fixed); }catch(e){_тихо(e,"L4604")} window._layoutFixInfo=null; }   // #181: баннер раскладки
     if(relaxQ && relaxQ.dropped.length && count) relaxBanner(relaxQ.dropped, relaxQ.used);   // M172: честно показать что убрали
+    // 🌳 #624: точный корень — отдельным блоком НАД обычной выдачей (см. _блокТочногоКорня)
+    if(rootMode && _qRoot){ try{ const _бл=await _блокТочногоКорня(_qRoot);
+      if(_бл && seq===_seq) res.insertBefore(_бл, head.nextSibling); }catch(e){_тихо(e,"L4607r")} }
     if(count){ if(relMode && count>2){ renderResultsView(); } else { ensureGrpToggle(); ensureUniqToggle(); ensureRelToggle(); } try{ensureStructureBtn();}catch(e){_тихо(e,"L4606")} }
   }
   setStatus('');
@@ -6869,8 +6991,14 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
      Тирмизи/Дарими/Адаб аль-Муфрада — ноль. Значит это наша недоделка, а не свойство хадиса, и она обязана
      нести отметку «что и почему будет доделано». Вешаем ТОЛЬКО туда, где реально стоит «ожидается»:
      у Бухари/Муслима значка нет вовсе, у Ахмада стоит настоящая оценка. */
+  /* #712: сперва пробуем ДОСТАТЬ оценку (карточка могла прийти без неё — так работает читалка),
+     и только если её действительно нет, вешаем отметку «в работе». Иначе выходило, что оценка
+     у нас есть, а человеку написано «ожидается» и объяснено, почему это надолго. */
   try{ if(meta.innerHTML.indexOf('ожидается наша проверка')>=0){
-    _devNote('hukm_pending').then(dn=>{ try{ if(dn) meta.insertAdjacentHTML('beforeend', _devNoteHtml(dn)); }catch(e){_тихо(e,"L6601")} }); } }catch(e){_тихо(e,"L6601")}
+    gradesTopUp(code, (h.num||h.n), meta).then(нашлась=>{
+      if(нашлась) return;
+      _devNote('hukm_pending').then(dn=>{ try{ if(dn) meta.insertAdjacentHTML('beforeend', _devNoteHtml(dn)); }catch(e){_тихо(e,"L6601")} });
+    }); } }catch(e){_тихо(e,"L6601")}
   if(_riwNote) meta.innerHTML += _riwNote;
   { const _rl=_ruSrcLine(code); if(_rl) meta.innerHTML+='<span class="srcru" style="display:block;width:100%;font-size:11.5px;color:var(--hint);margin-top:1px;direction:ltr;text-align:left">'+esc(_rl)+'</span>'; }   // #37: рус. название + автор
   try{ ourHukmBadge(code, (h.num||h.n), meta, card); }catch(e){_тихо(e,"L6604")}
@@ -7411,6 +7539,48 @@ async function wordAi(word, root, host, btn, ctx){
 document.addEventListener('click',e=>{ if(!(e.target.closest&&(e.target.closest('#wordPop')||e.target.closest('.qw')))) closeWordPopup(); }, true);
 // M256: недавние (🕐) скрываются при тапе мимо поиска
 document.addEventListener('click',e=>{ const t=e.target; if(t&&t.closest&&(t.closest('#recentBox')||t.closest('#recentBtn')||t.closest('.searchbar'))) return; var b=document.getElementById('recentBox'); if(b&&b.style.display==='block') b.style.display='none'; }, true);
+/* 🌳 #624 — ТОЧНЫЙ КОРЕНЬ ОТДЕЛЬНЫМ БЛОКОМ НАД ОБЫЧНОЙ ВЫДАЧЕЙ.
+
+   Владелец: на «شفاء» приложение показывает 12 аятов, а корень там в шести. Он прав, и обе
+   цифры честные — просто считают разное. Режим «Однокоренные» ищет по СОГЛАСНОМУ СКЕЛЕТУ,
+   а скелет ش-ف накрывает сразу три разных корня:
+     ش-ف-ي «исцеление»       — 9:14, 10:57, 16:69, 17:82, 26:80, 41:44  (те самые шесть)
+     ش-ف-و «край»            — 3:103, 9:109
+     ش-ف-ع «заступничество»  — 2:255, 4:85, 7:53, 21:28
+   Скелет трогать НЕЛЬЗЯ: в хадисах морфологического разбора нет, и там он единственный
+   способ найти однокоренное. Поэтому не заменяем, а ДОБАВЛЯЕМ сверху точный ответ по
+   разбору учёных (quran_roots.json: 14 633 словоформы, 1 651 корень), а широкая выдача
+   остаётся ниже — видно, чем они отличаются, и ни один способ не потерян. */
+function _аятовСлово(n){ const о=n%10, д=n%100;
+  return (о===1&&д!==11)?'аят':((о>=2&&о<=4&&(д<12||д>14))?'аята':'аятов'); }
+async function _блокТочногоКорня(root){
+  try{
+    const R=await loadRoots(); const места=(R&&R.r&&R.r[root])||[]; if(!места.length) return null;
+    let arr=[]; try{ arr=await loadQuran(); }catch(e){ arr=quran||[]; }
+    const набор=new Set(места);
+    const обёртка=document.createElement('div');
+    const шапка=document.createElement('div'); шапка.className='card';
+    шапка.style.cssText='padding:11px;border-color:#3f7d55;background:rgba(46,155,91,.07)';
+    const формы=((R.rf&&R.rf[root])||[]).slice(0,8).map(function(it){
+      return '<span style="'+_AF+';font-size:16px">'+esc(it[0])+'</span>'
+        +'<span style="color:var(--hint);font-size:11px"> '+esc(it[1]||'')+' · '+it[2]+'</span>'; }).join(' &nbsp; ');
+    шапка.innerHTML='<div style="font-size:14px">🌳 Корень <b style="'+_AF+';font-size:20px;color:var(--mark)">'
+      +esc(root)+'</b> — <b>'+места.length+'</b> '+_аятовСлово(места.length)
+      +' <span style="color:var(--hint);font-size:12px">· по разбору учёных, а не по буквам</span></div>'
+      +(формы?('<div style="margin-top:6px;direction:rtl;text-align:right;line-height:1.9">'+формы+'</div>'):'')
+      +'<div class="hint" style="margin-top:6px;font-size:11.5px">Ниже — обычная выдача режима «Однокоренные». '
+      +'Она шире: ищет по согласному скелету и может захватить соседние корни.</div>';
+    обёртка.appendChild(шапка);
+    const ЛИМИТ=20; let n=0;
+    for(const v of arr){ if(!набор.has(v.s+':'+v.a)) continue;
+      if(n<ЛИМИТ){ try{ обёртка.appendChild(cardAyah({type:'q',v:v,_root:root},[])); }catch(e){_тихо(e,"L7541a")} }
+      n++; }
+    if(n>ЛИМИТ){ const ещё=document.createElement('div'); ещё.className='hint';
+      ещё.style.cssText='margin:4px 0 10px;color:var(--link);cursor:pointer;text-decoration:underline;font-size:13px';
+      ещё.textContent='показать все '+n+' '+_аятовСлово(n)+' корня — страница корня →';
+      ещё.onclick=function(){ showRootPlaces(root); }; обёртка.appendChild(ещё); }
+    return обёртка;
+  }catch(e){ try{_тихо(e,'блокКорня');}catch(_e){} return null; } }
 let _rootView={root:'',sort:'order',form:''};
 async function showRootPlaces(root, opts){
   if(!root) return; const R=await loadRoots(); let arr=[]; try{ arr=await loadQuran(); }catch(e){ arr=quran||[]; }   // QA-low: try/catch — loadQuran мог reject (офлайн до загрузки Корана) → тихий no-op
