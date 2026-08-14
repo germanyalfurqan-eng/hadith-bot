@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1378</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1379</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1378';
+const APPVER = 'v1379';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -18284,7 +18284,20 @@ var _isn=document.getElementById('isnadLinkSw'); if(_isn){ _isn.classList.toggle
 const APP_WEB_URL='https://germanyalfurqan-eng.github.io/hadith-bot/';
 const APP_TG_URL='https://t.me/muslimoontt_bot?startapp=';
 function deepLinkUrls(token){ const e=encodeURIComponent(token); return { web:APP_WEB_URL+'?g='+e, tg:APP_TG_URL+e }; }
-function _deepLinkToken(){ let g=''; try{ if(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.start_param) g=tg.initDataUnsafe.start_param; }catch(e){_тихо(e,"L17027")} if(!g){ try{ g=new URLSearchParams(location.search).get('g')||''; }catch(e){_тихо(e,"L17027")} } return (g||'').trim(); }
+/* ОБР-602 (владелец, 14.08.2026): «ссылка Абу Хурайра с первого раза не сработала, только со
+   второго». Проверил в браузере на холодной загрузке — там открывается исправно, значит логика
+   карточки цела, спотыкается стыковка с Телеграмом. Слабых мест в ней два, и оба здесь:
+   ① токен искали в ДВУХ местах, а Телеграм кладёт его и ТРЕТЬИМ — параметром `tgWebAppStartParam`
+      в адресе окна (в хвосте после # либо в самом запросе). Если `telegram-web-app.js` в этот
+      миг ещё не поднял `initDataUnsafe`, первые два места пусты, а третье — нет;
+   ② читали РОВНО ОДИН РАЗ на разборе страницы: пусто — и ссылка потеряна насовсем, никакого
+      повтора. Повтор добавлен в runDeepLink. */
+function _deepLinkToken(){ let g='';
+  try{ if(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.start_param) g=tg.initDataUnsafe.start_param; }catch(e){_тихо(e,"L17027")}
+  if(!g){ try{ g=new URLSearchParams(location.search).get('g')||''; }catch(e){_тихо(e,"L17027")} }
+  if(!g){ try{ const х=(location.hash||'').replace(/^#/,'');
+      g=new URLSearchParams(х).get('tgWebAppStartParam')||new URLSearchParams(location.search).get('tgWebAppStartParam')||''; }catch(e){_тихо(e,"L17027b")} }
+  return (g||'').trim(); }
 // R46 (ревизия 11.07): клик по фону закрывает статические модалки (было только у legendModal)
 try{ ['modal','favModal','settingsModal','menuModal','extraModal','helpModal','devModal','tafsirModal','readModal'].forEach(function(id){ var m=document.getElementById(id); if(m) m.addEventListener('click',function(e){ if(e.target===m) m.style.display='none'; }); }); }catch(e){_тихо(e,"L17029")}
 function runDeepLink(){ const g=_deepLinkToken(); if(!g) return;
@@ -18304,7 +18317,20 @@ function runDeepLink(){ const g=_deepLinkToken(); if(!g) return;
     else if(t==='n' && p[1]){ (async()=>{ try{ const c=await _narrCard(p[1]); openNarratorRijal((c&&c[1])||'', p[1]); }catch(e){_тихо(e,"L17044")} })(); }   // #246: карточка передатчика по mid (n_3889) — для дип-ссылки со скрина карточки
     else if(t==='cat') openCatalog();
   }catch(e){_тихо(e,"L17046")} }, 650); }
-try{ runDeepLink(); }catch(e){_тихо(e,"L17047")}
+/* ОБР-602: раньше здесь был ОДИН заход. Нет токена в эту миллисекунду — ссылка пропала, и
+   человек видит просто открывшееся приложение, а не то место, куда его звали. Теперь ждём
+   токен до трёх секунд, проверяя каждые 200 мс, и как только он появился — открываем и
+   больше не спрашиваем. Если Телеграм так и не дал его — значит ссылки и не было (обычный
+   запуск приложения), тихо расходимся. */
+(function(){ var сделано=false, кругов=0;
+  function попытка(){
+    if(сделано) return;
+    var есть=''; try{ есть=_deepLinkToken(); }catch(e){ есть=''; }
+    if(есть){ сделано=true; try{ runDeepLink(); }catch(e){_тихо(e,"L17047")} return; }
+    if(++кругов<15) setTimeout(попытка, 200);
+  }
+  попытка();
+})();
 var _mh=document.getElementById('maktabaTopBtn'); if(_mh) _mh.onclick=()=>{ try{ openCatalog(); }catch(e){_тихо(e,"L17048")} };
 /* Прогрев аль-Мухаймина (8.4МБ) + reverse_index в ФОНЕ на простое — чтобы первый поиск не ждал загрузку (тихо, без статуса). */
 (function(){ const warm=()=>{ try{ const p=loadMuhaymin(true); if(p&&p.catch) p.catch(()=>{}); }catch(e){_тихо(e,"L17050")} try{ if(typeof loadReverse==='function'){ const q=loadReverse(); if(q&&q.catch) q.catch(()=>{}); } }catch(e){_тихо(e,"L17050")} };   // #265/A-115: ловим async-реджект префетча — иначе сбой загрузки = ложный unhandledrejection в журнал ошибок
