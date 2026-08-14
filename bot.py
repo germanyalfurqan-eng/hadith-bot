@@ -20873,9 +20873,24 @@ async def _app_channel_watcher(application):
                             _нота = ""
                             if _вер:
                                 try:
-                                    _rq2 = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_notes_queue.json",
-                                                        headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
-                                    _оч2 = json.loads(base64.b64decode(_rq2.json().get("content", "")).decode("utf-8") or "[]") if _rq2.status_code == 200 else []
+                                    # ⚠️ 14.08.2026. Ноту берём с raw.githubusercontent, а НЕ через contents API.
+                                    # Оба отдают один файл, но contents отвечает из кэша дольше, и первая же
+                                    # попытка переписать пост #1239 получила СТАРУЮ ноту — ровно тот текст, что
+                                    # в посте и стоял. Телеграм на такое отвечает «message is not modified»,
+                                    # правка числится неудачной, а признак выполнения при этом уже записан.
+                                    # raw обновляется быстрее; contents оставлен запасным путём.
+                                    _оч2 = []
+                                    try:
+                                        _rr = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/update_notes_queue.json",
+                                                           headers={"Cache-Control": "no-cache"}, timeout=10)
+                                        if _rr.status_code == 200:
+                                            _оч2 = json.loads(_rr.text or "[]")
+                                    except Exception:
+                                        _оч2 = []
+                                    if not _оч2:
+                                        _rq2 = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_notes_queue.json",
+                                                            headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
+                                        _оч2 = json.loads(base64.b64decode(_rq2.json().get("content", "")).decode("utf-8") or "[]") if _rq2.status_code == 200 else []
                                     _нота = next((x.get("note", "") for x in _оч2 if x.get("id") == _вер), "")
                                 except Exception:
                                     _нота = ""
@@ -20900,8 +20915,34 @@ async def _app_channel_watcher(application):
                                                  "https://t.me/muslimoonapp/%s и поправь или удали сам" % (_мид, _мид))
                                 else:
                                     _мимо.append("%s (%s)" % (_мид, _txt_e[:60]))
-                        _jc["clean_posts"] = {"flag": _хеш, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
-                        _journal_save("чистка постов канала от личного")
+                        # ⛔ 14.08.2026: ПРИЗНАК ВЫПОЛНЕНИЯ СГОРАЛ ДАЖЕ ПРИ ПРОВАЛЕ.
+                        # Было: `_jc["clean_posts"] = {"flag": _хеш}` безусловно. Одна осечка —
+                        # и заявка считалась исполненной навсегда: файл тот же, хеш тот же,
+                        # обработчик больше не заходит. Так и вышло с постом #1239: правку
+                        # отбило «message is not modified» (пришла старая нота из кэша), а
+                        # признак записался, и второго круга не случилось бы никогда.
+                        # Теперь признак ставим, только если чинить больше нечего: либо всё
+                        # переписано, либо оставшееся неисправимо в принципе (старше 48 часов).
+                        # Временную осечку не хороним — даём ещё два круга.
+                        _непоправимых = sum(1 for _м in _мимо if "СТАРШЕ 48 ЧАСОВ" in _м)
+                        _временных = len(_мимо) - _непоправимых
+                        _прежн = (_jc.get("clean_posts") or {})
+                        _попыток = int(_прежн.get("попыток", 0)) + 1 if _прежн.get("flag_prob") == _хеш else 1
+                        if _временных and _попыток < 3:
+                            # признак НЕ ставим — на следующем круге зайдём снова
+                            _jc["clean_posts"] = {"flag": _прежн.get("flag", ""), "flag_prob": _хеш,
+                                                  "попыток": _попыток,
+                                                  "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
+                                                  "переписано": _почищено, "не_вышло": _мимо}
+                        else:
+                            _jc["clean_posts"] = {"flag": _хеш, "попыток": _попыток,
+                                                  "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
+                                                  "переписано": _почищено, "не_вышло": _мимо}
+                        # 🔎 И САМ ИСХОД — В ЖУРНАЛ, а не только письмом владельцу. Раньше
+                        # единственным следом было сообщение в личку: его не видно ни мне, ни
+                        # поиску, и разбираться, почему пост не переписался, было не по чему.
+                        _journal_save("чистка постов канала: переписано %d, не вышло %d"
+                                      % (len(_почищено), len(_мимо)))
                         try:
                             await application.bot.send_message(OWNER_ID,
                                 "🧹 Чистка постов канала: переписано %s%s"
