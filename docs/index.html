@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1377</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1378</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1377';
+const APPVER = 'v1378';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -10689,8 +10689,24 @@ async function _сподвижникПоСписку(id){
   return _sahСписок.has(+id);
 }
 // narr_sun.json (данные страницы sunnah.com, 5890 равиев): id→{c:[сборники],g:оценка,ct:город,tb:табака,dt:вафат,sid}
-let _nsCache=null,_nsP=null;
-async function _narrSun(id){ if(id==null) return null; if(!_nsCache){ if(!_nsP) _nsP=fetch('./narr_sun.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>{ _nsP=null; return null; }); _nsCache=await _nsP; } return (_nsCache||{})[String(id)]||null; }
+/* v1378: РАЗРЕЗАН НА ШАРДЫ (build_nsun_shards.py → nsun/<id//100>.json, 168 штук по ~6,6 КБ).
+   Из шести тяжёлых индексов карточки этот был единственным, у кого ровно ОДИН читатель —
+   вот эта функция, на одного открытого равия. А грузился весь: 206 КБ по сети ради одной
+   записи. Остальные пять резать нельзя — их спрашивают для многих id сразу (имена всех
+   звеньев цепи, сопоставление в поиске, названия книг), шарды дали бы не меньше запросов,
+   а больше. Шаг сотни — общая мерка приложения (narr/, prov/, testimonies/, narrbk/).
+   ⚠️ Сам narr_sun.json из выкладки НЕ убран намеренно: Telegram держит мини-апп в кэше, и
+   у кого открыта прежняя версия — та по-прежнему просит цельный файл. */
+var _nsШард={}, _nsШардП={};
+async function _narrSun(id){ if(id==null) return null;
+  const b=Math.floor(Math.abs(+id||0)/100);
+  if(_nsШард[b]===undefined){
+    if(!_nsШардП[b]) _nsШардП[b]=fetch('./nsun/'+b+'.json?v='+APPVER).then(r=>r.ok?r.json():{});
+    // честное «шарда нет» (не ok) запоминаем как пусто; СЕТЕВУЮ икоту — нет, иначе одна
+    // осечка гасит паритет sunnah.com до перезапуска страницы (тот же класс, что v1338).
+    try{ _nsШард[b]=await _nsШардП[b]; }catch(e){ _nsШардП[b]=null; return null; }
+  }
+  return (_nsШард[b]||{})[String(id)]||null; }
 const _SUNCOL_RU={'al-Bukhari':'Бухари','Muslim':'Муслим','Abu Dawud':'Абу Дауд','al-Tirmidhi':'Тирмизи',"al-Nasa'i":'Насаи','Ibn Majah':'Ибн Маджа','Ahmad':'Ахмад','Malik':'Малик','al-Darimi':'Дарими'};
 // УКАЗ 11.07.2026: отметки «будет доделано» — каждая недоделка несёт ясную заметку в своём месте приложения (dev_notes.json)
 let _dnCache=null,_dnP=null;
@@ -10745,7 +10761,7 @@ function _прогревСлов(волна){
   const тихо=f=>{ try{ f(); }catch(e){} };
   if(волна==='рано'){ if(_прогретоСлов&1) return; _прогретоСлов|=1;
     тихо(()=>_loadGuar()); тихо(()=>loadNarrExt()); тихо(()=>loadNarrVoc()); тихо(()=>loadNarrFlags());
-    тихо(()=>loadMid2Sid()); тихо(()=>_narrDisp(1)); тихо(()=>_narrSun(1)); тихо(()=>_loadIdfix());
+    тихо(()=>loadMid2Sid()); тихо(()=>_narrDisp(1)); тихо(()=>_loadIdfix());   // v1378: _narrSun(1) отсюда убран — файл разрезан, греть шард нулевой сотни бессмысленно; грев переехал в _прогревРавия, где известен id
     return; }
   if(_прогретоСлов&2) return; _прогретоСлов|=2;
   тихо(()=>loadNarrWiki()); тихо(()=>loadNarrWikiImg()); тихо(()=>loadNarrCurated()); тихо(()=>loadBooksMap());
@@ -10759,7 +10775,7 @@ function _прогревРавия(mid, волна){
   _прогревСлов(волна);
   mid=+mid; if(!isFinite(mid)||mid<=0) return;
   const тихо=f=>{ try{ f(); }catch(e){} };
-  if(волна==='рано'){ тихо(()=>_narrX(mid)); тихо(()=>_narrBio(mid)); тихо(()=>dzPart(mid)); return; }   // dzPart — «где он в цепях», читается сразу под шапкой
+  if(волна==='рано'){ тихо(()=>_narrX(mid)); тихо(()=>_narrBio(mid)); тихо(()=>dzPart(mid)); тихо(()=>_narrSun(mid)); return; }   // dzPart — «где он в цепях», читается сразу под шапкой; _narrSun — шард sunnah-паритета (v1378)
   тихо(()=>_testimGet(mid)); тихо(()=>_testimClusters(mid)); тихо(()=>_tlinkGet(mid)); тихо(()=>_edgesGet(mid));
   тихо(()=>_провМеста(mid)); тихо(()=>_годПоколение(mid));   // v1377: провенанс и годы/поколения — читаются ниже по карточке, грузить их поодиночке незачем
   тихо(()=>loadMid2Sid().then(m=>{ const sid=(m||{})[String(mid)]; if(sid!=null) _sunverdShard(sid); }).catch(()=>{}));
