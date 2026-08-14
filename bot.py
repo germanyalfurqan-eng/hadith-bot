@@ -20845,8 +20845,21 @@ async def _app_channel_watcher(application):
             try:
                 rc = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/clean_posts.txt",
                                   headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
-                if rc.status_code == 200:
-                    _спис = base64.b64decode(rc.json().get("content", "")).decode("utf-8").strip()
+                # ⚠️ 14.08.2026, ТОТ ЖЕ КЛАСС, ЧТО У НОТЫ НИЖЕ (З-40 — чинить класс, а не случай).
+                # contents API отвечает из кэша дольше raw. Пока он отдаёт ПРЕЖНИЙ clean_posts.txt,
+                # его хеш совпадает с записанным признаком, и обработчик считает, что делать нечего —
+                # свежая заявка не видна вовсе, сколько кругов ни пройди. Сначала raw, contents —
+                # запасным путём.
+                _спис_raw = None
+                try:
+                    _rc2 = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/clean_posts.txt",
+                                        headers={"Cache-Control": "no-cache"}, timeout=10)
+                    if _rc2.status_code == 200 and (_rc2.text or "").strip():
+                        _спис_raw = _rc2.text.strip()
+                except Exception:
+                    _спис_raw = None
+                if _спис_raw or rc.status_code == 200:
+                    _спис = _спис_raw if _спис_raw else base64.b64decode(rc.json().get("content", "")).decode("utf-8").strip()
                     _jc = _journal_load()
                     # ⛔ ПРИЗНАК ИЗМЕНЕНИЯ — ХЕШ ВСЕГО ФАЙЛА, А НЕ ЕГО НАЧАЛО (02.08.2026).
                     # Было `_спис[:60]` — первые шестьдесят знаков. А там лежит НЕИЗМЕННЫЙ
