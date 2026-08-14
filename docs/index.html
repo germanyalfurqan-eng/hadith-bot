@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1370</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1371</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1370';
+const APPVER = 'v1371';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5281,9 +5281,44 @@ function loadDarimi(){ if(_darimiCache) return Promise.resolve(_darimiCache); if
    он строится ПРЯМО во время выдачи, и на хадисе Ахмада запускал 25 МБ посреди сборки списка.
    Помощник ниже меняет только Ахмада: шард по номеру, а если в шарде пусто — прежний полный путь,
    чтобы ни один хадис не пропал. Остальные книги идут как шли. */
+/* 🚀 ОДИН ХАДИС ПО НОМЕРУ — БЕЗ ЗАГРУЗКИ ВСЕГО СБОРНИКА (заявки #711, #702, #709, #678).
+
+   ЗАМЕР НА БОЮ, v1370, настольный браузер, хорошая сеть: поиск по номеру «66» —
+   78 запросов, 10,98 МБ, 13 секунд. Крупное всё одного рода:
+     reader/muslim.json 2030 КБ · bukhari 1914 · tirmidhi 1076 · abudawud 1062 ·
+     nasai 982 · malik 444.
+   На скрине владельца (#711) внизу так и висит «Загружаю: ibnmaja…».
+
+   ПРИЧИНА. Блок «⚡ наше издание (стандартная нумерация)» строится для КАЖДОГО из восьми
+   канонических сборников и зовёт эту функцию, а она ради ОДНОЙ записи тянула сборник целиком.
+   У Ахмада это заметили и вылечили ещё в A-136 — 25 МБ не спрячешь. Семь книг по 1–2 МБ
+   поодиночке в глаза не бросались, а вместе дают те самые одиннадцать мегабайт.
+   Ровно тот случай, когда чинят там, где заметили, а не весь класс.
+
+   ЛЕЧЕНИЕ. Те же reader-файлы нарезаны по 200 номеров: hnum/<код>/<кусок>.json = {номер: текст}
+   (build_num_shards.py, приёмка со сверкой: 0 расхождений). Нужен №66 — приезжает кусок 0,
+   до 350 КБ, а не весь сборник. По расчёту на поиск поедет ~2,3 МБ вместо 43,9 МБ.
+   Нарезаны ИМЕННО reader-файлы: нумерация обязана совпасть с той, по которой приложение уже
+   живёт (у Муслима Абд аль-Баки, у Дарими своя печать). Взять источник «поточнее» значило бы
+   показать под номером другой хадис — это хуже медленной загрузки.
+   Прежний путь оставлен запасным: куска нет — грузим как раньше, ни один номер не пропадёт. */
+const _HNUM={}, _HNUMP={};
+const _HNUM_КОД={ibnmaja:'ibnmajah'};      // данные грузятся по ec, куски названы по коду читалки
+const _HNUM_КУСОК=200;                     // столько же, сколько в build_num_shards.py
+async function _хадисИзКуска(code,num){
+  const c=_HNUM_КОД[String(code)]||String(code);
+  const n=String(num==null?'':num).replace(/#.*/,'').replace(/[^0-9]/g,''); if(!n) return null;
+  const k=c+'/'+Math.floor(+n/_HNUM_КУСОК);
+  if(!(k in _HNUM)){
+    if(!_HNUMP[k]) _HNUMP[k]=fetch('./hnum/'+k+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
+    _HNUM[k]=await _HNUMP[k]; }
+  const м=_HNUM[k]; if(!м) return null;
+  const т=м[n]; if(т==null) return null;
+  return {num:n, text:т, grade:'', norm:''}; }
 async function _хадисПоНомеру(code, num){
   const ec=(code==='ibnmajah')?'ibnmaja':code;
   if(ec==='ahmad'){ try{ const x=await loadAhmadOne(num); if(x) return x; }catch(e){_тихо(e,"L4930")} }
+  try{ const s=await _хадисИзКуска(ec,num); if(s) return s; }catch(e){_тихо(e,"L4930h")}
   const arr=await loadByCode(ec); if(!arr) return null;
   return arr.find(x=>String(x.num)===String(num))||null;
 }
