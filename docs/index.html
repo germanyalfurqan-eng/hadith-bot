@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1380</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1381</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1380';
+const APPVER = 'v1381';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -15370,7 +15370,32 @@ async function showNarratorCardLocal(name, host, forceId){
       _ex.style.cssText='margin-top:6px;padding:8px 11px;border:1px solid #c9962b;border-radius:9px;background:rgba(232,182,50,.09);font-size:12.5px;line-height:1.7;direction:rtl;text-align:right;color:var(--text)';
       _ex.innerHTML='⭐ <b>Откуда статус «сподвижник»:</b> '+esc(_sahWhy||'по совокупности данных базы')+'<div style="font-size:11px;color:var(--hint);margin-top:3px">Полные свидетельства критиков — в своде ниже на карточке (#511).</div>';
       _sb.parentNode.insertBefore(_ex,_sb.nextSibling); }; }catch(e){_тихо(e,"L14353")}   // #511: источник статуса по клику
-    hdr.querySelectorAll('.nWikiS').forEach(b=>b.onclick=async()=>{ try{ // v1057 #510: умный фолбэк ru→en→ar через opensearch (CORS origin=*): открываем ПЕРВУЮ найденную статью, а не пустой поиск
+    /* 🔎 ОБР-611 (владелец, 14.08.2026): «у него Википедии ссылки нету а ты ставишь. Надо ру
+       если нету англ если нету араб. Обеспечь каждому».
+       Порядок ру→англ→араб тут стоял и раньше (v1057, #510) — беда была не в нём. Значок
+       рисовался ВСЕГДА, а есть ли статья, выяснялось только по нажатию. У Наджи ибн Салямы
+       (наш №22669) её нет ни на одном из трёх языков — проверено запросом, все три вернули
+       пусто, — и человек, нажав «W Википедия», попадал на пустую страницу поиска. Значок,
+       обещающий статью, которой нет, хуже отсутствия значка: приложение о передатчиках не
+       вправе казаться знающим больше, чем знает.
+       Теперь спрашиваем СРАЗУ после отрисовки: нашлась статья — значок остаётся и ведёт
+       прямо в неё, не нашлась ни на одном языке — значок убираем совсем. */
+    hdr.querySelectorAll('.nWikiS').forEach(b=>{ (async()=>{ try{
+      const ru=b.dataset.ru==='1'; const q=decodeURIComponent(b.dataset.q||'');
+      if(!q) { b.remove(); return; }
+      const langs=ru?['ru','en','ar']:['ar','en','ru'];
+      b.style.opacity='.45';
+      for(const L of langs){ try{
+        const r=await fetch('https://'+L+'.wikipedia.org/w/api.php?action=opensearch&limit=1&format=json&origin=*&search='+encodeURIComponent(q));
+        const j=await r.json();
+        if(j&&j[3]&&j[3][0]){ b.dataset.found=j[3][0]; b.style.opacity='';
+          b.title='Википедия ('+L+')'; return; }
+      }catch(e){_тихо(e,"L14361a")} }
+      b.remove();   // ни на одном языке — значка не будет
+    }catch(e){ try{ b.style.opacity=''; }catch(_){} } })(); });
+    hdr.querySelectorAll('.nWikiS').forEach(b=>b.onclick=async()=>{ try{
+      if(b.dataset.found){ openLink(b.dataset.found); return; }   // уже нашли при отрисовке
+      // v1057 #510: умный фолбэк ru→en→ar через opensearch (CORS origin=*): открываем ПЕРВУЮ найденную статью, а не пустой поиск
       const ru=b.dataset.ru==='1'; const q=decodeURIComponent(b.dataset.q);
       const langs=ru?['ru','en','ar']:['ar','en','ru'];
       b.style.opacity='.5';
