@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1373</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1374</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1373';
+const APPVER = 'v1374';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5324,7 +5324,15 @@ async function _хадисПоНомеру(code, num){
 }
 async function getOne(code,num){
   if(code==='muslim'){ return await loadMuslimOne(num); }   // Муслим — шард ~1МБ по номеру (не весь 15МБ); если полный массив в кэше — loadMuslimOne берёт оттуда
-  if(code==='darimi'){ const a=await loadDarimi(); const x=a.find(y=>String(y.num)===String(num)); return x?{num:String(x.num),text:(x.ar||'').replace(/\s+/g,' ').trim(),grade:'',norm:''}:null; }   // #151: Дарими — первоисточник, грузим из локального darimi.json (CDN 403)
+  /* 🔴 МЕТКА `_печать36114` — У ДАРИМИ В ПРИЛОЖЕНИИ ЖИВУТ ДВЕ НУМЕРАЦИИ РАЗОМ, и по голому
+     номеру их не различить. Здесь (editions/darimi.json) это печать 36114; в читалке, поиске
+     и кусках hnum (reader/darimi.json) — уже печать 21795. Вердикты нейротахкика посчитаны по
+     21795, значит номер ОТСЮДА надо перевести мостом, а номер ОТТУДА — ни в коем случае.
+     Замер 14.08.2026 (200 проб, потолок способа 100 %, пол 0,6 %):
+       reader + без моста .... 100,0 %      reader + мост ....  6,5 %
+       editions + мост ....... 99,5 %       editions без моста  8,0 %
+     Ставим метку на самом хадисе: она едет вместе с ним и не даст перепутать дверь. */
+  if(code==='darimi'){ const a=await loadDarimi(); const x=a.find(y=>String(y.num)===String(num)); return x?{num:String(x.num),text:(x.ar||'').replace(/\s+/g,' ').trim(),grade:'',norm:'',_печать36114:true}:null; }   // #151: Дарими — первоисточник, грузим из локального darimi.json (CDN 403)
   // 26.07.2026, владелец в третий раз: «Ахмад загрузка, я сто раз сказал». Вот корень: getOne
   // открывает ОДИН хадис — а тянул ВЕСЬ Муснад (25 МБ). Достаточно точечного шарда на 900 КБ,
   // он лежит рядом (loadAhmadOne, A-136) и по номеру берёт ahmad/<num//1000>.json. Полный массив
@@ -7053,7 +7061,7 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
      против показа: вердикт был посчитан для 176 423 хадисов и почти никому не виден.
      Здесь он встаёт в общий ряд бейджей карточки — рядом с оценкой учёных, без тумблеров.
      Запрет на Сахихайн сидит внутри neuroVerdict, отдельной проверки тут нет и быть не должно. */
-  try{ neuroBadgeCard(code, (h.num||h.n), meta); }catch(e){_тихо(e,"L6604n")}
+  try{ neuroBadgeCard(code, (h.num||h.n), meta, h); }catch(e){_тихо(e,"L6604n")}   // h нужен ради метки печати у Дарими (двойная нумерация)
   try{ razboryBadge(code, (h.num||h.n), meta, card); }catch(e){_тихо(e,"L6605")}   // обратная связь: «📿 наш разбор» если хадис разбирали на канале
   try{ ourMaterialBadge(code, (h.num||h.n), meta, card); }catch(e){_тихо(e,"L6606")}   // M52: отметка «от Muslimoon»
   if(canRead){ const sp=meta.querySelector('.srcnav'); if(sp){ sp.style.cursor='pointer'; sp.onclick=()=>{ if(cfg.urBeta){ try{ openUnifiedReader(code,String(h.num)); return; }catch(e){_тихо(e,"L6607")} } openReader(code,String(h.num)); }; } }
@@ -16435,16 +16443,34 @@ async function neuroBadgeFor(bid,num){
    Трогать сам `_SLUG2BID` нельзя: он ведёт ещё и сверку, и правка там сдвинула бы совсем
    другую машину. Поэтому у вердикта своя карта, и в неё книга попадает только с замером.
 
-   ⛔ НЕ ВНЕСЕНЫ и почему: malik 27,8% · darimi 49,5% (сами вердикты верны для печати 21795,
-   расходится наша читалка — нужен ре-бридж издания) · abdbinhumayd 67,1% (ровный сдвиг +2 со
-   второй половины книги) · humaydi 92,7% (промахи похожи на артефакт данных, но не доказано) ·
-   adabmufrad 100%, но решаемых случаев всего 9 — доказательная база тонкая.
+   ⛔ БЫЛО НЕ ВНЕСЕНО (замер С72): malik 27,8% · darimi 49,5% · abdbinhumayd 67,1% ·
+   humaydi 92,7% · adabmufrad 100%, но решаемых случаев всего 9.
    Внести книгу без замера = посадить «даиф» на соседний хадис. Это утверждение о религии,
-   и оно хуже отсутствия бейджа (класс заявки #649). */
+   и оно хуже отсутствия бейджа (класс заявки #649).
+
+   ✅ 14.08.2026, С73 — ЭТИ ПЯТЬ ВНЕСЕНЫ ПОСЛЕ ЗАМЕРА, И ЗАМЕР МЕРИЛ ДРУГОЕ.
+   Прошлый мерил КНИГУ. Оказалось, мерить надо ДВЕРЬ: у одной книги в приложении бывает
+   несколько источников номера, и мост годится не для каждого. Инструмент — `neuro_zamer.py`:
+   берёт наш текст под номером N, переводит номер (или нет) и сравнивает ТЕКСТЫ с той печатью,
+   по которой посчитан вердикт. Линейка: потолок (Насаи, Ибн Маджа — соответствие доказано
+   давно) 100,0 %, пол (тот же приём на заведомо чужом номере) 0,6 %. По 200 проб на строку:
+
+     darimi   reader/darimi.json     без моста  100,0 %  ✅      с мостом   6,5 %  ⛔
+     darimi   editions/darimi.json   с мостом    99,5 %  ✅      без моста  8,0 %  ⛔
+     malik    reader/malik.json      с мостом    98,0 %  ✅      без моста  0,0 %  ⛔
+     malik    ara-malik.min.json     с мостом    97,5 %  ✅
+     abdbinhumayd editions           с мостом   100,0 %  ✅      без моста 36,0 %  ⛔
+     humaydi  editions               без моста   99,0 %  ✅
+     adabmufrad editions             без моста   99,5 %  ✅  (у С72 было 9 случаев — теперь 200)
+
+   🔴 У ДАРИМИ ДВЕ НУМЕРАЦИИ РАЗОМ, и по голому номеру их не различить: `reader/darimi.json`
+   (читалка, поиск, куски hnum) — печать 21795, `editions/darimi.json` (getOne, карточки
+   тахриджа) — печать 36114. Поэтому решает не код книги, а МЕТКА `_печать36114`, которую
+   ставит сам источник номера (см. getOne). Ни одна из строк выше не оставлена «на глазок». */
 const _NEURO_BID={
   // проверены и показывались раньше
   abudawud:'1726', nasai:'829', ibnmajah:'1198', tirmidhi:'7895', ahmad:'25794',
-  // добавлены по замеру 14.08.2026, все ≥95%
+  // добавлены по замеру 14.08.2026 (С72), все ≥95%
   ibnhibban:'537',        // 99,6%
   ibnkhuzayma:'1446',     // 100%
   nasaikubra:'8361',      // 99,5%
@@ -16453,15 +16479,43 @@ const _NEURO_BID={
   ibnaljad:'4407',        // 96,6%
   abuawana:'18144',       // 96,1%
   tayalisi:'1456',        // 95,7%
-  abuyala:'12520'         // 95,4%
+  abuyala:'12520',        // 95,4%
+  // добавлены по замеру ПО ДВЕРЯМ 14.08.2026 (С73)
+  darimi:'21795',         // 100,0% из читалки/поиска · 99,5% из издания через мост
+  malik:'28107',          // 98,0% через мост
+  abdbinhumayd:'10631',   // 100,0% через мост
+  humaydi:'8493',         // 99,0% напрямую
+  adabmufrad:'9647'       // 99,5% напрямую
 };
+/* Книги, где номер карточки ВСЕГДА надо перевести мостом (у них одна нумерация, и она не та,
+   по которой считались вердикты). Дарими здесь НЕТ намеренно: у него решает метка на хадисе. */
+const _NEURO_ЧЕРЕЗ_МОСТ={malik:1, abdbinhumayd:1};
+let _мостН=null, _мостНP=null;
+async function _neuroМост(){
+  if(_мостН) return _мостН;
+  if(!_мостНP) _мостНP=fetch('./neuro_most.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({}));
+  _мостН=await _мостНP; return _мостН; }
 
-async function neuroBadgeCard(code, num, meta){
+async function neuroBadgeCard(code, num, meta, h){
   try{
     if(!meta||num==null) return;
-    const bid=_NEURO_BID[String(code)];
+    const c=String(code);
+    const bid=_NEURO_BID[c];
     if(!bid) return;                                   // книга без ЗАМЕРЕННОГО соответствия номеров — молчим
-    const html=await neuroBadgeFor(bid, String(num).replace(/#.*/,'').replace(/[^0-9]/g,''));
+    let n=String(num).replace(/#.*/,'').replace(/[^0-9]/g,'');
+    if(!n) return;
+    // Мост нужен либо всей книге, либо этому конкретному хадису (Дарими из издания 36114).
+    const нужен_мост = !!_NEURO_ЧЕРЕЗ_МОСТ[c] || !!(h && h._печать36114);
+    if(нужен_мост){
+      const м=await _neuroМост();
+      const пара=(м && м[c]) ? м[c][n] : null;
+      /* ⛔ ФОЛБЭКА БЫТЬ НЕ ДОЛЖНО. Нет пары — молчим. Показать вердикт по непереведённому
+         номеру значит поставить приговор о достоверности на соседний хадис: у Малика без
+         моста это 0,0 % попаданий, у Абд ибн Хумайда 36 %. Пробел в покрытии честнее лжи. */
+      if(пара==null) return;
+      n=String(пара);
+    }
+    const html=await neuroBadgeFor(bid, n);
     if(!html) return;
     const sp=document.createElement('span');
     sp.style.cssText='margin-inline-start:6px';
