@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1385</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1386</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1385';
+const APPVER = 'v1386';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4878,6 +4878,14 @@ async function runSearch(explicit){
       if(corr && corr.changed.length) autoCorrectBanner(shown, corr.corrected.join(' '));   // M173: «показаны результаты для X · искать как ввёл»
       if(window._layoutFixInfo){ try{ _layoutFixBanner(window._layoutFixInfo.orig, window._layoutFixInfo.fixed); }catch(e){_тихо(e,"L4526")} window._layoutFixInfo=null; }   // #181: баннер раскладки
       if(relax && relax.dropped.length && count) relaxBanner(relax.dropped, relax.used);   // честно: что убрали + «строго»
+      /* 📖 #699: у РУССКОГО поиска по хадисам своя ветка, и она возвращается раньше общей —
+         сюда мой блок и не доходил, хотя случай владельца ровно этот: он вставил русский
+         текст аята, стоя на вкладке «Хадисы». Поднимаем Коран наверх и отсюда. */
+      try{ _блокАятСверху(shown, (relax&&relax.dropped)||[]).then(function(бл){
+        try{ if(бл && seq===_seq && !res.querySelector('.ayatTop')){
+          бл.className=(бл.className||'')+' ayatTop';
+          res.insertBefore(бл, head && head.parentNode===res ? head.nextSibling : res.firstChild);
+        } }catch(e){_тихо(e,"L4530b")} }).catch(function(){}); }catch(e){_тихо(e,"L4530a")}
       setStatus(''); logSearch(shown,tab,count);
       if(!count){ const s=document.createElement('div'); s.className='status';   // append, чтобы не стереть баннер исправления (M173)
         s.textContent='По-русски не нашёл'+(strict?' (строгий режим — как ввёл)':'')+'. Готовый перевод есть для Бухари/Муслим/Абу Дауд; для остальных включи 🧠 По смыслу.';
@@ -4921,6 +4929,15 @@ async function runSearch(explicit){
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
     if(relaxA && relaxA.dropped.length && count) relaxBanner(relaxA.dropped, relaxA.used);
     if(count){ if(relMode && count>2){ renderResultsView(); } else { ensureGrpToggle(); ensureUniqToggle(); ensureRelToggle(); } try{ensureStructureBtn();}catch(e){_тихо(e,"L4570")} }
+    /* 📖 #699: если человек вставил в поиск АЯТ, поднимаем Коран НАД выдачей сборников.
+       Считаем ПОСЛЕ отрисовки хадисов, чтобы не задерживать их ни на миллисекунду, и
+       вставляем сверху, когда готово. Не нашлось — не показываем ничего. */
+    if(!numMode){ try{ _блокАятСверху(shown, (relaxA&&relaxA.dropped)||[]).then(function(бл){
+        try{ if(бл && seq===_seq && !document.getElementById('res').querySelector('.ayatTop')){
+          бл.className=(бл.className||'')+' ayatTop';
+          const _r=document.getElementById('res');
+          _r.insertBefore(бл, head && head.parentNode===_r ? head.nextSibling : _r.firstChild);
+        } }catch(e){_тихо(e,"L4924b")} }).catch(function(){}); }catch(e){_тихо(e,"L4924a")} }
     if(!numMode && !(selCols.size||selExtra.size)) addLibMore();   // кнопка «искать ещё в большой библиотеке» (16 изданий + Мукбиль). v1052 #542: при ВЫБРАННОМ сборнике не предлагаем и не авто-грузим остальные издания — «выбрал = только в них» (семантика #50, как у Мактабы через _selNarrow)
   } else {
     let relaxQ=null, corrQ=null, _qRoot=null;   // #624: корень запроса нужен и ПОСЛЕ цикла — для точного блока над выдачей
@@ -7634,6 +7651,71 @@ async function _блокТочногоКорня(root){
       ещё.onclick=function(){ showRootPlaces(root); }; обёртка.appendChild(ещё); }
     return обёртка;
   }catch(e){ try{_тихо(e,'блокКорня');}catch(_e){} return null; } }
+
+/* 📖 ЗАЯВКА #699 — «почему сверху Бухари и муслим, а внизу Коран, при том что я общий поиск».
+   Понял только по СКРИНУ владельца: он стоит на вкладке «Хадисы» и вставляет в поиск АЯТ
+   (кусок суры «Рум»), а приложение отвечает «ищу в Бухари и Муслиме…» и Коран показывает
+   лишь строкой загрузки внизу.
+   Воспроизвёл: на запрос «и Аллах дарует победу над ней» выдаются восемь хадисов про знамя
+   при Хайбаре, а Корана в выдаче НЕТ ВООБЩЕ. Хуже того — поиск ВЫБРАСЫВАЕТ слова
+   («показываю без: аллах, над, ней»), лишь бы найти хоть что-то в сборниках. То есть он
+   старательно ищет не там.
+   Лечим не вкладками и не переносом поиска: если запрос — это аят, поднимаем его блоком НАД
+   выдачей хадисов. Тем же приёмом, каким уже поднят блок точного корня.
+   ⚠️ Считаем ПОСЛЕ отрисовки хадисов и только для русского текста от трёх слов: иначе каждый
+   обычный поиск платил бы загрузкой перевода Корана. */
+async function _блокАятСверху(запрос, выброшены){
+  try{
+    const с=(запрос||'').trim();
+    if(!/[а-яё]/i.test(с)) return null;                       // не русский текст — не наш случай
+    const слова=с.toLowerCase().replace(/[«»"',.!?()]/g,' ').split(/\s+/).filter(w=>w.length>2);
+    if(слова.length<3) return null;                           // короткий запрос — слишком много ложных попаданий
+    const arr=await loadQuran(); const ru=await loadQuranRu();
+    if(!arr||!arr.length||!ru) return null;
+    const текст=v=>(ru[v.s+':'+v.a]||'').toLowerCase();
+    // строго: аят должен содержать ВСЕ значимые слова запроса. Половинчатые совпадения
+    // наверх не поднимаем — блок над выдачей обязан быть точным, иначе он врёт громче всех.
+    const нашлись=[]; for(const v of arr){ const g=текст(v); if(!g) continue;
+      let все=true; for(const w of слова){ if(g.indexOf(w)<0){ все=false; break; } }
+      if(все){ нашлись.push(v); if(нашлись.length>=12) break; } }
+
+    /* ⚖️ НИЧЕГО НЕ НАШЛОСЬ ТОЧНО — И ЭТО НЕ ПОВОД ГАДАТЬ.
+       Разбирая заявку, я проверил живой запрос владельца: его текста нет ни у Кулиева, ни у
+       Абу Аделя — он вставил третий источник (тафсир либо иной перевод). Совпадало 3 слова
+       из 5, и «лучшими» выходили совсем чужие аяты (2:212 «глумятся НАД теми…»). Поднять их
+       наверх значило бы соврать громче всех — ровно то, за что я весь день гасил ложные
+       вики-привязки.
+       Поэтому: аят не опознан — не называем аят. Но если поиск ради хадисов ВЫБРАСЫВАЛ слова
+       (признак «в сборниках такого нет»), а запрос длинный и русский — честно предлагаем
+       поискать в Коране. Мы не утверждаем, ГДЕ это; мы говорим, ГДЕ смотреть. */
+    if(!нашлись.length){
+      if(!выброшены || !выброшены.length || слова.length<4) return null;
+      const пред=document.createElement('div'); пред.className='card';
+      пред.style.cssText='padding:11px;border-color:#3f7d55;background:rgba(46,155,91,.07)';
+      пред.innerHTML='<div style="font-size:14px">📖 <b>Похоже, это не из сборников хадисов</b></div>'
+        +'<div class="hint" style="margin-top:5px;font-size:12px">Чтобы найти хоть что-то в сборниках, '
+        +'поиск отбросил слова: <b>'+esc(выброшены.slice(0,6).join(', '))+'</b>. '
+        +'Если вы искали текст Корана — он ищется на вкладке «Аяты».</div>'
+        +'<div style="margin-top:8px"><span class="mini" id="кАятам" style="cursor:pointer">'
+        +'📖 Искать это в Коране</span></div>';
+      try{ пред.querySelector('#кАятам').onclick=function(){
+        try{ const tq=document.querySelector('.tab[data-tab="quran"]'); if(tq) tq.click();
+             const п=document.getElementById('q'); if(п){ п.value=с; }
+             const g=document.getElementById('goBtn'); if(g) g.click(); }catch(e){_тихо(e,"L7700b")} }; }catch(e){}
+      return пред;
+    }
+    const обёртка=document.createElement('div');
+    const шапка=document.createElement('div'); шапка.className='card';
+    шапка.style.cssText='padding:11px;border-color:#3f7d55;background:rgba(46,155,91,.07)';
+    шапка.innerHTML='<div style="font-size:14px">📖 <b>Это есть в Коране</b> — '
+      +'<b>'+нашлись.length+'</b> '+_аятовСлово(нашлись.length)
+      +' <span style="color:var(--hint);font-size:12px">· по переводу</span></div>'
+      +'<div class="hint" style="margin-top:5px;font-size:11.5px">Вы искали во вкладке «Хадисы», '
+      +'а слова нашлись в Книге. Ниже — обычная выдача по сборникам.</div>';
+    обёртка.appendChild(шапка);
+    for(const v of нашлись) { try{ обёртка.appendChild(cardAyah({type:'q',v:v},[])); }catch(e){_тихо(e,"L7699a")} }
+    return обёртка;
+  }catch(e){ try{_тихо(e,'блокАят');}catch(_e){} return null; } }
 let _rootView={root:'',sort:'order',form:''};
 async function showRootPlaces(root, opts){
   if(!root) return; const R=await loadRoots(); let arr=[]; try{ arr=await loadQuran(); }catch(e){ arr=quran||[]; }   // QA-low: try/catch — loadQuran мог reject (офлайн до загрузки Корана) → тихий no-op
