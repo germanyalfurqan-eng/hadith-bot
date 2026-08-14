@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1372</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1373</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1372';
+const APPVER = 'v1373';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6885,11 +6885,21 @@ function _styleCollectorNote(ad){
 // жёсткое сравнение 0-7%, fold 100% — орфография хамз/алифов различается между изданиями).
 const _MKP_CACHE={};
 const _MKP_BOOKS={bukhari:1,muslim:1,abudawud:1,nasai:1,ibnmajah:1,ibnmaja:1,tirmidhi:1,malik:1,darimi:1,ibnhibban:1};
+/* ⚠️ КЭШ ОБЕЩАНИЕМ, А НЕ ЗНАЧЕНИЕМ — иначе один и тот же кусок едет дважды.
+   Замер на бою v1372, поиск по номеру «66»: `markup/muslim_0.json` пришёл ДВА раза по 649 КБ.
+   Причина ровно та, что уже лечили у codif (#497): карточки одного поиска зовут этот шард
+   почти одновременно, а значение в кэш кладётся только ПОСЛЕ ответа сети — второй звонок
+   видит `undefined` и уходит за тем же файлом. Кладём в кэш само обещание: сколько бы
+   карточек ни спросило, запрос будет один. */
+const _MKP_CACHE_P={};
 async function _mkpShard(slug,seg){
   const key=slug+'_'+seg;
   if(_MKP_CACHE[key]!==undefined) return _MKP_CACHE[key];
-  try{ _MKP_CACHE[key]=await cachedFetchJSON('markup/'+key+'.json',60000,{silent:true}); }
-  catch(e){ _MKP_CACHE[key]=null; }
+  if(!_MKP_CACHE_P[key]){
+    _MKP_CACHE_P[key]=cachedFetchJSON('markup/'+key+'.json',60000,{silent:true})
+      .catch(function(){ return null; });
+  }
+  _MKP_CACHE[key]=await _MKP_CACHE_P[key];
   return _MKP_CACHE[key];
 }
 function _mkpFold(s){ // как fold() интеграции: снять огласовки + унификация букв, только арабские буквы
