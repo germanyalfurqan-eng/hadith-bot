@@ -15955,8 +15955,12 @@ def _channel_claim(note, item_id=None, threshold=0.90):
                         r'\s*[:\-—]?\s*[«"]', str(note or ''), re.I)
     if _личное:
         try:
-            log.warning("КАНАЛ: пост отклонён — цитирует владельца лично (заявка #666): %s",
-                        str(note or "")[max(0, _личное.start() - 30):_личное.start() + 90])
+            # 🔴 15.08.2026: здесь стоял `log.warning`, а имени `log` в файле НЕТ вовсе —
+            # строка роняла NameError, и соседний `except: pass` его глотал. То есть
+            # отказ публикации не был виден НИКОГДА. Печатаем тем, что у бота есть
+            # на самом деле: print уходит в журнал Railway.
+            print("КАНАЛ: пост отклонён — цитирует владельца лично (заявка #666): %s"
+                  % str(note or "")[max(0, _личное.start() - 30):_личное.start() + 90])
         except Exception:
             pass
         return False
@@ -20812,7 +20816,25 @@ async def _post_app_channel(bot, note, note_id=None):
             def _зап(o):
                 o.setdefault('app_post_msgids', {})[вер] = _мид
                 return o
-            _data_atomic_mutate("journal.json", _зап, "app_post_msgids: запомнили номер поста " + вер)
+            _ок_мид, _нов_мид = _data_atomic_mutate(
+                "journal.json", _зап, "app_post_msgids: запомнили номер поста " + вер)
+            # 🔴 15.08.2026. Номер ПИСАЛСЯ — и тут же ПРОПАДАЛ. Восемь версий подряд
+            # (v1384–v1391) вышли в канал, а по журналу числились недоказанными.
+            # Улика: в ветке data ЕСТЬ коммит «app_post_msgids: запомнили номер поста v1391»
+            # (15:45:22), а поля в файле нет — через четыре минуты поверх лёг обычный
+            # коммит «searches», который сохраняет журнал ЦЕЛИКОМ из памяти инстанса
+            # (_journal_cache). Наша атомарная запись ушла прямо в GitHub, в памяти её не
+            # было — и первый же сохраняющий её стёр. Не гонка sha: тот пишет со свежим sha,
+            # поэтому 409 не случается и никто ничего не замечает.
+            # Ровно от этого выше по коду синхронизируют app_post_ids и app_post после
+            # _channel_claim. Про msgids забыли — а это и есть доказательство доставки З-47.
+            if _ок_мид and isinstance(_нов_мид, dict) and _journal_cache is not None:
+                _journal_cache['app_post_msgids'] = _нов_мид.get('app_post_msgids', {})
+            if not _ок_мид:
+                # Провал записи возвращается ЗНАЧЕНИЕМ, а не исключением: _data_atomic_mutate
+                # отдаёт (False, None) и молчит. Без этой проверки доказательство доставки
+                # теряется беззвучно — что и подорвало весь З-47.
+                raise RuntimeError('журнал не принял запись номера поста')
     except Exception as _e_мид:
         # 🔴 09.08.2026. Здесь стояло молчаливое `pass`, и это подорвало ВЕСЬ закон З-47.
         # Пост в канал выходит, а номер записать не удалось — и по журналу выходит, что
@@ -20854,8 +20876,19 @@ async def _post_app_channel(bot, note, note_id=None):
             def _зап_дж(o):
                 o.setdefault('jamaat_post_msgids', {})[_в] = _дж.message_id
                 return o
-            _data_atomic_mutate("journal.json", _зап_дж,
-                                "jamaat_post_msgids: обновление " + _в + " ушло в джамаат")
+            # 🔴 15.08.2026, та же беда, что у канала выше — чиним КЛАСС, а не случай:
+            # атомарная запись уходит прямо в GitHub, а сохранение журнала целиком из
+            # памяти (_journal_cache) затирает её следующим же коммитом. Синхронизируем
+            # память и не проглатываем отказ: он возвращается ЗНАЧЕНИЕМ, исключения нет.
+            # Джамаат — второй адресат, поэтому здесь только жалуемся в лог и не роняем
+            # основной путь: канал важнее, терять его из-за зеркала нельзя.
+            _ок_дж, _нов_дж = _data_atomic_mutate(
+                "journal.json", _зап_дж,
+                "jamaat_post_msgids: обновление " + _в + " ушло в джамаат")
+            if _ок_дж and isinstance(_нов_дж, dict) and _journal_cache is not None:
+                _journal_cache['jamaat_post_msgids'] = _нов_дж.get('jamaat_post_msgids', {})
+            if not _ок_дж:
+                print('jamaat_post_msgids: журнал НЕ ПРИНЯЛ номер поста %s' % _в)
     except Exception as _e:
         try:
             await bot.send_message(
