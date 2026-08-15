@@ -1882,7 +1882,7 @@ def _подсветить_иснад(текст_ар, код_сборника, �
                 if _сид:
                     _адр = 'https://sunnah.com/narrator/%s' % _сид
                 elif _мид:
-                    _адр = 'https://t.me/muslimoontt_bot?startapp=n_%s' % _мид
+                    _адр = 'https://t.me/muslimoontt_bot/app?startapp=n_%s' % _мид
                 else:
                     continue
                 _из = _из.replace(_э, '<a href="%s">%s</a>' % (_адр, _э), 1)
@@ -1916,7 +1916,7 @@ def _иснад_строкой(код_сборника, номер):
                     _части.append('%d. <a href="https://sunnah.com/narrator/%s">%s</a>'
                                   % (_н, _сид, _имя))
                 elif _мид:
-                    _части.append('%d. <a href="https://t.me/muslimoontt_bot?startapp=n_%s">%s</a>'
+                    _части.append('%d. <a href="https://t.me/muslimoontt_bot/app?startapp=n_%s">%s</a>'
                                   % (_н, _мид, _имя))
                 else:
                     _части.append('%d. %s' % (_н, _имя))
@@ -1976,7 +1976,7 @@ def _тахкик_цитатой(код_сборника, номер):
                     # мнимую ссылку не выдаём.
                     return _имя_з + ' <i>(аноним в цепи — имя не названо)</i>'
                 _рус = (_ру_т or {}).get(str(_мид)) or ''
-                _сс_з = ['<a href="https://t.me/muslimoontt_bot?startapp=n_%s">карточка</a>' % _мид]
+                _сс_з = ['<a href="https://t.me/muslimoontt_bot/app?startapp=n_%s">карточка</a>' % _мид]
                 _сид_з = (_m2s_т or {}).get(str(_мид))
                 if _сид_з:
                     _сс_з.append('<a href="https://sunnah.com/narrator/%s">sunnah</a>' % _сид_з)
@@ -2025,7 +2025,7 @@ def _тахкик_цитатой(код_сборника, номер):
             try:
                 if код_сборника and номер:
                     _ссылка_апп = (
-                        '\n\n📲 <a href="https://t.me/muslimoontt_bot?startapp=r_%s_%s">'
+                        '\n\n📲 <a href="https://t.me/muslimoontt_bot/app?startapp=r_%s_%s">'
                         'Открыть этот хадис в приложении</a> — текст, тахридж и дерево цепи'
                         % (код_сборника, номер))
             except Exception:
@@ -2137,7 +2137,7 @@ async def _досверить(сообщение, тело, хвост, сбор
     except Exception:
         pass
     # Ссылки на само место и на тахридж в приложении — владелец просил их отдельной строкой.
-    _ссыл = ('https://t.me/muslimoontt_bot?startapp=r_%s_%d'
+    _ссыл = ('https://t.me/muslimoontt_bot/app?startapp=r_%s_%d'
              % ({'ahmad_local': 'ahmad'}.get(_код, _код), номер))
     части.append('')
     части.append('🔗 <a href="%s">Открыть в приложении</a> · '
@@ -2221,7 +2221,7 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
             # приложение понимает у хадисов Мухаймина ТОЛЬКО `m_<номер>` (index.html: token
             # 'm_'+n для source==='muhaymin'). Ссылка открывала апп и вела в никуда: снаружи это
             # выглядит как «бот дал битую ссылку», а на деле два места разошлись в одной букве.
-            куски.append("Ссылка в приложении: https://t.me/muslimoontt_bot?startapp=m_" + str(н))
+            куски.append("Ссылка в приложении: https://t.me/muslimoontt_bot/app?startapp=m_" + str(н))
             # 🔴 08.08.2026, закон владельца #154: «любой хадис, когда приходит, не дожидаясь
             # кидаешь, но указываешь на загрузку и делаешь через DSOC перевод, который ты
             # накапливаешь». Здесь хадис уходил БЕЗ перевода вовсе и через пересказ модели.
@@ -5492,7 +5492,7 @@ async def narr_card_reply_text(query, ref):
     nm, kunya, nisba, death = best[cols.index('name')], best[cols.index('kunya')], best[cols.index('nisba')], best[cols.index('death')]
     rankH, rankD = best[cols.index('rankHajar')], best[cols.index('rankDhahabi')]
     ru_nm = ru.get(str(rid), nm)
-    app_link = "https://t.me/muslimoontt_bot?startapp=n_" + rid
+    app_link = "https://t.me/muslimoontt_bot/app?startapp=n_" + rid
     sid = (m2s or {}).get(rid)
     sunnah_link = f"https://sunnah.com/narrator/{sid}" if sid else None
     # ИИ ТОЛЬКО перефразирует НАШИ данные (R37: не домысливает) — если полей почти нет, обходимся без ИИ вовсе.
@@ -5622,7 +5622,7 @@ async def muhaymin_check_reply_text(hadith_text):
     if not hits:
         return f"❌ Нет, не нашёл этот хадис в Мухэймине (проверил все {len(data)} номеров, честный текстовый поиск, не ИИ-догадка)."
     n = hits[0][0]
-    link = f"https://t.me/muslimoontt_bot?startapp=m_{n}"
+    link = f"https://t.me/muslimoontt_bot/app?startapp=m_{n}"
     extra = f" (и ещё {len(hits)-1} совпадений)" if len(hits) > 1 else ""
     return f"✅ Да, есть — аль-Мухэймин №{n}{extra}\n📱 {link}"
 
@@ -12872,7 +12872,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             _ар = re.sub(r'\s+', ' ', str(_z.get('a') or '')).strip()
                             _ру = re.sub(r'\s+', ' ', str(_z.get('r') or '')).strip()
                             # ссылка открывает мини-апп сразу на этом хадисе (формат startapp=r_<книга>_<номер>)
-                            _сс = 'https://t.me/muslimoontt_bot?startapp=r_bukhari_%s' % _н
+                            _сс = 'https://t.me/muslimoontt_bot/app?startapp=r_bukhari_%s' % _н
                             # Владелец 27.07.2026: «каждому хадису присваивай балл, насколько он
                             # совпадает по мнению машины». Показываем ЧЕСТНО: сама близость векторов
                             # в процентах и отдельно — совпали ли слова буквально. Так видно, на чём
@@ -13344,7 +13344,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if is_private:
                 kb = InlineKeyboardButton("📗 𝗠𝗨𝗦𝗟𝗜𝗠𝗢𝗢𝗡-𝗔𝗣𝗣", web_app=WebAppInfo(url=WEBAPP_URL))
             else:
-                kb = InlineKeyboardButton("📗 𝗠𝗨𝗦𝗟𝗜𝗠𝗢𝗢𝗡-𝗔𝗣𝗣", url="https://t.me/muslimoontt_bot?startapp")
+                kb = InlineKeyboardButton("📗 𝗠𝗨𝗦𝗟𝗜𝗠𝗢𝗢𝗡-𝗔𝗣𝗣", url="https://t.me/muslimoontt_bot/app?startapp")
             msg = await update.message.reply_text(body, reply_markup=InlineKeyboardMarkup([[kb]]), parse_mode="Markdown")
             try:
                 await context.bot.pin_chat_message(chat_id=update.effective_chat.id, message_id=msg.message_id, disable_notification=True)
@@ -15033,7 +15033,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _vfp = vf.split()
                 if len(_vfp) >= 2 and _vfp[1].isdigit() and _vfp[0].isalpha():
                     _vfcode = {"ahmad_local": "ahmad"}.get(_vfp[0], _vfp[0])
-                    body += f"\n📲 [Открыть карточку первоисточника](https://t.me/muslimoontt_bot?startapp=r_{_vfcode}_{_vfp[1]})"   # #629: голый URL с «_» Telegram-Markdown резал в курсив (юзернейм слипался → «имя не найдено») — прячем URL в markdown-ссылку
+                    body += f"\n📲 [Открыть карточку первоисточника](https://t.me/muslimoontt_bot/app?startapp=r_{_vfcode}_{_vfp[1]})"   # #629: голый URL с «_» Telegram-Markdown резал в курсив (юзернейм слипался → «имя не найдено») — прячем URL в markdown-ссылку
                 await send_long(update, body)
             flush_trans()
         else:
@@ -15127,7 +15127,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 msg += muhaymin_crossref_note(_src_code, number)
                 # #269: прямая ссылка — открыть ЭТУ карточку хадиса в приложении одним тапом
                 _sa269 = ('m_' + str(number)) if _src_code == 'muhaymin' else ('r_' + str(_src_code) + '_' + str(number))
-                msg += f"\n\n📲 [Открыть карточку в приложении](https://t.me/muslimoontt_bot?startapp={_sa269})"   # #629: см. выше — «_» в голом URL ломали ссылку
+                msg += f"\n\n📲 [Открыть карточку в приложении](https://t.me/muslimoontt_bot/app?startapp={_sa269})"   # #629: см. выше — «_» в голом URL ломали ссылку
 
                 # 🔴 #127, закон владельца: к любому хадису — нейротахкик свёрнутой цитатой,
                 # кроме аль-Бухари и Муслима (их достоверность общеизвестна, слово от 01.07.2026).
@@ -15228,7 +15228,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _kb324 = []
             for _sc, _bid, _nm, _au in _c324:
                 _lbl = ("📖 " + _nm[:38] + (" — " + _au.split()[-1] if _au else ""))[:60]
-                _kb324.append([InlineKeyboardButton(_lbl, url=f"https://t.me/muslimoontt_bot?startapp=b_{_bid}_{_n324}")])
+                _kb324.append([InlineKeyboardButton(_lbl, url=f"https://t.me/muslimoontt_bot/app?startapp=b_{_bid}_{_n324}")])
             # #626 (владелец: «почему не даешь хадис? Книга и номер даны… НО ХАДИС НАДО ВЫДАТЬ!»).
             # Раньше сюда попадал ЛЮБОЙ запрос «книга + номер», и ответом были только кнопки —
             # даже когда книга оказывалась нашим каноническим сборником и текст лежал под рукой.
@@ -15253,7 +15253,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     _sc326 = {"ahmad_local": "ahmad"}.get(_наш, _наш)
                     _msg += muhaymin_crossref_note(_sc326, _n324)
                     _msg += (f"\n\n📲 [Открыть карточку в приложении]"
-                             f"(https://t.me/muslimoontt_bot?startapp=r_{_sc326}_{_n324})")
+                             f"(https://t.me/muslimoontt_bot/app?startapp=r_{_sc326}_{_n324})")
                     await send_long(update, _msg)
                     return
             # #626 (владелец: «Книга и номер даны… НО ХАДИС НАДО ВЫДАТЬ!»). Книга вне наших 41
@@ -17278,7 +17278,7 @@ async def _api_serve(application=None):
         # #272/«ссылка вкладки»: МЕСТО = кликабельная дип-ссылка ровно на карточку хадиса в приложении (m_ для Мухаймина, r_ для остальных)
         if src and num not in (None, ''):
             _sa = ('m_' + str(num)) if src == 'muhaymin' else ('r_' + str(src) + '_' + str(num))
-            loc = f" [{src} №{num}](https://t.me/muslimoontt_bot?startapp={_sa})"
+            loc = f" [{src} №{num}](https://t.me/muslimoontt_bot/app?startapp={_sa})"
             loc_plain = f" {src} №{num}"
         else:
             loc = ""; loc_plain = ""
@@ -20685,7 +20685,7 @@ def _format_channel_post(note):
         ml = re.match(r'^\s*LINK:\s*(.+?)\s*$', ln)
         if ml and deeplink is None and not rest:
             tok = ml.group(1).strip()
-            deeplink = tok if tok.startswith("http") else ("https://t.me/muslimoontt_bot?startapp=" + tok)
+            deeplink = tok if tok.startswith("http") else ("https://t.me/muslimoontt_bot/app?startapp=" + tok)
             continue
         rest.append(ln)
     main, instr, in_instr = [], [], False
@@ -20701,7 +20701,12 @@ def _format_channel_post(note):
         body += "\n\n<blockquote expandable>📋 <b>Как пользоваться</b>\n" + esc(instr_txt) + "</blockquote>"
     if deeplink:
         body += '\n\n👉 <a href="' + esc(deeplink) + '">Открыть в приложении то, что на скрине</a>'
-    body += "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot?startapp\n🤖 Бот: https://t.me/muslimoontt_bot"
+    # 🔴 #695 (владелец: «нарушение формата обновлений»). Ссылка в подвале шла БЕЗ «/app»
+    # и открывала переписку с ботом, а не приложение — человек жал «Приложение» и попадал
+    # в чат. Правильная форма задокументирована в этом же файле у кнопки «Открыть Muslimoon»:
+    # t.me/<бот>/<имя> открывает мини-апп ВНУТРИ Telegram. Знали в одном месте, а писали в
+    # семнадцати других по-старому — 15.08.2026 выправлены все разом.
+    body += "\n\n———\n📲 Приложение: https://t.me/muslimoontt_bot/app?startapp\n🤖 Бот: https://t.me/muslimoontt_bot"
     return photo, body
 
 async def _post_app_channel(bot, note, note_id=None):
