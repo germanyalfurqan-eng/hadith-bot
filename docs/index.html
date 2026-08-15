@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1387</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1388</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1387';
+const APPVER = 'v1388';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -8580,7 +8580,7 @@ async function openNarratorRijal(name, forceId){
   // перед открытием «Наука хадиса» — при закрытии того экрана некуда было возвращаться. Теперь карточка НЕ прячется,
   // просто временно перекрывается (openHadithScience сам ставит z-index выше) — закрыл «✕» и снова видна карточка равия.
   note.querySelector('.goHad').onclick=()=>{ openHadithScience(true); }; body.appendChild(note);
-  try{ if(!_rijal) await fetch('./hadith/rijal_books.json').then(r=>r.json()).then(d=>_rijal=d).catch(()=>{}); }catch(e){_тихо(e,"L7779")}
+  try{ await loadRijalBooks(); }catch(e){_тихо(e,"L7779")}
   if(_rijal && _rijal.critics){ const rj=document.createElement('div'); rj.style.cssText='margin-top:8px';
     rj.innerHTML='<div style="font-weight:600;font-size:12px;color:var(--hint);margin:4px 0">📚 Где читать:</div>';
     const rows=[]; _rijal.critics.slice(0,8).forEach(cr=>{ (cr.books||[]).slice(0,3).forEach(bk=>rows.push([bk,cr])); });
@@ -8664,6 +8664,26 @@ function ensureStructureBtn(){ const res=document.getElementById('res'); if(!res
 }
 // === 📜 Наука хадиса (мусталях): правила достоверности + 48 мутабарун + труды риджаль ===
 let _hadRule=null, _rijal=null;
+/* ⚡ Хвост карточки равия (продолжение #694). Замер на бою показал восемь запросов, идущих
+   ПОСЛЕДНИМИ и по одному. Два из них — вот эти, и у обоих одна и та же пара бед:
+   ① нет кэша обещания: два одновременных вызова качают файл ДВАЖДЫ;
+   ② метка времени `?'+Date.now()` в одном из мест — она отключает кэш браузера НАСОВСЕМ,
+      и файл тянется заново при каждом открытии окна. Свежесть тут не нужна: файл меняется
+      с выкладкой, а выкладка и так меняет адрес версией.
+   Заводим по одному колодцу на файл (З-33) и зовём их из прогрева. */
+let _rijalP=null;
+function loadRijalBooks(){ if(_rijal) return Promise.resolve(_rijal); if(_rijalP) return _rijalP;
+  _rijalP=fetch('./hadith/rijal_books.json?v='+APPVER).then(r=>r.ok?r.json():null)
+    .then(d=>{ if(d) _rijal=d; return _rijal; })
+    .catch(()=>{ _rijalP=null; return null; });   // сетевая икота — не запоминаем пустоту
+  return _rijalP; }
+let _narrAliases=null, _narrAliasesP=null;
+function loadNarrAliases(){ if(_narrAliases) return Promise.resolve(_narrAliases);
+  if(_narrAliasesP) return _narrAliasesP;
+  _narrAliasesP=fetch('./narr_aliases.json?v='+APPVER).then(r=>r.ok?r.json():{})
+    .then(d=>{ _narrAliases=d||{}; return _narrAliases; })
+    .catch(()=>{ _narrAliasesP=null; return null; });
+  return _narrAliasesP; }
 async function openHadithScience(_overNarr){
   let m=document.getElementById('hadModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='hadModal';
@@ -8680,7 +8700,7 @@ async function openHadithScience(_overNarr){
   modalTop(m); m.style.display='flex';
   const body=m.querySelector('#hadBody'); body.innerHTML='<div class="hint">Загружаю…</div>';
   try{ if(!_hadRule) _hadRule=await (await fetch('./hadith/rule_01_tawthiq_critics.json?'+Date.now())).json(); }catch(e){ body.innerHTML='<div class="hint">Не удалось загрузить правила.</div>'; return; }
-  try{ if(!_rijal) _rijal=await (await fetch('./hadith/rijal_books.json?'+Date.now())).json(); }catch(e){_тихо(e,"L7879")}
+  try{ await loadRijalBooks(); }catch(e){_тихо(e,"L7879")}
   // M306: труды риджаля показываем как обычные книги каталога — рус.имя + огласовки + чип Википедии.
   // Данные те же, что у каталога: _catTr.map[имя книги].voc/.ru (по арабскому имени) + window._wikiT[id] (по id turath).
   let _rjById={}; try{ await Promise.all([loadBookTr(), loadWikiTitles(), loadCatalog()]); }catch(e){_тихо(e,"L7882")}
@@ -10974,6 +10994,7 @@ function _прогревСлов(волна){
   тихо(()=>_словарь('_narrVerdP','./narr_verdicts.json'));
   тихо(()=>_словарь('_dhbP','./narr_dhahabi.json'));
   тихо(()=>_словарь('_sahDalilP','./narr_sahabi_dalil.json'));
+  тихо(()=>loadRijalBooks()); тихо(()=>loadNarrAliases());   // хвост #694: общие файлы — в общую волну, а не по одному в конце
   тихо(()=>_devNote('_прогрев'));   // v1377: пометки «в работе» — тоже общий файл, а стояли в хвостовой цепочке
 }
 function _прогревРавия(mid, волна){
@@ -11799,9 +11820,10 @@ function addChainNarr(c){
   toast('⛓ Добавлен: '+String(c.nm||'').split(' ').slice(0,3).join(' ')+(_chainSel.length<2?' — добавь ещё одного':' — жми «Найти цепь»'));
 }
 // M454: бесспорные дубли базы (народ один — id разные): группа эквивалентов для матча в цепи
-let _narrAliases=null;
+// (объявление переменной переехало выше, к колодцу loadNarrAliases — второе `let` в той же
+//  области видимости было бы SyntaxError и положило бы всё приложение)
 async function _aliasGroup(id){
-  if(_narrAliases===null){ try{ _narrAliases=await (await fetch('./narr_aliases.json')).json(); }catch(e){ _narrAliases={}; } }
+  if(_narrAliases===null){ try{ await loadNarrAliases(); }catch(e){ _narrAliases={}; } }
   const g=new Set([id]); const main=_narrAliases[String(id)]||id; g.add(main);
   for(const k in _narrAliases){ if(_narrAliases[k]===main) g.add(+k); }
   return [...g];
