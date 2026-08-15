@@ -33,6 +33,9 @@ import io          # 🔴 06.08: отправка файла из памяти (
                    # defined» — модуль использовался, а импорта не было. Ошибка тихая: она
                    # выстрелила только когда помощник впервые попробовал отдать файл.
 import os
+import sys        # 🔴 15.08: sys.path в умениях помощника падал «name 'sys' is not
+                  # defined», а сообщение винило сервер: «Медиа-умения недоступны на
+                  # этом сервере». Тот же класс, что след про io строкой выше.
 import asyncio
 import re
 import random
@@ -771,7 +774,7 @@ _ЗАПУЩЕН_В = (datetime.utcnow() + timedelta(hours=3)).strftime('%d.%m.%Y
 def _тревога_владельцу(текст):
     """Короткая тревога владельцу прямым запросом к Telegram, без очередей и без ожидания.
 
-    Почему не через application.bot: тревога рождается внутри обычного (не async) кода
+    Почему не через app.bot: тревога рождается внутри обычного (не async) кода
     моделей, и тащить туда цикл событий значит переписать полдюжины мест. Прямой вызов
     короче и надёжнее — а тревога, которую не отправили из-за архитектурных красот,
     бесполезна вдвойне.
@@ -2995,18 +2998,18 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
                     if len(_байты) > 45 * 1024 * 1024:
                         return 'Файл больше 45 МБ — не пересылаю. Так и скажи человеку.'
                     _имя_ф = (_url.rstrip('/').split('/')[-1].split('?')[0] or 'file')[:60]
-                    if bot and чат:
+                    if бот and чат:
                         try:
                             if _тип.startswith('image/'):
-                                await bot.send_photo(чат, photo=bytes(_байты),
+                                await бот.send_photo(чат, photo=bytes(_байты),
                                                      caption='📎 %s' % _url[:200])
                             elif _тип.startswith('video/'):
-                                await bot.send_video(чат, video=bytes(_байты),
+                                await бот.send_video(чат, video=bytes(_байты),
                                                      filename=_имя_ф,
                                                      caption='📎 %s' % _url[:200],
                                                      supports_streaming=True)
                             else:
-                                await bot.send_document(чат, document=bytes(_байты),
+                                await бот.send_document(чат, document=bytes(_байты),
                                                         filename=_имя_ф,
                                                         caption='📎 %s' % _url[:200])
                             return ('ГОТОВО: по ссылке был не текст, а файл (%s, %d КБ) — я '
@@ -9453,8 +9456,8 @@ async def _claude_dispatch(update, context):
     # #ЖУРНАЛ (владелец 03.07.2026): «Клод нигде не должен отвечать кроме меня — но КАЖДОЕ обращение
     # должно приходить в рабочий журнал (LOG_CHAT_ID), точно так же, как приходят траты DeepSeek — кто/что/когда».
     try:
-        if application:
-            await application.bot.send_message(LOG_CHAT_ID, f"🧑‍💻 #клод обращение #{entry_id}: {_where}, {when}, в очереди {queue_pos} — «{body[:200]}»")
+        if app:
+            await app.bot.send_message(LOG_CHAT_ID, f"🧑‍💻 #клод обращение #{entry_id}: {_where}, {when}, в очереди {queue_pos} — «{body[:200]}»")
     except Exception:
         pass
     return True
@@ -9477,8 +9480,8 @@ async def _claude_deliver_replies(update, context):
                 await context.bot.send_message(chat.id, "🧑‍💻 Клод: " + str(r.get("text", ""))[:3500])
                 r["delivered"] = True; changed = True
                 try:
-                    if application:
-                        await application.bot.send_message(LOG_CHAT_ID, f"🧑‍💻 #клод ответ доставлен в {getattr(chat,'title',None) or 'личку'}: «{str(r.get('text',''))[:150]}»")
+                    if app:
+                        await app.bot.send_message(LOG_CHAT_ID, f"🧑‍💻 #клод ответ доставлен в {getattr(chat,'title',None) or 'личку'}: «{str(r.get('text',''))[:150]}»")
                 except Exception:
                     pass
             except Exception:
@@ -10264,6 +10267,32 @@ async def on_spam(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # 🔴 15.08.2026, ПЕРЕНЕСЕНО В НАЧАЛО handle. Это объявление стояло на 340 строк НИЖЕ,
+    # а звали его выше — в ветке «запомнить видео, присланное владельцем». Вложенное
+    # объявление связывает имя только когда до него дойдёт исполнение, поэтому там
+    # каждый раз падало NameError, и падало МОЛЧА: ветка обёрнута в try. Владелец слал
+    # видео, бот его не запоминал, и никто об этом не узнавал.
+    # Нашлось разбором всего файла на неопределённые имена (pyflakes), а не глазами.
+
+    # 🔴 06.08.2026. АНОНИМНЫЙ АДМИН — ЭТО ТОЖЕ ВЛАДЕЛЕЦ.
+    # В чате джамаата владелец пишет от имени группы: у такого сообщения from_user — служебный
+    # GroupAnonymousBot, а настоящий отправитель спрятан в sender_chat. Все мои проверки
+    # «это владелец?» смотрели на from_user и для анонимных сообщений отвечали «нет».
+    # Отсюда разом: и «почему отвечает Groq», и «почему зов не дошёл», и «почему ботяра не
+    # ведёт к помощнику». Правила были верные — до них не доходило дело.
+    # Чужой анонимом писать не может: право говорить от имени группы есть только у админов.
+    def _хозяин(u):
+        # 🔴 07.08.2026, 21:10, ПРИКАЗ ВЛАДЕЛЬЦА: «от имени канала Муслимун я пишу. Немедленно
+        # впиши ид Муслимун только и две лички мои».
+        # ЧТО БЫЛО. Здесь стояло правило «пишет от имени группы = владелец», заведённое 06.08,
+        # чтобы его анонимные сообщения доходили. Но оно признаёт владельцем ЛЮБОГО админа
+        # чата, написавшего анонимно: для бота они неотличимы. Я назвал ему эту дыру, и он
+        # закрыл её одним словом — правильно, потому что через неё чужой человек мог бы
+        # обратиться ко мне ОТ ЕГО ИМЕНИ, а я бы этого не заметил.
+        # ЧТО СТАЛО. Владелец — только он сам: его канал MUSLIMOON и два его личных номера.
+        # Больше никто, ни при каких подписях.
+        return is_owner(u)
+
     if not update.message:
         # ⭐ НИШТЯЧОК прямо В КАНАЛЕ (Muslim Live и т.п.): это update.channel_post, а не update.message —
         # весь остальной handle() такие апдейты не видит вообще (падает на этой же строке). Постить в канал
@@ -10595,26 +10624,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
     except Exception:
         pass
-
-    # 🔴 06.08.2026. АНОНИМНЫЙ АДМИН — ЭТО ТОЖЕ ВЛАДЕЛЕЦ.
-    # В чате джамаата владелец пишет от имени группы: у такого сообщения from_user — служебный
-    # GroupAnonymousBot, а настоящий отправитель спрятан в sender_chat. Все мои проверки
-    # «это владелец?» смотрели на from_user и для анонимных сообщений отвечали «нет».
-    # Отсюда разом: и «почему отвечает Groq», и «почему зов не дошёл», и «почему ботяра не
-    # ведёт к помощнику». Правила были верные — до них не доходило дело.
-    # Чужой анонимом писать не может: право говорить от имени группы есть только у админов.
-    def _хозяин(u):
-        # 🔴 07.08.2026, 21:10, ПРИКАЗ ВЛАДЕЛЬЦА: «от имени канала Муслимун я пишу. Немедленно
-        # впиши ид Муслимун только и две лички мои».
-        # ЧТО БЫЛО. Здесь стояло правило «пишет от имени группы = владелец», заведённое 06.08,
-        # чтобы его анонимные сообщения доходили. Но оно признаёт владельцем ЛЮБОГО админа
-        # чата, написавшего анонимно: для бота они неотличимы. Я назвал ему эту дыру, и он
-        # закрыл её одним словом — правильно, потому что через неё чужой человек мог бы
-        # обратиться ко мне ОТ ЕГО ИМЕНИ, а я бы этого не заметил.
-        # ЧТО СТАЛО. Владелец — только он сам: его канал MUSLIMOON и два его личных номера.
-        # Больше никто, ни при каких подписях.
-        return is_owner(u)
-
     # 🔴 ЗОВ ТЕХНАДЗОРА ЛОВИТСЯ ПЕРВЫМ, ДО ВСЕХ ПРОЧИХ ПУТЕЙ.
     # 05.08.2026: владелец написал «передай технадзору…» — и ответил ему Groq: «я этого не
     # умею». Честно, но не по адресу: передать было некому, потому что до меня это не дошло.
@@ -12191,7 +12200,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # В облачный архив — тем же форматом, чтобы по одному взгляду было видно
                     # состояние правила (обращение #103).
                     try:
-                        _ма = await application.bot.send_message(
+                        _ма = await app.bot.send_message(
                             АРХИВ_КАНАЛ,
                             '📌 <b>ПРАВИЛО #%d — ✅ ДЕЙСТВУЕТ</b> (вердикта технадзора ещё нет)\n'
                             '<blockquote>%s</blockquote>\n· записал помощник сам\n'
@@ -12263,7 +12272,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                .replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')))
                     for _куда in (LOG_CHAT_ID, АРХИВ_КАНАЛ):
                         try:
-                            await application.bot.send_message(_куда, _вид, parse_mode='HTML')
+                            await app.bot.send_message(_куда, _вид, parse_mode='HTML')
                         except Exception:
                             pass
         except Exception:
@@ -17291,18 +17300,18 @@ async def _api_serve(application=None):
         _qs = (" · 🔎 «" + re.sub(r"[*_`\[\]()]", "", str(q))[:70] + "»") if q else ""   # M301: ЗА ЧТО потрачено (текст запроса) · #501: непарный _/* в чужом тексте рвал Markdown-ссылку ВСЕГО сообщения (та же чистка, что уже была у _fr/_nm)
         _fr = (" · 📝 «" + re.sub(r"[*_`\[\]()]", "", str(frag))[:90] + "…»") if frag else ""   # #312: фрагмент потраченного текста
         try:
-            await application.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} 🤖 {feat}: {who}{loc} — {tag}{extra}{_qs}{_fr}", parse_mode="Markdown", disable_web_page_preview=True)
+            await app.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} 🤖 {feat}: {who}{loc} — {tag}{extra}{_qs}{_fr}", parse_mode="Markdown", disable_web_page_preview=True)
         except Exception:
             # B-004 «can't parse entities»: спецсимвол (_ * [ ] ` ) в имени/запросе ломал Markdown → шлём БЕЗ разметки, сообщение НЕ теряем
             try:
                 who_plain = кто_с_id(user, вид="plain")   # #232: и без разметки называем полностью — имя и номер
-                await application.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} {feat}: {who_plain}{loc_plain} — {tag}{extra}{_qs}{_fr}")
+                await app.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} {feat}: {who_plain}{loc_plain} — {tag}{extra}{_qs}{_fr}")
             except Exception:
                 pass
     async def _notify(text):
-        if application:
+        if app:
             try:
-                await application.bot.send_message(LOG_CHAT_ID, text)
+                await app.bot.send_message(LOG_CHAT_ID, text)
             except Exception:
                 pass
 
@@ -17339,7 +17348,7 @@ async def _api_serve(application=None):
         # #62: ВЛАДЕЛЬЦУ В ЛИЧКУ (OWNER_ID) + копия в рабочий журнал (LOG_CHAT_ID)
         for chat in (OWNER_ID, LOG_CHAT_ID):
             try:
-                await application.bot.send_message(chat, msg, disable_web_page_preview=True)
+                await app.bot.send_message(chat, msg, disable_web_page_preview=True)
             except Exception:
                 pass
     def _cors(resp):
@@ -17659,7 +17668,7 @@ async def _api_serve(application=None):
             # чтобы «где это записано» отвечалось одним нажатием, а не поиском.
             _ссылка_п = ''
             try:
-                _м_п = await application.bot.send_message(
+                _м_п = await app.bot.send_message(
                     АРХИВ_КАНАЛ,
                     '📌 <b>ПРАВИЛО #%d — ✅ ДЕЙСТВУЕТ</b> (внёс технадзор)\n'
                     '<blockquote>%s</blockquote>\n%s'
@@ -17848,7 +17857,7 @@ async def _api_serve(application=None):
         _ч = body.get('чат')
         чат = _ч if isinstance(_ч, str) and _ч.startswith('@') else int(_ч or LOG_CHAT_ID)
         _мид = []
-        ок, беда = await отправить_файлом(application.bot, чат, имя, текст,
+        ок, беда = await отправить_файлом(app.bot, чат, имя, текст,
                                           str(body.get('подпись') or ''),
                                           int(body['ответ_на']) if body.get('ответ_на') else None,
                                           мид_out=_мид)
@@ -17929,7 +17938,7 @@ async def _api_serve(application=None):
         # поставил ниже — и запрос честно отбило «озвучка выключена», хотя звук тут ни при чём.
         if 'видео_id' in body:
             try:
-                _м = await application.bot.send_video(
+                _м = await app.bot.send_video(
                     int(body.get('чат') or OWNER_ID), video=str(body['видео_id']),
                     caption=str(body.get('подпись') or '')[:1000], parse_mode='HTML',
                     supports_streaming=True)
@@ -17966,7 +17975,7 @@ async def _api_serve(application=None):
         if _аят and ':' in _аят:
             try:
                 _с, _а = _аят.split(':')[:2]
-                ок, что = await отправить_аят(application.bot, чат, int(_с), int(_а),
+                ок, что = await отправить_аят(app.bot, чат, int(_с), int(_а),
                                               str(body.get('чтец') or 'alafasy'),
                                               int(ответ_на) if ответ_на else None)
                 return _cors(web.json_response({'ok': ок, 'чтец': что}))
@@ -17979,7 +17988,7 @@ async def _api_serve(application=None):
                     {'ok': False, 'error': 'озвучка не собралась: ни edge-tts, ни gTTS'}))
             _г = str(body.get('голос') or '') or ГОЛОСА.get(_язык_текста(текст), ГОЛОСА['ru'])
             ок, замечание = await отправить_звук(
-                application.bot, чат, путь, int(ответ_на) if ответ_на else None,
+                app.bot, чат, путь, int(ответ_на) if ответ_на else None,
                 подпись=str(body.get('подпись') or
                             ('🔊 озвучено синтезом · голос <b>%s</b>' % _г)))
             # Возвращаем, КАКИМ голосом озвучено: 05.08.2026 владелец сказал «это одинаковые
@@ -18044,7 +18053,7 @@ async def _api_serve(application=None):
         собрано, промахи, причины = [], 0, []
         for н in range(номер - окно, номер + окно + 1):
             try:
-                м = await application.bot.forward_message(chat_id=куда, from_chat_id=чат,
+                м = await app.bot.forward_message(chat_id=куда, from_chat_id=чат,
                                                           message_id=н)
                 собрано.append({
                     'номер': н,
@@ -18079,7 +18088,7 @@ async def _api_serve(application=None):
                 })
                 # прибираем за собой: служебный архив не должен зарастать пересылками
                 try:
-                    await application.bot.delete_message(chat_id=куда, message_id=м.message_id)
+                    await app.bot.delete_message(chat_id=куда, message_id=м.message_id)
                 except Exception:
                     pass
             except Exception as _е:
@@ -18333,7 +18342,7 @@ async def _api_serve(application=None):
             текст += ''.join('</%s>' % _т for _т in reversed(_стек))
             текст += chr(10) + '…(обрезано, не влезло в одно сообщение)'
         try:
-            м = await application.bot.send_message(
+            м = await app.bot.send_message(
                 чат, текст, parse_mode='HTML', disable_web_page_preview=True,
                 reply_to_message_id=int(ответ_на) if ответ_на else None)
             # Реестр авторства: ответ на это сообщение пойдёт тому, кто его написал.
@@ -18380,7 +18389,7 @@ async def _api_serve(application=None):
             if 'parse' not in str(e).lower() and 'entities' not in str(e).lower():
                 return _cors(web.json_response({'ok': False, 'error': str(e)[:250]}, status=500))
             try:
-                м = await application.bot.send_message(
+                м = await app.bot.send_message(
                     чат, re.sub(r'<[^>]+>', '', текст)[:4000],
                     reply_to_message_id=int(ответ_на) if ответ_на else None)
                 return _cors(web.json_response({'ok': True, 'пост': getattr(м, 'message_id', None),
@@ -18415,14 +18424,14 @@ async def _api_serve(application=None):
                 новый = новый.replace(неверно, '<s>' + неверно + '</s>', 1)
             новый += ('\n\n<b>UPD ' + _now_msk() + '</b>\n' + upd)
             try:
-                await application.bot.edit_message_text(chat_id=куда, message_id=мид,
+                await app.bot.edit_message_text(chat_id=куда, message_id=мид,
                                                         text=новый[:4000], parse_mode='HTML',
                                                         disable_web_page_preview=True)
                 итог['правка'] = 'да'
             except Exception as e:
                 итог['правка'] = str(e)[:200]
         try:
-            м = await application.bot.send_message(
+            м = await app.bot.send_message(
                 куда, '✏️ <b>УТОЧНЕНИЕ к посту выше</b>\n\n' + upd,
                 parse_mode='HTML', reply_to_message_id=мид, disable_web_page_preview=True)
             итог['уточнение'] = getattr(м, 'message_id', None)
@@ -18458,7 +18467,7 @@ async def _api_serve(application=None):
         сп.append({'n': ид, 'd': _now_msk(), 't': текст[:600]})
         _data_put(DSOC_ВЫГОВОРЫ_ФАЙЛ, сп, 'выговор помощнику #%d' % ид)
         try:
-            await application.bot.send_message(
+            await app.bot.send_message(
                 LOG_CHAT_ID, '⚠️ <b>ВЫГОВОР ПОМОЩНИКУ №%d</b>\n%s' % (ид, текст[:900]),
                 parse_mode='HTML')
         except Exception:
@@ -18493,12 +18502,12 @@ async def _api_serve(application=None):
         мид = None
         try:
             пост = ('📚 <b>%s</b> — %s\n\n%s' % (метка, заголовок, текст[:3300]))
-            м = await application.bot.send_message(LOG_CHAT_ID, пост, parse_mode='HTML',
+            м = await app.bot.send_message(LOG_CHAT_ID, пост, parse_mode='HTML',
                                                   disable_web_page_preview=True)
             мид = getattr(м, 'message_id', None)
         except Exception:
             try:
-                м = await application.bot.send_message(
+                м = await app.bot.send_message(
                     LOG_CHAT_ID, '📚 %s — %s\n\n%s' % (метка, заголовок, текст[:3300]))
                 мид = getattr(м, 'message_id', None)
             except Exception:
@@ -18512,7 +18521,7 @@ async def _api_serve(application=None):
         # записано» должно отвечаться нажатием, а не поиском по каналу (тот же урок, что #131).
         ссылка_а = ''
         try:
-            _ма = await application.bot.send_message(
+            _ма = await app.bot.send_message(
                 АРХИВ_КАНАЛ, '📚 <b>НАКОПЛЕНО: %s</b> — %s\n\n%s'
                 % (метка, заголовок, текст[:3300]), parse_mode='HTML',
                 disable_web_page_preview=True)
@@ -18553,7 +18562,7 @@ async def _api_serve(application=None):
             if not _цель.get('chat'):
                 return _cors(web.json_response({'ok': False, 'error': 'бот ещё не видел ни одного «раг» после перезапуска'}))
             try:
-                await application.bot.send_message(
+                await app.bot.send_message(
                     _цель['chat'], text[:3900],
                     reply_to_message_id=_цель['msg'], disable_web_page_preview=True)
                 return _cors(web.json_response({'ok': True, 'sent': 'в_чат', 'chat': _цель['chat'],
@@ -18568,7 +18577,7 @@ async def _api_serve(application=None):
                 import io as _io
                 data = base64.b64decode(b64)
                 bio = _io.BytesIO(data); bio.name = fname
-                await application.bot.send_document(OWNER_ID, document=bio, filename=fname, caption=("🤖 #клод_сказал\n" + caption)[:1024] if caption else None)
+                await app.bot.send_document(OWNER_ID, document=bio, filename=fname, caption=("🤖 #клод_сказал\n" + caption)[:1024] if caption else None)
                 return _cors(web.json_response({'ok': True, 'sent': 'file', 'size': len(data)}))
             except Exception as e:
                 return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}), status=500)
@@ -18591,7 +18600,7 @@ async def _api_serve(application=None):
                                           '(заявки #639/#640/#642) — сними сторож с Планировщика',
                 'подавлено_с_перезапуска': _ПОДАВЛЕНО['доступность']}))
         try:
-            await application.bot.send_message(OWNER_ID, ("🤖 #клод_сказал\n" + text)[:4000])
+            await app.bot.send_message(OWNER_ID, ("🤖 #клод_сказал\n" + text)[:4000])
             return _cors(web.json_response({'ok': True}))
         except Exception as e:
             return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}), status=500)
@@ -18617,7 +18626,7 @@ async def _api_serve(application=None):
                 _куда = int(_куда)
             except Exception:
                 _куда = OWNER_ID
-            msg = await application.bot.send_poll(_куда, q, opts, is_anonymous=False, allows_multiple_answers=False)
+            msg = await app.bot.send_poll(_куда, q, opts, is_anonymous=False, allows_multiple_answers=False)
             pid = msg.poll.id
             pm = _data_get('poll_map.json', {}) or {}
             pm[pid] = {'ref': ref, 'q': q[:120], 'opts': opts, 'ts': _now_msk(), 'msg_id': msg.message_id}
@@ -19169,7 +19178,7 @@ async def _api_serve(application=None):
                 # Он прав по сути: поток писем — следствие нерешённых ошибок, а не беда уведомлений.
                 # Лечение — решать ошибки, а не гасить сигнал. Эта строка НЕПРИКОСНОВЕННА.
                 try:
-                    if application: await application.bot.send_message(OWNER_ID, _enote)
+                    if app: await app.bot.send_message(OWNER_ID, _enote)
                 except Exception: pass
                 # 🔴 08.08.2026, обращение #187: «сделай, чтобы любая ошибка, которая сюда
                 # приходит, будила сессию 69 Мини апп».
@@ -19326,10 +19335,10 @@ async def _api_serve(application=None):
             total = await loop.run_in_executor(None, wordai_put, key, val)
             await loop.run_in_executor(None, usage_log, user, "слово-ии", True, len(word), "", "")
             # уведомление ВЛАДЕЛЬЦУ: ИИ-перевод слова — проверь (может ИИ ошибся, а Arabus прав)
-            if application:
+            if app:
                 try:
                     who = кто_с_id(user)   # #232: имя · @ник · номер (виден и копируется), имя нажимаемо
-                    await application.bot.send_message(
+                    await app.bot.send_message(
                         OWNER_ID,
                         f"#ии #слово 🔤 ИИ-перевод слова: *{word}*\nПеревод: {ru}\nКорень (ИИ): {root}\n"
                         + (f"Контекст: {ctx}\n" if ctx else "") + f"Кто: {who} · всего слов: {total}\n"
@@ -19430,7 +19439,7 @@ async def _api_serve(application=None):
             await loop.run_in_executor(None, _data_put, 'devfeedback.json', fb[-500:], 'devfeedback +1')
         except Exception:
             pass
-        if application:
+        if app:
             try:
                 cap = "#замечание 🛠 От владельца Claude:\n" + text + (("\n📍 " + ctx) if ctx else "")
                 if img and isinstance(img, str) and img.startswith('data:image'):
@@ -19438,9 +19447,9 @@ async def _api_serve(application=None):
                     from io import BytesIO
                     raw = base64.b64decode(img.split(',', 1)[1])
                     bio = BytesIO(raw); bio.name = 'feedback.jpg'
-                    await application.bot.send_photo(LOG_CHAT_ID, photo=bio, caption=cap[:1000])
+                    await app.bot.send_photo(LOG_CHAT_ID, photo=bio, caption=cap[:1000])
                 else:
-                    await application.bot.send_message(LOG_CHAT_ID, cap, disable_web_page_preview=True)
+                    await app.bot.send_message(LOG_CHAT_ID, cap, disable_web_page_preview=True)
             except Exception:
                 pass
         return _cors(web.json_response({'ok': True}))
@@ -19976,7 +19985,7 @@ async def _api_serve(application=None):
                 from io import BytesIO
                 raw = base64.b64decode(img.split(',', 1)[1])
                 bio = BytesIO(raw); bio.name = 'feedback.jpg'
-                await application.bot.send_photo(LOG_CHAT_ID, photo=bio, caption=cap[:1000])
+                await app.bot.send_photo(LOG_CHAT_ID, photo=bio, caption=cap[:1000])
             except Exception:
                 await _notify(cap)
         else:
@@ -20324,20 +20333,20 @@ async def _api_serve(application=None):
                         # supports_streaming: иначе Telegram отдаёт ролик файлом, и его надо
                         # скачивать, чтобы посмотреть. Для вертикального ролика это убивает
                         # весь смысл — его смотрят на ходу, не скачивая.
-                        _м = await application.bot.send_video(chat, video=bytes(data),
+                        _м = await app.bot.send_video(chat, video=bytes(data),
                                                               filename=filename, caption=подпись,
                                                               supports_streaming=True)
                     elif вид in ('фото', 'картинка', 'photo', 'image'):
                         # #255: образцы шрифтов и прочие картинки. Именно send_photo, а не
                         # документом: документ надо скачать, чтобы увидеть, а картинку смотрят
                         # прямо в ленте — для голосования это и есть весь смысл.
-                        _м = await application.bot.send_photo(chat, photo=bytes(data),
+                        _м = await app.bot.send_photo(chat, photo=bytes(data),
                                                               caption=подпись)
                     elif вид in ('аудио', 'audio'):
-                        _м = await application.bot.send_audio(chat, audio=bytes(data),
+                        _м = await app.bot.send_audio(chat, audio=bytes(data),
                                                               filename=filename, caption=подпись)
                     else:
-                        _м = await application.bot.send_document(chat, document=bytes(data),
+                        _м = await app.bot.send_document(chat, document=bytes(data),
                                                                   filename=filename, caption=подпись)
                     sent.append(chat)
                     try:
@@ -20402,7 +20411,7 @@ async def _api_serve(application=None):
             from telegram import InputMediaDocument
             м = InputMediaDocument(media=bytes(data), filename=filename,
                                    caption=(подпись or None), parse_mode='HTML')
-            await application.bot.edit_message_media(chat_id=чат, message_id=номер, media=м)
+            await app.bot.edit_message_media(chat_id=чат, message_id=номер, media=м)
             return _cors(web.json_response({'ok': True, 'чат': чат, 'номер': номер,
                                             'размер': len(data)}))
         except Exception as e:
@@ -20463,7 +20472,7 @@ async def _req_imgs_export(application):
         n = 0
         for r in todo[:30]:
             try:
-                f = await application.bot.get_file(r["imgkey"])
+                f = await app.bot.get_file(r["imgkey"])
                 import base64
                 from io import BytesIO
                 bio = BytesIO()
@@ -20477,7 +20486,7 @@ async def _req_imgs_export(application):
         if n:
             _journal_save("выгружено скринов заявок: %d" % n)
             try:
-                await application.bot.send_message(OWNER_ID, "📤 Скрины твоих заявок выгружены в журнал (%d шт) — Claude теперь видит их сам." % n)
+                await app.bot.send_message(OWNER_ID, "📤 Скрины твоих заявок выгружены в журнал (%d шт) — Claude теперь видит их сам." % n)
             except Exception:
                 pass
     except Exception as e:
@@ -20500,7 +20509,7 @@ async def _setup(application):
             _строки.append("📝 " + _сообщ)
         _строки.append("Открывать Railway не нужно: пришло это сообщение — значит деплой "
                        "закончен и бот жив.")
-        await application.bot.send_message(LOG_CHAT_ID, chr(10).join(_строки))
+        await app.bot.send_message(LOG_CHAT_ID, chr(10).join(_строки))
     except Exception:
         pass
     try:
@@ -20516,8 +20525,8 @@ async def _setup(application):
         from telegram import MenuButtonWebApp, WebAppInfo
         btn = MenuButtonWebApp(text="𝗠𝗨𝗦𝗟𝗜𝗠𝗢𝗢𝗡-𝗔𝗣𝗣", web_app=WebAppInfo(url=WEBAPP_URL))   # имя кнопки приложения — вариант владельца
         # кнопка «🔎 Поиск» по умолчанию для ВСЕХ (доступ внутри решает сервер G9)
-        await application.bot.set_chat_menu_button(menu_button=btn)
-        await application.bot.set_chat_menu_button(chat_id=OWNER_ID, menu_button=btn)
+        await app.bot.set_chat_menu_button(menu_button=btn)
+        await app.bot.set_chat_menu_button(chat_id=OWNER_ID, menu_button=btn)
     except Exception as e:
         print("menu button setup failed:", e)
     try:
@@ -20540,7 +20549,7 @@ async def _setup(application):
         else:
             try:
                 msg = "#деплой ✅ *Обновление готово!*\n" + (note if note else "Бот снова в эфире.")
-                await application.bot.send_message(LOG_CHAT_ID, msg, parse_mode="Markdown")
+                await app.bot.send_message(LOG_CHAT_ID, msg, parse_mode="Markdown")
             except Exception:
                 pass
             if note:
@@ -20555,7 +20564,7 @@ async def _setup(application):
             if rj.status_code == 200:
                 jn = base64.b64decode(rj.json().get("content", "")).decode("utf-8").strip()
             if jn and jn != (j.get("journal_note") or {}).get("note", ""):
-                await application.bot.send_message(LOG_CHAT_ID, jn, disable_web_page_preview=True)
+                await app.bot.send_message(LOG_CHAT_ID, jn, disable_web_page_preview=True)
                 j["journal_note"] = {"note": jn, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
                 _journal_save("journal_note → LOG")
         except Exception:
@@ -20608,13 +20617,13 @@ async def _razbory_fetch_bg(application):
         except Exception: pass
         return
     try:
-        await application.bot.send_message(OWNER_ID, f"📥 Авто-обработка разборов {CH}: тяну {len(missing)} постов (из {HI-LO+1}). Аудио → Whisper → сохраняю по мере готовности.")
+        await app.bot.send_message(OWNER_ID, f"📥 Авто-обработка разборов {CH}: тяну {len(missing)} постов (из {HI-LO+1}). Аудио → Whisper → сохраняю по мере готовности.")
     except Exception:
         pass
     done = 0
     for mid in missing:
         try:
-            m = await application.bot.forward_message(LOG_CHAT_ID, CH, mid)
+            m = await app.bot.forward_message(LOG_CHAT_ID, CH, mid)
             txt = (m.text or m.caption or "").strip()
             kind = "text"
             if (m.voice or m.audio) and len(txt) < 60:
@@ -20629,7 +20638,7 @@ async def _razbory_fetch_bg(application):
                     txt = (txt + "\n" + tr).strip()
                 try: os.remove(p)
                 except Exception: pass
-            try: await application.bot.delete_message(LOG_CHAT_ID, m.message_id)
+            try: await app.bot.delete_message(LOG_CHAT_ID, m.message_id)
             except Exception: pass
             if txt:
                 store[str(mid)] = {"text": txt[:9000], "kind": kind, "url": f"https://t.me/hadis_isnad/{mid}", "n": mid}
@@ -20644,7 +20653,7 @@ async def _razbory_fetch_bg(application):
     try: _data_put("razbory.json", store, f"razbory bg done: {len(store)} (#147)")
     except Exception: pass
     try:
-        await application.bot.send_message(OWNER_ID, f"✅ Разборы: в базе {len(store)} (data/razbory.json). Больше авто-обработка не перезапускается. Claude оформит карточки.")
+        await app.bot.send_message(OWNER_ID, f"✅ Разборы: в базе {len(store)} (data/razbory.json). Больше авто-обработка не перезапускается. Claude оформит карточки.")
     except Exception:
         pass
 
@@ -20955,7 +20964,7 @@ async def _app_channel_watcher(application):
                     if _пора:
                         for _з in _пора[:30]:      # по чуть-чуть: не долбить Telegram пачкой
                             try:
-                                await application.bot.delete_message(chat_id=int(_з['чат']),
+                                await app.bot.delete_message(chat_id=int(_з['чат']),
                                                                      message_id=int(_з['смс']))
                             except Exception:
                                 pass               # уже удалено руками или прав нет — не беда
@@ -21050,7 +21059,7 @@ async def _app_channel_watcher(application):
                                 _мимо.append(_мид + " (нет текста)"); continue
                             try:
                                 _p, _b = _format_channel_post(_clean_announce(_нота))
-                                await application.bot.edit_message_text(chat_id=APP_CHANNEL_ID, message_id=int(_мид),
+                                await app.bot.edit_message_text(chat_id=APP_CHANNEL_ID, message_id=int(_мид),
                                                                         text=_b, parse_mode="HTML",
                                                                         disable_web_page_preview=True)
                                 _почищено.append(_мид)
@@ -21101,7 +21110,7 @@ async def _app_channel_watcher(application):
                         _journal_save("чистка постов канала: переписано %d, не вышло %d"
                                       % (len(_почищено), len(_мимо)))
                         try:
-                            await application.bot.send_message(OWNER_ID,
+                            await app.bot.send_message(OWNER_ID,
                                 "🧹 Чистка постов канала: переписано %s%s"
                                 % (", ".join(_почищено) or "—",
                                    (chr(10)+"не вышло: " + ", ".join(_мимо)) if _мимо else ""))
@@ -21121,7 +21130,7 @@ async def _app_channel_watcher(application):
                     _jj = _journal_load()
                     _метка = _текст[:40]
                     if _текст and _метка != (_jj.get("jamaat_note") or {}).get("flag", ""):
-                        await application.bot.send_message(JAMAAT_RU_CHAT_ID, _текст,
+                        await app.bot.send_message(JAMAAT_RU_CHAT_ID, _текст,
                                                            parse_mode="HTML", disable_web_page_preview=True)
                         _jj["jamaat_note"] = {"flag": _метка, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
                         _journal_save("объявление о RAG → @jamaat_ru")
@@ -21136,7 +21145,7 @@ async def _app_channel_watcher(application):
                     flag = base64.b64decode(rf.json().get("content", "")).decode("utf-8").strip()
                     jm = _journal_load()
                     if flag and flag != (jm.get("manifest_post") or {}).get("flag", ""):
-                        await application.bot.send_document(APP_CHANNEL_ID,
+                        await app.bot.send_document(APP_CHANNEL_ID,
                             document="https://germanyalfurqan-eng.github.io/hadith-bot/manifest.pdf",
                             caption="⚖️ МАНИФЕСТ О ПРОГРАММЕ «MUSLIMOON APP» — фундамент проекта (Конституция проекта). 11.06.2026")
                         jm["manifest_post"] = {"flag": flag, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
@@ -21152,9 +21161,9 @@ async def _app_channel_watcher(application):
                     jb = _journal_load()
                     if bnote and bnote != (jb.get("backup_post") or {}).get("note", ""):
                         _btxt = "💾 " + bnote
-                        try: await application.bot.send_message(LOG_CHAT_ID, _btxt)
+                        try: await app.bot.send_message(LOG_CHAT_ID, _btxt)
                         except Exception: pass
-                        try: await application.bot.send_message(OWNER_ID, _btxt)
+                        try: await app.bot.send_message(OWNER_ID, _btxt)
                         except Exception: pass
                         jb["backup_post"] = {"note": bnote, "d": datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
                         _journal_save("backup_post → рабочий журнал + ЛС владельца")
@@ -21247,9 +21256,9 @@ async def _app_channel_watcher(application):
                                          "чуть не вышло ДВА одинаковых поста подряд про одно и то же обновление. "
                                          "Это моя защита сработала как надо, действий от тебя не требуется.\n\n"
                                          f"📋 Про какое обновление речь:\n{(item['note'] or '')[:250]}")
-                                try: await application.bot.send_message(LOG_CHAT_ID, _atxt)
+                                try: await app.bot.send_message(LOG_CHAT_ID, _atxt)
                                 except Exception: pass
-                                try: await application.bot.send_message(OWNER_ID, _atxt)
+                                try: await app.bot.send_message(OWNER_ID, _atxt)
                                 except Exception: pass
                             continue
                         # 🔴 ВЫГОВОР В-41 (владелец 01.08.2026: «ты всё это время не описывал обновления
@@ -21301,7 +21310,7 @@ async def _app_channel_watcher(application):
                                       % (item["id"], len(_чист), len(_сыро), _сыро[:1500]))
                                 for _ч in (OWNER_ID, LOG_CHAT_ID):
                                     try:
-                                        await application.bot.send_message(_ч, _t)
+                                        await app.bot.send_message(_ч, _t)
                                     except Exception:
                                         pass
                             continue
@@ -21309,7 +21318,7 @@ async def _app_channel_watcher(application):
                             # note_id — НАСТОЯЩИЙ id версии из очереди. Именно под ним постер
                             # запишет номер поста в app_post_msgids, и доставку станет видно по
                             # закону З-47 (раньше ключ выводился из текста ноты и был мусорным).
-                            await _post_app_channel(application.bot, item["note"], note_id=item["id"])
+                            await _post_app_channel(app.bot, item["note"], note_id=item["id"])
                             posted_now += 1
                             def _сброс(obj, _id=item["id"]):     # вышло — счётчик неудач обнуляем
                                 obj = obj or {}
@@ -21369,7 +21378,7 @@ async def _app_channel_watcher(application):
                                              "попытки, версия отложится и я скажу отдельно."
                                              % (item["id"], str(_e_post)[:300]))
                                 for _чат in (OWNER_ID, LOG_CHAT_ID):
-                                    try: await application.bot.send_message(_чат, _txt_fail)
+                                    try: await app.bot.send_message(_чат, _txt_fail)
                                     except Exception: pass
                             elif _n_бывш == 2:
                                 _txt_fail = ("Обновление %s отложено: три неудачных попытки публикации подряд. "
@@ -21377,7 +21386,7 @@ async def _app_channel_watcher(application):
                                              "Последняя причина: %s\n\nПроверь, остаётся ли бот администратором "
                                              "@muslimoonapp с правом публикации." % (item["id"], str(_e_post)[:300]))
                                 for _чат in (OWNER_ID, LOG_CHAT_ID):
-                                    try: await application.bot.send_message(_чат, _txt_fail)
+                                    try: await app.bot.send_message(_чат, _txt_fail)
                                     except Exception: pass
                             continue   # соседние версии не теряем — идём дальше по очереди
                         await asyncio.sleep(2)   # пауза между постами — не флудить Telegram API
