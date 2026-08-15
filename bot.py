@@ -13055,10 +13055,15 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     # Через lambda, а не functools.partial: functools в bot.py не
                     # импортирован — код бы собрался и упал уже в живом чате.
+                    # Вложение едет ВМЕСТЕ с заявкой (#714: «видео озвучь переводом» записалось
+                    # без видео, и через сутки ролик пришлось искать перебором чата).
+                    _вл = _вложение_заявки(update.message)
                     _рид = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda: req_add('🟩 [DSOC] ' + _зтек, src='🤝 помощник'))
-                    собрано += ('\n\n📌 Записал по-настоящему — заявка приложения №%d.'
-                                % _рид)
+                        None, lambda: req_add('🟩 [DSOC] ' + _зтек, src='🤝 помощник',
+                                              влож=_вл))
+                    собрано += ('\n\n📌 Записал по-настоящему — заявка приложения №%d.%s'
+                                % (_рид, (' Файл (%s) запомнил вместе с ней — искать потом '
+                                          'не придётся.' % _вл['вид']) if _вл else ''))
                     await asyncio.get_event_loop().run_in_executor(
                         None, _тревога_владельцу,
                         '📌 <b>Заявка №%d</b> (помощник обещал записать — записано заслоном '
@@ -16938,7 +16943,45 @@ def feedback_add(user, ctx, txt, has_img=False):
 def _now_msk():
     """Точное московское время (сервер Railway в UTC; МСК = UTC+3). Для всех заявок — по требованию владельца."""
     return (datetime.utcnow() + timedelta(hours=3)).strftime("%d.%m.%Y %H:%M МСК")
-def req_add(txt, img_flag=False, imgkey="", src="🤖 бот"):
+def _вложение_заявки(msg):
+    """Куда потом идти за файлом, о котором заявка. None — если файла нет.
+
+    🔴 16.08.2026, заявка #714. Владелец попросил: «видео озвучь переводом на русский». Заявка
+    записалась исправно — а САМО ВИДЕО в ней не сохранилось: `img:false`, `imgkey` пустой.
+    Заявка ПРО ФАЙЛ осталась без файла. Через сутки, когда пришло время исполнять, искать ролик
+    пришлось перебором сообщений чата и гадать между двумя найденными.
+    Храним не только file_id (он у Telegram живёт долго, но не вечно), а ещё чат и номер
+    сообщения: по ним видео можно достать всегда, пока сообщение не удалили.
+    ⚠️ Смотрим И на само сообщение, И на то, на которое ОТВЕТИЛИ: «озвучь вот это» — обычный
+    способ показать пальцем, и именно так была подана #714.
+    """
+    try:
+        for _м, _где in ((msg, 'в самой просьбе'),
+                         (getattr(msg, 'reply_to_message', None), 'в отмеченном сообщении')):
+            if _м is None:
+                continue
+            for _поле, _вид in (('video', 'видео'), ('video_note', 'кружок'),
+                                ('animation', 'гифка'), ('audio', 'аудио'),
+                                ('voice', 'голосовое'), ('document', 'документ')):
+                _о = getattr(_м, _поле, None)
+                if _о is not None:
+                    return {'вид': _вид, 'file_id': getattr(_о, 'file_id', ''),
+                            'чат': getattr(getattr(_м, 'chat', None), 'id', None),
+                            'смс': getattr(_м, 'message_id', None), 'где': _где,
+                            'вес': int(getattr(_о, 'file_size', 0) or 0),
+                            'секунд': int(getattr(_о, 'duration', 0) or 0)}
+            _ф = getattr(_м, 'photo', None)
+            if _ф:
+                return {'вид': 'фото', 'file_id': _ф[-1].file_id,
+                        'чат': getattr(getattr(_м, 'chat', None), 'id', None),
+                        'смс': getattr(_м, 'message_id', None), 'где': _где,
+                        'вес': int(getattr(_ф[-1], 'file_size', 0) or 0), 'секунд': 0}
+    except Exception:
+        pass
+    return None
+
+
+def req_add(txt, img_flag=False, imgkey="", src="🤖 бот", влож=None):
     """Заявка/замечание ВЛАДЕЛЬЦА → нумерованный журнал requests[] (отдельно от пользовательских feedback[]).
     M286: номер ПРОДОЛЖАЕТ сквозной ряд #NNN — берём max(счётчик, максимальный id в журнале), чтобы
     нумерация НИКОГДА не откатывалась к №1 (даже если req_seq потерялся при пересборке журнала).
@@ -16953,8 +16996,11 @@ def req_add(txt, img_flag=False, imgkey="", src="🤖 бот"):
     # 🔴 10.08.2026, тот же класс, что и в очереди технадзора: [:1500] резал ЗАЯВКУ владельца
     # молча и по середине слова. Реестр заявок — главная память проекта о его словах; хранить
     # там половину просьбы и не знать об этом хуже, чем не хранить вовсе.
-    j.setdefault("requests", []).insert(0, {"id": rid, "d": _now_msk(), "src": src,
-                                            "t": (txt or "")[:20000], "img": bool(img_flag), "imgkey": imgkey, "done": False})
+    _зап = {"id": rid, "d": _now_msk(), "src": src,
+            "t": (txt or "")[:20000], "img": bool(img_flag), "imgkey": imgkey, "done": False}
+    if влож:
+        _зап["влож"] = влож          # см. _вложение_заявки: заявка про файл обязана помнить файл
+    j.setdefault("requests", []).insert(0, _зап)
     j["requests"] = j["requests"][:1000]
     _journal_save(f"заявка #{rid}")
     return rid
