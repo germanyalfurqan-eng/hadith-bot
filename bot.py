@@ -14270,6 +14270,48 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await update.message.reply_text("Перешли мне (форвардом) сам пост из @muslimoonapp, потом ОТВЕТЬ на пересланное сообщение словами «удали дубль».")
             return
+        # ===== «УДАЛИ ЭТО» ОТВЕТОМ — УБРАТЬ ИМЕННО ТО СООБЩЕНИЕ (16.08.2026, приказ владельца)
+        # 🔴 ПОВОД. Я озвучил не то видео и выложил его в чат. Владелец ответил на мой ролик:
+        # «Ты не то видео сделал. Удали это». Помощник ответил: «не нашёл этого в памяти
+        # разговора — отметь именно ту реплику, которую надо выкинуть». Он понял «удали» как
+        # «забудь из памяти», хотя человек показал пальцем на сообщение и просил убрать его
+        # ИЗ ЧАТА. Владелец: «разберись в контексте диалога и научи его».
+        # ЧИНИМ СПОСОБНОСТЬЮ, А НЕ ФОРМУЛИРОВКОЙ. Раньше удаление умело работать только с
+        # ПЕРЕСЛАННЫМ постом канала — то есть требовало обряда, которого никто не знает.
+        # Ответить на сообщение и сказать «удали это» — обычный человеческий способ, и он
+        # обязан работать. Сообщение при этом указано точно, гадать не о чем.
+        if (re.match(r'^\s*удали(\s+(это|её|ее|его|сообщение|видео|пост|файл|это\s+сообщение))?\s*[!.]*\s*$',
+                     _tl) and update.message.reply_to_message):
+            _цель_у = update.message.reply_to_message
+            _чат_у = update.effective_chat.id
+            _мид_у = _цель_у.message_id
+            try:
+                await context.bot.delete_message(_чат_у, _мид_у)
+                _ок_у = await update.message.reply_text('🗑 Убрал то сообщение (%s).' % _мид_у)
+                # Своё «убрал» тоже уносим через минуту: расписка о чистке, которая сама
+                # остаётся мусором в чате, — это чистка наполовину.
+                try:
+                    _оч = _data_get('удалить_позже.json', None) or []
+                    if isinstance(_оч, list):
+                        _оч.append({'чат': _чат_у, 'смс': _ок_у.message_id,
+                                    'до': time.time() + 60})
+                        _data_put('удалить_позже.json', _оч[-400:], 'расписка об удалении')
+                except Exception:
+                    pass
+            except Exception as _еу:
+                _ну = str(_еу).lower()
+                if "message can't be deleted" in _ну or "message to delete not found" in _ну:
+                    _п = ('Это сообщение уже не убрать: Telegram разрешает боту удалять только '
+                          'то, что моложе 48 часов, и только своё либо при праве администратора.')
+                elif ('not enough rights' in _ну or 'chat_admin_required' in _ну
+                      or 'can_delete' in _ну or 'need administrator' in _ну):
+                    _п = ('У меня нет права «Удаление сообщений» в этом чате — выдайте его боту '
+                          'в настройках администраторов, и я уберу сам.')
+                else:
+                    _п = 'Причина не опознана.'
+                await update.message.reply_text(
+                    '❌ Не смог удалить. %s\nДословно от Telegram: %s' % (_п, str(_еу)[:150]))
+            return
         if _tl in ("ошибки", "журнал ошибок", "errors"):
             errs = _data_get("errors.json", []) or []
             open_errs = [e for e in errs if not e.get('fixed')]
@@ -18516,6 +18558,39 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': ок, 'error': беда, 'пост': _n,
                                         'ссылка': _ссылка}))
 
+    async def udalit(r):
+        """Убрать сообщение из чата по номеру (16.08.2026). Пара к `ozvuchit`.
+
+        Понадобилось сразу же: я выложил в чат озвученный ролик, а он оказался НЕ ТЕМ.
+        Владелец сказал «удали это» — и убрать за собой мне было нечем. Кто кладёт в чат,
+        тот обязан уметь и убрать: иначе за каждой моей ошибкой приходится ходить человеку.
+        """
+        if not application or not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            return _cors(web.json_response({'error': 'bad_json'}, status=400))
+        if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        try:
+            чат = int(body.get('чат'))
+        except Exception:
+            return _cors(web.json_response({'error': 'нужен числовой id чата'}, status=400))
+        смс = body.get('смс')
+        номера = [int(x) for x in (смс if isinstance(смс, list) else [смс]) if x]
+        if not номера or len(номера) > 50:
+            return _cors(web.json_response({'error': 'нужен «смс» (до 50 номеров)'}, status=400))
+        убрано, не_вышло = [], {}
+        for _н in номера:
+            try:
+                await app.bot.delete_message(чат, _н)
+                убрано.append(_н)
+            except Exception as _е:
+                не_вышло[str(_н)] = str(_е)[:120]
+        return _cors(web.json_response({'ok': bool(убрано), 'убрано': убрано,
+                                        'не_вышло': не_вышло}))
+
     async def ozvuchit(r):
         """Озвучить переводом ВИДЕО, которое уже лежит в чате (заявка #714, приказ 16.08.2026).
 
@@ -21200,7 +21275,7 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True}))
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/samotest', samotest), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
