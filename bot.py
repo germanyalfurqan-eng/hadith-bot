@@ -18470,6 +18470,118 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': ок, 'error': беда, 'пост': _n,
                                         'ссылка': _ссылка}))
 
+    async def ozvuchit(r):
+        """Озвучить переводом ВИДЕО, которое уже лежит в чате (заявка #714, приказ 16.08.2026).
+
+        🔴 ЗАЧЕМ ОТДЕЛЬНАЯ ДВЕРЬ. Умение дублировать видео я сделал, но сработать оно могло
+        только когда владелец сам укажет боту на ролик. Я так ему и сказал — «до вашего
+        вложения не дотянусь». Он ответил: «можешь дотянись и исполни, это приказ». И он прав:
+        достать было чем, я просто не искал. Бот состоит в чате, а состоящий в чате бот умеет
+        ПЕРЕСЛАТЬ себе любое сообщение по номеру — ровно так работает разбор постов из
+        @hadis_isnad. Пересланная копия несёт file_id вложения, и дальше всё уже есть.
+
+        Принимает: чат + либо `смс` (номер сообщения), либо `от`/`до` — тогда ищем видео в
+        диапазоне, при желании с проверкой подписи (`подпись`). Найденное пересылаем себе в
+        служебный чат, забираем file_id, служебную копию удаляем.
+        """
+        if not application or not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            return _cors(web.json_response({'error': 'bad_json'}, status=400))
+        if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        _ч = body.get('чат')
+        чат = _ч if isinstance(_ч, str) and str(_ч).startswith('@') else int(_ч or LOG_CHAT_ID)
+        куда = int(body.get('куда') or OWNER_ID)
+        громкость = float(body.get('громкость') or 0.15)
+        подпись_ищем = str(body.get('подпись') or '').strip().lower()
+        если_смс = body.get('смс')
+        диапазон = ([int(если_смс)] if если_смс
+                    else list(range(int(body.get('от') or 0), int(body.get('до') or 0) + 1)))
+        if not диапазон or not диапазон[0]:
+            return _cors(web.json_response({'error': 'нужен «смс» либо «от»/«до»'}, status=400))
+        if len(диапазон) > 300:
+            return _cors(web.json_response({'error': 'диапазон больше 300 — сузьте'}, status=400))
+
+        найдено = None
+        осмотрено = 0
+        for _мид in диапазон:
+            try:
+                _коп = await app.bot.forward_message(LOG_CHAT_ID, чат, _мид)
+            except Exception:
+                continue          # сообщения нет, оно удалено или переслать нельзя — идём дальше
+            осмотрено += 1
+            _вид = getattr(_коп, 'video', None) or getattr(_коп, 'video_note', None)
+            _подп = ((getattr(_коп, 'caption', None) or getattr(_коп, 'text', None) or '')
+                     .strip().lower())
+            _подходит = bool(_вид) and (not подпись_ищем or подпись_ищем in _подп)
+            if _подходит and найдено is None:
+                найдено = {'file_id': _вид.file_id, 'смс': _мид,
+                           'подпись': _подп[:200],
+                           'размер': int(getattr(_вид, 'file_size', 0) or 0)}
+            try:
+                await app.bot.delete_message(LOG_CHAT_ID, _коп.message_id)
+            except Exception:
+                pass              # служебная копия не убралась — не повод ронять работу
+            if найдено:
+                break
+        if not найдено:
+            return _cors(web.json_response(
+                {'ok': False, 'error': 'видео в этом диапазоне не нашлось',
+                 'осмотрено': осмотрено}, status=404))
+
+        _папка = os.path.join('/tmp', 'dub_api_%s' % найдено['смс'])
+        try:
+            os.makedirs(_папка, exist_ok=True)
+            _исх = os.path.join(_папка, 'исходник.mp4')
+            try:
+                _ф = await app.bot.get_file(найдено['file_id'])
+                await _ф.download_to_drive(_исх)
+            except Exception as _е:
+                return _cors(web.json_response(
+                    {'ok': False, 'найдено': найдено,
+                     'error': 'видео найдено, но не скачалось: %s. У Telegram потолок '
+                              'скачивания ботом — 20 МБ.' % str(_е)[:150]}, status=413))
+            _ст = await app.bot.send_message(
+                куда, '🎙 Нашёл то самое видео (сообщение %s) и взял в работу. '
+                      'Распознать, перевести, наговорить и свести — несколько минут.'
+                      % найдено['смс'])
+
+            async def _ход(т):
+                try:
+                    await app.bot.edit_message_text(chat_id=куда, message_id=_ст.message_id,
+                                                    text=т)
+                except Exception:
+                    pass
+
+            _гот, _отч, _срт = await дубляж_видео(_исх, _папка, _ход, громкость)
+            if _гот:
+                with io.open(_гот, 'rb') as _фг:
+                    await app.bot.send_video(куда, _фг, caption=_отч[:1000], parse_mode='HTML',
+                                             supports_streaming=True)
+                try:
+                    await app.bot.delete_message(куда, _ст.message_id)
+                except Exception:
+                    pass
+            else:
+                await _ход('🔴 Озвучка не собралась: %s' % _отч)
+            if _срт and os.path.exists(_срт):
+                with io.open(_срт, 'rb') as _фс:
+                    await app.bot.send_document(куда, _фс, filename='perevod_ru.srt',
+                                                caption='📝 Русские субтитры отдельным файлом.')
+            return _cors(web.json_response({'ok': bool(_гот), 'найдено': найдено,
+                                            'отчёт': _отч, 'осмотрено': осмотрено}))
+        except Exception as _е2:
+            return _cors(web.json_response({'ok': False, 'найдено': найдено,
+                                            'error': str(_е2)[:300]}, status=500))
+        finally:
+            try:
+                shutil.rmtree(_папка, ignore_errors=True)
+            except Exception:
+                pass
+
     async def oc_balans(r):
         """Остаток на счёте OpenCode — по данным самого OpenCode, а не нашего журнала.
 
@@ -21030,7 +21142,7 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True}))
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/samotest', samotest), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/samotest', samotest), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
