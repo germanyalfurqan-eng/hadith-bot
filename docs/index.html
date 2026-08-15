@@ -716,7 +716,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1386</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1387</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1386';
+const APPVER = 'v1387';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6418,7 +6418,20 @@ async function maktabaByNum(seq, n){
     edTgl.style.background=open?'var(--btn)':''; edTgl.style.color=open?'#fff':'var(--hint)'; edTgl.style.borderColor=open?'var(--btn)':'var(--border)';
     Object.values(canonSlots).forEach(sl=>{ if(!sl.__edBtn) return; sl.__edBtn.__open=open;
       sl.querySelectorAll('.canonEd').forEach(c=>{ c.style.display=open?'':'none'; }); _edBtnPaint(sl.__edBtn, sl); }); };
-  edTglBox.appendChild(edTgl); res.insertBefore(edTglBox, listCanon);
+  edTglBox.appendChild(edTgl);
+  /* Защита от второго тумблера — ПРО ЗАПАС, а не по факту поломки. Честно, чтобы не ввести
+     в заблуждение следующего: на скрине владельца к заявке #709 тумблер «показать все доп.
+     печати» виден ДВАЖДЫ (над «ищу дальше…» и под ним), но это была старая версия. На v1386
+     я проверил дважды — обычным подсчётом и наблюдателем за всё время загрузки: тумблер
+     ВСЕГДА один, второго не бывает даже мельком. (Моё первое «нашёл дубль» было ошибкой
+     счёта: я принял обёртку-div за второй элемент.)
+     Guard оставлен потому, что элемент вставляется во время постепенной отрисовки, и два
+     тумблера, спорящие за одно состояние, — беда сама по себе: нажал верхний, нижний остался
+     с прежней галочкой. Стоит копейки, ловит целый класс. */
+  edTglBox.className='edTglBox';
+  const _ужеЕсть=res.querySelector('.edTglBox');
+  if(_ужеЕсть){ try{ _ужеЕсть.parentNode.removeChild(_ужеЕсть); }catch(e){} }
+  res.insertBefore(edTglBox, listCanon);
   const tail=document.createElement('div'); tail.style.cssText='text-align:center;margin:10px 0;animation:fadeInUp .25s ease-out both';   // #635: плавное появление свода «⏳ ищу дальше…»/«ещё книги»
   const more=document.createElement('button'); more.className='mini'; more.style.cssText='border:1px solid var(--border);padding:8px 16px;border-radius:10px'; more.textContent='⬇️ Ещё книги с №'+n;
   tail.appendChild(more); res.appendChild(tail);
@@ -7524,6 +7537,102 @@ async function onWordTap(word, el, ctx){
   e=e||['','',''];
   showWordPopup(el, word, e[0], e[1], e[2], ctx);
 }
+/* Транскрипция арабского слова русскими буквами — заявка #696.
+
+   ⚠️ ПОЧЕМУ НЕЛЬЗЯ «ПРОСТО ЗАМЕНИТЬ БУКВЫ». Первый мой заход именно так и делал, и проверка
+   на известных словах вскрыла четыре беды разом:
+     رَبِّ      → «рабии» вместо «рабби»  — удвоение цеплялось за ГЛАСНУЮ, а не за согласную;
+     هُوَ       → «хӯа»  вместо «хува»   — و принимали за долгую «у», хотя на ней своя фатха;
+     ٱلرَّحْمَٰنِ → «лраах̣маани»           — не слились солнечные буквы и потерялась начальная «а»;
+     ٱللَّٰهِ    → «ллаахи»                — надстрочный алиф читался как ещё одна краткая «а».
+   В тексте Корана такая «помощь» хуже её отсутствия: человек станет читать неверно.
+
+   Поэтому разбираем слово на СЛОГИ: (согласная, удвоение?, огласовка?, долгота?) — и только
+   потом собираем русскими буквами. Долгота видна из самого письма: ا после фатхи, و после
+   даммы, ي после касры, надстрочный алиф ٰ. Где огласовки нет — не выдумываем гласную.
+
+   Что русскими буквами передать НЕЛЬЗЯ, и мы это честно помечаем значками, а не подменяем:
+   ع (ʿ), ح (х̣), خ (х), ق (к̣), ط (т̣), ص (с̣), ض (д̣), ظ (з̣), ث (с̱), ذ (з̱).
+*/
+
+const AR_СОГЛ = {
+  'ب':'б','ت':'т','ث':'с̱','ج':'дж','ح':'х̣','خ':'х','د':'д','ذ':'з̱','ر':'р','ز':'з',
+  'س':'с','ش':'ш','ص':'с̣','ض':'д̣','ط':'т̣','ظ':'з̣','ع':'ʿ','غ':'г','ف':'ф','ق':'к̣',
+  'ك':'к','ل':'л','م':'м','ن':'н','ه':'х','و':'в','ي':'й','ء':'’','أ':'’','إ':'’',
+  'ئ':'’','ؤ':'’','ة':'т','ٱ':'','ا':''
+};
+// солнечные буквы: артикль «аль-» перед ними сливается — «ар-Рах̣ма̄н», а не «аль-Рах̣ма̄н»
+const AR_СОЛНЕЧНЫЕ = new Set(['ت','ث','د','ذ','ر','ز','س','ش','ص','ض','ط','ظ','ل','ن']);
+const ФАТ='َ', КАС='ِ', ДАМ='ُ', СУК='ْ', ШАД='ّ';
+const ТАНВИН={'ً':'ан','ٍ':'ин','ٌ':'ун'};
+const ДАГГЕР='ٰ';           // надстрочный алиф — ДОЛГАЯ «а̄»
+const ЗНАКИ=new Set(['ٓ','ٔ','ٕ','ـ','ۡ','۟','۠']);
+
+function транскрипцияАР(слово){
+  const s=(слово||'').trim();
+  if(!s) return '';
+  // ① разбор на слоги
+  const слоги=[]; let i=0;
+  while(i<s.length){
+    const c=s[i];
+    if(ЗНАКИ.has(c)){ i++; continue; }
+    if(!(c in AR_СОГЛ) && c!=='ى' && !/[ء-ي]/.test(c)){ i++; continue; }
+    const сл={б:c, удв:false, гл:'', долг:false, танвин:''};
+    i++;
+    // знаки, относящиеся к этой букве, идут следом в любом порядке
+    while(i<s.length){
+      const z=s[i];
+      if(z===ШАД){ сл.удв=true; i++; continue; }
+      if(z===ФАТ){ сл.гл='а'; i++; continue; }
+      if(z===КАС){ сл.гл='и'; i++; continue; }
+      if(z===ДАМ){ сл.гл='у'; i++; continue; }
+      if(z===СУК){ сл.гл=''; сл.сукун=true; i++; continue; }
+      if(ТАНВИН[z]){ сл.танвин=ТАНВИН[z]; i++; continue; }
+      if(z===ДАГГЕР){ сл.долг=true; сл.гл=сл.гл||'а'; i++; continue; }
+      if(ЗНАКИ.has(z)){ i++; continue; }
+      break;
+    }
+    // ② долгота из следующей буквы-носителя
+    const сле=s[i];
+    if(сле==='ا' && (сл.гл==='а'||сл.гл==='')){ сл.гл='а'; сл.долг=true; i++; }
+    else if(сле==='ى' && (сл.гл==='а'||сл.гл==='')){ сл.гл='а'; сл.долг=true; i++; }
+    else if(сле==='و' && сл.гл==='у' && !_имеетОгласовку(s,i)){ сл.долг=true; i++; }
+    else if(сле==='ي' && сл.гл==='и' && !_имеетОгласовку(s,i)){ сл.долг=true; i++; }
+    слоги.push(сл);
+  }
+  // ③ сборка
+  let из='';
+  for(let k=0;k<слоги.length;k++){
+    const сл=слоги[k];
+    let б=AR_СОГЛ[сл.б];
+    if(б===undefined) б='';
+    // артикль: ٱل / ال в начале
+    if(k===0 && (сл.б==='ٱ'||сл.б==='ا') && слоги[k+1] && слоги[k+1].б==='ل'){
+      const след=слоги[k+2];
+      if(след && AR_СОЛНЕЧНЫЕ.has(след.б)){
+        /* Солнечная буква: артикль слился с ней, и это слияние САМО и есть удвоение.
+           Первый заход давал «ар-ррах̣ма̄ни»: я писал «ар-», а следом ещё раз удваивал
+           букву по её шадде. Шадду здесь надо ПОГАСИТЬ — она уже отражена в «ар-Р». */
+        из+='а'+AR_СОГЛ[след.б]+'-';           // ар-, ас-, ад-…
+        след.удв=false;
+        k++;                                    // пропускаем лам
+        continue;
+      }
+      из+='аль-'; k++; continue;                // лунная: «аль-Х̣амду», а не «ал-»
+    }
+    if(сл.удв && б) б=б+б;
+    из+=б;
+    if(сл.гл){ из+=сл.гл; if(сл.долг) из+='̄'; }   // макрон = долгая
+    if(сл.танвин) из+=сл.танвин;
+  }
+  return из.replace(/--+/g,'-').replace(/\s+/g,' ').trim();
+}
+
+function _имеетОгласовку(s,i){
+  const z=s[i+1];
+  return z===ФАТ||z===КАС||z===ДАМ||z===ШАД||!!ТАНВИН[z];
+}
+
 function showWordPopup(el, word, root, lemma, gram, ctx){
   closeWordPopup();
   const n = root ? ((_roots.r[root]||[]).length) : 0;
@@ -7532,6 +7641,20 @@ function showWordPopup(el, word, root, lemma, gram, ctx){
   // M406: fixed + max-height со скроллом — карточка слова НИКОГДА не вылезает за низ экрана (даже когда Arabus дорастит контент)
   pop.style.cssText='position:fixed;max-width:min(360px,94vw);max-height:64vh;overflow:auto;padding:12px 14px;font-size:15.5px;box-shadow:0 8px 28px rgba(0,0,0,.55)';   // №7: шрифт чуть крупнее
   let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b style="font-size:22px;'+_AF+'">'+esc(word)+'</b><span id="wpX" style="cursor:pointer;color:var(--hint);font-size:18px">✕</span></div>';
+  /* 📣 ЗАЯВКА #696 (владелец: «на каждое слово в Коране при выделении надо транскрипцию
+     русскими буквами, наверное лучше всего подумай»). Подумал — и вот что вышло.
+     Ставим строку СРАЗУ под словом: человек нажал, чтобы понять слово, и первое, что ему
+     нужно, — как это произнести.
+     Считается по огласовкам самого слова (см. транскрипцияАР выше), а не по словарю: текст
+     Корана огласован полностью, значит чтение выводится точно и работает на ЛЮБОМ слове,
+     а не на заранее собранных. Где огласовки нет — гласную не выдумываем.
+     ⚠️ Подпись «звучание примерное» не для скромности: ع, ح, خ, ق, ط, ص, ض, ظ, ث, ذ русскими
+     буквами не передаются, они помечены значками. Обещать точность здесь было бы обманом. */
+  try{ const _зв=транскрипцияАР(word);
+    if(_зв) h+='<div style="margin-top:5px;font-size:15px;color:#7fe3bf;direction:ltr;text-align:left">'
+      +'🗣 <b>'+esc(_зв)+'</b>'
+      +'<span style="color:var(--hint);font-size:11px"> · звучание примерное, по огласовкам</span></div>';
+  }catch(e){_тихо(e,"L7541тр")}
   const ga=gramAr(gram);   // M404: часть речи и по-русски, и по-арабски (термин نحو)
   if(g) h+='<div style="margin-top:6px;color:var(--text)">📝 '+esc(g)+(ga?(' · <b style="'+_AF+';font-size:15px;color:var(--mark)">'+esc(ga)+'</b>'):'')+'</div>';
   if(lemma && rootKey(lemma)!==rootKey(word)) h+='<div style="margin-top:3px;color:var(--hint);font-size:13px">лемма: <b style="'+_AF+'">'+esc(lemma)+'</b></div>';
@@ -18405,7 +18528,13 @@ var _isn=document.getElementById('isnadLinkSw'); if(_isn){ _isn.classList.toggle
 /* ===== Глубокие ссылки: открыть приложение СРАЗУ на нужном месте. Работает в Telegram (?startapp=TOKEN) и в браузере (?g=TOKEN).
    Токены: q_2_255 (Коран 2:255) · b_16_78 (книга turath id 16, стр.78) · r_muslim_2408 (наш ридер: Муслим №2408) · n_3889 (карточка передатчика по mid) · cat (каталог Мактабы). ===== */
 const APP_WEB_URL='https://germanyalfurqan-eng.github.io/hadith-bot/';
-const APP_TG_URL='https://t.me/muslimoontt_bot?startapp=';
+/* 🔴 ОБР-643, владелец: «ссылка неверная». Он прав, и доказательство лежит в коде самого бота
+   (пометка M202): у мини-приложения есть КОРОТКОЕ ИМЯ `app`, и внутри Telegram открывает
+   именно `t.me/<бот>/app`. Голая форма `t.me/<бот>?startapp=` ведёт в ЧАТ с ботом, а не в
+   приложение — человек жмёт на слово-ссылку и попадает не туда.
+   Было: 'https://t.me/muslimoontt_bot?startapp='  ← без /app
+   Стало: с /app. Той же формой бот сам открывает приложение в группах. */
+const APP_TG_URL='https://t.me/muslimoontt_bot/app?startapp=';
 function deepLinkUrls(token){ const e=encodeURIComponent(token); return { web:APP_WEB_URL+'?g='+e, tg:APP_TG_URL+e }; }
 /* ОБР-602 (владелец, 14.08.2026): «ссылка Абу Хурайра с первого раза не сработала, только со
    второго». Проверил в браузере на холодной загрузке — там открывается исправно, значит логика
