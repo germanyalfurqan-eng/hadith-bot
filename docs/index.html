@@ -1580,7 +1580,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1390';
+const APPVER = 'v1391';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6525,11 +6525,22 @@ async function maktabaByNum(seq, n){
   const load=async()=>{
     if(busy||done) return; busy=true; more.disabled=true; more.textContent='⏳ ищу дальше…';
     try{
-      for(let hop=0; hop<4 && !done; hop++){   // до 4 страниц индекса за заход — копим НОВЫЕ книги заранее
-        page++;
-        const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(arN+' -')+'&page='+page+'&initData='+encodeURIComponent(INITDATA));
-        if(seq!==_seq) return;
-        const j=await r.json().catch(()=>({}));
+      /* #709, «ищу дальше очень долго». За одно нажатие берём до 4 страниц указателя —
+         и брали их ПО ОЧЕРЕДИ, каждую отдельным походом к серверу. Человек ждал четыре
+         задержки подряд, хотя сами страницы друг от друга не зависят: их номера известны
+         заранее, и содержимое одной никак не влияет на запрос другой. Связаны они только
+         тем, что РАЗБИРАТЬ их надо по порядку — а это разбор, не сеть.
+         Просим все четыре разом, разбираем строго по порядку, как и раньше.
+         Цена промаха названа честно: если книги кончились на второй странице, третья и
+         четвёртая улетели впустую. Это лишние запросы к своему же серверу против лишних
+         ожиданий у человека — размен в пользу человека. */
+      const _номера=[]; for(let hop=0; hop<4; hop++) _номера.push(++page);
+      const _пачка=await Promise.all(_номера.map(_п =>
+        fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(arN+' -')+'&page='+_п+'&initData='+encodeURIComponent(INITDATA))
+          .then(r=>r.json()).catch(()=>({}))));
+      if(seq!==_seq) return;
+      for(const j of _пачка){
+        if(done) break;
         const data=j.data||[];
         if(!data.length){ done=true; break; }
         let add=0;
