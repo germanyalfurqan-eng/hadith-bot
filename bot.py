@@ -9001,10 +9001,38 @@ async def _nisht_extract_one(msg):
             src = f"/tmp/nisht_{f.file_id}{ext}"
             await f.download_to_drive(src)
             txt = await asyncio.get_event_loop().run_in_executor(None, transcribe_audio, src)
+            # 👁 ОБР-634/637 (владелец: «нужна не запись, а способность»). Раньше из видео брали
+            # ТОЛЬКО звук: помощник слышал речь, а на вопрос про картинку отвечал «не могу».
+            # Недостающее звено было одно — вынуть кадр. ffmpeg в образе уже стоит (его ставят
+            # ради аудио), зрячая функция dsoc_глаза тоже готова. Соединяем, а не заводим третье.
+            # Кадр берём с середины ролика: первый кадр часто чёрный или заставка.
+            _видно = ""
+            try:
+                if (ext or "").lower() in (".mp4", ".webm", ".mpeg") and os.path.exists(src):
+                    _кадр = src + ".jpg"
+                    _к = await asyncio.create_subprocess_exec(
+                        "ffmpeg", "-y", "-loglevel", "error", "-ss", "00:00:02",
+                        "-i", src, "-frames:v", "1", "-vf", "scale=768:-1", _кадр,
+                        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+                    await asyncio.wait_for(_к.wait(), timeout=45)
+                    if os.path.exists(_кадр) and os.path.getsize(_кадр) > 2000:
+                        with open(_кадр, "rb") as _ф:
+                            _видно = await dsoc_глаза(_ф.read(), "кадр из присланного видео") or ""
+                    try: os.remove(_кадр)
+                    except Exception: pass
+            except Exception:
+                _видно = ""      # не увидели — не беда: звук всё равно отдадим
             try: os.remove(src)
             except Exception: pass
-            if txt and txt.strip():
-                return txt.strip(), "аудио/видео (расшифровка Whisper)" + (f": {t}" if t else "")
+            if (txt and txt.strip()) or _видно.strip():
+                _части = []
+                if txt and txt.strip():
+                    _части.append("=== ЧТО СЛЫШНО ===\n" + txt.strip())
+                if _видно.strip():
+                    _части.append("=== ЧТО ВИДНО НА ЭКРАНЕ ===\n" + _видно.strip())
+                return "\n\n".join(_части), ("аудио/видео (расшифровка Whisper"
+                                              + (" + кадр глазами" if _видно.strip() else "") + ")"
+                                              + (f": {t}" if t else ""))
         except Exception:
             pass
     # #546/#524 (владелец: реплай «Ништячок» на PDF → «не смог извлечь содержимое»): документы брались ТОЛЬКО
