@@ -21359,6 +21359,49 @@ async def _api_serve(application=None):
         _hermes_hb['ts'] = time.time()
         return _cors(web.json_response({'ok': True}))
 
+    async def tg_relay(r):
+        # 🔌 ПЕРЕНАПРАВИТЕЛЬ TELEGRAM BOT API — дорога к Телеграму для того, у кого её нет.
+        #
+        # 16.08.2026: с ноутбука владельца api.telegram.org перестал открываться вовсе.
+        # Проверено по слоям: до 149.154.167.220 пакет ДОХОДИТ, а рукопожатие рвут — то есть
+        # режут не адрес, а имя сайта; остальные адреса Телеграма не отвечают вообще, при
+        # том что huggingface и google открываются за 0,8 с. Гермес с полуночи честно
+        # перебирал запасные адреса и переподключался — идти ему было некуда, и владелец
+        # писал ему в пустоту. Мой собственный мост в это же время работал: он ходит не
+        # напрямую, а через ЭТОТ сервер, у которого дорога в Телеграм есть.
+        #
+        # Отсюда решение: даём Гермесу ту же дорогу. Он стучится сюда, сервер спрашивает
+        # Телеграм и отдаёт ответ дословно. На стороне Гермеса это одна строка настройки —
+        # telegram.extra.base_url: https://<этот сервер>/tg/bot
+        #
+        # ⚠️ Токен идёт В ПУТИ запроса (так устроен Bot API) и НИКУДА не записывается:
+        # ни в лог, ни в ответ, ни в журнал. В сообщениях об ошибке — только код состояния.
+        # ⚠️ Пускаем ТОЛЬКО пути Bot API (bot… и file/bot…), чтобы это не стало открытым
+        # перенаправителем куда угодно.
+        import aiohttp as _ai
+        хвост = r.match_info.get('t') or ''
+        if not (хвост.startswith('bot') or хвост.startswith('file/bot')):
+            return web.json_response({'error': 'only_bot_api'}, status=403)
+        цель = 'https://api.telegram.org/' + хвост
+        if r.query_string:
+            цель += '?' + r.query_string
+        тело = await r.read() if r.method in ('POST', 'PUT', 'PATCH') else None
+        заг = {к: з for к, з in r.headers.items()
+               if к.lower() in ('content-type', 'accept', 'user-agent')}
+        try:
+            # getUpdates держит соединение до 50 секунд — таймаут должен быть заведомо больше,
+            # иначе мы сами будем рвать длинное ожидание и Гермес решит, что сеть плоха.
+            вр = _ai.ClientTimeout(total=180, sock_connect=30)
+            async with _ai.ClientSession(timeout=вр) as с:
+                async with с.request(r.method, цель, data=тело, headers=заг) as о:
+                    сырое = await о.read()
+                    тип = о.headers.get('Content-Type', 'application/json')
+                    return web.Response(body=сырое, status=о.status, content_type=тип.split(';')[0])
+        except Exception as e:
+            # Наружу отдаём тип беды без подробностей: в подробностях бывает путь с токеном.
+            return web.json_response({'error': 'relay_failed', 'kind': type(e).__name__},
+                                     status=502)
+
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
     a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
@@ -21384,6 +21427,7 @@ async def _api_serve(application=None):
                   web.post('/api/backup_push', backup_push),
                   web.post('/api/zamenit_fayl', zamenit_fayl),
                   web.post('/api/hermes_hb', hermes_hb),
+                  web.route('*', '/tg/{t:.*}', tg_relay),   # 16.08.2026: дорога Гермеса к Телеграму в обход стены на ноутбуке
                   web.options('/api/{t:.*}', opt)])
     runner = web.AppRunner(a); await runner.setup()
     port = int(os.environ.get('PORT', '8080'))
