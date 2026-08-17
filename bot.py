@@ -7906,7 +7906,30 @@ def ask_opencode(prompt, system, max_tokens=None):
         if о.status_code != 200:
             return None
         j = о.json()
-        ответ = (j.get("choices") or [{}])[0].get("message", {}).get("content")
+        _вб = (j.get("choices") or [{}])[0]
+        ответ = (_вб.get("message", {}) or {}).get("content")
+        # 🔴 17.08.2026, продолжение той же уборки. Владелец получил от технадзора ответ из
+        # одного слова — «Пусти». Здесь та же дыра, что была в dsoc_запрос: оборванный ответ
+        # непустой, значит проходил как готовый. Улика — finish_reason == "length": модель
+        # упёрлась в потолок и не договорила. Переспрашиваем ОДИН раз с потолком побольше и
+        # берём повтор, только если он длиннее огрызка.
+        if (_вб.get("finish_reason") or "") == "length":
+            try:
+                о2 = requests.post(OPENCODE_URL, timeout=180,
+                                   headers={"Content-Type": "application/json",
+                                            "Authorization": "Bearer " + _кл},
+                                   json={"model": OPENCODE_MODEL,
+                                         "messages": [{"role": "system", "content": system},
+                                                      {"role": "user", "content": prompt}],
+                                         "max_tokens": min(max(max_tokens or 2000, 3000) * 3,
+                                                           16000)})
+                if о2.status_code == 200:
+                    _о2 = (((о2.json().get("choices") or [{}])[0].get("message", {}) or {})
+                           .get("content") or '')
+                    if _о2.strip() and len(_о2) > len(ответ or ''):
+                        ответ = _о2
+            except Exception:
+                pass
         if not ответ:
             return None
         try:
