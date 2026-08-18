@@ -11019,10 +11019,25 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Стоит ДО помощника намеренно: иначе ссылка ушла бы модели, та пересказала бы её своими
     # словами, и человек получил бы пересказ вместо страницы. Здесь всё точное: текст из
     # Мактабы, перевод нашим переводчиком, ссылка собрана из чисел адреса.
+    # 🔴 Слово владельца 18.08.2026 (#851): «к ссылкам Мактаба добавь также ссылки с Сунна
+    # ком и апптурас». Адреса разные, а книга за ними одна и та же: у Шамили и у turath
+    # НОМЕР КНИГИ ОДИН, отличается только вид адреса. Поэтому не заводим второй обработчик,
+    # а расширяем разбор (З-33): один вход — три написания одного и того же.
+    #   shamela.ws/book/2170/1687      → книга 2170, страница 1687
+    #   app.turath.io/book/2170?page=1687 → то же самое
+    # Сунна.ком устроен иначе: это не страница книги, а НУМЕРОВАННЫЙ ХАДИС, и отвечать на
+    # него надо хадисом из нашей базы, а не страницей. Его ловим отдельным выражением.
+    _шам = _сун = None
     try:
-        _шам = re.search(r'shamela' + chr(92) + r'.ws/book/(' + chr(92) + r'd{1,7})(?:/(' + chr(92) + r'd{1,6}))?', text or '', re.I)
+        _шам = re.search(r'(?:shamela' + chr(92) + r'.ws|app' + chr(92) + r'.turath' + chr(92) + r'.io)'
+                         r'/book/(' + chr(92) + r'd{1,7})'
+                         r'(?:/(' + chr(92) + r'd{1,6})|[?&][^ ]*?page=(' + chr(92) + r'd{1,6}))?',
+                         text or '', re.I)
+        if not _шам:
+            _сун = re.search(r'sunnah' + chr(92) + r'.com/([a-z]+)(?:/(' + chr(92) + r'd{1,4}))?'
+                             r'[:/](' + chr(92) + r'd{1,6})', text or '', re.I)
     except Exception:
-        _шам = None
+        _шам = _сун = None
     if _шам:
         # 🔴 «Технадзор, зачем он влезает?» — сказано через двадцать минут после выкатки, и
         # сказано справедливо. Я поставил ответ на ЛЮБУЮ такую ссылку в ЛЮБОМ чате: в общине
@@ -11045,9 +11060,62 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _звали_ш = bool(re.search(r'ботяр|бот|технадзор|муслимун|@muslimoontt_bot',
                                       text or '', re.I))
         if not (_личка_ш or _звали_ш):
-            _шам = None
+            _шам = _сун = None
+    if _сун:
+        # СУННА.КОМ — это не страница книги, а нумерованный хадис. Значит и отвечать надо
+        # хадисом из НАШЕЙ базы: тем же путём, каким работает «источник <сборник> <номер>».
+        # Слуги у них и у нас почти совпадают; где расходятся — сводим здесь, одним местом.
+        _СУН_КОД = {'bukhari': 'bukhari', 'muslim': 'muslim', 'abudawud': 'abudawud',
+                    'tirmidhi': 'tirmidhi', 'nasai': 'nasai', 'ibnmajah': 'ibnmajah',
+                    'malik': 'malik', 'ahmad': 'ahmad', 'darimi': 'darimi',
+                    'nasaikubra': 'nasaikubra', 'bulugh': '', 'riyadussalihin': '',
+                    'adab': 'adabmufrad', 'shamail': ''}
+        _скод = _СУН_КОД.get((_сун.group(1) or '').lower(), '')
+        _сном = _сун.group(3)
+        if not _скод:
+            try:
+                await update.message.reply_text(
+                    'Этот сборник с sunnah.com у нас отдельной книгой не заведён — '
+                    'ответить его хадисом не могу. Назовите сборник и номер словами, '
+                    'поищу по нашим сводам.',
+                    reply_to_message_id=update.message.message_id)
+            except Exception:
+                pass
+            return
+        try:
+            _сар, _сру, _сяз, _соц = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: (get_ahmad_hadith(_сном) if _скод == 'ahmad'
+                               else get_hadith(_скод, _сном)))
+        except Exception as _ес:
+            _сар = _сру = ''
+        if not (_сар or _сру):
+            try:
+                await update.message.reply_text(
+                    '%s №%s у нас не нашёлся — возможно, номер за пределами нашего издания. '
+                    'Это не «нет доступа»: я смотрел в своей базе.' % (NAMES.get(_скод, _скод), _сном),
+                    reply_to_message_id=update.message.message_id)
+            except Exception:
+                pass
+            return
+        _сссыл = 'https://t.me/muslimoontt_bot/app?startapp=r_%s_%s' % (_скод, _сном)
+        _стело = ('📖 <b>%s, №%s</b>' % (esc(NAMES.get(_скод, _скод)), esc(str(_сном)))
+                  + chr(10) + chr(10)
+                  + '<blockquote expandable>%s</blockquote>' % esc((_сар or '')[:2200]))
+        if _сру:
+            _стело += (chr(10) + chr(10) + '<b>Перевод:</b>' + chr(10)
+                       + '<blockquote expandable>%s</blockquote>' % esc(_сру[:2200]))
+        _стело += (chr(10) + chr(10) + '📱 <a href="%s">Открыть в приложении</a>'
+                   ' — цепь передатчиков, оценки критиков, тахридж' % _сссыл)
+        try:
+            await update.message.reply_text(_стело[:4000], parse_mode='HTML',
+                                            disable_web_page_preview=True,
+                                            reply_to_message_id=update.message.message_id)
+        except Exception:
+            pass
+        return
     if _шам:
-        _шбид, _шстр = _шам.group(1), int(_шам.group(2) or 1)
+        _шбид = _шам.group(1)
+        _шстр = int(_шам.group(2) or _шам.group(3) or 1)
         _ст_ш = None
         try:
             _ст_ш = await update.message.reply_text(
