@@ -771,7 +771,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1398</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1399</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1637,7 +1637,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1398';
+const APPVER = 'v1399';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6578,6 +6578,17 @@ async function maktabaByNum(seq, n){
     const ar=document.createElement('div'); ar.className='ar'; ar.style.cssText='font-size:16px;line-height:2;margin-top:6px'; ar.textContent=it[1]; card.appendChild(ar);
     const meta=document.createElement('div'); meta.className='meta';
     try{ addTr(meta, card, it[1], null, {k:'mk|'+bid+'|'+n, leaf:(it[0]||''), type:'h', coll:bn, label:bn+' №'+n, text:it[1].slice(0,200)}); }catch(e){_тихо(e,"L5971")}   // QA#1-фикс: ключ ЕДИНЫЙ (mk|bid|n) как в развёрнутом виде (3667) → нет дублей/рассинхрона звезды; лист вынесен в отдельное поле f.leaf (для openBook)
+    /* 🤖 ЗАЯВКА #712, ЧЕТВЁРТЫЙ ПОВТОР: «нейротахкик должен быть везде, кроме Бухари и Муслима».
+       Дверь `_NEURO_BID` открыта по СЛУГУ книги — а у этих карточек слуга нет вовсе: выдача
+       «№N в 41 книге» держит на руках bid и номер и рисуется из f40c. Поэтому три десятка
+       сводов, для которых вердикт давно посчитан, показывали цепь — и молчали о достоверности.
+       Здесь перевод номера не нужен: f40c и neuro ключуются ОДНИМ bid и ОДНИМ номером.
+       ⚠️ «Не нужен» — не догадка, а замер (_zamer_dveri_f40c.py, прибор из neuro_zamer):
+       сличали текст карточки с текстом ТОЙ печати, по которой посчитан вердикт. Калибровка
+       на трёх уже доказанных книгах дала 100% при поле (сдвиг номера на 7) 0–4%. Открываем
+       ТОЛЬКО замеренные ≥95%; кому не мерили или кто ниже — молчим, как молчали. Пробел в
+       покрытии честнее приговора о достоверности, поставленного на соседний хадис. */
+    try{ neuroBadgeF40(bid, n, meta); }catch(e){_тихо(e,"L5971n")}
     card.appendChild(meta);
     if(it[0]){ const ob=document.createElement('span'); ob.style.cssText='display:inline-block;margin-top:6px;color:var(--link);cursor:pointer;font-weight:700;font-size:13.5px';   // #48: убрано подчёркивание — было непостоянно (та же книга вверху без подчёркивания); цвет ссылки достаточно
       ob.textContent='📖 '+bn+' №'+n; ob.title='Открыть '+bn+' №'+n+' в книге (лист '+it[0]+')'; ob.onclick=()=>{ try{ openBook(bid, it[0]); }catch(e){_тихо(e,"L5974")} }; card.appendChild(ob); }   // R45: «Книга №» активная ссылка как везде (не «открыть в книге»)
@@ -17348,6 +17359,40 @@ async function _neuroМост(){
   if(_мостН) return _мостН;
   if(!_мостНP) _мостНP=fetch('./neuro_most.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({}));
   _мостН=await _мостНP; return _мостН; }
+
+/* Книги, где номер карточки первоисточника (f40c) совпадает с номером вердикта.
+   Список НЕ угадан: каждая строка — замер 18.08.2026 на 50 пробах, «тот же хадис» по
+   вложенности множеств слов, с полом (сдвиг номера на 7) 0–4%. Кто не мерян — не здесь. */
+const _NEURO_F40C=new Set([
+  '278','537','748','1424','1446','1456','1613','1733','3610','4407','8218','8361','8493',
+  '9615','9647','9944','10631','12520','12981','13027','13028','13037','13122','13136',
+  '13155','13159','18144','21545','21795'
+]);
+/* Кого замер НЕ пустил, и почему — чтобы следующий не «дописал книгу» из добрых побуждений:
+   · 5562 (Мустахрадж Абу Нуайма) — 90,5% на 200 пробах, ниже принятой планки в 95%.
+     (9944 Ибн Аби Шейба и 18144 Абу Авана на 50 пробах давали 94% и 92% и висели «спорно»;
+      уточнение на 200 пробах дало 97,0% и 95,5% — и это сходится с их же замером по слуговой
+      двери, 96,8% и 96,1%. Пятьдесят проб на пограничной книге просто мало.)
+   · 654 (Абу Дауд, дехлийская печать) — общих номеров с f40c не нашлось вовсе, мерить нечего;
+   · Бухари и Муслим — воля владельца, запрет живёт внутри neuroVerdict. */
+
+/* Бейдж для карточки первоисточника: bid и номер уже на руках, переводить нечего.
+   Запрет на Сахихайн не дублируем — он внутри neuroVerdict, единственной двери (#712). */
+async function neuroBadgeF40(bid, num, meta){
+  try{
+    if(!meta || num==null) return;
+    if(!_NEURO_F40C.has(String(bid))) return;      // не замерено — молчим
+    const html=await neuroBadgeFor(String(bid), String(num).replace(/[^0-9]/g,''));
+    if(!html) return;
+    const sp=document.createElement('span');
+    sp.style.cssText='margin-inline-start:6px';
+    sp.innerHTML=html;
+    // Как и в карточках сводов: приговор о достоверности стоит в начале ряда, а не в хвосте
+    // за кнопками — иначе он «формально виден», а на деле на 947-м пикселе (заявка 14.08).
+    if(meta.firstChild) meta.insertBefore(sp, meta.firstChild);
+    else meta.appendChild(sp);
+  }catch(e){ try{_тихо(e,"neuroBadgeF40");}catch(_e){} }
+}
 
 async function neuroBadgeCard(code, num, meta, h){
   try{
