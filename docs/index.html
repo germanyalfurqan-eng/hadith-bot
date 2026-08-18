@@ -90,8 +90,17 @@ window.тихоОтчёт = function () {
 #netInd.q-idle .nd{background:#7b8794;box-shadow:none;animation:none}
 @keyframes ndPulse{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1.15)}}
 @media (prefers-reduced-motion: reduce){#netInd .nd{animation:none}}
-#netInd .ndBar{width:34px;height:3px;border-radius:2px;background:rgba(255,255,255,.14);overflow:hidden;flex:0 0 auto}
-#netInd .ndBar i{display:block;height:100%;width:0;border-radius:2px;background:currentColor;transition:width .25s ease}
+/* 🔴 ОБР-824 (владелец, 18.08.2026): «некрасиво, значке надо как-то кругляшек, который
+   показывает загрузку — шкала круглая». Полоску в 34 точки шириной заменяем кольцом.
+   Кольцо рисуем обводкой круга (stroke-dasharray), а не картинкой: оно масштабируется,
+   красится темой и не тянет ни одного лишнего файла. */
+#netInd .ndRing{width:26px;height:26px;flex:0 0 auto;transform:rotate(-90deg)}
+#netInd .ndRing circle{fill:none;stroke-width:3;stroke-linecap:round}
+#netInd .ndRing .fon{stroke:rgba(127,150,180,.22)}
+#netInd .ndRing .ход{stroke:currentColor;transition:stroke-dashoffset .25s ease}
+#netInd .ndProc{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:8.5px;font-weight:700;color:var(--text);transform:none;font-variant-numeric:tabular-nums}
+#netInd .ndKrug{position:relative;width:26px;height:26px;flex:0 0 auto}
 #netInd.q-good{color:#3ddc84}#netInd.q-mid{color:#f2c14e}#netInd.q-slow{color:#ff6b5e}
 #netInd .ndTxt{color:#dfe6ee;white-space:normal;text-align:left}
 /* #717: «внизу слева не написано сколько загрузилось из сколько надо». Строк стало две
@@ -784,7 +793,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1401</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1402</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1650,7 +1659,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1401';
+const APPVER = 'v1402';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7948,7 +7957,13 @@ function транскрипцияАР(слово){
     знач.id = 'netInd';
     знач.setAttribute('role','status');
     знач.setAttribute('aria-live','polite');
-    знач.innerHTML = '<span class="nd"></span><span class="ndBar"><i></i></span>'
+    // Кольцо: длина окружности радиуса 11 ≈ 69,1 — её и делим по проценту.
+    знач.innerHTML = '<span class="nd"></span>'
+                   + '<span class="ndKrug"><svg class="ndRing" viewBox="0 0 26 26">'
+                     + '<circle class="fon" cx="13" cy="13" r="11"></circle>'
+                     + '<circle class="ход" cx="13" cy="13" r="11" '
+                       + 'stroke-dasharray="69.1" stroke-dashoffset="69.1"></circle>'
+                   + '</svg><span class="ndProc"></span></span>'
                    + '<span class="ndTxt"></span>';
     панель = document.createElement('div');
     панель.id = 'netPanel';
@@ -7967,10 +7982,12 @@ function транскрипцияАР(слово){
       '<div style="font-weight:600;margin-bottom:4px">📶 Сеть</div>'
       + '<div class="ndRow"><span>сейчас грузится</span><b>' + вПути + '</b></div>'
       + '<div class="ndRow"><span>скачано за сеанс</span><b>' + мб(БАЙТ + живоеВесом()) + ' МБ</b></div>'
+      /* ОБР-824: слово «надо всего» отсюда убрано. Это НЕ итог — это сумма по запросам,
+         которые уже ушли, и она растёт с каждой новой волной. Называем ровно тем, что есть. */
       + (ОЖИДАЕТСЯ > 0
-          ? '<div class="ndRow"><span>надо всего (объявлено сервером)</span><b>'
+          ? '<div class="ndRow"><span>объявлено по начатым (растёт)</span><b>'
             + мб(Math.max(ОЖИДАЕТСЯ, БАЙТ + живоеВесом())) + ' МБ</b></div>'
-          : '<div class="ndRow"><span>надо всего</span><b>сервер веса не назвал</b></div>')
+          : '')
       + '<div class="ndRow"><span>файлов получено</span><b>' + КОНЧИЛОСЬ + ' из ' + НАЧАЛОСЬ + '</b></div>'
       + '<div class="ndRow"><span>скорость</span><b>' + скоростьТекст() + '</b></div>'
       + (ждут.length ? '<div class="ndFiles">' + ждут.map(function(и){ return '• ' + и; }).join('<br>') + '</div>' : '')
@@ -7989,23 +8006,57 @@ function транскрипцияАР(слово){
     var _течёт = вПути > 0;
     if(!_течёт){ for(var _к in живые){ if(Object.prototype.hasOwnProperty.call(живые,_к)){ _течёт = true; break; } } }
     знач.className = качество() + (_течёт || панель.classList.contains('on') ? ' on' : '');
-    /* #717: первая строка отвечает на заданный вопрос — СКОЛЬКО ЗАГРУЖЕНО ИЗ СКОЛЬКИ НАДО.
-       Загружено = докачанное (замер браузера) + то, что течёт прямо сейчас.
-       Надо = сумма названных сервером весов. Если сервер веса не назвал ни разу, «из» не
-       пишем вовсе: пустое место честнее выдуманного числа.
-       Потолок Math.max нужен потому, что часть ответов приходит без content-length — тогда
-       скачанное обгоняет объявленное, и «12,4 из 9,0» выглядело бы поломкой. */
+    /* 🔴 ОБР-824 (владелец, через час после выкатки #717): «слева внизу часто бывает „из 14“
+       пишет, когда доходит до 14, то дальше идёт — то есть он не может писать сразу, сколько
+       надо точно загрузить».
+
+       ОН ПРАВ, И Я ЭТО ЗНАЛ, КОГДА ВЫПУСКАЛ. «Надо» я считал суммой весов по УЖЕ УШЕДШИМ
+       запросам, а поиск шлёт их волнами: сумма растёт, шкала доходит до края и едет дальше.
+       Число, которое меняется, — не итог, и подписывать его словом «из» нельзя. Утешал себя
+       тем, что оно «честное, просто растущее»; человеку от этого не легче — ему обещали край.
+
+       Чиню не подпись, а выбор величины. Показываем ТОЛЬКО то, что известно ТОЧНО:
+       ① кольцо — ход ТЕКУЩЕГО файла. Его вес сервер называет в заголовке до первого байта,
+          он не меняется, и до края доходит ровно один раз;
+       ② цифра рядом — сколько пришло за сеанс. Это факт, а не обещание, и «из» ему не нужно;
+       ③ строка ниже — что именно грузится сейчас и с какой скоростью. По ней видно разницу
+          между «идёт медленно» и «встало», а это и был вопрос «что за вечная загрузка».
+       Ничего не качается — кольцо показывает файлы (готово из начатых), и подпись говорит
+       именно «файлов», чтобы его не путали с весом. */
+    /* Выбирая «текущий», сперва берём НЕДОКАЧАННЫЙ. Первая редакция брала самый крупный —
+       и стоило начаться второму файлу, как кольцо замирало на первом, уже дошедшем до конца:
+       на экране «100 %, Муснад Ахмада», а качается в это время Насаи. Ровно та же беда, что и
+       с растущим «из 14», только наизнанку: показ отстаёт от дела. Докачанные берём лишь
+       когда недокачанных нет вовсе. */
+    var текущий = null, _завершённый = null;
+    for(var _т in живые){
+      if(!Object.prototype.hasOwnProperty.call(живые,_т)) continue;
+      var _з = живые[_т];
+      if(!(_з && _з.всего > 0)) continue;
+      var _к = {имя:_т, готово:_з.готово||0, всего:_з.всего};
+      if(_к.готово < _к.всего){
+        if(!текущий || _к.всего > текущий.всего) текущий = _к;
+      } else if(!_завершённый || _к.всего > _завершённый.всего){
+        _завершённый = _к;
+      }
+    }
+    if(!текущий) текущий = _завершённый;
     var загружено = БАЙТ + живоеВесом();
-    var надо = Math.max(ОЖИДАЕТСЯ, загружено);
-    var естьНадо = ОЖИДАЕТСЯ > 0;
-    var доля = естьНадо ? Math.min(100, Math.round(загружено / надо * 100))
-                        : (НАЧАЛОСЬ ? Math.min(100, Math.round(КОНЧИЛОСЬ / НАЧАЛОСЬ * 100)) : 0);
-    знач.querySelector('.ndBar i').style.width = доля + '%';
+    var доля, подпись;
+    if(текущий){
+      доля = Math.max(0, Math.min(100, Math.round(текущий.готово / текущий.всего * 100)));
+      подпись = текущий.имя.slice(0,22) + ' — ' + мб(текущий.готово) + ' из ' + мб(текущий.всего) + ' МБ';
+    } else {
+      доля = НАЧАЛОСЬ ? Math.min(100, Math.round(КОНЧИЛОСЬ / НАЧАЛОСЬ * 100)) : 0;
+      подпись = КОНЧИЛОСЬ + ' из ' + НАЧАЛОСЬ + ' файлов';
+    }
+    var _ход = знач.querySelector('.ndRing .ход');
+    if(_ход) _ход.setAttribute('stroke-dashoffset', (69.1 * (1 - доля/100)).toFixed(1));
+    var _пр = знач.querySelector('.ndProc');
+    if(_пр) _пр.textContent = доля + '%';
     знач.querySelector('.ndTxt').innerHTML =
-      (вПути ? '⬇ ' + вПути + ' · ' : '')
-      + '<b>' + мб(загружено) + (естьНадо ? ' из ' + мб(надо) : '') + ' МБ</b>'
-      + '<span class="ndSub">' + КОНЧИЛОСЬ + ' из ' + НАЧАЛОСЬ + ' файлов · '
-      + скоростьТекст() + '</span>';
+      '<b>' + мб(загружено) + ' МБ</b> · ' + скоростьТекст()
+      + '<span class="ndSub">' + (вПути ? '⬇ ' + вПути + ' · ' : '') + подпись + '</span>';
     if(панель.classList.contains('on')) подробности();
     /* Догорание: когда всё скачано, не гасим мгновенно — иначе человек не успеет прочесть,
        чем всё кончилось. Три секунды и уходим. */
@@ -8081,7 +8132,10 @@ function транскрипцияАР(слово){
       if(!живые[имя]){
         живые[имя] = { готово: 0, учтён: false };
       }
-      if(всего > 0 && !живые[имя].учтён){ живые[имя].учтён = true; ОЖИДАЕТСЯ += (+всего || 0); живые[имя].всего = +всего; }
+      if(всего > 0){
+        if(!живые[имя].учтён){ живые[имя].учтён = true; ОЖИДАЕТСЯ += (+всего || 0); }
+        живые[имя].всего = +всего;      // ОБР-824: вес нужен КАЖДЫЙ раз — по нему рисуется кольцо
+      }
       живые[имя].готово = +готово || 0;
       рисовать();
     }catch(_){}
