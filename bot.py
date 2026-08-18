@@ -14242,11 +14242,21 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     lines.append(f"№{r['id']} ({r['d']}){' 📷' if r.get('img') else ''}: {(r.get('t') or '')[:200]}")
             else:
                 lines.append("✅ Открытых заявок нет.")
+            # 🔴 18.08.2026. Закрытые ПОКАЗЫВАЕМ, а не только считаем, и называем — кем.
+            # Пока их было ноль, показывать было нечего; теперь технадзор закрывает заявки
+            # сам, с распиской, и владелец обязан видеть, ЧТО объявлено сделанным и чьим
+            # решением. Иначе счётчик «выполнено» станет врать в другую сторону.
+            _закр = [r for r in done_r if r.get('закрыл')]
+            if _закр:
+                lines.append("\n✅ *Закрыто технадзором* (не согласны — «заявка открой <№>»):")
+                for r in _закр[-12:]:
+                    lines.append(f"№{r['id']}: {(r.get('t') or '')[:90]}"
+                                 f"\n   ↳ {(r.get('итог') or '')[:160]}")
             if fb:
                 lines.append(f"\n📨 *От пользователей* (последние, всего {len(fb)}):")
                 for x in fb[:8]:
                     lines.append(f"№{x.get('id','?')} {x.get('u','')}: {(x.get('t') or '')[:140]}")
-            lines.append("\nℹ️ Добавить: «заявка <текст>». Закрыть: «заявка done <№>».")
+            lines.append("\nℹ️ Добавить: «заявка <текст>». Закрыть: «заявка done <№>». Вернуть в работу: «заявка открой <№>».")
             _digest = "\n".join(lines)[:4000]
             try:
                 await update.message.reply_text(_digest, parse_mode="Markdown")
@@ -14360,6 +14370,28 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(re.sub(r'[*_`\[\]()]', '', _sumtxt))
             return
         # ===== Закрыть заявку: «заявка done <№>» / «заявка готово <№>» =====
+        # ===== Вернуть заявку в работу: «заявка открой <№>» =====
+        # Технадзор теперь закрывает заявки сам — значит владельцу нужна обратная дверь,
+        # и она обязана быть такой же короткой. Несогласие, которое трудно выразить,
+        # выражено не будет: он просто перестанет смотреть в счётчик.
+        if _tl.startswith("заявка открой ") or _tl.startswith("заявка вернуть "):
+            try:
+                _рид = int("".join(ch for ch in _tl if ch.isdigit()))
+            except Exception:
+                _рид = 0
+            j = _journal_load(); _есть = False
+            for r in j.get("requests", []):
+                if r.get("id") == _рид:
+                    r["done"] = False
+                    r.pop("итог", None); r.pop("закрыл", None); r.pop("закрыта", None)
+                    _есть = True
+                    break
+            if _есть:
+                _journal_save(f"заявка #{_рид} возвращена в работу")
+                await update.message.reply_text(f"🔁 Заявка №{_рид} снова открыта.")
+            else:
+                await update.message.reply_text(f"Не нашёл заявку №{_рид}.")
+            return
         if _tl.startswith("заявка done ") or _tl.startswith("заявка готово "):
             try:
                 rid = int("".join(ch for ch in _tl if ch.isdigit()))
@@ -19689,6 +19721,86 @@ async def _api_serve(application=None):
             итог['уточнение_ошибка'] = str(e)[:200]
         return _cors(web.json_response(итог))
 
+    async def zayavka_zakryt(r):
+        """Закрыть заявку владельца — С РАСПИСКОЙ, чьими руками и чем именно.
+
+        🔴 ПОЧЕМУ ЭТО ПОНАДОБИЛОСЬ (18.08.2026). В журнале 719 заявок, и ВСЕ ДО ОДНОЙ числятся
+        открытыми — поле «сделано» не проставлено ни разу за всю историю. Владелец смотрит в
+        этот счётчик и видит, что не сделано ничего; по нему же передавали дела между сменами,
+        и каждая новая смена начинала с ложной картины.
+
+        Я думал, что виновата поломка — сравнение номера строки с числом, — и пошёл проверять
+        у данных. Оказалось иначе: номера числовые, команда «заявка готово N» исправна. Просто
+        ею НИКТО НИ РАЗУ не воспользовался: закрывать мог только владелец, вручную, в чате,
+        а он для того и заводит заявки, чтобы не заниматься ими сам.
+
+        Поэтому дверь открывается технадзору — но с двумя условиями, иначе счётчик станет
+        врать в другую сторону:
+        ① пишем КТО закрыл и ЧЕМ (итог обязателен, без него запись не примут) — «сделано»
+           без доказательства ничем не лучше «не сделано»;
+        ② закрытое технадзором видно отдельно от закрытого владельцем: он вправе не согласиться
+           и открыть обратно, и по записи должно быть понятно, чьё это решение, а не общий ✅.
+        """
+        if not application or not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            return _cors(web.json_response({'error': 'bad_json'}, status=400))
+        if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        try:
+            рид = int(body.get('id') or 0)
+        except Exception:
+            рид = 0
+        итог = str(body.get('итог', '')).strip()
+        кто = str(body.get('кто', '')).strip()[:40] or 'технадзор'
+        открыть = bool(body.get('открыть'))
+        if not рид:
+            return _cors(web.json_response({'error': 'нужен числовой id заявки'}, status=400))
+        if not открыть and len(итог) < 20:
+            # Итог короче двадцати знаков — это не расписка, а галочка. Такую не принимаем:
+            # ради галочки счётчик и молчал все эти месяцы.
+            return _cors(web.json_response(
+                {'error': 'нужен «итог» — чем именно закрыта заявка (от 20 знаков)'}, status=400))
+        _нашли = {'ok': False}
+
+        def _правка(o):
+            o = o or {}
+            for з in (o.get('requests') or []):
+                if int(з.get('id') or 0) == рид:
+                    if открыть:
+                        з['done'] = False
+                        з.pop('итог', None); з.pop('закрыл', None); з.pop('закрыта', None)
+                    else:
+                        з['done'] = True
+                        з['закрыл'] = кто
+                        з['итог'] = итог[:600]
+                        з['закрыта'] = _now_msk()
+                    _нашли['ok'] = True
+                    _нашли['текст'] = str(з.get('t') or '')[:120]
+                    break
+            return o
+
+        _ок, _ = _data_atomic_mutate('journal.json', _правка,
+                                     'заявка #%d: %s' % (рид, 'открыта заново' if открыть else 'закрыта'))
+        if not _нашли['ok']:
+            return _cors(web.json_response({'error': 'заявки №%d нет в журнале' % рид}, status=404))
+        # Владелец узнаёт о закрытии СРАЗУ: заявка его, и решение по ней он вправе оспорить,
+        # пока помнит, о чём просил. Молча закрытая заявка — это закрытая от него, а не для него.
+        try:
+            await app.bot.send_message(
+                OWNER_ID,
+                ('🔁 <b>Заявка №%d открыта заново</b>' % рид) if открыть else
+                ('✅ <b>Заявка №%d закрыта</b> · %s\n\n<i>%s</i>\n\n%s'
+                 % (рид, html.escape(кто), html.escape(_нашли.get('текст') or ''),
+                    html.escape(итог[:600]))),
+                parse_mode='HTML', disable_web_page_preview=True)
+        except Exception:
+            pass
+        return _cors(web.json_response({'ok': bool(_ок), 'id': рид,
+                                        'состояние': 'открыта' if открыть else 'закрыта'}))
+
     async def vygovor_put(r):
         """Выговор помощнику — в ЕГО журнал. Он держит их в системном промте всегда:
         выговор, который не перечитываешь, повторяется."""
@@ -21722,7 +21834,7 @@ async def _api_serve(application=None):
                                      status=502)
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/vygovor', vygovor_put), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
