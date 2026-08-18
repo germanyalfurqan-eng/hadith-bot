@@ -93,7 +93,12 @@ window.тихоОтчёт = function () {
 #netInd .ndBar{width:34px;height:3px;border-radius:2px;background:rgba(255,255,255,.14);overflow:hidden;flex:0 0 auto}
 #netInd .ndBar i{display:block;height:100%;width:0;border-radius:2px;background:currentColor;transition:width .25s ease}
 #netInd.q-good{color:#3ddc84}#netInd.q-mid{color:#f2c14e}#netInd.q-slow{color:#ff6b5e}
-#netInd .ndTxt{color:#dfe6ee}
+#netInd .ndTxt{color:#dfe6ee;white-space:normal;text-align:left}
+/* #717: «внизу слева не написано сколько загрузилось из сколько надо». Строк стало две
+   (вес и файлы), поэтому значок больше не однострочный — но и не растекается на пол-экрана. */
+#netInd{max-width:min(74vw,270px)}
+#netInd .ndTxt b{color:#fff;font-weight:700}
+#netInd .ndSub{display:block;opacity:.78;font-size:10.5px;margin-top:1px}
 #netPanel{position:fixed;left:8px;bottom:calc(44px + env(safe-area-inset-bottom,0px));z-index:9999;
   display:none;max-width:min(88vw,340px);padding:10px 12px;border-radius:12px;font-size:12px;
   background:var(--card);border:1px solid var(--border);color:var(--text);
@@ -766,7 +771,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1389</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1398</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1632,7 +1637,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1397';
+const APPVER = 'v1398';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2247,10 +2252,18 @@ async function cachedFetchJSON(url, ms, opts){ ms=ms||60000; opts=opts||{};
     if(!opts.silent && r.body && r.body.getReader){
       const всего=+(r.headers.get('content-length')||0);
       if(всего>800000){                                    // мелочь грузится мгновенно, полоса только мигнёт
-        _plShow(String(url).split('/').pop().replace('.json',''));
+        const _имя=String(url).split('/').pop().replace('.json','');
+        _plShow(_имя);
         const чтец=r.body.getReader(); const куски=[]; let готово=0;
-        for(;;){ const {done,value}=await чтец.read(); if(done) break;
-          куски.push(value); готово+=value.length; _plSet(готово,всего); }
+        try{
+          for(;;){ const {done,value}=await чтец.read(); if(done) break;
+            куски.push(value); готово+=value.length; _plSet(готово,всего);
+            // #717: угол внизу слева должен ШЕВЕЛИТЬСЯ на большом файле, а не ждать конца
+            try{ if(window._netInd && window._netInd.поток) window._netInd.поток(_имя, готово, всего); }catch(_){}
+          }
+        } finally {
+          try{ if(window._netInd && window._netInd.потокСнять) window._netInd.потокСнять(_имя); }catch(_){}
+        }
         _plHide();
         const всё=new Uint8Array(готово); let сдвиг=0;
         for(const к of куски){ всё.set(к,сдвиг); сдвиг+=к.length; }
@@ -3320,13 +3333,16 @@ async function _грузитьСоШкалой(url, что){
       const {done, value} = await чтец.read();
       if(done) break;
       куски.push(value); принято += value.length;
+      try{ if(window._netInd && window._netInd.поток) window._netInd.поток(что, принято, всего); }catch(_){}   // #717
       const сек = Math.max(.15, (Date.now()-t0)/1000);
       const проц = Math.min(99, Math.round(принято*100/всего));
       const скор = принято/1024/сек;                       // КБ/с
       try{ setStatus('Загружаю '+что+' — '+проц+'% · '+
         (скор>900 ? (скор/1024).toFixed(1)+' МБ/с' : Math.round(скор)+' КБ/с')); }catch(_){_тихо(_,"L2920")}
     }
-  } finally { clearInterval(сторож); }
+  } finally { clearInterval(сторож);
+    try{ if(window._netInd && window._netInd.потокСнять) window._netInd.потокСнять(что); }catch(_){}   // #717
+  }
   const сек = Math.max(.15,(Date.now()-t0)/1000);
   if(принято/1024/сек < 40 && принято > 200*1024){        // ползёт — тоже повод записать
     try{ if(typeof _appReport==='function')
@@ -7848,12 +7864,34 @@ function транскрипцияАР(слово){
 (function(){
   var НАЧАЛОСЬ = 0, КОНЧИЛОСЬ = 0, БАЙТ = 0, вПути = 0, скорость = 0, тПервый = 0;
   var имена = [], таймерГашения = 0;
+  /* #717 (владелец, 17.08.2026): «внизу слева не написано сколько загрузилось из сколько надо».
+     Он просит это ВТОРОЙ раз — первый был обращением #655, и тогда я ответил ему устройством,
+     а не числом: «заранее браузер веса не знает, поэтому считаем файлы». Довод верен ровно
+     наполовину. Заранее — не знает. Но как только ответ пришёл с заголовком content-length,
+     вес известен ТОЧНО, и именно на этом заголовке уже работают три полосы в приложении.
+     Значит «надо» у нас было всё это время, просто угол его не спрашивал.
+
+     ОЖИДАЕТСЯ — сумма весов всех ответов, чей вес сервер назвал. Число не выдуманное и не
+     предсказанное: оно растёт по мере того, как запросы уходят, и это честно — «столько надо
+     из того, что уже затребовано». Чего сервер не назвал (сжатие на лету, chunked), в сумму
+     не идёт вовсе: лучше не показать, чем показать выдуманное.
+
+     ЖИВЫЕ — то, что качается ПРЯМО СЕЙЧАС, по кускам. Без него угол на 25-мегабайтном Ахмаде
+     полминуты показывал бы неподвижный ноль и прыгнул сразу к концу: браузер отдаёт свой замер
+     (transferSize) только когда файл ДОКАЧАН. Ровно это владелец и видел как «не написано». */
+  var ОЖИДАЕТСЯ = 0, живые = {};
+
+  function живоеВесом(){
+    var с = 0;
+    for(var к in живые){ if(Object.prototype.hasOwnProperty.call(живые, к)) с += (живые[к].готово || 0); }
+    return с;
+  }
   var знач = null, панель = null, готово = false;
 
-  function мб(б){ return (б/1048576).toFixed(б < 10485760 ? 2 : 1); }
+  function мб(б){ return (б/1048576).toFixed(б < 10485760 ? 2 : 1).replace('.', ','); }
   function скоростьТекст(){
     if(!скорость) return '—';
-    return скорость >= 1048576 ? (скорость/1048576).toFixed(1)+' МБ/с'
+    return скорость >= 1048576 ? (скорость/1048576).toFixed(1).replace('.', ',')+' МБ/с'
                                : Math.round(скорость/1024)+' КБ/с';
   }
   /* Пороги подобраны под мобильную сеть, а не под кабель: 1,5 МБ/с — уверенно,
@@ -7889,7 +7927,11 @@ function транскрипцияАР(слово){
     панель.innerHTML =
       '<div style="font-weight:600;margin-bottom:4px">📶 Сеть</div>'
       + '<div class="ndRow"><span>сейчас грузится</span><b>' + вПути + '</b></div>'
-      + '<div class="ndRow"><span>скачано за сеанс</span><b>' + мб(БАЙТ) + ' МБ</b></div>'
+      + '<div class="ndRow"><span>скачано за сеанс</span><b>' + мб(БАЙТ + живоеВесом()) + ' МБ</b></div>'
+      + (ОЖИДАЕТСЯ > 0
+          ? '<div class="ndRow"><span>надо всего (объявлено сервером)</span><b>'
+            + мб(Math.max(ОЖИДАЕТСЯ, БАЙТ + живоеВесом())) + ' МБ</b></div>'
+          : '<div class="ndRow"><span>надо всего</span><b>сервер веса не назвал</b></div>')
       + '<div class="ndRow"><span>файлов получено</span><b>' + КОНЧИЛОСЬ + ' из ' + НАЧАЛОСЬ + '</b></div>'
       + '<div class="ndRow"><span>скорость</span><b>' + скоростьТекст() + '</b></div>'
       + (ждут.length ? '<div class="ndFiles">' + ждут.map(function(и){ return '• ' + и; }).join('<br>') + '</div>' : '')
@@ -7899,18 +7941,41 @@ function транскрипцияАР(слово){
   function рисовать(){
     if(!cfg.netInd){ if(знач){ знач.classList.remove('on'); панель.classList.remove('on'); } return; }
     собрать();
-    знач.className = качество() + (вПути || панель.classList.contains('on') ? ' on' : '');
-    var доля = НАЧАЛОСЬ ? Math.min(100, Math.round(КОНЧИЛОСЬ / НАЧАЛОСЬ * 100)) : 0;
+    /* 🔴 #717, НАСТОЯЩАЯ ПРИЧИНА ЖАЛОБЫ, найдена живой пробой в браузере.
+       Значок горел по условию «есть незавершённый fetch». Но fetch завершается, как только
+       пришли ЗАГОЛОВКИ, — а тело в 25 МБ течёт ещё полминуты после этого. Значит на самой
+       долгой загрузке приложения счётчик «в пути» падал в ноль, и угол ГАС ровно тогда,
+       когда человек в него смотрит. Владелец видел пустое место и написал «не написано».
+       Теперь горим, пока течёт хоть один поток. */
+    var _течёт = вПути > 0;
+    if(!_течёт){ for(var _к in живые){ if(Object.prototype.hasOwnProperty.call(живые,_к)){ _течёт = true; break; } } }
+    знач.className = качество() + (_течёт || панель.classList.contains('on') ? ' on' : '');
+    /* #717: первая строка отвечает на заданный вопрос — СКОЛЬКО ЗАГРУЖЕНО ИЗ СКОЛЬКИ НАДО.
+       Загружено = докачанное (замер браузера) + то, что течёт прямо сейчас.
+       Надо = сумма названных сервером весов. Если сервер веса не назвал ни разу, «из» не
+       пишем вовсе: пустое место честнее выдуманного числа.
+       Потолок Math.max нужен потому, что часть ответов приходит без content-length — тогда
+       скачанное обгоняет объявленное, и «12,4 из 9,0» выглядело бы поломкой. */
+    var загружено = БАЙТ + живоеВесом();
+    var надо = Math.max(ОЖИДАЕТСЯ, загружено);
+    var естьНадо = ОЖИДАЕТСЯ > 0;
+    var доля = естьНадо ? Math.min(100, Math.round(загружено / надо * 100))
+                        : (НАЧАЛОСЬ ? Math.min(100, Math.round(КОНЧИЛОСЬ / НАЧАЛОСЬ * 100)) : 0);
     знач.querySelector('.ndBar i').style.width = доля + '%';
-    знач.querySelector('.ndTxt').textContent =
-      (вПути ? '⬇ ' + вПути + ' · ' : '') + мб(БАЙТ) + ' МБ · ' + скоростьТекст();
+    знач.querySelector('.ndTxt').innerHTML =
+      (вПути ? '⬇ ' + вПути + ' · ' : '')
+      + '<b>' + мб(загружено) + (естьНадо ? ' из ' + мб(надо) : '') + ' МБ</b>'
+      + '<span class="ndSub">' + КОНЧИЛОСЬ + ' из ' + НАЧАЛОСЬ + ' файлов · '
+      + скоростьТекст() + '</span>';
     if(панель.classList.contains('on')) подробности();
     /* Догорание: когда всё скачано, не гасим мгновенно — иначе человек не успеет прочесть,
        чем всё кончилось. Три секунды и уходим. */
     clearTimeout(таймерГашения);
-    if(!вПути){
+    if(!_течёт){
       таймерГашения = setTimeout(function(){
-        if(!вПути && знач && !панель.classList.contains('on')) знач.classList.remove('on');
+        var _ещё = вПути > 0;
+        if(!_ещё){ for(var _к2 in живые){ if(Object.prototype.hasOwnProperty.call(живые,_к2)){ _ещё = true; break; } } }
+        if(!_ещё && знач && !панель.classList.contains('on')) знач.classList.remove('on');
       }, 3000);
     }
   }
@@ -7938,6 +8003,10 @@ function транскрипцияАР(слово){
       try{ п = родной.apply(this, arguments); }
       catch(e){ вПути = Math.max(0, вПути-1); рисовать(); throw e; }
       return Promise.resolve(п).then(function(о){
+        /* Вес берём из ЗАГОЛОВКА — это чтение одной строки, тела мы по-прежнему не касаемся
+           (клонировать многомегабайтный JSON ради счётчика значило бы удвоить память). */
+        try{ var _в = +((о && о.headers && о.headers.get('content-length')) || 0);
+             if(_в > 0) ОЖИДАЕТСЯ += _в; }catch(_){}
         вПути = Math.max(0, вПути-1); КОНЧИЛОСЬ++; рисовать(); return о;
       }, function(e){
         вПути = Math.max(0, вПути-1); КОНЧИЛОСЬ++; рисовать(); throw e;
@@ -7963,7 +8032,29 @@ function транскрипцияАР(слово){
     н.observe({entryTypes:['resource']});
   }catch(e){ _тихо(e,'L655obs'); }
 
-  window._netInd = { рисовать: рисовать, показать: function(){ собрать(); рисовать(); } };
+  /* Вход для тех трёх мест, где мы и так читаем файл кусками (книги, Коран, Ахмад).
+     Не заводим четвёртую обёртку над fetch — берём цифры у тех, кто их уже считает.
+     `всего` кладём в ожидаемое ОДИН раз на поток: иначе на каждом куске сумма росла бы
+     заново и «надо» улетело бы в сотни мегабайт. */
+  function поток(имя, готово, всего){
+    try{
+      имя = String(имя || 'файл');
+      if(!живые[имя]){
+        живые[имя] = { готово: 0, учтён: false };
+      }
+      if(всего > 0 && !живые[имя].учтён){ живые[имя].учтён = true; ОЖИДАЕТСЯ += (+всего || 0); живые[имя].всего = +всего; }
+      живые[имя].готово = +готово || 0;
+      рисовать();
+    }catch(_){}
+  }
+  /* Поток закончился — снимаем его из «течёт сейчас». Докачанное тут же учтёт замер браузера
+     (PerformanceObserver), и если оставить запись здесь, те же байты посчитались бы дважды. */
+  function потокСнять(имя){
+    try{ delete живые[String(имя || 'файл')]; рисовать(); }catch(_){}
+  }
+
+  window._netInd = { рисовать: рисовать, показать: function(){ собрать(); рисовать(); },
+                     поток: поток, потокСнять: потокСнять };
 })();
 
 function _имеетОгласовку(s,i){
@@ -18886,11 +18977,63 @@ window.showUpdateNotes=async function(ver){
   const lines=(txt||'').split('\n').map(s=>s.replace(/\s+$/,'')).filter(s=>s.trim() && !/^🆕\s*Обновление/i.test(s) && !/^\s*SHOT:/i.test(s));   // SHOT: — служебная строка скрина для канала, в аппе не показываем
   body.innerHTML='';
   if(!lines.length){ body.innerHTML='<div class="hint">Описание пунктов пока недоступно.</div>'; }
-  lines.forEach(line=>{ const row=document.createElement('div'); row.style.cssText='display:flex;gap:8px;align-items:flex-start;border-bottom:1px solid var(--border);padding:8px 2px';
-    const tx=document.createElement('div'); tx.style.cssText='flex:1;font-size:13px;line-height:1.5'; tx.innerHTML=_нотаВHtml(line.trim());
+
+  /* ЗАЯВКА #713 (владелец, 15.08.2026): «сделай вид с обновлениями более яснее и
+     структурнее, а то всё как-то как одно монолитное».
+
+     Он прав, и монолит выходил не из-за длины текста, а из-за того, что показ НЕ ЗНАЛ о его
+     устройстве. Нота пишется всегда одинаково: первая строка — заголовок обновления одной
+     фразой, дальше абзацы, и почти каждый абзац начинается с жирного зачина — «Добавлены:»,
+     «Почему это делалось медленно», «И честно о том, чего я НЕ стал делать». То есть
+     подзаголовки в тексте БЫЛИ с самого начала. Их просто рисовали тем же серым шрифтом
+     13px, что и всё прочее, одинаковыми строчками через тонкую черту: глазу не за что
+     зацепиться, и десять абзацев читаются как одна простыня.
+
+     Поэтому не переписываем ноты и не заводим новой разметки — читаем ту, что уже есть:
+       (1) первая строка — ЗАГОЛОВОК, крупно и без кнопки замечания (замечание «по заголовку»
+           бессмысленно: это название всего обновления, а не пункт);
+       (2) жирный зачин абзаца становится ПОДЗАГОЛОВКОМ пункта, остальное — телом;
+       (3) каждый пункт — отдельная карточка с фоном и полями, а не строка в общем потоке.
+     Ни один пункт не спрятан и не сокращён: тот же текст, но со швами, видимыми глазу. */
+  const _пунктОбновления=(line)=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;gap:8px;align-items:flex-start;background:var(--card);'
+      +'border:1px solid var(--border);border-radius:12px;padding:10px 11px;margin-bottom:8px';
+    const tx=document.createElement('div'); tx.style.cssText='flex:1;min-width:0';
+    const цел=_нотаВHtml(line.trim());
+    /* Зачин ищем ТОЛЬКО в начале абзаца и ТОЛЬКО целым тегом: жирное слово посреди фразы —
+       это ударение, а не подзаголовок, и вытащить его наверх значило бы разорвать предложение. */
+    const м=цел.match(/^\s*<b>([\s\S]{2,120}?)<\/b>\s*([\s\S]*)$/i);
+    if(м && м[2].trim()){
+      const h=document.createElement('div');
+      h.style.cssText='font-size:13.5px;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:3px';
+      h.innerHTML=м[1];
+      const pp=document.createElement('div');
+      pp.style.cssText='font-size:13px;line-height:1.55;color:var(--hint)';
+      pp.innerHTML=м[2];
+      tx.appendChild(h); tx.appendChild(pp);
+    } else {
+      const pp=document.createElement('div');
+      pp.style.cssText='font-size:13px;line-height:1.55;color:var(--text)';
+      pp.innerHTML=цел;
+      tx.appendChild(pp);
+    }
     const cm=document.createElement('button'); cm.className='mini'; cm.textContent='💬'; cm.title='Замечание по этому пункту'; cm.style.flex='none';
     cm.onclick=()=>{ m.style.display='none'; try{ openFeedback('по обновлению '+ver+' → «'+line.trim().replace(/<\/?[a-z][^>]*>/gi,'').slice(0,140)+'»'); }catch(e){_тихо(e,"L16989")} };   /* #708: в замечание тоже уходила строка с тегами — человек цитировал бы сор */
-    row.appendChild(tx); row.appendChild(cm); body.appendChild(row); });
+    row.appendChild(tx); row.appendChild(cm);
+    return row;
+  };
+  lines.forEach((line, i)=>{
+    if(i===0){
+      const шапка=document.createElement('div');
+      шапка.style.cssText='font-size:15.5px;font-weight:700;color:var(--text);line-height:1.45;'
+        +'padding:2px 2px 10px;margin-bottom:10px;border-bottom:1px solid var(--border)';
+      шапка.innerHTML=_нотаВHtml(line.trim());
+      body.appendChild(шапка);
+      return;
+    }
+    body.appendChild(_пунктОбновления(line));
+  });
 };
 async function sendFeedback(){
   const t=document.getElementById('fbText').value.trim();
@@ -19223,10 +19366,15 @@ async function fetchWithProgress(url, подпись, опции){
     const всего=+(r.headers.get('content-length')||0);
     if(!r.body || !r.body.getReader){ const t=await r.text(); _plHide(); return t; }
     const чтец=r.body.getReader(); const куски=[]; let готово=0;
-    for(;;){
-      const {done, value}=await чтец.read();
-      if(done) break;
-      куски.push(value); готово+=value.length; _plSet(готово, всего);
+    try{
+      for(;;){
+        const {done, value}=await чтец.read();
+        if(done) break;
+        куски.push(value); готово+=value.length; _plSet(готово, всего);
+        try{ if(window._netInd && window._netInd.поток) window._netInd.поток(подпись, готово, всего); }catch(_){}   // #717
+      }
+    } finally {
+      try{ if(window._netInd && window._netInd.потокСнять) window._netInd.потокСнять(подпись); }catch(_){}
     }
     _plHide();
     const всё=new Uint8Array(готово); let сдвиг=0;
