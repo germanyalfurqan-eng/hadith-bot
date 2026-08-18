@@ -343,7 +343,20 @@ window.тихоОтчёт = function () {
   .chip{padding:7px 11px;border-radius:20px;background:var(--card);border:1px solid var(--border);
         font-size:13px;cursor:pointer;user-select:none;display:inline-block;vertical-align:middle}   /* #543/#548 (скрины: чип наезжает на подпись «искать по-арабски», чипы цепи идут лесенкой): span по умолчанию inline — его padding НЕ раздвигает строки и налезает на соседние. inline-block чинит это везде разом */
   .chip.on{background:var(--btn);color:var(--btn-text);border-color:var(--btn)}
-  .hint{color:var(--hint);font-size:12px;margin:4px 2px 10px}
+  /* 🔴 ЗАЯВКА #707 (владелец, 08.08.2026): «слушай, может, шрифт больше сделать, а то тяжело
+     читать?». К заявке приложен скрин, и он объясняет её точнее слов: арабский на нём крупный
+     и читается, а мелким набрано всё ОСТАЛЬНОЕ — подписи, «Сахих аль-Бухари» под номером,
+     строка сверки «звеньев в цепи: 4 · приложение: 4», «▸ подробнее», подсказка над поиском.
+     Одиннадцать-двенадцать точек на телефоне.
+     И главное: регулятор «Aa» у него на экране БЫЛ — но он менял только `.ar` и `.tr-out`,
+     то есть арабский и перевод. Ровно то, что и так читалось. Человек жмёт кнопку размера,
+     видит, что мелкое не изменилось, и просит «сделать больше» словами.
+     ⚠️ ЧЕСТНО О ГРАНИЦЕ ЭТОЙ ПРАВКИ. Она чинит те подписи, чей размер задан ЗДЕСЬ, в правилах.
+     Но в приложении 782 места, где размер 12,5 точки и мельче написан прямо в элементе, и
+     такой размер перебивает правило — регулятор их по-прежнему не берёт. Замерено, не на
+     глаз. Переписывать все 782 разом, не имея возможности посмотреть каждый экран, — это
+     менять вёрстку вслепую, поэтому здесь только первый шаг, а не «сделано». */
+  .hint{color:var(--hint);font-size:calc(12.5px * var(--txtScale,1));margin:4px 2px 10px}
   .neuro-box{background:var(--card);border:1px dashed var(--border);border-radius:12px;
        padding:10px;margin-bottom:10px;display:none}
   .neuro-box textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:8px;
@@ -410,7 +423,7 @@ window.тихоОтчёт = function () {
   .sugRow .ic{opacity:.55;font-size:13px;width:16px;text-align:center;flex:0 0 auto}
   .sugRow .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .sugRow .rx{opacity:.4;font-size:12px;flex:0 0 auto}.sugRow .rx:hover{opacity:.9}
-  .meta{margin-top:8px;font-size:13px;color:var(--hint);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .meta{margin-top:8px;font-size:calc(13px * var(--txtScale,1));color:var(--hint);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
   .src{color:var(--link);font-weight:600;text-decoration:none}
   .badge{background:#1d3a5f;color:#cfe3ff;border:1px solid #2f5b8f;border-radius:8px;padding:2px 8px;font-size:12px;font-weight:600}
   .badge.muh{background:#d4af37;color:#241c00}
@@ -771,7 +784,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1399</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1400</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1637,7 +1650,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1399';
+const APPVER = 'v1400';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -19782,6 +19795,12 @@ function _qrOpen(){ const m=document.getElementById('qrModal'); return !!(m && m
 function applyFontScale(){ try{ const z=(cfg.fontScale||1), qz=(cfg.qrFontScale||1);   // Коран — ОТДЕЛЬНЫЙ размер, не влияет на остальное
   // #57: на экране результатов масштабируем ТЕКСТ (.ar/.tr-out через --txtScale), а НЕ зумим всё (кнопки/карточки остаются)
   const rs=document.getElementById('res'); if(rs){ rs.style.zoom=''; rs.style.setProperty('--txtScale', z); }
+  /* #707: подписи и пояснения живут НЕ ТОЛЬКО в выдаче — подсказка над поиском, шапки, своды
+     стоят выше по дереву. Раз мелкий текст теперь считается от --txtScale, ставим её и на
+     корень, иначе регулятор чинил бы половину экрана, а вторая осталась бы прежней —
+     то самое «формально сделано». Читалка Корана не задета: у неё свой множитель (qrFontScale)
+     и своя ветка ниже. */
+  try{ document.documentElement.style.setProperty('--txtScale', z); }catch(_){}
   const bt=document.getElementById('bookText'); if(bt) bt.style.zoom=z;   // книга — отдельная читалка, зум допустим
   const qzw=document.getElementById('qrZoom'); const qb=document.getElementById('qrBody');
   if(qzw){ qzw.style.zoom=qz; if(qb) qb.style.zoom=''; } else if(qb) qb.style.zoom=qz;   // M357: zoom на обёртке, не на скроллере (и снять старый с qrBody)
