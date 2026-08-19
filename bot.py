@@ -1730,6 +1730,59 @@ def _выбор_записать(имя):
         return False
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# 🔁 РАБОТА ДЛЯ НОУТБУКА — очередь заданий вместо двери снаружи (владелец, #948)
+#
+# «Придумай путь, чтобы БЕЗ МЕНЯ вы сделали Линг в чате помощника».
+#
+# ПОЧЕМУ ТАК, А НЕ ТУННЕЛЕМ. Полдня мы пытались пустить сервер К ноутбуку и упёрлись:
+# пять туннелей подряд, две пары рук, все адреса мертвы; постоянный требует токена, то есть
+# участия владельца — ровно того, чего он просил избежать.
+# А обратное направление работает давно и надёжно: мост на ноутбуке опрашивает этот самый
+# сервер каждые 20 секунд. Дверь снаружи внутрь закрыта, изнутри наружу — открыта.
+# Значит не сервер идёт к модели, а НОУТБУК ЗАБИРАЕТ РАБОТУ.
+#
+# Побочная выгода важнее удобства: наружу не открыто вообще НИЧЕГО. Прежний замысел открывал
+# дверь с секретом — теперь двери нет совсем, есть только исходящие звонки самого ноутбука.
+#
+# Задания живут в памяти процесса намеренно: вопрос к модели живёт секунды, переживать
+# перезапуск ему незачем, а файл на диске пришлось бы чистить и сторожить.
+_ЗАДАНИЯ = {}
+_ЗАДАНИЯ_СЧЁТ = [0]
+ЗАДАНИЕ_ЖИВЁТ = 300          # сек: дольше этого вопрос уже не нужен — человек ушёл
+
+
+def _задания_прибрать():
+    """Выкинуть протухшее. Без уборки словарь растёт молча, а молчаливый рост — это утечка."""
+    _сейчас = time.time()
+    for _к in [к for к, з in _ЗАДАНИЯ.items() if _сейчас - з.get('когда', 0) > ЗАДАНИЕ_ЖИВЁТ]:
+        _ЗАДАНИЯ.pop(_к, None)
+
+
+def задание_положить(модель, сообщения, потолок, температура):
+    _задания_прибрать()
+    _ЗАДАНИЯ_СЧЁТ[0] += 1
+    _ид = 'z%d' % _ЗАДАНИЯ_СЧЁТ[0]
+    _ЗАДАНИЯ[_ид] = {'модель': модель, 'сообщения': сообщения, 'потолок': потолок,
+                     'температура': температура, 'ответ': None, 'взято': False,
+                     'когда': time.time()}
+    return _ид
+
+
+def задание_ждать(ид, сколько):
+    """Ждём ответа от ноутбука. Вернём None — значит не дождались, и зовущий уйдёт в облако."""
+    _край = time.time() + сколько
+    while time.time() < _край:
+        _з = _ЗАДАНИЯ.get(ид)
+        if not _з:
+            return None
+        if _з.get('ответ') is not None:
+            return _ЗАДАНИЯ.pop(ид)['ответ']
+        time.sleep(0.4)
+    _ЗАДАНИЯ.pop(ид, None)
+    return None
+
+
 def dsoc_канал(чат_ид=None):
     """Куда идти за ответом: (адрес, модель, ключ, метка, местная_ли).
 
@@ -1813,6 +1866,23 @@ def dsoc_запрос(сообщения, потолок=3000, температ�
         # обязанности первого, иначе он их растеряет — это уже проходили со сторожем).
         # чат прокидывается снаружи: без него канал вернёт облако (см. разбор в dsoc_канал).
         _адрес, _модель, _кл, _метка, _местная = dsoc_канал(чат)
+        # 🔁 #948: местная модель отвечает НЕ по прямой связи, а через очередь заданий —
+        # ноутбук сам забирает работу. Сервер к нему не ходит вовсе (и не может: он его не
+        # видит). Не дождались за отведённое время — молча уходим в облако ниже, как и при
+        # любом другом отказе местной: человек не должен ждать выключенный ноутбук.
+        if _местная:
+            _ид = задание_положить(_модель, сообщения, потолок, температура)
+            _готово = задание_ждать(_ид, 150)
+            if _готово and (_готово.get('текст') or '').strip():
+                return (_готово['текст'], _готово.get('вход') or 0, _готово.get('выход') or 0)
+            print('dsoc_запрос: местная «%s» не забрала работу за 150 с — иду в облако' % _модель)
+            try:
+                _выбор_записать('')
+            except Exception:
+                pass
+            _кл, _имя_кл = opencode_ключ()
+            opencode_отметить(_имя_кл)
+            _адрес, _модель, _местная = OPENCODE_URL, OPENCODE_MODEL, False
         # Заслон перед местными моделями пускает только со знанием общего секрета: голая
         # модель, открытая наружу, — это чужие люди на видеокарте владельца за его счёт.
         _заг = {"Content-Type": "application/json", "Authorization": "Bearer " + _кл}
@@ -19520,6 +19590,45 @@ async def _api_serve(application=None):
                                         'открытые': [з for з in сп if not з.get('исполнено')],
                                         'новые': [з for з in сп if not з.get('взято')]}))
 
+    async def rabota(r):
+        """Дверь для работника с ноутбука: взять задание и вернуть ответ (#948).
+
+        Одна дверь на оба действия намеренно: два обработчика отличались бы тремя строками,
+        и завтра мы правили бы обе, а послезавтра забыли бы про одну (З-33, не множить сущности).
+        Наружу отсюда не уходит ничего лишнего — только сам вопрос к модели.
+        """
+        if not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            _д = await r.json()
+        except Exception:
+            _д = {}
+        if str(_д.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'forbidden'}, status=403))
+        _дело = (_д.get('действие') or 'взять').strip()
+        if _дело == 'взять':
+            _задания_прибрать()
+            for _ид, _з in sorted(_ЗАДАНИЯ.items(), key=lambda x: x[1].get('когда', 0)):
+                if not _з.get('взято') and _з.get('ответ') is None:
+                    _з['взято'] = True
+                    return _cors(web.json_response({'ok': True, 'есть': True, 'id': _ид,
+                                                    'модель': _з['модель'],
+                                                    'сообщения': _з['сообщения'],
+                                                    'потолок': _з['потолок'],
+                                                    'температура': _з['температура']}))
+            return _cors(web.json_response({'ok': True, 'есть': False}))
+        if _дело == 'ответ':
+            _ид = str(_д.get('id') or '')
+            _з = _ЗАДАНИЯ.get(_ид)
+            if not _з:
+                # Опоздал: человек уже получил ответ из облака. Не беда и не ошибка — но сказать
+                # надо, иначе работник будет думать, что его слышат, а его никто не ждёт.
+                return _cors(web.json_response({'ok': False, 'почему': 'задание истекло'}))
+            _з['ответ'] = {'текст': _д.get('текст') or '', 'вход': _д.get('вход') or 0,
+                           'выход': _д.get('выход') or 0, 'кто': _д.get('кто') or ''}
+            return _cors(web.json_response({'ok': True}))
+        return _cors(web.json_response({'error': 'bad_action'}, status=400))
+
     async def promt(r):
         """Отдать ЖИВОЙ системный промт помощника целиком. Слово владельца 19.08.2026:
         «в архиве весь системный промт должен быть всегда».
@@ -22653,7 +22762,7 @@ async def _api_serve(application=None):
                                      status=502)
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
