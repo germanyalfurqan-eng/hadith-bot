@@ -19482,6 +19482,31 @@ async def _api_serve(application=None):
                                         'открытые': [з for з in сп if not з.get('исполнено')],
                                         'новые': [з for з in сп if not з.get('взято')]}))
 
+    async def promt(r):
+        """Отдать ЖИВОЙ системный промт помощника целиком. Слово владельца 19.08.2026:
+        «в архиве весь системный промт должен быть всегда».
+
+        Почему дверь, а не сборка на месте: промт собирается ИЗ живых кусков — свежие
+        обновления приложения, выговоры, приобретённые правила, карта аппа, текущая модель.
+        Собранный на ноутбуке он был бы ПОХОЖ на настоящий и тем опасен: в архив лёг бы не
+        тот текст, по которому помощник на самом деле живёт. Спрашиваем у того, кто им и живёт.
+        """
+        if not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            _д = await r.json()
+        except Exception:
+            _д = {}
+        if (_д.get('secret') or '') != BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'forbidden'}, status=403))
+        try:
+            _т = dsoc_системный()
+        except Exception as e:
+            return _cors(web.json_response({'error': str(e)[:200]}, status=500))
+        return _cors(web.json_response({'ok': True, 'промт': _т, 'знаков': len(_т),
+                                        'модель': _выбор_прочитать() or OPENCODE_MODEL,
+                                        'снято': _now_msk()}))
+
     async def pravila(r):
         """Свод правил помощника: посмотреть и вынести вердикт.
 
@@ -22587,7 +22612,7 @@ async def _api_serve(application=None):
                                      status=502)
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
