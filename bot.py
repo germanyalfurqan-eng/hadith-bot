@@ -11391,6 +11391,62 @@ async def on_spam(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 
 
+async def _модель_команда(update, имя):
+    """Выбор модели помощника. Только владелец — проверка стоит у вызова (is_owner: две его
+    лички и канал Муслимун).
+
+    Вынесено отдельной функцией, потому что вызывается ПЕРВОЙ строкой обработчика: приказ
+    владельца не должен ждать своей очереди среди трёх тысяч строк — на этом он четырежды
+    писал команду впустую.
+    """
+    _р = _реестр_моделей()
+    _мест = _р.get('местные') or {}
+    _сейчас = _выбор_прочитать()
+    if not имя:
+        _стр = ['🎛 <b>Модель помощника</b>', '',
+                'Сейчас: <b>%s</b>' % (_сейчас or (OPENCODE_MODEL + ' · облако')), '',
+                '<b>Местные</b> (через твой ноутбук):']
+        for _и in sorted(_мест):
+            _стр.append('  • <code>%s</code>%s' % (_и, '  ← по умолчанию'
+                                                   if _и == _р.get('по_умолчанию_местная') else ''))
+        _стр += ['', '<b>Облако:</b> <code>%s</code>' % OPENCODE_MODEL, '',
+                 'Переключить: «модель ling-q3-262k» · вернуть: «модель облако»']
+        await update.message.reply_text('\n'.join(_стр)[:4000], parse_mode='HTML')
+        return
+    if имя.lower() in ('облако', 'обл', 'cloud'):
+        _выбор_записать('')
+        await update.message.reply_text('☁️ Готово: отвечаю через облако (<b>%s</b>).'
+                                        % OPENCODE_MODEL, parse_mode='HTML')
+        return
+    if имя not in _мест:
+        # Похожее не подставляем: подмена соседним профилем — ровно тот случай, когда владелец
+        # выбрал одного Линга, а говорил со старым и не заметил.
+        await update.message.reply_text(
+            '🤷 Профиля <code>%s</code> в реестре нет. Скажи «модель» — покажу список.'
+            % имя[:60], parse_mode='HTML')
+        return
+    await update.message.reply_text(
+        '⏳ Проверяю <b>%s</b> — задание уходит на твой ноутбук, это до полуминуты.\n'
+        'Пока отвечает прежняя: <b>%s</b>.' % (имя, _сейчас or 'облако'), parse_mode='HTML')
+    _жива, _сказала, _кто = await asyncio.get_event_loop().run_in_executor(
+        None, lambda: dsoc_проверить_модель(имя, 120))
+    if not _жива:
+        # Молчаливого отката не бывает: владелец должен знать, с кем говорит.
+        await update.message.reply_text(
+            '🔴 <b>%s</b> не отозвалась (%s). Остаюсь на прежней: <b>%s</b>.\n'
+            'Ничего не переключил — чтобы ты не думал, что говоришь с ней.'
+            % (имя, _сказала, _сейчас or 'облако'), parse_mode='HTML')
+        return
+    _выбор_записать(имя)
+    # Правду о том, кто ответил, говорит ответ, а не настройка.
+    _подп = ('\n🏷 представилась: <code>%s</code>' % _кто[:70]) if _кто else ''
+    _разн = ('\n⚠️ просил <code>%s</code>, ответила <code>%s</code> — проверь'
+             % (имя, _кто[:50])) if (_кто and имя.split('-')[0] not in _кто.lower()) else ''
+    await update.message.reply_text(
+        '✅ Переключился на <b>%s</b>.\nПроверка: «%s»%s%s'
+        % (имя, _сказала[:120], _подп, _разн), parse_mode='HTML')
+
+
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 🔴 15.08.2026, ПЕРЕНЕСЕНО В НАЧАЛО handle. Это объявление стояло на 340 строк НИЖЕ,
     # а звали его выше — в ветке «запомнить видео, присланное владельцем». Вложенное
@@ -11445,6 +11501,26 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text or ""
     text = text.strip()
+
+    # 🔴 19.08.2026. Команда «модель» стоит ЗДЕСЬ, первой строкой после разбора текста.
+    # Она уже стояла ниже — и владелец четырежды писал её впустую: между началом обработчика
+    # и тем местом три с половиной тысячи строк, и любая ветка чата выходит раньше. Я всё это
+    # время объяснял причину то очередью, то памятью сервера, то анонимной подписью — а дело
+    # было в очерёдности. Приказ владельца обязан разбираться прежде всего прочего, иначе он
+    # не приказ, а пожелание, зависящее от того, кто перехватит раньше.
+    if text.strip().lower().startswith('модель') and is_owner(update):
+        _мчасти = text.strip().split(None, 1)
+        if _мчасти[0].lower() == 'модель':
+            _мимя = (_мчасти[1].strip() if len(_мчасти) > 1 else '')
+            try:
+                await _модель_команда(update, _мимя)
+            except Exception as _e:
+                print('команда модель упала: %s' % str(_e)[:200])
+                try:
+                    await update.message.reply_text('🔧 Команда сорвалась: %s' % str(_e)[:150])
+                except Exception:
+                    pass
+            return
 
     # 🛡 #178: осмотр сообщений новичков на рекламу. Стоит РАНО и ничего не решает сам —
     # только считает приметы и, если сошлись, зовёт владельца с кнопками. Ни одной ветки
@@ -14839,526 +14915,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # «модель ling-q3-262k», получал «заявка записана» — до команды дело не доходило
         # вовсе. Три раза подряд он писал её впустую, а я искал причину в очереди и в
         # памяти сервера. Порядок обработчиков — тоже часть работы команды.
-        # ===== 🎛 «модель» — выбор модели помощника (только владелец, 19.08.2026) =====
-        # Владелец: «команда только от меня, больше ни от кого». Чужому не отвечаем ВОВСЕ —
-        # ни отказом, ни подсказкой: сам факт наличия такой команды посторонним знать незачем.
-        if _tl == "модель" or _tl.startswith("модель "):
-            # 🔴 19.08.2026, ВОТ ПОЧЕМУ КОМАНДА НЕ РАБОТАЛА В ДЖАМААТЕ. Я сверял отправителя с
-            # номером владельца напрямую — а он пишет там от имени группы, анонимным админом:
-            # в отправителе стоит служебный GroupAnonymousBot, а сам он спрятан в sender_chat.
-            # Моя проверка его не узнавала и молча выходила. В боте для этого давно есть
-            # _хозяин(), учитывающий анонима, — надо было взять готовое, а не писать своё.
-            # Ровно та же ошибка, что и с местом команды: я делал рядом со сделанным.
-            try:
-                _свой = _хозяин(update)
-            except Exception:
-                _свой = (getattr(update.effective_user, 'id', 0) == OWNER_ID)
-            if not _свой:
-                return
-            _что = text.strip()[6:].strip()
-            _р = _реестр_моделей()
-            _сейчас = _выбор_прочитать()
-            _мест = _р.get("местные") or {}
-            if not _что:
-                # Показать, кто отвечает и что вообще есть. Список длинный (28 профилей),
-                # поэтому даём его целиком, но с отметкой умолчания — владелец просил
-                # «мочь выбрать ЛЮБУЮ доступную».
-                _строки = ["🎛 <b>Модель помощника</b>", "",
-                           "Сейчас: <b>%s</b>" % (_сейчас or (OPENCODE_MODEL + " · облако")), ""]
-                _строки.append("<b>Местные</b> (только здесь, в личке — в общем чате всегда облако):")
-                for _и in sorted(_мест):
-                    _строки.append("  • <code>%s</code>%s" % (_и, "  ← по умолчанию"
-                                                             if _и == _р.get("по_умолчанию_местная") else ""))
-                _строки.append("")
-                _строки.append("<b>Облачные:</b> " + ", ".join("<code>%s</code>" % _о
-                                                              for _о in (_р.get("облачные") or [])))
-                _строки.append("")
-                _строки.append("Переключить: «модель ling-q3-262k» · вернуть облако: «модель облако»")
-                await update.message.reply_text("\n".join(_строки)[:4000], parse_mode="HTML")
-                return
-            if _что.lower() in ("облако", "обл", "cloud", OPENCODE_MODEL):
-                _выбор_записать("")
-                await update.message.reply_text(
-                    "☁️ Готово: отвечаю через облако (<b>%s</b>)." % OPENCODE_MODEL, parse_mode="HTML")
-                return
-            if _что not in _мест:
-                # Не угадываем «похожее»: подстановка соседнего профиля — ровно тот случай,
-                # когда владелец выбрал одного Линга, а получил другого и не заметил.
-                await update.message.reply_text(
-                    "🤷 Профиля <code>%s</code> в реестре нет. Скажи «модель» — покажу список." % _что[:60],
-                    parse_mode="HTML")
-                return
-            # ④ ПРОВЕРКА ДО СМЕНЫ. Пока идёт — работает СТАРАЯ модель.
-            await update.message.reply_text(
-                "⏳ Проверяю <b>%s</b> перед переключением — она может подниматься минутами.\n"
-                "Пока отвечает прежняя: <b>%s</b>." % (_что, _сейчас or "облако"), parse_mode="HTML")
-            _жива, _что_сказала, _кто = await asyncio.get_event_loop().run_in_executor(
-                None, lambda: dsoc_проверить_модель(_что))
-            if not _жива:
-                # ① Молчаливого отката не бывает: владелец должен знать, с кем говорит.
-                await update.message.reply_text(
-                    "🔴 <b>%s</b> не ответила (%s). Остаюсь на прежней: <b>%s</b>.\n"
-                    "Ничего не переключил — чтобы ты не думал, что говоришь с ней."
-                    % (_что, _что_сказала, _сейчас or "облако"), parse_mode="HTML")
-                return
-            _выбор_записать(_что)
-            # ② Подпись по факту: показываем, кто ОТВЕТИЛ, а не кого просили.
-            _подпись = ("\n🏷 представилась: <code>%s</code>" % _кто[:80]) if _кто else ""
-            _разн = ("\n⚠️ просил <code>%s</code>, ответила <code>%s</code> — проверь"
-                     % (_что, _кто[:60])) if (_кто and _что not in _кто) else ""
-            await update.message.reply_text(
-                "✅ Переключился на <b>%s</b>.\nПроверка: «%s»%s%s\n\n"
-                "В общем чате по-прежнему отвечает облако." % (_что, _что_сказала[:120], _подпись, _разн),
-                parse_mode="HTML")
-            return
-        # ===== ПОЛНАЯ ИНСТРУКЦИЯ команд владельца (чтобы не запоминать): «команды» / «помощь» =====
-        if _tl in ("команды", "помощь", "хелп", "/команды", "инструкция", "что умеешь"):
-            await update.message.reply_text(
-                "🛠 *Команды владельца* (пиши боту в личку):\n\n"
-                "📥 *Заявки/замечания мне (Claude):*\n"
-                "• `заявка <текст>` — записать заявку с номером (предупрежу, если точный дубль)\n"
-                "• *фото с подписью* `заявка <текст>` — скрин-заявка (скрин уходит в рабочий журнал, с МСК-временем)\n"
-                "• `заявки` — список (невыполненные первыми + от пользователей)\n"
-                "• `заявка done <№>` — пометить выполненной\n"
-                "• `журнал` — вкл/выкл уведомления о работе Claude над заявками\n\n"
-                "🤖 *ИИ (внутренняя кухня, только тебе):*\n"
-                "• `гпт <вопрос>` — спросить GPT/Gemini\n\n"
-                "💬 *Связь с пользователем:*\n"
-                "• `написать <ID> <текст>` — отправить юзеру сообщение от твоего имени (ID берёшь из журнала #ии)\n\n"
-                "📣 *Канал и закреп:*\n"
-                "• `анонс` — запостить текущее обновление в @muslimoonapp\n"
-                "• `анонс <текст>` — свой текст в канал\n"
-                "• `закреп` — сообщение с кнопкой приложения (закрепляется автоматически)\n"
-                "• `закреп <текст>` — свой текст под кнопкой\n\n"
-                "🧠 *Смысловой поиск (РАГ):*\n"
-                "• `раг <вопрос>` — поиск по смыслу · `раг бухари <вопрос>` — только по этой книге\n"
-                "• `раг оценки` — журнал качества: сколько 👎/👍 и последние промахи (#671)\n"
-                "• `раг доступ` — кому открыт · `раг диаг` — жив ли поиск\n\n"
-                "⛔ *Модерация чата (#628):*\n"
-                "• `права` / `права <id чата>` — есть ли у бота право банить (ничего не меняет)\n"
-                "• `чат бан <id> [id чата]` — реально выгнать из чата · `чат разбан <id>`\n"
-                "• `бан <id>` — только чёрный список БОТА (игнор), из чата не выгоняет\n\n"
-                "⚙️ *Управление:*\n"
-                "• `ии вкл` / `ии выкл` — ИИ для пользователей вкл/выкл\n"
-                "• `бот стоп` / `бот старт` — режим обслуживания\n\n"
-                "ℹ️ Эту шпаргалку всегда можно открыть командой *команды*.",
-                parse_mode="Markdown")
-            return
-        # ===== GPT (OpenAI) для особых задач: «гпт <вопрос>» / «gpt <вопрос>» =====
-        if _tl == "гпт" or _tl == "gpt" or _tl.startswith("гпт ") or _tl.startswith("gpt ") or _tl.startswith("гпт\n") or _tl.startswith("gpt\n"):
-            q = text.strip()[3:].strip()
-            if not q:
-                await update.message.reply_text("Напиши: гпт <вопрос>")
-                return
-            if not OPENAI_API_KEY and not GEMINI_API_KEY:
-                await update.message.reply_text("⚠️ Нет ни OPENAI_API_KEY, ни GEMINI_API_KEY (валидного). Railway → Variables: имя без пробелов, и Redeploy.")
-                return
-            try: await update.message.reply_text("🤖 Думаю…")
-            except Exception: pass
-            ans, model = ask_special(q)
-            await update.message.reply_text(((ans or "Не удалось получить ответ.") + (f"\n\n— {model}" if model else ""))[:4000])
-            # СТРОГИЙ лог расхода GPT в внутренний журнал (Gemini бесплатный — не логируем как расход)
-            if model and str(model).startswith("GPT") and _LAST_GPT_SPEND:
-                s = _LAST_GPT_SPEND
-                try:
-                    await context.bot.send_message(LOG_CHAT_ID, f"💸 GPT-расход ({s.get('t')}): {s.get('model')} · in {s.get('in')}/out {s.get('out')} ток. ≈ ${s.get('cost', 0):.4f} · всего GPT ≈ ${s.get('total', 0):.4f} ({s.get('calls', '?')} вызовов). Баланс — platform.openai.com/usage")
-                except Exception:
-                    pass
-            return
-        # === НАПИСАТЬ ПОЛЬЗОВАТЕЛЮ по ID (релей через бота — для юзеров без @username, по их ID из журнала): «написать <ID> <текст>» ===
-        if _tl.startswith("написать ") or _tl.startswith("ответить ") or _tl.startswith("напиши "):
-            parts = text.strip().split(None, 2)   # [команда, ID, текст]
-            if len(parts) >= 3 and parts[1].lstrip('-').isdigit():
-                target_uid = int(parts[1]); body = parts[2]
-                try:
-                    await context.bot.send_message(target_uid, f"💬 Сообщение от разработчика Muslimoon:\n\n{body}")
-                    await update.message.reply_text(f"✅ Отправлено пользователю {target_uid}.")
-                except Exception as e:
-                    await update.message.reply_text(f"⚠️ Не смог отправить {target_uid}: {e}\n(Юзер мог не запускать бота или заблокировал.)")
-            else:
-                await update.message.reply_text("Формат: написать <ID> <текст>\nНапр.: написать 6692711031 Ассаламу алейкум!\n(ID берётся из журнала #ии; бот отправит юзеру от твоего имени.)")
-            return
-        # ===== ЗАКРЕП: сообщение с кнопкой открытия приложения + автозакреп. «закреп <свой текст>» = свой текст =====
-        if _tl == "закреп" or _tl == "закрепить" or _tl.startswith("закреп "):
-            from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-            custom = text.strip()[7:].strip() if _tl.startswith("закреп ") else ""
-            body = custom or ("📗 *Muslimoon* — Коран и хадисы 🌙\n🔎 Поиск по хадисам и аятам · 📚 чтение Мактабы (8589 книг) · 👤 передатчики · 📖 тафсир.\n\nЖми кнопку ниже 👇")
-            is_private = update.effective_chat and update.effective_chat.type == "private"
-            if is_private:
-                kb = InlineKeyboardButton("📗 𝗠𝗨𝗦𝗟𝗜𝗠𝗢𝗢𝗡-𝗔𝗣𝗣", web_app=WebAppInfo(url=WEBAPP_URL))
-            else:
-                kb = InlineKeyboardButton("📗 𝗠𝗨𝗦𝗟𝗜𝗠𝗢𝗢𝗡-𝗔𝗣𝗣", url="https://t.me/muslimoontt_bot/app?startapp")
-            msg = await update.message.reply_text(body, reply_markup=InlineKeyboardMarkup([[kb]]), parse_mode="Markdown")
-            try:
-                await context.bot.pin_chat_message(chat_id=update.effective_chat.id, message_id=msg.message_id, disable_notification=True)
-                await update.message.reply_text("📌 Закреплено. Перешли это сообщение в свой канал/группу и закрепи там. ✍️ Свой текст: «закреп <твой текст>».")
-            except Exception:
-                await update.message.reply_text("Сообщение с кнопкой отправлено ✅. Авто-закрепить не вышло — закрепи вручную (зажми сообщение → «Закрепить»). ✍️ Свой текст: «закреп <твой текст>».")
-            return
-        # M428: ПОЛНЫЙ единый журнал (M-чат + TB-бот + TA-апп) — сводка статусов/причин/сроков с Pages (req_status.json, обновляется каждым деплоем)
-        if _tl in ("статус заявок", "заявки полные", "полный журнал", "журнал заявок"):
-            try:
-                rs = requests.get("https://germanyalfurqan-eng.github.io/hadith-bot/req_status.json", timeout=15).json()
-                lines = [f"📋 *ЕДИНЫЙ журнал заявок* · 🕐 сейчас {_now_msk()}",
-                         f"_данные собраны: {rs.get('updated','')}_",
-                         f"Современных: {rs.get('modern_total')} = ✅{rs.get('modern_done')} + 🔴{rs.get('modern_open')}",
-                         f"_{rs.get('legacy_note','')}_", "", "🔴 *Открытые:*"]
-                for it in (rs.get("items") or []):
-                    if it.get("status") != "open":
-                        continue
-                    lines.append(f"• *{it.get('code')}*: {(it.get('title') or '')[:90]}")
-                    if it.get("reason"):
-                        lines.append(f"   ↳ {it['reason']} · срок: {it.get('eta','—')}")
-                    if len(lines) > 70:
-                        lines.append("… (полный список — в Кабинете приложения, «📋 Журнал заявок»)"); break
-                await send_long(update, "\n".join(lines), "Markdown")
-            except Exception as e:
-                await update.message.reply_text("🔧 Журнал не дотянулся: " + str(e)[:120])
-            return
-        # ===== ЗАЯВКИ владельца: список (невыполненные первыми + от пользователей) =====
-        if _tl == "заявки" or _tl == "список заявок" or _tl == "мои заявки":
-            j = _journal_load(); reqs = j.get("requests", []); fb = j.get("feedback", [])
-            open_r = [r for r in reqs if not r.get("done")]; done_r = [r for r in reqs if r.get("done")]
-            lines = [f"📋 *Заявки владельца* — открытых {len(open_r)} · выполнено {len(done_r)}\n"]
-            # З-18: «В РАБОТЕ СЕЙЧАС» (live_now.json) — что делаю/жду прямо сейчас, со штампом времени
-            try:
-                _ln = requests.get("https://germanyalfurqan-eng.github.io/hadith-bot/live_now.json", timeout=8).json()
-                _lw = [f"🔵 *В РАБОТЕ СЕЙЧАС* ({_ln.get('asof','')})"]
-                for _f in (_ln.get("fronts") or [])[:6]:
-                    _p = f" — {_f['pct']}%" if isinstance(_f.get("pct"), int) else ""
-                    _lw.append(f"▸ {_f.get('t','')}{_p}" + (f"\n   {_f.get('s','')}" if _f.get("s") else ""))
-                if _ln.get("note"):
-                    _lw.append(f"_{_ln['note']}_")
-                lines = _lw + [""] + lines
-            except Exception:
-                pass
-            if open_r:
-                lines.append("🔴 *Не сделано:*")
-                for r in open_r[:30]:
-                    lines.append(f"№{r['id']} ({r['d']}){' 📷' if r.get('img') else ''}: {(r.get('t') or '')[:200]}")
-            else:
-                lines.append("✅ Открытых заявок нет.")
-            # 🔴 18.08.2026. Закрытые ПОКАЗЫВАЕМ, а не только считаем, и называем — кем.
-            # Пока их было ноль, показывать было нечего; теперь технадзор закрывает заявки
-            # сам, с распиской, и владелец обязан видеть, ЧТО объявлено сделанным и чьим
-            # решением. Иначе счётчик «выполнено» станет врать в другую сторону.
-            _закр = [r for r in done_r if r.get('закрыл')]
-            if _закр:
-                lines.append("\n✅ *Закрыто технадзором* (не согласны — «заявка открой <№>»):")
-                for r in _закр[-12:]:
-                    lines.append(f"№{r['id']}: {(r.get('t') or '')[:90]}"
-                                 f"\n   ↳ {(r.get('итог') or '')[:160]}")
-            if fb:
-                lines.append(f"\n📨 *От пользователей* (последние, всего {len(fb)}):")
-                for x in fb[:8]:
-                    lines.append(f"№{x.get('id','?')} {x.get('u','')}: {(x.get('t') or '')[:140]}")
-            lines.append("\nℹ️ Добавить: «заявка <текст>». Закрыть: «заявка done <№>». Вернуть в работу: «заявка открой <№>».")
-            _digest = "\n".join(lines)[:4000]
-            try:
-                await update.message.reply_text(_digest, parse_mode="Markdown")
-            except Exception:   # #165-фикс: Markdown-символ в тексте юзера ломал «заявки» (Telegram 400) → фолбэк без разметки
-                await update.message.reply_text(_digest)
-            return
-        # ===== #165: тумблер рабочего журнала (уведомления о работе Claude над заявками) =====
-        if (_tl == "журнал" or _tl == "worklog") and is_owner(update):
-            j = _journal_load()
-            j["worklog_enabled"] = not j.get("worklog_enabled", False)
-            _journal_save("toggle worklog")
-            await update.message.reply_text(("✅ Рабочий журнал ВКЛЮЧЕН — буду слать тебе В ЛИЧКУ: что начал/закончил/на чём остановился по каждой заявке, суть с логикой, сколько заявок осталось невыполнено и в работе, и сколько токенов потрачено. Выключить — снова напиши «журнал»." if j["worklog_enabled"] else "🔇 Рабочий журнал ОТКЛЮЧЕН — уведомления о заявках слать не буду."))
-            return
-        # ===== #147: фетч разборов достоверности с канала @hadis_isnad (бот — участник; форвард по message_id → текст/Whisper → data/razbory.json) =====
-        if (_tl.startswith("разбор") or _tl.startswith("разборы")) and is_owner(update):
-            RAZBOR_CHANNEL = "@hadis_isnad"
-            _nums = [int(x) for x in re.findall(r'\d+', _tl)]
-            if not _nums:
-                await update.message.reply_text("📜 #147 разборы достоверности.\nФормат: «разбор 11» (один пост) или «разборы 11 50» (диапазон).\nЯ форварну посты из @hadis_isnad, аудио расшифрую (Whisper), сохраню в data/razbory.json — потом внесу вердикты в карточки (⛔ наш разбор). Аудио = расход Whisper, поэтому до 40 за раз.")
-                return
-            _a = _nums[0]; _b = _nums[1] if len(_nums) > 1 else _nums[0]
-            if _b < _a:
-                _a, _b = _b, _a
-            if _b - _a > 40:
-                _b = _a + 40
-                await update.message.reply_text(f"⚠️ За раз беру до 40 постов (аудио = расход Whisper): {_a}–{_b}. Дальше продолжишь «разборы {_b+1} 173».")
-            store = _data_get("razbory.json", {}) or {}
-            await update.message.reply_text(f"📥 Тяну разборы {_a}–{_b} из {RAZBOR_CHANNEL}…")
-            _done = 0; _fail = 0; _aud = 0
-            for _mid in range(_a, _b + 1):
-                try:
-                    _m = await context.bot.forward_message(LOG_CHAT_ID, RAZBOR_CHANNEL, _mid)
-                    _txt = (_m.text or _m.caption or "").strip()
-                    _kind = "text"
-                    if (_m.voice or _m.audio) and len(_txt) < 40:
-                        _kind = "audio"
-                        _media = _m.voice or _m.audio
-                        _f = await _media.get_file()
-                        _ext = ".ogg" if _m.voice else ".mp3"
-                        _p = f"/tmp/razbor_{_mid}{_ext}"
-                        await _f.download_to_drive(_p)
-                        _tr = transcribe_audio(_p)
-                        if _tr:
-                            _txt = (_txt + "\n" + _tr).strip()
-                            _aud += 1
-                        try: os.remove(_p)
-                        except Exception: pass
-                    try: await context.bot.delete_message(LOG_CHAT_ID, _m.message_id)
-                    except Exception: pass
-                    if _txt:
-                        store[str(_mid)] = {"text": _txt[:9000], "kind": _kind, "url": f"https://t.me/hadis_isnad/{_mid}"}
-                        _done += 1
-                    else:
-                        _fail += 1
-                except Exception:
-                    _fail += 1
-            _data_put("razbory.json", store, f"razbory {_a}-{_b} (#147)")
-            await update.message.reply_text(f"✅ Разборы {_a}–{_b}: сохранено {_done} (аудио расшифровано {_aud}), пропущено/ошибок {_fail}. Всего в базе: {len(store)}. → data/razbory.json. Claude внесёт вердикты в our_hukm.json.")
-            return
-        # ===== #410 (владелец 30.06.2026): «саммари <ссылка t.me/jamaat_ru/N>» — поймать диалог (текст+аудио) и выдать саммари.
-        # Та же схема, что #147 «разбор N»: форвард по message_id (работает ТОЛЬКО если бот участник чата и в чате
-        # НЕ включена «защита контента» — иначе Telegram отклонит forward даже боту-участнику; тогда единственный
-        # путь — владелец форвардит сообщение(я) боту вручную, как уже принято в #147). До 15 ссылок за раз.
-        if _tl.startswith("саммари ") and is_owner(update):
-            _links = re.findall(r'https?://t\.me/([A-Za-z0-9_]+)/(\d+)', text)
-            if not _links:
-                await update.message.reply_text("📎 #410 саммари диалога.\nФормат: «саммари <ссылка на сообщение t.me/чат/N>» (можно несколько ссылок подряд — поймаю каждое сообщение). Работает, только если бот состоит в этом чате и там не включена защита контента — иначе перешли мне сообщения вручную.")
-                return
-            _links = _links[:15]
-            await update.message.reply_text(f"📥 Ловлю {len(_links)} сообщени{'е' if len(_links)==1 else 'й'}…")
-            _texts = []; _fail = 0
-            for _un, _mid_s in _links:
-                _mid = int(_mid_s)
-                try:
-                    _m = await context.bot.forward_message(LOG_CHAT_ID, "@" + _un, _mid)
-                    _txt = (_m.text or _m.caption or "").strip()
-                    if (_m.voice or _m.audio) and len(_txt) < 40:
-                        _media = _m.voice or _m.audio
-                        _f = await _media.get_file()
-                        _ext = ".ogg" if _m.voice else ".mp3"
-                        _p = f"/tmp/summary_{_mid}{_ext}"
-                        await _f.download_to_drive(_p)
-                        _tr = transcribe_audio(_p)
-                        if _tr: _txt = (_txt + "\n" + _tr).strip()
-                        try: os.remove(_p)
-                        except Exception: pass
-                    if not _txt:   # Hermes-ревью #410: молчаливый пропуск медиа без текста путал счётчик "не поймано" — честный плейсхолдер
-                        if _m.photo: _txt = "[фото без подписи]"
-                        elif _m.video: _txt = "[видео без подписи]"
-                        elif _m.document: _txt = "[файл без подписи]"
-                    try: await context.bot.delete_message(LOG_CHAT_ID, _m.message_id)
-                    except Exception: pass
-                    if _txt: _texts.append(_txt)
-                    else: _fail += 1
-                except Exception:
-                    _fail += 1
-            if not _texts:
-                await update.message.reply_text(f"❌ Не поймал ни одного сообщения ({_fail} из {len(_links)}). Похоже, форвард из этого чата заблокирован (защита контента) или бот не в нём — перешли мне эти сообщения вручную реплаем, распознаю так же.")
-                return
-            _raw = "\n\n---\n\n".join(_texts)[:16000]
-            _ans = ask_ai("Сделай краткое саммари этого диалога/переписки (100-200 слов, по-русски, по сути, без искажений):\n\n" + _raw,
-                          "Ты — помощник, который кратко и точно суммаризирует диалоги.", owner=True, max_tokens=700)
-            if not _годен(_ans):
-                await update.message.reply_text("❌ ИИ сейчас недоступен для саммари. Текст поймал (" + str(len(_texts)) + " сообщ.), попробуй позже ещё раз командой «саммари» с теми же ссылками.")
-                return
-            _fail_note = f" (не поймано {_fail})" if _fail else ""
-            _sumtxt = f"📋 *Саммари* ({len(_texts)} сообщ.{_fail_note}):\n\n{_ans}"
-            try:
-                await update.message.reply_text(_sumtxt, parse_mode="Markdown")
-            except Exception:   # спецсимвол в тексте диалога/ответе ИИ мог сломать Markdown — фолбэк без разметки
-                await update.message.reply_text(re.sub(r'[*_`\[\]()]', '', _sumtxt))
-            return
-        # ===== Закрыть заявку: «заявка done <№>» / «заявка готово <№>» =====
-        # ===== МУЛЬТИ-ОТВЕТ: «мульти <вопрос>» =====
-        # 🔴 Слово владельца 19.08.2026: сперва #869 («может, генерация идёт не одна, а один
-        # ответ два-три или даже пять раз генерит и выбирает между ними верный — это новый
-        # лайфхак, как модель маленькую сделать умной»), затем #896 — «ролик посмотри и научи
-        # этому ассистента». Самого ролика я открыть не смог: Инстаграм отдаёт страницу без
-        # видео, в подписи только «Пиши слово: Мульти, я скину ссылки». Поэтому делаю то, что
-        # он описал СВОИМИ словами двумя часами раньше, а не то, что я домыслил из подписи.
-        #
-        # ПОЧЕМУ КОМАНДОЙ, А НЕ ВСЕГДА. Мульти стоит вчетверо дороже обычного ответа и во
-        # столько же дольше. Включать его на каждое «как дела» — тихо тратить чужие деньги;
-        # у владельца уже был разбор про расход, и повторять его я не хочу. Слово «мульти»
-        # перед вопросом — осознанный выбор человека платить за точность.
-        if _tl.startswith("мульти ") or _tl.startswith("мульти:"):
-            _вопр = text.strip()[6:].lstrip(": ").strip()
-            if not _вопр:
-                await update.message.reply_text(
-                    "После слова «мульти» нужен сам вопрос. Пример: «мульти сколько будет "
-                    "17% от 4830 и почему».")
-                return
-            _скок = 3
-            _мm = re.match(r'^(\d)\s+(.+)$', _вопр)
-            if _мm and 2 <= int(_мm.group(1)) <= 5:
-                _скок, _вопр = int(_мm.group(1)), _мm.group(2)
-            _жду = None
-            try:
-                _жду = await update.message.reply_text(
-                    "🎲 Отвечаю %d раза и выбираю верный — это дольше обычного." % _скок)
-            except Exception:
-                pass
-            _сооб = [{"role": "system", "content": dsoc_системный()},
-                     {"role": "user", "content": _вопр}]
-            try:
-                _итог, _вх, _вых, _свод = await asyncio.to_thread(
-                    dsoc_мульти, _сооб, _скок, 3000)
-            except Exception as e:
-                _итог, _вх, _вых, _свод = None, 0, 0, str(e)[:120]
-            try:
-                if _жду:
-                    await _жду.delete()
-            except Exception:
-                pass
-            if not _итог:
-                await update.message.reply_text(
-                    "Мульти не получился: %s. Спросите обычным путём." % _свод)
-                return
-            # Сводку показываем ВСЕГДА: «все три сошлись» и «три разошлись, выбран сводный» —
-            # это разная степень доверия, и прятать её значит выдавать догадку за уверенность.
-            _тело = разметку_в_текст(_итог) + chr(10) * 2 + "🎲 " + _свод
-            await update.message.reply_text(_тело[:4000])
-            # Расход: у мульти он в несколько раз больше обычного, и молча его прятать
-            # нельзя — владелец уже спрашивал, куда уходят деньги.
-            try:
-                dsoc_расход_записать(dsoc_стоимость(_вх, _вых))
-            except Exception:
-                pass
-            return
-
-        # ===== Вернуть заявку в работу: «заявка открой <№>» =====
-        # Технадзор теперь закрывает заявки сам — значит владельцу нужна обратная дверь,
-        # и она обязана быть такой же короткой. Несогласие, которое трудно выразить,
-        # выражено не будет: он просто перестанет смотреть в счётчик.
-        if _tl.startswith("заявка открой ") or _tl.startswith("заявка вернуть "):
-            try:
-                _рид = int("".join(ch for ch in _tl if ch.isdigit()))
-            except Exception:
-                _рид = 0
-            j = _journal_load(); _есть = False
-            for r in j.get("requests", []):
-                if r.get("id") == _рид:
-                    r["done"] = False
-                    r.pop("итог", None); r.pop("закрыл", None); r.pop("закрыта", None)
-                    _есть = True
-                    break
-            if _есть:
-                _journal_save(f"заявка #{_рид} возвращена в работу")
-                await update.message.reply_text(f"🔁 Заявка №{_рид} снова открыта.")
-            else:
-                await update.message.reply_text(f"Не нашёл заявку №{_рид}.")
-            return
-        if _tl.startswith("заявка done ") or _tl.startswith("заявка готово "):
-            try:
-                rid = int("".join(ch for ch in _tl if ch.isdigit()))
-            except Exception:
-                rid = 0
-            j = _journal_load(); hit = False
-            for r in j.get("requests", []):
-                if r.get("id") == rid:
-                    r["done"] = True; hit = True; break
-            if hit:
-                _journal_save(f"заявка #{rid} done")
-                await update.message.reply_text(f"✅ Заявка №{rid} помечена выполненной.")
-            else:
-                await update.message.reply_text(f"Не нашёл заявку №{rid}.")
-            return
-        # ===== #505 (владелец 04.07.2026): заметки джамаата — «JM <текст>» / «джм <текст>» ТОЛЬКО владельцем,
-        # в @jamaat_ru И в личке владельца. Структурно копим (дата+нумерация),
-        # «список заметок»/«заметки JM»/«джм список» — выдать всё, .md-файлом если длинно.
-        _jm_here = is_owner(update) and (getattr(update.effective_chat, "id", None) == JAMAAT_RU_CHAT_ID
-                                         or getattr(update.effective_chat, "type", "") == "private")
-        if (_tl.startswith(("jm ", "jm\n", "джм ", "джм\n"))) and _jm_here and _tl not in ("джм список", "jm список"):
-            _jm_body = text.strip()[(3 if _tl.startswith("джм") else 2):].strip()
-            if not _jm_body:
-                await update.message.reply_text("✍️ Напиши: JM <текст заметки>")
-                return
-            _jm = _data_get("jamaat_notes.json", []) or []
-            _jm_id = (max([n.get("id", 0) for n in _jm]) if _jm else 0) + 1
-            _jm.append({"id": _jm_id, "d": _now_msk(), "t": _jm_body})
-            _data_put("jamaat_notes.json", _jm, f"JM-заметка #{_jm_id}")
-            await update.message.reply_text(
-                f"📒 *Заметка JM-{_jm_id} сохранена* · {_now_msk()}\n"
-                f"———————————\n"
-                f"{_jm_body[:400]}\n"
-                f"———————————\n"
-                f"_Все заметки: «джм список»_", parse_mode="Markdown")
-            return
-        if _tl in ("список заметок", "заметки jm", "jm список", "список jm", "джм список", "список джм") and _jm_here:
-            _jm = _data_get("jamaat_notes.json", []) or []
-            if not _jm:
-                await update.message.reply_text("Заметок JM пока нет. Пиши: JM <текст>")
-                return
-            _lines = [f"{n.get('id')}. [{n.get('d','')}] {n.get('t','')}" for n in _jm]
-            _md = "# Заметки джамаата (JM)\n\n" + "\n\n".join(_lines) + "\n"
-            if len(_md) > 3500:
-                import tempfile
-                _fp = tempfile.NamedTemporaryFile(suffix=".md", delete=False, mode="w", encoding="utf-8")
-                _fp.write(_md); _fp.close()
-                try:
-                    await update.message.reply_document(open(_fp.name, "rb"), filename="jamaat_notes.md", caption=f"📝 Заметок JM: {len(_jm)}")
-                finally:
-                    try: os.remove(_fp.name)
-                    except Exception: pass
-            else:
-                await update.message.reply_text("📝 *Заметки JM:*\n\n" + "\n".join(_lines), parse_mode="Markdown")
-            return
-        # ===== Добавить заявку: «заявка <текст>» / «замечание <текст>» (+ подсказка о дубле) =====
-        if _tl.startswith("заявка ") or _tl.startswith("замечание ") or _tl == "заявка" or _tl == "замечание":
-            body = text.strip()[6:].strip() if _tl.startswith("заявк") or _tl == "заявка" else text.strip()[9:].strip()
-            img_flag = False; imgkey = ""
-            rep = update.message.reply_to_message
-            # #245/#274: «заявка [коммент]» РЕПЛАЕМ на сообщение → регистрируем ОСНОВНОЙ текст отвеченного сообщения + коммент владельца.
-            # БАГ #274 (исправлено): раньше при наличии коммента основное сообщение (на которое ответили) ТЕРЯЛОСЬ — писался только коммент.
-            if rep:
-                rep_text = (rep.text or rep.caption or "").strip()
-                # ⚠️ 25.07.2026 — НЕ вводить здесь фильтр «ответ на пост бота без комментария = не заявка».
-                # Я его ввёл и тут же откатил по слову владельца: «там нет мусора; если я отметил смс, значит
-                # тебе надо посмотреть ЭТОТ смс». Владелец отмечает ПЛОХОЙ ВЫВОД БОТА именно затем, чтобы его
-                # разобрали — это полноценная заявка, а молчание тут означает «смотри сам, что не так».
-                # Пример: #637 — владелец написал в чате «муслим 7», бот выдал несколько километровых постов.
-                if rep_text:
-                    body = (rep_text + "\n— коммент владельца: " + body) if body else rep_text
-                if getattr(rep, "photo", None):
-                    try: imgkey = str(rep.photo[-1].file_id); img_flag = True
-                    except Exception: pass
-            if not body and not img_flag:
-                await update.message.reply_text("✍️ Напиши: *заявка <текст>* — или ответь «заявка» на сообщение. Скрин: фото с подписью «заявка ...».", parse_mode="Markdown")
-                return
-            # 🔴 ВЫГОВОР ВЛАДЕЛЬЦА (ОБР-454, 11.08.2026): «он не пропускает то, что не
-            # дублируется: он не смотрит скрин, а смотрит тупо текст».
-            #
-            # Он прав. Проверка на повтор сравнивала ТОЛЬКО текст. А жалобы со снимками очень
-            # часто идут с одинаковой подписью — «вот тут ошибка», «смотри», — и весь смысл
-            # такой заявки в КАРТИНКЕ, которую проверка не видела вовсе. Две разные поломки с
-            # одинаковой подписью считались одной, и вторая молча пропадала.
-            #
-            # Со снимком не отбиваем никогда: цена ошибки несимметрична. Лишняя заявка стоит
-            # строки в реестре, потерянная — потерянной поломки, о которой мы не узнаем.
-            dup = None if img_flag else req_dup(body)
-            if dup:
-                await update.message.reply_text(f"⚠️ Похоже, ты это уже присылал — *заявка №{dup}*. Не дублирую.\n(Если всё же другое — допиши подробнее и пришли ещё раз.)", parse_mode="Markdown")
-                return
-            chat_type = getattr(update.effective_chat, "type", "")
-            chat_id = getattr(update.effective_chat, "id", None)
-            # #425 (владелец 01.07.2026): было "любая группа = @jamaat_ru" — но рабочий чат уведомлений (LOG_CHAT_ID)
-            # ТОЖЕ группа/супергруппа → заявки оттуда ложно подписывались "(из чата @jamaat_ru)". Разводим по chat_id.
-            if chat_id == LOG_CHAT_ID:
-                from_chat = " (из рабочего чата уведомлений)"
-            elif chat_type in ("group", "supergroup"):
-                from_chat = " (из чата @jamaat_ru)"
-            else:
-                from_chat = ""
-            rid = req_add((body or "(скрин)") + from_chat, img_flag, imgkey)
-            # #245: дубль ВЛАДЕЛЬЦУ В ЛС — все заявки в переписке с ботом (если команда не из самой ЛС)
-            try:
-                if update.effective_chat.id != OWNER_ID:
-                    await context.bot.send_message(OWNER_ID, f"📥 Заявка #{rid}{from_chat} ({_now_msk()}):\n{обрезать(body, 1500, 'полностью — в реестре заявок')}" + ("\n🖼 со скрином" if img_flag else ""))
-            except Exception: pass
-            try:
-                if update.effective_chat.id not in (LOG_CHAT_ID, OWNER_ID):   # #41/#90: НЕ дублировать эхо в тот же чат
-                    await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid}{from_chat} ({_now_msk()}):\n{обрезать(body, 1500, 'полностью — в реестре заявок')}")
-            except Exception: pass
-            await update.message.reply_text(f"📥 *Заявка #{rid}* записана ✅{from_chat} · 🤖 бот ({_now_msk()})\nПродублировал тебе в ЛС с ботом. Журнал — командой «заявки».", parse_mode="Markdown")   # M287: показываем место приёма
-            return
-
         # ===== АНОНС в канал приложения вручную ===== «анонс» = текущий update_note.txt; «анонс <текст>» = свой
         if _tl == "анонс" or _tl.startswith("анонс ") or _tl.startswith("анонс\n"):
             custom = text.strip()[5:].strip()
