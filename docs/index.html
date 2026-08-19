@@ -798,7 +798,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1416</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1417</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1664,7 +1664,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1416';
+const APPVER = 'v1417';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2264,7 +2264,7 @@ async function fetchJSON(url, ms, opts){ ms=ms||20000;
 // Совместим с fetchJSON по сигнатуре и формату ошибки (журнал /api/errlog, opts.silent).
 const _BOOK_CACHE_NS='muslimoon-books-v1';
 async function cachedFetchJSON(url, ms, opts){ ms=ms||60000; opts=opts||{};
-  let cache=null;
+  let cache=null; let _снятьКэш=function(){};
   try{ if(window.caches){ cache=await caches.open(_BOOK_CACHE_NS);
         const hit=await cache.match(url);
         if(hit){
@@ -2278,9 +2278,18 @@ async function cachedFetchJSON(url, ms, opts){ ms=ms||60000; opts=opts||{};
           try{
             const _им=String(url).split('/').pop().replace(/\.json$/,'').replace(/\.min$/,'').replace(/^ara-/,'');
             let _чел=_им; try{ const _ч=nameOf(_им); if(_ч && _ч!==_им) _чел=_ч; }catch(_e){}
-            if(!opts.silent) setStatus('⚡ ' + _чел + ' — из памяти устройства, разбираю…');
+            /* 19.08.2026, сессия 76: «quran» — имя ФАЙЛА, а книга у нас всюду зовётся Кораном.
+               Та же придирка, что в #711 про «ara-bukhari.min»: справочник книг Коран не знает,
+               потому что он не сборник хадисов. */
+            if(_чел==='quran'||_чел==='quran_uthmani') _чел='Коран';
+            if(!opts.silent) _снятьКэш=_статусСвой('⚡ ' + _чел + ' — из памяти устройства, разбираю…');
           }catch(_e){}
-          try{ return await hit.json(); }catch(_){ try{ await cache.delete(url); }catch(__){_тихо(__,"L2145")} }
+          /* 🔴 19.08.2026, сессия 76 (#644): и эта надпись жила вечно. Владелец прислал скрин с
+             «Загружаю Коран… ⏳ дольше обычного» на пустом экране; когда я вылечил зажигание в
+             loadQuran, на его месте осталась ВОТ ЭТА — из кэша, ещё один писатель без выхода.
+             Гасим свою: разбор кончился — строке о разборе не место на экране. */
+          try{ const _д = await hit.json(); try{ _снятьКэш(); }catch(_){} return _д; }
+          catch(_){ try{ _снятьКэш(); }catch(__){} try{ await cache.delete(url); }catch(__){_тихо(__,"L2145")} }
         } } }catch(e){ cache=null; }
   const ctl=new AbortController(); const t=setTimeout(()=>{ try{ctl.abort();}catch(e){_тихо(e,"L2146")} }, ms);
   try{ const r=await fetch(url,{signal:ctl.signal}); if(!r.ok) throw new Error('HTTP '+r.status);
@@ -3280,12 +3289,12 @@ async function loadMuslimOne(num){ if(cache['muslim']){ return cache['muslim'].f
   const b=Math.floor((+num)/500); if(!(b in _musOne)){ try{ _musOne[b]=await cachedFetchJSON('./muslim/'+b+'.json', 60000, {silent:true}); }catch(e){ delete _musOne[b]; return null; } }   // то же: провал не запоминаем
   const m=_musOne[b]; const r=m&&m[String(num)]; return r?{num:String(num),text:_muslimStripApparatus(r[0]||''),grade:'',fw:r[1]||null,norm:''}:null; }
 const _local={};
-async function loadLocal(code,file){ if(_local[code])return _local[code]; setStatus('Загружаю '+nameOf(code)+'…');
+async function loadLocal(code,file){ if(_local[code])return _local[code]; const _снять=_статусСвой('Загружаю '+nameOf(code)+'…');   /* 19.08.2026 #711/#631: кто зажёг, тот и тушит */
   let j; try{ j=await cachedFetchJSON('./'+file, 180000); }catch(_e){ j=await cachedFetchJSON('./'+file, 180000); }   // A-124/A-137: крупные книги (muslim_baqi 8.4МБ, Абу Авана 22МБ, Насаи-Кубра/Абу Яʿля 12-13МБ); кэш Cache Storage + таймаут 180с + 2 попытки (60-90с не хватало на медленной мобиле)
-  _local[code]=(Array.isArray(j)?j:[]).map(x=>{ const raw=_muslimStripApparatus((x.ar||x.t||'').replace(/\s+/g,' ').trim()); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }   /* F3(аудит): guard массива */   // v1062: чистка аппарата (Заваид и др.) для локальных изданий
-async function loadExtra(code){ if(_local[code])return _local[code]; const e=EXTRA_MAP[code]; setStatus('Загружаю '+(e?e.short:nameOf(code))+'…');   // #711: не узнали книгу в EXTRA_MAP — спросим общий справочник, а не покажем код
+  _local[code]=(Array.isArray(j)?j:[]).map(x=>{ const raw=_muslimStripApparatus((x.ar||x.t||'').replace(/\s+/g,' ').trim()); return {num:String(x.num),text:raw,grade:'',norm:''}; }); try{ _снять(); }catch(_){} return _local[code]; }   /* F3(аудит): guard массива */   // v1062: чистка аппарата (Заваид и др.) для локальных изданий
+async function loadExtra(code){ if(_local[code])return _local[code]; const e=EXTRA_MAP[code]; const _снять=_статусСвой('Загружаю '+(e?e.short:nameOf(code))+'…');   /* 19.08.2026 #711: кто зажёг, тот и тушит */   // #711: не узнали книгу в EXTRA_MAP — спросим общий справочник, а не покажем код
   if(e&&e.cdn){ const j=await fetchEdition(code);
-    _local[code]=(j.hadiths||[]).map(h=>({num:String(h.hadithnumber),text:_muslimStripApparatus((h.text||'').replace(/\s+/g,' ').trim()),grade:gradeOf(h),grades:gradesAll(h),norm:''})); return _local[code]; }
+    _local[code]=(j.hadiths||[]).map(h=>({num:String(h.hadithnumber),text:_muslimStripApparatus((h.text||'').replace(/\s+/g,' ').trim()),grade:gradeOf(h),grades:gradesAll(h),norm:''})); try{ _снять(); }catch(_){} return _local[code]; }
   // A-126 (25.07.2026, ошибка пришла ко мне сторожем): «Загрузка книги не удалась (таймаут 90с): darimi.json».
   // Проверил ассет напрямую — 3.77 МБ, отдаётся с Pages за 1.2 секунды, HTTP 200. Значит виноват не файл:
   // запрос либо стоял в очереди за другими крупными загрузками, либо оборвался на слабой сети. Одна попытка
@@ -3296,9 +3305,20 @@ async function loadExtra(code){ if(_local[code])return _local[code]; const e=EXT
     j=await cachedFetchJSON(EXTRA_BASE+code+'.json', 30000); }
   // (из прежней правки A-124: крупные издания — Ибн Хиббан 11МБ, Абу Авана 22МБ; кэш Cache Storage →
   //  повторное открытие мгновенно, #301 ishaq / #326 abuyala)
-  _local[code]=(Array.isArray(j)?j:[]).map(x=>{ const raw=_muslimStripApparatus((x.ar||x.t||'').replace(/\s+/g,' ').trim()); return {num:String(x.num),text:raw,grade:'',norm:''}; }); return _local[code]; }   /* F3(аудит): guard массива */   // v1062: чистка аппарата (Заваид и др.) для локальных изданий
+  _local[code]=(Array.isArray(j)?j:[]).map(x=>{ const raw=_muslimStripApparatus((x.ar||x.t||'').replace(/\s+/g,' ').trim()); return {num:String(x.num),text:raw,grade:'',norm:''}; }); try{ _снять(); }catch(_){} return _local[code]; }   /* F3(аудит): guard массива */   // v1062: чистка аппарата (Заваид и др.) для локальных изданий
+/* 🔴 19.08.2026, сессия 76 — «КТО ЗАЖЁГ, ТОТ И ТУШИТ» (заявки #644 · #631 · #711 · #669).
+   Беда одного покроя: loadQuran/loadLocal/loadExtra ЗАЖИГАЮТ «Загружаю …», а гасить оставляют
+   вызывающему — и фоновые вызывающие не гасят никогда. Надпись переживает загрузку и висит,
+   пока приложение не перезапустят: скрин #644 «Загружаю Коран… ⏳ дольше обычного» снят на
+   ПУСТОМ экране, где давно ничего не грузилось.
+   Гасим ТОЛЬКО свою надпись: если статус успел перехватить кто-то другой (человек начал
+   действие), она уже не наша и трогать её нельзя — иначе вылечим одну гонку, заведя другую. */
+function _статусСвой(t){ try{ setStatus(t); }catch(_){}
+  return function(){ try{ const el=document.getElementById('status');
+    if(el && el.textContent && el.textContent.indexOf(t)===0) setStatus(''); }catch(_){} }; }
 async function loadQuran(){ if(quran)return quran;
-  try{ if(!(typeof modes!=='undefined'&&(modes.narr||modes.chain))) setStatus('Загружаю Коран…'); }catch(e){_тихо(e,"L2845")}   // в режимах равиев фоновая загрузка молчит («зачем при поиске передатчика грузить Коран»)
+  let _снятьКоран=function(){};
+  try{ if(!(typeof modes!=='undefined'&&(modes.narr||modes.chain))) _снятьКоран=_статусСвой('Загружаю Коран…'); }catch(e){_тихо(e,"L2845")}   // в режимах равиев фоновая загрузка молчит («зачем при поиске передатчика грузить Коран»)
   let j; try{ j=await cachedFetchJSON(QURAN_URL, 60000); }catch(e){ try{ j=await cachedFetchJSON(QURAN_URL, 60000); }catch(e2){ try{ setStatus('Не удалось загрузить Коран — проверь сеть'); }catch(_){_тихо(_,"L2846")} throw e2; } }   // A-135: Cache Storage (повтор мгновенно) + 60с + 2 попытки (1.5МБ рвался за 30с на медленной мобиле)
   const _qRaws=j.map(v=>(v.text||'').replace(/﻿/g,'').replace(/\s+/g,' ').trim());
   // владелец (03.07.2026, срочно): «бисмилля не часть аятов!!!» — в исходнике (Tanzil Uthmani) басмаля вклеена
@@ -3314,7 +3334,8 @@ async function loadQuran(){ if(quran)return quran;
       if(raw.slice(0,_qB1.length)===_qB1) raw=raw.slice(_qB1.length).trim();
       else if(_qB2 && raw.slice(0,_qB2.length)===_qB2) raw=raw.slice(_qB2.length).trim();
     }
-    return {s:v.s,a:v.a,text:raw,norm:''}; }); return quran; }
+    return {s:v.s,a:v.a,text:raw,norm:''}; }); try{ _снятьКоран(); }catch(_){}   /* 19.08.2026 #644: свою надпись гасим сами */
+  return quran; }
 let quranRu=null;
 async function loadQuranRu(){
   // перевод Корана уважает настройку cfg.qtr (Кулиев / Абу Адель). Кеш — по изданию.
@@ -3849,7 +3870,26 @@ if(_q){ let _canonWarmed=false; _q.addEventListener('focus', function(){ if(_can
     // далеко не первые — код сам говорит, что первый Бухари. Оба грузятся как прежде, когда
     // человек их реально откроет.
     const codes=['bukhari','muslim','abudawud','tirmidhi','ibnmaja','malik']; let i=0;
-    const step=()=>{ if(i>=codes.length) return; const code=codes[i++]; try{ const p=loadByCode(code); if(p&&p.catch) p.catch(function(){}); }catch(e){_тихо(e,"L3333")} setTimeout(step, 400); }; step();
+    /* 🔴 19.08.2026, сессия 76, заявки #711 · #631 · #669 · #664 · #644 — ОДНА причина на все.
+       Владелец: «Загружаю: ibnmaja… висит», «внизу написано не нашёл, а поиск ещё крутится и
+       вводит в заблуждение», «че за загрузка Корана».
+       ЗАМЕРЕНО НА БОЕВОМ (v1416, живой браузер): 96 запросов завершены, в полёте 0, а в #status
+       висит «Загружаю: Малик… ⏳ дольше обычного». Малик — ПОСЛЕДНИЙ в этом списке прогрева.
+       Значит грузить давно нечего: надпись просто некому снять.
+       ПОЧЕМУ: прогрев — работа, о которой человек не просил, но пишет он в ТОТ ЖЕ индикатор,
+       что и действия человека. Снимает надпись только setStatus(''), а он зовётся на выходах
+       ПОИСКА — у прогрева выхода нет вовсе. Поиск успевал погасить свой статус раньше, чем
+       очередная фоновая книга ставила свой, и последняя оставалась на экране навсегда.
+       ЛЕЧИМ КЛАСС, А НЕ НАДПИСЬ: фоновая работа молчит. Флаг поднят только вокруг СИНХРОННОГО
+       входа в загрузку — setStatus внутри loadLocal/loadExtra стоит до первого await, поэтому
+       ловится ровно фоновое сообщение. Если человек в эту же секунду откроет книгу сам, его
+       собственная надпись не пострадает: его вызов идёт вне этого шва. */
+    const step=()=>{ if(i>=codes.length) return; const code=codes[i++];
+      try{ window._фонТихо=(window._фонТихо||0)+1;
+           const p=loadByCode(code); if(p&&p.catch) p.catch(function(){});
+      }catch(e){_тихо(e,"L3333")}
+      finally{ window._фонТихо=Math.max(0,(window._фонТихо||1)-1); }
+      setTimeout(step, 400); }; step();
   }catch(e){_тихо(e,"L3334")} }); }
 document.getElementById('q').addEventListener('input', updateQuranHelper);
 document.getElementById('q').addEventListener('input', function(){ try{ _updRandBtn(); }catch(e){_тихо(e,"L3336")} });   // 🎲 исчезает когда начал печатать
@@ -19676,7 +19716,12 @@ async function fetchWithProgress(url, подпись, опции){
   }catch(e){ _plHide(); throw e; }
 }
 
-function setStatus(t){ const el=document.getElementById('status'); if(!el) return; el.textContent=t;
+function setStatus(t){ const el=document.getElementById('status'); if(!el) return;
+  /* 🔴 19.08.2026, сессия 76 (см. подробный разбор у прогрева канонов, ~стр. 3852): индикатор —
+     общий на всё приложение, и писателя у него два: человек и фон. Фоновому слова не даём —
+     иначе его надпись переживает действие человека и висит, пока приложение не перезапустят. */
+  if(window._фонТихо>0 && t && /^(Загружаю|Повторяю загрузку)/.test(t)) return;
+  el.textContent=t;
   if(!t) _plHide();
   clearTimeout(_stSlowT); _stSlowT=null;
   // v1093 П-5-фикс (найдено живой проверкой «بخاري 1»): у поиска есть РАННИЕ return (номер хадиса, карточка
