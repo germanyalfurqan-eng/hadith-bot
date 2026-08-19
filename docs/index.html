@@ -798,7 +798,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1411</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1412</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1664,7 +1664,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1411';
+const APPVER = 'v1412';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4789,6 +4789,46 @@ async function runSearch(explicit){
   if(!q){ toast('Введите запрос'); return; }
   q=q.replace(/[​-‏‪-‮﻿⁦-⁩]/g,'');   // M438: НЕВИДИМКИ из копипасты Шамелы (ZWNJ и пр.) ломали матч — «в Мактабе находится, у нас нет»
   q=q.replace(/[،؛؟,;!]+/g,' ').replace(/\s+/g,' ').trim();   // M283: убрать пунктуацию (запятая прилипала к слову и ломала строгий матч)
+  /* 🔗 #849 (владелец 18.08.2026): «пусть приложение тоже понимает ссылки библиотек — книга,
+     страница, выделенный абзац с подсветкой».
+     Бот это уже умеет (#851: Шамиля, app.turath.io, sunnah.com — один разбор на три написания),
+     а приложение ссылку молча ВЫБРАСЫВАЛО: строкой ниже стоит чистка вставки, которая срезает
+     любой URL. Человек кидал адрес в поиск и получал «ничего не найдено» — не потому что нет,
+     а потому что мы сами стёрли то, что он принёс.
+     Ставим разбор ДО чистки, иначе разбирать будет нечего.
+     Номер книги у Шамили и у turath ОДИН И ТОТ ЖЕ, страница прямая — ссылка собирается из
+     самих чисел адреса, без догадок. Сунна.ком устроен иначе: это не страница книги, а
+     нумерованный хадис, и отвечать на него надо хадисом из нашей базы. */
+  try{
+    const _шам=q.match(/(?:shamela\.ws|app\.turath\.io)\/book\/(\d{1,7})(?:\/(\d{1,6})|[?&][^\s]*?page=(\d{1,6}))?/i);
+    if(_шам){
+      const _bid=_шам[1], _pg=Number(_шам[2]||_шам[3]||1);
+      // Если рядом со ссылкой человек принёс и сам отрывок — подсвечиваем его: «выделенный
+      // абзац с подсветкой» из просьбы владельца. Арабский кусок берём ЦЕЛИКОМ, ссылку убираем.
+      const _хвост=q.replace(/https?:\/\/\S+/g,' ').replace(/\s+/g,' ').trim();
+      const _подсв=(_хвост.match(/[؀-ۿ][؀-ۿ\s,.،؛]{15,300}/)||[''])[0].trim();
+      toast('🔗 Ссылка библиотеки: книга '+_bid+', страница '+_pg+(_подсв?' — с подсветкой':''));
+      try{ openBook(_bid,_pg,false,_подсв||''); }catch(_e){ toast('Не смог открыть книгу '+_bid); }
+      logSearch(shown,'ссылка-библиотеки',1); return;
+    }
+    const _сун=q.match(/sunnah\.com\/([a-z]+)(?:\/(\d{1,4}))?[:\/](\d{1,6})/i);
+    if(_сун){
+      const _код=String(_сун[1]||'').toLowerCase(), _ном=_сун[3];
+      // sunnah.com отвечает НАШИМ хадисом: у нас тот же свод и та же нумерация, где она сверена.
+      const _наш={bukhari:'bukhari',muslim:'muslim',abudawud:'abudawud',nasai:'nasai',
+                  ibnmajah:'ibnmajah',ahmad:'ahmad',malik:'malik',tirmidhi:'tirmidhi'}[_код];
+      if(_наш){
+        /* Открываем ЧИТАЛКОЙ на том же номере, а не «поиском по числу»: у нас та же нумерация,
+           что на sunnah.com, и человек ждёт именно этот хадис, а не список совпадений.
+           `openReader(код, номер)` — тот же вход, которым открываются сохранённые хадисы. */
+        toast('🔗 sunnah.com: '+nameOf(_наш)+' № '+_ном+' — открываю у нас');
+        try{ openReader(_наш, String(_ном)); }
+        catch(_e){ toast('Не смог открыть '+nameOf(_наш)+' № '+_ном); }
+        logSearch(shown,'ссылка-sunnah',1); return;
+      }
+      toast('Свод «'+_код+'» с sunnah.com у нас пока не заведён — ищу по номеру');
+    }
+  }catch(e){_тихо(e,"L4290ссылка")}
   // M131: чистка вставки — URL, telegram-ссылки, маркеры оформления (звёздочки/подчёркивания markdown, эмодзи-буллеты) не должны попадать в матч
   { const q0=q;
     q=q.replace(/https?:\/\/\S+|t\.me\/\S+|www\.\S+/gi,' ')
@@ -15251,8 +15291,11 @@ function _цитМесто(mid, quote){
   try{
     const сп=(_цитШард[Math.floor(Math.abs(+mid)/100)]||{})[String(mid)];
     if(!сп||!сп.length) return null;
+    // Мерка обязана быть ОДНА с той, что строила ключ: сноски («_________», «٣») выкидываем
+    // здесь ровно так же, иначе ключ не совпадёт ни с чем и место найденной цитаты пропадёт.
     const н=function(s){ return String(s||'').replace(/[ً-ْٰـ]/g,'')
         .replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي')
+        .replace(/[_0-9٠-٩]+/g,' ')
         .replace(/[^\w؀-ۿ ]+/g,' ').replace(/\s+/g,' ').trim(); };
     const q=н(quote);
     return сп.find(function(x){ return x.q && x.pid && q.indexOf(н(x.q))>=0; })||null;
