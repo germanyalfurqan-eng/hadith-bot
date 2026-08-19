@@ -7940,7 +7940,7 @@ async def сказать_голосом(update, текст, context=None, фай
     except Exception as e:
         # Не молчим. Владелец должен видеть, что голос не вышел и почему, а не гадать.
         try:
-            await update.message.reply_text("🔇 Озвучить не вышло: %s" % str(e)[:200])
+            await _мсообщ(update).reply_text("🔇 Озвучить не вышло: %s" % str(e)[:200])
         except Exception:
             pass
         try:
@@ -8007,7 +8007,7 @@ async def аудио_в_хадис(update, context, файл_id, подпись=
     try:
         await ст.edit_text(ответ[:4000])
     except Exception:
-        await update.message.reply_text(ответ[:4000])
+        await _мсообщ(update).reply_text(ответ[:4000])
 
 
 # ===== 🚨 АВТО-РУБИЛЬНИК ЗАЩИТЫ КЛЮЧА (анти-спам ИИ) =====
@@ -8796,7 +8796,7 @@ async def _journal_assistant(update, context, text):
     # это и есть личность: разные подписи читаются как разные собеседники, даже если внутри
     # один свод правил. Приводим к одному.
     try:
-        await update.message.reply_text("💬 DSOC думает…")
+        await _мсообщ(update).reply_text("💬 DSOC думает…")
     except Exception:
         pass
     ans = ""
@@ -8827,10 +8827,10 @@ async def _journal_assistant(update, context, text):
     except Exception:
         pass
     try:
-        await update.message.reply_text(ans[:4000])
+        await _мсообщ(update).reply_text(ans[:4000])
     except Exception:
         try:
-            await update.message.reply_text(re.sub(r'<[^>]+>', '', ans)[:4000])
+            await _мсообщ(update).reply_text(re.sub(r'<[^>]+>', '', ans)[:4000])
         except Exception:
             pass
 def _load_trans():
@@ -9036,16 +9036,16 @@ async def send_long(update, text, parse_mode=None):
             chunk, text = text[:cut], text[cut:].lstrip("\n ")
         try:
             if parse_mode:
-                await update.message.reply_text(chunk, parse_mode=parse_mode)
+                await _мсообщ(update).reply_text(chunk, parse_mode=parse_mode)
             else:
-                await update.message.reply_text(chunk)
+                await _мсообщ(update).reply_text(chunk)
         except Exception:
             # #B-004 («Can't parse entities», 32 повтора): разметка где-то не экранирована (& / <) —
             # фолбэк шлёт БЕЗ parse_mode (Telegram не парсит теги в plain text, ошибка невозможна),
             # но сам фолбэк тоже был не защищён — второе исключение (флуд-контроль и т.п.) улетало
             # в глобальный _on_error необработанным. Теперь ловим и его.
             try:
-                await update.message.reply_text(chunk)
+                await _мсообщ(update).reply_text(chunk)
             except Exception:
                 pass
 
@@ -11391,6 +11391,12 @@ async def on_spam(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 
 
+def _мсообщ(update):
+    """Куда отвечать: у поста канала update.message пуст, а отвечать надо туда же, откуда
+    пришло. Без этого команда сработала бы молча — сделала бы дело и не сказала о нём."""
+    return update.message or update.channel_post
+
+
 async def _модель_команда(update, имя):
     """Выбор модели помощника. Только владелец — проверка стоит у вызова (is_owner: две его
     лички и канал Муслимун).
@@ -11411,28 +11417,28 @@ async def _модель_команда(update, имя):
                                                    if _и == _р.get('по_умолчанию_местная') else ''))
         _стр += ['', '<b>Облако:</b> <code>%s</code>' % OPENCODE_MODEL, '',
                  'Переключить: «модель ling-q3-262k» · вернуть: «модель облако»']
-        await update.message.reply_text('\n'.join(_стр)[:4000], parse_mode='HTML')
+        await _мсообщ(update).reply_text('\n'.join(_стр)[:4000], parse_mode='HTML')
         return
     if имя.lower() in ('облако', 'обл', 'cloud'):
         _выбор_записать('')
-        await update.message.reply_text('☁️ Готово: отвечаю через облако (<b>%s</b>).'
+        await _мсообщ(update).reply_text('☁️ Готово: отвечаю через облако (<b>%s</b>).'
                                         % OPENCODE_MODEL, parse_mode='HTML')
         return
     if имя not in _мест:
         # Похожее не подставляем: подмена соседним профилем — ровно тот случай, когда владелец
         # выбрал одного Линга, а говорил со старым и не заметил.
-        await update.message.reply_text(
+        await _мсообщ(update).reply_text(
             '🤷 Профиля <code>%s</code> в реестре нет. Скажи «модель» — покажу список.'
             % имя[:60], parse_mode='HTML')
         return
-    await update.message.reply_text(
+    await _мсообщ(update).reply_text(
         '⏳ Проверяю <b>%s</b> — задание уходит на твой ноутбук, это до полуминуты.\n'
         'Пока отвечает прежняя: <b>%s</b>.' % (имя, _сейчас or 'облако'), parse_mode='HTML')
     _жива, _сказала, _кто = await asyncio.get_event_loop().run_in_executor(
         None, lambda: dsoc_проверить_модель(имя, 120))
     if not _жива:
         # Молчаливого отката не бывает: владелец должен знать, с кем говорит.
-        await update.message.reply_text(
+        await _мсообщ(update).reply_text(
             '🔴 <b>%s</b> не отозвалась (%s). Остаюсь на прежней: <b>%s</b>.\n'
             'Ничего не переключил — чтобы ты не думал, что говоришь с ней.'
             % (имя, _сказала, _сейчас or 'облако'), parse_mode='HTML')
@@ -11442,7 +11448,7 @@ async def _модель_команда(update, имя):
     _подп = ('\n🏷 представилась: <code>%s</code>' % _кто[:70]) if _кто else ''
     _разн = ('\n⚠️ просил <code>%s</code>, ответила <code>%s</code> — проверь'
              % (имя, _кто[:50])) if (_кто and имя.split('-')[0] not in _кто.lower()) else ''
-    await update.message.reply_text(
+    await _мсообщ(update).reply_text(
         '✅ Переключился на <b>%s</b>.\nПроверка: «%s»%s%s'
         % (имя, _сказала[:120], _подп, _разн), parse_mode='HTML')
 
@@ -11490,6 +11496,21 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # весь остальной handle() такие апдейты не видит вообще (падает на этой же строке). Постить в канал
         # может только админ, поэтому отдельная owner-проверка тут не нужна — сам факт поста уже доверенный.
         if update.channel_post:
+            # 🔴 19.08.2026, ВОТ ГДЕ ОНА ТЕРЯЛАСЬ. Владелец пишет в чат от имени своего канала
+            # Муслимун — такие сообщения приходят НЕ как update.message, а как channel_post, и
+            # обработчик выходил отсюда, не дойдя ни до одной команды. Я четырежды переставлял
+            # её всё выше внутри ветки, до которой сообщение вообще не добиралось.
+            # Урок: прежде чем двигать своё правило, проверь, ПОПАДАЕТ ли сообщение в ту ветку,
+            # где оно стоит. Я двигал вслепую и трижды назвал владельцу неверную причину.
+            try:
+                _чт = (update.channel_post.text or '').strip()
+                if _чт.lower().startswith('модель') and is_owner(update):
+                    _ч = _чт.split(None, 1)
+                    if _ч[0].lower() == 'модель':
+                        await _модель_команда(update, _ч[1].strip() if len(_ч) > 1 else '')
+                        return
+            except Exception as _e:
+                print('команда модель (канал): %s' % str(_e)[:150])
             try:
                 if await _nisht_dispatch(update, context):
                     return
@@ -11517,7 +11538,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as _e:
                 print('команда модель упала: %s' % str(_e)[:200])
                 try:
-                    await update.message.reply_text('🔧 Команда сорвалась: %s' % str(_e)[:150])
+                    await _мсообщ(update).reply_text('🔧 Команда сорвалась: %s' % str(_e)[:150])
                 except Exception:
                     pass
             return
@@ -11547,7 +11568,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _r = update.message.reply_to_message
                 _исх = ((_r.text or _r.caption or '')).strip()
             if len(_исх) < 20:
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     'Дай текст: «видео <текст>» либо ответь этим словом на сообщение, '
                     'из которого делать ролик. Из двух слов ролика не выйдет.')
                 return
@@ -11555,12 +11576,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 async def _ход(с):
                     try:
-                        await update.message.reply_text(с)
+                        await _мсообщ(update).reply_text(с)
                     except Exception:
                         pass
                 _путь, _отчёт = await сделать_видео(_исх, _папка, _ход)
                 if not _путь:
-                    await update.message.reply_text('🎬 Не получилось: %s.' % _отчёт)
+                    await _мсообщ(update).reply_text('🎬 Не получилось: %s.' % _отчёт)
                 else:
                     with open(_путь, 'rb') as _f:
                         await context.bot.send_video(update.effective_chat.id, _f,
@@ -11574,7 +11595,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
     except Exception as _e:
         try:
-            await update.message.reply_text('🎬 Сорвалось на середине: %s' % str(_e)[:200])
+            await _мсообщ(update).reply_text('🎬 Сорвалось на середине: %s' % str(_e)[:200])
         except Exception:
             pass
         return
@@ -11658,7 +11679,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _сном = _сун.group(3)
         if not _скод:
             try:
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     'Этот сборник с sunnah.com у нас отдельной книгой не заведён — '
                     'ответить его хадисом не могу. Назовите сборник и номер словами, '
                     'поищу по нашим сводам.',
@@ -11674,7 +11695,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _сар = _сру = ''
         if not (_сар or _сру):
             try:
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     '%s №%s у нас не нашёлся — возможно, номер за пределами нашего издания. '
                     'Это не «нет доступа»: я смотрел в своей базе.' % (NAMES.get(_скод, _скод), _сном),
                     reply_to_message_id=update.message.message_id)
@@ -11691,7 +11712,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _стело += (chr(10) + chr(10) + '📱 <a href="%s">Открыть в приложении</a>'
                    ' — цепь передатчиков, оценки критиков, тахридж' % _сссыл)
         try:
-            await update.message.reply_text(_стело[:4000], parse_mode='HTML',
+            await _мсообщ(update).reply_text(_стело[:4000], parse_mode='HTML',
                                             disable_web_page_preview=True,
                                             reply_to_message_id=update.message.message_id)
         except Exception:
@@ -11751,7 +11772,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _тело_ш[:4000], parse_mode='HTML', disable_web_page_preview=True)
         except Exception:
             try:
-                await update.message.reply_text(_тело_ш[:4000], parse_mode='HTML',
+                await _мсообщ(update).reply_text(_тело_ш[:4000], parse_mode='HTML',
                                                 disable_web_page_preview=True)
             except Exception:
                 pass
@@ -11779,7 +11800,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not is_owner(update):
             # Дубляж стоит денег (Whisper + перевод) и минут работы сервера. Открывать его
             # чату на тысячу человек без слова владельца я не вправе — но и молчать нельзя.
-            await update.message.reply_text(
+            await _мсообщ(update).reply_text(
                 '🎙 Озвучить видео переводом я умею, но пока только по просьбе владельца: '
                 'на каждое такое видео уходят платные распознавание и перевод. Скажите ему — '
                 'откроет всем одной строкой.')
@@ -11884,7 +11905,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
         except Exception as _e:
             try:
-                await update.message.reply_text("🔴 Не смог разобрать то голосовое: %s" % str(_e)[:200])
+                await _мсообщ(update).reply_text("🔴 Не смог разобрать то голосовое: %s" % str(_e)[:200])
             except Exception:
                 pass
             return
@@ -11962,7 +11983,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await аудио_в_хадис(update, context, _гол.file_id, update.message.caption or "")
             except Exception as _e:
                 try:
-                    await update.message.reply_text("🔴 Сбой на разборе аудио: %s" % str(_e)[:200])
+                    await _мсообщ(update).reply_text("🔴 Сбой на разборе аудио: %s" % str(_e)[:200])
                 except Exception:
                     pass
             return
@@ -11983,14 +12004,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if _вг:
             _расп = голос_выбрать(_вг.group(1))
             if _расп:
-                await update.message.reply_text(_расп)
+                await _мсообщ(update).reply_text(_расп)
                 await сказать_голосом(update, _расп, context)    # сразу слышно, что закрепилось
                 return
     if text and is_owner(update):
         _голсек = голос_режим_разобрать(text)
         if _голсек is not None:
             _расписка = голос_режим_задать(update.effective_chat.id, _голсек)
-            await update.message.reply_text(_расписка)
+            await _мсообщ(update).reply_text(_расписка)
             if _голсек:      # включили — тут же показываем голосом, что режим ЖИВОЙ, а не обещан
                 await сказать_голосом(update, _расписка, context)
             return
@@ -12026,7 +12047,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                        'вид': ('кружок' if getattr(update.message, 'video_note', None)
                                else 'видео')},
                       'приветственный ролик от владельца')
-            await update.message.reply_text(
+            await _мсообщ(update).reply_text(
                 '🎬 Ролик принял и запомнил (%d сек). Теперь он уходит новичкам вместе с '
                 'приветствием — сам файл я не храню, шлю по номеру у Telegram.\n'
                 'Заменить — просто пришли другой.' % _сек)
@@ -12250,7 +12271,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _посл_р = _РАСПИСКИ_ЧАТ.get(_чид, 0)
             _кратко = (time.time() - _посл_р) < _окно_р
             _РАСПИСКИ_ЧАТ[_чид] = time.time()
-            await update.message.reply_text(
+            await _мсообщ(update).reply_text(
                 (('✅ Принято — %s' % код_обращения(_н)) if _кратко else
                  ('✅ <b>Принято обращение %s</b> — %s\n'
                   '%s\n\n'
@@ -12311,7 +12332,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 disable_web_page_preview=True)
             # #273/#275: расписка ВСЕГДА с номером, а если номера нет — прямо об этом.
             # «Передал» без номера непроверяемо, и владелец законно назвал это обманом.
-            await update.message.reply_text(
+            await _мсообщ(update).reply_text(
                 ("✅ Принято обращение <b>%s</b> — технадзор Клод. Ответит прямо здесь и "
                  "укажет, что это ответ на %s." % (код_обращения(_н), код_обращения(_н)))
                 if _н else
@@ -12338,7 +12359,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # а пожелание. Владельцу говорим, как поднять; чужим не отвечаем вовсе.
         if _хозяин(update):
             try:
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     "🔴 Помощник ВЫКЛЮЧЕН рубильником. Поднять: напиши в рабочий журнал "
                     "или мне в личку «помощник вкл».")
             except Exception:
@@ -12365,7 +12386,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Человеку отвечаем вежливо и БЕЗ подробностей: чужому незачем знать
             # ни про списки, ни про подписку, ни про то, у кого просить.
             try:
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     'Помощник пока отвечает не всем — идёт настройка. Спасибо за интерес.')
             except Exception:
                 pass
@@ -12387,7 +12408,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if _к:
             _ц = update.message.reply_to_message.from_user
             if _ц is None:
-                await update.message.reply_text('Не вижу, чьё это сообщение — у него нет автора.')
+                await _мсообщ(update).reply_text('Не вижу, чьё это сообщение — у него нет автора.')
                 return
             # 🔴 ОБРАЩЕНИЕ #651. Ответ указывает не всегда на человека. В чате сообщения
             # ходят ЧЕРЕЗ посредников: бот-пересыльщик, анонимный админ, публикация от имени
@@ -12398,13 +12419,13 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Молча пускать посредника нельзя: список доступа — не место для догадок (П-05).
             _отвеч = update.message.reply_to_message
             if getattr(_отвеч, 'sender_chat', None) is not None:
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     'Это сообщение опубликовано от имени чата или канала, живого человека за '
                     'ним не видно — впустить некого.\n\n'
                     'Назови его ником или номером: «пусти @ник».')
                 return
             if getattr(_ц, 'is_bot', False):
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     'Ответ указывает на бота (%s), а не на человека — его сообщение шло через '
                     'посредника. Впускать бота смысла нет.\n\n'
                     'Назови человека сам: «пусти @ник» — ник возьму у Telegram.'
@@ -12427,17 +12448,17 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                           'откройему', 'откройдоступ', 'вбелый'))
             _закрываем = _слово.startswith(('запрет', 'закр', 'бан', 'вчёрный', 'вчерный'))
             if not _пускаем and not _закрываем:
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     'Не понял, впустить или закрыть. Скажи «пусти» или «запрети» — '
                     'ответом на сообщение человека.')
                 return
             if _пускаем:
                 _n = dsoc_белый_добавить(_ц.id, _имя2)
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     '✅ %s допущен к помощнику. В белом списке: %d.' % (_имя2, _n))
             else:
                 _n = dsoc_чёрный_добавить(_ц.id, _имя2)
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     '⛔ %s закрыт. В чёрном списке: %d.' % (_имя2, _n))
             return
 
@@ -12452,14 +12473,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _почему = (_рб.group(2) or '').strip()
             if _что in ('выкл', 'откл', 'стоп', 'off'):
                 dsoc_рубильник_поставить(True, 'владелец', _почему)
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     '🔴 ПОМОЩНИК ВЫКЛЮЧЕН. Не отвечает никому, включая тебя. '
                     'Деньги подписки больше не тратятся.' +
                     (chr(10) + 'Причина записана: ' + _почему if _почему else '') +
                     chr(10) + 'Поднять: «помощник вкл».')
             else:
                 dsoc_рубильник_поставить(False, 'владелец', _почему)
-                await update.message.reply_text('🟢 Помощник включён и снова отвечает.')
+                await _мсообщ(update).reply_text('🟢 Помощник включён и снова отвечает.')
             return
 
     # Списки — тоже словом, без захода в код: «помощник доступ» покажет, кто допущен.
@@ -12468,7 +12489,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _им = _д.get('имена') or {}
         def _строкой(_сп):
             return ', '.join('%s (%s)' % (_им.get(str(x), '?'), x) for x in _сп) or '— пусто'
-        await update.message.reply_text(
+        await _мсообщ(update).reply_text(
             ('🔑 ДОСТУП К ПОМОЩНИКУ' + chr(10) + chr(10) +
              'Состояние: %s' + chr(10) +
              'Белый список: %s' + chr(10) +
@@ -12693,7 +12714,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     getattr(update.effective_chat, 'id', 0), update.message.message_id,
                     text.strip(), getattr(update.effective_user, 'first_name', ''),
                     кому=_кому2)
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     ('✅ Принято обращение <b>%s</b> — %s.\n'
                      'Это продолжение разговора с ней: она говорила последней.\n'
                      'Нужен помощник — начни словом «Ботяра».'
@@ -12744,28 +12765,28 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 if _куда == "помощник":
                     _rid = dsoc_заявка_помощнику(_текст, "владелец")
-                    await update.message.reply_text(
+                    await _мсообщ(update).reply_text(
                         "📓 Записал в журнал помощника — <b>%s</b>:\n%s"
                         % (код_помощнику(_rid), _текст), parse_mode='HTML')
                 else:
                     _rid = req_add("🟩 [DSOC] " + _текст)
                     # Заявки мини-аппа исторически просто числа — их вид не меняем (#275),
                     # но называем ЯВНО «заявка приложения №», чтобы не слить с обращениями.
-                    await update.message.reply_text(
+                    await _мсообщ(update).reply_text(
                         "📨 Передал технадзору — <b>заявка приложения №%d</b>:\n%s"
                         % (_rid, _текст), parse_mode='HTML')
             except Exception as _e:
-                await update.message.reply_text("🔴 Не смог записать: %s" % str(_e)[:150])
+                await _мсообщ(update).reply_text("🔴 Не смог записать: %s" % str(_e)[:150])
             return
 
         if not OPENCODE_KEY:
-            await update.message.reply_text(
+            await _мсообщ(update).reply_text(
                 "🔑 Ключ OpenCode боту не выдан.\n"
                 "Добавь на Railway переменную OPENCODE_ZEN_API_KEY и передеплой — "
                 "и DSOC заработает.")
             return
         if not _dsoc:
-            await update.message.reply_text(
+            await _мсообщ(update).reply_text(
                 "Я на связи. Пиши: DSOC <что сделать>.\n"
                 "Помню весь наш разговор в этом чате (до миллиона токенов, дальше ужимаю сам).\n"
                 "Ответом на любое сообщение — возьму его в работу вместе с вопросом.")
@@ -12838,7 +12859,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if re.search(r'вмеша|вмеща|разбери\s+диалог|что тут происходит', _dsoc.lower()):
             _пред = update.message.reply_to_message
             if not _пред:
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     "🧩 Отметь сообщение, в диалог вокруг которого нужно вмешаться, — иначе я не "
                     "знаю, о каком разговоре речь. В чате их идёт несколько сразу.")
                 return
@@ -12880,7 +12901,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 окно = подано + [з for з in (окно or []) if з.get('i') not in _ид]
 
             if not окно:
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     '🧩 В отмеченном сообщении нет текста, который я мог бы разобрать — '
                     'ни подписи, ни цитаты. Пришли текстом или отметь сообщение с текстом.')
                 return
@@ -12929,7 +12950,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 await _ст.edit_text(ответ[:3800])
             # Судьба контекста — решает владелец, а не я за него.
-            await update.message.reply_text(
+            await _мсообщ(update).reply_text(
                 "🧩 Что сделать с этим разбором в памяти разговора?",
                 reply_markup=_КЛ([[_КБ("💾 Сохранить", callback_data="ctx:keep:" + _кл),
                                    _КБ("🗜 Сжать", callback_data="ctx:squeeze:" + _кл),
@@ -12963,7 +12984,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     реплики = реплики[:-2]
                     убрано, что_убрал = 2, 'последняя пара «вопрос-ответ»'
             if not убрано:
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     "🤔 Не нашёл этого в памяти разговора — возможно, оно туда и не попадало. "
                     "Отметь именно ту реплику, которую надо выкинуть.")
                 return
@@ -12975,14 +12996,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _сн[_кл] = снимок[-160:]
                 _data_put(DSOC_СНИМКИ_ФАЙЛ, {k: v for k, v in list(_сн.items())[-8:]},
                           "снимок перед точечной чисткой")
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     "✂️ Убрал из памяти разговора: %s (%d реплик).\n"
                     "Осталось %d токенов переписки. Забытое не вернуть иначе — держи кнопку."
                     % (что_убрал, убрано, dsoc_размер(реплики)),
                     reply_markup=_КЛ([[_КБ("↩️ Вернуть как было",
                                            callback_data="dsocback:" + _кл)]]))
             except Exception:
-                await update.message.reply_text("✂️ Убрал: %s (%d реплик)." % (что_убрал, убрано))
+                await _мсообщ(update).reply_text("✂️ Убрал: %s (%d реплик)." % (что_убрал, убрано))
             return
 
         # Владелец пометил ответ помощника неудачным — записываем с цитатой того ответа.
@@ -12992,7 +13013,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _цитата = (getattr(_пред, 'text', None) or getattr(_пред, 'caption', None) or '') if _пред else ''
             _н = await dsoc_неудача(context.bot, chat_id, '(помечено владельцем вручную)',
                                     _цитата, 'владелец: ответ не годится')
-            await update.message.reply_text(
+            await _мсообщ(update).reply_text(
                 "🔻 Записал как неудачу №%s — с цитатой того ответа. Разберу и превращу в "
                 "знание, правку или выговор." % _н)
             return
@@ -13064,7 +13085,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if _прямо:
                 _расписка = ("📣 Передал технадзору — обращение #%s. Он ответит прямо здесь, "
                              "ответом на это сообщение." % _н)
-                await update.message.reply_text(_расписка)
+                await _мсообщ(update).reply_text(_расписка)
                 # Спросил голосом — и расписку слышит голосом. Правило владельца «отвечаю
                 # голосом по умолчанию» относится ко ВСЕМ ответам, а не только к длинным:
                 # ранние ветки молчали, и выходило, будто правило работает через раз.
@@ -13094,7 +13115,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # стороны это выглядело так, будто сказанное пропало. Номер видят оба — и он,
                 # и я; спросить «а что с номером таким-то» теперь можно про ЛЮБОЕ его слово.
                 if _нс:
-                    await update.message.reply_text(
+                    await _мсообщ(update).reply_text(
                         "📝 Записал технадзору к сведению — №%s (ответа не требует)." % _нс)
             except Exception:
                 pass
@@ -13171,7 +13192,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not dsoc_рубильник():
             if _хозяин(update):
                 try:
-                    await update.message.reply_text('🔴 Помощник выключен рубильником. Поднять: «помощник вкл».')
+                    await _мсообщ(update).reply_text('🔴 Помощник выключен рубильником. Поднять: «помощник вкл».')
                 except Exception:
                     pass
             return
@@ -13207,7 +13228,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
             try:
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     'Пока отвечаю только владельцу — идёт настройка и бета-тест. Спасибо за интерес.')
             except Exception:
                 pass
@@ -13660,12 +13681,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             # не влез в то же сообщение — уходит следом, но уходит обязательно
                             for _к_п in (_резать_html(_хв_д.lstrip(), 3900) or []):
                                 try:
-                                    await update.message.reply_text(
+                                    await _мсообщ(update).reply_text(
                                         _к_п, parse_mode="HTML",
                                         disable_web_page_preview=True)
                                 except Exception:
                                     try:
-                                        await update.message.reply_text(
+                                        await _мсообщ(update).reply_text(
                                             re.sub(r'<[^>]+>', '', _к_п)[:3800])
                                     except Exception:
                                         pass
@@ -13674,7 +13695,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     try:      # разметка не зашла — ответ всё равно обязан дойти
                         await живое.edit_text(re.sub(r'<[^>]+>', '', _готово)[:3600])
                     except Exception:
-                        await update.message.reply_text(re.sub(r'<[^>]+>', '', _готово)[:3600])
+                        await _мсообщ(update).reply_text(re.sub(r'<[^>]+>', '', _готово)[:3600])
                 реплики.append({"role": "assistant", "content": _готово[:1500], "t": time.time()})
                 DSOC_ПАМЯТЬ[chat_id] = реплики
                 dsoc_сохранить(силой=True)
@@ -14053,7 +14074,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await живое.edit_text(_жалоба, parse_mode='HTML')
             except Exception:
                 try:
-                    await update.message.reply_text('Ответа не вышло — модель вернула пустоту. '
+                    await _мсообщ(update).reply_text('Ответа не вышло — модель вернула пустоту. '
                                                     'Спроси ещё раз, пожалуйста.')
                 except Exception:
                     pass
@@ -14186,7 +14207,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await живое.edit_text(_сыр + подпись)
             except Exception:
-                await update.message.reply_text(_сыр + подпись)
+                await _мсообщ(update).reply_text(_сыр + подпись)
         # 🔴 #152: ответ ушёл — теперь СВЕРЯЕМ его с нашей базой и дописываем выверенное.
         # Порядок именно такой: сперва человек получает ответ, потом получает доказательство.
         # Обещание «допишу» обязано чем-то кончиться — не вышло, скажем прямо (урок #63).
@@ -14240,7 +14261,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _data_put('poll_results.json', _res, 'свой вариант ' + _pend['poll_id'])
                 _data_put('poll_pending.json', {}, 'сброс pending')
                 try:
-                    await update.message.reply_text('✍️ Твой вариант записан по опросу «' + _pend.get('q', '')[:60] + '». Клод увидит.')
+                    await _мсообщ(update).reply_text('✍️ Твой вариант записан по опросу «' + _pend.get('q', '')[:60] + '». Клод увидит.')
                 except Exception:
                     pass
                 return
@@ -14250,7 +14271,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 🆔 диагностика: «ид чата» (владелец, любой чат) — узнать числовой chat_id, напр. чтобы настроить кросс-пост ништячка в jamaat_ru
     if is_owner(update) and text.lower().strip() in ("ид чата", "id чата", "chat id", "ид группы"):
         ch = update.effective_chat
-        await update.message.reply_text(f"🆔 id этого чата: `{ch.id}`\nНазвание: {getattr(ch,'title',None) or getattr(ch,'first_name','—')}\nТип: {ch.type}", parse_mode="Markdown")
+        await _мсообщ(update).reply_text(f"🆔 id этого чата: `{ch.id}`\nНазвание: {getattr(ch,'title',None) or getattr(ch,'first_name','—')}\nТип: {ch.type}", parse_mode="Markdown")
         return
 
     # 🧑‍💻 МОСТ «КЛОД» (канал Muslim Live уже выше; тут — личка владельца, оба аккаунта)
@@ -14289,7 +14310,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # где заметил, — пятый урок этих суток.
             dup = None
             if dup:
-                await update.message.reply_text(f"⚠️ Похоже, ты это уже присылал — заявка №{dup}. Не дублирую.")
+                await _мсообщ(update).reply_text(f"⚠️ Похоже, ты это уже присылал — заявка №{dup}. Не дублирую.")
                 return
             rid = req_add(body or "(скрин)", img_flag=True, imgkey=str(update.message.photo[-1].file_id))
             try:
@@ -14298,7 +14319,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid} ({_now_msk()}): {обрезать(body or '(скрин)', 300, 'полностью — в реестре')}")
             except Exception:
                 pass
-            await update.message.reply_text(f"📥 Заявка #{rid} со скрином записана ✅ · 🤖 бот (уникальный № — ищи в журнале командой «заявки»).")   # M287
+            await _мсообщ(update).reply_text(f"📥 Заявка #{rid} со скрином записана ✅ · 🤖 бот (уникальный № — ищи в журнале командой «заявки»).")   # M287
             return
     except Exception:
         pass
@@ -14317,7 +14338,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     'текст': (text or '').strip()[:600],
                     'кто': (update.effective_user.first_name if update.effective_user else 'владелец')})
                 _data_put('rag_journal.json', _ж_лог[-500:], 'раг: замечание владельца')
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     '📝 Записал в журнал РАГ — к запросу «%s».\nПростое поправлю сам, '
                     'хлопотное пойдёт в доработку.' % (_ж_лог[-1].get('вопрос') or '')[:60])
                 return
@@ -14351,7 +14372,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             _info.append('/health → HTTP %d (%s)' % (_r.status, (await _r.text())[:60]))
                 except Exception as _e:
                     _info.append('/health → ошибка: %s' % str(_e)[:80])
-                await update.message.reply_text('\n'.join(_info))
+                await _мсообщ(update).reply_text('\n'.join(_info))
                 return
             # 📊 ЖУРНАЛ КАЧЕСТВА ПОИСКА (#671, только владелец): «раг оценки».
             # Владелец просил не просто копить отметки «не туда», а видеть их — иначе журнал
@@ -14365,7 +14386,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception:
                     _оц = []
                 if not _оц:
-                    await update.message.reply_text(
+                    await _мсообщ(update).reply_text(
                         '📊 Журнал качества РАГ пуст — ни одной отметки.\n'
                         'Кнопки «👎 не туда» / «👍 в точку» в приложении шлют их на /api/rag_feedback.')
                     return
@@ -14392,14 +14413,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                    if z.get('комментарий') else ''))
                 _стр.append('')
                 _стр.append('<i>Файл: ветка data → rag_feedback.json</i>')
-                await update.message.reply_text('\n'.join(_стр)[:3900], parse_mode='HTML',
+                await _мсообщ(update).reply_text('\n'.join(_стр)[:3900], parse_mode='HTML',
                                                 disable_web_page_preview=True)
                 return
             # команды управления доступом (только владелец или анон-админ группы)
             if is_owner(update) or _anon:
                 _ac = _rag_access_cmd(text)
                 if _ac is not None:
-                    await update.message.reply_text(_ac)
+                    await _мсообщ(update).reply_text(_ac)
                     return
             # ── ГДЕ И КОМУ РАЗРЕШЁН РАГ (владелец 27.07.2026) ──────────────────────────────
             # «Эта функция строго в джамаат ру только работает пока, даже в личке никому кроме
@@ -14418,11 +14439,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Теперь отвечаем и там, но с намордником: одна подсказка на чат в 10 минут,
                     # чтобы «раг» в шумной группе не превратился в спам от бота.
                     if update.effective_chat and update.effective_chat.type == 'private':
-                        await update.message.reply_text(
+                        await _мсообщ(update).reply_text(
                             '🔒 Смысловой поиск работает пока только в чате @jamaat_ru — заходи туда и спрашивай.')
                     elif rate_ok('ragнеттут:%s' % (update.effective_chat.id if update.effective_chat else 0), 1, 600):
                         _о, _вс = _rag_остаток(_uid)
-                        await update.message.reply_text(
+                        await _мсообщ(update).reply_text(
                             '🔒 Смысловой поиск (РАГ) включён пока только в @jamaat_ru — там и спрашивай.\n'
                             '👤 лимит на человека: %d запросов в сутки, у тебя осталось %d.\n'
                             'Нужно больше — напиши админам чата.' % (_вс, _о))
@@ -14431,7 +14452,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if not _можно:
                     # #673: число берём из настройки, а не из константы — владелец меняет его
                     # командой «раг лимит N», и текст обязан говорить ПРАВДУ, а не старое «3».
-                    await update.message.reply_text(
+                    await _мсообщ(update).reply_text(
                         '🔒 На сегодня твои %d запроса к РАГ израсходованы — счётчик обнулится завтра.\n'
                         'Нужно больше — напиши админам чата, откроют.' % _rag_лимит())
                     return
@@ -14448,7 +14469,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _вопрос = re.sub(r'^(раг|rag)\s+(бухари\s+)?', '', text, flags=re.I).strip()
                 _только_бухари = bool(re.match(r'^(раг|rag)\s+бухари\s+', text, flags=re.I))
                 if len(_вопрос) < 3:
-                    await update.message.reply_text('Напиши вопрос: «раг можно ли пить стоя» или «раг бухари ...» — только по этой книге')
+                    await _мсообщ(update).reply_text('Напиши вопрос: «раг можно ли пить стоя» или «раг бухари ...» — только по этой книге')
                     return
                 try:
                     _ПОСЛ_РАГ.update({'chat': update.effective_chat.id if update.effective_chat else None,
@@ -14611,10 +14632,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             _ПОСЛ_РАГ['ответ_msg'] = _от.message_id
                 except Exception:
                     try:
-                        await update.message.reply_text(re.sub(r'<[^>]+>', '', _т)[:3900])
+                        await _мсообщ(update).reply_text(re.sub(r'<[^>]+>', '', _т)[:3900])
                     except Exception as _e3:
                         try:
-                            await update.message.reply_text('🧠 Ответ не удалось отправить: %s' % str(_e3)[:150])
+                            await _мсообщ(update).reply_text('🧠 Ответ не удалось отправить: %s' % str(_e3)[:150])
                         except Exception:
                             pass
                 return
@@ -14661,7 +14682,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 try: await _wait.edit_text(_none)
                                 except Exception: await update.message.reply_text(_none)
                             else:
-                                await update.message.reply_text(_none)
+                                await _мсообщ(update).reply_text(_none)
                             return
                         _cards = _rag_cards(_top, _terms, limit=4)   # карточки: целый хадис+выделение+перевод+ссылка
                         _hdr = '🔎 По запросу «%s»%s — карточки хадисов (%d из %d):' % (
@@ -14670,19 +14691,19 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             try: await _wait.edit_text(_hdr)
                             except Exception: await update.message.reply_text(_hdr)
                         else:
-                            await update.message.reply_text(_hdr)
+                            await _мсообщ(update).reply_text(_hdr)
                         for _c in _cards:
                             try:
-                                await update.message.reply_text(_c, parse_mode='HTML', disable_web_page_preview=True)
+                                await _мсообщ(update).reply_text(_c, parse_mode='HTML', disable_web_page_preview=True)
                             except Exception:
-                                await update.message.reply_text(re.sub('<[^>]+>', '', _c), disable_web_page_preview=True)
+                                await _мсообщ(update).reply_text(re.sub('<[^>]+>', '', _c), disable_web_page_preview=True)
                     except Exception as _e:
                         _err = '⚠️ RAG временно недоступен (%s). Попробуй позже.' % str(_e)[:90]
                         if _wait:
                             try: await _wait.edit_text(_err)
                             except Exception: await update.message.reply_text(_err)
                         else:
-                            await update.message.reply_text(_err)
+                            await _мсообщ(update).reply_text(_err)
                     return
     except Exception:
         pass
@@ -14697,35 +14718,35 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception: pass
     if is_owner(update) and text.lower() in ("ии вкл", "ии включи", "включи ии", "ai on"):
         _AI_KILL = False; _AI_KILL_MANUAL = False; _AI_CALLS.clear()
-        await update.message.reply_text("✅ ИИ снова включён."); return
+        await _мсообщ(update).reply_text("✅ ИИ снова включён."); return
     if is_owner(update) and text.lower() in ("ии выкл", "выключи ии", "ai off", "ии стоп"):
         _AI_KILL_MANUAL = True
-        await update.message.reply_text("⏸ ИИ выключен вручную. Включить: «ии вкл»."); return
+        await _мсообщ(update).reply_text("⏸ ИИ выключен вручную. Включить: «ии вкл»."); return
     if is_owner(update) and text.lower() in ("ии статус", "статус ии", "ai status"):
-        await update.message.reply_text(f"ИИ: {'⏸ ВЫКЛ' if ai_kill_active() else '✅ вкл'}\nВызовов за {AI_RATE_WINDOW}с: {len(_AI_CALLS)}/{AI_RATE_LIMIT}\nавто-выкл={_AI_KILL} · ручной={_AI_KILL_MANUAL}\nботяра в группах: {'⏸ ВЫКЛ' if _GROUP_AI_OFF else '✅ вкл'}\n🔒 ИИ для публики: {'⏸ ВЫКЛ (только владелец)' if _AI_PUBLIC_OFF else '✅ доступен всем'}"); return
+        await _мсообщ(update).reply_text(f"ИИ: {'⏸ ВЫКЛ' if ai_kill_active() else '✅ вкл'}\nВызовов за {AI_RATE_WINDOW}с: {len(_AI_CALLS)}/{AI_RATE_LIMIT}\nавто-выкл={_AI_KILL} · ручной={_AI_KILL_MANUAL}\nботяра в группах: {'⏸ ВЫКЛ' if _GROUP_AI_OFF else '✅ вкл'}\n🔒 ИИ для публики: {'⏸ ВЫКЛ (только владелец)' if _AI_PUBLIC_OFF else '✅ доступен всем'}"); return
     # #236: отдельный рубильник ИИ-«ботяра» в ГРУППАХ (@jamaat_ru) — не трогает /neuro и личку
     if is_owner(update) and text.lower() in ("ботяра вкл", "ботяра включи", "включи ботяра", "чат-ии вкл"):
         _GROUP_AI_OFF = False; _save_ai_gate()   # ФИКС: сохраняем — иначе рестарт бота (деплой) сбрасывал обратно в ВЫКЛ
-        await update.message.reply_text("✅ Ботяра в группах включён (реагирует на «ботяра»/ответ боту), переживёт рестарт. Выключить: «ботяра выкл»."); return
+        await _мсообщ(update).reply_text("✅ Ботяра в группах включён (реагирует на «ботяра»/ответ боту), переживёт рестарт. Выключить: «ботяра выкл»."); return
     if is_owner(update) and text.lower() in ("ботяра выкл", "выключи ботяра", "ботяра стоп", "чат-ии выкл"):
         _GROUP_AI_OFF = True; _save_ai_gate()
-        await update.message.reply_text("⏸ Ботяра в группах выключен (в личке и /neuro работают). Включить: «ботяра вкл»."); return
+        await _мсообщ(update).reply_text("⏸ Ботяра в группах выключен (в личке и /neuro работают). Включить: «ботяра вкл»."); return
     # 🔒 ГЛАВНЫЙ РУБИЛЬНИК: ИИ (DeepSeek + все модели) ТОЛЬКО для владельца — во всех остальных чатах ВЫКЛ
     if is_owner(update) and text.lower() in ("дипсик всем выкл", "дипсик выкл всем", "ии всем выкл", "ии только мне", "дипсик только мне", "ии публично выкл", "публичный ии выкл"):
         _AI_PUBLIC_OFF = True; _save_ai_gate()
-        await update.message.reply_text("🔒 ГОТОВО: ИИ (DeepSeek и все модели) теперь ТОЛЬКО для тебя. Во всех остальных чатах/группах/мини-аппе ИИ выключен. Вернуть всем: «дипсик всем вкл»."); return
+        await _мсообщ(update).reply_text("🔒 ГОТОВО: ИИ (DeepSeek и все модели) теперь ТОЛЬКО для тебя. Во всех остальных чатах/группах/мини-аппе ИИ выключен. Вернуть всем: «дипсик всем вкл»."); return
     if is_owner(update) and text.lower() in ("дипсик всем вкл", "дипсик вкл всем", "ии всем вкл", "ии публично вкл", "публичный ии вкл", "дипсик всем включи"):
         _AI_PUBLIC_OFF = False; _save_ai_gate()
-        await update.message.reply_text("✅ ИИ снова доступен всем (с учётом лимитов и доступа feature_allowed). Сделать только себе: «дипсик всем выкл»."); return
+        await _мсообщ(update).reply_text("✅ ИИ снова доступен всем (с учётом лимитов и доступа feature_allowed). Сделать только себе: «дипсик всем выкл»."); return
 
     # B4: режим обслуживания — «бот стоп» / «бот старт» (только владелец); для остальных бот отвечает заглушкой
     global _MAINTENANCE
     if is_owner(update) and text.lower() in ("бот стоп", "бот выкл", "стоп бот", "обслуживание", "обслуживание вкл"):
         _MAINTENANCE = True
-        await update.message.reply_text("🔧 Режим обслуживания ВКЛ. Для остальных бот отвечает заглушкой (поиск/ИИ не работают). Вернуть в эфир: «бот старт»."); return
+        await _мсообщ(update).reply_text("🔧 Режим обслуживания ВКЛ. Для остальных бот отвечает заглушкой (поиск/ИИ не работают). Вернуть в эфир: «бот старт»."); return
     if is_owner(update) and text.lower() in ("бот старт", "бот вкл", "старт бот", "обслуживание выкл"):
         _MAINTENANCE = False
-        await update.message.reply_text("✅ Бот снова в эфире (обслуживание выключено)."); return
+        await _мсообщ(update).reply_text("✅ Бот снова в эфире (обслуживание выключено)."); return
     if _MAINTENANCE and not is_owner(update):
         try: await update.message.reply_text("🔧 Бот на техническом обслуживании — скоро вернёмся, ин ша Аллах.")
         except Exception: pass
@@ -14743,9 +14764,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             r = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/release_notes.txt", timeout=8)
             note = r.text if r.status_code == 200 else "Нет release_notes.txt"
             await context.bot.send_message(ANNOUNCE_CHAT_ID, note)
-            await update.message.reply_text("✅ Опубликовано в канале обновлений.")
+            await _мсообщ(update).reply_text("✅ Опубликовано в канале обновлений.")
         except Exception as e:
-            await update.message.reply_text("Ошибка анонса: " + str(e))
+            await _мсообщ(update).reply_text("Ошибка анонса: " + str(e))
         return
     # ===== Видео-пересказ YouTube (З-10): reply на пост со ссылкой + «видео»/«видео кратко»; вопросы — тоже reply =====
     if is_owner(update):
@@ -14755,20 +14776,20 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _isvid = _tlv.startswith(("видеоперессказ", "видеопересказ"))
         if _isvid:
             if not _repv:
-                await update.message.reply_text("Ответь (reply) на пост со ссылкой YouTube и напиши «видеоперессказ» (или «видеоперессказ коротко», добавь «аудио» для mp3).")
+                await _мсообщ(update).reply_text("Ответь (reply) на пост со ссылкой YouTube и напиши «видеоперессказ» (или «видеоперессказ коротко», добавь «аудио» для mp3).")
                 return
             brief = ("коротк" in _tlv) or ("кратк" in _tlv)
             want_audio = "аудио" in _tlv
-            await update.message.reply_text("📹 Достаю субтитры…")
+            await _мсообщ(update).reply_text("📹 Достаю субтитры…")
             tr = _yt_transcript(_repv)
             if not tr:
-                await update.message.reply_text("⚠️ У этого видео нет открытых субтитров. Пересказ по аудио (Whisper) добавлю позже.")
+                await _мсообщ(update).reply_text("⚠️ У этого видео нет открытых субтитров. Пересказ по аудио (Whisper) добавлю позже.")
                 return
             usd = _yt_cost_est(tr)
-            await update.message.reply_text(f"⚠️ Через DeepSeek ≈ ${usd:.3f} (~{usd*92:.1f}₽). Делаю {'кратко' if brief else 'подробно'}{' + озвучка' if want_audio else ''}…")
+            await _мсообщ(update).reply_text(f"⚠️ Через DeepSeek ≈ ${usd:.3f} (~{usd*92:.1f}₽). Делаю {'кратко' if brief else 'подробно'}{' + озвучка' if want_audio else ''}…")
             ans = _yt_summarize(tr, brief)
             if not _годен(ans):
-                await update.message.reply_text("⚠️ ИИ не ответил (DeepSeek и Gemini). Попробуй ещё раз позже.")
+                await _мсообщ(update).reply_text("⚠️ ИИ не ответил (DeepSeek и Gemini). Попробуй ещё раз позже.")
                 return
             _VIDEO_LAST[update.effective_user.id] = {"vid": _repv, "tr": tr}
             await send_long(update, ("📺 *Краткий пересказ*\n\n" if brief else "📺 *Подробный пересказ + перевод*\n\n") + ans + "\n\n💬 Задай вопрос по видео — ответом (reply) на этот же пост.")
@@ -14781,9 +14802,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         try: os.remove(mp3)
                         except Exception: pass
                     else:
-                        await update.message.reply_text("⚠️ Озвучку сделать не вышло (TTS). Текст выше.")
+                        await _мсообщ(update).reply_text("⚠️ Озвучку сделать не вышло (TTS). Текст выше.")
                 except Exception as _e:
-                    await update.message.reply_text("⚠️ Озвучка не удалась: " + str(_e)[:80])
+                    await _мсообщ(update).reply_text("⚠️ Озвучка не удалась: " + str(_e)[:80])
             return
         if _repv and not _isvid and len(text.strip()) > 3:
             last = _VIDEO_LAST.get(update.effective_user.id)
@@ -14801,18 +14822,18 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_owner(update) and text.strip().lower() in ("баланс", "баланс дипсик", "дипсик баланс", "deepseek баланс", "баланс ии"):
         b = deepseek_balance()
         if not b:
-            await update.message.reply_text("⚠️ Не удалось получить баланс DeepSeek (проверь ключ/сеть).\nСтраница: platform.deepseek.com/usage")
+            await _мсообщ(update).reply_text("⚠️ Не удалось получить баланс DeepSeek (проверь ключ/сеть).\nСтраница: platform.deepseek.com/usage")
             return
         lines = ["💳 *Баланс DeepSeek*", f"Доступен: {'✅ да' if b.get('is_available') else '❌ НЕТ'}"]
         for i in b.get("balance_infos", []):
             lines.append(f"• {i.get('currency','')}: осталось *{i.get('total_balance','?')}* (пополнено {i.get('topped_up_balance','?')}, бонус {i.get('granted_balance','?')})")
         lines.append("\n📈 Подробно: platform.deepseek.com/usage")
-        await update.message.reply_text("\n".join(lines), parse_mode="Markdown", disable_web_page_preview=True)
+        await _мсообщ(update).reply_text("\n".join(lines), parse_mode="Markdown", disable_web_page_preview=True)
         return
     if is_owner(update) and text.strip().lower() in ("бэкап", "бекап", "backup", "архив", "бэкап архив", "статус бэкапа", "бэкап файл", "пришли бэкап", "скинь бэкап"):
         # #259/#261: сам ZIP приходит в ЖУРНАЛ УВЕДОМЛЕНИЙ (LOG_CHAT) + владельцу в ЛС при каждом бэкапе (локальный ps1 -> /api/backup_push -> send_document).
         # Приватно (внутри журналы R42) — поэтому НЕ в публичный канал/Pages.
-        await update.message.reply_text(
+        await _мсообщ(update).reply_text(
             "📦 *Бэкап Muslimoon*\n"
             "Свежий `Muslimoon_RECOVERY.zip` приходит в журнал + тебе в ЛС файлом при каждом бэкапе (ежедневно 21:00 + при каждой версии).\n"
             "Нужен прямо сейчас? Запусти локально `backup_muslimoon.ps1` — он соберёт свежий zip и пришлёт его сюда.\n"
@@ -14824,7 +14845,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown", disable_web_page_preview=True)
         return
     if is_owner(update) and text.strip().lower() in ("ресурсы", "рабочий стол", "ссылки", "инструменты"):
-        await update.message.reply_text(
+        await _мсообщ(update).reply_text(
             "🧰 *Рабочие ресурсы*\n"
             "• 💳 DeepSeek расход/баланс: platform.deepseek.com/usage  (команда: баланс)\n"
             f"• 🔤 Переводы по сборникам: github.com/{GITHUB_REPO}/tree/data/translations\n"
@@ -14845,24 +14866,24 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             lines.append("пока пусто")
         try:
-            await update.message.reply_text("\n".join(lines)[:3900], parse_mode="Markdown")
+            await _мсообщ(update).reply_text("\n".join(lines)[:3900], parse_mode="Markdown")
         except Exception:   # B «can't parse entities»: спецсимвол в сыром запросе ломал Markdown → без разметки
-            await update.message.reply_text("\n".join(lines)[:3900])
+            await _мсообщ(update).reply_text("\n".join(lines)[:3900])
         return
 
     if is_owner(update) and text.strip().lower() in ("отзывы", "обратная связь", "комментарии", "ошибки людей"):
         j = _journal_load(); fb = j.get("feedback", [])
         if not fb:
-            await update.message.reply_text("Отзывов пока нет.")
+            await _мсообщ(update).reply_text("Отзывов пока нет.")
             return
         lines = ["💬 *Отзывы / ошибки (последние)*"]
         for x in fb[:15]:
             c = f" · {x['ctx']}" if x.get("ctx") else ""
             lines.append(f"\n*№{x.get('id','?')}* · {x['d']} · {x['u']}{c}\n  «{x['t']}»")
         try:
-            await update.message.reply_text("\n".join(lines)[:3900], parse_mode="Markdown")
+            await _мсообщ(update).reply_text("\n".join(lines)[:3900], parse_mode="Markdown")
         except Exception:   # B «can't parse entities»: спецсимвол в тексте отзыва → без разметки
-            await update.message.reply_text("\n".join(lines)[:3900])
+            await _мсообщ(update).reply_text("\n".join(lines)[:3900])
         return
 
     # ===== Владельцу: журналы (расход ИИ и накопление) =====
@@ -14885,9 +14906,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 lines.append(f"  {'🆕' if x.get('fresh') else '♻️'} {x['d']} · {who_full} · {x.get('f','')}{loc}")
         lines.append("\n📄 Файл: github.com/" + GITHUB_REPO + "/blob/data/journal.json")
         try:
-            await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+            await _мсообщ(update).reply_text("\n".join(lines), parse_mode="Markdown")
         except Exception:   # B «can't parse entities»: спецсимвол в имени/src → без разметки
-            await update.message.reply_text("\n".join(lines))
+            await _мсообщ(update).reply_text("\n".join(lines))
         return
     if is_owner(update) and text.strip().lower() in ("накопление", "журнал накопления", "накопления", "переводы накоплено"):
         j = _journal_load(); tr = j["translations"]; tot = tr.get("totals", {})
@@ -14905,7 +14926,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 lines.append(f"  {x['d']} {x['s']} №{x['n']}")
         lines.append("\n📁 Папка: github.com/" + GITHUB_REPO + "/tree/data/translations")
         lines.append("ℹ️ Удаляется ТОЛЬКО тобой. Копится только полезное (мусор/ошибки не пишем).")
-        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        await _мсообщ(update).reply_text("\n".join(lines), parse_mode="Markdown")
         return
 
     # ===== Владельцу: ЧЁРНЫЙ СПИСОК (бан чата/пользователя по id) =====
@@ -14928,22 +14949,22 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception:
                     note = ""
             if not note:
-                await update.message.reply_text("Пусто. Напиши: анонс <текст обновления>")
+                await _мсообщ(update).reply_text("Пусто. Напиши: анонс <текст обновления>")
                 return
             # 04.07.2026 (владелец поймал v963 дважды): АТОМАРНАЯ проверка-и-захват ПЕРЕД постом — если
             # автоматическая очередь (update_notes_queue.json) уже запостила ЭТОТ ЖЕ текст (напр. только что),
             # ручная «анонс» больше НЕ дублирует его молча.
             if not _channel_claim(note):
-                await update.message.reply_text("⏸ Это обновление уже было опубликовано в @muslimoonapp только что (текст совпадает с последним постом) — повторно НЕ отправляю, чтобы не дублировать.")
+                await _мсообщ(update).reply_text("⏸ Это обновление уже было опубликовано в @muslimoonapp только что (текст совпадает с последним постом) — повторно НЕ отправляю, чтобы не дублировать.")
                 return
             try:
                 # id версии здесь взять неоткуда: текст мог быть набран владельцем вручную. Постер
                 # сам достанет номер «vNNN» из текста, чтобы доказательство доставки (app_post_msgids)
                 # всё равно легло под версией, а не под первым словом ноты (закон З-47).
                 await _post_app_channel(context.bot, note)   # ЗАКОН С31: скрин + анонс + сворачиваемая инструкция
-                await update.message.reply_text("✅ Опубликовал в канал @muslimoonapp.")
+                await _мсообщ(update).reply_text("✅ Опубликовал в канал @muslimoonapp.")
             except Exception as e:
-                await update.message.reply_text("❌ Не вышло: " + str(e)[:200])
+                await _мсообщ(update).reply_text("❌ Не вышло: " + str(e)[:200])
             return
         # ===== УДАЛИТЬ ПОСТ ИЗ @muslimoonapp вручную (04.07.2026, владелец поймал дубли, «удали сам, доступ есть»)
         # У бота НЕТ сохранённого message_id прошлых постов (_post_app_channel их не хранил) — программно
@@ -14955,7 +14976,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if rep and rep.forward_from_chat and rep.forward_from_message_id:
                 try:
                     await context.bot.delete_message(rep.forward_from_chat.id, rep.forward_from_message_id)
-                    await update.message.reply_text(f"✅ Удалил сообщение из канала (id {rep.forward_from_message_id}).")
+                    await _мсообщ(update).reply_text(f"✅ Удалил сообщение из канала (id {rep.forward_from_message_id}).")
                 except Exception as e:
                     # #628 (тот же класс): сырой английский ответ Telegram владельцу ничего не
                     # объясняет. Отказ здесь бывает ровно двух видов, и делать надо разное:
@@ -14972,10 +14993,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                  "%s → включить «Удаление сообщений» → Сохранить." % _МОД_БОТ_ЮЗЕР)
                     else:
                         _пояс = "Причина не опознана. Проверь, что бот — администратор канала с правом «Удаление сообщений»."
-                    await update.message.reply_text(
+                    await _мсообщ(update).reply_text(
                         "❌ Не удалось удалить пост.\n" + _пояс + "\nДословный ответ Telegram: " + str(e)[:150])
             else:
-                await update.message.reply_text("Перешли мне (форвардом) сам пост из @muslimoonapp, потом ОТВЕТЬ на пересланное сообщение словами «удали дубль».")
+                await _мсообщ(update).reply_text("Перешли мне (форвардом) сам пост из @muslimoonapp, потом ОТВЕТЬ на пересланное сообщение словами «удали дубль».")
             return
         # ===== «УДАЛИ ЭТО» ОТВЕТОМ — УБРАТЬ ИМЕННО ТО СООБЩЕНИЕ (16.08.2026, приказ владельца)
         # 🔴 ПОВОД. Я озвучил не то видео и выложил его в чат. Владелец ответил на мой ролик:
@@ -15016,21 +15037,21 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                           'в настройках администраторов, и я уберу сам.')
                 else:
                     _п = 'Причина не опознана.'
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     '❌ Не смог удалить. %s\nДословно от Telegram: %s' % (_п, str(_еу)[:150]))
             return
         if _tl in ("ошибки", "журнал ошибок", "errors"):
             errs = _data_get("errors.json", []) or []
             open_errs = [e for e in errs if not e.get('fixed')]
             if not errs:
-                await update.message.reply_text("✅ Журнал ошибок пуст.")
+                await _мсообщ(update).reply_text("✅ Журнал ошибок пуст.")
             else:
                 lines = ["🐞 Журнал ошибок — открытых: " + str(len(open_errs)) + " / всего: " + str(len(errs))]
                 for e in sorted(errs, key=lambda x: (x.get('fixed', False), -x.get('seq', x.get('count', 1))))[:25]:
                     mark = "✅" if e.get('fixed') else "🔴"
                     lines.append(f"{mark} {e.get('eid','A-?')} [{e.get('ver','')}] {e.get('where','')}: {e.get('msg','')[:110]} (×{e.get('count',1)})")
                 lines.append("\nРешить: «ошибка решена A-001» (по номеру) или «ошибка решена <часть текста>».")
-                await update.message.reply_text("\n".join(lines)[:3900])
+                await _мсообщ(update).reply_text("\n".join(lines)[:3900])
             return
         # ===== #110: ЖУРНАЛ ЗАЯВОК в боте (общий: бот+мастер; З-12 штамп времени, З-16 исправленная цитата) =====
         # #Ф-роутинг (командный роутинг из хендоффа): «заявки»/«журнал заявок» перехватываются
@@ -15080,7 +15101,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             lines.append("📒 Мастер-журнал (575 кодов M/TB/Э/R/Ф): ЗАЯВКИ.md в репо.")
             txt = "\n".join(lines)
             for i in range(0, len(txt), 3900):
-                await update.message.reply_text(txt[i:i + 3900], disable_web_page_preview=True)
+                await _мсообщ(update).reply_text(txt[i:i + 3900], disable_web_page_preview=True)
             return
         _mfix = re.match(r"^ошибка\s+(решена|исправлена)\s+(.+)$", _tl)
         if _mfix:
@@ -15091,7 +15112,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if _fl == str(e.get('eid', '')).lower() or frag in (e.get('msg', '') + ' ' + e.get('where', '')).lower():
                     e['fixed'] = True; n += 1
             _data_put("errors.json", errs, "errlog: помечено решённым")
-            await update.message.reply_text(f"✅ Помечено решёнными: {n}.")
+            await _мсообщ(update).reply_text(f"✅ Помечено решёнными: {n}.")
             return
         if _tl in ("баны", "чёрный список", "черный список", "бан список", "блок список"):
             cfg0 = load_access(); cur = [str(x) for x in cfg0.get("blacklist", [])]; notes0 = cfg0.get("ban_notes", {}) or {}
@@ -15099,7 +15120,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for x in cur:
                 nt = notes0.get(str(x), "")
                 lines.append("• "+str(x)+(" — "+nt if nt else ""))
-            await update.message.reply_text("⛔ Чёрный список ("+str(len(cur))+"):\n" + ("\n".join(lines) if lines else "пусто") + "\n\nКоманды: «бан <id> [причина]» (можно несколько id, или ОТВЕТЬ «бан» на уведомление) / «разбан <id>».")
+            await _мсообщ(update).reply_text("⛔ Чёрный список ("+str(len(cur))+"):\n" + ("\n".join(lines) if lines else "пусто") + "\n\nКоманды: «бан <id> [причина]» (можно несколько id, или ОТВЕТЬ «бан» на уведомление) / «разбан <id>».")
             return
         # БАН/РАЗБАН: несколько id, бан по ответу на уведомление (id берём из него), причина-комментарий
         if re.match(r"^(бан|разбан)\b", _tl):
@@ -15117,7 +15138,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reason = rest[:200]
             ids = list(dict.fromkeys(ids))
             if not ids:
-                await update.message.reply_text("Укажи id: «бан 123456» (можно несколько: «бан 111 222»), либо ОТВЕТЬ «бан» на уведомление с id.")
+                await _мсообщ(update).reply_text("Укажи id: «бан 123456» (можно несколько: «бан 111 222»), либо ОТВЕТЬ «бан» на уведомление с id.")
                 return
             cfg = load_access(); bl = [str(x) for x in cfg.get("blacklist", [])]; notes = dict(cfg.get("ban_notes", {}) or {})
             done = []
@@ -15136,7 +15157,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # но человек как сидел в группе, так и сидит. Владелец 20.07.2026 именно на это и
                 # напоролся. Теперь пишем, что произошло на самом деле, и рядом — команда для
                 # настоящего бана в Telegram.
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     "🔇 В чёрный список бота: " + ", ".join(done) + (("\n📝 " + reason) if reason else "") +
                     "\nВсего в ЧС: " + str(len(bl)) +
                     "\n\nℹ️ Это список игнора: бот перестанет их обслуживать, но из чата НЕ выгонит."
@@ -15148,7 +15169,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await context.bot.send_message(LOG_CHAT_ID, jrn)
                 except Exception: pass
             else:
-                await update.message.reply_text("✅ Разбанено: " + ", ".join(done) + "\nВ ЧС осталось: " + str(len(bl)))
+                await _мсообщ(update).reply_text("✅ Разбанено: " + ", ".join(done) + "\nВ ЧС осталось: " + str(len(bl)))
             return
         # ===== #628: НАСТОЯЩИЙ БАН В TELEGRAM + ПРОВЕРКА ПРАВ БОТА =====
         # Заявка #628 (20.07.2026): к уведомлению о входе участника пришла приписка
@@ -15186,7 +15207,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _я = await context.bot.get_chat_member(_чат, context.bot.id)
                 _ст = getattr(_я, "status", "?")
                 if _ст != "administrator":
-                    await update.message.reply_text(
+                    await _мсообщ(update).reply_text(
                         "🔍 Права в «%s» (id %s):\n❌ Бот НЕ администратор (статус: %s) — банить не может."
                         % (_назв, _чат, _ст) + _права_инструкция(_назв))
                     return
@@ -15204,9 +15225,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     _строки.append(_права_инструкция(_назв))
                 else:
                     _строки.append("\nБанить можно: «чат бан <id>» · вернуть: «чат разбан <id>».")
-                await update.message.reply_text("\n".join(_строки))
+                await _мсообщ(update).reply_text("\n".join(_строки))
             except Exception as _e:
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     "🔍 Не смог проверить права в чате %s: %s\n"
                     "Обычно это значит, что бота в этом чате нет вовсе. Проверь id: «ид чата» — "
                     "напиши это прямо в нужном чате." % (_чат, str(_e)[:160]))
@@ -15229,11 +15250,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 if _акт == "бан":
                     await context.bot.ban_chat_member(chat_id=_чат, user_id=_кого)
-                    await update.message.reply_text(
+                    await _мсообщ(update).reply_text(
                         "⛔ Забанен в «%s»: %d.\nВернуть: «чат разбан %d %s»." % (_назв, _кого, _кого, _чат))
                 else:
                     await context.bot.unban_chat_member(chat_id=_чат, user_id=_кого, only_if_banned=True)
-                    await update.message.reply_text("✅ Разбанен в «%s»: %d." % (_назв, _кого))
+                    await _мсообщ(update).reply_text("✅ Разбанен в «%s»: %d." % (_назв, _кого))
                 try:
                     if update.effective_chat and update.effective_chat.id != LOG_CHAT_ID:
                         await context.bot.send_message(
@@ -15255,7 +15276,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception:
                     _подробно = ("⚠️ Не удалось %s %d в «%s»: %s\n"
                                  "Проверить права: «права %s»." % (_акт, _кого, _назв, str(_e)[:200], _чат))
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     _подробно + "\n\n🔍 Проверить права бота: «права %s»." % _чат)
             return
 
@@ -15288,7 +15309,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             стр.append("Режим групп: <b>%s</b> · разрешённых: %d" % (mode, len(wl)))
             стр.append("Команды: «группы только свои» · «группы всем» · «группа разреши &lt;id&gt;» · "
                        "«покинь &lt;id&gt;» · «бан &lt;id&gt;»")
-            await update.message.reply_text("\n".join(стр), parse_mode="HTML",
+            await _мсообщ(update).reply_text("\n".join(стр), parse_mode="HTML",
                                             disable_web_page_preview=True)
             return
         if _tl in ("группы только свои", "группы свои", "группы только разрешенные", "группы только разрешённые"):
@@ -15310,7 +15331,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await context.bot.leave_chat(gid); await update.message.reply_text(f"➖ Вышел из чата {gid}.")
             except Exception as e:
-                await update.message.reply_text(f"Не удалось выйти из {gid}: {e}")
+                await _мсообщ(update).reply_text(f"Не удалось выйти из {gid}: {e}")
             return
         # #153: быстрый тумблер «молчи»/«говори» в ТЕКУЩЕМ чате (резко отключить бота, если тупит)
         if _tl in ("молчи", "тихо", "замолчи"):
@@ -15398,7 +15419,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 hadith_src = re.sub(r'мух[эе]йм[иі]н[еа]?.*$', '', text, flags=re.IGNORECASE).strip()
                 if not re.search(r'[ء-ي]', hadith_src): hadith_src = text  # запрос сам может содержать текст перед словом «мухэймин»
-            await update.message.reply_text("🔎 Ищу в Мухэймине...")
+            await _мсообщ(update).reply_text("🔎 Ищу в Мухэймине...")
             result = await muhaymin_check_reply_text(hadith_src)
             await send_long(update, result)
             return
@@ -15419,7 +15440,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # #450: «ботяра дай карточку X» — СТРУКТУРНЫЙ ответ (наши данные + ссылки), не общий ИИ-домысел
             _nq = parse_narr_card_query(clean)
             if _nq:
-                await update.message.reply_text("🔎 Ищу в базе передатчиков...")
+                await _мсообщ(update).reply_text("🔎 Ищу в базе передатчиков...")
                 result = await narr_card_reply_text(_nq[0], _nq[1])
                 # parse_mode=HTML — карточка отдаёт свёрнутую цитату с оценками критиков
                 # (правило владельца #103). Без него теги показались бы сырыми (A-45).
@@ -15433,12 +15454,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if _tr is not None:
                 _tr_text = _tr if _tr != "REPLY" else ((update.message.reply_to_message.text if update.message.reply_to_message else None))
                 if _tr_text:
-                    await update.message.reply_text("🔄 Перевожу...")
+                    await _мсообщ(update).reply_text("🔄 Перевожу...")
                     result = ask_ai(f"Переведи на русский:\n{_tr_text}", "Ты — переводчик.")
                     await send_long(update, result)
                     await log_bot_ai(update, context, ai_text=result)
                     return
-            await update.message.reply_text("🤔 Думаю...")
+            await _мсообщ(update).reply_text("🤔 Думаю...")
             result = ask_ai_with_memory(clean)
             await send_long(update, result)
             await log_bot_ai(update, context, ai_text=result)
@@ -15448,7 +15469,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id != OWNER_ID and not feature_allowed('botsearch', tg_user_dict(update)):
         if chat_type == "private":
             try:
-                await update.message.reply_text("🔒 Бот пока доступен не всем. Обратись к владельцу за доступом.")
+                await _мсообщ(update).reply_text("🔒 Бот пока доступен не всем. Обратись к владельцу за доступом.")
             except Exception:
                 pass
         return  # в группах — тихо, чтобы не спамить
@@ -15478,7 +15499,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _цель = _т.replace('почини анонсы', '').replace('почини анонс', '').strip()
                 _список = [_цель] if _цель else list(_мид)
                 if not _мид:
-                    await update.message.reply_text(
+                    await _мсообщ(update).reply_text(
                         "Номеров постов пока нет: их начали запоминать только сейчас. "
                         "Старые посты правятся так — перешлите мне пост из канала, я перепишу его по номеру из пересылки.")
                     return
@@ -15496,7 +15517,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except Exception as e:
                         _мимо.append('%s (%s)' % (_в, str(e)[:40]))
                 _хвост = (' · не вышло: ' + ', '.join(_мимо)) if _мимо else ''
-                await update.message.reply_text("✅ Переписано: %s%s" % (', '.join(_ок) or '—', _хвост))
+                await _мсообщ(update).reply_text("✅ Переписано: %s%s" % (', '.join(_ок) or '—', _хвост))
                 return
         except Exception:
             pass
@@ -15524,12 +15545,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     чистый = _clean_announce(исходный)
                     try:
                         await context.bot.edit_message_text(chat_id=_fc.id, message_id=_fmid, text=чистый)
-                        await update.message.reply_text("✅ Пост в канале переписан — личные цитаты и рабочая кухня убраны.")
+                        await _мсообщ(update).reply_text("✅ Пост в канале переписан — личные цитаты и рабочая кухня убраны.")
                     except Exception as e:
-                        await update.message.reply_text("Не смог переписать: %s\n\nВот чистый текст, вставьте вручную:\n\n%s"
+                        await _мсообщ(update).reply_text("Не смог переписать: %s\n\nВот чистый текст, вставьте вручную:\n\n%s"
                                                         % (str(e)[:90], чистый))
                     return
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     "🆔 Переслано из: %s\nid: `%s`\nтип: %s"
                     % (getattr(_fc, 'title', '?'), _fc.id, getattr(_fc, 'type', '?')),
                     parse_mode="Markdown")
@@ -15552,21 +15573,21 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     try:
                         await _st.edit_text(f"📝 {desc}\n\nСохранить в реестр? (да/нет)")
                     except Exception:
-                        await update.message.reply_text(f"📝 {desc}\n\nСохранить в реестр? (да/нет)")
+                        await _мсообщ(update).reply_text(f"📝 {desc}\n\nСохранить в реестр? (да/нет)")
                     return
                 else:
-                    await update.message.reply_text("❌ Ответь на медиа.")
+                    await _мсообщ(update).reply_text("❌ Ответь на медиа.")
             else:
-                await update.message.reply_text("❌ Ответь на медиа командой 'в реестр'.")
+                await _мсообщ(update).reply_text("❌ Ответь на медиа командой 'в реестр'.")
             return
 
         if chat_id in pending_edits and pending_edits[chat_id].get("action") == "add_registry":
             pending = pending_edits.pop(chat_id)
             if text.lower() in ["да", "ок", "ok", "yes", "сохранить"]:
                 eid = add_to_registry({"type": "медиа", "description": pending["description"]})
-                await update.message.reply_text(f"✅ #{eid}\n📝 {pending['description']}\n📌 ожидает")
+                await _мсообщ(update).reply_text(f"✅ #{eid}\n📝 {pending['description']}\n📌 ожидает")
             else:
-                await update.message.reply_text("❌ Отмена.")
+                await _мсообщ(update).reply_text("❌ Отмена.")
             return
 
         # #163: подтверждение голосовой ЗАЯВКИ (в аудио бывают ошибки распознавания — переспрашиваем перед записью)
@@ -15576,7 +15597,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 vtxt = pend.get("text", "")
                 dup = req_dup(vtxt)
                 if dup:
-                    await update.message.reply_text(f"⚠️ Похоже, уже есть — заявка №{dup}. Не дублирую.")
+                    await _мсообщ(update).reply_text(f"⚠️ Похоже, уже есть — заявка №{dup}. Не дублирую.")
                 else:
                     rid = req_add(vtxt)
                     try:
@@ -15584,9 +15605,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid} (голосом, {_now_msk()}):\n{обрезать(vtxt, 1500, 'полностью — в реестре заявок')}")
                     except Exception:
                         pass
-                    await update.message.reply_text(f"📥 Заявка #{rid} записана ✅ (голосом). Ищи в журнале командой «заявки».")
+                    await _мсообщ(update).reply_text(f"📥 Заявка #{rid} записана ✅ (голосом). Ищи в журнале командой «заявки».")
             else:
-                await update.message.reply_text("❌ Не записал. Надиктуй заново или поправь текстом «заявка <текст>».")
+                await _мсообщ(update).reply_text("❌ Не записал. Надиктуй заново или поправь текстом «заявка <текст>».")
             return
 
         # #163: голосовая ЗАЯВКА — владелец шлёт голосовое в ЛИЧКУ (без текста) → Whisper → подтверждение перед записью
@@ -15620,7 +15641,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await _st.edit_text(f"📝 {desc}\n\nСохранить в реестр? (да/нет)")
             except Exception:
-                await update.message.reply_text(f"📝 {desc}\n\nСохранить в реестр? (да/нет)")
+                await _мсообщ(update).reply_text(f"📝 {desc}\n\nСохранить в реестр? (да/нет)")
             return
 
         # #196 (интерфейс доносить разборы): ответь на сообщение (разбор Абу Сафии/чужой пост о достоверности) словом «в разборы» →
@@ -15649,7 +15670,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as _e:
                     pass
             if not rt:
-                await update.message.reply_text("❌ В том сообщении нет текста/распознаваемого документа (.docx/.txt). Ответь «в разборы» на текстовый разбор или Word-файл.")
+                await _мсообщ(update).reply_text("❌ В том сообщении нет текста/распознаваемого документа (.docx/.txt). Ответь «в разборы» на текстовый разбор или Word-файл.")
                 return
             src_url = ""
             try:
@@ -15664,7 +15685,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                      "from": (rep.from_user.full_name if rep.from_user else ""), "ts": _now_msk()}
             raw.append(entry)
             _data_put("razbory_raw.json", raw, f"raw razbor +#{new_id} (всего {len(raw)})")
-            await update.message.reply_text(
+            await _мсообщ(update).reply_text(
                 f"📿 Сырой разбор #{new_id} сохранён (всего {len(raw)}){(' · из файла '+doc_name) if doc_name else ''}. Claude оформит его в карточку: тема, вердикт, хадис+ссылка, конспект."
                 + (f"\n🔗 {src_url}" if src_url else ""))
             return
@@ -15691,18 +15712,18 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     for e in data:
                         if e["id"] == eid:
                             pending_edits[chat_id] = {"action": "done_registry", "id": eid, "desc": e.get("description","")[:100]}
-                            await update.message.reply_text(f"✅ Отметить #{eid} как готовое?\n\n{e.get('description','')[:100]}\n\nНапиши «да» или «нет».")
+                            await _мсообщ(update).reply_text(f"✅ Отметить #{eid} как готовое?\n\n{e.get('description','')[:100]}\n\nНапиши «да» или «нет».")
                             return
-                    await update.message.reply_text("❌ Не найдено."); return
+                    await _мсообщ(update).reply_text("❌ Не найдено."); return
                 if reg_cmd.startswith("delete_"):
                     eid = int(reg_cmd.split("_")[1])
                     data = load_registry()
                     for e in data:
                         if e["id"] == eid:
                             pending_edits[chat_id] = {"action": "delete_registry", "id": eid, "desc": e.get("description","")[:100]}
-                            await update.message.reply_text(f"⚠️ Удалить #{eid}?\n\n{e.get('description','')[:100]}\n\nНапиши «да» или «нет».")
+                            await _мсообщ(update).reply_text(f"⚠️ Удалить #{eid}?\n\n{e.get('description','')[:100]}\n\nНапиши «да» или «нет».")
                             return
-                    await update.message.reply_text("❌ Не найдено."); return
+                    await _мсообщ(update).reply_text("❌ Не найдено."); return
                 if reg_cmd.startswith("result_"):
                     parts = reg_cmd.split("_", 2)
                     eid = int(parts[1])
@@ -15712,14 +15733,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         if e["id"] == eid:
                             e["result"] = link; e["status"] = "готово"
                             save_registry(data)
-                            await update.message.reply_text(f"✅ #{eid} результат сохранён."); return
-                    await update.message.reply_text("❌ Не найдено."); return
+                            await _мсообщ(update).reply_text(f"✅ #{eid} результат сохранён."); return
+                    await _мсообщ(update).reply_text("❌ Не найдено."); return
                 results = search_registry(reg_cmd)
                 if results:
                     msg = f"🔍 *«{reg_cmd}»:*\n\n" + "\n".join([f"#{e['id']} {'🟢' if e['status']=='готово' else '🔴'} {e['description'][:100]}" for e in results])
                     await send_long(update, msg, "Markdown")
                 else:
-                    await update.message.reply_text("❌ Не найдено в реестре.")
+                    await _мсообщ(update).reply_text("❌ Не найдено в реестре.")
                 return
 
     # ============ ВЛАДЕЛЕЦ: АУДИО → MP3 (конвертация / студийное улучшение / метаданные) ============
@@ -15739,7 +15760,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _has_meta     = bool(re.search(r'(имя|исполнител\w*|назван\w*|описани\w*|title|artist|performer)\s*[:=]?\s*["«»“‘\']', _tl))
         # 📝 РАСШИФРОВКА речи (Whisper): ответь на голосовое/аудио/видео + «расшифровать»
         if _has_audio and _want_transcribe:
-            await update.message.reply_text("📝 Расшифровываю речь… (может занять минуту)")
+            await _мсообщ(update).reply_text("📝 Расшифровываю речь… (может занять минуту)")
             _fobj = _rep.audio or _rep.voice or _rep.video or _rep.document
             try:
                 _f = await _fobj.get_file()
@@ -15765,14 +15786,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         await send_long(update, "📝 Расшифровка:\n\n" + _txt)
                 else:
-                    await update.message.reply_text("❌ Не удалось расшифровать. Нужен OPENAI_API_KEY на Railway (Whisper).")
+                    await _мсообщ(update).reply_text("❌ Не удалось расшифровать. Нужен OPENAI_API_KEY на Railway (Whisper).")
                 try: os.remove(_src)
                 except Exception: pass
             except Exception as e:
-                await update.message.reply_text("❌ Ошибка расшифровки: " + str(e)[:200])
+                await _мсообщ(update).reply_text("❌ Ошибка расшифровки: " + str(e)[:200])
             return
         if _has_audio and (_want_mp3 or _want_enhance or _has_meta):
-            await update.message.reply_text("✨ Улучшаю звук (шумодав + громкость)…" if _want_enhance else "🎧 Делаю mp3…")
+            await _мсообщ(update).reply_text("✨ Улучшаю звук (шумодав + громкость)…" if _want_enhance else "🎧 Делаю mp3…")
             _fobj = _rep.audio or _rep.voice or _rep.video or _rep.document
             _t_meta, _a_meta, _c_meta = parse_audio_meta(text)
             # свободный заголовок после команды без кавычек: «mp3 Лекция о посте»
@@ -15796,17 +15817,17 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         _cap += f"\n🏷 {_title} — {_artist}" + (f"\n📝 {_comment}" if _comment else "")
                     await update.message.reply_audio(audio=open(_out, "rb"), title=_title, performer=_artist, caption=_cap)
                 else:
-                    await update.message.reply_text("❌ Не удалось обработать аудио. Нужен ffmpeg в деплое — после Redeploy (nixpacks.toml) заработает.")
+                    await _мсообщ(update).reply_text("❌ Не удалось обработать аудио. Нужен ffmpeg в деплое — после Redeploy (nixpacks.toml) заработает.")
                 for _p in (_src, _out):
                     try: os.remove(_p)
                     except Exception: pass
             except Exception as e:
-                await update.message.reply_text("❌ Ошибка обработки аудио: " + str(e)[:200])
+                await _мсообщ(update).reply_text("❌ Ошибка обработки аудио: " + str(e)[:200])
             return
 
     # ============ #163: ГОЛОСОВЫЕ ЗАЯВКИ ВЛАДЕЛЬЦА (voice → распознавание → ПОДТВЕРЖДЕНИЕ → регистрация) ============
     if is_owner(update) and update.message.voice and getattr(update.effective_chat, "type", "") == "private" and not update.message.reply_to_message:
-        await update.message.reply_text("📝 Распознаю голос…")
+        await _мсообщ(update).reply_text("📝 Распознаю голос…")
         try:
             _f = await update.message.voice.get_file()
             _src = f"/tmp/{_f.file_id}.ogg"
@@ -15815,13 +15836,13 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if _txt and _txt.strip():
                 _txt = _txt.strip()
                 pending_edits[chat_id] = {"action": "voice_request_confirm", "transcribed_text": _txt}
-                await update.message.reply_text(f"🎙️ Правильно ли я понял заявку:\n\n«{_txt}»\n\nОтветь: да / нет / или пришли исправленный текст")
+                await _мсообщ(update).reply_text(f"🎙️ Правильно ли я понял заявку:\n\n«{_txt}»\n\nОтветь: да / нет / или пришли исправленный текст")
             else:
-                await update.message.reply_text("❌ Не удалось распознать (нужен OPENAI_API_KEY / Whisper).")
+                await _мсообщ(update).reply_text("❌ Не удалось распознать (нужен OPENAI_API_KEY / Whisper).")
             try: os.remove(_src)
             except Exception: pass
         except Exception as e:
-            await update.message.reply_text("❌ Ошибка голоса: " + str(e)[:200])
+            await _мсообщ(update).reply_text("❌ Ошибка голоса: " + str(e)[:200])
         return
 
     # ============ ВЛАДЕЛЕЦ: ПАМЯТЬ ============
@@ -15835,10 +15856,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if pending.get("action") == "clear_memory":
                 if t_lower == "точно ботяра":
                     pending_edits.pop(chat_id); save_memory([])
-                    await update.message.reply_text("🧠 Память полностью очищена.")
+                    await _мсообщ(update).reply_text("🧠 Память полностью очищена.")
                 else:
                     pending_edits.pop(chat_id)
-                    await update.message.reply_text("❌ Удаление отменено.")
+                    await _мсообщ(update).reply_text("❌ Удаление отменено.")
                 return
             if pending.get("action") == "delete_memory":
                 if t_lower in ["да", "ок", "ok", "yes", "удалить"]:
@@ -15847,10 +15868,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     idx = pending["index"]
                     if 0 <= idx < len(memory):
                         removed = memory.pop(idx); save_memory(memory)
-                        await update.message.reply_text(f"🗑 Удалено:\n{removed.get('text','')}")
+                        await _мсообщ(update).reply_text(f"🗑 Удалено:\n{removed.get('text','')}")
                 else:
                     pending_edits.pop(chat_id)
-                    await update.message.reply_text("❌ Удаление отменено.")
+                    await _мсообщ(update).reply_text("❌ Удаление отменено.")
                 return
             if pending.get("action") == "delete_memory_word":
                 if t_lower in ["да", "ок", "ok", "yes", "удалить"]:
@@ -15859,51 +15880,51 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     before = len(memory)
                     memory = [m for m in memory if word.lower() not in m.get("text", "").lower()]
                     save_memory(memory)
-                    await update.message.reply_text(f"🗑 Удалено {before - len(memory)} записей с «{word}».")
+                    await _мсообщ(update).reply_text(f"🗑 Удалено {before - len(memory)} записей с «{word}».")
                 else:
                     pending_edits.pop(chat_id)
-                    await update.message.reply_text("❌ Удаление отменено.")
+                    await _мсообщ(update).reply_text("❌ Удаление отменено.")
                 return
             if pending.get("action") == "done_registry":
                 if t_lower in ["да", "ок", "ok", "yes"]:
                     pending_edits.pop(chat_id); mark_done(pending["id"])
-                    await update.message.reply_text(f"✅ #{pending['id']} готово.")
+                    await _мсообщ(update).reply_text(f"✅ #{pending['id']} готово.")
                 else:
                     pending_edits.pop(chat_id)
-                    await update.message.reply_text("❌ Отмена.")
+                    await _мсообщ(update).reply_text("❌ Отмена.")
                 return
             if pending.get("action") == "delete_registry":
                 if t_lower in ["да", "ок", "ok", "yes", "удалить"]:
                     pending_edits.pop(chat_id); delete_entry(pending["id"])
-                    await update.message.reply_text(f"🗑 #{pending['id']} удалено.")
+                    await _мсообщ(update).reply_text(f"🗑 #{pending['id']} удалено.")
                 else:
                     pending_edits.pop(chat_id)
-                    await update.message.reply_text("❌ Отмена.")
+                    await _мсообщ(update).reply_text("❌ Отмена.")
                 return
             if pending.get("action") == "voice_request_confirm":
                 if t_lower in ["да", "ок", "ok", "yes", "верно"]:
                     txt = pending["transcribed_text"]; pending_edits.pop(chat_id)
                     dup = req_dup(txt)
                     if dup:
-                        await update.message.reply_text(f"⚠️ Похоже, это уже есть — *заявка №{dup}*. Не дублирую.", parse_mode="Markdown")
+                        await _мсообщ(update).reply_text(f"⚠️ Похоже, это уже есть — *заявка №{dup}*. Не дублирую.", parse_mode="Markdown")
                     else:
                         rid = req_add(txt)
                         try:
                             if update.effective_chat.id != LOG_CHAT_ID:
                                 await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца (голосом) #{rid} ({_now_msk()}):\n{обрезать(txt, 1500, 'полностью — в реестре заявок')}")
                         except Exception: pass
-                        await update.message.reply_text(f"📥 *Заявка #{rid}* записана ✅ · 🤖 бот ({_now_msk()})", parse_mode="Markdown")   # M287
+                        await _мсообщ(update).reply_text(f"📥 *Заявка #{rid}* записана ✅ · 🤖 бот ({_now_msk()})", parse_mode="Markdown")   # M287
                 elif t_lower in ["нет", "не надо", "отмена", "no"]:
                     pending_edits.pop(chat_id)
-                    await update.message.reply_text("❌ Отмена. Пришли голос снова или напиши текстом.")
+                    await _мсообщ(update).reply_text("❌ Отмена. Пришли голос снова или напиши текстом.")
                 else:
                     new_text = (text or "").strip()
                     if new_text:
                         pending_edits[chat_id] = {"action": "voice_request_confirm", "transcribed_text": new_text}
-                        await update.message.reply_text(f"✏️ Исправил на:\n\n«{new_text}»\n\nВерно? (да / нет)")
+                        await _мсообщ(update).reply_text(f"✏️ Исправил на:\n\n«{new_text}»\n\nВерно? (да / нет)")
                     else:
                         pending_edits.pop(chat_id)
-                        await update.message.reply_text("❌ Пусто. Пришли голос снова.")
+                        await _мсообщ(update).reply_text("❌ Пусто. Пришли голос снова.")
                 return
             if "new_text" in pending:
                 if t_lower in ["да", "сохранить", "ок", "ok", "yes"]:
@@ -15913,28 +15934,28 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if 0 <= idx < len(memory):
                         memory[idx]["text"] = pending["new_text"]; memory[idx]["date"] = today()
                         save_memory(memory)
-                        await update.message.reply_text(f"✅ Запись #{idx+1} обновлена.")
+                        await _мсообщ(update).reply_text(f"✅ Запись #{idx+1} обновлена.")
                 elif t_lower in ["нет", "не надо", "отмена", "no"]:
                     pending_edits.pop(chat_id)
-                    await update.message.reply_text("❌ Правка отменена.")
+                    await _мсообщ(update).reply_text("❌ Правка отменена.")
                 else:
-                    await update.message.reply_text("🔄 Переделываю...")
+                    await _мсообщ(update).reply_text("🔄 Переделываю...")
                     new_text = format_memory_item(f"{pending['original']} — {text}")
                     pending_edits[chat_id]["new_text"] = new_text
-                    await update.message.reply_text(f"📝 Новый вариант:\n\n{new_text}\n\nСохранить? (да/нет)")
+                    await _мсообщ(update).reply_text(f"📝 Новый вариант:\n\n{new_text}\n\nСохранить? (да/нет)")
                 return
 
         # Запомнить
         if t_lower.startswith("запомни:") or t_lower.startswith("запомни "):
             fact = text.split(" ", 1)[1].strip() if " " in text else ""
             if fact:
-                await update.message.reply_text("🧠 Структурирую...")
+                await _мсообщ(update).reply_text("🧠 Структурирую...")
                 formatted = format_memory_item(fact)
                 memory = load_memory()
                 memory.append({"date": today(), "text": formatted})
                 save_memory(memory)
                 new_id = len(memory)
-                await update.message.reply_text(f"✅ Запись #{new_id} [{today()}]\n📝 {formatted}\n\n✏️ Исправить: исправь память {new_id}: текст")
+                await _мсообщ(update).reply_text(f"✅ Запись #{new_id} [{today()}]\n📝 {formatted}\n\n✏️ Исправить: исправь память {new_id}: текст")
             return
 
         # Очистить память (с подтверждением)
@@ -15942,14 +15963,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if botyara_q is not None:
             if botyara_q in ["очисти свою память", "очисти память", "забудь всё", "сотри память", "стереть память"]:
                 pending_edits[chat_id] = {"action": "clear_memory"}
-                await update.message.reply_text("⚠️ Ты хочешь удалить ВСЮ память!\nЭто нельзя отменить.\n\nЕсли уверен — напиши: **точно ботяра**")
+                await _мсообщ(update).reply_text("⚠️ Ты хочешь удалить ВСЮ память!\nЭто нельзя отменить.\n\nЕсли уверен — напиши: **точно ботяра**")
                 return
 
         # Просмотр памяти
         if t_lower == "память":
             memory = load_memory()
             if not memory:
-                await update.message.reply_text("🧠 Память пуста.")
+                await _мсообщ(update).reply_text("🧠 Память пуста.")
             else:
                 msg = "🧠 *Что я знаю:*\n\n"
                 for i, m in enumerate(memory):
@@ -15965,9 +15986,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 idx = int(val) - 1
                 if 0 <= idx < len(memory):
                     pending_edits[chat_id] = {"action": "delete_memory", "index": idx, "text": memory[idx].get("text", "")}
-                    await update.message.reply_text(f"⚠️ Удалить запись #{idx+1}?\n\n{memory[idx].get('text','')}\n\nНапиши «да» или «нет».")
+                    await _мсообщ(update).reply_text(f"⚠️ Удалить запись #{idx+1}?\n\n{memory[idx].get('text','')}\n\nНапиши «да» или «нет».")
                 else:
-                    await update.message.reply_text("❌ Такого номера нет.")
+                    await _мсообщ(update).reply_text("❌ Такого номера нет.")
             else:
                 found = [m for m in memory if val.lower() in m.get("text", "").lower()]
                 if found:
@@ -15976,9 +15997,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     for f in found[:5]: msg += f"• {f.get('text','')[:100]}\n"
                     if len(found) > 5: msg += f"...и ещё {len(found)-5}\n"
                     msg += "\nНапиши «да» или «нет»."
-                    await update.message.reply_text(msg)
+                    await _мсообщ(update).reply_text(msg)
                 else:
-                    await update.message.reply_text(f"❌ Не найдено записей с «{val}».")
+                    await _мсообщ(update).reply_text(f"❌ Не найдено записей с «{val}».")
             return
 
         # Исправить память
@@ -15991,20 +16012,20 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 memory = load_memory()
                 if 0 <= idx < len(memory):
                     original = memory[idx].get("text", "")
-                    await update.message.reply_text("🔄 Переделываю...")
+                    await _мсообщ(update).reply_text("🔄 Переделываю...")
                     new_text = format_memory_item(f"{original} — {instruction}")
                     pending_edits[chat_id] = {"index": idx, "original": original, "new_text": new_text}
-                    await update.message.reply_text(f"📝 Было:\n{original}\n\n✏️ Стало:\n{new_text}\n\nСохранить? (да/нет)")
+                    await _мсообщ(update).reply_text(f"📝 Было:\n{original}\n\n✏️ Стало:\n{new_text}\n\nСохранить? (да/нет)")
                 else:
-                    await update.message.reply_text("❌ Такого номера нет.")
+                    await _мсообщ(update).reply_text("❌ Такого номера нет.")
             else:
-                await update.message.reply_text("❌ Формат: исправь память 2: сделай короче")
+                await _мсообщ(update).reply_text("❌ Формат: исправь память 2: сделай короче")
             return
 
         # Быстрая очистка памяти
         if t_lower == "очистить память":
             save_memory([])
-            await update.message.reply_text("🧠 Память очищена.")
+            await _мсообщ(update).reply_text("🧠 Память очищена.")
             return
 
     # ============ AI ДЛЯ ВЛАДЕЛЬЦА И ЕГО КАНАЛА ============
@@ -16017,7 +16038,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             is_command = _это_команда_бота(text)
 
             if not is_command:
-                await update.message.reply_text("🤔 Думаю...")
+                await _мсообщ(update).reply_text("🤔 Думаю...")
                 result = ask_ai_with_memory(text)
                 await send_long(update, result)
                 await log_bot_ai(update, context, ai_text=result)
@@ -16041,12 +16062,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if _tr is not None:
                     _tr_text = _tr if _tr != "REPLY" else ((update.message.reply_to_message.text if update.message.reply_to_message else None))
                     if _tr_text:
-                        await update.message.reply_text("🔄 Перевожу...")
+                        await _мсообщ(update).reply_text("🔄 Перевожу...")
                         result = ask_ai(f"Переведи на русский:\n{_tr_text}", "Ты — переводчик.")
                         await send_long(update, result)
                         await log_bot_ai(update, context, ai_text=result)
                         return
-                await update.message.reply_text("🤔 Думаю...")
+                await _мсообщ(update).reply_text("🤔 Думаю...")
                 result = ask_ai_with_memory(clean)
                 await send_long(update, result)
                 await log_bot_ai(update, context, ai_text=result)
@@ -16065,7 +16086,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # #450: «ботяра дай карточку X» — СТРУКТУРНЫЙ ответ (наши данные + ссылки), не общий ИИ-домысел
             _nq = parse_narr_card_query(clean)
             if _nq:
-                await update.message.reply_text("🔎 Ищу в базе передатчиков...")
+                await _мсообщ(update).reply_text("🔎 Ищу в базе передатчиков...")
                 result = await narr_card_reply_text(_nq[0], _nq[1])
                 # parse_mode=HTML — карточка отдаёт свёрнутую цитату с оценками критиков
                 # (правило владельца #103). Без него теги показались бы сырыми (A-45).
@@ -16077,12 +16098,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if _tr is not None:
                 _tr_text = _tr if _tr != "REPLY" else ((update.message.reply_to_message.text if update.message.reply_to_message else None))
                 if _tr_text:
-                    await update.message.reply_text("🔄 Перевожу...")
+                    await _мсообщ(update).reply_text("🔄 Перевожу...")
                     result = ask_ai(f"Переведи на русский:\n{_tr_text}", "Ты — переводчик.")
                     await send_long(update, result)
                     await log_bot_ai(update, context, ai_text=result)
                     return
-            await update.message.reply_text("🤔 Думаю...")
+            await _мсообщ(update).reply_text("🤔 Думаю...")
             result = ask_ai_with_memory(clean)
             await send_long(update, result)
             await log_bot_ai(update, context, ai_text=result)
@@ -16092,12 +16113,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tr = parse_translate(text)
         if tr == "REPLY":
             if update.message.reply_to_message and update.message.reply_to_message.text:
-                await update.message.reply_text("🔄 Перевожу...")
+                await _мсообщ(update).reply_text("🔄 Перевожу...")
                 result = ask_ai(f"Переведи на русский:\n{update.message.reply_to_message.text}", "Ты — переводчик.")
                 await send_long(update, result)
             return
         if tr and tr != "REPLY":
-            await update.message.reply_text("🔄 Перевожу...")
+            await _мсообщ(update).reply_text("🔄 Перевожу...")
             result = ask_ai(f"Переведи на русский:\n{tr}", "Ты — переводчик.")
             await send_long(update, result)
             return
@@ -16105,7 +16126,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Тафсир
         surah, ayah = parse_tafsir_query(text)
         if surah and ayah:
-            await update.message.reply_text(f"📖 Ищу тафсир {surah}:{ayah}...")
+            await _мсообщ(update).reply_text(f"📖 Ищу тафсир {surah}:{ayah}...")
             arabic_ayah, _ = get_quran_ayah(surah, ayah)
             prompt = f"Дай тафсир Ибн Касира на аят {surah}:{ayah}."
             if arabic_ayah: prompt += f"\n\nАят: {arabic_ayah}"
@@ -16118,14 +16139,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = text[7:].strip()
 
         if not query:
-            await update.message.reply_text(
+            await _мсообщ(update).reply_text(
                 "❌ Напишите корень после команды.\n"
                 "Пример: `корень علم` или `корень хукм`",
                 parse_mode="Markdown"
             )
             return
 
-        await update.message.reply_text(f"🔍 Ищу корень «{query}»...")
+        await _мсообщ(update).reply_text(f"🔍 Ищу корень «{query}»...")
 
         # Определяем, что ввёл пользователь — арабский или русский
         is_arabic = bool(re.search(r'[؀-ۿ]', query))
@@ -16135,7 +16156,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             arabic_root = RU_TO_ROOT.get(query.lower().strip())
             if not arabic_root:
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     f"❌ Слово «{query}» не найдено в словаре.\n\n"
                     f"📖 *Примеры:* хукм, ильм, сабр, китаб, таухид, ризк, джихад\n"
                     f"🔤 Или напишите арабский корень: `корень حكم`",
@@ -16147,7 +16168,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if latin_key:
             url = f"https://corpus.quran.com/qurandictionary.jsp?q={latin_key}"
-            await update.message.reply_text(
+            await _мсообщ(update).reply_text(
                 f"📖 Корень: {query} → {arabic_root} → {latin_key}\n\n"
                 f"🔗 {url}",
                 disable_web_page_preview=False
@@ -16155,7 +16176,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             direct_url = f"https://corpus.quran.com/qurandictionary.jsp?q={arabic_root}"
             _qclean = re.sub(r'[*_`\[\]()]', '', query)   # #297/#465: та же чистка — сырой ввод рвал Markdown
-            await update.message.reply_text(
+            await _мсообщ(update).reply_text(
                 f"📖 *Корень:* {_qclean} → {arabic_root}\n\n"
                 f"🔗 [Попробовать открыть в Corpus Quran]({direct_url})\n\n"
                 f"💡 Если страница не открылась — корень не найден в базе.",
@@ -16169,7 +16190,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if tr_name:
         query = tr_name
         if re.search(r"[а-яА-ЯёЁ]", tr_name):   # русское имя -> арабское
-            await update.message.reply_text("🔤 Перевожу имя на арабский...")
+            await _мсообщ(update).reply_text("🔤 Перевожу имя на арабский...")
             ar = ask_ai("Дай арабское написание имени этого передатчика хадисов. "
                         "Только арабское имя, без пояснений:\n" + tr_name,
                         "Ты знаток рижаль (передатчиков хадисов). Отвечай ТОЛЬКО арабским именем.",
@@ -16177,7 +16198,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ar = re.sub(r"\n*⚡ \*Модель:.*$", "", ar or "", flags=re.S)
             ar = re.sub(r"[^؀-ۿ\s]", " ", ar).strip()
             query = ar or tr_name
-        await update.message.reply_text(f"🧑‍🏫 Ищу передатчиков «{query}»...")
+        await _мсообщ(update).reply_text(f"🧑‍🏫 Ищу передатчиков «{query}»...")
         res = search_transmitters(query, 8)
         # feedback #3 (25.06.2026, «ابن لهيعة» не ищется): hawramani.com — внешний поиск, не наш индекс,
         # и он чувствителен к орфографии ة/ه (напр. в наших данных передатчик записан «لهيعه», а
@@ -16187,7 +16208,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _alt = (query[:-1] + ("ه" if query[-1] == "ة" else "ة"))
             res = search_transmitters(_alt, 8)
         if not res:
-            await update.message.reply_text("❌ Не найдено в موسوعة رواة الحديث. Попробуй другое написание.")
+            await _мсообщ(update).reply_text("❌ Не найдено в موسوعة رواة الحديث. Попробуй другое написание.")
             return
         msg = f"🧑‍🏫 <b>Передатчики «{_esc_mark(query)}»</b> (موسوعة رواة الحديث):\n\n"
         for i, t in enumerate(res, 1):
@@ -16203,7 +16224,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     smart = parse_smart_sunnah(text)
     if sun or smart:
         if smart:
-            await update.message.reply_text(f"🧠 Подбираю ключевые слова для «{smart}»...")
+            await _мсообщ(update).reply_text(f"🧠 Подбираю ключевые слова для «{smart}»...")
             kw = ask_ai(
                 "Из описания хадиса по смыслу выдай 4-7 КЛЮЧЕВЫХ АРАБСКИХ СЛОВ из его матна. "
                 "Только слова через пробел, без огласовок, без перевода и пояснений.\nОписание: " + smart,
@@ -16212,18 +16233,18 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             kw = re.sub(r"\n*⚡ \*Модель:.*$", "", kw or "", flags=re.S)
             kw = re.sub(r"[^؀-ۿ\s]", " ", kw).strip()
             if not kw:
-                await update.message.reply_text("❌ Не удалось подобрать ключевые слова.")
+                await _мсообщ(update).reply_text("❌ Не удалось подобрать ключевые слова.")
                 return
-            await update.message.reply_text(f"🔎 Ищу по словам: {kw}")
+            await _мсообщ(update).reply_text(f"🔎 Ищу по словам: {kw}")
             query = kw
         else:
-            await update.message.reply_text(f"🔎 Ищу: {sun}...")
+            await _мсообщ(update).reply_text(f"🔎 Ищу: {sun}...")
             query = sun
         cnt, res = search_sunnah_one(query, limit=4)
         if not res:
-            await update.message.reply_text("❌ Ничего не найдено (или источник недоступен).")
+            await _мсообщ(update).reply_text("❌ Ничего не найдено (или источник недоступен).")
             return
-        await update.message.reply_text(f"🔎 الدرر السنية — найдено: {cnt}, версий: {len(res)}")
+        await _мсообщ(update).reply_text(f"🔎 الدرر السنية — найдено: {cnt}, версий: {len(res)}")
         # ── ГЛАВНАЯ версия: полно, с переводом ──
         r0 = res[0]
         main = f"{hukm_emoji(r0['hukm'])} <b>الحكم:</b> {_esc_mark(r0['hukm'] or '—')}\n"
@@ -16251,20 +16272,20 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ============ ДЛЯ ВСЕХ: ПОИСК ХАДИСОВ ============
     sq = parse_search_query(text)
     if sq:
-        await update.message.reply_text(f"🔍 Ищу: {sq}...")
+        await _мсообщ(update).reply_text(f"🔍 Ищу: {sq}...")
         results = search_hadith(sq)
         if results is None:
             # Источник не ответил (dorar.net закрылся от роботов — проверено 12.08.2026:
             # HTTP 403). Говорим ПРАВДУ и предлагаем то, что работает: своя база из 41
             # первоисточника и Мактаба ищутся у нас, без чужого сайта.
-            await update.message.reply_text(
+            await _мсообщ(update).reply_text(
                 "🚧 Внешний поисковик (dorar.net) сейчас нас не пускает — это не «ничего не "
                 "найдено», это «не удалось поискать» ТАМ.\n\n"
                 "Своё работает: напиши слово или фразу в приложении — ищем по нашим 41 "
                 "первоисточнику и по библиотеке Мактаба.")
             return
         if not results:
-            await update.message.reply_text("❌ Ничего не найдено.")
+            await _мсообщ(update).reply_text("❌ Ничего не найдено.")
             return
         msg = f"🔍 *«{re.sub(r'[*_`\[\]()]', '', sq)}»*\n\n"   # #297/#465: непарный _/* в сыром поисковом запросе рвал Markdown всего сообщения (тот же класс, что #501)
         for i, r in enumerate(results, 1):
@@ -16279,10 +16300,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ============ ДЛЯ ВСЕХ: КОРАН ============
     surah, ayah = parse_quran_query(text)
     if surah and ayah:
-        await update.message.reply_text("⏳ Ищу аят...")
+        await _мсообщ(update).reply_text("⏳ Ищу аят...")
         a, r = get_quran_ayah(surah, ayah)
         if not a and not r:
-            await update.message.reply_text(f"❌ Аят {surah}:{ayah} не найден.")
+            await _мсообщ(update).reply_text(f"❌ Аят {surah}:{ayah} не найден.")
             return
         msg = f"📖 Коран, {surah}:{ayah}\n\n"
         if a:
@@ -16313,7 +16334,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             places = find_in_murhid(scode, snum)
             nm = SOURCE_NAMES_RU.get(scode, scode)
             if not places:
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     f"❌ {nm} {snum} в аль-Мухаймине не найден.")
                 return
             data = get_muhaymin(places[0]["m"])
@@ -16332,7 +16353,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # АЛЬ-МУХАЙМИН — поиск по нашему выверенному индексу
     if collection == "riwayat":
-        await update.message.reply_text("🔍 Ищу хадис в аль-Мухаймине...")
+        await _мсообщ(update).reply_text("🔍 Ищу хадис в аль-Мухаймине...")
         data = get_muhaymin(number)
         if data:
             riw = data.get("riwayat", [])
@@ -16345,7 +16366,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if data.get("note"):
                 head += f"{data['note']}\n"
             head += f"📚 Риваятов (версий): {len(riw)}"
-            await update.message.reply_text(head)
+            await _мсообщ(update).reply_text(head)
             # ── каждая версия — своим сообщением ──
             SEP = "━━━━━━━━━━━━━━"
             for i, r in enumerate(riw, 1):
@@ -16368,12 +16389,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await send_long(update, body)
             flush_trans()
         else:
-            await update.message.reply_text(f"❌ Хадис №{number} в аль-Мухаймине не найден.")
+            await _мсообщ(update).reply_text(f"❌ Хадис №{number} в аль-Мухаймине не найден.")
         return
 
     if collection:
         if collection in ["random", "random_bukhari", "random_muslim", "random_quran"]:
-            await update.message.reply_text("🎲 Ищу...")
+            await _мсообщ(update).reply_text("🎲 Ищу...")
             if collection == "random_quran":
                 s, n, ar, ru = get_random_quran()
                 if ar or ru:
@@ -16382,7 +16403,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if ru: msg += f"🌍 {ru}\n"
                     await send_long(update, msg)
                 else:
-                    await update.message.reply_text("❌ Не удалось.")
+                    await _мсообщ(update).reply_text("❌ Не удалось.")
                 return
             else:
                 c = None if collection == "random" else collection.replace("random_", "")
@@ -16397,7 +16418,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if similar: msg += f"\n\n📖 Также:\n• " + "\n• ".join(similar[:5])
                     await send_long(update, msg)
                 else:
-                    await update.message.reply_text("❌ Не удалось.")
+                    await _мсообщ(update).reply_text("❌ Не удалось.")
                 return
 
         if number:
@@ -16424,7 +16445,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 "(مقدمة и т.п.). Надёжнее искать по тексту: «сунна <часть хадиса>».")
                     # #354 (слово владельца): честная формулировка — не «пусто в источнике» огульно,
                     # а «в НАШЕЙ базе не найден» + возможные причины + совет искать по тексту
-                    await update.message.reply_text(
+                    await _мсообщ(update).reply_text(
                         f"❌ {NAMES.get(collection, collection)} №{number} — в нашей базе не найден.\n"
                         f"Возможные причины: номер за пределами издания ИЛИ пробел в наших данных "
                         f"(сообщи — проверим и добьём).\n"
@@ -16554,11 +16575,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         for _к_п in (_резать_html(_перевод_х.lstrip(), 3900)
                                      or [("🌍 " + _ru)[:3800]]):
                             try:
-                                await update.message.reply_text(
+                                await _мсообщ(update).reply_text(
                                     _к_п, parse_mode="HTML", disable_web_page_preview=True)
                             except Exception:
                                 try:
-                                    await update.message.reply_text(
+                                    await _мсообщ(update).reply_text(
                                         re.sub(r'<[^>]+>', '', _к_п)[:3800])
                                 except Exception:
                                     pass
@@ -16603,7 +16624,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                       829: "nasai", 1198: "ibnmajah", 1699: "malik", 25794: "ahmad_local"}
             _наш = next((_c2col[_b] for _s, _b, _nm, _au in _c324 if _b in _c2col), None)
             if _наш:
-                await update.message.reply_text("⏳ Ищу хадис...")
+                await _мсообщ(update).reply_text("⏳ Ищу хадис...")
                 _ar, _tr, _lang, _gr = (get_ahmad_hadith(_n324) if _наш == "ahmad_local"
                                         else get_hadith(_наш, _n324))
                 if _ar or _tr:
@@ -16639,14 +16660,14 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # текст режем до 3000, шапка ~200 → влезаем в 3900.
                 def _эск(s):
                     return (str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
-                await update.message.reply_text(
+                await _мсообщ(update).reply_text(
                     "📖 <b>%s</b>, №%s\n\n🔤 %s\n\n📄 Лист %s · книга из библиотеки Мактабы "
                     "(вне наших 41 сборника — оценки достоверности по ней у нас нет)"
                     % (_эск(_имя324), _эск(_n324), _эск(_хад[:3000]), _лист),
                     reply_markup=InlineKeyboardMarkup(_kb324), parse_mode="HTML")
                 return
             # Не нашли — так и говорим. Соврать номером хуже, чем не ответить (П-43).
-            await update.message.reply_text(
+            await _мсообщ(update).reply_text(
                 f"📚 По запросу «{text}»: это «{_имя324}» из библиотеки Мактабы.\n"
                 f"Хадис №{_n324} в ней найти не удалось — либо в этом издании другая нумерация, "
                 f"либо номер за пределами книги. Выдумывать не буду.\n"
@@ -16675,7 +16696,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if _kw:
                 _cnt, _res = search_sunnah_one(_kw, limit=4)
                 if _res:
-                    await update.message.reply_text(f"🔎 По смыслу «{text[:45]}» → {_kw}\nالدرر السنية: найдено {_cnt}")
+                    await _мсообщ(update).reply_text(f"🔎 По смыслу «{text[:45]}» → {_kw}\nالدرر السنية: найдено {_cnt}")
                     _r0 = _res[0]
                     _m = f"{hukm_emoji(_r0['hukm'])} <b>الحكم:</b> {_esc_mark(_r0['hukm'] or '—')}\n📜 <b>{_esc_mark(_r0['marked'])}</b>\n"
                     if is_owner(update):
@@ -16691,7 +16712,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ============ ПОМОЩЬ ============
     if text.lower() in ["помощь", "справка", "команды", "хелп", "help", "/start"]:
-        await update.message.reply_text(
+        await _мсообщ(update).reply_text(
             "📚 *Команды бота:*\n\n"
             "*Хадисы (8 сборников):*\nбухари 1 | муслим 1 | абу дауд 1\nтирмизи 1 | ибн маджа 1 | насаи 1 | муватта 1\nахмад 1\n\n"
             "*Аль-Мухаймин (الموحد المهيمن):*\nмухаймин 907 | муршид 907\n"
@@ -23370,14 +23391,14 @@ async def start_cmd(update, context):
             # нельзя, но t.me/<bot>/<short_name> открывает мини-апп ВНУТРИ Telegram. Голый WEBAPP_URL (GitHub Pages)
             # выкидывал человека из Telegram — там нет initData, и он упирался в гейт «доступ только для владельца».
             btn = InlineKeyboardButton("📗 Открыть Muslimoon", url="https://t.me/muslimoontt_bot/app")
-        await update.message.reply_text(
+        await _мсообщ(update).reply_text(
             "Добро пожаловать в *Muslimoon Bot*! 🌙\n\n"
             "🔎 Поиск по хадисам, аятам и базе аль-Мухаймин — жми кнопку ниже.\n"
             "Также прямо в чате: «Бухари 333» · «мухэймин 5» · «коран 2:255» · «искать الصبر».",
             reply_markup=InlineKeyboardMarkup([[btn]]), parse_mode="Markdown")
     except Exception as e:
         try:
-            await update.message.reply_text("🔎 Открой поиск: " + WEBAPP_URL)
+            await _мсообщ(update).reply_text("🔎 Открой поиск: " + WEBAPP_URL)
         except Exception:
             pass
 
