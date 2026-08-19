@@ -1112,6 +1112,20 @@ def is_owner(update: Update) -> bool:
     sender_chat_id = 0
     if update.message and update.message.sender_chat:
         sender_chat_id = update.message.sender_chat.id
+    # 🔴 19.08.2026, ОКОНЧАТЕЛЬНАЯ причина, по которой команда владельца не работала в чате.
+    # Он пишет от имени своего канала — такие сообщения приходят как channel_post, и
+    # update.message у них ПУСТ. Значит подпись канала здесь не читалась вовсе, и владелец,
+    # писавший от Муслимуна, для бота был чужим. Правило про его канал существовало и не
+    # работало: смотрели не туда, где лежит ответ.
+    # Беру подпись из любого вида сообщения, а не только из обычного.
+    if not sender_chat_id:
+        for _вид in (getattr(update, 'channel_post', None),
+                     getattr(update, 'edited_message', None),
+                     getattr(update, 'edited_channel_post', None)):
+            _sc = getattr(_вид, 'sender_chat', None) or getattr(_вид, 'chat', None)
+            if _sc and getattr(_sc, 'id', 0):
+                sender_chat_id = _sc.id
+                break
 
     if user_id == OWNER_ID:
         return True
