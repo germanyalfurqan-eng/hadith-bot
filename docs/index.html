@@ -798,7 +798,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1417</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1418</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1664,7 +1664,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1417';
+const APPVER = 'v1418';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -17513,11 +17513,31 @@ function neuroDecode(nv){
    ⚠️ Слова короткие, но НЕ смягчённые: «даиф» остаётся «даиф». Приговор о хадисе нельзя
    показывать мягче, чем он есть, ради вида списка. Обоснование — в блоке сверки цепи,
    и подсказка на бейдже прямо говорит, где его искать. */
+/* 🔴 19.08.2026, заявка владельца #967: «слабое звено указано, а передатчиков такого имя не
+   видно и номер звена не указан».
+   Он прав, и проверка это подтвердила числами: виновник в данных ЕСТЬ У ВСЕХ 3 669 хадисов с
+   приговором «даиф» — сто процентов. Ломался ПОКАЗ: бейдж брал из приговора только оценку и
+   выбрасывал поле с виновником. Приговор без имени проверить нечем, и владелец справедливо
+   отказывался верить на слово.
+   Имя берём из самих данных (поле w: id · чем плох · имя). Номера звена в данных пока НЕТ —
+   он теряется в сборщике, где цепь складывается во множество и порядок пропадает; это правится
+   пересчётом отдельно. Пока номера нет, обещать его нельзя — показываем то, что знаем точно. */
+function neuroВиновник(nv){
+  try{
+    const w = nv && nv.w; if(!Array.isArray(w) || !w.length) return '';
+    const п = w[0]; if(!Array.isArray(п)) return '';
+    const имя = (п[2]||'').trim();
+    if(!имя) return '';
+    return имя;
+  }catch(e){ return ''; }
+}
 function neuroBadge(nv){
   const d=neuroDecode(nv); if(!d) return '';
+  const _вин = neuroВиновник(nv);
+  const _хвост = _вин ? (' · <span style="font-weight:600">' + esc(_вин) + '</span>') : '';
   return '<span class="ntBadge" title="Нейротахкик (БЕТА): '+esc(d[1])+'. Формула по нашим правилам ПР-1…5 (таусик — только от 48 муʿтабаров, нужно ≥2; джарх принимается шире), это не ИИ. Полный разбор — в блоке сверки цепи." '
     +'style="display:inline-block;font-size:calc(10.5px * var(--txtScale,1));font-weight:700;color:'+d[2]+';border:1px solid '+d[2]+'55;border-radius:7px;padding:1px 7px;background:rgba(108,92,231,.10);vertical-align:middle;white-space:nowrap">'
-    +'🤖 '+d[0]+' '+esc(d[1].split(' (')[0])+' <span style="font-size:calc(8.5px * var(--txtScale,1));opacity:.75">БЕТА</span></span>';
+    +'🤖 '+d[0]+' '+esc(d[1].split(' (')[0])+_хвост+' <span style="font-size:calc(8.5px * var(--txtScale,1));opacity:.75">БЕТА</span></span>';
 }
 
 /* 🔴 19.08.2026, заявка #721. Владелец: «покажи мне тут, где нейротахкик? Стратегический указ:
