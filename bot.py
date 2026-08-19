@@ -19497,7 +19497,10 @@ async def _api_serve(application=None):
             _д = await r.json()
         except Exception:
             _д = {}
-        if (_д.get('secret') or '') != BACKUP_SECRET:
+        # .strip() с ОБЕИХ сторон — как во всех соседних дверях. Свою я написал «чище», без
+        # обрезки, и получил 403 при верном секрете: в значении на сервере есть лишний пробел.
+        # Второй путь обязан нести ВСЕ обязанности первого, включая неочевидные.
+        if str(_д.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
             return _cors(web.json_response({'error': 'forbidden'}, status=403))
         try:
             _т = dsoc_системный()
