@@ -812,7 +812,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1422</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1423</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1678,7 +1678,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1422';
+const APPVER = 'v1423';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -19291,7 +19291,19 @@ async function renderTasks(){
     let RSTAT={}; try{ RSTAT=await (await fetch('./requests_status.json?v='+APPVER+'&t='+Date.now())).json(); }catch(e){_тихо(e,"L16924")}
     if(reqs.length){
       const META={done:{ic:'✅',lbl:'Выполнено',c:'#4eb573'},progress:{ic:'🔧',lbl:'В работе',c:'#e0b34a'},wait:{ic:'⏳',lbl:'Ожидают',c:'#7f9bd6'},open:{ic:'📋',lbl:'Не выполнено',c:'#e0796a'}};
-      const items=reqs.map(r=>{ const s=RSTAT[String(r.id)]||(r.done?{s:'done'}:{s:'open'}); return {id:r.id,d:r.d||'',t:r.t||'',img:!!r.img,s:(META[s.s]?s.s:'open'),v:s.v||'',why:s.why||''}; });
+      // v1423. Было: RSTAT[id] || (r.done ? …) — то есть журнал спрашивали ТОЛЬКО если номера нет
+      // в карте статусов. А в карте есть все 724 номера, поэтому журнал не спрашивали НИКОГДА, и
+      // закрытия с распиской (_zakryt.py пишет «итог» именно в журнал) в этой таблице не появлялись
+      // вовсе. 20.08.2026 таких набралось 22 штуки: закрыты по-настоящему, с проверкой на боевом,
+      // а владелец видел их как невыполненные. Теперь берём ОБЪЕДИНЕНИЕ: выполнено, если так говорит
+      // журнал ИЛИ карта. Именно объединение, а не «журнал главнее»: расписка может только ЗАКРЫТЬ,
+      // и отсутствие расписки у старой заявки не доказывает, что её не сделали — до появления _zakryt.py
+      // сессии отмечали сделанное в карте, с версией и объяснением. Обратный порядок «журнал главнее»
+      // молча вернул бы в невыполненные 517 заявок, закрытых прошлыми сессиями.
+      const items=reqs.map(r=>{ const k=RSTAT[String(r.id)]||null; const закрытаЖурналом=!!(r.done||r.итог||r.closed);
+        let s = k || {s:'open'};
+        if(закрытаЖурналом && s.s!=='done') s = {s:'done', v:(k&&k.v)||'', why:(k&&k.why)||'закрыта с распиской в журнале заявок'};
+        return {id:r.id,d:r.d||'',t:r.t||'',img:!!r.img,s:(META[s.s]?s.s:'open'),v:s.v||'',why:s.why||''}; });
       const cnt={done:0,progress:0,wait:0,open:0}; items.forEach(i=>{ cnt[i.s]++; });
       const box=document.createElement('div'); box.style.cssText='margin-top:16px;border-top:2px solid var(--btn);padding-top:10px'; out.appendChild(box);
       const total=items.length;
