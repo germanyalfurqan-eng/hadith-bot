@@ -833,7 +833,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1432</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1433</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1699,7 +1699,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1432';
+const APPVER = 'v1433';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2224,6 +2224,15 @@ function fontInstalled(name){ try{
 }catch(e){ return false; } }
 const _AR_PRIM={system:'',amiriquran:'Amiri Quran',kfgqpchafs:'KFGQPC HAFS Uthmanic Script',uthmantaha:'KFGQPC Uthman Taha Naskh',amiri:'Amiri',naskh:'Noto Naskh Arabic',sans:'Noto Sans Arabic',scheherazade:'Scheherazade New',lateef:'Lateef',kfgqpc:'KFGQPC Sindhi Naskh'};   // #288/#292: только веб-шрифты (Apple/iOS убраны по слову владельца)
 const _AR_PRIM2={kfgqpc:'KFGQPC Uthman Taha Naskh'};
+// v1432/v1433 (#452): каких МУСХАФНЫХ знаков нет в самом файле шрифта. Замерено по таблице cmap
+// (fontTools, 20.08.2026): у KFGQPC Uthman Taha и KFGQPC Sindhi — а это ОДИН файл — отсутствуют
+// U+06ED (ихфа), U+06E2 (икляб), U+06DF (круглый сукун) и U+06DD (знак конца аята); когда знака
+// в шрифте нет, движок рисует на его месте кружок. У остальных наших шрифтов они есть.
+// Держим ОДНУ таблицу на всё приложение (З-33): её читают и статус под выбором, и тест шрифтов.
+// Браузером это не проверить: недостающий знак подставляется из запасного шрифта, и любая мерка
+// по ширине скажет «всё хорошо» — потому знание и записано здесь явно, с датой замера.
+const _НЕТМУСХАФ={uthmantaha:'малый мим ихфа и икляба, круглый сукун, знак конца аята',
+                  kfgqpc:'малый мим ихфа и икляба, круглый сукун, знак конца аята'};
 function _updArFontStatus(){
   const el=document.getElementById('arFontStatus'); if(!el) return;
   const _isWeb={kfgqpchafs:1,uthmantaha:1,naskh:1,amiri:1,scheherazade:1,lateef:1,sans:1,kfgqpc:1,amiriquran:1};   // все веб-шрифты (self-hosted @font-face) — фетчатся при использовании. v1430: amiriquran добавлен — он тоже наш саморазмещённый, а без него статус врал «нет на этом устройстве» вместо «грузится»
@@ -2237,9 +2246,14 @@ function _updArFontStatus(){
       const _чек=(имя)=>{ try{ return !!(document.fonts&&document.fonts.check&&document.fonts.check('20px "'+имя+'"',_AR_ОБРАЗЕЦ)); }catch(e){ return false; } };
       let ok=_чек(prim)||fontInstalled(prim);
       if(!ok&&_AR_PRIM2[k]) ok=_чек(_AR_PRIM2[k])||fontInstalled(_AR_PRIM2[k]);
-      if(ok){ el.textContent='✅ «'+prim+'» доступен — он и отображается.'; el.style.color='#7fd6a0'; }
-      else if(_isWeb[k]){ el.textContent='⚠️ «'+prim+'» пока грузится… если не появится — проверь сеть (временно запасной).'; el.style.color='#e6b800'; }
-      else { el.textContent='⚠️ «'+prim+'» нет на этом устройстве — показываю запасной.'; el.style.color='#e6b800'; }
+      // v1433 (#452, #329): предупреждение о нехватке мусхафных знаков стоит ЗДЕСЬ, в минуту
+      // выбора, а не только в «Тесте всех шрифтов». Владелец полтора месяца видел кружки вместо
+      // ихфа, икляба и круглого сукуна и не знал, что дело в самом шрифте, — знание, спрятанное
+      // за кнопкой теста, ему не помогло. Таблица измерена по cmap файлов (v1432), см. _НЕТМУСХАФ.
+      const _нехватка=_НЕТМУСХАФ[k]?(' ⚠️ Мусхафных знаков в нём нет ('+_НЕТМУСХАФ[k]+') — на их месте будет кружок.'):'';
+      if(ok){ el.textContent='✅ «'+prim+'» доступен — он и отображается.'+_нехватка; el.style.color=_нехватка?'#e6b800':'#7fd6a0'; }
+      else if(_isWeb[k]){ el.textContent='⚠️ «'+prim+'» пока грузится… если не появится — проверь сеть (временно запасной).'+_нехватка; el.style.color='#e6b800'; }
+      else { el.textContent='⚠️ «'+prim+'» нет на этом устройстве — показываю запасной.'+_нехватка; el.style.color='#e6b800'; }
     }catch(e){_тихо(e,"L2056")} };
     // #заявка #535/#544/#550 (шрифт ложно «не загрузился/проверь сеть»): self-hosted @font-face фетчится ТОЛЬКО при использовании →
     // ПРИНУДИТЕЛЬНО грузим выбранный шрифт, ЗАТЕМ статус (иначе ложный жёлтый до первого рендера арабского)
@@ -19763,11 +19777,9 @@ if(_arfT){ _arfT.onclick=()=>{
   // 0644 064E 0670 0653 0626 0650 0643 064E · 06DD 0661. Пропал 06ED, 06E2, 06DF или 06DD —
   // тест перестал проверять то, ради чего заведён, и молча показывает «всё хорошо».
   const МУСХАФ='هُدًۭى أَحَدٌۢ أُو۟لَٰٓئِكَ ۝١';
-  // Замер по САМИМ файлам шрифтов (таблица cmap, 20.08.2026, сессия 78). Проверять это в браузере
-  // нечем: когда знака в шрифте нет, движок берёт его из запасного, и любая мерка по ширине
-  // говорит «всё хорошо». Поэтому знание получено разбором файлов и записано сюда явно, с датой.
-  const НЕТЗНАКОВ={uthmantaha:'малый мим (ихфа и икляб), круглый сукун, знак конца аята',
-                   kfgqpc:'малый мим (ихфа и икляб), круглый сукун, знак конца аята'};
+  // Таблица нехватки — общая, объявлена рядом с _AR_PRIM (v1433). Второй копии не заводим:
+  // разошлись бы через месяц, и одно место говорило бы правду, а другое — вчерашнюю правду.
+  const НЕТЗНАКОВ=_НЕТМУСХАФ;
   const names={system:'Системный (родной шрифт устройства)',kfgqpchafs:'KFGQPC HAFS Uthmanic',uthmantaha:'KFGQPC Uthman Taha Naskh',kfgqpc:'KFGQPC Sindhi Naskh',amiriquran:'Amiri Quran',amiri:'Amiri',scheherazade:'Scheherazade',naskh:'Noto Naskh',sans:'Noto Sans Arabic',lateef:'Lateef'};
   const run=()=>{ let h='';
     for(const k in names){ const prim=_AR_PRIM[k]||'';
