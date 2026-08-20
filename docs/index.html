@@ -812,7 +812,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1423</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1425</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1678,7 +1678,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1423';
+const APPVER = 'v1425';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2269,7 +2269,21 @@ let _appReport=function(){};
   /* #677-③ (С67): возвращаем ПРИЗНАК отправки. Раньше функция молчала, и вызывающий не мог честно
      сказать человеку «отчёт ушёл» — а он мог и не уйти (штатный сетевой шум, дубль, лимит 12 за сессию).
      Обещать записанное, когда ничего не записано, нельзя: журнал — это доказательство, а не вежливость. */
-  function _report(msg, where, stack){ try{ if(!BACKEND_URL||!msg||_cnt>12) return false; if(_benign(msg, where)) return false; const k=(msg+'|'+where).slice(0,160); if(_sent[k]) return false; _sent[k]=1; _cnt++;
+  /* v1425. Тревога владельцу — ТОЛЬКО с боевого адреса. 20.08.2026 я проверял правку на локальном
+     сервере, и три моих же ошибки ушли ему как «ОШИБКА ПРИЛОЖЕНИЯ A-240 (app v1424)». Он получил
+     тревогу о версии, которой нигде нет, и полез смотреть, что сломалось. Плохо в обе стороны:
+     человека будят зря, а настоящий сбой прода тонет в шуме разработки.
+     Сомнение толкуем В ПОЛЬЗУ ОТПРАВКИ: не узнать о реальной поломке хуже, чем прислать лишнее. */
+  function _боевой(){ try{
+    if(location.protocol==='file:') return false;
+    var h=(location.hostname||'').toLowerCase();
+    if(!h) return false;
+    return !(h==='localhost'||h==='127.0.0.1'||h==='::1'||h==='[::1]'
+             ||/^192\.168\./.test(h)||/^10\./.test(h)||/^172\.(1[6-9]|2\d|3[01])\./.test(h)
+             ||/\.local$/.test(h));
+  }catch(e){ return true; } }
+  function _report(msg, where, stack){ try{ if(!BACKEND_URL||!msg||_cnt>12) return false;
+    if(!_боевой()){ try{ console.warn('[не боевой адрес — в журнал НЕ шлём]', where, msg); }catch(e){} return false; } if(_benign(msg, where)) return false; const k=(msg+'|'+where).slice(0,160); if(_sent[k]) return false; _sent[k]=1; _cnt++;
     msg=_безЛичного(msg); where=_безЛичного(where); stack=_безЛичного(stack);
     const simple=_безЛичного(_simplifyError(msg, where));
     fetch(BACKEND_URL+'/errlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:String(msg).slice(0,300),where:String(where||'').slice(0,120),stack:String(stack||'').slice(0,600),simple:simple,ver:(typeof APPVER!=='undefined'?APPVER:''),initData:INITDATA})}).catch(()=>{}); return true; }catch(e){ return false; } }
@@ -9039,6 +9053,17 @@ function _narrНеОпознан(body, name){
   }catch(e){ try{ body.innerHTML='<div class="hint">Не удалось опознать передатчика точно.</div>'; }catch(_e){_тихо(_e,"L7602")} }
 }
 async function openNarratorRijal(name, forceId){
+  /* v1425 (ошибка A-240). У этой функции ЕСТЬ второй довод forceId — номер равия. Передать номер
+     ПЕРВЫМ довод — ошибка естественная: id равиев в приложении повсюду, в цепях, в чипах, в ссылках.
+     Раньше номер уходил внутрь как имя, там его чистили строковой заменой, и всё валилось
+     «TypeError: (s || "").replace is not a function» — трижды подряд и МОЛЧА, через проглатывание.
+     Тихая поломка на неверном типе недопустима: она неотличима от «ничего не найдено». Теперь
+     число понимается как номер, а любой иной тип честно приводится к строке. */
+  if(forceId==null && (typeof name==='number'
+      || (typeof name==='string' && /^\s*\d+\s*$/.test(name)))){
+    forceId = Number(String(name).trim()); name = '';
+  }
+  if(name!=null && typeof name!=='string'){ try{ name=String(name); }catch(e){ name=''; } }
   if(!name && forceId==null) return;
   let m=document.getElementById('narrModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='narrModal';
@@ -15599,7 +15624,7 @@ function _narrAnchors(rebuild){
   try{
     const b=document.getElementById('narrBody'); if(!b) return;
     const old=b.querySelector('#narrAnch');
-    if(old){ if(!rebuild) return; old.remove(); }
+    if(old && !rebuild) return;
     const find=(rx)=>{ const els=b.querySelectorAll('b,div,span'); for(const x of els){ const t=(x.textContent||'').slice(0,60); if(rx.test(t)) return x; } return null; };
     // 20.07 дефект D (ревизия карточки): якоря были без подсказок — по «⚖ Оценки» непонятно, что откроется.
     // Третье поле = title (что именно откроется при переходе).
@@ -15609,8 +15634,14 @@ function _narrAnchors(rebuild){
                 ['🔗 Сеть',/^🔗 Учители и ученики/,'К учителям и ученикам этого передатчика'],
                 ['📊 Охват',/^📊 Охват:/,'К охвату: в каких книгах и сколько раз встречается']];
     const items=defs.map(([t,rx,ti])=>({t:t,ti:ti,el:find(rx)})).filter(x=>x.el);
-    if(items.length<2) return;
-    const bar=document.createElement('div'); bar.id='narrAnch';
+    if(items.length<2) return;   // v1424: нечего строить — СТАРУЮ полоску НЕ трогаем. Прежде её сносили
+                                 // до этой проверки, и неудачная перестройка оставляла карточку вовсе без якорей.
+    // v1424 (#635): подпись набора. Перестройка с тем же набором раньше сносила полоску и рисовала
+    // заново — она моргала и переигрывала анимацию на ровном месте. Тот же набор — ничего не делаем.
+    const _подпись = items.map(x=>x.t).join('|');
+    if(old && old.getAttribute('data-sig')===_подпись) return;
+    if(old) old.remove();
+    const bar=document.createElement('div'); bar.id='narrAnch'; bar.setAttribute('data-sig',_подпись);
     // слово владельца 25.07 («вот эта верхняя выпрыгивает без анимации»): полоска дорисовывается ПОЗЖЕ карточки
     // (секции строятся асинхронно) и раньше просто возникала рывком. Теперь мягко въезжает сверху.
     bar.style.cssText='position:sticky;top:-1px;z-index:7;background:var(--bg);display:flex;gap:6px;overflow-x:auto;padding:6px 2px 7px;border-bottom:1px solid var(--border);margin:0 0 4px;scrollbar-width:none;animation:anchIn .3s cubic-bezier(.22,.61,.36,1) both';
@@ -15625,6 +15656,17 @@ function _narrAnchors(rebuild){
     b.prepend(bar);
   }catch(e){_тихо(e,"L13646")}
 }
+// v1424 (#635): слежение за дорисовкой карточки равия. Секции строят разные функции и в разное время;
+// вместо угадывания момента таймером просто смотрим, когда в теле карточки появляется новое, и достраиваем
+// полоску якорей. Перестройка с тем же набором — пустая операция (подпись), поэтому мигать нечему.
+function _narrAnchorsСледить(){ try{
+  const b=document.getElementById('narrBody'); if(!b || b._анкВахта) return;
+  b._анкВахта=true;
+  let т=null;
+  const наб=new MutationObserver(()=>{ clearTimeout(т); т=setTimeout(()=>{ try{ _narrAnchors(true); }catch(e){_тихо(e,"L13652")} },200); });
+  наб.observe(b,{childList:true,subtree:true});
+  setTimeout(()=>{ try{ наб.disconnect(); }catch(e){} b._анкВахта=false; }, 15000);
+}catch(e){_тихо(e,"L13653")} }
 async function renderTestimoniesCard(mid, host){
   if(mid==null) return;
   // 🔴 ЖДЁМ шард выверенных мест ДО отрисовки. Прежде файл грузился без ожидания, и на
@@ -15636,7 +15678,22 @@ async function renderTestimoniesCard(mid, host){
   // на руках. Не дождаться его = нарисовать «место НЕ выверено» там, где место найдено.
   try{ await _цитМеста(mid); }catch(e){_тихо(e,"L13900ц")}
   window._qppSeen=0;   // v1088: счётчик заглушек «страница уточняется» — на карточку (полная заметка 1 раз, дальше компакт)
-  try{ setTimeout(()=>_narrAnchors(false),1800); setTimeout(()=>_narrAnchors(true),4500); }catch(e){_тихо(e,"L13651")}   // v1089: якоря — двумя волнами (поздние секции)
+  // v1425 (#635, владелец: «вот это сверху своды — они появляются с опозданием и без анимации»).
+  // ⚠️ ЗАМЕР ОПРОВЕРГ ПЕРВОНАЧАЛЬНЫЙ ЗАМЫСЕЛ, пишу как есть, чтобы следующий не повторил.
+  // Я решил, что виноваты слепые таймеры 1800 и 4500 мс, и заменил их слежением. Померил на живом,
+  // на одном и том же равии (Абу Хурайра, id 3320): боевой со старыми таймерами — 2227 мс, эта
+  // версия — 2052 мс. Разница в пределах шума. ОПОЗДАНИЕ НЕ В ТАЙМЕРЕ: карточка ждёт выверенные
+  // места и цитаты (два await выше), и разделы просто не существуют раньше двух секунд. Кто возьмётся
+  // за опоздание всерьёз — идти надо туда, а не сюда.
+  // ЧТО ЭТА ПРАВКА ВСЁ ЖЕ ДАЁТ, и ради чего оставлена:
+  //   ① поздние разделы ДОСТРАИВАЮТСЯ. Старый код после 4500 мс не пересобирал полоску никогда:
+  //      раздел, приехавший на шестой секунде, не попадал в неё до конца жизни карточки;
+  //   ② пересборка с тем же набором больше не сносит и не перерисовывает полоску — не мигает;
+  //   ③ пересборка, нашедшая меньше двух разделов, не оставляет карточку вовсе без якорей
+  //      (старый код сносил полоску ДО проверки и при неудаче не возвращал).
+  // Теперь строим СРАЗУ и следим за дорисовкой: каждая новая секция достраивает полоску. Слежение само
+  // снимается через 15 секунд — карточка к этому времени собрана полностью.
+  try{ _narrAnchors(false); _narrAnchorsСледить(); }catch(e){_тихо(e,"L13651")}
   // ТРЕВОГА-фикс (владелец 04.07.2026, скрин Ибн Умара: «оценки критиков несуществующие, все карточки не совпадают
   // с сунна.ком»): сподвижники (الصحابة عدول) единогласно надёжны по иджма — формула туثيق/джарх/«N из 48 муʿтабаров»
   // к ним НЕ применяется, даже если в базе случайно нашлись какие-то биографические цитаты. Общая точка входа —
