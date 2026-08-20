@@ -833,7 +833,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1430</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1431</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1699,7 +1699,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1430';
+const APPVER = 'v1431';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -10290,6 +10290,25 @@ function _stripBasmala(text){ // убрать ведущую басмалу из
 async function _qrLoad(){
   const m=document.getElementById('qrModal'); if(!m) return;
   const body=m.querySelector('#qrBody'), nav=m.querySelector('#qrNav'), ttl=m.querySelector('#qrTitle'); const s=_qrView.s;
+  // v1431 (#398 «когда убираешь огласовки и возвращаешь в Коране… в начало прыгает»).
+  // Читалка перерисовывается ЦЕЛИКОМ на каждое переключение настройки — огласовки, перевод,
+  // таджвид, — а место чтения при этом бралось из _qrView.a. Открыв суру с начала, человек имеет
+  // там ноль, ноль ложно → внизу срабатывало body.scrollTop=0, и его выбрасывало в первый аят.
+  // На аль-Бакаре это двести аятов назад одним нажатием.
+  // Чиню КЛАСС, а не случай (З-40): место запоминает сама перерисовка, поэтому разом выправляются
+  // все четыре переключателя, а не один названный в заявке. Сура сменилась — начало уместно,
+  // и тогда ничего не запоминаем.
+  // Меряем не offsetTop (он считается от позиционированного предка, а лента лежит внутри
+  // обёртки масштаба #qrZoom), а разницу прямоугольников — она верна при любой вложенности.
+  const _тоЖеМесто = (function(){ try{
+    if(body.dataset.sura !== String(s)) return null;
+    const cr = body.getBoundingClientRect();
+    for(const b of body.querySelectorAll('.qrAyah')){
+      const br = b.getBoundingClientRect();
+      if(br.bottom > cr.top + 4) return {a:(b.id||'').slice(3), сдвиг: br.top - cr.top, верх: body.scrollTop};
+    }
+    return {a:'', сдвиг:0, верх: body.scrollTop};
+  }catch(e){ return null; } })();
   body.dataset.sura=String(s);   // какая сура сейчас показана (для привязки подсветки/скролла аудио к нужной суре)
   try{ cfg.qrLast={s:s, a:_qrView.a||0}; saveCfg(cfg); }catch(e){_тихо(e,"L8713")}   // M356: помним, где читал (продолжение при следующем открытии)
   ttl.textContent='📖 Сура '+s+' · '+(SURA_NAMES[s-1]||'');
@@ -10479,7 +10498,17 @@ async function _qrLoad(){
   sp.appendChild(trow);
   nav.appendChild(sp);   // #47: панель настроек (sp) — полная ширина под навигацией; ① кнопка-шестерёнка теперь в titleRow (см. выше), из navBox убрана
   _navApply();
-  if(_qrView.a){ const tgt=body.querySelector('#qr-'+_qrView.a); if(tgt) setTimeout(()=>{ try{ tgt.scrollIntoView({block:'center'}); }catch(e){_тихо(e,"L8901")} },60); } else { body.scrollTop=0; }
+  if(_тоЖеМесто){
+    // Та же сура, просто перерисована → вернуть человека ровно туда, где он читал.
+    // Дважды: сразу и через кадр — масштаб и шрифты доезжают после, и первая установка съезжает.
+    const _вернуть=()=>{ try{
+      const t=_тоЖеМесто.a ? body.querySelector('#qr-'+_тоЖеМесто.a) : null;
+      if(t){ const br=t.getBoundingClientRect(), cr=body.getBoundingClientRect(); body.scrollTop += (br.top-cr.top) - _тоЖеМесто.сдвиг; }
+      else { body.scrollTop=_тоЖеМесто.верх; }
+    }catch(e){_тихо(e,"L8901")} };
+    _вернуть(); setTimeout(_вернуть,60);
+  }
+  else if(_qrView.a){ const tgt=body.querySelector('#qr-'+_qrView.a); if(tgt) setTimeout(()=>{ try{ tgt.scrollIntoView({block:'center'}); }catch(e){_тихо(e,"L8901")} },60); } else { body.scrollTop=0; }
   try{ applyFontScale(); }catch(e){_тихо(e,"L8902")}
   try{ _qrFastScrollSetup(); }catch(e){_тихо(e,"L8903")}   // #46: левая крутилка быстрой прокрутки
   // предупреждение когда уходишь с играющего аята: баннер «↪ к аяту · ⏹ выключить» (в панели, над текстом)
