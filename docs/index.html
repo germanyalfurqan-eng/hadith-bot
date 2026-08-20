@@ -812,7 +812,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1427</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1428</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1678,7 +1678,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1427';
+const APPVER = 'v1428';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -20333,8 +20333,19 @@ function updateFloatTools(){ try{ const w=document.getElementById('floatTools');
        ① пока палец в поле ввода — панель не нужна вовсе (ни размер шрифта, ни стрелки), прячем;
        ② низ считаем от VISUAL viewport, чтобы панель держалась у реально видимого низа экрана.
      Тем же закрываются #680/#671/#314 — там эти же круги наезжали на арабский текст и на сверку. */
+  /* v1428 (#617/#663, ВТОРОЙ виновник — нашёлся при проверке первого). Пока палец в поле ввода,
+     прячем не только эту панель, но и НИЖНЮЮ НАВИГАЦИЮ. Замер на боевом v1427, экран 375×460
+     (телефон с открытой клавиатурой): кнопка «Найти» стоит на 387–437, а #botNav занимает 408–460
+     во всю ширину — и document.elementFromPoint во ВСЕХ трёх точках кнопки (центр, левый край,
+     правый) возвращает botNav. То есть нажать «Найти» с открытой клавиатурой было НЕЛЬЗЯ вовсе.
+     Отступ снизу у страницы (64 точки против 52 у панели) тут не спасает: кнопка стоит не в конце
+     страницы, а в потоке, и на коротком экране приходится ровно на панель.
+     Навигация при открытой клавиатуре и не нужна: человек печатает, а не переходит по разделам. */
   try{ const _ae=document.activeElement;
-    if(_ae && ['INPUT','TEXTAREA'].indexOf(_ae.tagName)>=0 && !_ae.readOnly && !_ae.disabled){ w.style.display='none'; return; } }catch(_e){_тихо(_e,"L17693")}
+    const _вводит = _ae && ['INPUT','TEXTAREA'].indexOf(_ae.tagName)>=0 && !_ae.readOnly && !_ae.disabled;
+    try{ const _bn=document.getElementById('botNav');
+      if(_bn){ const _надо=_вводит?'none':''; if(_bn.style.display!==_надо) _bn.style.display=_надо; } }catch(_e2){_тихо(_e2,"L17693b")}
+    if(_вводит){ w.style.display='none'; return; } }catch(_e){_тихо(_e,"L17693")}
   try{ const vv=window.visualViewport;
     // сколько экрана съедено снизу (клавиатура): на десктопе и без клавиатуры это 0 → прежние 74px
     const _eaten = vv ? Math.max(0, Math.round(window.innerHeight-(vv.offsetTop+vv.height))) : 0;
@@ -20350,7 +20361,26 @@ function updateFloatTools(){ try{ const w=document.getElementById('floatTools');
   const sizeGrp=document.getElementById('fsGroup'); const up=document.getElementById('floatUp'); const down=document.getElementById('floatDown');
   // #240 (откат ③): шрифт/«наверх» ВСЕГДА СПРАВА (крутилка возвращена влево, как было — перекрытия нет). Раньше в Коране уезжали влево из-за крутилки-справа.
   try{ w.style.right='10px'; w.style.left='auto'; }catch(e){_тихо(e,"L17708")}
-  const showSize=_hasText() && !_hideAa; if(sizeGrp) sizeGrp.style.display=showSize?'flex':'none';
+  /* v1428 (#617 «срочно перекрывает кнопку найти», #663 «кнопку поиск перекрывает постоянно справа
+     кнопка»). Защита выше закрывала ДВА случая — палец в поле ввода и открытое окно, — и оба верные.
+     Но случаев больше, чем можно перечислить: я воспроизвёл третий, которого никто не предвидел.
+     Узкий экран (375×460, как с открытой клавиатурой) + ПРОКРУТКА на 120 точек: кнопку «Найти»
+     уносит вверх, ровно под панель. Замер на боевом v1427: панель 295–386, кнопка 267–317, наезд
+     89 точек; document.elementFromPoint в ЦЕНТРЕ кнопки возвращал fsToggle, а не кнопку. То есть
+     палец попадал в размер шрифта вместо поиска — в точности то, на что жаловался владелец.
+     Поэтому НЕ перечисляем опасные случаи, а СМОТРИМ: накрыли кнопку — уходим. Перечисление
+     проигрывает всегда, потому что четвёртый случай придумает не тот, кто пишет список. */
+  let _накрылиНайти=false;
+  try{ if(sizeGrp){
+    const _кн=document.getElementById('goBtn');
+    if(_кн && _кн.offsetHeight>0){
+      const _пр=sizeGrp.getBoundingClientRect(), _б=_кн.getBoundingClientRect();
+      const _зазор=6;   // не впритык: 1 точка запаса — это отсутствие запаса
+      _накрылиНайти = !(_пр.right<=_б.left-_зазор || _б.right<=_пр.left-_зазор
+                     || _пр.bottom<=_б.top-_зазор || _б.bottom<=_пр.top-_зазор);
+    }
+  } }catch(_e){_тихо(_e,"L17706b")}
+  const showSize=_hasText() && !_hideAa && !_накрылиНайти; if(sizeGrp) sizeGrp.style.display=showSize?'flex':'none';
   if(!showSize){ const c=document.getElementById('fsCtrls'); if(c) c.style.display='none'; const tg=document.getElementById('fsToggle'); if(tg){ tg.style.borderColor='var(--border)'; tg.style.color='var(--text)'; } }   // #75: скрыли — сворачиваем разворот
   // ▲ только когда реально есть куда прокручивать вверх; ▼ только когда есть куда вниз (и не у самого конца)
   const sc=_activeScroller(); let canUp=false, canDown=false;
