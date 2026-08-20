@@ -833,7 +833,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1433</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1434</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1699,7 +1699,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1433';
+const APPVER = 'v1434';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4949,6 +4949,9 @@ async function runSearch(explicit){
   const strict=_strictSearch; _strictSearch=false;   // M173: захватываем флаг строгого режима на этот запуск
   try{ const _cb=document.getElementById('corrBanner'); if(_cb) _cb.remove(); }catch(e){_тихо(e,"L4265")}   // 05.07: баннер коррекции живёт вне #res — чистим при новом поиске
   const seq=++_seq; groupSrc=false; uniqMode=false; relMode=false; _lastQueryTerms=[];   // новый поиск — сброс режимов вывода
+  /* v1434: какие книги НЕ СКАЧАЛИСЬ за этот поиск. Объявлено на уровне функции намеренно —
+     сообщение о них рисуется в finally, а объявление внутри try туда бы не дотянулось. */
+  const _неСкачалось=[];
   try{   // ⬇ #665/#669: тело поиска в try — гашение индикатора теперь в finally внизу (единственная точка выхода)
   _arabusOn=false;   // M-fix: новый поиск → Arabus сброшен в ВЫКЛ (по умолчанию выключен)
   let q=document.getElementById('q').value.trim(); const shown=q;
@@ -5343,8 +5346,18 @@ async function runSearch(explicit){
        что 7 сборников по 8–9 МБ разбираются из JSON и перебираются построчно НА ГЛАВНОЙ НИТИ.
        Ни перестановка, ни ранняя отрисовка этого не лечат — лечит заранее собранный указатель
        слов (путь ②) либо перенос перебора в Worker. Возвращаю как было. */
+    /* 🔴 v1434 (#596 «ищет не грузит», #665 «подвисает поиск», #303 «не показывает результаты
+       сразу», #678, #664). ЗДЕСЬ ОТКАЗ СЕТИ ПРЕВРАЩАЛСЯ В «НИЧЕГО НЕ НАЙДЕНО».
+       Книга не скачалась — `catch` молча отдавал пустой массив, и дальше всё шло как обычно:
+       поиск честно докладывал, что в Бухари ничего нет. Для человека это приговор о СОДЕРЖИМОМ,
+       а на деле мы просто не дотянулись до файла. Поймал живьём на своей рваной связи: строка
+       «ищу в Бухари и Муслиме…» и ноль карточек, при том что тем же запросом минутой раньше
+       находилось двести.
+       Заслон: помним, ЧТО не доехало, и говорим об этом отдельной строкой — не смешивая
+       «не нашлось» с «не скачалось». Пустой массив по-прежнему отдаём: одна упавшая книга не
+       должна ронять поиск по остальным. */
     const _arrProm={}; if(!numMode) for(const _c of codes){ const _X=EXTRA_MAP[_c], _C=COLLECTIONS.find(x=>x.code===_c);
-      _arrProm[_c]=(async()=>{ try{ if(_c==='muhaymin')return await loadMuhaymin(); if(_c==='ahmad')return await loadAhmad(); if(_X&&_X.file)return await loadLocal(_c,_X.file); if(_X)return await loadExtra(_c); if(_C&&_C.file)return await loadLocal(_c,_C.file); return await loadCollection(_c); }catch(e){ return []; } })(); }
+      _arrProm[_c]=(async()=>{ try{ if(_c==='muhaymin')return await loadMuhaymin(); if(_c==='ahmad')return await loadAhmad(); if(_X&&_X.file)return await loadLocal(_c,_X.file); if(_X)return await loadExtra(_c); if(_C&&_C.file)return await loadLocal(_c,_C.file); return await loadCollection(_c); }catch(e){ _неСкачалось.push(_c); _тихо(e,"L4560зкч"); return []; } })(); }
     for(const code of codes){
       if(seq!==_seq) return;
       const C=COLLECTIONS.find(x=>x.code===code); const X=EXTRA_MAP[code];
@@ -5460,6 +5473,29 @@ async function runSearch(explicit){
     // индикатор принадлежит ему, и гасить его устаревшим запуском нельзя.
     if(seq===_seq){ try{ _goBusy(false); _skelOff(); }catch(e){_тихо(e,"L4647")} }
     try{ _srchWaitOff(seq); }catch(e){_тихо(e,"L4648")}   /* #669 (С67): страховка — если до Мактабы дело не дошло, строка «уже ищу…» всё равно не останется висеть */
+    /* v1434 (#596 «ищет не грузит», #665, #303, #678, #664): книга НЕ СКАЧАЛАСЬ — говорим об этом
+       отдельно от «не нашлось», и даём повторить. Раньше отказ сети молча превращался в пустой
+       массив, и человек уносил вывод «в Бухари этого нет», хотя мы просто не дотянулись до файла.
+       ⚠️ Рисуем ЗДЕСЬ, в finally, а не там, где ловим ошибку: ветка «Ничего не найдено 🤷» ниже
+       делает res.innerHTML=… и стирает всё, что дописано раньше. Проверено пробой — первая
+       попытка ставила сообщение выше по коду, и его смывало ровно в том случае, ради которого
+       оно и заводилось. Сюда же приходит любой выход из поиска, включая исключение. */
+    if(_неСкачалось.length && seq===_seq){ try{
+      const _res=document.getElementById('res');
+      if(_res && !_res.querySelector('.нескач')){
+        const _им=[...new Set(_неСкачалось)].map(c=>{ try{ const X=(typeof EXTRA_MAP!=='undefined')?EXTRA_MAP[c]:null; return (X&&X.short)||nameOf(c)||c; }catch(e){ return c; } });
+        const _б=document.createElement('div'); _б.className='status нескач';
+        _б.style.cssText='border:1px solid #b3541e;background:rgba(179,84,30,.12);color:#ffd9c2;border-radius:10px;padding:9px 11px;margin:8px 0;line-height:1.5;text-align:left';
+        _б.innerHTML='📡 Не скачалось: <b>'+esc(_им.join(', '))+'</b>. Это <u>не значит</u>, что там ничего нет — по этим книгам поиск просто не прошёл. Проверь сеть и повтори.';
+        const _к=document.createElement('button'); _к.className='mini';
+        _к.style.cssText='display:block;margin:8px 0 0;padding:7px 14px;border:1px solid #b3541e;background:transparent;color:#ffd9c2;border-radius:9px;cursor:pointer;font-size:calc(13px * var(--txtScale,1))';
+        _к.textContent='🔄 Повторить поиск по ним';
+        _к.onclick=()=>{ try{ hap('light'); }catch(e){_тихо(e,"L4650пвт")} _к.disabled=true; _к.textContent='⏳ повторяю…';
+          try{ _неСкачалось.forEach(c=>{ try{ delete _local[c]; }catch(e){} }); }catch(e){_тихо(e,"L4650пвт")}
+          setTimeout(()=>{ try{ runSearch(true); }catch(e){_тихо(e,"L4650пвт")} }, 300); };   /* имя runSearch сверено по коду, а не придумано: выдуманное дало бы МЁРТВУЮ кнопку, молча съеденную _тихо */
+        _б.appendChild(_к); _res.appendChild(_б);
+      }
+    }catch(e){_тихо(e,"L4650скч")} }
     // Маяк на первой карточке: показать новичку, где перевод. Только первая — остальные,
     // как верно заметил владелец, человек сообразит сам. Ждём отрисовки, карточки приходят не сразу.
     try{ if(seq===_seq) МАЯК.ждиИЗажги(document.getElementById('res'), 'perevod', 12000); }catch(e){_тихо(e,"L4651")}
