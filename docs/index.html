@@ -833,7 +833,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1431</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1432</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1699,7 +1699,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1431';
+const APPVER = 'v1432';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -19752,12 +19752,37 @@ if(_arfT){ _arfT.onclick=()=>{
   const out=document.getElementById('arFontTestOut'); if(!out) return;
   if(out.style.display!=='none'){ out.style.display='none'; _arfT.textContent='🧪 Тест всех шрифтов'; return; }
   const AYA='بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ ﴿١﴾ الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ';
-  const names={system:'Системный (родной шрифт устройства)',kfgqpchafs:'KFGQPC HAFS Uthmanic',uthmantaha:'KFGQPC Uthman Taha Naskh',kfgqpc:'KFGQPC Sindhi Naskh',amiri:'Amiri',scheherazade:'Scheherazade',naskh:'Noto Naskh',sans:'Noto Sans Arabic',lateef:'Lateef'};
+  // v1432 (#452 — подробный разбор владельца про косой танвин, круглый сукун и номера аятов).
+  // Вторая строка теста — МУСХАФНЫЕ ЗНАКИ, взятые из нашего же quran.json, а не придуманные:
+  //   هُدࣰى (2:5) — танвин + малый мим снизу, ихфа   ·   أَحَدٌۢ (112:4) — танвин + малый мим сверху, икляб
+  //   أُو۟لَٰٓئِكَ (2:5) — круглый сукун над немым алифом   ·   ۝١ — знак конца аята
+  // ⚠️ Строка набрана живыми знаками, и это опасное место: огласовки в исходнике умеют
+  // переставляться при записи файла, а на глаз подмену не увидишь. Поэтому после каждой правки
+  // этой строки её коды сверяются отдельно; на 20.08.2026 они таковы:
+  // 0647 064F 062F 064B 06ED 0649 · 0623 064E 062D 064E 062F 064C 06E2 · 0623 064F 0648 06DF
+  // 0644 064E 0670 0653 0626 0650 0643 064E · 06DD 0661. Пропал 06ED, 06E2, 06DF или 06DD —
+  // тест перестал проверять то, ради чего заведён, и молча показывает «всё хорошо».
+  const МУСХАФ='هُدًۭى أَحَدٌۢ أُو۟لَٰٓئِكَ ۝١';
+  // Замер по САМИМ файлам шрифтов (таблица cmap, 20.08.2026, сессия 78). Проверять это в браузере
+  // нечем: когда знака в шрифте нет, движок берёт его из запасного, и любая мерка по ширине
+  // говорит «всё хорошо». Поэтому знание получено разбором файлов и записано сюда явно, с датой.
+  const НЕТЗНАКОВ={uthmantaha:'малый мим (ихфа и икляб), круглый сукун, знак конца аята',
+                   kfgqpc:'малый мим (ихфа и икляб), круглый сукун, знак конца аята'};
+  const names={system:'Системный (родной шрифт устройства)',kfgqpchafs:'KFGQPC HAFS Uthmanic',uthmantaha:'KFGQPC Uthman Taha Naskh',kfgqpc:'KFGQPC Sindhi Naskh',amiriquran:'Amiri Quran',amiri:'Amiri',scheherazade:'Scheherazade',naskh:'Noto Naskh',sans:'Noto Sans Arabic',lateef:'Lateef'};
   const run=()=>{ let h='';
     for(const k in names){ const prim=_AR_PRIM[k]||'';
-      let ok=prim?fontInstalled(prim):true; if(!ok&&_AR_PRIM2[k]) ok=fontInstalled(_AR_PRIM2[k]);
+      // v1432: сперва прямой ответ движка (document.fonts.check на арабском образце), и только
+      // потом канвас. У KFGQPC HAFS unicode-range намеренно урезан — канвас на пробной строке
+      // мерит запасной шрифт и врёт «фолбэк» про загруженный (тот же случай, что чинили в v1420).
+      const _чек=(имя)=>{ try{ return !!(document.fonts&&document.fonts.check&&document.fonts.check('20px "'+имя+'"',_AR_ОБРАЗЕЦ)); }catch(e){ return false; } };
+      let ok=prim?(_чек(prim)||fontInstalled(prim)):true; if(!ok&&_AR_PRIM2[k]) ok=_чек(_AR_PRIM2[k])||fontInstalled(_AR_PRIM2[k]);
       const cur=(cfg.arFont||'naskh')===k?' · <b style="color:#7fd6a0">← сейчас выбран</b>':'';
-      h+='<div style="border-bottom:1px solid var(--border);padding:7px 2px"><div style="font-size:calc(11.5px * var(--txtScale,1));color:'+(ok?'#7fd6a0':'#e6b800')+'">'+(ok?'✅':'⚠️ фолбэк')+' '+esc(names[k])+cur+'</div><div dir="rtl" style="font-family:'+(_AR_FONTS[k]||'serif').replace(/"/g,'&quot;')+';font-size:20px;line-height:2.1;text-align:right">'+AYA+'</div></div>'; }
+      const _ст=(_AR_FONTS[k]||'serif').replace(/"/g,'&quot;');
+      const _нет=НЕТЗНАКОВ[k];
+      h+='<div style="border-bottom:1px solid var(--border);padding:7px 2px"><div style="font-size:calc(11.5px * var(--txtScale,1));color:'+(ok?'#7fd6a0':'#e6b800')+'">'+(ok?'✅':'⚠️ фолбэк')+' '+esc(names[k])+cur+'</div><div dir="rtl" style="font-family:'+_ст+';font-size:20px;line-height:2.1;text-align:right">'+AYA+'</div>'
+        +'<div dir="rtl" style="font-family:'+_ст+';font-size:22px;line-height:2.2;text-align:right">'+МУСХАФ+'</div>'
+        +'<div style="font-size:calc(10.5px * var(--txtScale,1));color:'+(_нет?'#e6b800':'var(--hint)')+';line-height:1.4">'+(_нет?('⚠️ мусхафные знаки не входят в этот шрифт: '+esc(_нет)+' — на их месте кружок'):'мусхафные знаки на месте')+'</div></div>'; }
+    h+='<div style="font-size:calc(10.5px * var(--txtScale,1));color:var(--hint);line-height:1.5;padding:8px 2px">Вторая строка у каждого шрифта — мусхафные знаки из нашего же текста Корана: ихфа, икляб, круглый сукун над немым алифом и знак конца аята. Где вместо знака кружок — знака в шрифте нет.</div>';
     out.innerHTML=h; out.style.display='block'; _arfT.textContent='🧪 Скрыть тест шрифтов'; };
   // сначала ФОРСИРОВАННО загрузить каждый веб-шрифт (font-display:swap ленивый — без этого canvas мерит фолбэк и метки врут)
   out.innerHTML='<div class="hint" style="padding:8px 2px">⏳ загружаю шрифты для честного теста…</div>'; out.style.display='block';
