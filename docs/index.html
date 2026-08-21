@@ -833,7 +833,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1435</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1436</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1699,7 +1699,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1435';
+const APPVER = 'v1436';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -10833,15 +10833,27 @@ function addTr(meta,card,text,ayah,fav){
   cp.title=t('Копировать','Copy');
   // копируем матн + (если показан) ПЕРЕВОД. Берём именно блок перевода `out` (а не первый .tr-out —
   // огласовки/тахридж/передатчики тоже .tr-out) и чистый текст из dataset.tr (без подписи/ссылки «обновить»).
-  cp.onclick=()=>{ let s=text; if(fav&&fav.label) s+='\n— '+fav.label;
-    if(out && out.style.display!=='none'){ const trv=(out.dataset.tr||'').trim()||(out.textContent||'').trim(); if(trv) s+='\n\n'+trv; }
-    // С38 (заявка владельца): к скопированному хадису — РУС. источник + ссылка на ЭТОТ ЖЕ хадис в боте (не общий линк аппа)
+  cp.onclick=()=>{ let s=text;
+    /* #623 (С79). Владелец: «почему ты когда копируешь аят два раза пишется Коран сура номер».
+       Ссылка печаталась ДВАЖДЫ: подписью fav.label сразу под текстом и ещё раз строкой _srcRu
+       после перевода. У аята обе совпадали дословно («— Коран 3:19» и «📖 Коран 3:19»),
+       у хадиса повтор шёл на двух языках («— البخاري №2581» и «📚 Сахих аль-Бухари 2581»).
+       Оставляем ОДНУ, русскую _srcRu (R48, меньшее сопротивление): она читаемее и несёт больше —
+       полное имя сборника и номер риваята. Подпись fav.label печатаем ТОЛЬКО когда источник
+       опознать не удалось и _srcRu пуст, иначе ссылка пропала бы совсем.
+       Источник считаем ДО сборки текста: решение о подписи принимается на факте, а не на догадке. */
+    let _tok=null, _srcRu='';
     try{
-      const _r=ayah?null:refOf(fav); let _tok=null, _srcRu='';
+      const _r=ayah?null:refOf(fav);
       if(ayah && ayah.s && ayah.a){ _tok='q_'+ayah.s+'_'+ayah.a; _srcRu='📖 Коран '+ayah.s+':'+ayah.a; }
       else if(_r && _r.source && _r.num!=null){ let _n=String(_r.num); const _ri=_n.match(/#(\d+)/); _n=_n.replace(/#.*/,'');
         _tok=(_r.source==='muhaymin')?('m_'+_n):('r_'+_r.source+'_'+_n+(_ri?('-'+_ri[1]):''));   // START_PARAM: риваят как «-N» (Telegram startapp = [A-Za-z0-9_-])
         const _br=bookRuOf(_r.source); if(_br) _srcRu='📚 '+_br+' '+_n+(_ri?(' (риваят '+_ri[1]+')'):''); }
+    }catch(e){_тихо(e,"L9160")}
+    if(!_srcRu && fav && fav.label) s+='\n— '+fav.label;
+    if(out && out.style.display!=='none'){ const trv=(out.dataset.tr||'').trim()||(out.textContent||'').trim(); if(trv) s+='\n\n'+trv; }
+    // С38 (заявка владельца): к скопированному хадису — РУС. источник + ссылка на ЭТОТ ЖЕ хадис в боте (не общий линк аппа)
+    try{
       if(_srcRu) s+='\n\n'+_srcRu;
       if(cfg.sig!==false) s+='\n— 📗 Muslimoon — Коран и хадисы';
       s+='\n'+(_tok?deepLinkUrls(_tok).tg:APP_LINK);
