@@ -833,7 +833,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1444</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1445</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1699,7 +1699,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1444';
+const APPVER = 'v1445';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2476,8 +2476,15 @@ function userAllowed(){
 /* ===================== НОРМАЛИЗАЦИЯ ===================== */
 const DIAC = '\\u0610-\\u061A\\u064B-\\u065F\\u0670\\u06D6-\\u06ED\\u0640';
 const reDiac = new RegExp('['+DIAC+']','g');
-function stripDiac(s){ return (s||'').replace(/﻿/g,'').replace(reDiac,''); }
-function fold(s){ return s.replace(/[إأآٱ]/g,'ا').replace(/[ىئ]/g,'ي').replace(/ؤ/g,'و').replace(/ة/g,'ه').replace(/گ/g,'ك')
+/* 🔴 21.08.2026 (С79), живая ошибка журнала приложения: «проглочено 3 раза за сеанс:
+   TypeError: (s || "").replace is not a function». Здесь и был корень: `(s||'')` при ЧИСЛЕ
+   отдаёт само число — оно истинно, а .replace у числа нет. Через stripDiac идёт fold, через
+   них обоих — canon, то есть ВСЯ нормализация поиска и сравнения имён. Одно число из данных
+   (а они приходят и числами: у части равиев id хранится числом — на этом же классе рушилась
+   полная карточка, см. esc ниже) роняло разбор, и ошибка ГЛОТАЛАСЬ: человек видел не сбой,
+   а пустой результат. Лечим в корне: приводим к строке, как это давно делает esc. */
+function stripDiac(s){ return String(s==null?'':s).replace(/﻿/g,'').replace(reDiac,''); }
+function fold(s){ return String(s==null?'':s).replace(/[إأآٱ]/g,'ا').replace(/[ىئ]/g,'ي').replace(/ؤ/g,'و').replace(/ة/g,'ه').replace(/گ/g,'ك')
   // M228: усманская орфография (ا пишется как و) — صلوة/زكوة/حيوة/مشكوة → صلاة/زكاة... (после ة→ه)
   .replace(/صلوه/g,'صلاه').replace(/زكوه/g,'زكاه').replace(/حيوه/g,'حياه').replace(/مشكوه/g,'مشكاه').replace(/غدوه/g,'غداه'); }
 function canon(s){ return fold(stripDiac(s)).replace(/\s+/g,' ').trim(); }
@@ -4728,7 +4735,7 @@ function _clearRenderQ(){ _renderQ=[]; if(_flushT){ clearTimeout(_flushT); _flus
   if(_rvT){ _craf(_rvT); _rvT=null; } }   // #678 (С67): гасим и дорисовку renderResultsView — иначе карточки прошлого запроса падают в новый список
 // M230: «9 знамений» — отдельная цифра терялась (фильтр length>1). Разворачиваем 1-2-значные числа в слова.
 const _RUNUM={'0':'ноль','1':'один','2':'два','3':'три','4':'четыре','5':'пять','6':'шесть','7':'семь','8':'восемь','9':'девять','10':'десять','11':'одиннадцать','12':'двенадцать','40':'сорок','70':'семьдесят'};
-function _ruNumExpand(s){ return (s||'').replace(/\b(\d{1,2})\b/g,(m,d)=>_RUNUM[d]||m); }
+function _ruNumExpand(s){ return String(s==null?'':s).replace(/\b(\d{1,2})\b/g,(m,d)=>_RUNUM[d]||m); }
 // M196: браузер корней Корана — выбрать буквы корня (как Quran Dictionary corpus.quran.com) → аяты
 async function openRootBrowser(){
   const R=await loadRoots(); const roots=Object.keys(R.r||{}).filter(k=>k && !k.startsWith('r:'));
@@ -7599,7 +7606,7 @@ async function _mkpShard(slug,seg){
   return _MKP_CACHE[key];
 }
 function _mkpFold(s){ // как fold() интеграции: снять огласовки + унификация букв, только арабские буквы
-  s=(s||'').replace(/[ؐ-ًؚ-ٰٟۖ-ۭـ]/g,'');
+  s=String(s==null?'':s).replace(/[ؐ-ًؚ-ٰٟۖ-ۭـ]/g,'');
   s=s.replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/ء/g,'');
   return s.replace(/[^ء-ي]/g,'');
 }
@@ -8811,7 +8818,7 @@ async function showRootPlaces(root, opts){
   }
   res.appendChild(head);
   st.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>showRootPlaces(root,{sort:b.getAttribute('data-s'),form:_rootView.form}));
-  const _nrm=s=>(s||'').replace(/[ؗ-ًؚ-ْٰـ]/g,'');   // снять огласовки/ташдид/ـ для сравнения форм
+  const _nrm=s=>String(s==null?'':s).replace(/[ؗ-ًؚ-ْٰـ]/g,'');   // снять огласовки/ташдид/ـ для сравнения форм
   const lemOf=v=>{ for(const w of v.text.split(/\s+/)){ const e=R.f[rootKey(w)]; if(e&&e[0]===root&&e[1]) return e[1]; } return ''; };
   // карта нормализованная лемма → подпись (для заголовков групп)
   const labOf={}; rf.forEach(it=>{ labOf[_nrm(it[0])]=it[1]||''; });
@@ -11222,7 +11229,7 @@ function addTr(meta,card,text,ayah,fav){
 function _ruVers(n){ return n+' верс'+(n%10===1&&n%100!==11?'ия':(n%10>=2&&n%10<=4&&(n%100<10||n%100>=20)?'ии':'ий')); }
 // матн-ключ — ТОЧНОЕ зеркало Python mkey() из build_tahrij_full.py (менять только синхронно с пересборкой шардов!)
 var _TK_D=/[ً-ْٰـ]/g;
-function _tkCanM(s){ s=(s||'').replace(_TK_D,'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/\s+/g,' ');
+function _tkCanM(s){ s=String(s==null?'':s).replace(_TK_D,'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/\s+/g,' ');
   return s.replace(/[^ء-ي ]/g,'').trim(); }
 var _TK_HON=/صلي الله عليه وسلم|رضي الله عنه?م?ا?|عليه السلام|رحمه الله|تبارك وتعالي|عز وجل|جل جلاله/g;
 var _TK_RAFE=/قال رسول الله|قال النبي|ان رسول الله|ان النبي|عن النبي|سمعت رسول الله|سمعت النبي|سمع رسول الله|سمع النبي|كان رسول الله|كان النبي|رايت رسول الله|رايت النبي/;
@@ -11253,7 +11260,7 @@ const TKNAME=[
   [/ابن الجعد/,'ibnaljad'],[/ابن المبارك/,'ibnmubarak'],
 ];
 function tkCode(name){ for(const [re,c] of TKNAME){ if(re.test(name)) return c; } return null; }
-const _toLatN=s=>(s||'').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+const _toLatN=s=>String(s==null?'':s).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
 // Разобрать строку تخريج → [{code, name, nums:[...]}] (только сборники, что мы умеем сопоставить).
 function parseTakhreej(str){
   if(!str) return []; const out=[];
