@@ -833,7 +833,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1441</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1442</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1699,7 +1699,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1441';
+const APPVER = 'v1442';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5916,9 +5916,19 @@ async function getOne(code,num){
     if(!x){ const a=await loadAhmad(); x=a.find(y=>String(y.num)===String(num)); }
     return x?{num:String(x.num),text:(x.text||'').replace(/\s+/g,' ').trim(),grade:x.grade||'',norm:''}:null; }   // #171: Ахмад — локальный (CDN ara-ahmad даёт иную нумерацию → клик не открывал)
   try{ const _X=EXTRA_MAP[code]; if(_X && (_X.file || (!_X.soon && !_X.muhaymin))){ const a=await loadByCode(code); const x=a.find(y=>String(y.num)===String(num)); if(x) return {num:String(x.num),text:(x.text||x.ar||'').replace(/\s+/g,' ').trim(),grade:x.grade||'',norm:''}; } }catch(e){_тихо(e,"L4944")}   // #171: прочие локальные первоисточники/издания (Ибн Хиббан, Насаи-Кубра, Абу Я‘ля…) — из наших editions, не с CDN
+  /* 🔴 #354 (С79, 21.08.2026): «Сунан ат-Тирмизи №3717 не найден (пусто в источнике)».
+     Проверено на боевом: внешний CDN отдаёт по этому номеру ЗАПИСЬ С ОЦЕНКАМИ, но с ПУСТЫМ
+     текстом — а наш собственный кусок hnum/tirmidhi/18.json держит те же 401 знак матна.
+     То есть текст лежал рядом и не спрашивался: getOne шёл на CDN и возвращал пустую карточку,
+     где видны только источник и оценки учёных. Человек читает это как «хадиса у вас нет».
+     Наши куски hnum полны на 100%: 34 544 номера по восьми сводам, пустых НОЛЬ (замерено).
+     Поэтому: пустой текст с CDN — не ответ, а повод спросить своё. Оценки при этом сохраняем,
+     их в наших кусках нет. И если CDN не ответил вовсе — тоже берём своё, а не отдаём null. */
   try{ const j=await (await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-'+code+'/'+num+'.min.json')).json();
-    const h=(j.hadiths||[])[0]; if(h){ const raw=(h.text||'').replace(/\s+/g,' ').trim();
-      return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),grades:gradesAll(h),norm:''}; } }catch(e){_тихо(e,"L4947")}
+    const h=(j.hadiths||[])[0]; if(h){ let raw=(h.text||'').replace(/\s+/g,' ').trim();
+      if(!raw){ try{ const _св=await _хадисИзКуска(code,num); if(_св && _св.text) raw=String(_св.text).replace(/\s+/g,' ').trim(); }catch(_e){_тихо(_e,"L354a")} }
+      if(raw) return {num:String(h.hadithnumber),text:raw,grade:gradeOf(h),grades:gradesAll(h),norm:''}; } }catch(e){_тихо(e,"L4947")}
+  try{ const _св2=await _хадисИзКуска(code,num); if(_св2 && _св2.text) return _св2; }catch(e){_тихо(e,"L354b")}
   return null;
 }
 function info(t){const d=document.createElement('div');d.className='hint';d.style.textAlign='center';d.textContent=t;return d;}
