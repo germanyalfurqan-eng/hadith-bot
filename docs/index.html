@@ -833,7 +833,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1443</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1444</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1699,7 +1699,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1443';
+const APPVER = 'v1444';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6305,7 +6305,7 @@ async function _bookLoad(){
        Ставим чип в строку глав — она под заголовком и всегда на виду. Без листа: обработчик сам
        подставит СТРАНИЦУ, на которой человек стоит, и ссылка приведёт ровно туда же, а не в начало книги. */
     const _hd=(meta.headings||[]).filter(Boolean);
-    let _шамЧип=''; try{ _шамЧип=_shamChip(_bookView.id)||''; }catch(e){_тихо(e,"L74sham")}
+    let _шамЧип=''; try{ _шамЧип=_shamChip(_bookView.id, null, 'reader')||''; }catch(e){_тихо(e,"L74sham")}
     crumb.innerHTML=(_hd.length?('📑 '+_hd.map(h=>esc(h)).join(' ‹ ')):'')+(_шамЧип?((_hd.length?' &nbsp; ':'')+_шамЧип):'');
     crumb.style.display=(_hd.length||_шамЧип)?'block':'none';
     if(!j.text){ tEl.innerHTML='<span class="hint">Страница пуста. Полистай ← / → или введи другой номер.</span>'; }
@@ -9808,8 +9808,23 @@ async function _critBio(c, host, btn){
 let _wikiT=null, _wikiTP=null;
 // 📗 чип «Шамела ↗» (заявка 13.06): ссылка книги на shamela.ws/book/<id> — ЕДИНЫЙ формат чипов (R45:
 // форма как у Википедии — бордер+серифная буква+↗; цвет — фирменный зелёный Мактабы). cfg.shLink: wiki|reader|off.
-function _shamChip(bid, leaf){
-  if((cfg.shLink||'wiki')!=='wiki') return '';
+function _shamChip(bid, leaf, место){
+  /* 🔴 #74/#307 (С79, 21.08.2026). В настройках у этой ссылки ТРИ выбора: «возле Википедии»,
+     «в шапке читалки», «выключить». А проверка стояла одна — «если не wiki, не показывать».
+     То есть выбор «в шапке читалки» УБИРАЛ чип отовсюду и работал как второй выключатель:
+     человек просил перенести ссылку, а она исчезала. Проверено замером: длина чипа при
+     'wiki' = 463 знака, при 'reader' = 0, при 'off' = 0.
+     Теперь каждый выбор значит написанное:
+       off    — нигде;
+       reader — ТОЛЬКО в шапке читалки книги;
+       wiki   — возле Википедии И в шапке читалки. Второе потому, что владелец просил ссылку
+                именно в читалке (#74 «мактаба открывает внутренний», #307 «где ссылка на
+                мактабу книгу»), а wiki стоит по умолчанию — значит по умолчанию она там и будет.
+     `место` передаёт вызывающий: 'reader' из шапки книги, пусто — из остальных мест. */
+  const _реж = cfg.shLink || 'wiki';
+  if(_реж === 'off') return '';
+  if(место === 'reader'){ if(_реж !== 'reader' && _реж !== 'wiki') return ''; }
+  else if(_реж !== 'wiki') return '';
   // leaf: нумерация страниц shamela.ws = наш «лист» (проверено фразой: shamela.ws/book/1424/2245 = turath pg 2245) → ссылка ровно на СТРАНИЦУ
   return '<span class="shamLink" data-b="'+esc(String(bid))+'"'+(leaf?(' data-l="'+esc(String(leaf))+'"'):'')+' title="'+(leaf?'Эта СТРАНИЦА на сайте Мактабы аш-Шамиля':'Эта книга на сайте Мактабы аш-Шамиля')+'" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:calc(11px * var(--txtScale,1));color:#bfe3cf;border:1px solid #2e7d5a;border-radius:4px;padding:2px 8px;background:rgba(46,125,90,.10);white-space:nowrap"><b style="font-family:Georgia,\'Times New Roman\',serif;font-size:calc(13px * var(--txtScale,1));line-height:1">ش</b> Шамела ↗</span>';
 }
