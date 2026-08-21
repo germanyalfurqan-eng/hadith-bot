@@ -833,7 +833,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1434</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1435</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1699,7 +1699,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1434';
+const APPVER = 'v1435';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -1895,11 +1895,28 @@ function _collRu(code){ const c=COLLECTIONS.find(x=>x.code===code); return c?c.r
 // #204/#243: детектор ссылок на обсуждаемый хадис в тексте разбора («Бухари 5590» / «البخاري ٥٥٩٠» / «Muslim 2026») → кликабельные ссылки в нашу базу
 function _razFindHadithRefs(text){
   if(!text) return []; const out=[], seen=new Set();
-  const toLat=s=>String(s).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+  /* ПОЖАР #645 (С79, 21.08.2026). Жалоба владельца: «кнопка о недостоверности нашего разбора
+     хадиса Тирмизи 1 пересылает в разбор о геях». Корень: в тексте разбора №119 стоит
+     «(Абу Дауд 4462, ат-Тирмизи 1/275, Ибн Маджах 2561)» — у Тирмизи здесь ТОМ 1, СТРАНИЦА 275,
+     а не хадис №1. Старое правило брало первое число после имени сборника без разбора.
+     СТРОИТЕЛЬ индекса (build_razbory_cards.py, hadith_ref) починили 01.08.2026, А ФРОНТ НЕТ —
+     и тот же промах вернулся через чипы «📌 упомянуты». Правило здесь и там — ОДНО и то же,
+     менять только ВМЕСТЕ, иначе расхождение снова вылезет с другой стороны.
+       ① (?!\s*[/\\]\s*\d) — число, за которым идёт «/число», это том/страница, а не номер хадиса;
+       ② [а-яёА-ЯЁ]{0,4} — хвост русского слова («Ибн Маджах» при имени «Ибн Маджа»);
+       ③ персидские цифры ۰-۹ тоже переводим — иначе ключ вида tirmidhi:۳۲۵ мёртвый.
+     Замер на 125 разборах: убрано 8 ложных ссылок (все 8 — подтверждённо том/страница),
+     добавлено 30 верных, которых старое правило не находило вовсе. Максимум на карточку — 5,
+     поэтому slice(0,8) ничего не режет (проверено распределением, а не на глаз). */
+  const toLat=s=>String(s).replace(/[\u0660-\u0669]/g,d=>String(d.charCodeAt(0)-0x0660))
+                          .replace(/[\u06F0-\u06F9]/g,d=>String(d.charCodeAt(0)-0x06F0));
   const add=(code,num)=>{ if(!num||num==='0') return; const key=code+':'+num; if(seen.has(key)) return; seen.add(key); out.push({code:code,num:num,label:_collRu(code)+' №'+num}); };
   try{
     COLLECTIONS.forEach(c=>{ [c.ru,c.ar].concat(_COLL_EN[c.code]||[]).forEach(nm=>{ if(!nm) return;
-      const re=new RegExp(nm.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'[\\s,:№#\\-]*([\\d٠-٩]{1,5})','gi'); let m;
+      const re=new RegExp(nm.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')
+        +'[а-яёА-ЯЁ]{0,4}[\\s,:№#\\-.()«»"]{0,14}?'
+        +'([\\d\\u0660-\\u0669\\u06F0-\\u06F9]{1,5})'
+        +'(?!\\s*[/\\\\]\\s*[\\d\\u0660-\\u0669\\u06F0-\\u06F9])','gi'); let m;
       while((m=re.exec(text))){ add(c.code, toLat(m[1])); } }); });
   }catch(e){_тихо(e,"L1758")}
   return out.slice(0,8);
