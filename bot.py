@@ -24018,11 +24018,33 @@ async def _app_channel_watcher(application):
             # @muslimoonapp — ОЧЕРЕДЬ выше. Два независимых пути к одному каналу = гарантированная гонка/дубль
             # при любой задержке одного из GET-запросов к GitHub API — убрано насовсем, не патчем поверх.
             try:
-                rq = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_notes_queue.json",
-                                  headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
+                # 🔴 21.08.2026. Очередь читалась ТОЛЬКО через contents API, и любой ответ,
+                # кроме 200 — упёрлись в лимит запросов, ответ медленнее восьми секунд, сбой
+                # сети — оставлял queue пустым, а цикл шёл дальше МОЛЧА. Снаружи это
+                # неотличимо от «публиковать нечего». Так и вышло с v1450: страница обновилась,
+                # данные обновились, в очереди она одна ждёт отправки — а поста нет сорок минут,
+                # и заявка даже не застолблена.
+                # Соседний блок чистки постов читает ту же очередь и там уже записано: «Ноту
+                # берём с raw.githubusercontent, а НЕ через contents API» — raw отдаёт CDN, он
+                # не считает лимитов и отвечает быстрее. Правило было, применено в одном месте
+                # из двух. Теперь сперва raw, contents — запасной путь.
                 queue = []
-                if rq.status_code == 200:
-                    queue = json.loads(base64.b64decode(rq.json().get("content", "")).decode("utf-8") or "[]")
+                try:
+                    _rq_raw = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/update_notes_queue.json",
+                                           headers={"Cache-Control": "no-cache"}, timeout=15)
+                    if _rq_raw.status_code == 200:
+                        queue = json.loads(_rq_raw.text or "[]")
+                except Exception:
+                    queue = []
+                if not queue:
+                    rq = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_notes_queue.json",
+                                      headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=10)
+                    if rq.status_code == 200:
+                        queue = json.loads(base64.b64decode(rq.json().get("content", "")).decode("utf-8") or "[]")
+                    else:
+                        # Молчащая проверка хуже отсутствующей: пусть в логе будет видно, что
+                        # очередь не прочиталась, а не «нечего публиковать».
+                        print("app channel watcher: очередь НЕ прочиталась, contents API отдал", rq.status_code)
                 if isinstance(queue, list) and queue:
                     j = _journal_load()
                     posted_ids = set(j.get("app_post_ids") or [])
