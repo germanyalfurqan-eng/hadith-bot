@@ -833,7 +833,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1439</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1440</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1699,7 +1699,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1439';
+const APPVER = 'v1440';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2753,7 +2753,20 @@ document.addEventListener('copy', e=>{
 /* ===== копирование ===== */
 function copyText(t){ try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(()=>toast('Скопировано ✓'),()=>_fbCopy(t)); } else _fbCopy(t); }catch(e){ _fbCopy(t); } }
 function cleanRu(t){ return (t||'').replace(/\\[rn]/g,' ').replace(/[\r\n]+/g,' ').replace(/\s+/g,' ').trim(); }   // убираем литеральные "\n" и мусор в готовых переводах
-const APP_LINK='https://t.me/muslimoontt_bot?startapp'; // #175: /app не открывает мини-апп (у бота нет короткого имени "app" в BotFather) — только ?startapp= формат, как везде в bot.py
+/* 🔴 #465/#501/#629/#582 (С79, 21.08.2026): ссылка вела в ЧАТ с ботом, а не в приложение.
+   Здесь стояла голая форма `t.me/<бот>?startapp` с пометкой «#175: /app не открывает мини-апп
+   (у бота нет короткого имени app в BotFather)». Пометка УСТАРЕЛА и врала: короткое имя есть.
+   Доказательство не в рассуждении, а в коде самого бота — bot.py строит ссылку на приложение
+   формой `https://t.me/muslimoontt_bot/app?startapp=…` в двенадцати с лишним местах
+   (строки 2391, 2425, 2485, 2534, 2646, 2749, 3023, 4247, 6371, 6501, 12270, 12324).
+   Ту же ошибку владелец уже находил (ОБР-643 «ссылка неверная»), и её исправили — но ТОЛЬКО
+   в APP_TG_URL (см. ниже, около глубоких ссылок). Здесь осталась старая: одно правило, два
+   писателя, починен один. А эта константа стоит в ЧЕТЫРЁХ местах, которые видит человек:
+   подпись под каждым копированием (copyWithSig), кнопка «поделиться приложением»,
+   подпись к пересылаемому тексту и запасной путь копирования карточки без опознанного
+   источника. То есть неверная ссылка уезжала людям в каждой копии.
+   ⚠️ Правится ВМЕСТЕ с APP_TG_URL: это одна и та же форма адреса, разошлись — снова соврут. */
+const APP_LINK='https://t.me/muslimoontt_bot/app';
 const BOT_LINK='https://t.me/muslimoontt_bot';
 function copyWithSig(t){ try{hap('light');}catch(e){_тихо(e,"L2472")} copyText( (cfg.sig===false) ? t : (t+'\n\n— 📗 Muslimoon — Коран и хадисы\n'+APP_LINK) ); }
 function _fbCopy(t){ try{ const ta=document.createElement('textarea'); ta.value=t; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); toast('Скопировано ✓'); }catch(e){ toast('Не удалось скопировать'); } }
@@ -3630,7 +3643,20 @@ function bookRuOf(c){ if(c==='ibnmaja') c='ibnmajah'; if(COLL_RU_FULL[c]) return
 function authRuOf(c){ if(c==='ibnmaja') c='ibnmajah'; if(COLL_AUTH_RU[c]) return COLL_AUTH_RU[c]; if(EXTRA_MAP[c]) return EXTRA_MAP[c].author||''; return ''; }
 // единая рус.строка карточки «Название · Автор» (без дублей, если автор уже в названии)
 function _ruSrcLine(c){ const t=bookRuOf(c), a=authRuOf(c); if(!t) return a||''; if(!a||t.indexOf(a)!==-1) return t; return t+' · '+a; }
-function isReadable(c){ return c!=='muhaymin' && (!!COLLECTIONS.find(k=>k.code===c) || (EXTRA_MAP[c] && !EXTRA_MAP[c].soon)); }
+/* 🔴 #451/#465 (С79, 21.08.2026): «не открывается ссылка» / ссылка вида r_abuawana_487.
+   Здесь стояло «читаемо = любой сборник из COLLECTIONS ИЛИ из EXTRA, кроме помеченных „скоро“» —
+   то есть 17 сводов. А сама читалка держит ДЕВЯТЬ (const READABLE, كتب التسعة), и это ПРЯМОЕ
+   слово владельца от 25.07.2026: «в читалке — ТОЛЬКО девять сводов», остальные книги читаются
+   через Мактабу. Два ответа на один вопрос, и они расходились.
+   Чем это било. Ссылка r_abuawana_487 вела в openReader → в выпадающем списке читалки такого
+   сборника НЕТ, `sel.value` молча не присваивается, а загрузка уходила на тяжёлый запасной путь
+   (быстрого rdx/abuawana.json не существует — их ровно восемь, по числу сводов). Человек оставался
+   на экране выбора сборника, где его книги нет, и без единого слова о причине.
+   Теперь «читаемо» значит ровно то, что умеет читалка. Остальные сборники ссылка открывает в
+   Мактабе — там они и живут (bid есть у 17 из 18, кроме аль-Мухаймина, у него свой токен m_). */
+function isReadable(c){ if(c==='muhaymin') return false;
+  try{ if(typeof READABLE!=='undefined' && READABLE) return READABLE.some(function(r){ return r.code===c; }); }catch(e){}
+  return !!COLLECTIONS.find(function(k){ return k.code===c; });   /* запас, пока READABLE ещё не объявлен */ }
 
 /* ===================== UI STATE ===================== */
 let tab='hadith'; var _seq=0, _results=[], _groups=[], _shown=0;
@@ -19852,7 +19878,14 @@ function runDeepLink(){ const g=_deepLinkToken(); if(!g) return;
     if(!userAllowed()) return;   // QA-low: не открывать deep-link модал поверх gate-экрана у заблокированного юзера
     if(t==='q') openQuranReader(+p[1]||1,+p[2]||0);
     else if(t==='b') openBook(p[1],p[2]);
-    else if(t==='r') openReader(p[1],String(p[2]||'').replace(/-\d+$/,''));   // share-place: «247-1» риваят → открываем хадис №247
+    else if(t==='r'){ const _rc=p[1], _rn=String(p[2]||'').replace(/-\d+$/,'');   // share-place: «247-1» риваят → открываем хадис №247
+      /* #451/#465 (С79): сборник ВНЕ девяти читалка не держит — раньше его всё равно вели туда,
+         и человек оставался на экране выбора, где его книги нет. Теперь такие ведём в Мактабу. */
+      if(isReadable(_rc)) openReader(_rc,_rn);
+      else { let _rb=null; try{ _rb=(typeof EXTRA_BIDS!=='undefined'&&EXTRA_BIDS[_rc])||(typeof COLL_BIDS!=='undefined'&&COLL_BIDS[_rc]&&COLL_BIDS[_rc][0])||null; }catch(_e){_тихо(_e,"L451a")}
+        if(_rb){ try{ openByCodeNum(String(_rb), _rn); }catch(_e){_тихо(_e,"L451b")} }
+        else { try{ toast('Сборник «'+(ruTitle(_rc)||_rc)+'» открывается через поиск — ищу №'+_rn);
+                    const _qi=document.getElementById('q'); if(_qi){ _qi.value=_rc+' '+_rn; runSearch(true); } }catch(_e){_тихо(_e,"L451c")} } } }
     else if(t==='m' && p[1]){ (async()=>{ try{ const _th=document.querySelector('.tab[data-tab="hadith"]'); if(_th) _th.click();   // 📍 share-place: аль-Мухаймин №p[1] карточкой (он вне читалки)
       const _a=await loadMuhaymin(); const _h=_a.find(x=>String(x.n)===String(p[1])); const _res=document.getElementById('res');
       if(_h&&_res){ _res.innerHTML=''; _groups=[]; _res.appendChild(makeCard({type:'m',h:_h})); } }catch(e){_тихо(e,"L17042")} })(); }
