@@ -833,7 +833,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1437</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1438</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1699,7 +1699,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1437';
+const APPVER = 'v1438';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5228,6 +5228,42 @@ async function runSearch(explicit){
         const _ая = await loadQuran();
         if(seq!==_seq) return;
         const _всего = _ая.length;                       // 6236
+        /* #607 (С79). Владелец: «она мешает предложению, там предложение должно давать 6:66 и 66:6».
+           Голая цифровая строка читается НЕСКОЛЬКИМИ способами, а приложение выбирало одно и молчало
+           об остальных. «666» — это и сквозной аят 666 (ан-Ниса 4:173), и сура 6 аят 66, и сура 66 аят 6.
+           Хуже другое: «2255» уводило на сквозной аят 2255, а человек почти наверняка искал 2:255 —
+           аят аль-Курси. Показываем ВСЕ верные чтения и даём выбрать; решать за человека нельзя. */
+        const _числоАятов={}; _ая.forEach(function(v){ _числоАятов[v.s]=(_числоАятов[v.s]||0)+1; });
+        function _чтенияЧисла(строка){
+          const из=[];
+          for(let i=1;i<строка.length;i++){
+            const a=строка.slice(0,i), b=строка.slice(i);
+            if(a[0]==='0'||b[0]==='0') continue;              // «06:6» — не номер, а опечатка
+            const su=parseInt(a,10), ay=parseInt(b,10);
+            if(!(su>=1&&su<=114)) continue;
+            if(!(ay>=1&&ay<=(_числоАятов[su]||0))) continue;
+            из.push({s:su,a:ay});
+          }
+          return из;
+        }
+        function _чипыЧтений(строка, куда){
+          const вар=_чтенияЧисла(строка); if(!вар.length) return;
+          const п=document.createElement('div'); п.className='hint';
+          п.style.cssText='margin-top:9px';
+          п.textContent='🔢 «'+строка+'» читается и так — выберите, если искали это:';
+          куда.appendChild(п);
+          const ряд=document.createElement('div');
+          ряд.style.cssText='display:flex;gap:7px;flex-wrap:wrap;margin-top:5px';
+          вар.forEach(function(v){
+            const c=document.createElement('span'); c.className='chip';
+            c.style.cssText='cursor:pointer;padding:5px 11px;border-radius:9px;border:1px solid var(--border)';
+            const имя=(typeof SURA_NAMES!=='undefined'&&SURA_NAMES&&SURA_NAMES[v.s-1])||('сура '+v.s);
+            c.textContent='📖 '+v.s+':'+v.a+' · '+имя;
+            c.onclick=function(){ try{ _setQ(v.s+':'+v.a, true); }catch(e){_тихо(e,"L607chip")} };
+            ряд.appendChild(c);
+          });
+          куда.appendChild(ряд);
+        }
         if(_н >= 1 && _н <= _всего){
           const _в = _ая[_н-1];
           res.innerHTML=''; _results=[]; _groups=[];
@@ -5243,6 +5279,7 @@ async function runSearch(explicit){
             _су.onclick=()=>{ try{ openQuranReader(_н,1); }catch(e){ _setQ(_н+':1', true); } };
             res.appendChild(_су);
           }
+          try{ _чипыЧтений(String(q).trim(), res); }catch(e){_тихо(e,"L607a")}
           setStatus(''); _goBusy(false); _skelOff(); logSearch(shown, tab, 1);
           return;
         }
@@ -5254,6 +5291,7 @@ async function runSearch(explicit){
           + 'а вы ввели '+_н+'</div><div class="hh">Введите номер от 1 до '+_всего
           + ', либо в виде «сура:аят» — например 2:255.</div>';
         res.appendChild(_нет);
+        try{ _чипыЧтений(String(q).trim(), res); }catch(e){_тихо(e,"L607b")}
         setStatus(''); _goBusy(false); _skelOff(); logSearch(shown, tab, 0);
         return;
       }catch(e){_тихо(e,"L662ayat")}
