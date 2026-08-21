@@ -833,7 +833,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1436</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1437</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1699,7 +1699,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1436';
+const APPVER = 'v1437';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6101,6 +6101,53 @@ async function openShamelaCitation(title, vol, page, phrase){
     return true;
   }catch(e){ return false; }
 }
+/* #722 (С79). Владелец: «А'маш открыл, первая же цитата — открываю, и нихрена не подсвечена,
+   и ДАЖЕ НЕ ЗНАЮ ЕСТЬ ТАМ ИЛИ НЕТ». Подсветка и раньше пробовала себя по нескольку раз
+   (_hlTry 6×, _hlTry2 5×), но когда попытки кончались — приложение МОЛЧАЛО. Человек видел
+   страницу без единой метки и не мог отличить три разных случая: цитаты здесь нет; цитата
+   есть, но записана иначе; подсветка просто не сработала. Молчание и было поломкой — не сам
+   промах, а то, что о промахе не говорят.
+   Теперь исход проговаривается вслух, и вместо тупика даётся ход: поиск по ВСЕЙ книге
+   (findQuoteInBook — тот же путь, которым уже ходит чип «📚 Источник»), а если цитата нашлась
+   на другой странице, туда и переходим. Зовётся из ОБОИХ мест повторов, и на успехе тоже:
+   успех обязан убирать сказанное раньше, иначе останется врать под подсвеченной цитатой. */
+function _citHlItog(tEl, bid, quote){ try{
+  var me = (tEl && (tEl.querySelector('#bookMain') || tEl)); if(!me) return;
+  var было = document.getElementById('citNotFound');
+  if(me.querySelector('mark')){ if(было && было.parentNode) было.parentNode.removeChild(было); return; }
+  if(было) return;                                    // уже сказали — второй раз не повторяем
+  var q = String(quote || '');
+  var ci = q.lastIndexOf(':'); if(ci >= 0 && ci < q.length - 6) q = q.slice(ci + 1);
+  q = q.replace(/_+/g, ' ').replace(/[«»"'.]/g, ' ').replace(/\([^)]*\)/g, ' ').trim();
+  if(q.length < 6) return;                            // нечего искать — и говорить не о чем
+  var box = document.createElement('div'); box.id = 'citNotFound';
+  box.style.cssText = 'border:1px solid #8a6f2e;background:rgba(240,207,138,.10);border-radius:11px;'
+    + 'padding:10px 12px;margin:0 0 10px;font-size:calc(13px * var(--txtScale,1));line-height:1.55;direction:ltr;text-align:left';
+  box.innerHTML = '<b style="color:#f0cf8a">⚠️ Цитата на этой странице не подсвечена</b>'
+    + '<div id="citNfWhy" style="color:var(--hint);margin-top:3px">В тексте этой страницы её нет. '
+    + 'Возможно, в этом издании она стоит на другой странице или записана немного иначе.</div>'
+    + '<button class="mini" id="citFindAll" style="margin-top:8px;padding:7px 13px">🔎 Искать по всей книге</button>';
+  if(me.parentNode) me.parentNode.insertBefore(box, me); else me.appendChild(box);
+  var b = box.querySelector('#citFindAll');
+  b.onclick = async function(){
+    b.disabled = true; b.textContent = '⏳ Ищу по всей книге…';
+    var hit = null;
+    try{ hit = await findQuoteInBook(String(bid || ''), q); }catch(_e){ hit = null; }
+    if(hit && hit.pid){
+      var _kn = hit.kniga || '';
+      b.textContent = '📖 Нашлась: ' + (_kn ? (_kn + ' · ') : '') + 'т.' + (hit.vol || '?') + ' стр.' + (hit.page || '?') + ' — открываю';
+      try{ openBook(hit.bid || String(bid || ''), hit.pid, false, q);
+           toast('✓ Цитата найдена: т.' + (hit.vol || '?') + ' стр.' + (hit.page || '?')
+                 + (hit.drugaya ? ' · в другом своде' : '') + (hit.tot > 1 ? (' (мест: ' + hit.tot + ')') : ''));
+      }catch(_e){ b.textContent = 'Не смог открыть страницу ' + (hit.page || '?'); }
+    } else {
+      b.disabled = true; b.textContent = 'В этой книге цитата не нашлась';
+      var w = box.querySelector('#citNfWhy');
+      if(w) w.textContent = 'Искал по всей книге — целиком и по началу фразы, без огласовок. Совпадений нет. '
+        + 'Значит либо у нас другое издание, либо цитата записана с ошибкой. Нажми «✍️ Сообщить нам» — разберу.';
+    }
+  };
+}catch(e){_тихо(e,"L722citHl")} }
 function _bkSavePos(){ try{ const pos=JSON.parse(localStorage.getItem('bk_pos')||'{}');
   pos[_bookView.id]={pg:_bookView.pg, t:Date.now()};
   const ks=Object.keys(pos); if(ks.length>60){ ks.sort((a,b)=>(pos[a].t||0)-(pos[b].t||0)); delete pos[ks[0]]; }
@@ -6238,7 +6285,7 @@ async function _bookLoad(){
       try{ if(_bookView.hl && typeof window._bookDoFind==='function'){ var _hq=String(_bookView.hl); var _ci=_hq.lastIndexOf(":"); if(_ci>=0&&_ci<_hq.length-6) _hq=_hq.slice(_ci+1); _hq=_hq.replace(/_+/g," ").replace(/[«»"'.]/g," ").replace(/\([^)]*\)/g," ").trim(); if(_hq.length>46) _hq=_hq.slice(0,46);
         // R-61 (гонка, 676/تقريب34): want-доводка рендерит страницу ПОВТОРНО — одиночные 80мс красили промежуточную. Ретрай до появления mark (6×450мс).
         (function _hlTry(n){ setTimeout(function(){ try{ window._bookDoFind((_hq&&_hq.length>=6)?_hq:_bookView.hl); }catch(_e){_тихо(_e,"L5321")}
-          try{ var _me=tEl.querySelector('#bookMain')||tEl; if(!_me.querySelector('mark') && n>0) _hlTry(n-1); }catch(_e){_тихо(_e,"L5322")} }, n===6?90:450); })(6); } }catch(e){_тихо(e,"L5322")}
+          try{ var _me=tEl.querySelector('#bookMain')||tEl; if(!_me.querySelector('mark') && n>0) _hlTry(n-1); else _citHlItog(tEl, _bookView.id, _bookView.hl); }catch(_e){_тихо(_e,"L5322")} }, n===6?90:450); })(6); } }catch(e){_тихо(e,"L5322")}
       const _pAdd=tEl.querySelector('#bookPrevAdd'); if(_pAdd){ if(_bookView.pg<=1) _pAdd.style.display='none'; _pAdd.onclick=_bookAddPrev; }
       const _nAdd=tEl.querySelector('#bookNextAdd'); if(_nAdd) _nAdd.onclick=_bookAddNext; }
     navEl.innerHTML=''; navEl.style.flexDirection='column'; navEl.style.gap='7px';
@@ -6593,6 +6640,7 @@ async function _bookLoad(){
         try{ var _me2=tEl.querySelector('#bookMain')||tEl;
           if(!_me2.querySelector('mark')){ var _q2=String(_bookView.hl); if(_q2.length>46) _q2=_q2.slice(0,46); window._bookDoFind(_q2); }
           if(!_me2.querySelector('mark') && n>0) _hlTry2(n-1);
+          else _citHlItog(tEl, _bookView.id, _bookView.hl);
         }catch(_e){_тихо(_e,"L5663")} }, n===5?250:500); })(5);
     } }catch(e){_тихо(e,"L5664")}
   }catch(e){
