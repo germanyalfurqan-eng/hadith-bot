@@ -833,7 +833,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1442</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1443</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1699,7 +1699,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1442';
+const APPVER = 'v1443';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6296,7 +6296,18 @@ async function _bookLoad(){
     try{ const al=ttl.querySelector('#bookAuthLink'); if(al) al.onclick=()=>{ try{ openAuthor(aut); }catch(e){_тихо(e,"L5265")} }; }catch(e){_тихо(e,"L5265")}
     if(!_catalog){ try{ loadCatalog().then(()=>{ if(!aut){ const a2=bookAuthorOf(_bookView.id); if(a2){ const cur=m.querySelector('#bookTitle'); if(cur && cur.querySelector('div')) cur.innerHTML='<div style="direction:rtl;text-align:right">📖 '+esc(bnm)+'</div><div style="direction:rtl;text-align:right;font-size:calc(12px * var(--txtScale,1));font-weight:400;margin-top:2px"><span id="bookAuthLink2" style="color:var(--link);cursor:pointer">✍️ '+esc(a2)+'</span></div>'; const al2=cur.querySelector('#bookAuthLink2'); if(al2) al2.onclick=()=>openAuthor(a2); } } }); }catch(e){_тихо(e,"L5266")} }
     let crumb=m.querySelector('#bookCrumb'); if(!crumb){ crumb=document.createElement('div'); crumb.id='bookCrumb'; crumb.style.cssText='direction:rtl;text-align:right;font-size:calc(12px * var(--txtScale,1));color:var(--mark);margin:0 0 6px;line-height:1.5'; tEl.parentNode.insertBefore(crumb, tEl); }
-    const _hd=(meta.headings||[]).filter(Boolean); crumb.innerHTML=_hd.length?('📑 '+_hd.map(h=>esc(h)).join(' ‹ ')):''; crumb.style.display=_hd.length?'block':'none';
+    /* #74 (владелец: «мактаба открывает внутренний — открой ссылку мактаба с карточки хадиса
+       бухари 333») и #307 («где ссылка на мактабу книгу?»). Книга Мактабы открывалась у нас, и
+       выхода на сам сайт из читалки не было НИ ОДНОГО: чип «ش Шамела ↗» строился (_shamChip),
+       но в шапку книги его никто не ставил — на всей странице их было ноль.
+       Что это был именно недосмотр, а не решение, видно по обработчику нажатия: он УЖЕ умеет
+       брать текущую страницу читалки («if(!l && s.closest('#bookModal') && _bookView.pg) l=_bookView.pg»).
+       Ставим чип в строку глав — она под заголовком и всегда на виду. Без листа: обработчик сам
+       подставит СТРАНИЦУ, на которой человек стоит, и ссылка приведёт ровно туда же, а не в начало книги. */
+    const _hd=(meta.headings||[]).filter(Boolean);
+    let _шамЧип=''; try{ _шамЧип=_shamChip(_bookView.id)||''; }catch(e){_тихо(e,"L74sham")}
+    crumb.innerHTML=(_hd.length?('📑 '+_hd.map(h=>esc(h)).join(' ‹ ')):'')+(_шамЧип?((_hd.length?' &nbsp; ':'')+_шамЧип):'');
+    crumb.style.display=(_hd.length||_шамЧип)?'block':'none';
     if(!j.text){ tEl.innerHTML='<span class="hint">Страница пуста. Полистай ← / → или введи другой номер.</span>'; }
     else { let clean=(j.text||'').replace(/<[^>]*>/g,'').replace(/ /g,' ');   // убрать turath-теги <span…> (мусор)
       _bookView.firstLeaf=_bookView.pg; _bookView.lastLeaf=_bookView.pg;   // диапазон загруженных листов (для «добавить страницу»)
@@ -9805,7 +9816,11 @@ function _shamChip(bid, leaf){
 document.addEventListener('click',e=>{ const s=e.target&&e.target.closest&&e.target.closest('.shamLink');
   if(s){ e.stopPropagation(); e.preventDefault();
     let l=s.dataset.l;
-    if(!l && s.closest('#bookModal') && window._bookView && _bookView.pg) l=_bookView.pg;   // шапка читалки → ТЕКУЩАЯ страница
+    /* #74 (С79): сторожем стояло `window._bookView`, а переменная объявлена через `let` и в
+       window НЕ попадает — проверка была всегда ложью, и страница не подставлялась НИ РАЗУ.
+       Ссылка на Шамелу вела в начало книги вместо страницы, на которой человек стоит.
+       Проверено живьём: typeof window._bookView === 'undefined', typeof _bookView === 'object'. */
+    if(!l && s.closest('#bookModal') && typeof _bookView!=='undefined' && _bookView && _bookView.pg) l=_bookView.pg;   // шапка читалки → ТЕКУЩАЯ страница
     const u='https://shamela.ws/book/'+s.dataset.b+(l?('/'+l):'');
     try{ openLink(u); }catch(_e){ window.open(u,'_blank'); } } }, true);
 // #207 (ЗАКОН): у книги/равия берём ОБЩЕИЗВЕСТНОЕ рус.имя. Вики-статья иногда названа менее распространённым
