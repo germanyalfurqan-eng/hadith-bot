@@ -833,7 +833,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1451</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1452</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1699,7 +1699,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1451';
+const APPVER = 'v1452';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6431,10 +6431,10 @@ async function _bookLoad(){
       bot.appendChild(nav2);
       // #38: пара «в начало книги / в конец книги» (как ⏮/⏭ в Мактабе) — ясные подписи, не зависит от RTL
       const nav3=document.createElement('div'); nav3.style.cssText='display:flex;gap:7px;width:100%;margin-top:6px';
-      const bFirst=document.createElement('button'); bFirst.className='mini'; bFirst.textContent='⏮ В начало книги';
+      const bFirst=document.createElement('button'); bFirst.className='mini'; bFirst.textContent='⤒ В начало книги';   /* #656: медиа-глифы ⏮⏭ читаются по-плеерски; в читалке наших сборников их убрали ещё тогда, здесь остались */
       bFirst.style.cssText='flex:1;min-height:40px;font-size:calc(12.5px * var(--txtScale,1));font-weight:600;border:1px solid var(--border);border-radius:10px'+(_bookView.pg<=1?';opacity:.4':'');
       bFirst.disabled=_bookView.pg<=1; bFirst.onclick=()=>{ if(_bookView.pg!==1){ try{hap('light');}catch(e){_тихо(e,"L5378")} _bookView.pg=1; _bookView.want=null; _bookView.snaps=0; _bookLoad(); } };
-      const bLast=document.createElement('button'); bLast.className='mini'; bLast.textContent='В конец книги ⏭';
+      const bLast=document.createElement('button'); bLast.className='mini'; bLast.textContent='⤓ В конец книги';
       bLast.style.cssText='flex:1;min-height:40px;font-size:calc(12.5px * var(--txtScale,1));font-weight:600;border:1px solid var(--border);border-radius:10px';
       bLast.onclick=()=>{ try{hap('light');}catch(e){_тихо(e,"L5381")} _bkJumpLast(); };
       nav3.appendChild(bFirst); nav3.appendChild(bLast); bot.appendChild(nav3);
@@ -11923,7 +11923,42 @@ async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.lengt
     if(nm===cn){ exact=it[1]; break; }
     if(nm.indexOf(cn+' ')===0 && nm.length<prefLen){ pref=it[1]; prefLen=nm.length; }
     if(cn.indexOf(nm+' ')===0 && nm.length>coverLen && nm.indexOf(' ')>0){ cover=it[1]; coverLen=nm.length; } }
-  return exact!=null?exact:(cover!=null?cover:pref); }
+  const _поИмени = exact!=null?exact:(cover!=null?cover:pref);
+  if(_поИмени!=null) return _поИмени;
+  /* 🔴 #684 (владелец открыл «أبي الشعثاء المحاربي», получил «не удалось опознать точно» и
+     спросил: почему так). А он у нас есть — id 2561, кунья أبو الشعثاء, нисба المحاربي.
+     Не нашли потому, что искали среди ИМЁН: кунья лежит в своём поле, нисба — в описании, и
+     пара «кунья+нисба» не совпадает ни с одним именем. Одна кунья неоднозначна — таких Абу-ш-
+     Шаʿса в базе больше десятка, — а пара с нисбой разводит тёзок.
+     Указатель (build_kunya_nisba.py) держит ТОЛЬКО однозначные пары: 12 802 из 15 223, где
+     двое и больше — пара выброшена. Городские нисбы в ключ не берутся: аль-Куфи может быть
+     кто угодно. Опознать не того хуже, чем не опознать вовсе. */
+  try{
+    const кн=await _loadKunyaNisba();
+    if(кн){
+      // кунья склоняется: в цепи «أبي/أبا фулян», в базе «أبو фулян» — приводим к именительному
+      const _ф=cn.replace(/^(?:\u0627\u0628\u064a|\u0627\u0628\u0627)(?= )/, '\u0627\u0628\u0648');
+      if(кн[_ф]!=null) return кн[_ф];
+      // «أبو الشعثاء المحاربي الكوفي» — нисба не обязательно второе слово: пробуем каждое
+      const _сл=_ф.split(' ');
+      if(_сл.length>=3){ const _к2=_сл[0]+' '+_сл[1];
+        for(let i=2;i<_сл.length;i++){ const _кл=_к2+' '+_сл[i]; if(кн[_кл]!=null) return кн[_кл]; } }
+    }
+  }catch(e){_тихо(e,"L_куньяНисба")}
+  return null; }
+/* Загрузчик указателя «кунья+нисба». Правила те же, что у соседей (см. _loadShuhra):
+   один общий промис на всех зовущих и НЕ запоминаем неудачу — иначе секунда сети выключила бы
+   опознание по кунье до перезагрузки приложения. Файл тянем ЛЕНИВО, только когда опознание по
+   имени не вышло: платить 605 КБ на каждой карточке незачем. */
+let _knMap=null, _knPromise=null;
+async function _loadKunyaNisba(){
+  if(_knMap!==null) return _knMap;
+  if(!_knPromise) _knPromise=fetchJSON('./narr_kunya_nisba.json?v='+APPVER, 30000, {silent:true})
+    .catch(()=>{ _knPromise=null; return null; });
+  const д=await _knPromise;
+  if(д && typeof д==='object' && Object.keys(д).length){ _knMap=д; }
+  else { _knPromise=null; }
+  return _knMap; }
 async function _narrCard(id){ const b=Math.floor(id/100); if(!_narrShard[b]){ if(!_narrShardP[b]) _narrShardP[b]=fetch('./narr/'+b+'.json').then(r=>r.json()).catch(()=>{ delete _narrShardP[b]; return null; }); _narrShard[b]=await _narrShardP[b]; } return (_narrShard[b]||{})[String(id)]||null; }
 // narr_disp.json (build_narr_disp.py): id→{ar,ru} КАНОНИЧЕСКОЕ отображаемое имя (вместо обрывка-родительного «أبي هريرة» / родословной поля[1]).
 let _ndCache=null,_ndP=null;
