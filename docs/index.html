@@ -833,7 +833,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1447</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1448</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1699,7 +1699,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1447';
+const APPVER = 'v1448';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -15741,6 +15741,41 @@ async function _провМеста(mid){
    стоит вся фраза (таких 5 243 из 33 059, 15,9%). Такие подписываем честно, а не «выверено». */
 var _ПРОВ_Д=/[\u064B-\u0652\u0670\u0640]/g, _ПРОВ_А=/[\u0623\u0625\u0622]/g, _ПРОВ_Т=/\u0629/g, _ПРОВ_Я=/\u0649/g;
 function _провНорм(s){ return String(s==null?'':s).replace(_ПРОВ_Д,'').replace(_ПРОВ_А,'\u0627').replace(_ПРОВ_Т,'\u0647').replace(_ПРОВ_Я,'\u064A').replace(/\s+/g,' ').trim(); }
+
+/* 🔴 21.08.2026 (С79), заявка #661 «почему ты главы пропускаешь» — случай МУСЛИМА.
+
+   У Насаи прошлый заход вернул 2463 главы (там заголовок набран «(٢) بَابُ …» и разборщик его
+   не узнавал). У Бухари этим же заходом опознаны 273 главы тафсира, чей заголовок — сам аят.
+   У Муслима случай третий и другой: заголовок главы НЕ ЛЕЖИТ ОТДЕЛЬНОЙ ЗАПИСЬЮ. Он приклеен
+   к тексту первого хадиса главы:
+       «باب إبطال بيع الملامسة والمنابذة ١ - (١٥١١) حدثنا يحيى بن يحيى…»
+   Читалка честно показывает это как хадис — и плашки главы у Муслима нет ни одной на 620
+   таких записей; ещё 9 записей так же держат заголовок КНИГИ (китаба).
+
+   Резать данные надвое нельзя: у записи один номер, а указатель rdx, шарды hnum и вся
+   нумерация ходят по её месту в потоке. Поэтому отделяем на ПОКАЗЕ.
+
+   Шов — печатный маркер хадиса: число, затем тире («١ - (١٥١١)»). Замер: шов находится у 617
+   записей Муслима из 629, у 33 записей Бухари и у 1 записи Тирмизи. Где шва нет — не трогаем. */
+var _ЗАГ_НАЧ=/^[\s\d\u0660-\u0669\u06F0-\u06F9\[\]().\-]*(\u0628\u0627\u0628|\u0643\u062A\u0627\u0628)[\s:\u061F]/;
+var _ЗАГ_ШОВ=/[\d\u0660-\u0669]+\s*[-\u2010-\u2015\u0640]\s*/;
+function _отделитьЗаголовок(текст){
+  try{
+    var т=String(текст==null?'':текст).trim();
+    if(!т) return null;
+    // начало проверяем БЕЗ огласовок (мерка та же, что у выверки), а шов ищем в исходном
+    // тексте: цифры и тире огласовками не задеваются, значит позиции не разъедутся.
+    if(!_ЗАГ_НАЧ.test(_провНорм(т))) return null;
+    var m=_ЗАГ_ШОВ.exec(т.slice(1));
+    if(!m) return null;
+    var поз=m.index+1;
+    if(поз<8 || поз>320) return null;                 // слишком коротко/длинно для заголовка
+    var заг=т.slice(0,поз).trim(), ост=т.slice(поз).trim();
+    if(!заг || ост.length<40) return null;            // без внятного хадиса под ним не режем
+    var китаб=/^[\s\d\u0660-\u0669\u06F0-\u06F9\[\]().\-]*\u0643\u062A\u0627\u0628/.test(_провНорм(заг));
+    return { заголовок:заг, остаток:ост, китаб:китаб };
+  }catch(e){ try{_тихо(e,"L_отделитьЗаголовок");}catch(_){} return null; }
+}
 function _провВыбор(mid, quote, свБид){
   try{
     var пж=(_провШард[Math.floor(Math.abs(+mid)/100)]||{})[String(mid)];
@@ -21308,8 +21343,24 @@ function _readRender(){
       _chSlot.title='Название главы — из печатного издания (Мактаба). В выгрузке sunnah.com глав нет.';
     }).catch(()=>{});
   }catch(e){_тихо(e,"L18206")} }
+  /* #661 (С79): у Муслима заголовок главы приклеен к первому хадису главы — отделяем на показе.
+     Данные не режем: у записи один номер, а по её месту ходят указатель rdx и шарды hnum. */
+  let _hПоказ=h;
+  try{ const _раз=_отделитьЗаголовок(h && h.text);
+    if(_раз){
+      const _cap=document.createElement('div');
+      _cap.style.cssText='font-size:calc(11.5px * var(--txtScale,1));color:var(--hint);margin:0 0 5px;'+_RF;
+      _cap.textContent=(_раз.китаб?'📕 Книга (китаб)':'📑 Глава (باب)')+' — в печатном издании стоит перед этим хадисом';
+      const _d=document.createElement('div'); _d.dir='rtl';
+      _d.style.cssText=(_раз.китаб?'font-size:18px;font-weight:700;color:#f0d98a;background:rgba(232,195,90,.14);border:1px solid #8a7433':'font-size:17px;color:#e8c35a;background:rgba(232,195,90,.09);border:1px solid #6b5a28')+';'+_AF+';border-radius:10px;padding:9px 13px;line-height:1.9;margin:0 0 9px;text-align:justify';
+      try{ _d.innerHTML=hl(_раз.заголовок, _groups||[]); }catch(_e){ _d.textContent=_раз.заголовок; }
+      body.appendChild(_cap); body.appendChild(_d);
+      try{ enableArabusTap(_d); }catch(_e){}
+      _hПоказ=Object.assign({}, h, {text:_раз.остаток});
+    }
+  }catch(e){_тихо(e,"L_глава661")}
   const sg=_groups;                 // #311: в читалке СОХРАНЯЕМ подсветку искомого слова (зашёл из поиска → sg непуст; из меню/новый поиск → []) — тот же hl(), Arabus не затронут
-  try{ body.appendChild(cardHadith({code:_readCode,h,noNav:true},sg||[])); }
+  try{ body.appendChild(cardHadith({code:_readCode,h:_hПоказ,noNav:true},sg||[])); }
   catch(e){   // M496: сбой полной карточки → НЕ голый текст, а мини-карточка с addTr
     try{ console.warn('reader-card fail', _readCode, h&&h.num, e); }catch(_e){_тихо(_e,"L18210")}
     const card=document.createElement('div'); card.className='card';
