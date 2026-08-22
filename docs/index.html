@@ -841,7 +841,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1459</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1460</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1707,7 +1707,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1459';
+const APPVER = 'v1460';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -11893,6 +11893,47 @@ function loadNarrNames(){ if(_narrNames && (_narr2Ok || _narr2Попыток>=3)
     // передатчиков — то есть ошибка маскировалась под пустой результат работы.
     return _narrNames; }).catch(()=>{_narrNames=null; _narrNamesP=null; return [];}); return _narrNamesP; }
 function _narrCanon(s){ s=(s||'').replace(/[ً-ْـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه'); return s.replace(/\s+/g,' ').trim(); }
+
+/* ЕДИНЫЙ отбор огласованной формы имени. Правило жило в ДВУХ местах — в карточке равия и в подсказке
+   поиска, — и в подсказке его не было вовсе: карточка уже показывала «عبد الله التيمي», а подсказка
+   на тот же запрос предлагала «عَبْدُ الأَعْلَى» — другого человека. Один закон — один писатель. */
+const _РОД_ИМ={'ابيه':1,'ابي':1,'اباه':1,'امه':1,'امها':1,'ابيها':1,'جده':1,'جدها':1,'رجل':1,'امراه':1,'ابنه':1,'اخيه':1};
+const _СЛУЖ_ИМ={'بن':1,'ابن':1,'ابو':1,'ابي':1,'ابا':1,'ام':1,'عبد':1,'عبيد':1,'ال':1,'و':1,'مولي':1,'بنت':1,'قيل':1,'وقيل':1};
+function _корИм(w){ return _narrCanon(stripDiac(String(w||''))).replace(/[ءؤئ]/g,'').replace(/^ال(?=..)/,'').replace(/وو/g,'و').replace(/يي/g,'ي'); }
+/* Годится ли огласованная форма как имя ЭТОГО равия: делит ли она с его записью (имя/кунья/нисба)
+   хотя бы одно значащее слово. Слова родства («его отец», «его дед») не годятся никогда. */
+function _формаЭтого(форма, c){ try{
+  const ф=_narrCanon(stripDiac(String(форма||''))); if(!ф || !c) return false;
+  if(_РОД_ИМ[ф.replace(/\s+/g,'')]) return false;
+  const поле=new Set(); [c[1],c[2],c[3]].forEach(п=>_narrCanon(stripDiac(String(п||''))).split(' ').forEach(w=>{ const k=_корИм(w); if(k) поле.add(k); }));
+  const знач=ф.split(' ').map(_корИм).filter(w=>w&&!_СЛУЖ_ИМ[w]);
+  if(!знач.length) return false;
+  return знач.some(w=>поле.has(w));
+}catch(e){ return false; } }
+/* Корпус огласовок хранит имя ТАК, КАК ОНО СТОИТ В ЦЕПИ: с глаголом передачи впереди и в родительном
+   падеже («وَعَنْ نَافِعٍ», «أَبِي صَالِحٍ»). Заголовок — это имя, а не кусок цепи: срезаем глагол и ставим
+   именительный. Правку делаем ТОЛЬКО в показе, данные не трогаем. */
+function _имНоминатив(v){ try{
+  let _voc=String(v||''); if(!_voc) return '';
+  if(/^(أَبِي|أبي|ابي)\s/.test(_voc)) _voc=_voc.replace(/^(?:أَبِي|أبي|ابي)/,'أَبُو');
+  _voc=_voc.replace(/^[وَفَ]{0,2}\s*(?:وَ?عَ?نْ?|حَ?دَّ?ثَ?نَ?ا|أَ?خْ?بَ?رَ?نَ?ا|قَ?الَ?|سَ?مِ?عْ?تُ?)\s+/,'').trim();
+  const _foldW=(w)=>String(w||'').replace(/[ً-ْٰ]/g,'');
+  const _nomFix=(w)=>{
+    if(/ِو$/.test(w)) return w.replace(/ِو$/,'ُو');
+    if(/ٍو$/.test(w)) return w.replace(/ٍو$/,'ٌو');
+    if(/ٍ$/.test(w)) return w.replace(/ٍ$/,'ٌ');
+    if(/ةَ$/.test(w)) return w.replace(/ةَ$/,'ةُ');
+    if(/ِ$/.test(w)) return w.replace(/ِ$/,'ُ');
+    return w; };
+  const _parts=_voc.split(/\s+/);
+  if(_parts.length){ let i=0;
+    if(_parts.length>1 && _foldW(_parts[0])==='عبد') i=1;
+    _parts[0]=_nomFix(_parts[0]);
+    const j=i+1;
+    if(_parts.length>j && /^(بن|ابن)$/.test(_foldW(_parts[j]))) _parts[j]=_nomFix(_parts[j]);
+    _voc=_parts.join(' '); }
+  return _voc;
+}catch(e){ return String(v||''); } }
 let _mudPromise=null;
 async function _loadMudallisin(){ if(window._MUDCACHE) return window._MUDCACHE;
   if(!_mudPromise) _mudPromise=fetch('mudallisin.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>{_mudPromise=null; return {};});
@@ -15134,16 +15175,30 @@ async function _narrHintNormal(q){
   const my=++_narrHintSeq;
   let cands=[]; try{ cands=await narrCandidates(q); }catch(e){_тихо(e,"L12877")}
   if(my!==_narrHintSeq) return;
-  // v1056 #458: длинное полное имя (3+ слова, араб) не матчится целиком — пробуем ЯДРО (4/3/2 слова), как в narrSuggest
-  if(isArabic(q) && (!cands.length || (cands[0]&&cands[0].sc<100))){
+  // v1056 #458: длинное полное имя (3+ слова, араб) не матчится целиком — пробуем ЯДРО (4/3/2 слова), как в narrSuggest.
+  /* v1459 (#458, разбор на боевом): ядро подставлялось ДАЖЕ КОГДА полное имя УЖЕ НАШЛО ЧЕЛОВЕКА.
+     Запрос владельца «عبد الله بن محمد بن عمران بن إبراهيم بن» даёт РОВНО ОДНОГО кандидата — №20103,
+     это он и есть, — с очками 99,29 при пороге 100. Не хватало 0,71 очка: включалось ядро
+     «عبد الله بن محمد», у которого 20 однофамильцев, и подсказка предлагала ДРУГОГО, общего человека.
+     Теперь: нашли по ПОЛНОМУ имени одного и уверенно — им и отвечаем, ядро не трогаем. А если ядро
+     всё-таки берём, оно обязано быть однозначным: либо кандидатов мало, либо первый оторвался. */
+  const _полн=(cands&&cands[0])||null;
+  const _полнОдин=!!_полн && (cands.length===1 || (cands[1] && (_полн.sc-cands[1].sc)>=10));
+  const _полнГоден=!!_полн && _полн.sc>=90 && _полнОдин;
+  if(isArabic(q) && !_полнГоден && (!cands.length || (cands[0]&&cands[0].sc<100))){
     const w=q.trim().split(/\s+/).filter(Boolean);
     if(w.length>=3){ for(const k of [4,3,2]){ if(w.length>k){ let c2=[]; try{ c2=await narrCandidates(w.slice(0,k).join(' ')); }catch(e){_тихо(e,"L12882")}
-      if(my!==_narrHintSeq) return; if(c2.length && c2[0].sc>=100){ cands=c2; break; } } } }
+      if(my!==_narrHintSeq) return;
+      if(c2.length && c2[0].sc>=100 && (c2.length<=3 || (c2[1] && (c2[0].sc-c2[1].sc)>=50))){ cands=c2; break; } } } }
   }
   const top=cands&&cands[0], second=cands&&cands[1]; const s1=top?top.sc:0, s2=second?second.sc:0; const ar=isArabic(q);
   // ОЧЕВИДНОЕ имя (заявка): араб — точное(200)/префикс(100); рус — знаменитость(999) или уверенный многословный с запасом над 2-м.
   // (обычные слова «молитва»/«صحيح»/«كتاب» дают sc 30–82 и НЕ проходят — проверено)
-  const ok = top && (ar ? s1>=100 : (s1===999 || (q.trim().split(/\s+/).length>=2 && s1>=55 && (s1-s2)>=10)));
+  /* Порог 100 — «точное(200)/префикс(100)». Длинное имя набирает чуть меньше сотни ИЗ-ЗА ДЛИНЫ:
+     «عبد الله بن محمد بن عمران بن إبراهيم بن» → 99,29 (кандидат один), «شعبة بن الحجاج» → 99,99
+     при втором 84,58. Оба — те самые люди, и оба молчали. Верим с 90, когда рядом никого: второго
+     нет или он отстал на 10+. Обычные слова («صلاة», «كتاب») набирают 30–82 и не проходят. */
+  const ok = top && (ar ? (s1>=100 || (s1>=90 && (!second || (s1-s2)>=10))) : (s1===999 || (q.trim().split(/\s+/).length>=2 && s1>=55 && (s1-s2)>=10)));
   if(!ok){ box.style.display='none'; return; }
   const nm=top.nm, shortNm=nm.split(' ').slice(0,4).join(' ');
   box.innerHTML='';
@@ -15153,16 +15208,40 @@ async function _narrHintNormal(q){
   // человек и искал, арабское — с огласовками из narr_voc и шрифтом из настроек, плюс бейдж поколения (⭐ сподвижник).
   var _hid=(top.id!=null?top.id:(top.i!=null?top.i:null));
   var _hru=((top.ru||'')+'').trim(); if(!_hru && /[а-яё]/i.test(q)) _hru=q.trim();
-  var _hvoc=''; try{ if(_hid!=null && typeof _narrVoc!=='undefined' && _narrVoc) _hvoc=_narrVoc[String(_hid)]||_narrVoc[shortNm]||''; }catch(e){_тихо(e,"L12898")}
-  // словарь огласовок грузится лениво — если его ещё нет, тихо просим и дорисовываем имя, когда придёт
-  try{ if(!_hvoc && typeof loadNarrVoc==='function'){ loadNarrVoc().then(function(){ try{
-      var _v2=(typeof _narrVoc!=='undefined'&&_narrVoc)?(_narrVoc[String(_hid)]||_narrVoc[shortNm]||''):'';
-      var _b2=a.querySelector('bdi'); if(_v2&&_b2) _b2.textContent=_v2;
+  /* v1459 (#458/#457). Тут было ДВЕ дыры разом, обе по имени в подсказке.
+     ① Огласовка искалась «по номеру ИЛИ ПО ИМЕНИ» (_narrVoc[shortNm]). Имя — не ключ: «عبد الله»
+        носят сотни людей, и подсказка легко брала форму тёзки. Ключ теперь только номер.
+     ② Форма не проверялась на принадлежность этому человеку и не приводилась в именительный —
+        карточка это уже делала, подсказка нет. Из-за этого на один и тот же запрос карточка
+        показывала «عبد الله التيمي», а подсказка над ней — «عَبْدُ الأَعْلَى», чужого человека.
+     Обе проверки — общими помощниками _формаЭтого/_имНоминатив, теми же, что у карточки. */
+  var _hvoc='';
+  var _hПроверить=function(форма){ try{ if(!форма) return '';
+    var зап=(typeof _narrShard!=='undefined')?((_narrShard[Math.floor(_hid/100)]||{})[String(_hid)]||null):null;
+    /* Записи равия ещё нет под рукой — значит проверить форму НЕЧЕМ. Молча показать непроверенное
+       нельзя: ровно так «أم المؤمنين» встало вместо «عائشة بنت أبي بكر». Возвращаем пусто, и форму
+       дорисует нижняя ветка — она дожидается записи и проверяет по-настоящему. */
+    if(!зап) return '';
+    if(!_формаЭтого(форма, зап)) return '';
+    return _имНоминатив(форма); }catch(e){ return ''; } };
+  try{ if(_hid!=null && typeof _narrVoc!=='undefined' && _narrVoc) _hvoc=_hПроверить(_narrVoc[String(_hid)]||''); }catch(e){_тихо(e,"L12898")}
+  // словари грузятся лениво — если их ещё нет, тихо просим и дорисовываем имя, когда придут (уже с проверкой)
+  try{ if(!_hvoc && _hid!=null && typeof loadNarrVoc==='function'){ Promise.all([loadNarrVoc(), (typeof _narrCard==='function')?_narrCard(+_hid):null]).then(function(р){ try{
+      var зап=р[1]||null; var сыр=(typeof _narrVoc!=='undefined'&&_narrVoc)?(_narrVoc[String(_hid)]||''):'';
+      if(!сыр || (зап && !_формаЭтого(сыр, зап))) return;
+      var _b2=a.querySelector('bdi'); if(_b2) _b2.textContent=_имНоминатив(сыр);
     }catch(e){_тихо(e,"L12903")} }).catch(function(){}); } }catch(e){_тихо(e,"L12903")}
   a.innerHTML='<span style="font-size:19px;flex:none">👤</span><span style="font-size:14px;color:var(--text);overflow:hidden;min-width:0">'
     +(_hru?('<b>'+esc(_hru)+'</b> '):'')
     +'<bdi dir="rtl" style="font-family:var(--arFont,\'Noto Naskh Arabic\',serif);font-size:15px">'+esc(_hvoc||shortNm)+'</bdi>'
-    +((top.sah)?' <span style="font-size:calc(11px * var(--txtScale,1));padding:1px 7px;border-radius:8px;white-space:nowrap;background:#3a2f0b;color:#ffd479;border:1px solid #8a6d1f">⭐ сподвижник</span>':'<span class="_hBadge"></span>')
+    /* v1459: тут стояло «top.sah → ⭐ сподвижник», и это была ФАКТИЧЕСКАЯ ошибка. Поле sah у кандидата —
+       флаг САХИХАЙН (его хадисы есть у аль-Бухари и/или Муслима), а не сподвижничество: его ставит
+       _sahGet, читая ./sahihayn/*.json, и он отдаёт 'bm'/'b'/'m'. Флаг несут 2038 равиев, и 1293 из них
+       умерли ПОСЛЕ 110 г.х. — заведомо не сподвижники. Имам Малик (ум. 178) получал в подсказке звание
+       сподвижника. Поколение теперь ставит _genBadge (ниже, по рангу и году смерти), а флаг Сахихайн
+       показываем отдельно и своими словами. */
+    +'<span class="_hBadge"></span>'
+    +((top.sah)?(' <span title="Его хадисы есть в Сахихах — это не про сподвижничество, а про то, у кого он передаёт" style="font-size:calc(11px * var(--txtScale,1));padding:1px 7px;border-radius:8px;white-space:nowrap;background:#12211a;color:#bfe8cd;border:1px solid #24513a">📗 '+(top.sah==='bm'?'у обоих Шейхов':(top.sah==='b'?'у аль-Бухари':'у Муслима'))+'</span>'):'')
     +'<div style="font-size:calc(11.5px * var(--txtScale,1));color:var(--hint);margin-top:2px">передатчик хадисов — <span style="color:var(--link)">открыть карточку ›</span></div></span>';
   try{ if(_hid!=null && typeof _narrCard==='function') _narrCard(+_hid).then(function(v){ try{
       if(!v) return; var _gb=(typeof _genBadge==='function')?_genBadge((v[5]||'')+' '+(v[6]||'')+' '+(v[7]||''), v[4]):null;
@@ -15170,7 +15249,10 @@ async function _narrHintNormal(q){
       var _sah=(_gb[0]==='صحابي');
       _bs.innerHTML=' <span style="font-size:calc(11px * var(--txtScale,1));padding:1px 7px;border-radius:8px;white-space:nowrap;'
         +(_sah?'background:#3a2f0b;color:#ffd479;border:1px solid #8a6d1f':'background:var(--card);color:var(--hint);border:1px solid var(--border)')+'">'
-        +(_sah?'⭐ сподвижник':esc(String(_gb[1]||_gb[0]||'').slice(0,18)))+'</span>';
+        /* _genBadge отдаёт [термин, ЦВЕТ, обоснование, null, русская подпись]. Второй элемент — цвет,
+           и подсказка печатала его как текст: у каждого не-сподвижника в бейдже стояло «#b9a7ff»
+           вместо «≈ Таби‘ ат-табиин». Берём русскую подпись, а арабский термин — запасным. */
+        +(_sah?'⭐ сподвижник':esc(String(_gb[4]||_gb[0]||'').slice(0,20)))+'</span>';
     }catch(e){_тихо(e,"L12916")} }).catch(function(){}); }catch(e){_тихо(e,"L12916")}
   a.onclick=()=>{ try{hap('light');}catch(e){_тихо(e,"L12917")} box.style.display='none'; try{ narrOpen(nm); }catch(e){_тихо(e,"L12917")} };
   const x=document.createElement('span'); x.textContent='✕'; x.title='Скрыть подсказку для этого запроса'; x.style.cssText='cursor:pointer;opacity:.55;font-size:calc(13px * var(--txtScale,1));padding:0 2px;flex:none';
@@ -16648,34 +16730,7 @@ async function showNarratorCardLocal(name, host, forceId){
   const _shDiff=!!_sh && stripDiac(_sh)!==stripDiac(c[1]||'');
   // #247: ОГЛАСОВАННОЕ имя из существующего _narrVoc (корпус+курированные) — приоритет в шапке, без ИИ; иначе шухра/полное (#246). Используем СУЩЕСТВУЮЩИЙ loadNarrVoc (без дубликата — урок П-01).
   let _voc=''; try{ await loadNarrVoc(); _voc=(_narrVoc&&_narrVoc[String(id)])||''; }catch(e){_тихо(e,"L14077")}
-  // #владелец 01.07.2026: огласованные данные (_narrVoc) хранят кунью В РОДИТЕЛЬНОМ (أَبِي صَالِحٍ — как после «عن» в цепи);
-  // в ШАПКЕ карточки (это заголовок-имя, не фрагмент цепи) нужен ИМЕНИТЕЛЬНЫЙ (أَبُو صَالِحٍ). Нормализуем только ПОКАЗ, не данные.
-  if(_voc && /^(أَبِي|أبي|ابي)\s/.test(_voc)) _voc=_voc.replace(/^(?:أَبِي|أبي|ابي)/,'أَبُو');
-  // владелец 02.07 (скрин «وَعَنْ نَافِعٍ» в шапке): корпусные огласовки иногда захватывают глагол передачи и родительный падеж цепи.
-  // Шапка = ИМЯ в именительном: срезаем ведущие глаголы (وعن/عن/حدثنا…) и меняем хвостовой танвин-кяср на танвин-дамм (نَافِعٍ→نَافِعٌ).
-  if(_voc){ _voc=_voc.replace(/^[وَفَ]{0,2}\s*(?:وَ?عَ?نْ?|حَ?دَّ?ثَ?نَ?ا|أَ?خْ?بَ?رَ?نَ?ا|قَ?الَ?|سَ?مِ?عْ?تُ?)\s+/,'').trim();
-    // #487 (владелец: «анас ибн малик — неузнаваем»): конструкция «Имя1 بن/ابن Имя2» — корпус хранит ВСЮ фразу в родительном
-    // (как после «عن»: أَنَسِ بْنِ مَالِكٍ). Шапка — именительный, но родительный нужен ТОЛЬКО у Имя1+بن (подлежащее),
-    // Имя2 (مضاف إليه при بن) ОСТАЁТСЯ в родительном — это грамматически верно и трогать его нельзя. Старый код чинил
-    // ПОСЛЕДНЕЕ слово (давая заведомо неверное «أَنَسِ بْنِ مَالِكٌ» — родительный+родительный+именительный вперемешку).
-    // шухра-форма БЕЗ имени перед «ибн» (сама фраза — «Ибн Умар»): чинить нужно САМО بن/ابن, второе имя (مضاф إليه) не трогать.
-    const _foldW=(w)=>String(w||'').replace(/[ً-ْٰ]/g,'');
-    const _nomFix=(w)=>{
-      if(/ِو$/.test(w)) return w.replace(/ِو$/,'ُو');
-      if(/ٍو$/.test(w)) return w.replace(/ٍو$/,'ٌو');
-      if(/ٍ$/.test(w)) return w.replace(/ٍ$/,'ٌ');
-      if(/ةَ$/.test(w)) return w.replace(/ةَ$/,'ةُ');
-      if(/ِ$/.test(w)) return w.replace(/ِ$/,'ُ');
-      return w; };
-    const _parts=_voc.split(/\s+/);
-    if(_parts.length){
-      let i=0;
-      if(_parts.length>1 && _foldW(_parts[0])==='عبد') i=1;   // «عبد الله/الرحمن/…» — عبد сам مضاف, имя Аллаха (i) не трогаем
-      _parts[0]=_nomFix(_parts[0]);
-      const j=i+1;
-      if(_parts.length>j && /^(بن|ابن)$/.test(_foldW(_parts[j]))) _parts[j]=_nomFix(_parts[j]);   // بن сразу за подлежащим согласуется с ним
-      _voc=_parts.join(' ');
-    } }
+  _voc=_имНоминатив(_voc);   // общий помощник: срез глагола передачи + именительный падеж (был здесь же, вынесен ради подсказки поиска)
   /* #456/#457 (владелец: «сверху написание какое-то некрасивое недоделанное»). Огласованная форма
      берётся из корпуса сводов (narr_voc) по НОМЕРУ равия — но сам корпус собран по тексту, и часть
      форм в нём чужие. Пример, на котором поймано: равий №20103 — в реестре «عبد الله بن محمد بن عمران
@@ -16686,17 +16741,8 @@ async function showNarratorCardLocal(name, host, forceId){
      Правило: заголовок — имя ЭТОГО человека. Форма годится в заголовок, если делит с записью
      (имя/кунья/нисба) хотя бы одно значащее слово; слова родства не годятся никогда. Чужая, но
      осмысленная форма не пропадает — уходит подписью в скобки, как делает sunnah.com с «أم المؤمنين». */
-  const _РОДСТВО={'ابيه':1,'ابي':1,'اباه':1,'امه':1,'امها':1,'ابيها':1,'جده':1,'جدها':1,'رجل':1,'امراه':1,'ابنه':1,'اخيه':1};
-  const _СЛУЖНМ={'بن':1,'ابن':1,'ابو':1,'ابي':1,'ابا':1,'ام':1,'عبد':1,'عبيد':1,'ال':1,'و':1,'مولي':1,'بنت':1,'قيل':1,'وقيل':1};
-  const _корНМ=(w)=>_narrCanon(stripDiac(String(w||''))).replace(/[ءؤئ]/g,'').replace(/^ال(?=..)/,'').replace(/وو/g,'و').replace(/يي/g,'ي');
-  const _имяЭтого=(форма)=>{ const ф=_narrCanon(stripDiac(String(форма||''))); if(!ф) return false;
-    if(_РОДСТВО[ф.replace(/\s+/g,'')]) return false;
-    const поле=new Set(); [c[1],c[2],c[3]].forEach(п=>_narrCanon(stripDiac(String(п||''))).split(' ').forEach(w=>{ const k=_корНМ(w); if(k) поле.add(k); }));
-    const знач=ф.split(' ').map(_корНМ).filter(w=>w&&!_СЛУЖНМ[w]);
-    if(!знач.length) return false;
-    return знач.some(w=>поле.has(w)); };
-  const _vocСвой=!!_voc && _имяЭтого(_voc);
-  const _vocЧужой=!!_voc && !_vocСвой && !_РОДСТВО[_narrCanon(stripDiac(_voc)).replace(/\s+/g,'')];
+  const _vocСвой=!!_voc && _формаЭтого(_voc, c);
+  const _vocЧужой=!!_voc && !_vocСвой && !_РОД_ИМ[_narrCanon(stripDiac(_voc)).replace(/\s+/g,'')];
   const _hdrName = (_voc && _vocСвой) ? _voc : (_shDiff?_sh:c[1]);
   const _showFull = stripDiac(_hdrName)!==stripDiac(c[1]||'');
   // 10.07 (владелец, سمي): заголовок как на sunnah.com — «سمي القرشي», а «سُمَىٌّ مَوْلَى أَبِي بَكْرٍ» подписью в скобках
