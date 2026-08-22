@@ -831,6 +831,26 @@ window.тихоОтчёт = function () {
     if(onVibro)haptic('soft'); revealMenu(); s.classList.add('gone'); setTimeout(function(){ try{s.remove();}catch(e){_тихо(e,"L699")} },600); }
   if(v){ v.addEventListener('ended',function(){fin(false);}); v.addEventListener('error',function(){fin(true);}); try{var pp=v.play();if(pp&&pp.catch)pp.catch(function(){});}catch(e){_тихо(e,"L700")} }
   playAudio(); startVibro();
+  /* #625: система отказала в звуке — предлагаем нажать, но не навязываем. Кнопка появляется ТОЛЬКО
+     когда включена настройка «Кнопка звука на заставке» И автоплей действительно отклонён. Нажатие
+     по ней звук включает и заставку НЕ пропускает — тап по остальной площади по-прежнему пропускает. */
+  try{ if(snd && LS('mn_i_tapsnd')===true && localStorage.getItem('mn_i_tapsnd')==='1'){
+    var _пр=snd.play();
+    if(_пр && _пр.catch) _пр.catch(function(){ try{
+      if(done) return;
+      var b=document.createElement('div'); b.textContent='🔊';
+      b.title='Включить звук заставки';
+      b.style.cssText='position:absolute;right:14px;top:14px;width:42px;height:42px;border-radius:50%;'
+        +'display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;'
+        +'background:rgba(20,26,34,.72);border:1px solid rgba(255,255,255,.22);z-index:5';
+      b.addEventListener('click', function(e){ try{ e.stopPropagation(); }catch(_){}
+        try{ if(snd){ snd.play().catch(function(){}); } }catch(_){}
+        try{ if(voc){ voc.play().catch(function(){}); } }catch(_){}
+        try{ b.remove(); }catch(_){}
+      });
+      s.appendChild(b);
+    }catch(_e){} });
+  } }catch(e){_тихо(e,"L700b")}
   // #618 (владелец: «звук интро должен зависеть от режима — если беззвучный, то звука не будет»):
   // раньше при отказе автоплея вешался повтор на ПЕРВЫЙ тап по экрану — и звук внезапно вырывался у человека,
   // который держит телефон в беззвучном (система молча блокирует автоплей именно поэтому). Повтор убран:
@@ -853,7 +873,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1463</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1464</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1108,6 +1128,12 @@ window.тихоОтчёт = function () {
           <div class="row"><span>🎬 Видео-заставка при открытии</span><div class="sw" id="introVideoSw"></div></div>
           <div class="row"><span>🔊 Звук заставки <span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1))">(лёгкий, при появлении лого)</span></span><div class="sw" id="introSoundSw"></div></div>
           <div class="row"><span>🎙 Голос-приветствие <span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1))">(«Ассаляму алейкум, добро пожаловать в Muslimoon»)</span></span><div class="sw" id="introVoiceSw"></div></div>
+          <!-- #625 (владелец: «включаю приложение с домашнего экрана — нет звука интро, а беззвучный у меня не стоял»).
+               Молча вернуть звук нельзя: по #618 вы сами велели НЕ доигрывать его по первому касанию — система блокирует
+               автоплей как раз у тех, кто держит телефон в беззвучном, и звук вырывался неожиданно. Здесь противоречат
+               два ваших слова, поэтому выбор отдан вам, а по умолчанию остаётся #618. Включите — и когда система не даст
+               звук сама, на заставке появится маленькая кнопка «🔊»: звук пойдёт только если вы её нажмёте. -->
+          <div class="row"><span>🔊 Кнопка звука на заставке <span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1))">(если система не дала звук сама — показать «🔊», звук по нажатию)</span></span><div class="sw" id="introTapSndSw"></div></div>
           <div class="row"><span>📳 Вибро-отклик заставки <span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1))">(деликатно, по ритму видео)</span></span><div class="sw" id="introVibroSw"></div></div>
     </details>
     <details class="setSec"><summary>🎨 Вид и интерфейс · 5</summary>
@@ -1719,7 +1745,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1463';
+const APPVER = 'v1464';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -20434,14 +20460,18 @@ var _ttsw=document.getElementById('ttsSw'); if(_ttsw){ _ttsw.classList.toggle('o
 (function(){ var _rsw=document.getElementById('randHadSw'); if(!_rsw) return; _rsw.classList.toggle('on',!!cfg.randHadith);
   _rsw.onclick=function(){ cfg.randHadith=!cfg.randHadith; saveCfg(cfg); _rsw.classList.toggle('on',!!cfg.randHadith); try{ _updRandBtn(); }catch(e){_тихо(e,"L17116")} toast(cfg.randHadith?'🎲 Кнопка случайного хадиса включена (на главной)':'Кнопка случайного хадиса скрыта'); }; })();
 // v1151: тумблеры заставки (интро читает эти же ключи localStorage до загрузки cfg). По умолчанию всё вкл.
-(function(){ function bindI(id,key,onT,offT){ var sw=document.getElementById(id); if(!sw)return;
-    function on(){ try{ return localStorage.getItem(key)!=='0'; }catch(e){ return true; } }
+(function(){ function bindI(id,key,onT,offT,выклПоУмолчанию){ var sw=document.getElementById(id); if(!sw)return;
+    /* Пятый признак — «по умолчанию ВЫКЛ». Нужен там, где включать без спроса нельзя: у настройки
+       #625 (кнопка звука на заставке) молчание по умолчанию — это ваше же решение #618. Без него
+       переключатель рисовался бы включённым, а вести себя стал бы как выключенный. */
+    function on(){ try{ var v=localStorage.getItem(key); return выклПоУмолчанию ? (v==='1') : (v!=='0'); }catch(e){ return !выклПоУмолчанию; } }
     sw.classList.toggle('on',on());
     sw.onclick=function(){ var nv=!on(); try{ localStorage.setItem(key,nv?'1':'0'); }catch(e){_тихо(e,"L17121")} sw.classList.toggle('on',nv); try{ toast(nv?onT:offT); }catch(e){_тихо(e,"L17121")} };
   }
   bindI('introVideoSw','mn_i_video','🎬 Видео-заставка вкл','Видео-заставка выкл');
   bindI('introSoundSw','mn_i_sound','🔊 Звук заставки вкл','Звук заставки выкл');
   bindI('introVoiceSw','mn_i_voice','🎙 Голос-приветствие вкл','Голос-приветствие выкл');
+  bindI('introTapSndSw','mn_i_tapsnd','🔊 Кнопка звука на заставке вкл','Кнопка звука на заставке выкл', true);   // #625: по умолчанию ВЫКЛ — сохраняем ваше решение #618
   bindI('introVibroSw','mn_i_vibro','📳 Вибро заставки вкл','Вибро заставки выкл');
 })();
 var _vfw=document.getElementById('verifySw'); if(_vfw){ _vfw.classList.toggle('on',cfg.verify!==false); _vfw.onclick=()=>{ cfg.verify=!(cfg.verify!==false); saveCfg(cfg); _vfw.classList.toggle('on',cfg.verify!==false); toast(cfg.verify?'🛡 Независимая сверка ВКЛ':'Сверка выкл'); }; }   // независимая сверка передатчиков
