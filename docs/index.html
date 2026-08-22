@@ -350,6 +350,12 @@ window.тихоОтчёт = function () {
      поэтому работает во ВСЕХ местах разом, без правки каждого вызова. */
   @keyframes lateIn{ from{ opacity:0; transform:translateY(7px) } to{ opacity:1; transform:none } }
   .lateIn{ animation:lateIn .26s cubic-bezier(.22,.61,.36,1) both }
+  /* #620, часть про подсказку в поле поиска. Своей анимации я сюда НЕ добавил, и вот почему.
+     Она уже есть и сделана правильнее, чем я начал делать: `qPhIn` выше (строка 311) поднимает
+     подсказку с прозрачности .3 до .9 — мягкое появление, и текст НИКОГДА не невидим, даже если
+     анимация где-то замрёт. Плюс поверх поля живёт слой подсказок (#qHint), который сам меняет
+     примеры с плавным затуханием. Моя вторая анимация на том же ::placeholder просто перебила бы
+     первую, ничего не добавив. Класс ошибки известный: не плодить второе правило поверх рабочего. */
   @media (prefers-reduced-motion:reduce){ #res .card,#res .status,#corrBanner,#res .hint,.modal .panel,#scopeBar>div,.lateIn{ animation:none!important } }
   @media (prefers-reduced-motion:reduce){ textarea#q::placeholder,textarea#q::-webkit-input-placeholder{ animation:none } }
   button{font-size:15px;border:none;border-radius:12px;cursor:pointer}
@@ -847,7 +853,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1462</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1463</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1713,7 +1719,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1462';
+const APPVER = 'v1463';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5010,6 +5016,13 @@ function _srchWaitOff(seq){ try{
   try{ _goBusy(false); }catch(e){_тихо(e,"L4261")}
 }catch(e){_тихо(e,"L4262")} }
 async function runSearch(explicit){
+  /* #620/#678: окно молчания для наблюдателя анимации заводит САМ поиск, а не обработчик кнопки.
+     Проверено на боевом: анимация догоняющих блоков работает и без единого поиска — значит дыры
+     «пока не нажмёшь Найти, ничего не анимируется» НЕТ, и я её себе придумал, пока читал код.
+     А вот польза от переноса настоящая: окно ставилось ТОЛЬКО тапом по кнопке «Найти», и поиск,
+     запущенный с клавиатуры, чипом или ссылкой, рисовал первую — самую тяжёлую — порцию БЕЗ
+     защиты. Замер разработчика ниже: наблюдатель на порции из 8 карточек стоит 248 мс против 57. */
+  try{ if(window._lateQuiet) _lateQuiet(700); }catch(e){_тихо(e,"L4264b")}
   const strict=_strictSearch; _strictSearch=false;   // M173: захватываем флаг строгого режима на этот запуск
   try{ const _cb=document.getElementById('corrBanner'); if(_cb) _cb.remove(); }catch(e){_тихо(e,"L4265")}   // 05.07: баннер коррекции живёт вне #res — чистим при новом поиске
   const seq=++_seq; groupSrc=false; uniqMode=false; relMode=false; _lastQueryTerms=[];   // новый поиск — сброс режимов вывода
@@ -22190,6 +22203,8 @@ function openUnifiedReader(code, fromNum){
       .catch(function(e){ try{toast('Карта: не удалось загрузить данные');}catch(_){_тихо(_,"L18748")} });
   };
 })();
+
+
 </script>
 
 </body>
