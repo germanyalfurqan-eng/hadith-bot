@@ -15285,6 +15285,17 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if _ac is not None:
                     await _мсообщ(update).reply_text(_ac)
                     return
+                # 🎬 #1128: включение/выключение видеомоста — там же, где живут
+                # прочие хозяйские переключатели. Своего места одной команде не
+                # завожу (З-33, не множить сущности).
+                try:
+                    _вм = _вм_команда(text, int(_uid)
+                                      if str(_uid).lstrip("-").isdigit() else 0)
+                except Exception:
+                    _вм = None
+                if _вм is not None:
+                    await _мсообщ(update).reply_text(_вм)
+                    return
             # ── ГДЕ И КОМУ РАЗРЕШЁН РАГ (владелец 27.07.2026) ──────────────────────────────
             # «Эта функция строго в джамаат ру только работает пока, даже в личке никому кроме
             # меня — два аккаунта. Лимит установи также для других пользователей, небольшой,
@@ -17248,7 +17259,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _vfp = vf.split()
                 if len(_vfp) >= 2 and _vfp[1].isdigit() and _vfp[0].isalpha():
                     _vfcode = {"ahmad_local": "ahmad"}.get(_vfp[0], _vfp[0])
-                    body += f"\n📲 [Открыть карточку первоисточника](https://t.me/muslimoontt_bot/app?startapp=r_{_vfcode}_{_vfp[1]})"   # #629: голый URL с «_» Telegram-Markdown резал в курсив (юзернейм слипался → «имя не найдено») — прячем URL в markdown-ссылку
+                    # Адрес прямо, без скобок разметки: send_long шлёт это БЕЗ parse_mode,
+                    # и скобки человек видел буквально (см. разбор у соседней ссылки, #629).
+                    body += f"\n📲 Открыть карточку первоисточника: https://t.me/muslimoontt_bot/app?startapp=r_{_vfcode}_{_vfp[1]}"   # #629: голый URL с «_» Telegram-Markdown резал в курсив (юзернейм слипался → «имя не найдено») — прячем URL в markdown-ссылку
                 await send_long(update, body)
             flush_trans()
         else:
@@ -17342,7 +17355,15 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 msg += muhaymin_crossref_note(_src_code, number)
                 # #269: прямая ссылка — открыть ЭТУ карточку хадиса в приложении одним тапом
                 _sa269 = ('m_' + str(number)) if _src_code == 'muhaymin' else ('r_' + str(_src_code) + '_' + str(number))
-                msg += f"\n\n📲 [Открыть карточку в приложении](https://t.me/muslimoontt_bot/app?startapp={_sa269})"   # #629: см. выше — «_» в голом URL ломали ссылку
+                # 🔴 22.08.2026. Здесь стояла пометка «#629: „_“ в голом URL ломали ссылку» —
+                # и она НЕВЕРНА, я проверил. Настоящий #629 живёт в журнале (_notify_usage),
+                # где сообщение уходит старым Markdown и подчёркивания съедаются курсивом.
+                # А ЭТО сообщение отправляется send_long БЕЗ разметки вовсе — адрес цел, зато
+                # человек видит голые скобки «[Открыть карточку](https://…)».
+                # Разметку не включаю: сюда попадает арабский текст хадиса, и любой «<» или
+                # «&» в нём уронил бы разбор. Пишем адрес прямо — Телеграм сам делает его
+                # нажимаемым, и он остаётся целым.
+                msg += f"\n\n📲 Открыть карточку в приложении: https://t.me/muslimoontt_bot/app?startapp={_sa269}"
 
                 # 🔴 #127, закон владельца: к любому хадису — нейротахкик свёрнутой цитатой,
                 # кроме аль-Бухари и Муслима (их достоверность общеизвестна, слово от 01.07.2026).
@@ -17500,8 +17521,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         _msg += f"\n📊 {_gr}"
                     _sc326 = {"ahmad_local": "ahmad"}.get(_наш, _наш)
                     _msg += muhaymin_crossref_note(_sc326, _n324)
-                    _msg += (f"\n\n📲 [Открыть карточку в приложении]"
-                             f"(https://t.me/muslimoontt_bot/app?startapp=r_{_sc326}_{_n324})")
+                    # Тот же случай: send_long без parse_mode, скобки видны буквально.
+                    _msg += (f"\n\n📲 Открыть карточку в приложении: "
+                             f"https://t.me/muslimoontt_bot/app?startapp=r_{_sc326}_{_n324}")
                     await send_long(update, _msg)
                     return
             # #626 (владелец: «Книга и номер даны… НО ХАДИС НАДО ВЫДАТЬ!»). Книга вне наших 41
@@ -19753,7 +19775,18 @@ async def _api_serve(application=None):
         if not application:
             return
         uid = (user or {}).get("id")
-        who = кто_с_id(user)   # #231/#232: имя · @ник · НОМЕР — видимый (скопировать) и нажимаемый (открыть личку)
+        # 🔴 22.08.2026, заявка владельца #629 «не работает ссылка 23676». Он нажал в журнале
+        # «ahmad №23676» и получил «Имя @muslimoonttbot не найдено».
+        # ПРИЧИНА. Сообщение уходило СТАРЫМ Markdown, а в нём подчёркивание значит курсив
+        # ДАЖЕ ВНУТРИ адреса ссылки. В адресе их два — в имени бота (muslimoontt_bot) и в
+        # метке (r_ahmad_23676), — и пара съедалась как курсив: от адреса оставалось
+        # «muslimoonttbot?startapp=rahmad23676». Ровно это он и увидел: пропали ОБА.
+        # Класс тут знали и раньше — соседние поля чистят от «_*`[]()», — но адрес почистить
+        # нельзя: подчёркивания в нём смысловые, они и есть ссылка.
+        # Лечим разметкой, а не чисткой: в HTML подчёркивание не значит ничего. Вид «html»
+        # у кто_с_id уже был — просто его тут не звали.
+        # Причину нашла линия мини-аппа и передала мне, потому что файл мой; проверил сам.
+        who = кто_с_id(user, вид="html")   # #231/#232: имя · @ник · НОМЕР — видимый и нажимаемый
         # #414/#420 (повтор-жалоба владельца, скрин 01.07): раньше ЖЁСТКО писали «DeepSeek, ключ потрачен» для
         # ЛЮБОГО свежего ответа — даже когда реально ответил бесплатный Groq/Gemini. Теперь берём модель из ответа.
         if not fresh:
@@ -19767,7 +19800,8 @@ async def _api_serve(application=None):
         # #272/«ссылка вкладки»: МЕСТО = кликабельная дип-ссылка ровно на карточку хадиса в приложении (m_ для Мухаймина, r_ для остальных)
         if src and num not in (None, ''):
             _sa = ('m_' + str(num)) if src == 'muhaymin' else ('r_' + str(src) + '_' + str(num))
-            loc = f" [{src} №{num}](https://t.me/muslimoontt_bot/app?startapp={_sa})"
+            loc = (f' <a href="https://t.me/muslimoontt_bot/app?startapp={_sa}">'
+                   f'{html.escape(str(src))} №{html.escape(str(num))}</a>')
             loc_plain = f" {src} №{num}"
         else:
             loc = ""; loc_plain = ""
@@ -19780,7 +19814,15 @@ async def _api_serve(application=None):
         _qs = (" · 🔎 «" + re.sub(r"[*_`\[\]()]", "", str(q))[:70] + "»") if q else ""   # M301: ЗА ЧТО потрачено (текст запроса) · #501: непарный _/* в чужом тексте рвал Markdown-ссылку ВСЕГО сообщения (та же чистка, что уже была у _fr/_nm)
         _fr = (" · 📝 «" + re.sub(r"[*_`\[\]()]", "", str(frag))[:90] + "…»") if frag else ""   # #312: фрагмент потраченного текста
         try:
-            await app.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} 🤖 {feat}: {who}{loc} — {tag}{extra}{_qs}{_fr}", parse_mode="Markdown", disable_web_page_preview=True)
+            # HTML вместо Markdown — см. разбор у `who` выше (#629). Всё, что НЕ ссылка,
+            # экранируем: в HTML опасны угловые скобки и амперсанд, а они попадаются в
+            # именах людей и в текстах запросов.
+            _э = html.escape
+            await app.bot.send_message(
+                LOG_CHAT_ID,
+                f"#ии {_э(ftag)} 🤖 {_э(str(feat))}: {who}{loc} — {_э(tag)}{_э(extra)}"
+                f"{_э(_qs)}{_э(_fr)}",
+                parse_mode="HTML", disable_web_page_preview=True)
         except Exception:
             # B-004 «can't parse entities»: спецсимвол (_ * [ ] ` ) в имени/запросе ломал Markdown → шлём БЕЗ разметки, сообщение НЕ теряем
             try:
@@ -24737,8 +24779,225 @@ async def _чат_в_реестр(update, context):
         pass
 
 
+
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+# 🎬 ВИДЕОМОСТ (обращение владельца #1128, поправка #1135, 22.08.2026)
+#
+# Владелец: «если кто-то скинет сюда ссылку с инстаграма, тиктока или ютуба — переслать её в
+# Muslim Live; там она упадёт в обсуждение, чужой бот скачает видео». И поправка, которая
+# меняет главное: «если я пишу в чате джамаат, то понятно, что в чате джамаат имею в виду» —
+# ВИДЕО ВОЗВРАЩАЕТСЯ ТУДА, ОТКУДА ПРИШЛА ССЫЛКА, а не публикуется в Muslim Live.
+#
+# Своей качалки не заводим: качает чужой бот, уже стоящий в обсуждении. Мы связываем шаги.
+# Muslim Live остаётся ТЕХНИЧЕСКИМ перевалочным пунктом: туда уходит временная ссылка и
+# оттуда убирается, как только видео доставлено.
+#
+# ⛔ ПО УМОЛЧАНИЮ ВЫКЛЮЧЕНО. Это автомат, который сам пишет в публичный канал. Включает
+#    человек командой «видеомост вкл» — его решение, не моё.
+#
+# Основу написала линия мини-аппа (сессия 79) и передала готовым куском. Здесь она с моей
+# правкой под поправку #1135: цепочка помнит ИСТОЧНИК ссылки (чат и сообщение). Без этого
+# вернуть видео «туда, откуда пришло» нечем — у них адресат был жёстко Muslim Live.
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+_ВМ_ФАЙЛ = 'videomost.json'
+_ВМ_ЖДЁМ = {}          # ключ -> {'url','лайв','откуда','смс','когда'}
+_ВМ_СРОК = 3600        # час: качалка не ответила — цепочку выбрасываем, чтобы не выложить чужое
+_ВМ_ССЫЛКА = re.compile(
+    r'https?://(?:www\.|m\.)?(?:instagram\.com|instagr\.am|tiktok\.com|vm\.tiktok\.com|'
+    r'vt\.tiktok\.com|youtube\.com|youtu\.be|youtube-nocookie\.com)/\S+', re.I)
+
+_ВМ_КЭШ = {'когда': 0.0, 'что': None}
+
+
+def _вм_настройки(свежо=False):
+    """Настройки видеомоста. Живут в ветке данных: перезапуск контейнера их не теряет.
+
+    ⚠️ В ПАМЯТИ НА ДВЕ МИНУТЫ. Обработчик стоит на ВСЕХ сообщениях подряд, а чтение ветки
+    данных — поход к GitHub. Спрашивать его на каждое сообщение значит утопить бота в сетевых
+    запросах на ровном месте."""
+    if not свежо and _ВМ_КЭШ['что'] is not None and (time.time() - _ВМ_КЭШ['когда']) < 120:
+        return _ВМ_КЭШ['что']
+    н = _data_get(_ВМ_ФАЙЛ, None)
+    if not isinstance(н, dict):
+        н = {'вкл': False, 'чаты': []}
+    н.setdefault('вкл', False)
+    н.setdefault('чаты', [])
+    _ВМ_КЭШ['что'] = н
+    _ВМ_КЭШ['когда'] = time.time()
+    return н
+
+
+def _вм_сохранить(н):
+    _ВМ_КЭШ['что'] = н
+    _ВМ_КЭШ['когда'] = time.time()   # иначе «вкл» не подействовало бы ещё две минуты
+    try:
+        _data_put(_ВМ_ФАЙЛ, н, 'видеомост: настройки')
+    except Exception:
+        pass
+
+
+def _вм_команда(text, uid):
+    """Команды владельца. Вернёт текст-ответ либо None (значит это не команда)."""
+    if uid != OWNER_ID and not (OWNER_ID2 and uid == OWNER_ID2):
+        return None
+    t = (text or '').lower().strip()
+    if t in ('видеомост', 'видео мост', 'видеомост статус'):
+        н = _вм_настройки()
+        return ('🎬 Видеомост: %s\n'
+                '• слушаю чаты: %s\n'
+                '• незакрытых цепочек сейчас: %d\n\n'
+                'Команды: «видеомост вкл» / «видеомост выкл» · «видеомост чат +<id>» / «чат -<id>»\n'
+                'Пока выключен — ссылки не трогаю и в канал не пишу.'
+                % ('ВКЛЮЧЁН' if н['вкл'] else 'выключен',
+                   н['чаты'] or 'джамаат и твоя личка', len(_ВМ_ЖДЁМ)))
+    if t in ('видеомост вкл', 'видеомост включи', 'видеомост on'):
+        н = _вм_настройки()
+        н['вкл'] = True
+        _вм_сохранить(н)
+        return ('✅ Видеомост ВКЛЮЧЁН. Увижу ссылку — отправлю её в Muslim Live, дождусь видео '
+                'от качалки и верну ТУДА, ОТКУДА ПРИШЛА ССЫЛКА, ответом на то самое сообщение. '
+                'Временный пост в Muslim Live уберу.\n'
+                '⚠️ Если бот не админ в @muslimlive с правом публиковать и удалять — скажу '
+                'первым же разом, а не промолчу.')
+    if t in ('видеомост выкл', 'видеомост выключи', 'видеомост off'):
+        н = _вм_настройки()
+        н['вкл'] = False
+        _вм_сохранить(н)
+        return '✅ Видеомост выключен. Ссылки больше не трогаю.'
+    m = re.match(r'^видеомост\s+чат\s+([+\-]?)(-?\d+)$', t)
+    if m:
+        н = _вм_настройки()
+        ид = int(m.group(2))
+        if m.group(1) == '-':
+            н['чаты'] = [x for x in н['чаты'] if int(x) != ид]
+        elif ид not in [int(x) for x in н['чаты']]:
+            н['чаты'].append(ид)
+        _вм_сохранить(н)
+        return '✅ Слушаю чаты: %s' % (н['чаты'] or 'джамаат и твоя личка')
+    return None
+
+
+def _вм_убрать_старое():
+    try:
+        сейчас = time.time()
+        for k in [k for k, v in _ВМ_ЖДЁМ.items()
+                  if сейчас - float((v or {}).get('когда') or 0) > _ВМ_СРОК]:
+            _ВМ_ЖДЁМ.pop(k, None)
+    except Exception:
+        pass
+
+
+async def видеомост(update, context):
+    """Три роли в одном обработчике — по тому, откуда пришло сообщение."""
+    try:
+        m = getattr(update, 'effective_message', None)
+        if not m:
+            return
+        чат = int(getattr(m.chat, 'id', 0) or 0)
+        # Дешёвое раньше дорогого: не из обсуждения и не похоже на ссылку — настройки даже
+        # не спрашиваем. Обработчик висит на КАЖДОМ сообщении, и его цена должна быть нулевой.
+        if чат != MUSLIM_CHAT_ID:
+            _т = (m.text or m.caption or '')
+            if not _т or not _ВМ_ССЫЛКА.search(_т):
+                return
+        н = _вм_настройки()
+        _вм_убрать_старое()
+
+        # ── ③④ видео от качалки в обсуждении ──────────────────────────────────────────────
+        if чат == MUSLIM_CHAT_ID:
+            # ② копия нашего поста прилетела в обсуждение сама — сшиваем по номеру исходного
+            if getattr(m, 'is_automatic_forward', False):
+                исх = getattr(m, 'forward_from_message_id', None)
+                з = _ВМ_ЖДЁМ.pop('лайв:%s' % исх, None)
+                if з:
+                    _ВМ_ЖДЁМ[int(m.message_id)] = з
+                return
+            видео = getattr(m, 'video', None) or getattr(m, 'animation', None)
+            отв = getattr(m, 'reply_to_message', None)
+            if not (видео and отв):
+                return
+            з = _ВМ_ЖДЁМ.pop(int(отв.message_id), None)
+            if not з:
+                return
+            # ⑤ ВОЗВРАЩАЕМ ТУДА, ОТКУДА ПРИШЛО (поправка владельца #1135), ответом на то самое
+            # сообщение: видео без вопроса, к которому оно относится, в общем чате — загадка.
+            _беда = None
+            try:
+                await context.bot.send_video(з['откуда'], video=видео.file_id,
+                                             caption=з['url'][:900],
+                                             reply_to_message_id=(з.get('смс') or None),
+                                             supports_streaming=True)
+            except Exception as e:
+                _беда = e
+                # Пробуем без привязки: исходное сообщение могли удалить, а видео нужно.
+                try:
+                    await context.bot.send_video(з['откуда'], video=видео.file_id,
+                                                 caption=з['url'][:900],
+                                                 supports_streaming=True)
+                    _беда = None
+                except Exception as e2:
+                    _беда = e2
+            if _беда is not None:
+                # Молчать нельзя: человек ждёт видео, а его не будет.
+                for ч in (OWNER_ID, LOG_CHAT_ID):
+                    try:
+                        await context.bot.send_message(
+                            ч, '🎬 Видеомост: видео скачалось, но вернуть в чат %s не вышло.\n'
+                               'Причина: %s\nСсылка: %s'
+                               % (з['откуда'], str(_беда)[:200], з['url']))
+                    except Exception:
+                        pass
+                return
+            # временный пост в Muslim Live убираем ТОЛЬКО после удачной доставки
+            try:
+                await context.bot.delete_message(MUSLIM_LIVE_CHAT, з['лайв'])
+            except Exception as e:
+                try:
+                    await context.bot.send_message(
+                        OWNER_ID, '🎬 Видео доставлено, а временный пост в @muslimlive убрать '
+                                  'не смог: %s' % str(e)[:160])
+                except Exception:
+                    pass
+            return
+
+        # ── ① ссылка в разрешённом чате ───────────────────────────────────────────────────
+        if not н['вкл']:
+            return
+        разрешён = (чат == OWNER_ID) or (чат == JAMAAT_RU_CHAT_ID) \
+            or (чат in [int(x) for x in н['чаты']])
+        if not разрешён:
+            return
+        мс = _ВМ_ССЫЛКА.search(m.text or m.caption or '')
+        if not мс:
+            return
+        url = мс.group(0).rstrip('.,);]')
+        try:
+            пост = await context.bot.send_message(MUSLIM_LIVE_CHAT, url,
+                                                  disable_web_page_preview=False)
+        except Exception as e:
+            try:
+                await m.reply_text('🎬 Видеомост: не смог отправить ссылку в @muslimlive — %s\n'
+                                   'Проверь, админ ли бот в канале.' % str(e)[:200])
+            except Exception:
+                pass
+            return
+        # До прихода копии в обсуждение помним по номеру поста канала. ИСТОЧНИК запоминаем
+        # здесь и только здесь: позже узнать, откуда пришла ссылка, будет уже негде.
+        _ВМ_ЖДЁМ['лайв:%s' % пост.message_id] = {
+            'url': url, 'лайв': int(пост.message_id), 'откуда': чат,
+            'смс': int(getattr(m, 'message_id', 0) or 0), 'когда': time.time()}
+    except Exception as e:
+        try:
+            print('видеомост:', e)
+        except Exception:
+            pass
+
+
 app.add_handler(MessageHandler(filters.ChatType.GROUPS | filters.ChatType.CHANNEL,
                                _чат_в_реестр), group=9)
+# Видеомост живёт СВОЕЙ группой обработчиков: он не должен ни перехватывать обычную
+# работу бота, ни падать вместе с ней. Своя группа — свой поток исключений.
+app.add_handler(MessageHandler(filters.ALL, видеомост), group=11)
 async def _on_error(update, context):
     err = str(context.error); print("ERR:", err)
     if 'Conflict' in err:  # две копии бота — не спамим, settle сам
