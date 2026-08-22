@@ -151,6 +151,12 @@ window.тихоОтчёт = function () {
      Одна строка возвращает их в общий строй; у кого шрифт задан своим правилом (моноширинный номер,
      арабская вставка с _AF) — тот его и сохраняет, класс и inline сильнее селектора по тегу. */
   button,input,select,textarea,optgroup{font-family:inherit}
+  /* #604 (скрин владельца: тап по «sunnah.com #1663» вместо перехода ВЫДЕЛИЛ текст — видны синие
+     маркеры выделения). На телефоне чуть задержанное касание по надписи начинает выделение, и нажатие
+     до обработчика не доходит. Управляющим элементам выделение не нужно — текст хадиса и перевод
+     остаются выделяемыми, их это правило не касается. */
+  button,.chip,.mini,.go,.tab,.col,.tr-btn,.gear,.snNarr,.shamNarr,.nWiki,.nWikiS,.nWikiAv,.narrShare,.ourId,.partCount,.ourColsJump{
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
   /* фон закреплён по ВЫСОТЕ экрана (100vh), а не inset:0 — иначе при появлении клавиатуры низ «съезжает» и фон/лого прыгает */
   body::before{content:'';position:fixed;top:0;left:0;right:0;height:100vh;z-index:-2;background:url('./bg.jpg') no-repeat center top;background-size:cover}
   body::after{content:'';position:fixed;top:0;left:0;right:0;height:100vh;z-index:-1;background:linear-gradient(rgba(9,13,21,.74),rgba(6,9,14,.90))}
@@ -841,7 +847,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1460</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1461</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1707,7 +1713,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1460';
+const APPVER = 'v1461';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -11894,6 +11900,10 @@ function loadNarrNames(){ if(_narrNames && (_narr2Ok || _narr2Попыток>=3)
     return _narrNames; }).catch(()=>{_narrNames=null; _narrNamesP=null; return [];}); return _narrNamesP; }
 function _narrCanon(s){ s=(s||'').replace(/[ً-ْـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه'); return s.replace(/\s+/g,' ').trim(); }
 
+/* Единственное место, где строится адрес равия в موسوعة الرواة (المكتبة الشاملة). Разметка чипа
+   несёт наш номер в `data-id`; если когда-нибудь появится готовый `data-u` — он и победит. */
+function _адресШамелаРавий(el){ try{ const u=el&&el.dataset&&el.dataset.u; if(u) return u;
+  const id=(el&&el.dataset&&el.dataset.id)||''; return id?('https://shamela.ws/narrator/'+id):''; }catch(e){ return ''; } }
 /* ЕДИНЫЙ отбор огласованной формы имени. Правило жило в ДВУХ местах — в карточке равия и в подсказке
    поиска, — и в подсказке его не было вовсе: карточка уже показывала «عبد الله التيمي», а подсказка
    на тот же запрос предлагала «عَبْدُ الأَعْلَى» — другого человека. Один закон — один писатель. */
@@ -14469,7 +14479,10 @@ async function openNarrTable(opts){
       const voc=(_narrVoc&&(_narrVoc[String(r[0])]||_narrVoc[r[1]]))||'';   // ключ voc = ID равия (M361c)
       const rk=(r[4]||'').trim(); const rc=/ثق|أوثق|حافظ|إمام/.test(rk)?'#4eb573':/صدوق/.test(rk)?'#9fd3a8':/صحاب/.test(rk)?'#e8c35a':/ضعيف|متروك|كذاب|منكر/.test(rk)?'#e07f7f':'#9aa7b5';
       let ruN=''; try{ ruN=arNameRu(r[1],4); }catch(e){_тихо(e,"L12239")}                       // M467: перевод имени
-      const wk=_WIKI_NARR_OK?(()=>{ const _x=(window._narrWiki||{})[String(r[0])]; return _wikiOk(_x)?_x:null; })():null;   // v1097: только выверенные            // M467/TB-26: до валидации — скрыто
+      /* строка ЭТОЙ таблицы — [номер, полное имя, год смерти, число] (проверено на живой строке:
+         [3,"آدم بن أبي إياس …",220,42]), а не запись карточки [номер, имя, кунья, нисба]. Значит
+         сверять заголовок статьи можно только с ИМЕНЕМ — так и передаём, не выдавая год за нисбу. */
+      const wk=_WIKI_NARR_OK?(()=>{ const _x=(window._narrWiki||{})[String(r[0])]; return _wikiOk(_x, [r[0], r[1], '', ''])?_x:null; })():null;   // v1097: только выверенные            // M467/TB-26: до валидации — скрыто
       d.innerHTML='<span style="flex:none;width:56px;font-size:calc(11px * var(--txtScale,1));color:#5b87b5">#'+r[0]+(cnt?('<b style="display:block;color:#9fd3a8">×'+(cnt.get(r[0])||0)+'</b>'):'')
         +'<span class="ntT" data-k="t" data-id="'+r[0]+'" data-nm="'+esc(r[1])+'" title="От кого передавал (учителя)" style="display:block;cursor:pointer;font-size:calc(12px * var(--txtScale,1));margin-top:3px">👨‍🏫</span>'
         +'<span class="ntT" data-k="s" data-id="'+r[0]+'" data-nm="'+esc(r[1])+'" title="Кто от него передавал (ученики)" style="display:block;cursor:pointer;font-size:calc(12px * var(--txtScale,1))">👨‍🎓</span></span>'
@@ -14541,7 +14554,7 @@ function loadMuslimRiw(){ if(_muslimRiw) return Promise.resolve(_muslimRiw); if(
   _muslimRiwP=fetch('./muslim_riw.json?v='+APPVER).then(r=>r.ok?r.json():{}).then(j=>{ _muslimRiw=j||{}; return _muslimRiw; }).catch(()=>{ _muslimRiw={}; return _muslimRiw; }); return _muslimRiwP; }
 // клики: «база Мактабы» → shamela.ws/narrator/<id>; sunnah.com → sunnah.com/narrator/<sid>; «#id» → наша таблица
 document.addEventListener('click', e=>{
-  const sh=e.target&&e.target.closest&&e.target.closest('.shamNarr'); if(sh){ e.preventDefault(); e.stopPropagation(); try{ openLink('https://shamela.ws/narrator/'+sh.dataset.id); }catch(_e){ window.open('https://shamela.ws/narrator/'+sh.dataset.id,'_blank'); } return; }
+  const sh=e.target&&e.target.closest&&e.target.closest('.shamNarr'); if(sh){ e.preventDefault(); e.stopPropagation(); const _u=_адресШамелаРавий(sh); try{ openLink(_u); }catch(_e){ window.open(_u,'_blank'); } return; }
   const sn=e.target&&e.target.closest&&e.target.closest('.snNarr'); if(sn){ e.preventDefault(); e.stopPropagation(); try{ openLink(sn.dataset.u); }catch(_e){ window.open(sn.dataset.u,'_blank'); } return; }   // #141 sunnah.com
   const nt=e.target&&e.target.closest&&e.target.closest('.ntOpen'); if(nt){ e.stopPropagation();
     try{ document.querySelectorAll('.modal').forEach(m=>{ if(m.id!=='ntModal' && m.style.display && m.style.display!=='none') m.style.display='none'; }); }catch(_e){_тихо(_e,"L12315")}   // #12586: таблица (ntModal) открывалась ЗА читалкой/карточкой — закрываем остальные, чтобы была видна
@@ -14827,7 +14840,20 @@ document.addEventListener('click', e=>{ const b=e.target&&e.target.closest&&e.ta
 // 14 071 — нет (в т.ч. 556 служебных страниц вики и 155 статей о ПЛЕМЕНАХ вместо людей).
 // Данные НЕ удалены (владелец: «просто так выкидывать не можем») — помечены v=1/v=0 (wiki_mark_verified.py).
 // Гард: значок «W» даём ТОЛЬКО при v===1. Невыверенная привязка = не показываем как «его статью» (честность).
-function _wikiOk(w){ try{ return !!(w && w.u && w.v===1 && !w.bad); }catch(e){ return false; } }
+/* #589 (владелец: «ссылки Википедия не совпадают с карточкой личностью; покажи отчёт, по которому
+   кто-то приводил в соответствие и проверял»). Отчёт: в narrators_wiki.json 19 031 привязка, показываем
+   только помеченные выверенными — 1 578. Я сверил их сам, 22.08.2026: у 1 165 заголовок статьи по-арабски,
+   и его можно сравнить со словами имени равия. Совпало 1 146 (98,4%), НЕ совпало 19 — и это настоящие
+   промахи: «محسن الشريقي» и «مؤيد النفيعي» — наши современники, «النفيسية» — вовсе не человек.
+   Поэтому проверка теперь идёт не только по метке в данных, но и на ГЛАЗАХ у показа: арабский заголовок
+   обязан делить с записью равия хотя бы одно значащее слово. Заголовки по-русски и по-английски этой
+   меркой не проверить — они остаются на прежней метке, и это сказано честно, а не замолчано. */
+function _wikiOk(w, c){ try{
+  if(!(w && w.u && w.v===1 && !w.bad)) return false;
+  const t=String(w.t||'');
+  if(c && /[؀-ۿ]/.test(t) && !_формаЭтого(t, c)) return false;
+  return true;
+}catch(e){ return false; } }
 const _WIKI_NARR_OK=true;   // #258 (С32): включено на ВЫВЕРЕННЫХ ссылках v7 (резолв реальной статьи ru→en→ar, тёзка-проверка: ism+отец+⊆+различающий токен+эпоха+категория). Король Саудии/Пророк/эмир Кордовы отсекаются. narrators_wiki.json = narrators_wiki_v7
 let _narrWiki=null;
 function loadNarrWiki(){ if(_narrWiki) return Promise.resolve(_narrWiki);
@@ -16794,7 +16820,7 @@ async function showNarratorCardLocal(name, host, forceId){
   // #439 (владелец: «отметь каждое непроверенное имя что это неточный перевод»): транслит выверен ТОЛЬКО если из
   // Википедии или курированной карты _NARR_RU; голый arNameRu — авто, помечаем «авто ⚠».
   let _ruSh='', _ruShVer=false; try{ _ruSh=arNameRu(_hdrName,5); }catch(e){_тихо(e,"L14138")}
-  if(_WIKI_NARR_OK && _wikiOk(_wk) && _wk.t && /[А-Яа-яЁё]/.test(_wk.t)){ _ruSh=_wk.t; _ruShVer=true; }   // v1097: невыверенная привязка давала ЧУЖОЕ русское имя в карточку
+  if(_WIKI_NARR_OK && _wikiOk(_wk, c) && _wk.t && /[А-Яа-яЁё]/.test(_wk.t)){ _ruSh=_wk.t; _ruShVer=true; }   // v1097: невыверенная привязка давала ЧУЖОЕ русское имя в карточку
   try{ const _kunNorm=(x)=>String(x||'').replace(/^اب[يا] /,'ابو '); const _cks=[canon(_hdrName||'').trim(), canon(_c1||'').trim()]; _cks.push(_kunNorm(_cks[0]), _kunNorm(_cks[1])); for(const k of _cks){ if(_NARR_RU[k]){ _ruSh=_NARR_RU[k]; _ruShVer=true; break; } } }catch(e){_тихо(e,"L14140")}
   let _ruNm=''; try{ _ruNm=arNameRu(_c1,12).replace(/\s+ибн$/i,''); }catch(e){_тихо(e,"L14141")}   // #457: имя обрывалось на висящем «ибн» у длинных генеалогий (лимит был 7 слов) — поднят лимит + подчищен возможный хвост
   let _td=null,_inSahT=false; try{ _inSahT=(_flags==='bm'); }catch(e){_тихо(e,"L14142")}
@@ -16818,7 +16844,7 @@ async function showNarratorCardLocal(name, host, forceId){
       +'<div style="flex:none"><div style="position:relative;width:62px;height:62px">'
         +'<div style="width:62px;height:62px;border-radius:50%;border:2px solid #2ea043;background:#0f1712;display:flex;align-items:center;justify-content:center;font-size:30px;color:#cfeada;overflow:hidden">'+_avHtml+'</div>'
         // #472 (владелец, «сто раз просил Википедия в круг передатчика»): значок W — прямо НА кружке аватара (угол), кликабелен. Кнопка выше (у ID) осталась — не убираем то, что уже работает.
-        +((_WIKI_NARR_OK&&_wikiOk(_wk))?('<span class="nWikiAv" data-u="'+esc(_wk.u)+'" title="Википедия" style="position:absolute;right:-4px;bottom:-4px;width:20px;height:20px;border-radius:50%;background:#1c2128;border:1.5px solid #3a434d;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:Georgia,serif;font-size:calc(11px * var(--txtScale,1));font-weight:700;color:#e9eef3">W</span>'):'')
+        +((_WIKI_NARR_OK&&_wikiOk(_wk, c))?('<span class="nWikiAv" data-u="'+esc(_wk.u)+'" title="Википедия" style="position:absolute;right:-4px;bottom:-4px;width:20px;height:20px;border-radius:50%;background:#1c2128;border:1.5px solid #3a434d;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:Georgia,serif;font-size:calc(11px * var(--txtScale,1));font-weight:700;color:#e9eef3">W</span>'):'')
       +'</div></div>'
       +'<div style="flex:1;min-width:190px">'
         // 10.07 (владелец, эталон sunnah.com «سمي القرشي (سمي مولى أبي بكر)»): главный заголовок = канон.имя + различающая нисба, полная форма (мавля и т.п.) — подписью в скобках
@@ -16836,7 +16862,7 @@ async function showNarratorCardLocal(name, host, forceId){
           +'<span class="ourId" title="Наш внутренний номер равия — нажми, чтобы скопировать" style="cursor:pointer;font-size:calc(13px * var(--txtScale,1));font-weight:700;color:#7fe0a8;background:rgba(46,160,67,.16);border:1px solid #2ea043;border-radius:7px;padding:2px 10px;letter-spacing:.2px">🆔 наш №'+c[0]+'</span>'   // #владелец 01.07.2026: не писать «Muslimoon» — просто наш номер
           +'<span class="narrShare" title="Поделиться карточкой — ссылка откроет приложение на этом же передатчике" style="cursor:pointer;font-size:calc(11px * var(--txtScale,1));color:var(--link);border:1px solid var(--border);border-radius:6px;padding:2px 8px">📤 Поделиться</span>'
           // #493 (владелец, «Wikipedia+sunnah.com наверх к ID, вернуть надпись Википедия»): перенесены сюда из нижнего ряда
-          +((_WIKI_NARR_OK&&_wikiOk(_wk))?('<span class="nWiki" data-u="'+esc(_wk.u)+'" title="Википедия" style="cursor:pointer;font-size:calc(11px * var(--txtScale,1));color:#e9eef3;border:1px solid #3a434d;background:#1c2128;border-radius:6px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px"><b style="font-family:Georgia,serif;font-size:calc(13px * var(--txtScale,1))">W</b> Википедия</span>'):('<span class="nWikiS" data-q="'+encodeURIComponent((_ruSh&&/[А-Яа-яЁё]/.test(_ruSh))?_ruSh:((c[1]||'').replace(/[ً-ْٰ]/g,'').split(' ').slice(0,4).join(' ')))+'" data-ru="'+((_ruSh&&/[А-Яа-яЁё]/.test(_ruSh))?'1':'')+'" title="Искать в Википедии" style="cursor:pointer;font-size:calc(11px * var(--txtScale,1));color:#cfd6dc;border:1px dashed #3a434d;background:#1c2128;border-radius:6px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px"><b style="font-family:Georgia,serif;font-size:calc(13px * var(--txtScale,1))">W</b> Википедия</span>'))
+          +((_WIKI_NARR_OK&&_wikiOk(_wk, c))?('<span class="nWiki" data-u="'+esc(_wk.u)+'" title="Википедия" style="cursor:pointer;font-size:calc(11px * var(--txtScale,1));color:#e9eef3;border:1px solid #3a434d;background:#1c2128;border-radius:6px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px"><b style="font-family:Georgia,serif;font-size:calc(13px * var(--txtScale,1))">W</b> Википедия</span>'):('<span class="nWikiS" data-q="'+encodeURIComponent((_ruSh&&/[А-Яа-яЁё]/.test(_ruSh))?_ruSh:((c[1]||'').replace(/[ً-ْٰ]/g,'').split(' ').slice(0,4).join(' ')))+'" data-ru="'+((_ruSh&&/[А-Яа-яЁё]/.test(_ruSh))?'1':'')+'" title="Искать в Википедии" style="cursor:pointer;font-size:calc(11px * var(--txtScale,1));color:#cfd6dc;border:1px dashed #3a434d;background:#1c2128;border-radius:6px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px"><b style="font-family:Georgia,serif;font-size:calc(13px * var(--txtScale,1))">W</b> Википедия</span>'))
           // владелец («зачем два, надо в рамках одной ссылки писать ид и знак»): было — рядом с ID лежал ГОЛЫЙ
           // некликабельный «sunnah #NNNN», а НАСТОЯЩАЯ кликабельная кнопка sunnah.com — отдельно в той же строке.
           // Слито в ОДНУ кнопку: номер теперь часть подписи самой рабочей ссылки.
@@ -17000,7 +17026,13 @@ async function showNarratorCardLocal(name, host, forceId){
     // полагались ТОЛЬКО на делегированный обработчик на document, а в модалке карточки клик до него не доходил.
     // Вешаем onclick НАПРЯМУЮ (как у .nWiki) — надёжно, не зависит от делегирования.
     hdr.querySelectorAll('.snNarr').forEach(b=>b.onclick=(e)=>{ try{e.stopPropagation();}catch(_){_тихо(_,"L14344")} try{ openLink(b.dataset.u); }catch(e2){ try{ window.open(b.dataset.u,'_blank'); }catch(_e){_тихо(_e,"L14344")} } });
-    hdr.querySelectorAll('.shamNarr').forEach(b=>b.onclick=(e)=>{ try{e.stopPropagation();}catch(_){_тихо(_,"L14345")} try{ openLink(b.dataset.u); }catch(e2){ try{ window.open(b.dataset.u,'_blank'); }catch(_e){_тихо(_e,"L14345")} } });
+    /* #604 (владелец: «ссылка на сунна ком И МАКТАБА на карточку передатчика не работает»). У чипа
+       موسوعة الرواة адрес НЕ хранится: в разметке лежит `data-id` — наш номер равия, — а этот
+       обработчик читал `data-u`, которого там нет, и звал openLink(undefined). Проверено на боевом
+       щелчком по чипу: sunnah.com открывал верный адрес, Мактаба — «undefined». Дыра ровно та,
+       про которую мы уже знаем: один чип, ДВА обработчика, и они расходятся в том, где лежит адрес.
+       Адрес теперь строит один помощник, и оба обработчика зовут его. */
+    hdr.querySelectorAll('.shamNarr').forEach(b=>b.onclick=(e)=>{ try{e.stopPropagation();}catch(_){_тихо(_,"L14345")} const _u=_адресШамелаРавий(b); try{ openLink(_u); }catch(e2){ try{ window.open(_u,'_blank'); }catch(_e){_тихо(_e,"L14345")} } });
     hdr.querySelectorAll('.nWikiAv').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); try{ openLink(b.dataset.u); }catch(_e){_тихо(_e,"L14346")} });   // #472: значок на кружке аватара
     try{ const _sb=hdr.querySelector('#sahBadge'); if(_sb) _sb.onclick=(e)=>{ e.stopPropagation();
       let _ex=hdr.querySelector('#sahWhy');
