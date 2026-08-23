@@ -17753,13 +17753,32 @@ def _cf_creds():
     # .strip() на ИМЕНИ обязателен: 26.07.2026 владелец завёл переменную, а эндпоинт всё равно молчал —
     # диагностика показала имя «CLOUDFLARE_ACCOUNT_ID » с ПРОБЕЛОМ на конце (проскочил при вводе в панель).
     # Для системы это другое имя. Чистим и имя, и значение — чтобы такая опечатка больше ничего не ломала.
-    низ = {k.strip().lower(): (v or '').strip() for k, v in os.environ.items()}
-    имена_ток = ('cloudflare_m_api_token', 'cloudflare_api_token', 'cloudflare_api_key',
-                 'cloudflare_token', 'cf_token', 'cf_api_token')
-    имена_акк = ('cloudflare_m_account_id', 'cloudflare_account_id', 'cf_account_id', 'cloudflare_account')
-    tok = next((низ[n] for n in имена_ток if низ.get(n)), '')
-    acc = next((низ[n] for n in имена_акк if низ.get(n)), '')
-    return tok, acc
+    # 🔴 23.08.2026, слово владельца: «ключ у меня был рабочий» — и он был прав.
+    # ЗДЕСЬ токен и номер аккаунта брались ДВУМЯ НЕЗАВИСИМЫМИ СПИСКАМИ: токен — первое непустое
+    # из шести имён, аккаунт — первое непустое из четырёх. Заполнена одна половина второго
+    # аккаунта (например CLOUDFLARE_M_ACCOUNT_ID без своего токена) — и код спаривал рабочий
+    # токен первого аккаунта с номером второго. Cloudflare отвечал ровно тем, что мы видели:
+    # «not authorized for that account» — то есть претензия к ПАРЕ, а не к ключу.
+    # Тот же сбой уже был 26.07.2026 и держал RAG полдня; тогда завели _cf_пары с правилом
+    # «токен и номер берутся ТОЛЬКО ПАРОЙ», но эта функция осталась жить по-старому и ходила
+    # мимо правила. Больше собирать пару вручную негде: здесь единственный вход, и он берёт
+    # ПЕРВУЮ ГОТОВУЮ ПАРУ. Смешать половинки теперь физически нечем.
+    пары = _cf_пары()
+    return пары[0] if пары else ('', '')
+
+
+# ⛔ ЗАКОН ЭТОГО МЕСТА (владелец 23.08.2026: «пропиши туда, чтобы потом не нарушалось»).
+# Токен Cloudflare и номер аккаунта — ОДНО ЦЕЛОЕ. Их нельзя брать из разных переменных:
+# токен, выданный на аккаунт A, для аккаунта B — чужой, и сервис отвечает «not authorized
+# for that account». Список пар живёт ЗДЕСЬ и только здесь; любой, кому нужны ключи, зовёт
+# _cf_пары() (все пары, чтобы перебрать) или _cf_creds() (первая готовая пара). Заводить
+# рядом свой разбор переменных запрещено — именно так и родились обе поломки, 26.07 и 23.08.
+_CF_ИМЕНА_ПАР = (('cloudflare_api_token', 'cloudflare_account_id'),        # основной
+                 ('cloudflare_m_api_token', 'cloudflare_m_account_id'),    # второй аккаунт
+                 ('cf_token', 'cloudflare_account_id'),                    # запись из muslimoon_api.env
+                 ('cloudflare_api_key', 'cloudflare_account_id'),
+                 ('cloudflare_token', 'cloudflare_account_id'),
+                 ('cf_api_token', 'cf_account_id'))
 
 
 def _cf_пары():
@@ -17776,17 +17795,22 @@ def _cf_пары():
     """
     низ = {k.strip().lower(): (v or '').strip() for k, v in os.environ.items()}
     пары = []
-    for тн, ан in (('cloudflare_api_token', 'cloudflare_account_id'),        # основной
-                   ('cloudflare_m_api_token', 'cloudflare_m_account_id'),    # второй аккаунт
-                   ('cf_token', 'cloudflare_account_id'),                    # запись из muslimoon_api.env
-                   ('cloudflare_api_key', 'cloudflare_account_id')):
+    for тн, ан in _CF_ИМЕНА_ПАР:
         t, a = низ.get(тн, ''), низ.get(ан, '')
         if t and a and (t, a) not in пары:
             пары.append((t, a))
+    # Одинокая половина — самая частая беда этого места: она не даёт пары и раньше молча
+    # исчезала. Теперь о ней слышно: имя (без значения!) уходит в журнал сервера, чтобы
+    # владелец увидел, какую переменную он завёл без напарника.
     if not пары:
-        t, a = _cf_creds()
-        if t and a:
-            пары.append((t, a))
+        try:
+            for тн, ан in _CF_ИМЕНА_ПАР:
+                if низ.get(тн) and not низ.get(ан):
+                    print('CLOUDFLARE: есть %s, но нет %s — пара не собирается' % (тн, ан))
+                if низ.get(ан) and not низ.get(тн):
+                    print('CLOUDFLARE: есть %s, но нет %s — пара не собирается' % (ан, тн))
+        except Exception:
+            pass
     return пары
 
 
@@ -17950,25 +17974,36 @@ def _rag_query_vec_sync(q):
     if _к in _ВЕК_КЭШ:                      # уже спрашивали — лимит не тратим
         _ВЕК_СЧЁТ['из_кэша'] += 1
         return _ВЕК_КЭШ[_к]
-    tok, acc = _cf_creds()
-    if not tok or not acc:
+    # 🔴 23.08.2026. Здесь бралась ОДНА пара — и если она не подошла, поиск по смыслу вставал
+    # у всех, хотя вторая пара рядом и рабочая. Перебираем ВСЕ пары: первая, что отдала вектор,
+    # и выигрывает. Пары берём у _cf_пары — своего разбора переменных тут нет и не будет.
+    пары = _cf_пары()
+    if not пары:
         _ВЕК_СЧЁТ['сбоев'] += 1
         return None
-    try:
-        url = 'https://api.cloudflare.com/client/v4/accounts/%s/ai/run/@cf/baai/bge-m3' % acc
-        j = requests.post(url, json={'text': [q[:600]]},
-                          headers={'Authorization': 'Bearer ' + tok}, timeout=30).json()
-        _в = ((j.get('result') or {}).get('data') or [None])[0]
-        if _в:
-            _ВЕК_СЧЁТ['новых'] += 1
-            if len(_ВЕК_КЭШ) < 3000:
-                _ВЕК_КЭШ[_к] = _в
-        else:
-            _ВЕК_СЧЁТ['сбоев'] += 1
-        return _в
-    except Exception:
-        _ВЕК_СЧЁТ['сбоев'] += 1
-        return None
+    _последняя_беда = ''
+    for tok, acc in пары:
+        try:
+            url = 'https://api.cloudflare.com/client/v4/accounts/%s/ai/run/@cf/baai/bge-m3' % acc
+            j = requests.post(url, json={'text': [q[:600]]},
+                              headers={'Authorization': 'Bearer ' + tok}, timeout=30).json()
+            _в = ((j.get('result') or {}).get('data') or [None])[0]
+            if _в:
+                _ВЕК_СЧЁТ['новых'] += 1
+                if len(_ВЕК_КЭШ) < 3000:
+                    _ВЕК_КЭШ[_к] = _в
+                return _в
+            _последняя_беда = str((j.get('errors') or j.get('messages') or ''))[:160]
+        except Exception as _e:
+            _последняя_беда = str(_e)[:160]
+    _ВЕК_СЧЁТ['сбоев'] += 1
+    if _последняя_беда:
+        try:
+            print('RAG вектор: ни одна из %d пар ключей не сработала · %s'
+                  % (len(пары), _последняя_беда))
+        except Exception:
+            pass
+    return None
 
 def _rag_find_sync(q, top=6):
     """Поиск по книге: косинус со всеми векторами + порог отсечки мусора."""
