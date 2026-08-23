@@ -12174,6 +12174,80 @@ def _скачать_видео_по_ссылке(url, потолок=_ВИДЕО
         return None, '', беда
 
 
+async def _озвучить_скачанное(update, context, путь_видео, текст):
+    """Русская озвучка к ролику, только что скачанному по ссылке (#1348).
+
+    Ролик уже отдан человеку — здесь идёт ДОБАВКА, поэтому любая неудача сообщается словами
+    и на этом кончается: портить уже удавшееся нельзя.
+    """
+    try:
+        if not is_owner(update):
+            return                       # платно; чужим — только по слову владельца
+        if re.search(r'без\s+(озвуч|перевод|дубляж|дубл)', текст or '', re.I):
+            return                       # попросил без озвучки — значит без озвучки
+        import shutil as _sh
+        _ст = None
+        try:
+            _ст = await update.message.reply_text(
+                '🎙 Ролик отдал, теперь делаю русскую озвучку — распознать речь, перевести, '
+                'наговорить и свести. Это несколько минут, пришлю следом.')
+        except Exception:
+            pass
+
+        async def _ход(т):
+            try:
+                if _ст:
+                    await _ст.edit_text(т)
+            except Exception:
+                pass
+
+        _папка = os.path.join(os.path.dirname(путь_видео), 'dub')
+        os.makedirs(_папка, exist_ok=True)
+        try:
+            _гот, _отч, _срт = await дубляж_видео(путь_видео, _папка, _ход, 0.15)
+        except Exception as _ед:
+            await _ход('🔴 Озвучка сорвалась: %s' % str(_ед)[:200])
+            return
+        if not _гот:
+            await _ход('🔴 Озвучка не собралась: %s' % (_отч or 'причина неизвестна'))
+            # Перевод уже сделан и оплачен — отдать субтитрами честнее, чем выбросить.
+            if _срт and os.path.exists(_срт):
+                try:
+                    with io.open(_срт, 'rb') as _фс:
+                        await context.bot.send_document(
+                            update.effective_chat.id, _фс, filename='perevod_ru.srt',
+                            caption='📝 Русские субтитры к ролику — перевод собрался, '
+                                    'подвела только сборка.',
+                            reply_to_message_id=update.message.message_id)
+                except Exception:
+                    pass
+            return
+        try:
+            with io.open(_гот, 'rb') as _фг:
+                await context.bot.send_video(
+                    update.effective_chat.id, _фг, caption=(_отч or '')[:1000],
+                    parse_mode='HTML', reply_to_message_id=update.message.message_id,
+                    supports_streaming=True,
+                    read_timeout=180, write_timeout=180, connect_timeout=60)
+            try:
+                if _ст:
+                    await _ст.delete()
+            except Exception:
+                pass
+        except Exception as _ео:
+            await _ход('🎙 Озвучил, а отправить не смог: %s' % str(_ео)[:180])
+        finally:
+            try:
+                _sh.rmtree(_папка, ignore_errors=True)
+            except Exception:
+                pass
+    except Exception as _е:
+        try:
+            print('озвучка скачанного: %s' % str(_е)[:200])
+        except Exception:
+            pass
+
+
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 🔴 15.08.2026, ПЕРЕНЕСЕНО В НАЧАЛО handle. Это объявление стояло на 340 строк НИЖЕ,
     # а звали его выше — в ветке «запомнить видео, присланное владельцем». Вложенное
@@ -12255,7 +12329,20 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # нужен либо зов по имени, либо ответ на моё же сообщение. В личке звать не нужно.
     try:
         _вс = _ВИДЕО_ССЫЛКА.search(text) if text else None
-        if _вс and _ВИДЕО_ПРОСЬБА.search(text):
+        # 🔴 23.08.2026, #1346: «ссылку скинул, должен был видео скинуть — че не работает».
+        # На двери стояло ТРИ замка: ссылка + слово-просьба + зов. Он открыл один и не
+        # получил даже отказа — молчание двери неотличимо от поломки.
+        # ГОЛАЯ ССЫЛКА — ЭТО И ЕСТЬ ПРОСЬБА. Сообщение, где кроме ссылки (и зова по имени)
+        # ничего нет, значит ровно одно: «на, возьми». Требовать сверху слова «скачай» —
+        # второй замок на двери, уже запертой первым. А вот если слова ЕСТЬ, а корня-просьбы
+        # среди них нет («смотрите какой ролик…»), — не лезем: человек делится, не заказывает.
+        _голая = False
+        if _вс:
+            _ост = _ВИДЕО_ССЫЛКА.sub(' ', text)
+            _ост = re.sub(r'@\w+|ботяр\w*|botyara', ' ', _ост, flags=re.I)
+            _ост = re.sub(r'[^0-9A-Za-zА-Яа-яЁё]+', '', _ост)
+            _голая = len(_ост) <= 3
+        if _вс and (_ВИДЕО_ПРОСЬБА.search(text) or _голая):
             _в_группе = getattr(update.effective_chat, 'type', '') in ('group', 'supergroup')
             _позвали = True
             if _в_группе:
@@ -12265,8 +12352,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Имя бота спрашиваем У САМОГО БОТА: своей константы с ним в файле нет, а
                 # выдуманное имя переменной — это мёртвая ветка, которая молча не сработает.
                 _ник = (getattr(getattr(context, 'bot', None), 'username', '') or '').lower()
+                # 🔴 ВЛАДЕЛЬЦУ ЗВАТЬ НЕ НУЖНО. Его #1246 («не лезь, когда не просят») держит
+                # группу для всех остальных — им зов по-прежнему обязателен, залить чат чужими
+                # роликами нечем. Но #1346 — тоже его слово, и оно про него самого.
                 _позвали = _мне or ('ботяр' in _низ) or ('botyara' in _низ) \
-                    or bool(_ник and ('@' + _ник) in _низ)
+                    or bool(_ник and ('@' + _ник) in _низ) or _хозяин(update)
             if _позвали:
                 _урл = _вс.group(0).rstrip('.,);]')
                 _ждём = None
@@ -12295,6 +12385,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 await _ждём.delete()
                         except Exception:
                             pass
+                        # 🎙 #1348: «просил скачивать видео с озвучкой русским переводом
+                        # сразу». Дубляж в боте есть с заявки #714, но его ветка ждёт
+                        # ВЛОЖЕНИЕ — до скачанного по ссылке она не доходила никогда.
+                        # Зову здесь: ролик уже у человека, озвучка идёт добавкой следом.
+                        await _озвучить_скачанное(update, context, _путь, text)
                     except Exception as _e:
                         _txt = ('🎬 Видео скачал, а отправить не смог: %s' % str(_e)[:180])
                         try:
