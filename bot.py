@@ -22667,6 +22667,34 @@ async def _api_serve(application=None):
                 # прочее (сеть, модель) повторять смысла нет.
                 if resp.status_code not in (401, 403, 429):
                     break
+            # 🔴 23.08.2026, слово владельца «реши вопрос сам». Обе пары Cloudflare отдают 401,
+            # а ключи — не моя рука. Но модель, которой посчитано ядро, есть НЕ ТОЛЬКО у них:
+            # bge-m3 раздаёт и NVIDIA NIM, ключ к нему у нас живой.
+            # ⚠️ «Любой другой эмбеддер» не годится: вектора разных моделей живут в разных
+            # пространствах, косинус между ними — бессмыслица. Спасает только ТА ЖЕ модель,
+            # поэтому ниже стоит проверка длины: не 1024 — выбрасываем, молчаливая подмена
+            # пространства испортила бы выдачу необъяснимо («поиск стал плохой», а почему — никак).
+            беда_nim = ''
+            if NVIDIA_NIM_API_KEY:
+                try:
+                    _resp = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: requests.post(
+                            'https://integrate.api.nvidia.com/v1/embeddings',
+                            headers={'Authorization': 'Bearer ' + NVIDIA_NIM_API_KEY,
+                                     'Content-Type': 'application/json'},
+                            json={'input': [q], 'model': 'baai/bge-m3', 'input_type': 'query',
+                                  'encoding_format': 'float', 'truncate': 'END'}, timeout=45))
+                    _j = _resp.json()
+                    _v = ((_j.get('data') or [{}])[0] or {}).get('embedding')
+                    if _v and len(_v) == 1024:
+                        return _cors(web.json_response({'v': [round(float(x), 5) for x in _v],
+                                                        'model': 'bge-m3', 'поставщик': 'nvidia-nim',
+                                                        'лимит': _лимиты}))
+                    беда_nim = 'NIM HTTP %s · %s' % (
+                        _resp.status_code,
+                        str(_j.get('detail') or _j.get('error') or ('длина %s' % (len(_v) if _v else 'нет')))[:110])
+                except Exception as _e:
+                    беда_nim = 'NIM: ' + str(_e)[:110]
             # Голое «empty» ничего не объясняет: за ним прячется и выбитая квота, и просроченный ключ,
             # и опечатка в имени модели. 26.07 полдня ушло на гадание — отдаём то, что сказал Cloudflare.
             выбита = последний_код == 429 or 'limit' in последняя_беда.lower()
@@ -22676,7 +22704,7 @@ async def _api_serve(application=None):
             # Поэтому отдаём готовую человеческую фразу и остаток — фронту нечего додумывать.
             return _cors(web.json_response({
                 'v': None, 'error': 'empty', 'код': последний_код, 'пар_пробовал': len(пары),
-                'причина': последняя_беда or 'ответ пуст',
+                'причина': последняя_беда or 'ответ пуст', 'запасной': беда_nim or 'не пробовали',
                 'квота_выбита': выбита, 'лимит': _лимиты,
                 'сообщение': ('Запросы к ИИ на сегодня кончились — это не поломка. '
                               'Обычный поиск работает как всегда, а поиск по смыслу вернётся завтра.'
