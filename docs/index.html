@@ -888,7 +888,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1474</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1475</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1760,7 +1760,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1474';
+const APPVER = 'v1475';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5770,6 +5770,94 @@ function attachFeed(res, getList, startShown, makeFn, guard){
     return b;
   }catch(e){ return null; }
 }
+/* ⬇️ #346 — КЛАСС, А НЕ СЛУЧАЙ (З-40). Лента выше научилась догружаться сама ещё в июне,
+   но это ОДИН список из тринадцати: «Показать ещё» руками осталась в цепях, тахридже, местах
+   в книгах, категориях, таблицах и подборках равиев. Владелец писал не про конкретный экран,
+   а про повадку приложения целиком — значит и чинить надо повадку, одним сторожем на все
+   кнопки разом, включая те, что появятся завтра.
+
+   ⚠️ Каждое исключение здесь названо поимённо — молчаливых нет:
+   · у кого есть СВОЙ наблюдатель (`_io`) — не трогаем: второй клик грузил бы двойную порцию;
+   · выключенные (disabled) и те, чья подпись стала «— всё показано —»;
+   · переключатели «▾ Показать ещё / ▴ Свернуть» — после нажатия подпись меняется на
+     «Свернуть», под правило больше не подходит, свернуть себя обратно сторож не может;
+   · после СОРОКА порций подряд отпускаем: список на 52 000 строк незачем разворачивать
+     целиком из-за одного касания — дальше человек жмёт сам.
+   · берём только ЛИСТ (элемент без детей-элементов): иначе под правило попал бы и всякий
+     div-обёртка, внутри которого лежит настоящая кнопка, и клик ушёл бы мимо. */
+(function самодогрузка(){
+  try{
+    if(!('IntersectionObserver' in window) || !('MutationObserver' in window)) return;
+    var ПРЕДЕЛ = 40, ОТСТУП = '300px', ПАУЗА = 600;
+    var ойк = function(e,м){ try{ if(typeof _тихо==='function') _тихо(e,м); }catch(_){} };
+    var годится = function(эл){
+      try{
+        if(!эл || эл.nodeType!==1 || эл.__сам || эл._io || эл.disabled) return false;
+        if(эл.children && эл.children.length) return false;          // только лист
+        if(эл.tagName!=='BUTTON' && typeof эл.onclick!=='function') return false;
+        var т = эл.textContent || '';
+        return /Показать\s+ещё/i.test(т) && !/Свернуть/i.test(т);
+      }catch(e){ return false; }
+    };
+    var свободен = function(эл){
+      var т = эл.textContent || '';
+      return эл.isConnected && !эл.disabled
+             && /Показать\s+ещё/i.test(т) && !/Свернуть/i.test(т);
+    };
+    var вооружить = function(эл){
+      if(!годится(эл)) return;
+      эл.__сам = { раз:0, io:null };
+      var наблюдать = function(){
+        try{
+          if(!свободен(эл) || эл.__сам.раз >= ПРЕДЕЛ){
+            if(эл.__сам.io) эл.__сам.io.disconnect();
+            return;
+          }
+          эл.__сам.io = new IntersectionObserver(function(вх){
+            for(var i=0;i<вх.length;i++){
+              if(!вх[i].isIntersecting) continue;
+              try{ эл.__сам.io.disconnect(); }catch(_){}
+              эл.__сам.раз++;
+              try{ эл.click(); }catch(e){ ойк(e,"L5772"); }
+              setTimeout(наблюдать, ПАУЗА);
+              break;
+            }
+          }, { rootMargin: ОТСТУП });
+          эл.__сам.io.observe(эл);
+        }catch(e){ ойк(e,"L5773"); }
+      };
+      наблюдать();
+    };
+    var обойти = function(корень){
+      try{
+        if(!корень || корень.nodeType!==1) return;
+        вооружить(корень);
+        var сп = корень.querySelectorAll ? корень.querySelectorAll('button,div,span,a') : [];
+        for(var i=0;i<сп.length;i++) вооружить(сп[i]);
+      }catch(e){ ойк(e,"L5774"); }
+    };
+    var ждёт = null, копилка = [];
+    var разобрать = function(){
+      ждёт = null;
+      var было = копилка; копилка = [];
+      for(var i=0;i<было.length;i++) обойти(было[i]);
+    };
+    var начать = function(){
+      обойти(document.body);
+      try{
+        new MutationObserver(function(зап){
+          for(var i=0;i<зап.length;i++){
+            var д = зап[i].addedNodes || [];
+            for(var j=0;j<д.length;j++) if(д[j] && д[j].nodeType===1) копилка.push(д[j]);
+          }
+          if(копилка.length && !ждёт) ждёт = setTimeout(разобрать, 400);
+        }).observe(document.body, { childList:true, subtree:true });
+      }catch(e){ ойк(e,"L5775"); }
+    };
+    if(document.body) начать();
+    else document.addEventListener('DOMContentLoaded', начать);
+  }catch(e){ /* сторож догрузки — удобство, а не работа приложения: упал молча, всё жмётся руками */ }
+})();
 // A-100/#346: при >200 результатов лента из _results (live total). Стартует с 200 (первые отрисованы стримингом).
 function ensureMoreBtn(seq){
   try{
