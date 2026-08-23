@@ -18033,10 +18033,41 @@ def _rag_query_vec_sync(q):
             _последняя_беда = str((j.get('errors') or j.get('messages') or ''))[:160]
         except Exception as _e:
             _последняя_беда = str(_e)[:160]
+    # 🔴 23.08.2026, слово владельца «реши вопрос сам». Обе пары ключей Cloudflare отдают 401,
+    # а ключи — не моё дело и не моя рука. Но модель, которой посчитано ядро, есть НЕ ТОЛЬКО у
+    # Cloudflare: bge-m3 раздаёт и NVIDIA NIM, и ключ к нему у нас уже живой.
+    # ⚠️ Почему нельзя брать «любой другой эмбеддер»: вектора разных моделей живут в разных
+    # пространствах, и косинус между ними — бессмыслица. Спасает только ТА ЖЕ модель.
+    # ⚠️ Поэтому же ниже стоит проверка длины: пришло не 1024 числа — значит модель другая,
+    # и такой вектор мы выбрасываем. Молчаливая замена пространства испортила бы всю выдачу,
+    # и понять это было бы невозможно — «поиск стал плохой», без причины.
+    if NVIDIA_NIM_API_KEY:
+        try:
+            _r = requests.post('https://integrate.api.nvidia.com/v1/embeddings',
+                               headers={'Authorization': 'Bearer ' + NVIDIA_NIM_API_KEY,
+                                        'Content-Type': 'application/json'},
+                               json={'input': [q[:600]], 'model': 'baai/bge-m3',
+                                     'input_type': 'query', 'encoding_format': 'float',
+                                     'truncate': 'END'}, timeout=40)
+            _j = _r.json()
+            _в = ((_j.get('data') or [{}])[0] or {}).get('embedding')
+            if _в and len(_в) == 1024:
+                _ВЕК_СЧЁТ['новых'] += 1
+                if len(_ВЕК_КЭШ) < 3000:
+                    _ВЕК_КЭШ[_к] = _в
+                try:
+                    print('RAG вектор: Cloudflare отказал, взял у NVIDIA NIM (bge-m3, 1024)')
+                except Exception:
+                    pass
+                return _в
+            _последняя_беда = ('NIM: ' + str(_j.get('detail') or _j.get('error') or
+                                             ('длина %s' % (len(_в) if _в else 'нет')))[:120])
+        except Exception as _e:
+            _последняя_беда = 'NIM: ' + str(_e)[:120]
     _ВЕК_СЧЁТ['сбоев'] += 1
     if _последняя_беда:
         try:
-            print('RAG вектор: ни одна из %d пар ключей не сработала · %s'
+            print('RAG вектор: ни один поставщик не дал вектор (пар Cloudflare %d) · %s'
                   % (len(пары), _последняя_беда))
         except Exception:
             pass
