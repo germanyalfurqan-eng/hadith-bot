@@ -22676,25 +22676,38 @@ async def _api_serve(application=None):
             # пространства испортила бы выдачу необъяснимо («поиск стал плохой», а почему — никак).
             беда_nim = ''
             if NVIDIA_NIM_API_KEY:
-                try:
-                    _resp = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda: requests.post(
-                            'https://integrate.api.nvidia.com/v1/embeddings',
-                            headers={'Authorization': 'Bearer ' + NVIDIA_NIM_API_KEY,
-                                     'Content-Type': 'application/json'},
-                            json={'input': [q], 'model': 'baai/bge-m3', 'input_type': 'query',
-                                  'encoding_format': 'float', 'truncate': 'END'}, timeout=45))
-                    _j = _resp.json()
-                    _v = ((_j.get('data') or [{}])[0] or {}).get('embedding')
-                    if _v and len(_v) == 1024:
-                        return _cors(web.json_response({'v': [round(float(x), 5) for x in _v],
-                                                        'model': 'bge-m3', 'поставщик': 'nvidia-nim',
-                                                        'лимит': _лимиты}))
-                    беда_nim = 'NIM HTTP %s · %s' % (
-                        _resp.status_code,
-                        str(_j.get('detail') or _j.get('error') or ('длина %s' % (len(_v) if _v else 'нет')))[:110])
-                except Exception as _e:
-                    беда_nim = 'NIM: ' + str(_e)[:110]
+                # HTTP 500 «Something went wrong» у NIM обычно означает не поломку, а несогласие
+                # с формой запроса: у разных сборок различаются truncate, input_type и то, принимает
+                # ли input строку или список. Перебираем ТРИ формы и в ответ пишем, какая прошла —
+                # чтобы в следующий раз не гадать, а прочитать.
+                _формы = (
+                    ('A', {'input': [q], 'model': 'baai/bge-m3', 'input_type': 'query',
+                           'encoding_format': 'float', 'truncate': 'NONE'}),
+                    ('B', {'input': [q], 'model': 'baai/bge-m3', 'input_type': 'query'}),
+                    ('C', {'input': q, 'model': 'baai/bge-m3', 'input_type': 'query',
+                           'encoding_format': 'float'}),
+                )
+                for _им, _тело in _формы:
+                    try:
+                        _resp = await asyncio.get_event_loop().run_in_executor(
+                            None, lambda т=_тело: requests.post(
+                                'https://integrate.api.nvidia.com/v1/embeddings',
+                                headers={'Authorization': 'Bearer ' + NVIDIA_NIM_API_KEY,
+                                         'Content-Type': 'application/json'},
+                                json=т, timeout=45))
+                        _j = _resp.json()
+                        _v = ((_j.get('data') or [{}])[0] or {}).get('embedding')
+                        if _v and len(_v) == 1024:
+                            return _cors(web.json_response({'v': [round(float(x), 5) for x in _v],
+                                                            'model': 'bge-m3',
+                                                            'поставщик': 'nvidia-nim/' + _им,
+                                                            'лимит': _лимиты}))
+                        беда_nim = '%s: HTTP %s · %s' % (
+                            _им, _resp.status_code,
+                            str(_j.get('detail') or _j.get('error') or _j.get('message')
+                                or ('длина %s' % (len(_v) if _v else 'нет')))[:90])
+                    except Exception as _e:
+                        беда_nim = '%s: %s' % (_им, str(_e)[:90])
             # Голое «empty» ничего не объясняет: за ним прячется и выбитая квота, и просроченный ключ,
             # и опечатка в имени модели. 26.07 полдня ушло на гадание — отдаём то, что сказал Cloudflare.
             выбита = последний_код == 429 or 'limit' in последняя_беда.lower()
