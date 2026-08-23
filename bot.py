@@ -15237,6 +15237,43 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     _info.append('/health → ошибка: %s' % str(_e)[:80])
                 await _мсообщ(update).reply_text('\n'.join(_info))
                 return
+            # 🔑 «раг ключи» (#1310, только владелец): какая ПАРА ключей Cloudflare и что именно
+            # отвечает сервис. Значений не показываем НИКОГДА — только имена переменных и хвост
+            # номера аккаунта. Заведено потому, что «Authentication error» одинаково звучит и при
+            # чужом аккаунте, и при токене без права Workers AI, а различить их со стороны нельзя.
+            if _low in ('раг ключи', 'ключи раг', 'раг ключ') and (is_owner(update) or _anon):
+                _стр = ['🔑 Ключи Cloudflare — что видит бот:']
+                try:
+                    низ = {k.strip().lower(): (v or '').strip() for k, v in os.environ.items()}
+                    for тн, ан in _CF_ИМЕНА_ПАР:
+                        т, а = низ.get(тн, ''), низ.get(ан, '')
+                        if not т and not а:
+                            continue
+                        _стр.append('· %s: %s | %s: %s'
+                                    % (тн, ('есть, %d знаков' % len(т)) if т else '❌ НЕТ',
+                                       ан, ('…%s' % а[-6:]) if а else '❌ НЕТ'))
+                    пары = _cf_пары()
+                    _стр.append('Собралось пар: %d' % len(пары))
+                    for н, (т, а) in enumerate(пары, 1):
+                        try:
+                            _u = 'https://api.cloudflare.com/client/v4/accounts/%s/ai/run/@cf/baai/bge-m3' % а
+                            _r = requests.post(_u, json={'text': ['проба']},
+                                               headers={'Authorization': 'Bearer ' + т}, timeout=25)
+                            _j = _r.json()
+                            _ok = bool(((_j.get('result') or {}).get('data') or [None])[0])
+                            _err = str(_j.get('errors') or '')[:150]
+                            _стр.append('  пара %d (…%s): HTTP %d · вектор %s%s'
+                                        % (н, а[-6:], _r.status_code, 'ЕСТЬ' if _ok else 'нет',
+                                           (' · ' + _err) if _err else ''))
+                        except Exception as _e:
+                            _стр.append('  пара %d (…%s): не дозвонился — %s' % (н, а[-6:], str(_e)[:70]))
+                    _стр.append('')
+                    _стр.append('«not authorized for that account» = токен не от этого аккаунта либо '
+                                'у него нет права Workers AI. Значения ключей тут не показываются.')
+                except Exception as _e:
+                    _стр.append('сбой проверки: %s' % str(_e)[:120])
+                await _мсообщ(update).reply_text(chr(10).join(_стр)[:3500])
+                return
             # 📊 ЖУРНАЛ КАЧЕСТВА ПОИСКА (#671, только владелец): «раг оценки».
             # Владелец просил не просто копить отметки «не туда», а видеть их — иначе журнал
             # существует только для меня, а не для него. Показываем счёт 👎/👍 и последние
