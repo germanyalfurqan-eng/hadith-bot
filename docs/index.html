@@ -873,7 +873,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1471</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1472</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1745,7 +1745,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1471';
+const APPVER = 'v1472';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -12655,6 +12655,61 @@ function _ragFb(card, q, bid, num, score){
   wrap.appendChild(bad); wrap.appendChild(good);
   return wrap;
 }
+/* #421: отметка «а это в Бухари ЕСТЬ» на пустом экране. Отдельная функция, а не ветка внутри
+   _ragFb, потому что случай другой по существу: там отмечают КОНКРЕТНУЮ карточку (есть книга,
+   номер, близость), здесь — САМ ЗАПРОС, у которого карточки не случилось. Общего у них только
+   адрес отправки. Возвращает готовый блок; вызывающий просто вставляет его.
+   Что уезжает на сервер: вопрос, вердикт «не нашлось», лучшая близость (та, что НЕ добрала до
+   порога) и необязательная строка «что ожидал найти». Близость тут — самое ценное: по ней
+   видно, промахнулись на волос или спрашивали о том, чего в книге нет. */
+function _ragНеНашлось(вопрос, лучшая){
+  const wrap=document.createElement('div');
+  wrap.style.cssText='margin-top:10px;display:flex;flex-direction:column;gap:6px';
+  if(!BACKEND_URL) return wrap;   // отправлять некуда — кнопку не рисуем, чтобы не обещать пустого
+  const кн=document.createElement('button'); кн.type='button';
+  кн.textContent='🔔 А это в Бухари есть — сообщить';
+  кн.title='Отметка уйдёт в журнал качества поиска: по таким промахам видно, где порог отсекает живое';
+  кн.style.cssText='align-self:flex-start;border:1px solid #6c5ce7;color:#d9ccff;background:rgba(108,92,231,.12);'
+    +'border-radius:9px;padding:7px 13px;font-size:calc(12.5px * var(--txtScale,1));font-weight:600;cursor:pointer;min-height:32px';
+  const итог=(txt)=>{ wrap.innerHTML=''; const sp=document.createElement('div');
+    sp.style.cssText='font-size:calc(12px * var(--txtScale,1));color:var(--hint)'; sp.textContent=txt; wrap.appendChild(sp); };
+  const послать=async(комментарий)=>{
+    итог('⏳ отправляю…');
+    try{
+      const r=await fetch(BACKEND_URL+'/rag_feedback',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({initData:INITDATA, q:String(вопрос||'').slice(0,300), verdict:'не нашлось',
+          bid:'bukhari', num:'', score:Number(лучшая)||0, comment:String(комментарий||'').slice(0,600)})});
+      const j=await r.json().catch(()=>null);
+      const серв=(j && typeof j.message==='string' && j.message.trim()) ? j.message.trim().slice(0,160) : '';
+      if(r.status===429){ итог('⏱ слишком часто'); toast(серв||'Отметок принимаю не больше 20 за 10 минут — чуть позже'); return; }
+      if(r.status===403){ итог('⚠️ не засчитано'); toast(серв||'Отметка засчитывается только из приложения в Telegram'); return; }
+      if(r.ok && j && j.ok){ итог('🔔 Записал: «не нашлось». Разберу и поправлю поиск.');
+        try{ hap('light'); }catch(e){_тихо(e,"L_ннш1")}
+        toast('Спасибо — по таким отметкам и настраивается порог'); return; }
+      итог('⚠️ не записал'); toast('Сервер не принял отметку — попробуй позже');
+    }catch(e){ итог('⚠️ нет связи'); toast('Не отправилось: нет связи с сервером'); }
+  };
+  кн.onclick=()=>{
+    try{ hap('light'); }catch(e){_тихо(e,"L_ннш2")}
+    if(wrap.querySelector('.ннСтрока')) return;
+    кн.disabled=true; кн.style.opacity='.6';
+    const row=document.createElement('div'); row.className='ннСтрока';
+    row.style.cssText='display:flex;gap:6px;animation:fadeInUp .2s ease-out both';
+    const inp=document.createElement('input'); inp.type='text'; inp.maxLength=200;
+    inp.placeholder='что вы искали? (можно пропустить)';
+    inp.style.cssText='flex:1;min-width:0;background:var(--card);border:1px solid var(--border);border-radius:8px;'
+      +'color:var(--text);font-size:calc(12.5px * var(--txtScale,1));padding:7px 9px';
+    const ok=document.createElement('button'); ok.type='button'; ok.textContent='Отправить';
+    ok.style.cssText='border:1px solid #6c5ce7;color:#d9ccff;background:rgba(108,92,231,.12);border-radius:8px;'
+      +'padding:7px 13px;font-size:calc(12.5px * var(--txtScale,1));cursor:pointer;white-space:nowrap';
+    ok.onclick=()=>{ const c=inp.value.trim(); послать(c); };
+    inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); ok.click(); } });
+    row.appendChild(inp); row.appendChild(ok); wrap.appendChild(row);
+    try{ inp.focus(); }catch(e){_тихо(e,"L_ннш3")}
+  };
+  wrap.appendChild(кн);
+  return wrap;
+}
 /* #689 (С67, владелец из чата @jamaat_ru: «Раг Бухари: некий человек сказал, что дела не входят в иман —
    обеспечь. В Бухари это ЕСТЬ»). Материал в индексе правда лежит, а рубит его порог: файл калибровки
    `rag/bukhari.porog.json` сам предупреждает — «⚠️ ОБЛАСТИ ПЕРЕКРЫЛИСЬ… нужен второй признак: совпадение слов».
@@ -12859,6 +12914,14 @@ async function ragSearch(qRaw, seq, shownQ){
     const p=document.createElement('div'); p.className='hint'; p.style.cssText='font-size:calc(12.5px * var(--txtScale,1));line-height:1.6;margin-top:6px';
     p.textContent='Самое близкое совпадение — '+(ранж.length?ранж[0][1].toFixed(3):'0')+', это ниже порога '+порог.toFixed(2)+'. Показывать не стал: это был бы мусор, а не ответ. Попробуй сформулировать иначе или поищи обычным поиском.';
     res.appendChild(p);
+    /* 🔴 #421, владелец 01.07.2026: «кнопку выдвигал явную когда не находит чтобы человек нажимал
+       что не нашло чтобы разработчику передавалась… Ты обязан это накапливать и развивать».
+       Кнопки 👎/👍 (#671) висят на РЕЗУЛЬТАТАХ — а самый дорогой промах выглядит как ПУСТОЙ ЭКРАН,
+       и отметить его было нечем. Выходило однобоко: журнал качества слышал только «показали
+       мусор» и никогда «не показали нужное». Это две РАЗНЫЕ границы порога: 👎 говорит, что он
+       низок, «не нашлось» — что высок. Калибровать по одной из них — всё равно что мерить
+       комнату, зная только один угол. */
+    res.appendChild(_ragНеНашлось(shownQ||qRaw, ранж.length?ранж[0][1]:0));
     _ragРисоватьСпасение(res, спас, порог, shownQ||qRaw);   // #689: но если тема совпала по названию главы — покажем отдельно
     return;
   }
