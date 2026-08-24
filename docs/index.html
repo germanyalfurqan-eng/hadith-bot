@@ -900,7 +900,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1485</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1486</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1772,7 +1772,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1485';
+const APPVER = 'v1486';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -20658,7 +20658,27 @@ function runDeepLink(){ const g=_deepLinkToken(); if(!g) return;
       const _a=await loadMuhaymin(); const _h=_a.find(x=>String(x.n)===String(p[1])); const _res=document.getElementById('res');
       if(_h&&_res){ _res.innerHTML=''; _groups=[]; _res.appendChild(makeCard({type:'m',h:_h})); } }catch(e){_тихо(e,"L17042")} })(); }
     else if(t==='raz' && p[1]){ try{ openOurRazbory(); setTimeout(()=>{ try{ const el=document.getElementById('raz_'+String(p[1]).replace(/[^a-zA-Z0-9_-]/g,'')); if(el){ el.style.display='block'; const hd=el.previousElementSibling; if(hd){ const ar=hd.querySelector('.razArrow'); if(ar) ar.textContent='▲'; } el.scrollIntoView({block:'center'}); } }catch(e){_тихо(e,"L17043")} }, 900); }catch(e){_тихо(e,"L17043")} }   // З-30: ссылка на разбор
-    else if(t==='n' && p[1]){ (async()=>{ try{ const c=await _narrCard(p[1]); openNarratorRijal((c&&c[1])||'', p[1]); }catch(e){_тихо(e,"L17044")} })(); }   // #246: карточка передатчика по mid (n_3889) — для дип-ссылки со скрина карточки
+    else if(t==='n' && p[1]){ (async()=>{
+      /* 🔴 24.08.2026. Ссылка n_<mid> НЕ ОТКРЫВАЛА НИЧЕГО. Проверено в настоящем браузере:
+         ?g=n_3320 оставляет главную (1622 знака), тогда как ссылка на аят даёт 3272.
+         Что это НЕ: токен читается верно ('n_3320'); доступ есть (userAllowed=true); данные
+         карточек на месте (227 шардов); сама карточка исправна — вызов ровно как здесь,
+         сделанный руками, открывает её (1622 → 2651).
+         Дело во ВРЕМЕНИ: ветка срабатывает через 650 мс, шард карточки ещё не подъехал, а
+         ошибка глотается — снаружи неотличимо от «ссылка не работает».
+         Тот же случай уже лечили здесь по ОБР-602 («сработала только со второго раза»), и
+         лечение то же: ПОВТОР. Не «ждать подольше» — от этого страдает тот, у кого всё
+         успело загрузиться; повтор стоит ровно столько, сколько нужно. */
+      const _открылась=()=>{ try{ const m=document.getElementById('rijalModal')||document.getElementById('narrModal');
+          if(m && m.style.display!=='none' && m.offsetParent!==null) return true; }catch(e){}
+        try{ return /Все хадисы с ним/.test(document.body.innerText||''); }catch(e){ return false; } };
+      for(let _п=0; _п<3; _п++){
+        try{ const c=await _narrCard(p[1]); await openNarratorRijal((c&&c[1])||'', p[1]); }
+        catch(e){_тихо(e,"L17044")}
+        await new Promise(r=>setTimeout(r,1200));
+        if(_открылась()) break;
+      }
+    })(); }   // #246: карточка передатчика по mid (n_3889) — для дип-ссылки со скрина карточки
     else if(t==='cat') openCatalog();
   }catch(e){_тихо(e,"L17046")} }, 650); }
 /* ОБР-602: раньше здесь был ОДИН заход. Нет токена в эту миллисекунду — ссылка пропала, и
