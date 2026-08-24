@@ -904,7 +904,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1495</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1496</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1776,7 +1776,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1495';
+const APPVER = 'v1496';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -15253,8 +15253,87 @@ document.addEventListener('click', e=>{ const b=e.target&&e.target.closest&&e.ta
    Поэтому проверка теперь идёт не только по метке в данных, но и на ГЛАЗАХ у показа: арабский заголовок
    обязан делить с записью равия хотя бы одно значащее слово. Заголовки по-русски и по-английски этой
    меркой не проверить — они остаются на прежней метке, и это сказано честно, а не замолчано. */
-function _wikiOk(w, c){ try{
-  if(!(w && w.u && w.v===1 && !w.bad)) return false;
+/* #472 (владелец, «сто раз просил Википедия в круг передатчика»).
+   ЗАМЕР: ссылок в файле 19 031, значок показывался у 1 578 — у 8 из 100. Остальные
+   помечены невыверенными и спрятаны ЦЕЛИКОМ, а в той куче вперемешку верные (Малик ибн
+   Анас, Аиша бинт Абу Бакр) и чужие (у Ибн Умара — статья про Умара ибн Абдул-Азиза).
+   Показать все нельзя: не показать значок досадно, а показать статью про ДРУГОГО
+   человека под именем равия — ложь под нашей подписью.
+   Открываем только доказуемое БЕЗ ТРАНСЛИТЕРАЦИИ: ссылка в арабскую Википедию, где
+   заголовок — арабское имя, сравнимое с именем равия напрямую. Транслитерация — самый
+   слабый наш шаг (замер 24.08: 56% попаданий), и здесь она не нужна вовсе. */
+function _скелетИм(s){ try{
+  s=String(s||'').replace(/[\u064B-\u0652\u0670\u0640]/g,'');
+  s=s.replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/[ىئ]/g,'ي').replace(/ؤ/g,'و');
+  return s.replace(/_/g,' ').split(/\s+/).filter(Boolean).join(' ');
+}catch(e){ return ''; } }
+function _этоНисба(w){ return w.indexOf('ال')===0 && w.slice(-1)==='ي' && w.length>=5; }
+function _викиСтрогоСовпало(u, c){ try{
+  if(!c || !/ar\.wikipedia\.org/.test(String(u||''))) return false;
+  let хв=String(u).split('/').pop()||''; try{ хв=decodeURIComponent(хв); }catch(e){}
+  const заг=_скелетИм(хв), имя=_скелетИм((c&&c[1])||'');
+  if(!заг || !имя) return false;
+  const си=имя.split(' '), сз=заг.split(' ');
+  if(си.length<3) return false;                                  // ② короткое имя носили сотни
+  if(!(заг===имя || заг.indexOf(имя+' ')===0)) return false;      // ① имя — НАЧАЛО заголовка
+  const хвост=сз.slice(си.length);
+  if(хвост.length>2) return false;                                // ③ хвост в полродословной
+  // ④ хвост — нисба, а не фамилия. Отсекает «فخرو» (современная фамилия Залива) и
+  //    страницы «(توضيح)» — разрешения неоднозначностей, вообще не статьи о людях.
+  for(let i=0;i<хвост.length;i++){ if(хвост[i]!=='بن' && !_этоНисба(хвост[i])) return false; }
+  return true;
+}catch(e){ return false; } }
+/* #472, второй путь. У самых заметных имён ссылка ведёт в РУССКУЮ Википедию, и правило
+   выше (сравнение арабских) их не открывает: Малик ибн Анас, Аиша, Умар ибн аль-Хаттаб,
+   Усман ибн Аффан, Халид ибн аль-Валид. Именно на них падает глаз.
+   Сверять русский заголовок с арабским именем ЧЕРЕЗ ТРАНСЛИТЕРАЦИЮ нельзя: она даёт 56%
+   попаданий (замер 24.08), и на такой опоре примерно в половине случаев встанет чужая
+   статья. Но сверять есть с чем без машинного шага: narr_curated.json — имена
+   знаменитейших передатчиков, выверенные РУКАМИ. Замер: совпало 9, разошлось 20;
+   разошедшиеся остаются скрытыми — безопасный отказ. */
+function _рускелет(s){ try{
+  s=String(s||'').toLowerCase().replace(/ё/g,'е');
+  s=s.replace(/[\u02BF\u02BC\u2019\u2018`]/g,'');
+  s=s.replace(/\([^)]*\)/g,' ').replace(/_/g,' ');
+  s=s.replace(/[^а-я ]/g,' ');
+  return s.split(/\s+/).filter(Boolean).join(' ');
+}catch(e){ return ''; } }
+function _викиРусскоеВыверено(u, id){ try{
+  if(id==null || !/ru\.wikipedia\.org/.test(String(u||''))) return false;
+  const к=(typeof _narrCur!=='undefined' && _narrCur) ? _narrCur[String(id)] : null;
+  if(!к) return false;                       // нет выверенного имени — сверять не с чем
+  /* Пробуем ОБЕ выверенные формы: короткую («Аиша») и полную («Аиша бинт Абу Бакр»).
+     Однословную отвергаем — «Аиша» одна совпала бы со многими статьями; но полная форма
+     того же человека выверена той же рукой и однозначна. */
+  let хв=String(u).split('/').pop()||''; try{ хв=decodeURIComponent(хв); }catch(e){}
+  const заг=_рускелет(хв);
+  const формы=[к.ru, к.ruf];
+  for(let i=0;i<формы.length;i++){
+    const имя=_рускелет(формы[i]||'');
+    if(!имя || имя.split(' ').length<2) continue;
+    /* Совпадение годится в ОБЕ стороны, и вот почему. Заголовок статьи бывает короче
+       выверенного имени: «Аиша бинт Абу Бакр» против «Аиша бинт Абу Бакр ас-Сиддик, Умм
+       Абдуллах». Начало общее — человек тот же. Порог в два слова держим на КОРОЧЕ из
+       двух, чтобы «Аиша» одна ни с чем не совпала. */
+    if(заг===имя) return true;
+    if(заг.indexOf(имя+' ')===0) return true;
+    if(имя.indexOf(заг+' ')===0 && заг.split(' ').length>=2) return true;
+  }
+  return false;
+}catch(e){ return false; } }function _wikiOk(w, c){ try{
+  if(!(w && w.u && !w.bad)) return false;
+  if(w.v!==1){
+    /* Ссылка есть, но руками не выверена. Пускаем ТОЛЬКО по строгому совпадению
+       арабского заголовка с арабским именем — см. _викиСтрогоСовпало выше.
+       Помечаем такую привязку, чтобы подсказка сказала правду: выведена, не проверена. */
+    /* Русский путь идёт ПЕРВЫМ: он опирается на имя, выверенное человеком, и потому
+       сильнее машинного совпадения арабских. Пометку «выведено» ему не ставим — здесь
+       привязку подтвердил человек, а не совпали буквы. */
+    if(_викиРусскоеВыверено(w.u, (c&&c[0])!=null?c[0]:null)) return true;
+    if(!_викиСтрогоСовпало(w.u, c)) return false;
+    try{ w._поСовпадению=1; }catch(e){}
+    return true;
+  }
   const t=String(w.t||'');
   if(c && /[؀-ۿ]/.test(t) && !_формаЭтого(t, c)) return false;
   return true;
@@ -17282,6 +17361,7 @@ async function showNarratorCardLocal(name, host, forceId){
   try{ const _gb=_genBadge((c[5]||"")+" "+(c[6]||"")+" "+(c[7]||""), c[4]); if(_gb && _gb[0]==="صحابي"){ _isSah=true; _sahWhy=_gb[2]||'';
     try{ const _rkAll=(c[5]||"")+" "+(c[6]||"")+" "+(c[7]||""); const _mm=_rkAll.match(/.{0,25}(صحاب|صحبة|بدري|شهد بدرا|من المهاجرين|من الأنصار|زوج النبي|أم المؤمنين|له رؤية).{0,30}/); if(_mm) _sahWhy+=' — из ранга критиков: «'+_mm[0].trim()+'»'; }catch(_e){_тихо(_e,"L14133")} } }catch(e){_тихо(e,"L14133")}
   if(!_isSah){ try{ const _cn=stripDiac(c[1]||"").trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc && (_cn===gc || _cn.startsWith(gc+" "))){ _isSah=true; _sahWhy='гарантированный список знаменитых сподвижников (M475) — имя совпало с «'+g+'»'; break; } } }catch(e){_тихо(e,"L14134")} }
+  try{ await loadNarrCurated(); }catch(e){}   // #472: без него первая карточка сверять не с чем
   let _wk=null; try{ _wk=(await loadNarrWiki())[String(id)]||null; }catch(e){_тихо(e,"L14135")}
   // #439 (владелец: «отметь каждое непроверенное имя что это неточный перевод»): транслит выверен ТОЛЬКО если из
   // Википедии или курированной карты _NARR_RU; голый arNameRu — авто, помечаем «авто ⚠».
@@ -17326,7 +17406,7 @@ async function showNarratorCardLocal(name, host, forceId){
       +'<div style="flex:none"><div style="position:relative;width:62px;height:62px">'
         +'<div style="width:62px;height:62px;border-radius:50%;border:2px solid #2ea043;background:#0f1712;display:flex;align-items:center;justify-content:center;font-size:30px;color:#cfeada;overflow:hidden">'+_avHtml+'</div>'
         // #472 (владелец, «сто раз просил Википедия в круг передатчика»): значок W — прямо НА кружке аватара (угол), кликабелен. Кнопка выше (у ID) осталась — не убираем то, что уже работает.
-        +((_WIKI_NARR_OK&&_wikiOk(_wk, c))?('<span class="nWikiAv" data-u="'+esc(_wk.u)+'" title="Википедия" style="position:absolute;right:-4px;bottom:-4px;width:20px;height:20px;border-radius:50%;background:#1c2128;border:1.5px solid #3a434d;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:Georgia,serif;font-size:calc(11px * var(--txtScale,1));font-weight:700;color:#e9eef3">W</span>'):'')
+        +((_WIKI_NARR_OK&&_wikiOk(_wk, c))?('<span class="nWikiAv" data-u="'+esc(_wk.u)+'" title="'+(_wk._поСовпадению?'Википедия — привязка выведена по совпадению арабского имени, вручную не выверена':'Википедия')+'" style="position:absolute;right:-4px;bottom:-4px;width:20px;height:20px;border-radius:50%;background:#1c2128;border:1.5px solid #3a434d;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:Georgia,serif;font-size:calc(11px * var(--txtScale,1));font-weight:700;color:#e9eef3">W</span>'):'')
       +'</div></div>'
       +'<div style="flex:1;min-width:190px">'
         // 10.07 (владелец, эталон sunnah.com «سمي القرشي (سمي مولى أبي بكر)»): главный заголовок = канон.имя + различающая нисба, полная форма (мавля и т.п.) — подписью в скобках
