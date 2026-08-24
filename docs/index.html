@@ -900,7 +900,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1486</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1487</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1772,7 +1772,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1486';
+const APPVER = 'v1487';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -20679,7 +20679,26 @@ function runDeepLink(){ const g=_deepLinkToken(); if(!g) return;
         if(_открылась()) break;
       }
     })(); }   // #246: карточка передатчика по mid (n_3889) — для дип-ссылки со скрина карточки
-    else if(t==='cat') openCatalog();
+    else if(t==='cat'){ (async()=>{
+      /* 🔴 24.08.2026, ВТОРОЙ СЛУЧАЙ ТОГО ЖЕ КЛАССА. После починки ссылки на карточку
+         передатчика я прогнал ВСЕ девять ссылок-заходов одной пробой: восемь работают,
+         `cat` оставляет экран нетронутым. Причина та же — ветка срабатывает через 650 мс,
+         каталог книг ещё не подъехал, и промах глотается.
+         Сама функция исправна: `openCatalog()`, вызванный руками, наполняет экран на
+         12 150 знаков. Лечение то же — повтор, до трёх попыток. */
+      for(let _п=0; _п<3; _п++){
+        try{ await openCatalog(); }catch(e){_тихо(e,"L17046c")}
+        await new Promise(r=>setTimeout(r,1200));
+        /* ⚠️ Признак «открылось» — ТОЛЬКО состояние окна каталога. Сперва я проверял ещё и
+           слово «Мактаб» на экране — а оно стоит на ГЛАВНОЙ («Читать библиотеку Мактаба
+           аш-Шамиля»), и условие выхода срабатывало на первой же попытке, до того как
+           каталог успевал открыться. Повтора не случалось ни разу, а выглядело как починка.
+           Тот же покрой, что я сегодня ловил в чужом коде: заслон есть, срабатывает
+           вхолостую и молчит об этом. */
+        try{ const m=document.getElementById('catModal');
+          if(m && m.style.display && m.style.display!=='none') break; }catch(e){}
+      }
+    })(); }
   }catch(e){_тихо(e,"L17046")} }, 650); }
 /* ОБР-602: раньше здесь был ОДИН заход. Нет токена в эту миллисекунду — ссылка пропала, и
    человек видит просто открывшееся приложение, а не то место, куда его звали. Теперь ждём
