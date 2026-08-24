@@ -900,7 +900,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1490</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1491</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1772,7 +1772,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1490';
+const APPVER = 'v1491';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -11226,7 +11226,29 @@ function addTr(meta,card,text,ayah,fav){
         const _br=bookRuOf(_r.source); if(_br) _srcRu='📚 '+_br+' '+_n+(_ri?(' (риваят '+_ri[1]+')'):''); }
     }catch(e){_тихо(e,"L9160")}
     if(!_srcRu && fav && fav.label) s+='\n— '+fav.label;
-    if(out && out.style.display!=='none'){ const trv=(out.dataset.tr||'').trim()||(out.textContent||'').trim(); if(trv) s+='\n\n'+trv; }
+    /* #441 (владелец 01.07.2026): «при копировании аята при включённом переводе он перевод
+       не выслал». Причина была в МЕРКЕ, а не в пропущенном элементе: копия спрашивала «что
+       выдала кнопка перевода?» (окошко out), а владелец ждёт «что я вижу под арабским?».
+       В читалке Корана постоянный перевод (Кулиев/Абу Адель, cfg.qrTr) — отдельный элемент
+       .qrTr, сосед блока инструментов; копия про него не знала вовсе.
+       Чиним мерку, а не случай (З-40): берём перевод, который НА ЭКРАНЕ рядом с этим
+       аятом/хадисом, откуда бы он ни пришёл. Появится третий источник — попадёт сам. */
+    let _пер='';
+    if(out && out.style.display!=='none'){ _пер=(out.dataset.tr||'').trim()||(out.textContent||'').trim(); }
+    if(!_пер){ try{
+      /* Видимость НЕ проверяем намеренно: при выключенном переводе элемент не создаётся
+         вовсе, прятать нечего. А проверка display соврала бы в свёрнутой панели и отняла бы
+         перевод у того, кто его видит. Наличие элемента и есть признак «перевод включён». */
+      const _вм=cp.closest('.qrAyah')||cp.closest('.card')||cp.closest('.qrBlk');
+      if(_вм){ const _кус=[];
+        /* dataset.orig, а не textContent: подсветка слова переписывает строку перевода и
+           хранит исходную в orig. Иначе в буфер уехала бы разметка подсветки. */
+        _вм.querySelectorAll('.qrTr,.ru-out').forEach(function(э){
+          const _з=((э.dataset&&э.dataset.orig)||э.textContent||'').trim(); if(_з) _кус.push(_з); });
+        _пер=_кус.join('\n'); }
+    }catch(_e){_тихо(_e,"L9161")} }
+    if(_пер) s+='\n\n'+_пер;
+    window._переводРядом=1;   /* метка: правка #441 на месте */
     // С38 (заявка владельца): к скопированному хадису — РУС. источник + ссылка на ЭТОТ ЖЕ хадис в боте (не общий линк аппа)
     try{
       if(_srcRu) s+='\n\n'+_srcRu;
@@ -22384,7 +22406,10 @@ try{ document.documentElement.setAttribute('data-jsok', (typeof APPVER!=='undefi
   };
   UR.shareAll=function(){
     if(!state.items.length) return;
-    var t=state.items.map(function(it){ return it.arabic||''; }).join('\n\n');
+    /* #441: «поделиться» отдавало голый арабский, хотя копия рядом уже отдавала и перевод.
+       Отдаём то же, что видит человек — как в copyAll двумя строками выше. */
+    var _делимсяСПереводом=1;
+    var t=state.items.map(function(it){ return (it.arabic||'')+(it.translation?'\n'+it.translation:''); }).join('\n\n');
     try{ if(navigator.share){ navigator.share({title:'Muslimoon',text:t}).catch(function(){}); } else if(window.tg&&tg.openTelegramLink){ tg.openTelegramLink('https://t.me/share/url?url=&text='+encodeURIComponent(t.slice(0,3000))); } }catch(e){_тихо(e,"L18484")}
   };
   UR.showJump=function(){ dom.jumpInput.value=''; dom.jumpModal.classList.add('show'); try{dom.jumpInput.focus();}catch(e){_тихо(e,"L18486")} };
