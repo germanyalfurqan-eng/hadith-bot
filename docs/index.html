@@ -904,7 +904,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1493</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1494</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1776,7 +1776,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1493';
+const APPVER = 'v1494';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4137,10 +4137,38 @@ if(_q){ let _canonWarmed=false; _q.addEventListener('focus', function(){ if(_can
        входа в загрузку — setStatus внутри loadLocal/loadExtra стоит до первого await, поэтому
        ловится ровно фоновое сообщение. Если человек в эту же секунду откроет книгу сам, его
        собственная надпись не пострадает: его вызов идёт вне этого шва. */
+    /* #72 (владелец): «почему иногда долго грузится? надо лёгкую отметку выдавать».
+       Прогрев тянет около 36 МБ и делает это молча — человек видит только вязкость.
+       Отметка ниже НЕ МОЖЕТ ЗАЛИПНУТЬ по устройству: это не надпись, которую надо не
+       забыть снять, а счётчик незавершённых загрузок. Убывает в finally — и при удаче,
+       и при ошибке, и при обрыве. Ноль — отметки нет, снимать нечего.
+       Показываем в СВОЁМ углу, не в строке состояния поиска: смешение своей работы с
+       работой человека уже однажды оставило на экране вечное «Загружаю: Малик…». */
+    const _фонОтметка=()=>{ try{
+      let э=document.getElementById('фонГруз');
+      const n=window._фонСчёт||0;
+      if(n<=0){ if(э) э.remove(); return; }
+      if(!э){ э=document.createElement('div'); э.id='фонГруз';
+        э.style.cssText='position:fixed;left:8px;bottom:8px;z-index:9;font-size:11px;'
+          +'color:var(--hint);background:var(--card);border:1px solid var(--border);'
+          +'border-radius:9px;padding:3px 8px;opacity:.82;pointer-events:none;'
+          +'max-width:70vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+        э.title='Приложение заранее подгружает издания, чтобы поиск по номеру шёл быстро. '
+          +'Мешать это не должно; если мешает — скажите, уберу прогрев.';
+        document.body.appendChild(э); }
+      э.textContent='⏳ фоном догружаю издания: '+n;
+    }catch(e){} };
     const step=()=>{ if(i>=codes.length) return; const code=codes[i++];
       try{ window._фонТихо=(window._фонТихо||0)+1;
-           const p=loadByCode(code); if(p&&p.catch) p.catch(function(){});
-      }catch(e){_тихо(e,"L3333")}
+           window._фонСчёт=(window._фонСчёт||0)+1; _фонОтметка();
+           const p=loadByCode(code);
+           /* убавляем в finally промиса, а не сразу: раньше счётчик падал на синхронном
+              выходе, то есть считал «сколько вызовов начато», а не «сколько ещё идёт». */
+           if(p&&p.then) p.then(function(){},function(){}).then(function(){
+             window._фонСчёт=Math.max(0,(window._фонСчёт||1)-1); _фонОтметка(); });
+           else { window._фонСчёт=Math.max(0,(window._фонСчёт||1)-1); _фонОтметка(); }
+           if(p&&p.catch) p.catch(function(){});
+      }catch(e){ window._фонСчёт=Math.max(0,(window._фонСчёт||1)-1); _фонОтметка(); _тихо(e,"L3333") }
       finally{ window._фонТихо=Math.max(0,(window._фонТихо||1)-1); }
       setTimeout(step, 400); }; step();
   }catch(e){_тихо(e,"L3334")} }); }
