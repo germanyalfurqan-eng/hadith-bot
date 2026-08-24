@@ -904,7 +904,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1499</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1500</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1776,7 +1776,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1499';
+const APPVER = 'v1500';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -10822,7 +10822,15 @@ async function _qrLoad(){
     blk.className='qrAyah'; blk.style.cssText='cursor:pointer'+(v.a===_qrView.a?';background:rgba(74,222,128,.10);border-radius:8px':'');
     blk.addEventListener('click',function(e){ if(cfg.qrAyahCard===false) return; if(e.target.closest&&e.target.closest('.qw,button,a,input,select,.tr-out')) return; try{ openAyahCard(s, v.a); }catch(_e){_тихо(_e,"L8738")} });   // #70: тап по ТЕРРИТОРИИ аята (не по слову/кнопке) → карточка аята
     let _vtext=(v.a===1 && s!==1 && s!==9)?_stripBasmala(v.text):v.text;   // у аята 1 убрать приклеенную басмалу
-    if(cfg.qrNoDiac) _vtext=stripDiac(_vtext);   // убрать огласовки (настройка чтения)
+    // #398 (владелец): «когда убираешь огласовки и возвращаешь, в Коране срастается аят».
+    // Замер на 800 случайных аятах: слова НЕ срастаются ни в одном — пробелы целы, текст
+    // не рвётся. Зато в 42% аятов остаётся ДВОЙНОЙ пробел: знаки паузы (ۖ ۗ ۚ ۛ) стоят в
+    // усманском тексте отдельными словами и попадают под снятие как надстрочные, а пробел
+    // по обе стороны от них остаётся. Выходит «تفرقوا  وٱذكروا» с провалом посреди строки,
+    // и на длинном аяте таких провалов несколько — строка выглядит рваной.
+    // Схлопываем подряд идущие пробелы. Трогаем ТОЛЬКО показ: сам stripDiac менять нельзя,
+    // через него идёт весь поиск и сверка имён.
+    if(cfg.qrNoDiac) _vtext=stripDiac(_vtext).replace(/ {2,}/g,' ').trim();
     const ar=document.createElement('div'); ar.className='ar'; ar.classList.add('qrAr'); ar.dataset.sa=s+':'+v.a;   // M244: привязка пословного перевода в читалке
     // Фатиха: убираем цифры аятов (спорно — басмала часть суры или нет; не берём ничью сторону)
     // #452: знак ۝ обязан ВКЛЮЧАТЬ цифру внутрь себя, а это умеют не все файлы (в kfgqpc-sindhi-naskh его вообще нет).
