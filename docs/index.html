@@ -900,7 +900,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1481</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1482</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1772,7 +1772,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1481';
+const APPVER = 'v1482';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -12626,7 +12626,7 @@ async function anyTextSearch(qRaw, seq){
    а ключ Cloudflare в приложение класть нельзя — он тут же станет общим достоянием.
    ═══════════════════════════════════════════════════════════════════════════════════════════════ */
 const _RAG={загружено:false, ids:null, поля:null, векторы:null, мета:null, порог:0.52, dim:0,
-  лимиты:null, ответ:null};   // #673 (С67): последний ответ /rag_embed и цифры остатка — чтобы объяснять отказ словами, а не «сервер не ответил»
+  лимиты:null, ответ:null, поставщик:null};   // #673 (С67): последний ответ /rag_embed и цифры остатка; #561: кто посчитал вектор — чтобы объяснять отказ словами, а не «сервер не ответил»
 async function _ragLoad(onProgress){
   if(_RAG.загружено) return true;
   try{
@@ -12729,8 +12729,19 @@ async function _ragQueryVec(q){
     // #673: ответ вектора несёт и состояние лимита — запоминаем, чтобы объяснить отказ словами
     // и обновить строку остатка, не тратя на это отдельный поход к серверу.
     _RAG.ответ=j||null;
+    /* #561 (владелец): «нажал раг, он нашёл хадисы — значит использовал ИИ, но мне не пришёл
+       отчёт, какой ИИ». Имя поставщика сервер знал всегда, но человеку не отдавал, а приложение
+       и не спрашивало. Показываем в той же строке, где уже стоит остаток запросов: это сведение
+       того же рода, отдельной строкой оно бы только мешало.
+       Запасной поставщик называется прямо запасным — по нему видно, что основной отказал, и это
+       объясняет, почему выдача могла прийти медленнее обычного. */
+    try{ if(j && j['поставщик']) _RAG.поставщик=String(j['поставщик']).slice(0,40); }catch(e){_тихо(e,"L10351")}
     try{ if(j && (typeof j['лимит']==='object' && j['лимит'])) { _RAG.лимиты=j['лимит'];
-      const el=document.getElementById('ragLim'); const s=_ragLimFmt(j['лимит']);
+      const el=document.getElementById('ragLim'); let s=_ragLimFmt(j['лимит']);
+      if(s && _RAG.поставщик){
+        const зап=(_RAG.поставщик!=='Cloudflare');
+        s+=' · вектор вопроса посчитал '+_RAG.поставщик+(зап?' (запасной)':'');
+      }
       if(el && s){ el.style.display=''; el.textContent=s; } } }catch(e){_тихо(e,"L10352")}
     return (j&&j.v&&j.v.length)?j.v:null;
   }catch(e){ _RAG.ответ=null; return null; }
