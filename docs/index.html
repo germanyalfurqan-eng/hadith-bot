@@ -900,7 +900,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1483</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1484</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1772,7 +1772,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1483';
+const APPVER = 'v1484';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -20623,7 +20623,28 @@ function runDeepLink(){ const g=_deepLinkToken(); if(!g) return;
   const p=g.split('_').filter(x=>x!==''); const t=(p[0]||'').toLowerCase();
   setTimeout(()=>{ try{
     if(!userAllowed()) return;   // QA-low: не открывать deep-link модал поверх gate-экрана у заблокированного юзера
-    if(t==='q') openQuranReader(+p[1]||1,+p[2]||0);
+    /* #225 (владелец): «дай ссылку на слушать Коран случайно, чтобы по переходу можно было
+       сразу случайно». Случайная кнопка была только у хадисов; для Корана не было ни кнопки,
+       ни ссылки. Токен `qrand` открывает случайную суру, берёт в ней случайный аят и включает
+       чтение. Ссылка одна, каждый переход — новое место.
+       Аят выбираем ПОСЛЕ отрисовки, а не заранее: таблицы «сколько аятов в суре» в приложении
+       нет, заводить её ради этого — значит завести второй источник правды, который однажды
+       разойдётся с настоящим и поведёт ссылку в пустоту. Сколько узлов нарисовано — столько и
+       аятов, ошибиться не на чем. Узлов нет — оставляем открытую суру и молчим: соврать
+       «включил чтение», не включив, нельзя. */
+    if(t==='qrand'){
+      const _сура=1+Math.floor(Math.random()*114);
+      openQuranReader(_сура,0);
+      setTimeout(function(){ try{
+        const _тело=document.getElementById('qrBody'); if(!_тело) return;
+        const _узлы=_тело.querySelectorAll('[id^="qr-"]'); if(!_узлы.length) return;
+        const _эл=_узлы[Math.floor(Math.random()*_узлы.length)];
+        const _аят=parseInt(String(_эл.id).replace('qr-',''),10)||1;
+        try{ _эл.scrollIntoView({block:'center'}); }catch(_e){}
+        _qrPlay(_сура,_аят);
+      }catch(e){_тихо(e,"L17041q")} }, 1500);
+    }
+    else if(t==='q') openQuranReader(+p[1]||1,+p[2]||0);
     else if(t==='b') openBook(p[1],p[2]);
     else if(t==='r'){ const _rc=p[1], _rn=String(p[2]||'').replace(/-\d+$/,'');   // share-place: «247-1» риваят → открываем хадис №247
       /* #451/#465 (С79): сборник ВНЕ девяти читалка не держит — раньше его всё равно вели туда,
