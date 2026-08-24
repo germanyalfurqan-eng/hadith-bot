@@ -904,7 +904,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1494</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1495</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1776,7 +1776,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1494';
+const APPVER = 'v1495';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -18841,6 +18841,27 @@ function neuroПочему(причина){
     +'🤖 '+esc(Т[0])+'</span>';
 }
 
+/* #1281 (владелец: «почему не пишешь, кто ограничил»). ОДНА дверь на вопрос «почему здесь
+   нет вердикта». Заведена потому, что верный ответ в коде БЫЛ, а на экран не попадал:
+   оба места показа раньше спрашивали «есть ли номер книги в карте» и на «нет» печатали
+   «нумерация не сверена». А Бухари с Муслимом в карте нет НАРОЧНО — именно потому, что
+   вердикт им не считают по слову владельца. Проверка на пробел срабатывала раньше проверки
+   на запрет, и запрет не назывался НИ РАЗУ: приложение валило указ владельца на свою
+   недоделку.
+   ПОРЯДОК ЗДЕСЬ НЕ СЛУЧАЕН: «нам не велено» старше, чем «мы не доделали». Сказать про свою
+   недоделку там, где стоит воля владельца, — соврать о себе и о нём разом.
+   Дописывать условие в два места было нельзя: их станет три, и третье забудут — этот самый
+   разлад уже случался внутри verifyNarr (#453). */
+function _этоСахихайн(code, bid){ try{
+  const c=String(code||'').toLowerCase();
+  if(c==='bukhari'||c==='muslim') return true;
+  if(typeof _BM_BIDS!=='undefined' && bid!=null && _BM_BIDS.includes(String(bid))) return true;
+  return false;
+}catch(e){ return false; } }
+function neuroПричинаМолчания(code, bid){
+  if(_этоСахихайн(code, bid)) return neuroПочему('сахихайн');
+  return neuroПочему('нумерация');
+}
 /* Удобная связка для мест показа: дай bid+номер — получи готовый бейдж или честную причину.
    Пустая строка, а не null: вызывающий вставляет её в шаблон без проверок и не может забыть. */
 async function neuroBadgeFor(bid,num){
@@ -18959,7 +18980,7 @@ async function neuroBadgeF40(bid, num, meta){
     // #721: не замерено — раньше молчали, теперь называем причину (пустота читалась как «не сделано»)
     const html=_NEURO_F40C.has(String(bid))
       ? await neuroBadgeFor(String(bid), String(num).replace(/[^0-9]/g,''))
-      : neuroПочему('нумерация');
+      : neuroПричинаМолчания(null, bid);
     if(!html) return;
     const sp=document.createElement('span');
     sp.style.cssText='margin-inline-start:6px';
@@ -18978,7 +18999,7 @@ async function neuroBadgeCard(code, num, meta, h){
     const bid=_NEURO_BID[c];
     // #721: книга без ЗАМЕРЕННОГО соответствия номеров. Приговор не показываем по-прежнему —
     // показываем ПРИЧИНУ, почему его тут нет. Она о нашей разметке, а не о хадисе.
-    if(!bid){ try{ const _п=neuroПочему('нумерация'); if(_п){ const _s=document.createElement('span');
+    if(!bid){ try{ const _п=neuroПричинаМолчания(c, null); if(_п){ const _s=document.createElement('span');
         _s.style.cssText='margin-inline-start:6px'; _s.innerHTML=_п;
         if(meta.firstChild) meta.insertBefore(_s, meta.firstChild); else meta.appendChild(_s); } }catch(_e){}
       return; }
