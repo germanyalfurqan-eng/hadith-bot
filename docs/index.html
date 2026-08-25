@@ -977,7 +977,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1510</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1511</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1850,7 +1850,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1510';
+const APPVER = 'v1511';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3858,13 +3858,32 @@ async function openByCodeNum(bid, num){
 }
 // #74: «Страница в Мактабе» = ВНЕШНИЙ сайт المكتبة الشاملة (shamela.ws/book/<bid>/<page>), а НЕ внутренняя читалка приложения (4-я жалоба владельца). turath bid == shamela id, page прямой (как _shamChip).
 // фраза-матн для резолва страницы (ИНВАРИАНТ между изданиями — номера у разных печатей РАЗНЫЕ!)
+// №44: формулы почтения выбрасываем ИЗ КУСКА ДЛЯ ПОИСКА. Издатели ставят их по-своему —
+// в одном издании «رضي الله عنه» есть, в другом нет, в третьем сокращено, — и кусок с ними
+// не находит НИЧЕГО. Замер по Сахиху аль-Бухари (ط السلطانية):
+//   «سمعت عمر بن الخطاب رضي الله»   → 0 совпадений;
+//   «سمعت عمر بن الخطاب»            → 20 совпадений, первое ведёт на чужую стр. 98;
+//   «سمعت عمر بن الخطاب على المنبر» → 1 совпадение, стр. 6 — то, что нужно.
+// Ноль совпадений — худший исход: выглядит как «хадиса в книге нет».
+// ⚠️ Убираем только устойчивые формулы и целиком. Голое «رضي» не трогаем: это обычное слово,
+// и вырезать его значило бы портить матн там, где речь о довольстве, а не о благословении.
+const _БЛАГОСЛОВЕНИЯ=[
+  /صلي الله عليه وسلم/g, /صلى الله عليه وسلم/g, /عليه الصلاة والسلام/g,
+  /رضي الله عنهما/g, /رضي الله عنهم/g, /رضي الله عنها/g, /رضي الله عنه/g,
+  /عليه السلام/g, /عز وجل/g, /تبارك وتعالي/g, /سبحانه وتعالي/g
+];
+function _безБлагословений(с){
+  let т=String(с||'');
+  for(const обр of _БЛАГОСЛОВЕНИЯ) т=т.replace(обр,' ');
+  return т.replace(/\s+/g,' ').trim();
+}
 function _matnSnippet(text){
-  try{ let t=stripDiac(String(text||'')).replace(/[«»ـ"،,.:؛()\[\]]/g,' ').replace(/\s+/g,' ').trim();
+  try{ let t=_безБлагословений(stripDiac(String(text||''))).replace(/[«»ـ"،,.:؛()\[\]]/g,' ').replace(/\s+/g,' ').trim();
     const parts=t.split(/قال رسول الله صلي الله عليه وسلم|عن النبي صلي الله عليه وسلم|ان رسول الله صلي الله عليه وسلم|قال النبي صلي الله عليه وسلم|انه قال|يقول /);
     let body=(parts.length>1?parts.slice(1).join(' '):t);
     let w=body.split(' ').filter(x=>x.length>1);
-    if(w.length<4){ w=t.split(' ').filter(x=>x.length>1); const st=Math.max(0,Math.floor(w.length/2)-1); return w.slice(st,st+6).join(' '); }
-    return w.slice(0,6).join(' ');
+    if(w.length<4){ w=t.split(' ').filter(x=>x.length>1); const st=Math.max(0,Math.floor(w.length/2)-1); return w.slice(st,st+8).join(' '); }
+    return w.slice(0,8).join(' ');   // №44: восемь слов вместо шести — короткий кусок находил двадцать мест, и первое было чужим
   }catch(e){ return ''; }
 }
 // УКАЗ-3 ревизия листов Муслима (слово владельца 16.06): ВСЕ ссылки Муслима = ТУРЕЦКОЕ изд. (ط التركية) shamela.ws/book/711, НЕ Абд аль-Баки 1727.
