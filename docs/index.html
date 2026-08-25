@@ -977,7 +977,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1511</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1512</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1850,7 +1850,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1511';
+const APPVER = 'v1512';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -20949,7 +20949,7 @@ async function renderTasks(){
       const items=reqs.map(r=>{ const k=RSTAT[String(r.id)]||null; const закрытаЖурналом=!!(r.done||r.итог||r.closed);
         let s = k || {s:'open'};
         if(закрытаЖурналом && s.s!=='done') s = {s:'done', v:(k&&k.v)||'', why:(k&&k.why)||'закрыта с распиской в журнале заявок'};
-        return {id:r.id,d:r.d||'',t:r.t||'',img:!!r.img,s:(META[s.s]?s.s:'open'),v:s.v||'',why:s.why||''}; });
+        return {id:r.id,d:r.d||'',t:r.t||'',img:!!r.img,s:(META[s.s]?s.s:'open'),v:s.v||'',why:s.why||'',зд:(r.закрыта||r.closed_at||'')}; });   // №59: дата расписки — по ней считаем «закрыто за период»
       const cnt={done:0,progress:0,wait:0,open:0}; items.forEach(i=>{ cnt[i.s]++; });
       const box=document.createElement('div'); box.style.cssText='margin-top:16px;border-top:2px solid var(--btn);padding-top:10px'; out.appendChild(box);
       const total=items.length;
@@ -20957,6 +20957,50 @@ async function renderTasks(){
         +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px">'
         +['done','progress','wait','open'].map(k=>'<span style="background:'+META[k].c+'22;border:1px solid '+META[k].c+';border-radius:20px;padding:4px 11px;font-size:calc(12.5px * var(--txtScale,1));font-weight:700;color:'+META[k].c+'">'+META[k].ic+' '+META[k].lbl+': '+cnt[k]+'</span>').join('')
         +'</div>';
+      // 🔴 №59: статистика ЗА ПЕРИОД. Владелец просил «час, два, день — удобно», и это
+      // отдельная величина от общих счётчиков: те показывают, что накопилось за всё время.
+      // ⚠️ Даты в журнале вида «24.08.2026 05:52 МСК» — обычным Date не разобрать.
+      // ⚠️ Неразобранную строку не считаю НИ ЗА период, ни против: приписать её к «за час»
+      // значило бы завысить собственную работу.
+      const _разборДатыЖурнала=(с)=>{ try{
+        const м=String(с||'').match(/(\d{1,2})\.(\d{1,2})\.(\d{4})[ ,]+(\d{1,2}):(\d{2})/);
+        if(!м) return null;
+        return new Date(+м[3], +м[2]-1, +м[1], +м[4], +м[5]).getTime();
+      }catch(e){ return null; } };
+      const ПЕРИОДЫ=[['час','за час',3600e3],['сутки','за сутки',86400e3],
+                     ['неделя','за неделю',7*86400e3],['всё','всё время',null]];
+      const pbar=document.createElement('div');
+      pbar.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 2px;align-items:center';
+      box.appendChild(pbar);
+      const psum=document.createElement('div');
+      psum.style.cssText='color:var(--hint);font-size:calc(12px * var(--txtScale,1));margin:2px 0 6px';
+      box.appendChild(psum);
+      const _счётЗаПериод=(мс)=>{
+        if(!мс) return {пришло:total, закрыто:cnt.done, нераспознано:0};
+        const порог=Date.now()-мс; let пришло=0, закрыто=0, нераспознано=0;
+        items.forEach(i=>{
+          const дп=_разборДатыЖурнала(i.d);
+          if(дп===null) нераспознано++; else if(дп>=порог) пришло++;
+          const дз=_разборДатыЖурнала(i.зд);
+          if(дз!==null && дз>=порог) закрыто++;
+        });
+        return {пришло, закрыто, нераспознано};
+      };
+      const _рисоватьПериод=()=>{
+        const тек=window._reqPeriod||'сутки';
+        [...pbar.children].forEach((ch,idx)=>{ const on=ПЕРИОДЫ[idx][0]===тек;
+          ch.style.background=on?'var(--btn)':'transparent'; ch.style.color=on?'#fff':'var(--text)';
+          ch.style.borderColor=on?'var(--btn)':'var(--border)'; ch.style.fontWeight=on?'700':'400'; });
+        const п=ПЕРИОДЫ.find(x=>x[0]===тек);
+        const с=_счётЗаПериод(п?п[2]:null);
+        psum.innerHTML='📥 пришло: <b style="color:var(--text)">'+с.пришло+'</b> · '
+          +'✅ закрыто: <b style="color:#4eb573">'+с.закрыто+'</b>'
+          +(с.нераспознано?(' · <span title="у этих записей дата в непривычном виде — в счёт периода не берём, чтобы не завысить">без даты: '+с.нераспознано+'</span>'):'');
+      };
+      ПЕРИОДЫ.forEach(([k,lbl])=>{ const ch=document.createElement('span'); ch.textContent='⏱ '+lbl;
+        ch.style.cssText='cursor:pointer;border:1px solid var(--border);border-radius:18px;padding:4px 11px;font-size:calc(12px * var(--txtScale,1))';
+        ch.onclick=()=>{ window._reqPeriod=k; _рисоватьПериод(); }; pbar.appendChild(ch); });
+      _рисоватьПериод();
       const fbar=document.createElement('div'); fbar.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin:8px 0'; box.appendChild(fbar);
       const list=document.createElement('div'); box.appendChild(list);
       const FILT=[['open','📋 Не вып.'],['progress','🔧 В работе'],['wait','⏳ Ожидают'],['done','✅ Выполнено'],['all','Все']];
