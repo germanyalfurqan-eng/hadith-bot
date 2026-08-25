@@ -961,7 +961,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1507</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1508</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1833,7 +1833,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1507';
+const APPVER = 'v1508';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -15003,7 +15003,25 @@ async function openNarrTable(opts){
     const q=(st.q||'').trim();
     if(q){ const mId=q.match(/^#?(\d{1,5})$/); if(mId) v=v.filter(r=>String(r[0]).indexOf(mId[1])===0);
       else if(/[а-яё]/i.test(q)){ v = _ruIds ? v.filter(r=>_ruIds.has(r[0])) : v; }   // #18: русский ввод («Амаш») — фильтр по id из скелет-матча
-      else { const cq=_narrCanon(q); v=v.filter(r=>r[1].indexOf(cq)>=0); } }
+      else { const cq=_narrCanon(q);
+        /* №18/№29: искали ТОЛЬКО в поле имени — а привычного имени там нет. Набери по-арабски
+           «الأعمش» (самый узнаваемый передатчик, 10 420 упоминаний) — и таблица отвечала пустотой,
+           потому что в базе он «سليمان بن مهران». То же с «أبو معاوية». По-русски «Амаш» находился
+           (скелет-матч выше), по-арабски — нет; человек вправе искать на любом из двух.
+           Теперь запрос проверяется и по словарю привычных имён. Словарь грузится по сети,
+           фильтр синхронный: пустой кэш = заказываем ОДИН раз и перерисовываем по приезде. */
+        let _поЛакабу=null;
+        try{
+          if(typeof _lakab==='object' && _lakab){
+            _поЛакабу=new Set();
+            for(const _k in _lakab){ const _L=_lakab[_k];
+              if(_L && _L[0] && _narrCanon(String(_L[0])).indexOf(cq)>=0) _поЛакабу.add(+_k); }
+          } else if(!window._ntЛакабЗаказан && typeof loadLakab==='function'){
+            window._ntЛакабЗаказан=true;
+            loadLakab().then(()=>{ try{ draw(true); }catch(_e){} }).catch(()=>{});
+          }
+        }catch(_e){}
+        v=v.filter(r=>r[1].indexOf(cq)>=0 || (_поЛакабу && _поЛакабу.has(+r[0]))); } }
     const f={id:(a,b)=>a[0]-b[0], alpha:(a,b)=>a[1].localeCompare(b[1],'ar'), death:(a,b)=>((a[2]||9999)-(b[2]||9999)), fame:(a,b)=>(b[3]-a[3]), cnt:(a,b)=>((cnt.get(b[0])||0)-(cnt.get(a[0])||0))}[st.sort];
     return v.slice().sort(f); };
   let cur=[];
