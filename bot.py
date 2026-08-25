@@ -2041,6 +2041,22 @@ def _проба_облачной(модель, таймаут=60):
         return False, str(_б)[:120]
 
 
+def _облачная_сейчас():
+    """Какой облачной моделью отвечаем ПРЯМО СЕЙЧАС: выбор владельца или умолчание.
+
+    Одна дверь на пять мест, где раньше стояла константа OPENCODE_MODEL. Пять копий
+    одного правила расходятся всегда — вопрос лишь в том, через сколько дней и какая
+    из них останется на старом.
+    """
+    try:
+        _в = _выбор_прочитать()
+        if _в and _в != OPENCODE_MODEL and _в in (_облачные_модели() or []):
+            return _в
+    except Exception:
+        pass
+    return OPENCODE_MODEL
+
+
 def dsoc_канал(чат_ид=None):
     """Куда идти за ответом: (адрес, модель, ключ, метка, местная_ли).
 
@@ -2083,13 +2099,7 @@ def dsoc_канал(чат_ид=None):
     # константа — и любое облачное имя молча превращалось в deepseek-v4-flash. Берём выбор,
     # но только если провайдер эту модель действительно отдаёт: неизвестное имя лучше
     # заменить умолчанием, чем получить отказ на каждом ответе.
-    _обл = OPENCODE_MODEL
-    if выбор and выбор != OPENCODE_MODEL:
-        try:
-            if выбор in (_облачные_модели() or []):
-                _обл = выбор
-        except Exception:
-            pass
+    _обл = _облачная_сейчас()
     return (OPENCODE_URL, _обл, _кл, _обл + " · облако", False)
 
 
@@ -2255,7 +2265,7 @@ def dsoc_запрос(сообщения, потолок=3000, температ�
                 о = requests.post(OPENCODE_URL, timeout=180,
                                   headers={"Content-Type": "application/json",
                                            "Authorization": "Bearer " + _кл2},
-                                  json={"model": OPENCODE_MODEL, "messages": сообщения,
+                                  json={"model": _облачная_сейчас(), "messages": сообщения,
                                         "max_tokens": потолок, "temperature": температура})
             if о.status_code != 200:
                 return None, 0, 0
@@ -2293,7 +2303,7 @@ def dsoc_запрос(сообщения, потолок=3000, температ�
             о2 = requests.post(OPENCODE_URL, timeout=240,
                                headers={"Content-Type": "application/json",
                                         "Authorization": "Bearer " + _кл},
-                               json={"model": OPENCODE_MODEL, "messages": сообщения,
+                               json={"model": _облачная_сейчас(), "messages": сообщения,
                                      "max_tokens": min(int(потолок) * 3, 16000),
                                      "temperature": 0.4})
             if о2.status_code == 200:
@@ -8972,7 +8982,7 @@ def ask_opencode(prompt, system, max_tokens=None, только_облако=Fals
         о = requests.post(OPENCODE_URL, timeout=120,
                           headers={"Content-Type": "application/json",
                                    "Authorization": "Bearer " + _кл},
-                          json={"model": OPENCODE_MODEL,
+                          json={"model": _облачная_сейчас(),
                                 "messages": [{"role": "system", "content": system},
                                              {"role": "user", "content": prompt}],
                                 # Потолок НЕ НИЖЕ 3000 (Ф-142): Flash — модель думающая,
@@ -9001,7 +9011,7 @@ def ask_opencode(prompt, system, max_tokens=None, только_облако=Fals
                 о2 = requests.post(OPENCODE_URL, timeout=180,
                                    headers={"Content-Type": "application/json",
                                             "Authorization": "Bearer " + _кл},
-                                   json={"model": OPENCODE_MODEL,
+                                   json={"model": _облачная_сейчас(),
                                          "messages": [{"role": "system", "content": system},
                                                       {"role": "user", "content": prompt}],
                                          "max_tokens": min(max(max_tokens or 2000, 3000) * 3,
@@ -14957,7 +14967,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # 🔴 Здесь стоял свой, короткий системный промт — а рядом жила функция
                 # dsoc_системный() со списком команд, и её никто не звал. Ассистент поэтому не знал
                 # ни одной нашей команды, хотя весь смысл затеи был в том, чтобы он их подсказывал.
-                тело = {"model": OPENCODE_MODEL,
+                тело = {"model": _облачная_сейчас(),
                         "messages": ([{"role": "system", "content": dsoc_системный()}]
                                      + dsoc_чистые(реплики[-60:])),
                         # 🔴 06.08.2026, владелец: «у нас же лимит выходных ответа не врезан?
