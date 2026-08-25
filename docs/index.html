@@ -961,7 +961,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1506</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1507</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1833,7 +1833,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1506';
+const APPVER = 'v1507';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -12612,12 +12612,39 @@ function _chainBox(){
     const anchor=document.getElementById('res'); anchor.parentNode.insertBefore(b, anchor); }
   return b;
 }
+// №29 (владелец: «имена передатчиков должны содержать короткие УЗНАВАЕМЫЕ имена… например
+// Абу Муавия — так его в основном передаёт Бухари»). В цепи имя резалось до двух слов, и в
+// заголовке стояло «سليمان بن + محمد بن» — «Сулейман сын», «Мухаммад сын». По таким огрызкам
+// человека не узнать. А словарь привычных имён у нас есть и знает верные: #2638 → «الاعمش»
+// (10 420 упоминаний), #5577 → «أبو معاوية الضرير» (2 462) — ровно то, что назвал владелец.
+// Порядок: лакаб из словаря → шухра по правилам → первые два слова, как было.
+let _лакабЗаказан=false;
+function _имяУзнаваемое(c){
+  try{
+    const пол=String((c&&c.nm)||'').trim();
+    if(!пол) return '';
+    if(typeof _lakab==='object' && _lakab){
+      const L=_lakab[String(c.id)];
+      if(L && L[1] && L[0]) return String(L[0]);       // помечен основным — самое узнаваемое
+    } else if(!_лакабЗаказан && typeof loadLakab==='function'){
+      // ⚠️ ОДИН раз: без флага каждый вызов заказывал бы загрузку и звал сам себя — вечная перерисовка
+      _лакабЗаказан=true;
+      loadLakab().then(()=>{ try{ chainRender(); }catch(e){} }).catch(()=>{});
+    }
+    if(typeof _shuhraOf==='function'){
+      const ш=_shuhraOf(пол, null);
+      if(ш && ш.length>2) return ш;
+    }
+    return пол.split(' ').slice(0,2).join(' ');
+  }catch(e){ return String((c&&c.nm)||'').split(' ').slice(0,2).join(' '); }
+}
 function chainRender(){
   const b=_chainBox(); const n=_chainSel.length;
   b.style.display=(typeof modes!=='undefined'&&modes.chain)?'block':'none';
   const md=window._chainMode||'any';
   window._chainForms=(window._chainForms||[]).slice(0,Math.max(0,_chainSel.length-1));
   const _sh2=nm=>esc(String(nm||'').split(' ').slice(0,2).join(' '));
+  const _shУзн=c=>esc(_имяУзнаваемое(c));   // №29: узнаваемое имя вместо огрызка «Сулейман сын»
   const seqMode=(md==='seq');
   // С40: селект формы передачи на КАЖДОМ стыке. kind: 'pre'(жёлт,до 1-го) · 'mid'(зел,между) · 'post'(жёлт,после посл.)
   const _chFsel=(idKey,fv,title,kind)=>{ const amb=(kind!=='mid');
@@ -12626,7 +12653,7 @@ function chainRender(){
   const chipParts=[];
   _chainSel.forEach((c,i)=>{
     if(seqMode && i===0)   // форма ПЕРЕД 1-м передатчиком (как собиратель книги его цитирует)
-      chipParts.push(_chFsel('pre', window._chainFormPre||'', 'Форма, которой собиратель цитирует 1-го передатчика ('+_sh2(c.nm)+'): حدثنا/أخبرنا…', 'pre'));
+      chipParts.push(_chFsel('pre', window._chainFormPre||'', 'Форма, которой собиратель цитирует 1-го передатчика ('+_shУзн(c)+'): حدثنا/أخبرنا…', 'pre'));
     // #549 (скрин владельца: «непонятно, кто 1-й, кто 2-й, хотя написано ПОРЯДОК ВВОДА = ПОРЯДОК ЦЕПИ»):
     // перед именем — номер слота. Имя НЕ режем многоточием — в конструкторе важно видеть его целиком.
     chipParts.push('<span title="'+esc(c.nm)+'" style="display:inline-flex;align-items:center;gap:6px;background:#2e1d4a;border:1px solid #6c5ce7;border-radius:9px;padding:5px 9px;margin:2px;direction:rtl">'
@@ -12634,9 +12661,9 @@ function chainRender(){
       +'<b style="font-size:calc(13.5px * var(--txtScale,1))">'+esc(c.nm)+'</b><span style="font-size:calc(10px * var(--txtScale,1));color:#9b8bd0">#'+esc(String(c.id))+'</span><span class="chDel" data-i="'+i+'" style="cursor:pointer;color:#e07f7f;font-weight:700;padding:0 3px">✕</span></span>');   // QA-HIGH: esc(c.id) — защита от XSS через подделанную share-ссылку #go= (c.id из ctx)
     if(seqMode){
       if(i<_chainSel.length-1){ const fv=window._chainForms[i]||'';   // форма МЕЖДУ парой
-        chipParts.push(_chFsel(String(i), fv, 'Как '+_sh2(c.nm)+' получил от '+_sh2(_chainSel[i+1].nm)+' (форма передачи)', 'mid')); }
+        chipParts.push(_chFsel(String(i), fv, 'Как '+_shУзн(c)+' получил от '+_shУзн(_chainSel[i+1])+' (форма передачи)', 'mid')); }
       else   // форма ПОСЛЕ последнего (как он получил выше — от Пророка ﷺ / следующего звена)
-        chipParts.push(_chFsel('post', window._chainFormPost||'', 'Как последний ('+_sh2(c.nm)+') получил выше (от Пророка ﷺ / следующего): سمعت/عن النبي/قال…', 'post'));
+        chipParts.push(_chFsel('post', window._chainFormPost||'', 'Как последний ('+_shУзн(c)+') получил выше (от Пророка ﷺ / следующего): سمعت/عن النبي/قال…', 'post'));
     }
   });
   const chips=chipParts.join('');
@@ -13500,7 +13527,7 @@ async function chainRun(){
   const prog=document.createElement('div'); prog.className='hint'; prog.style.cssText='font-size:calc(11.5px * var(--txtScale,1));margin:2px 0 6px';
   const resBox=document.createElement('div');
   out.appendChild(hd); out.appendChild(prog); out.appendChild(resBox);
-  const namesLbl='⛓ '+_chainSel.map(c=>String(c.nm||'').split(' ').slice(0,2).join(' ')).join(' + ')+(adj?' — РЯДОМ в иснаде':' — вместе в иснаде');
+  const namesLbl='⛓ '+_chainSel.map(c=>_имяУзнаваемое(c)).join(' + ')   /* №29: узнаваемое имя, а не первые два слова */+(adj?' — РЯДОМ в иснаде':' — вместе в иснаде');
   const allIds=[].concat(...groups);   // #594/#653 (С67): все выбранные передатчики (+ их алиасы) — обводим ВСЕХ разом в выдаче
   let found=0;
   for(let k=0;k<anchor.length;k++){
