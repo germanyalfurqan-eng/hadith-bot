@@ -303,6 +303,22 @@ window.тихоОтчёт = function () {
   .exrow.on .plus{color:#4ade80}
   .exsep{font-size:calc(11px * var(--txtScale,1));color:var(--hint);margin:10px 2px 4px;text-transform:uppercase;letter-spacing:.5px}
   .colbar{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+  /* 🎬 №60 · богатые анимации — включаются тумблером в Настройках, по умолчанию НЕТ.
+     Только CSS: никаких таймеров и работы в главном потоке, иначе вернулись бы рывки,
+     на которые жаловались (#678/#665/#664). */
+  body.animRich .modal .panel{ animation:animRichIn .22s cubic-bezier(.22,1,.36,1) both }
+  @keyframes animRichIn{ from{ opacity:0; transform:translateY(10px) scale(.985) } to{ opacity:1; transform:none } }
+  body.animRich button, body.animRich .mini, body.animRich .chip, body.animRich .go{
+    transition:transform .13s ease, box-shadow .13s ease, background-color .13s ease }
+  body.animRich button:active, body.animRich .mini:active, body.animRich .chip:active, body.animRich .go:active{
+    transform:scale(.96) }
+  body.animRich #res .card{ animation:animRichCard .26s ease-out both }
+  @keyframes animRichCard{ from{ opacity:0; transform:translateY(7px) } to{ opacity:1; transform:none } }
+  /* системное «уменьшить движение» сильнее галочки — оно ставится от укачивания */
+  @media (prefers-reduced-motion:reduce){
+    body.animRich .modal .panel, body.animRich #res .card{ animation:none }
+    body.animRich button, body.animRich .mini, body.animRich .chip, body.animRich .go{ transition:none }
+  }
   .mini{font-size:calc(12px * var(--txtScale,1));color:var(--link);cursor:pointer;background:none;border:none;padding:2px}
   /* 🔴 v1504 · ОБЛАСТЬ ПАЛЬЦА. Замер на боевом в телефонном окне: из 12 видимых кнопок
      10 меньше 44 px по меньшей стороне — крестик очистки 32×35, «недавние» 36×32,
@@ -961,7 +977,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1508</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1509</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1251,6 +1267,7 @@ window.тихоОтчёт = function () {
           <div class="row"><span>📳 Тактильная отдача (вибро) на действия</span><div class="sw" id="hapticSw"></div></div>
           <div class="row"><span>🖥 На весь экран <span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1))">(растянуть приложение, скрыть шапку Telegram)</span></span><div class="sw" id="fsSw"></div></div>
           <div class="row"><span>✨ Свечение при обновлении <span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1))">(клик на лого = домой, свет из угла)</span></span><div class="sw" id="glowSw"></div></div>
+          <div class="row"><span>🎬 Богатые анимации <span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1))">(плавное открытие окон, отклик кнопок, появление карточек; по умолчанию выключено — на слабом телефоне может подтормаживать)</span></span><div class="sw" id="animRichSw"></div></div>
           <div class="row"><span>📶 Индикатор сети <span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1))">(в углу: что грузится, сколько и с какой скоростью; нажать — подробности)</span></span><div class="sw" id="netIndSw"></div></div>
           <div class="row" id="netIndDevRow" style="display:none"><span>🛠 По умолчанию у новых <span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1))" id="netIndDevWhat">—</span></span><div class="sw" id="netIndDevSw"></div></div>
     </details>
@@ -1833,7 +1850,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1508';
+const APPVER = 'v1509';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -21231,6 +21248,32 @@ try{
   }
 }catch(e){_тихо(e,"L655dev")}
 var _gl=document.getElementById('glowSw'); if(_gl){ _gl.classList.toggle('on',!cfg.noLogoGlow); _gl.onclick=()=>{ cfg.noLogoGlow=!cfg.noLogoGlow; saveCfg(cfg); _gl.classList.toggle('on',!cfg.noLogoGlow); toast(cfg.noLogoGlow?'Свечение выключено':'✨ Свечение включено'); }; }
+// №60 (владелец: «сделай возможность ВКЛЮЧАТЬ режим более красивой анимации всего… вдруг у
+// кого-то телефон будет тянуть»). Потому и выключено по умолчанию: это для тех, у кого запас
+// есть. Включить всем — значит вернуть рывки владельцам слабых телефонов, а на них уже
+// жаловались (#678/#665/#664: «подвисает поиск, не могу нажать ничего»).
+var _ar=document.getElementById('animRichSw');
+if(_ar){
+  var _прим=function(){
+    var хочет=!!cfg.animRich;
+    // ⚠️ системное «уменьшить движение» сильнее галочки: его ставят от укачивания, а не от скуки
+    var меньшеДвижения=false;
+    try{ меньшеДвижения=window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
+    document.body.classList.toggle('animRich', хочет && !меньшеДвижения);
+    _ar.classList.toggle('on', хочет);
+    return меньшеДвижения;
+  };
+  _прим();
+  _ar.onclick=function(){
+    cfg.animRich=!cfg.animRich; saveCfg(cfg);
+    var режет=_прим();
+    try{
+      toast(!cfg.animRich ? 'Анимации обычные'
+            : (режет ? '🎬 Включено, но система просит меньше движения — уважаем её'
+                     : '🎬 Богатые анимации включены'));
+    }catch(e){}
+  };
+}
 var _th=document.getElementById('themeSel'); if(_th){ _th.value=cfg.theme||'dark'; _th.onchange=()=>{ cfg.theme=_th.value; saveCfg(cfg); applyTheme(); toast(cfg.theme==='light'?'Светлая тема ☀️':(cfg.theme==='sand'?'Бежевая тема 🏜':'Тёмная тема 🌙')); }; }
 var _arf=document.getElementById('arFontSel'); if(_arf){ _arf.value=cfg.arFont||'naskh'; _updArFontStatus(); _arf.onchange=()=>{ cfg.arFont=_arf.value; saveCfg(cfg); applyArFont(); _updArFontStatus(); toast('🔡 Шрифт арабского изменён'); }; }   // #51 · #138 дефолт naskh · #264/#256 индикатор наличия шрифта
 // #291/#329/#355/#295: аудит шрифтов — один аят С ОГЛАСОВКАМИ каждым шрифтом из списка + честная метка «загружен/фолбэк» (fontInstalled). Видно, какой шрифт битый и какой сейчас активен.
