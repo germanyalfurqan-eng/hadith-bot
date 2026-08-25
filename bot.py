@@ -17819,6 +17819,30 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ============ ПОИСК ПО SUNNAH.ONE (الدرر السنية): хукм + перевод + تخريج ============
     sun = parse_sunnah(text)
     smart = parse_smart_sunnah(text)
+    # 🔴 ОБР-1533 (25.08.2026), владелец: «технадзор чё-то влазит в разговор».
+    # Участник @jamaat_ru написал «Сунна это не только то что пророк делал или не делал» —
+    # бот принял это за команду «сунна <запрос>», пошёл искать и ответил в чужой разговор
+    # «по этому запросу ничего нет». Никто его не звал.
+    # Заслон против этого уже ставился по #1470, но ловил только ОДНО слово после триггера;
+    # тут слов десять, и он пропустил. Защита была, а главного случая не брала.
+    # Лечение взято отсюда же — так уже сделано для голосовых: в группе отвечаем ТОЛЬКО когда
+    # обратились. Мягче: без зова принимаем, лишь если за словом арабский или цифры —
+    # «сунна حديث…», «достоверность 7288» ни с чем не спутать, а русская фраза это разговор.
+    if (sun or smart) and getattr(update.effective_chat, "type", "") != "private":
+        _звали_тут = False
+        try:
+            _пред_с = update.message.reply_to_message
+            _звали_тут = bool(_пред_с and getattr(_пред_с, "from_user", None)
+                              and _пред_с.from_user.id == context.bot.id)
+        except Exception:
+            _звали_тут = False
+        if not _звали_тут:
+            try:
+                _звали_тут = parse_dsoc(text or "") is not None
+            except Exception:
+                _звали_тут = False
+        if not _звали_тут and not re.search(r"[\u0600-\u06FF\d]", (sun or smart or "")):
+            sun = smart = None            # чужой разговор — молчим совсем, даже об ошибке
     if sun or smart:
         if smart:
             await _мсообщ(update).reply_text(f"🧠 Подбираю ключевые слова для «{smart}»...")
@@ -25755,7 +25779,21 @@ async def _chat_seen(update, context):
         if ch and ch.id not in _seen_chats:
             _seen_chats.add(ch.id)
             _запомнить_чат(ch, "виден")
-            await context.bot.send_message(LOG_CHAT_ID, f"📡 Чат/канал: «{ch.title}» | id={ch.id} | type={ch.type}")
+            # 🔴 Заявка №9, дословно: «в чём суть такого формата? что я могу понять из него?».
+            # Стояла голая строка «Чат/канал: X | id=… | type=channel» — техническая запись без
+            # объяснения, зачем она и что с ней делать. Владелец справедливо не понял.
+            # Теперь запись говорит ТРИ вещи: что случилось, куда нажать и зачем это вообще пишется.
+            _вид = {"channel": "канал", "supergroup": "группу", "group": "группу"}.get(ch.type, "чат")
+            _сс = _ссылка_на_чат(ch)
+            await context.bot.send_message(
+                LOG_CHAT_ID,
+                ("📡 <b>Впервые вижу этот %s</b> — «%s»\n%s"
+                 "id: <code>%s</code>\n\n"
+                 "<i>Записал в реестр чатов: теперь его видно в кабинете и можно "
+                 "разрешить, запретить или выйти. Само по себе действий не требует.</i>")
+                % (_вид, html.escape(ch.title or "без названия"),
+                   (_сс + "\n") if _сс else "", ch.id),
+                parse_mode="HTML", disable_web_page_preview=True)
     except Exception:
         pass
 async def _bot_member(update, context):
