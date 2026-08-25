@@ -961,7 +961,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1505</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1506</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1833,7 +1833,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1505';
+const APPVER = 'v1506';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -9751,7 +9751,7 @@ async function openNarratorRijal(name, forceId){
       // именно его. Считаем один раз здесь: ниже она нужна и спискам мест, и охвату (не считаем дважды).
       let _meIds=[+_vid2]; try{ _meIds=await _aliasGroup(+_vid2); }catch(e){_тихо(e,"L7667")}
       const cc=await _narrCard(_vid2);
-      if(cc){ const gb=_genBadge(cc[5]||'', cc[4]);
+      if(cc){ const gb=_genBadge((cc[5]||'')+' '+(cc[6]||'')+' '+(cc[7]||''), cc[4]);   // №28: поле طبقة тоже, иначе метка гадает по году
         _isSahForRj=!!(gb && gb[0]==='صحابي');
         if(gb){ const gp=document.createElement('div'); gp.style.cssText='margin-top:9px';
           gp.innerHTML='<span style="color:var(--hint);font-size:calc(12px * var(--txtScale,1))">Поколение:</span> <span style="display:inline-block;padding:3px 11px;border-radius:20px;border:1px solid '+gb[1]+';color:'+gb[1]+';font-size:calc(12.5px * var(--txtScale,1))" dir="rtl" title="'+esc(gb[2]||'')+'">'+(gb[3]||esc(gb[0]))+'</span>';
@@ -15311,12 +15311,31 @@ async function _isSahById(mid){ if(mid==null) return false; try{
   const _gb=_genBadge((c[5]||'')+' '+(c[6]||'')+' '+(c[7]||''), c[4]); if(_gb && _gb[0]==='صحابي') return true;
   const _cn=stripDiac(c[1]||'').trim(); for(const g of _GUARANTEED_SAHABA){ const gc=stripDiac(g); if(gc && (_cn===gc || _cn.startsWith(gc+' '))) return true; }
   return false; }catch(e){ return false; } }
+// №28 (владелец: «где отметки сахаби табии и так далее»). Номер поколения по «Такриб
+// ат-Тахзиб» Ибн Хаджара лежит у нас в поле طبقة и до сих пор НЕ ЧИТАЛСЯ: метка гадала по
+// году смерти, имея точный ответ рядом. У аль-Амаша (#2638) там «الخامسة», а метка стояла
+// «≈ Таби‘ин, приближённо по году».
+// ⚠️ ПОРЯДОК ЗДЕСЬ — ЧАСТЬ СМЫСЛА: «الثانية عشرة» (двенадцатая) содержит внутри «الثانية»
+// (вторая). Проверь простые формы раньше составных — и последний в цепочке передатчик уедет
+// в старшие таби‘ин. Составные идут первыми, и трогать этот порядок нельзя.
+const _ТАБАКИ=[[/الثانية\s*عشر/,12],[/الحادية\s*عشر/,11],[/العاشرة/,10],[/التاسعة/,9],
+  [/الثامنة/,8],[/السابعة/,7],[/السادسة/,6],[/الخامسة/,5],[/الرابعة/,4],[/الثالثة/,3],
+  [/الثانية/,2],[/الأولى|الاولى/,1]];
+function _табакаИзСвода(s){ const t=String(s||''); for(const [re,n] of _ТАБАКИ){ if(re.test(t)) return n; } return 0; }
 function _genBadge(rk, death){
   const rkStr=String(rk||'');
   // M475: проверка гарантированного списка знаменитых сахабов (явное имя — имеет приоритет)
   if(rkStr){ for(const g of _GUARANTEED_SAHABA){ if(rkStr.includes(g)) return ['صحابي','#e8c35a','сахабство — гарантированный сахаба (M475)',null,'Сподвижник']; } }   /* #164: 5-й элем = видимый рус-ярлык положения */
   if(/صحاب|صحبة|بدري|شهد بدرا|من المهاجرين|من الأنصار|زوج النبي|أم المؤمنين|له رؤية/.test(rkStr)) return ['صحابي','#e8c35a','сахабство — из ранга (доказано сводом)',null,'Сподвижник'];   // ловит и «من صغار الصحابة», бадри, мухаджиров…
   if(/أمير المؤمنين/.test(rkStr)&&(+death||0)<=45) return ['صحابي','#e8c35a','амир аль-муминин ранней эпохи (халифы-сахабы); титул БЕЗ года не довод — у Бухари он «في الحديث»',null,'Сподвижник'];
+  // №28: точная ступень — по табаке из свода. Стоит НИЖЕ сахабских правил намеренно:
+  // сахабство определяется именем и маркерами и не должно уступать номеру поколения.
+  const _таб=_табакаИзСвода(rk);
+  if(_таб===1) return ['صحابي','#e8c35a','первая табака по «Такриб ат-Тахзиб» — сподвижник',null,'Сподвижник'];
+  if(_таб>=2&&_таб<=5) return ['تابعي','#7fc8e8','طبقة '+_таб+' по «Такриб ат-Тахзиб» Ибн Хаджара — таби‘ин (точно, не по году)',null,'Таби‘ин'];
+  if(_таб===6) return ['~تابعي','#7fc8e8','шестая табака: современники пятой, встреча со сподвижником НЕ доказана — таби‘ином не объявляем',null,'≈ Таби‘ин'];
+  if(_таб>=7&&_таб<=9) return ['تبع الأتباع','#b9a7ff','طبقة '+_таб+' — таби‘ ат-табиин (точно, не по году)',null,'Таби‘ ат-табиин'];
+  if(_таб>=10) return ['بعد أتباع التابعين','#d8c08a','طبقة '+_таб+' — поколение после таби‘ ат-табиин',null,'После таби‘ ат-табиин'];
   const d=+death||0; if(!d) return null;
   if(d<=110) return ['تابعي','#7fc8e8','таби‘ин по эпохе (год смерти ≤110, сахабские маркеры в ранге отсутствуют → сахабство не приписываем, но и «?» не вешаем — ЗАКОН ИМЕНИ)',null,'Таби‘ин'];   // ЗАКОН ИМЕНИ(С46): «?» только у реально неизвестных; сюда доходят лишь те, у кого НЕТ сахаба-маркеров (выше отлавливаются) → таби‘ин по умолчанию эпохи
   if(d<=180) return ['~تابعي','#7fc8e8','приближённо, по году смерти',null,'≈ Таби‘ин'];
@@ -15560,7 +15579,7 @@ function _narrRow(c){   // строка-кандидат: ПРИВЫЧНОЕ и�
       +(rk?('<span dir="rtl" style="display:block;color:#9aa7b8">'+esc((''+rk).slice(0,38))+'</span>'):'')
       +(c.id!=null?('<span style="display:block;color:#5b87b5;font-size:calc(10px * var(--txtScale,1))">#'+c.id+'</span>'):'');
     // поколение — заметным PILL ПОД ИМЕНЕМ (как رجال الشيخين; замечание «слева незаметно»)
-    const gb=_genBadge(rk, cc[4]);
+    const gb=_genBadge((rk||'')+' '+(cc[7]||''), cc[4]);   // №28: + поле طبقة, иначе точная ступень не видна
     const host=r.children[1];
     if(gb&&host&&!host.querySelector('.genB')){
       const BG={'#e8c35a':'rgba(232,195,90,.13)','#7fc8e8':'rgba(127,200,232,.13)','#b9a7ff':'rgba(185,167,255,.13)','#d8c08a':'rgba(216,192,138,.11)'};
