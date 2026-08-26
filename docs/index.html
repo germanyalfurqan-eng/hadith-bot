@@ -966,7 +966,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1513</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1514</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1839,7 +1839,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1513';
+const APPVER = 'v1514';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6715,6 +6715,8 @@ async function _bookLoad(){
         _html+='<div>'+_hnumBadge+_escTxt+'</div><div style="height:6px"></div>';
       }
       mainEl.innerHTML=_html.replace(/\n+/g,'<br>');
+      // #1610: вердикт нейротахкика к каждому номеру на листе (см. _bookNeuro)
+      try{ _bookNeuro(mainEl); }catch(e){_тихо(e,"L5410nt")}
       if(_foot){ // Паритет #33: сворачиваемый блок сносок
         const fb=document.createElement('div'); fb.style.cssText='margin-top:10px;border-top:1px dashed var(--border);padding-top:6px';
         const ft=document.createElement('div'); ft.style.cssText='cursor:pointer;font-size:calc(12px * var(--txtScale,1));color:var(--hint);user-select:none';
@@ -19306,6 +19308,59 @@ const _NEURO_BID={
 /* Книги, где номер карточки ВСЕГДА надо перевести мостом (у них одна нумерация, и она не та,
    по которой считались вердикты). Дарими здесь НЕТ намеренно: у него решает метка на хадисе. */
 const _NEURO_ЧЕРЕЗ_МОСТ={malik:1, abdbinhumayd:1};
+/* ═══ НЕЙРОТАХКИК НА СТРАНИЦЕ КНИГИ (заявка #1610, 26.08.2026) ══════════════════════════
+   Владелец: «вне бухари и муслима кучу хадисов открывает у меня потонно, и нейротахкика
+   нету». Мерил я не там: в выдаче поиска и в читалке сводов вердикт есть (проверено на
+   Абу Дауде №1 — «🟡 хасан»), а на странице КНИГИ его не было ни одного.
+   Якорь для него давно готов: разбор страницы рисует каждому номеру бейдж «№ хадиса в
+   этой книге» (M110/#538) — к нему и привязываемся.
+   ⛔ Только если открытая книга — ТА САМАЯ печать, по которой вердикт считался. Номера у
+   печатей разные (Малик: вердикт на 28107, книга открывается 1699), и вердикт по чужому
+   номеру сядет на соседний хадис. Пробел честнее ложного приговора (#649). */
+const _NEURO_ПЕЧАТИ=(function(){ const s=new Set(); try{ for(const k in _NEURO_BID) s.add(String(_NEURO_BID[k])); }catch(e){} return s; })();
+async function _bookNeuro(host){
+  try{
+    if(!host) return;
+    const bid=String((typeof _bookView!=='undefined' && _bookView.id)||'');
+    if(!bid) return;
+    const чипы=host.querySelectorAll('span[title="№ хадиса в этой книге"]');
+    if(!чипы.length) return;
+    if(!_NEURO_ПЕЧАТИ.has(bid)){
+      /* Печать не та. Молчать нельзя — пустое место читается как «не сделано» (тот же
+         разбор, что в neuroПочему). Но и грей-бейдж у КАЖДОГО номера не годится: их на
+         листе десяток, и страница превратится в частокол одинаковых отговорок.
+         Одна строка на лист: причина названа, глаза свободны. */
+      if(!host.querySelector('#bkNtWhy')){
+        /* 🔴 Причину НЕ пишем своими словами. У молчания две разных причины, и назвать
+           не ту — это ровно та беда, что чинили в #1281: приложение валило указ владельца
+           («на Сахихайн разбор не наводим») на свою недоделку с нумерацией. Здесь бы
+           повторилось буква в букву: страница Бухари — это не «печать не сверена».
+           Спрашиваем ЕДИНСТВЕННУЮ дверь, она знает обе причины и говорит верную. */
+        let _пр=''; try{ _пр=neuroПричинаМолчания(null, bid)||''; }catch(e){ _пр=''; }
+        if(_пр){
+          const п=document.createElement('div'); п.id='bkNtWhy';
+          п.style.cssText='margin:0 0 8px;line-height:1.6';
+          п.innerHTML=_пр;
+          if(host.parentNode) host.parentNode.insertBefore(п, host);
+        }
+      }
+      return;
+    }
+    const _влат=(с)=>String(с||'').replace(/[\u0660-\u0669]/g,(d)=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[^0-9]/g,'');
+    for(const ч of чипы){
+      if(ч.dataset && ч.dataset.nt) continue;          // второй проход не задваивает
+      const n=_влат(ч.textContent);
+      if(!n) continue;
+      let html=''; try{ html=neuroBadge(await neuroVerdict(bid, n)); }catch(e){ html=''; }
+      if(ч.dataset) ч.dataset.nt='1';
+      if(!html) continue;
+      const s=document.createElement('span');
+      s.style.cssText='margin-inline-start:6px;vertical-align:baseline';
+      s.innerHTML=html;
+      if(ч.parentNode) ч.parentNode.insertBefore(s, ч.nextSibling);
+    }
+  }catch(e){ try{_тихо(e,"bookNeuro");}catch(_e){} }
+}
 let _мостН=null, _мостНP=null;
 async function _neuroМост(){
   if(_мостН) return _мостН;
