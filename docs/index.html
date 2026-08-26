@@ -743,6 +743,25 @@ window.тихоОтчёт = function () {
   #qrBody .qrToolsBtn:hover{ border-color:var(--acc); box-shadow:0 4px 12px rgba(0,0,0,.38) }
   #qrBody .qrToolsBtn:active{ transform:scale(.92) }
   @media(max-width:520px){ #qrBody .qrAyah{ padding-inline-start:48px } }
+  /* #47 (владелец: «сделай удобнее, экономнее экран читалки, пол экрана забирает верх.
+     Может за счёт возможности включения режима скрытия»). Замер на экране 812 px: заголовок
+     68 + поиск 42 + навигация 158 = 268 px, до первого аята 571 px — 70% экрана уходило
+     прежде, чем начинался текст, на чтение оставалось 471.
+     При прокрутке ВНИЗ поиск и навигация уезжают, при прокрутке вверх возвращаются.
+     Заголовок с «закрыть» не прячем никогда: выход не должен зависеть от того, куда человек
+     тянул палец. max-height в обычном состоянии задан нарочно — без него уход был бы
+     мгновенным рывком, а не движением. */
+  #qrModal .panel #qrSearch, #qrModal .panel #qrNav{ max-height:420px; transition:max-height .22s ease, opacity .18s ease }
+  /* !important тут не от лени: у поля поиска и у ряда навигации отступы и рамка заданы
+     ИНЛАЙНОМ прямо в разметке читалки, а инлайн сильнее таблицы стилей. Без него полоса
+     сжималась до 22 px вместо нуля — рамка с отступами оставались и держали место.
+     Мерил без перехода: со включённым переход в скрытой вкладке не двигается вовсе и
+     показывает начальное значение (на это уже попадался). */
+  #qrModal .panel.qrTight #qrSearch,
+  #qrModal .panel.qrTight #qrNav{ max-height:0; opacity:0; overflow:hidden;
+    margin-top:0!important; margin-bottom:0!important;
+    padding-top:0!important; padding-bottom:0!important; border-width:0!important }
+  @media (prefers-reduced-motion:reduce){ #qrModal .panel #qrSearch, #qrModal .panel #qrNav{ transition:none } }
   /* ═══ КАРТОЧКА АЯТА ═══════════════════════════════════════════════════════════════════════
      Владелец 27.07.2026: «карточка аята вообще убогая, уродская, стиль как будто древний стал резко —
      продумай каждую деталь и сделай в соответствии с остальным».
@@ -975,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1515</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1516</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1201,6 +1220,7 @@ window.тихоОтчёт = function () {
           <div class="row"><span>🔡 Автоподсказки в Коране (списком при вводе номера)</span><div class="sw" id="acSw"></div></div>
           <div class="row"><span>▶️ Авто-переход на следующую суру <span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1))">(в плеере/чтеце Корана)</span></span><div class="sw" id="qrAutoNextSw"></div></div>
           <div class="row"><span>🎚 Крутилка быстрой прокрутки в Коране <span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1))">(бар слева — тянуть, листать суру)</span></span><div class="sw" id="qrThumbSw"></div></div>
+          <div class="row"><span>📏 Экономный верх в читалке Корана <span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1))">(листаешь вниз — поиск и навигация прячутся, вверх — возвращаются)</span></span><div class="sw" id="qrTightSw"></div></div>
           <div class="row"><span>👆 Свайп влево/вправо — смена суры <span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1))">(в читалке Корана)</span></span><div class="sw" id="qrSwipeSw"></div></div>
     </details>
     <details class="setSec"><summary>📜 Хадисы и передатчики · 9</summary>
@@ -1848,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1515';
+const APPVER = 'v1516';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -10780,7 +10800,44 @@ function _qrFastScrollSetup(){
         if(dx<0 && cur<114){ _qrView={s:cur+1,a:0}; _qrLoad(); try{toast('→ сура '+(cur+1)+'. '+(SURA_NAMES[cur]||''));}catch(_e){_тихо(_e,"L8560")} }
         else if(dx>0 && cur>1){ _qrView={s:cur-1,a:0}; _qrLoad(); try{toast('← сура '+(cur-1)+'. '+(SURA_NAMES[cur-2]||''));}catch(_e){_тихо(_e,"L8561")} } } },{passive:true});
   }
-  setTimeout(()=>{ try{_qrThumbSync();}catch(e){_тихо(e,"L8563")} }, 80);
+  /* #47: тело читалки занимает ВСЁ, что осталось под верхом, а не жёсткие 58vh.
+     Замер показал, что одного сжатия верха мало: класс вешался, а читать оставалось те же
+     471 px из 812 — потому что высота тела задана долей экрана, а не остатком. При этом
+     73 px пустовали даже до всякого сжатия.
+     Считаем от настоящего положения тела: сколько под ним экрана — столько и берём. */
+  window._qrFitBody=function(){
+    try{
+      var _b=document.getElementById('qrBody'); if(!_b) return;
+      var _т=_b.getBoundingClientRect().top;
+      if(!(_т>0)) return;                       // читалка закрыта или ещё не на экране
+      var _h=Math.max(220, Math.round(window.innerHeight - _т - 14));
+      _b.style.maxHeight=_h+'px';
+    }catch(e){}
+  };
+  if(!window._qrFitWired){ window._qrFitWired=true;
+    window.addEventListener('resize',function(){ try{ window._qrFitBody(); }catch(e){} });
+    window.addEventListener('orientationchange',function(){ setTimeout(function(){ try{ window._qrFitBody(); }catch(e){} },300); });
+  }
+  /* #47: экономный верх. Вешаем ОДИН раз на то же тело, что и свайп, — тем же признаком
+     `_wired`, чтобы повторная загрузка суры не наплодила слушателей.
+     Пороги разные нарочно: прячем только после 60 px и уверенного движения вниз, а
+     возвращаем от малейшего движения вверх. Человеку, который потянулся к поиску, ждать
+     не приходится; читающему вниз — не мигает. */
+  if(b && !b._tightWired){ b._tightWired=true; var _tPrev=0;
+    b.addEventListener('scroll',function(){
+      var p=document.querySelector('#qrModal .panel'); if(!p) return;
+      if(cfg.qrTight===false){ p.classList.remove('qrTight'); return; }
+      var y=b.scrollTop;
+      var _был=p.classList.contains('qrTight');
+      if(y<30 || y<_tPrev-18) p.classList.remove('qrTight');
+      else if(y>60 && y>_tPrev+8) p.classList.add('qrTight');
+      // Пересчитываем ТОЛЬКО когда верх правда сдвинулся, и после того, как движение
+      // закончилось (.22s): раньше — померили бы высоту на полпути.
+      if(_был!==p.classList.contains('qrTight')) setTimeout(function(){ try{ window._qrFitBody(); }catch(e){} },240);
+      _tPrev=y;
+    },{passive:true});
+  }
+  setTimeout(()=>{ try{_qrThumbSync();}catch(e){_тихо(e,"L8563")} try{window._qrFitBody();}catch(e){_тихо(e,"L8563b")} }, 80);
 }
 // #70: всплывающая КАРТОЧКА АЯТА (тап по территории аята) — как эталон: ✕/шара/№, текст, перевод, тафсир, низ-бар (закладка/play/избранное), тап вне = закрыть.
 function _qrBookmarks(){ try{ return JSON.parse(localStorage.getItem('qr_bookmarks')||'[]'); }catch(e){ return []; } }
@@ -21469,7 +21526,8 @@ try{ applyI18nShell(); }catch(e){_тихо(e,"L17099")}   // M15: локализ
 var _rcw=document.getElementById('recentSw'); if(_rcw){ _rcw.classList.toggle('on',cfg.recent!==false); _rcw.onclick=()=>{ cfg.recent=(cfg.recent===false); saveCfg(cfg); _rcw.classList.toggle('on',cfg.recent!==false); if(cfg.recent===false) hideRecent(); }; }
 var _tjw=document.getElementById('tafJumpSw'); if(_tjw){ _tjw.classList.toggle('on',cfg.tafJump!==false); _tjw.onclick=()=>{ cfg.tafJump=(cfg.tafJump===false); saveCfg(cfg); _tjw.classList.toggle('on',cfg.tafJump!==false); }; }
 var _qan=document.getElementById('qrAutoNextSw'); if(_qan){ _qan.classList.toggle('on',cfg.qrAutoNext!==false); _qan.onclick=()=>{ cfg.qrAutoNext=(cfg.qrAutoNext===false); saveCfg(cfg); _qan.classList.toggle('on',cfg.qrAutoNext!==false); }; }   // M275: тумблер авто-перехода чтеца Корана
-var _qts=document.getElementById('qrThumbSw'); if(_qts){ _qts.classList.toggle('on',cfg.qrThumb!==false); _qts.onclick=()=>{ cfg.qrThumb=(cfg.qrThumb===false); saveCfg(cfg); _qts.classList.toggle('on',cfg.qrThumb!==false); try{_qrThumbSync();}catch(e){_тихо(e,"L17103")} }; }   // #46: тумблер крутилки прокрутки Корана
+var _qts=document.getElementById('qrThumbSw'); if(_qts){ _qts.classList.toggle('on',cfg.qrThumb!==false); _qts.onclick=()=>{ cfg.qrThumb=(cfg.qrThumb===false); saveCfg(cfg); _qts.classList.toggle('on',cfg.qrThumb!==false); try{_qrThumbSync();}catch(e){_тихо(e,"L17103")} }; }
+var _qtt=document.getElementById('qrTightSw'); if(_qtt){ _qtt.classList.toggle('on',cfg.qrTight!==false); _qtt.onclick=()=>{ cfg.qrTight=(cfg.qrTight===false); saveCfg(cfg); _qtt.classList.toggle('on',cfg.qrTight!==false); try{ var _p=document.querySelector('#qrModal .panel'); if(_p&&cfg.qrTight===false) _p.classList.remove('qrTight'); }catch(e){_тихо(e,"L17103b")} try{ toast(cfg.qrTight!==false?'📏 Экономный верх ВКЛ':'Экономный верх выкл'); }catch(e){} }; }   // #47   // #46: тумблер крутилки прокрутки Корана
 var _qsw=document.getElementById('qrSwipeSw'); if(_qsw){ _qsw.classList.toggle('on',cfg.qrSwipe!==false); _qsw.onclick=()=>{ cfg.qrSwipe=(cfg.qrSwipe===false); saveCfg(cfg); _qsw.classList.toggle('on',cfg.qrSwipe!==false); }; }   // #69: тумблер свайпа смены суры
 var _urb=document.getElementById('urBetaSw'); if(_urb){ _urb.classList.toggle('on',!!cfg.urBeta); _urb.onclick=()=>{ cfg.urBeta=!cfg.urBeta; saveCfg(cfg); _urb.classList.toggle('on',!!cfg.urBeta); toast(cfg.urBeta?'🧪 Единая читалка ВКЛ — метка 📖 ведёт в новый ридер':'Единая читалка выкл — старый ридер'); }; }   // M313-тумблер
 var _str=document.getElementById('strictSw'); if(_str){ _str.classList.toggle('on',cfg.strictSearch!==false); _str.onclick=()=>{ cfg.strictSearch=(cfg.strictSearch===false); saveCfg(cfg); _str.classList.toggle('on',cfg.strictSearch!==false); toast(cfg.strictSearch!==false?'🎯 Строгий поиск ВКЛ — только все слова':'Строгий поиск ВЫКЛ — покажет и близкие'); }; }   // M283-тумблер
