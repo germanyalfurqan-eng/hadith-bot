@@ -994,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1520</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1521</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1520';
+const APPVER = 'v1521';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7961,6 +7961,30 @@ function _приБлизости(el, fn, запас){
          оттуда и жалуется на дёрганье. Поэтому вверх не заглядываем. */
     }, {rootMargin:'0px 0px '+(запас==null?400:запас)+'px 0px'});
     io.observe(el);
+    /* 🔴 #735 (владелец: «Почему не выделены передатчик»), 29.08.2026.
+       Наблюдатель был ЕДИНСТВЕННЫМ входом в эту работу, и запасного входа у него не было.
+       Проверено на живом приложении: когда страница не рисуется (document.visibilityState =
+       'hidden' — свёрнутое окно, вкладка в фоне, WebView Telegram за другим экраном),
+       IntersectionObserver не отдаёт НИ ОДНОГО сообщения. Карточка Бухари №1 осталась с нулём
+       подсвеченных имён; тот же разбор, вызванный руками, подсветил шесть. То есть данные и код
+       были целы — молчал вход. А молчание входа неотличимо от «передатчиков в хадисе нет».
+       Страховка НЕ нарушает правило выше («не будить все карточки разом»): мы не заводим общий
+       таймер на список, а один раз спрашиваем у ЭТОЙ карточки её собственный прямоугольник —
+       видна ли она на самом деле. Не видна — не трогаем, ровно как и было. */
+    const _полеЗапаса=(запас==null?400:запас);
+    const _виднаСама=()=>{ try{
+      if(сделано || !el.isConnected) return false;
+      const r=el.getBoundingClientRect(); if(!r.height && !r.width) return false;
+      const H=window.innerHeight||0, W=window.innerWidth||0;
+      return r.top < H+_полеЗапаса && r.bottom > -_полеЗапаса && r.left < W && r.right > 0;
+    }catch(_){ return false; } };
+    const _страховка=()=>{ if(!_виднаСама()) return;
+      сделано=true; try{ io.disconnect(); }catch(_){_тихо(_,"L6431")} try{ fn(); }catch(_e){_тихо(_e,"L6431")} };
+    setTimeout(_страховка, 1200);
+    // Возврат из фона — второй и последний шанс: там наблюдатель тоже мог смолчать.
+    try{ const _вз=function(){ if(сделано || document.hidden){ if(сделано) document.removeEventListener('visibilitychange',_вз); return; }
+      setTimeout(()=>{ _страховка(); try{ document.removeEventListener('visibilitychange',_вз); }catch(_){_тихо(_,"L6432")} }, 220); };
+      document.addEventListener('visibilitychange', _вз); }catch(_){_тихо(_,"L6432")}
   }catch(e){ try{ fn(); }catch(_e){_тихо(_e,"L6430")} }
 }
 function cardHadith(d,groups){
@@ -19091,12 +19115,42 @@ function _подсветитьСподвижника(card, имя, id, onClick){
   }catch(e){_тихо(e,"L15340")}
   return false;
 }
+/* 🔴 #735 (владелец: «Почему не выделены передатчик»), 29.08.2026.
+   Карточка молчала. Если имена не опознались, человек видел обычный текст — и не мог отличить
+   «ещё считается» от «цепь не разобрана» и от «сломалось». Вопрос владельца ровно об этом:
+   он спрашивает ПОЧЕМУ, а спросить было не у кого. Закон из #608 — «показывать, что
+   происходит» — касается и молчания.
+   Пишем ОДНУ строку и только когда подсветки действительно нет. Проверяем ДВАЖДЫ и не спеша:
+   codif ставит метки через 60 и 220 мс, добор имён по словарю приходит асинхронно — поспешив,
+   мы оболгали бы медленный, но исправный разбор.
+   Строка появляется лишь у карточек, до которых разбор реально дошёл (а доходит он только до
+   видимых) — списком из полусотни надписей это не станет. */
+function _отметитьБезПередатчиков(card, поТаблице){
+  const естьПодсветка=()=>{ try{
+    if(!card || !card.isConnected) return true;             // карточки нет — говорить не о чем
+    return !!card.querySelector('.ar .nhl, .ar .relNarr, .ar .nhlMe');
+  }catch(_){ return true; } };
+  setTimeout(()=>{ if(естьПодсветка()) return;
+    setTimeout(()=>{ try{
+      if(естьПодсветка()) return;
+      if(card.querySelector('.narrNone')) return;
+      const ar=card.querySelector('.ar'); if(!ar) return;
+      const d=document.createElement('div'); d.className='narrNone';
+      d.style.cssText='margin-top:6px;font-size:calc(11.5px * var(--txtScale,1));color:var(--hint);opacity:.92;line-height:1.5';
+      d.textContent = поТаблице ? '👤 передатчики этого хадиса в тексте не найдены'
+                                : '👤 цепь этого хадиса ещё не разобрана — имена не подсвечены';
+      d.title = 'Имена подсвечиваются по выверенной цепи передатчиков. Нет выверенной цепи — нет и подсветки: гадать мы намеренно не будем.';
+      ar.insertAdjacentElement('afterend', d);
+    }catch(e){_тихо(e,"L735note")} }, 2600);
+  }, 1500);
+}
 // A: авто-подсветка передатчиков в карточке. Сперва — ТОЧНАЯ по таблице (codif); нет данных по хадису → старый эвристический путь.
 function autoHighlightNarr(text, card, out, ref){
-  try{ const pl=_codifPlace(ref); if(pl){ _codifHighlight(text,card,out,pl).then(ok=>{ if(!ok){ try{_autoHLGuess(text,card,out);}catch(e){_тихо(e,"L15345")} } }).catch(()=>{ try{_autoHLGuess(text,card,out);}catch(e){_тихо(e,"L15345")} });
+  try{ const pl=_codifPlace(ref); if(pl){ _codifHighlight(text,card,out,pl).then(ok=>{ if(!ok){ try{_autoHLGuess(text,card,out);}catch(e){_тихо(e,"L15345")} } try{_отметитьБезПередатчиков(card, !!ok);}catch(e){_тихо(e,"L15345")} }).catch(()=>{ try{_autoHLGuess(text,card,out);}catch(e){_тихо(e,"L15345")} try{_отметитьБезПередатчиков(card, false);}catch(e){_тихо(e,"L15345")} });
     try{ if(cfg.verify) verifyNarr(card, pl, text); }catch(e){_тихо(e,"L15346")}   // #VERIFY: независимая сверка с эталоном (text → автономный парс на сборниках без краула)
     return; } }catch(e){_тихо(e,"L15347")}
   _autoHLGuess(text,card,out);
+  try{ _отметитьБезПередатчиков(card, false); }catch(e){_тихо(e,"L15347")}   // #735: место хадиса не опознано — сказать честно, а не молчать
 }
 // ===== НЕЗАВИСИМАЯ СИСТЕМА СВЕРКИ ПЕРЕДАТЧИКОВ (стратегич. заявка) =====
 // Эталон = цепь sunnah.com (= Мактаба): verify/<bid>_<num/500>.json {num:[[sid,имя,mid]]}. mid = id Мактабы (=наш id).
