@@ -994,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1524</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1525</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1524';
+const APPVER = 'v1525';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -17699,6 +17699,9 @@ async function showNarratorCardLocal(name, host, forceId){
   // 10.07 (владелец, سمي): заголовок как на sunnah.com — «سمي القرشي», а «سُمَىٌّ مَوْلَى أَبِي بَكْرٍ» подписью в скобках
   let _hdrMain=_hdrName, _hdrSub='';
   let _dspRu='';   // #422: русское имя из реестра — пригодится ниже, для шапки
+  // #601: нисба, ПРИКЛЕЕННАЯ к арабской строке шапки. Русскую строку берут из реестра, и она
+  // про эту склейку не знает — отсюда «дописано по-арабски, не дописано по-русски». См. ниже.
+  let _нисбаПриклеена='';
   try{ const _dsp=await _narrDisp(id); const _da=(_dsp&&_dsp.ar)||'';
     try{ _dspRu=(_dsp&&_dsp.ru)||''; }catch(_e){_тихо(_e,"L14090")}
     if(_da){ const _GEN2={'المدني':1,'الكوفي':1,'البصري':1,'المكي':1,'الشامي':1,'اليماني':1,'المصري':1,'مولاهم':1,'الحافظ':1,
@@ -17719,7 +17722,9 @@ async function showNarratorCardLocal(name, host, forceId){
       // v1088 (С62, корень #554/#555): 1618 disp-имён были огрызками («إسماعيل بن أبي») — клейка нисбы давала
       // мусор «إسماعيل بن أبي الأصبحي». Данные починены (fix_disp_truncated), тут гард на остаток: огрызок → полное имя.
       const _daCut=/(^|\s)(بن|ابن|أبي|ابي|عبد|عبيد|أبو|ابو|أم|ام)$/.test(_da);
-      _hdrMain=_daCut?_hdrName:(_da+((_n1&&_da.indexOf(_n1)<0&&_da.split(' ').length<=3)?(' '+_n1):''));
+      const _клеим=(!_daCut && _n1 && _da.indexOf(_n1)<0 && _da.split(' ').length<=3);
+      if(_клеим) _нисбаПриклеена=_n1;   // #601: запомнили, что приклеили — русской строке это тоже нужно
+      _hdrMain=_daCut?_hdrName:(_da+(_клеим?(' '+_n1):''));
       if(stripDiac(_hdrName)!==stripDiac(_hdrMain)) _hdrSub=_hdrName;
     }
   }catch(e){_тихо(e,"L14119")}
@@ -17791,6 +17796,23 @@ async function showNarratorCardLocal(name, host, forceId){
   }catch(e){_тихо(e,"L14138b")}
   if(_WIKI_NARR_OK && _wikiOk(_wk, c) && _wk.t && /[А-Яа-яЁё]/.test(_wk.t)){ _ruSh=_wk.t; _ruShVer=true; }   // v1097: невыверенная привязка давала ЧУЖОЕ русское имя в карточку
   try{ const _kunNorm=(x)=>String(x||'').replace(/^اب[يا] /,'ابو '); const _cks=[canon(_hdrName||'').trim(), canon(_c1||'').trim()]; _cks.push(_kunNorm(_cks[0]), _kunNorm(_cks[1])); for(const k of _cks){ if(_NARR_RU[k]){ _ruSh=_NARR_RU[k]; _ruShVer=true; break; } } }catch(e){_тихо(e,"L14140")}
+  /* 🔴 #601, ТРЕТИЙ заход и НАСТОЯЩАЯ причина. Первые две правки были мимо, обе выкачены зря
+     (v1523, v1524) — записываю, чтобы четвёртого захода не понадобилось.
+     Спросил у самих данных вместо догадок: `_narrDisp(6401)` отдаёт
+         ar: «موسى بن إسماعيل»   ru: «Муса ибн Исмаил»
+     — в реестре имя КОРОТКОЕ с обеих сторон. Нисба «التبوذكي» на экране появляется не оттуда:
+     её приклеивают отдельно, из поля нисбы (`_n1`), и ТОЛЬКО к арабской строке. А русская
+     строка берётся из реестра целиком и перекрывает любую транслитерацию (реестр — третий
+     источник, старше машины). Вот и выходило: по-арабски дописано, по-русски нет.
+     Значит чинить надо не выбор имени для перевода, а САМУ АСИММЕТРИЮ: приклеили нисбу справа —
+     приклей и слева.
+     Выверенные руками имена (курированная карта, Википедия) не трогаем: там имя полное и
+     проверенное, дописывать к нему машинный хвост нельзя — отсюда гард по `_ruShVer`. */
+  try{ if(_нисбаПриклеена && _ruSh && !_ruShVer){
+      const _рнисба=arNameRu(_нисбаПриклеена,3);
+      if(_рнисба && /[А-Яа-яЁё]/.test(_рнисба)
+         && _ruSh.toLowerCase().indexOf(_рнисба.toLowerCase())<0) _ruSh=_ruSh+' '+_рнисба;
+  } }catch(e){_тихо(e,"L14140b")}
   let _ruNm=''; try{ _ruNm=arNameRu(_c1,12).replace(/\s+ибн$/i,''); }catch(e){_тихо(e,"L14141")}   // #457: имя обрывалось на висящем «ибн» у длинных генеалогий (лимит был 7 слов) — поднят лимит + подчищен возможный хвост
   let _td=null,_inSahT=false; try{ _inSahT=(_flags==='bm'); }catch(e){_тихо(e,"L14142")}
   try{ window._MUDCACHE=await _loadMudallisin(); const _m=window._MUDCACHE[String(id)]; if(_m) _td={s:_m.s,q:_m.q,tier:_m.tier}; }catch(e){_тихо(e,"L14143")}
