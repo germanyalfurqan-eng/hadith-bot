@@ -994,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1527</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1528</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1527';
+const APPVER = 'v1528';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4879,6 +4879,29 @@ function autoCorrectBanner(orig, corrected){
   try{ const _anchor=document.querySelector('.modes'); if(_anchor&&_anchor.parentNode){ _anchor.parentNode.insertBefore(b,_anchor.nextSibling); _placed=true; } }catch(e){_тихо(e,"L3897")}
   if(!_placed) res.insertBefore(b, res.children[1]||null);
 }
+/* #543. Брат баннера выше, но с обратным смыслом: там «мы УЖЕ показали исправленное»,
+   здесь «мы НИЧЕГО не подменили, а догадка — вот она, жми если надо». Нужен там, где сложились
+   два послабления (исправили слово И уронили другое): подставлять такое молча нельзя — владелец
+   на это сказал «че за вакханалия», — но и прятать найденное глупо. Поэтому: выдача честно пустая
+   по тому, что ввёл человек, а догадка предложена ЯВНО и с числом, чтобы решал он. */
+function _баннерДогадки(orig, догадка, сколько, своих){
+  const res=document.getElementById('res');
+  try{ const _o=document.getElementById('corrBanner'); if(_o) _o.remove(); }catch(e){_тихо(e,"L3901a")}
+  const b=document.createElement('div'); b.className='hint'; b.id='corrBanner';
+  b.style.cssText='margin:8px 0;padding:10px 12px;border:1.5px solid #d8a85a;border-radius:10px;background:rgba(216,168,90,.12);font-size:calc(13.5px * var(--txtScale,1));color:#f2e2c0';
+  /* врать в баннере нельзя: когда по введённому что-то ЕСТЬ, «ничего не найдено» — ложь.
+     Случай владельца ровно такой: «Сума» стоит в 30 хадисах (внутри имени «Сумама»), не найдено
+     только второе слово. Поэтому две формулировки, по факту. */
+  const _левое = (своих>0)
+    ? 'Показано ровно по запросу «'+esc(orig)+'» ('+своих+')'
+    : 'По запросу «'+esc(orig)+'» ничего не найдено';
+  b.innerHTML='🔤 '+_левое+'. Возможно, вы искали <b style="color:#ffd479">'+esc(догадка)+'</b> — <span class="corrGo" style="cursor:pointer;text-decoration:underline;color:#9fd3ff;font-weight:700">показать '+сколько+'</span>';
+  const g=b.querySelector('.corrGo');
+  if(g) g.onclick=()=>{ document.getElementById('q').value=догадка; runSearch(true); };
+  let _p=false;
+  try{ const a=document.querySelector('.modes'); if(a&&a.parentNode){ a.parentNode.insertBefore(b,a.nextSibling); _p=true; } }catch(e){_тихо(e,"L3901b")}
+  if(!_p) res.insertBefore(b, res.children[1]||null);
+}
 // M172 для арабского/общего поиска (группы parseQuery). Работает на ОДНОМ массиве (Коран/сборник).
 // Одна группа, ≥2 позитивных терма → убираем самый частый терм, оставляя редкие; neg-термы сохраняем.
 function relaxGroupsArr(arr, groups, modes, strict){
@@ -5634,7 +5657,7 @@ async function runSearch(explicit){
             res.appendChild(cb); }
         }catch(e){_тихо(e,"L4510")}
       }
-      let relax=null, corr=null;
+      let relax=null, corr=null, _догадка=null;   // #543: догадка не подставляется молча, а предлагается
       try{ const ru=await loadHadithRu(); if(seq!==_seq) return;
         const qw=_ruNumExpand(q).toLowerCase().split(/\s+/).filter(w=>w.length>1);   // #181-фикс: искать конвертированный q (катада), не сырой shown (rfnflf)
         const allow = (selCols.size||selExtra.size) ? new Set([...selCols,...selExtra]) : null;
@@ -5644,10 +5667,26 @@ async function runSearch(explicit){
           if(!strict){ const _origHas=pool.some(x=>qw.every(w=>x.norm.indexOf(w)>=0));
             if(!_origHas){ corr=correctQuery(qw, ruVocabFrom('h', ru.map(x=>x.norm))); if(corr.changed.length) useWords=corr.corrected; } }
           relax=relaxSearch(useWords, x=>x.norm, pool, strict);   // M172: ослабление при нуле по всем словам
+          /* #543 (владелец: «че за вакханалия», скрин «Сума истаким» → 614 хадисов про суры).
+             Разобрано 31.08.2026. Два послабления по отдельности разумны: исправить опечатку, когда
+             оригинал дал ноль (закон 05.07), и уронить слово, которого нет ни в одном тексте (M172).
+             Беда в том, что они СКЛАДЫВАЮТСЯ. «Сума истаким»: правим «Сума»→«сура», роняем «истаким»,
+             и от запроса остаётся одно слово «сура» — а оно стоит почти в каждом переводе, отсюда 614
+             карточек ни о чём. После двух догадок подряд выдача уже не про то, что человек ввёл.
+             Правило: НЕ СКЛАДЫВАТЬ. Если исправленный запрос всё равно пришлось урезать — значит
+             исправление не помогло; откатываемся к тому, что ввёл человек. Честный ноль лучше стены
+             мусора (слово владельца: «промолчать лучше, чем подсказать не то»), и арабские подсказки
+             с «распознать фразу (ИИ)» при нуле остаются на месте. */
+          if(corr && corr.changed.length && relax.dropped.length){
+            _догадка={стало:relax.used.join(' '), сколько:relax.hits.length};
+            corr=null; useWords=qw;
+            relax=relaxSearch(qw, x=>x.norm, pool, strict);
+          }
           for(const x of relax.hits) add({type:'hr',s:x.s,n:x.n,ru:x.t,rq:relax.used.join(' ')}); }
       }catch(e){_тихо(e,"L4523")}
       if(seq!==_seq) return; setHead(true);
       if(corr && corr.changed.length) autoCorrectBanner(shown, corr.corrected.join(' '));   // M173: «показаны результаты для X · искать как ввёл»
+      if(_догадка && _догадка.сколько) _баннерДогадки(shown, _догадка.стало, _догадка.сколько, count);   // #543: догадка как выбор, а не как подмена
       if(window._layoutFixInfo){ try{ _layoutFixBanner(window._layoutFixInfo.orig, window._layoutFixInfo.fixed); }catch(e){_тихо(e,"L4526")} window._layoutFixInfo=null; }   // #181: баннер раскладки
       if(relax && relax.dropped.length && count) relaxBanner(relax.dropped, relax.used);   // честно: что убрали + «строго»
       /* 📖 #699: у РУССКОГО поиска по хадисам своя ветка, и она возвращается раньше общей —
@@ -5736,7 +5775,7 @@ async function runSearch(explicit){
         } }catch(e){_тихо(e,"L4924b")} }).catch(function(){}); }catch(e){_тихо(e,"L4924a")} }
     if(!numMode && !(selCols.size||selExtra.size)) addLibMore();   // кнопка «искать ещё в большой библиотеке» (16 изданий + Мукбиль). v1052 #542: при ВЫБРАННОМ сборнике не предлагаем и не авто-грузим остальные издания — «выбрал = только в них» (семантика #50, как у Мактабы через _selNarrow)
   } else {
-    let relaxQ=null, corrQ=null, _qRoot=null;   // #624: корень запроса нужен и ПОСЛЕ цикла — для точного блока над выдачей
+    let relaxQ=null, corrQ=null, _догадкаQ=null, _qRoot=null;   // #624: корень запроса нужен и ПОСЛЕ цикла — для точного блока над выдачей
     try{ const arr=await loadQuran(); if(seq!==_seq) return;
       const qn=q.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
       const mref=qn.match(/^(\d{1,3})\s*[:\s]\s*(\d{1,3})$/);
@@ -5753,6 +5792,12 @@ async function runSearch(explicit){
           if(!strict){ const _origHasQ=arr.some(v=>{ const g=gn(v); return qw.every(w=>g.indexOf(w)>=0); });
             if(!_origHasQ){ corrQ=correctQuery(qw, ruVocabFrom('q', Object.values(ru))); if(corrQ.changed.length) useWords=corrQ.corrected; } }   // ЗАКОН 05.07: только при нуле оригинала
           relaxQ=relaxSearch(useWords, gn, arr, strict);   // M172: ослабление при нуле по всем словам
+          /* #543: то же правило и здесь — не складывать исправление с урезанием (разбор у ветки хадисов) */
+          if(corrQ && corrQ.changed.length && relaxQ.dropped.length){
+            _догадкаQ={стало:relaxQ.used.join(' '), сколько:relaxQ.hits.length};
+            corrQ=null; useWords=qw;
+            relaxQ=relaxSearch(qw, gn, arr, strict);
+          }
           for(const v of relaxQ.hits) add({type:'q',v,ru:ru[v.s+':'+v.a],rq:relaxQ.used.join(' ')}); }
       }
       else { let _qg=groups; if(cfg.qSpaceExact){ const _qq=(q||'').trim(); if(_qq) _qg=[[{t:_qq,phrase:false,neg:false}]]; }   // M309/#235: пробел значим → ВЕСЬ запрос ОДНИМ термом (parseQuery иначе режет по \S+, пробел терялся → тумблер «не работал»)
@@ -5766,6 +5811,7 @@ async function runSearch(explicit){
     }catch(e){_тихо(e,"L4601")}
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
     if(corrQ && corrQ.changed.length) autoCorrectBanner(shown, corrQ.corrected.join(' '));   // M173: «показаны результаты для X · искать как ввёл»
+    if(_догадкаQ && _догадкаQ.сколько) _баннерДогадки(shown, _догадкаQ.стало, _догадкаQ.сколько, count);   // #543
     if(window._layoutFixInfo){ try{ _layoutFixBanner(window._layoutFixInfo.orig, window._layoutFixInfo.fixed); }catch(e){_тихо(e,"L4604")} window._layoutFixInfo=null; }   // #181: баннер раскладки
     if(relaxQ && relaxQ.dropped.length && count) relaxBanner(relaxQ.dropped, relaxQ.used);   // M172: честно показать что убрали
     // 🌳 #624: точный корень — отдельным блоком НАД обычной выдачей (см. _блокТочногоКорня)
@@ -20674,6 +20720,14 @@ const _RU_STOP=new Set(['по','в','на','и','о','об','от','до','дл�
 function _hasRuStop(query){ return (query||'').toLowerCase().split(/[\s,.;:!?()"'«»\/\-+|]+/).some(t=>_RU_STOP.has(t)); }
 // top-N арабских слов для ОДНОГО токена: точные совпадения класс-скелета → ed1 (якорь по 1-й букве, режет шум).
 function _tokTop(v, token, n, live){
+  /* #543 (31.08.2026). Выверенный словарь `_RU2AR_FIX` заводили ровно от этой беды — слово
+     владельца: «Ибн Ляхиа нигде не ищет, хотя подсказка предлагает». Но чипы его НЕ СПРАШИВАЛИ:
+     их питает только частотный ранжировщик по скелету согласных, и он отдавал «لله» («Аллаху»)
+     вместо «لهيعة». Правильный ответ лежал рядом и не показывался ни разу.
+     Замер: из 19 выверенных слов чипы давали верное — 0. Выверенное человеком старше частоты
+     в корпусе, поэтому спрашиваем его первым. Затрагивает ТОЛЬКО слова из списка: для всех
+     остальных запросов ничего не меняется. */
+  try{ const _выв=_RU2AR_FIX[String(token||'').toLowerCase()]; if(_выв) return [_выв]; }catch(e){}
   // live=строгий режим (живые подсказки): показываем только СИД-слова или точный матч ≥3 согласных,
   // чтобы русские слова (дела/по/намерениям) НЕ давали мусор. live=false — широко (для ИИ-режима).
   const ph=_phonRu(token); if(ph.length<2) return [];
