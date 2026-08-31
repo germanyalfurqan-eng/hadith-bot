@@ -994,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1529</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1530</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1529';
+const APPVER = 'v1530';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4902,6 +4902,32 @@ function _баннерДогадки(orig, догадка, сколько, св�
   try{ const a=document.querySelector('.modes'); if(a&&a.parentNode){ a.parentNode.insertBefore(b,a.nextSibling); _p=true; } }catch(e){_тихо(e,"L3901b")}
   if(!_p) res.insertBefore(b, res.children[1]||null);
 }
+/* #580 (владелец: «по идее это должно работать в режиме однокоренных, но кто это нажмёт? Может
+   по умолчанию искать однокоренные, но можно убрать? Как думаешь?»).
+   ОТВЕЧАЮ ЗАМЕРОМ, а не мнением. Включать корень ВСЕГДА нельзя: поиск «رحمة» (милость) даёт
+   дословно 73 аята, а по корню 313. И добавка — не «ещё про милость»: 187 аятов из неё содержат
+   божественные имена الرحمن/الرحيم, то есть КАЖДУЮ басмалу, а 12 — слово «أرحام», утробы (2:228,
+   про сроки развода). Искавший милость получил бы аят про утробы. Числа сверены по эталонному
+   Корану, не по выдаче.
+   Но настоящая его беда — «КТО ЭТО НАЖМЁТ» — лечится без смены поведения: если по корню есть ещё,
+   надо СКАЗАТЬ об этом у самой выдачи и дать одно нажатие. Дословный поиск остаётся хозяином. */
+function _подсказкаКорня(корень, ещё){
+  try{
+    const res=document.getElementById('res');
+    const _o=document.getElementById('rootHint'); if(_o) _o.remove();
+    const b=document.createElement('div'); b.className='hint'; b.id='rootHint';
+    b.style.cssText='margin:6px 0;padding:8px 11px;border:1px solid #2e7d5a;border-radius:10px;background:rgba(46,125,90,.10);font-size:calc(13px * var(--txtScale,1));color:#bfe3cf';
+    b.innerHTML='🌱 По корню <b>'+esc(корень)+'</b> есть ещё <b>'+ещё+'</b> — это другие формы того же слова. '
+      +'<span class="rootGo" style="cursor:pointer;text-decoration:underline;color:#9fd3ff;font-weight:700">показать однокоренные</span>';
+    const g=b.querySelector('.rootGo');
+    if(g) g.onclick=()=>{ try{ modes.root=true;
+        const ч=document.querySelector('.chip[data-mode="root"]'); if(ч) ч.classList.add('on');
+      }catch(e){_тихо(e,"L3902r")} runSearch(true); };
+    let _p=false;
+    try{ const a=document.querySelector('.modes'); if(a&&a.parentNode){ a.parentNode.insertBefore(b,a.nextSibling); _p=true; } }catch(e){_тихо(e,"L3902p")}
+    if(!_p) res.insertBefore(b, res.children[1]||null);
+  }catch(e){_тихо(e,"L3902")}
+}
 // M172 для арабского/общего поиска (группы parseQuery). Работает на ОДНОМ массиве (Коран/сборник).
 // Одна группа, ≥2 позитивных терма → убираем самый частый терм, оставляя редкие; neg-термы сохраняем.
 function relaxGroupsArr(arr, groups, modes, strict){
@@ -5275,6 +5301,11 @@ async function runSearch(explicit){
   try{ if(window._lateQuiet) _lateQuiet(700); }catch(e){_тихо(e,"L4264b")}
   const strict=_strictSearch; _strictSearch=false;   // M173: захватываем флаг строгого режима на этот запуск
   try{ const _cb=document.getElementById('corrBanner'); if(_cb) _cb.remove(); }catch(e){_тихо(e,"L4265")}   // 05.07: баннер коррекции живёт вне #res — чистим при новом поиске
+  /* #580: та же беда у подсказки корня — она тоже вставляется рядом с .modes, вне #res, и очистка
+     выдачи её не трогала. Поймано пробой: подсказка «по корню رحم есть ещё 238» пережила нажатие
+     (после которого стала врать: все 313 уже показаны), смену вкладки на Хадисы и два новых
+     поиска. Живёт вне #res — чистится здесь, вместе с соседом. */
+  try{ const _rh=document.getElementById('rootHint'); if(_rh) _rh.remove(); }catch(e){_тихо(e,"L4265r")}
   const seq=++_seq; groupSrc=false; uniqMode=false; relMode=false; _lastQueryTerms=[];   // новый поиск — сброс режимов вывода
   /* v1434: какие книги НЕ СКАЧАЛИСЬ за этот поиск. Объявлено на уровне функции намеренно —
      сообщение о них рисуется в finally, а объявление внутри try туда бы не дотянулось. */
@@ -5812,6 +5843,16 @@ async function runSearch(explicit){
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
     if(corrQ && corrQ.changed.length) autoCorrectBanner(shown, corrQ.corrected.join(' '));   // M173: «показаны результаты для X · искать как ввёл»
     if(_догадкаQ && _догадкаQ.сколько) _баннерДогадки(shown, _догадкаQ.стало, _догадкаQ.сколько, count);   // #543
+    /* #580: корень не включён, дословно что-то нашлось — но по корню есть ещё. Молчать об этом
+       нельзя (человек не догадается нажать чип), подставлять тоже нельзя (см. разбор у
+       _подсказкаКорня). Поэтому одна строка с числом и одно нажатие. */
+    if(!rootMode && !numMode && count>0 && isArabic(shown)){ (async()=>{ try{
+      const _rr=await loadRoots(); if(!_rr || !_rr.r) return;
+      const _сл=canon(shown).split(' ')[0].replace(/[^ء-ي]/g,''); if(!_сл) return;
+      const _к=((_rr.f||{})[_сл]||[])[0]; if(!_к) return;
+      const _всего=((_rr.r||{})[_к]||[]).length; const _ещё=_всего-count;
+      if(_ещё>=3 && seq===_seq) _подсказкаКорня(_к, _ещё);
+    }catch(e){_тихо(e,"L4604r")} })(); }
     if(window._layoutFixInfo){ try{ _layoutFixBanner(window._layoutFixInfo.orig, window._layoutFixInfo.fixed); }catch(e){_тихо(e,"L4604")} window._layoutFixInfo=null; }   // #181: баннер раскладки
     if(relaxQ && relaxQ.dropped.length && count) relaxBanner(relaxQ.dropped, relaxQ.used);   // M172: честно показать что убрали
     // 🌳 #624: точный корень — отдельным блоком НАД обычной выдачей (см. _блокТочногоКорня)
