@@ -994,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1546</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1547</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1546';
+const APPVER = 'v1547';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2037,7 +2037,16 @@ setTimeout(_checkUpdate, 1500);
 setInterval(_checkUpdate, 90000);   // СТРОГОЕ ПРАВИЛО: проверяем обновление каждые 90с (пока человек в приложении)
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) _checkUpdate(); });   // вернулся в приложение → сразу проверить
 const BACKEND_URL = "https://melodious-acceptance-production-1c9a.up.railway.app/api";
-const REVERSE_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
+/* 🔴 ЗАМЕР НА ЖИВОМ САЙТЕ (02.09.2026, v1546): поиск «муслим 100» шёл 40,9 секунды,
+   «муслим 987» — 15,4, а «бухари 1» — 0,15. Разница не в книге: в списке запросов
+   виден обратный указатель (568 КБ), который тянулся с raw.githubusercontent 36,6 с
+   и ещё раз 30,0 с — ДВАЖДЫ ПАРАЛЛЕЛЬНО. Тот же файл, взятый повторно, приходит за
+   136 мс: сервер raw не раздаёт статику через кэш, он рассчитан на другое.
+   Лечим двумя ходами: файл кладём НА ВИТРИНУ (та же выкатка, отдаёт CDN), а raw
+   оставляем запасным путём — на случай, если на витрине его ещё нет.
+   Сорок секунд молчания человек читает как «приложение зависло», и он прав. */
+const REVERSE_INDEX_URL = "./reverse_index.json";
+const REVERSE_INDEX_ЗАПАС = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
 const QURAN_RU_URL = "./quran_ru.json";
 const MUHAYMIN_URL = "./muhaymin.json";
@@ -3147,7 +3156,16 @@ async function _assistSend(m){ const inp=m.querySelector('#assistInput'); const 
 }
 /* ===================== ДАННЫЕ ===================== */
 const cache={}; let reverse=null, quran=null, muh=null;
-async function loadReverse(){ if(reverse)return reverse; try{ reverse=await fetchJSON(REVERSE_INDEX_URL, 45000, {silent:true}); }catch(e){ reverse={}; } return reverse; }   // QA-свип: таймаут (обратный индекс ~5МБ не виснет вечно)
+/* Обещание-кэш: без него два поиска подряд тянут указатель ДВАЖДЫ параллельно — это и
+   видно в замере (36,6 с и 30,0 с на один и тот же файл). Та же беда уже лечилась в этом
+   файле у шардов сверки и у dz; здесь её просто не заметили. */
+let _reverseП=null;
+async function loadReverse(){ if(reverse)return reverse;
+  if(!_reverseП){ _reverseП=(async()=>{
+    try{ return await fetchJSON(REVERSE_INDEX_URL, 20000, {silent:true}); }
+    catch(e){ try{ return await fetchJSON(REVERSE_INDEX_ЗАПАС, 45000, {silent:true}); }catch(e2){ return {}; } }
+  })(); }
+  reverse=await _reverseП; return reverse; }   // QA-свип: таймаут (обратный индекс ~5МБ не виснет вечно)
 function gradeOf(h){ const g=h.grades&&h.grades[0]; return g?(g.grade||'').toString():''; }
 // 🔴 Заявка #532. Оценки Албани (19 081) и Арнаута (6 413) ЛЕЖАЛИ в данных и не показывались:
 // gradeOf брала grades[0] и выбрасывала имя учёного. «صحيح» без имени — это чьё-то мнение,
