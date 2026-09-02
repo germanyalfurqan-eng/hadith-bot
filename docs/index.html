@@ -994,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1530</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1531</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1530';
+const APPVER = 'v1531';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2489,7 +2489,7 @@ let _appReport=function(){};
     if(/(failed to fetch|load failed|networkerror|network request failed|the network connection was lost|cancelled|отменена|the operation was aborted|load cancelled)/.test(m)) return true;
     return false; }
   // Обезличивание путей (закон о защите данных владельца, 27.07.2026): в стеке ошибки светился
-  // «file:///<локальный путь>/...» — домашний путь с ИМЕНЕМ ПОЛЬЗОВАТЕЛЯ. Такое не должно попадать
+  // «file:///C:/Users/anzor/...» — домашний путь с ИМЕНЕМ ПОЛЬЗОВАТЕЛЯ. Такое не должно попадать
   // ни в журнал, ни в сообщения, ни куда-либо ещё. Режем домашние пути до безопасного вида ДО отправки.
   function _безЛичного(s){ try{ return String(s||'')
       .replace(/file:\/\/\/[A-Za-z]:\/Users\/[^/]+\//gi, 'локально/')
@@ -4911,18 +4911,26 @@ function _баннерДогадки(orig, догадка, сколько, св�
    Корану, не по выдаче.
    Но настоящая его беда — «КТО ЭТО НАЖМЁТ» — лечится без смены поведения: если по корню есть ещё,
    надо СКАЗАТЬ об этом у самой выдачи и дать одно нажатие. Дословный поиск остаётся хозяином. */
-function _подсказкаКорня(корень, ещё){
+function _подсказкаКорня(корень, всего, показано){
   try{
     const res=document.getElementById('res');
     const _o=document.getElementById('rootHint'); if(_o) _o.remove();
     const b=document.createElement('div'); b.className='hint'; b.id='rootHint';
     b.style.cssText='margin:6px 0;padding:8px 11px;border:1px solid #2e7d5a;border-radius:10px;background:rgba(46,125,90,.10);font-size:calc(13px * var(--txtScale,1));color:#bfe3cf';
-    b.innerHTML='🌱 По корню <b>'+esc(корень)+'</b> есть ещё <b>'+ещё+'</b> — это другие формы того же слова. '
-      +'<span class="rootGo" style="cursor:pointer;text-decoration:underline;color:#9fd3ff;font-weight:700">показать однокоренные</span>';
+    /* 🔴 ИСПРАВЛЕНО В v1531, ПОЙМАНО НА БОЕВОМ. Сперва подсказка обещала «ещё N» и включала режим
+       Однокоренные — и на «نور» ОБМАНУЛА: обещала ещё 138, а выдача осталась 36. Причина: число я
+       брал из индекса корней (R.r), а режим корня ищет иначе — расширяет запрос по формам и сверяет
+       текст, и совпадают эти два счёта не всегда (на «رحمة» совпали: 313 и 313, на «نور» нет: 174
+       против 36). Обещание и исполнение шли из РАЗНЫХ источников — потому и разошлись.
+       Теперь нажатие ведёт в showRootPlaces(корень), который показывает РОВНО тот набор аятов, из
+       которого взято число. Обещание и исполнение из одного источника — разойтись не могут. */
+    b.innerHTML='🌿 У корня <b>'+esc(корень)+'</b> всего <b>'+всего+'</b> аятов, сейчас показано <b>'+показано+'</b>. '
+      +'<span class="rootGo" style="cursor:pointer;text-decoration:underline;color:#9fd3ff;font-weight:700">открыть все места корня</span>';
     const g=b.querySelector('.rootGo');
-    if(g) g.onclick=()=>{ try{ modes.root=true;
-        const ч=document.querySelector('.chip[data-mode="root"]'); if(ч) ч.classList.add('on');
-      }catch(e){_тихо(e,"L3902r")} runSearch(true); };
+    /* убрать себя ПЕРЕД показом: после нажатия «сейчас показано 36» устаревает, а стоящая
+       на экране устаревшая цифра — та же ложь, только тише. showRootPlaces чистит #res, но
+       подсказка живёт вне него. */
+    if(g) g.onclick=()=>{ try{ b.remove(); }catch(_e){} try{ showRootPlaces(корень); }catch(e){_тихо(e,"L3902r")} };
     let _p=false;
     try{ const a=document.querySelector('.modes'); if(a&&a.parentNode){ a.parentNode.insertBefore(b,a.nextSibling); _p=true; } }catch(e){_тихо(e,"L3902p")}
     if(!_p) res.insertBefore(b, res.children[1]||null);
@@ -5851,7 +5859,7 @@ async function runSearch(explicit){
       const _сл=canon(shown).split(' ')[0].replace(/[^ء-ي]/g,''); if(!_сл) return;
       const _к=((_rr.f||{})[_сл]||[])[0]; if(!_к) return;
       const _всего=((_rr.r||{})[_к]||[]).length; const _ещё=_всего-count;
-      if(_ещё>=3 && seq===_seq) _подсказкаКорня(_к, _ещё);
+      if(_ещё>=3 && seq===_seq) _подсказкаКорня(_к, _всего, count);
     }catch(e){_тихо(e,"L4604r")} })(); }
     if(window._layoutFixInfo){ try{ _layoutFixBanner(window._layoutFixInfo.orig, window._layoutFixInfo.fixed); }catch(e){_тихо(e,"L4604")} window._layoutFixInfo=null; }   // #181: баннер раскладки
     if(relaxQ && relaxQ.dropped.length && count) relaxBanner(relaxQ.dropped, relaxQ.used);   // M172: честно показать что убрали
