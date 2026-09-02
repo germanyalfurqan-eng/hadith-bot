@@ -994,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1535</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1538</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1535';
+const APPVER = 'v1538';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -8305,9 +8305,18 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
   if(code==='muslim'){ (async()=>{ try{ const rw=await loadMuslimRiw(); const _bn=String(h.num).replace(/[^0-9]/g,''); const lets=rw&&rw[_bn];
     if(lets && lets.length){ const sp=meta.querySelector('.src'); if(sp){ const rs=document.createElement('span');
       rs.style.cssText='font-size:calc(10.5px * var(--txtScale,1));color:var(--link);margin-inline-start:6px;cursor:pointer;white-space:nowrap';
-      const _myL=riwNo?(lets[riwNo-1]||lets[0]):lets[0];   // M496: риваят-карточка (⚬) → ТОЧНАЯ буква по позиции (#234)
-      rs.textContent=riwNo?('· код sunnah.com: '+_bn+_myL):('· sunnah.com '+lets.map(L=>_bn+L).join('·'));
-      rs.title=riwNo?('Код этого риваята на sunnah.com — нажми (откроется '+_bn+_myL+')'):('Риваяты этого хадиса на sunnah.com — нажми (откроется '+_bn+_myL+')');
+      /* №310 (скрин 21.06), ТРЕТЬЕ место с одной и той же ошибкой. Буква риваята бралась ПО ПОЗИЦИИ,
+         а когда позиции не хватало — «||lets[0]» молча подставлял первую: под шестым риваятом 987
+         стояло «код sunnah.com: 987a». Пять букв у sunnah.com против наших шести — значит разбивка
+         не совпадает, и позиция ничего не доказывает ни для шестого, ни для остальных.
+         Правило одно на все три места: числа риваятов сошлись — называем букву; не сошлись — не
+         называем никакую, показываем все и даём выбрать. Молчание честнее уверенной подмены. */
+      const _точно = !riwNo || (riwTot && riwTot===lets.length && lets[riwNo-1]);
+      const _myL=_точно?(riwNo?lets[riwNo-1]:lets[0]):lets[0];
+      rs.textContent=(riwNo&&_точно)?('· код sunnah.com: '+_bn+_myL):('· sunnah.com '+lets.map(L=>_bn+L).join('·'));
+      rs.title=(riwNo&&_точно)?('Код этого риваята на sunnah.com — нажми (откроется '+_bn+_myL+')')
+              :((riwNo&&!_точно)?('Наших риваятов '+riwTot+', а букв у sunnah.com '+lets.length+' — какая из них этот риваят, неизвестно. Нажми, чтобы открыть '+_bn+_myL+'; остальные буквы рядом с кнопкой sunnah.com.')
+                                :('Риваяты этого хадиса на sunnah.com — нажми (откроется '+_bn+_myL+')'));
       rs.onclick=(e)=>{ try{e.stopPropagation();}catch(_e){_тихо(_e,"L6615")} try{ openLink('https://sunnah.com/muslim:'+_bn+_myL); }catch(_e2){_тихо(_e2,"L6615")} };
       sp.insertAdjacentElement('afterend', rs); } } }catch(e){_тихо(e,"L6616")} })(); }
   if(code==='muslim' && riwNo<=1){ (async()=>{ try{ const nm=await _muslimNums(h.num); if(nm){ const sp=meta.querySelector('.src');   // M496: ⓘ и на риваятных (1-й риваят)
@@ -11857,6 +11866,22 @@ function addTr(meta,card,text,ayah,fav){
           // #234: если это карточка-риваят (разбивка по ⚬) и число риваятов = числу букв sunnah — кнопка ведёт на ИМЕННО эту букву (риваят 1→a, 2→b)
           const _ri=fav&&fav._riwNo, _rt=fav&&fav._riwTot;
           if(_ri && _rt===lets.length && lets[_ri-1]){ _primSuf=lets[_ri-1]; sb.textContent='🌐 sunnah.com ('+_scn+lets[_ri-1]+')'; sb.title='Открыть риваят '+_scn+lets[_ri-1]+' на sunnah.com'; return; }
+          /* №310, тот же скрин: на карточке «риваят 4/6» кнопка звалась «sunnah.com (987a)».
+             Буква бралась из ветки выше только когда наших риваятов СТОЛЬКО ЖЕ, сколько букв у
+             sunnah.com; у 987 их 6 против 5 — и подпись молча падала на первую букву, то есть
+             приложение называло четвёртый риваят первым. Это ровно то же, за что заявка: сказано
+             уверенно и мимо. Числа разошлись — буквы не знаем, и говорить её не будем: кнопка
+             ведёт на сам номер, а буквы остаются чипами рядом, выбор за человеком. */
+          if(_ri && _rt && _rt!==lets.length){
+            _primSuf='';
+            sb.title='Наших риваятов '+_rt+', а букв у sunnah.com '+lets.length+' — какая из них этот риваят, мы не знаем и гадать не будем. Кнопка открывает хадис '+_scn+'; буквы — рядом.';
+            const wrap0=document.createElement('span'); wrap0.style.cssText='display:inline-flex;gap:4px;flex-wrap:wrap;align-items:center;margin-inline-start:4px;vertical-align:middle';
+            const lbl0=document.createElement('span'); lbl0.className='hint'; lbl0.style.cssText='font-size:calc(11px * var(--txtScale,1))'; lbl0.textContent='риваяты:'; wrap0.appendChild(lbl0);
+            lets.forEach(L=>{ const c=document.createElement('span'); c.textContent=_scn+L; c.title='Открыть риваят '+_scn+L+' на sunnah.com';
+              c.style.cssText='cursor:pointer;font-size:calc(11px * var(--txtScale,1));border:1px solid var(--border);border-radius:8px;padding:1px 7px;color:var(--link);white-space:nowrap';
+              c.onclick=()=>_openSun(_sunUrl(L)); wrap0.appendChild(c); });
+            sb.insertAdjacentElement('afterend', wrap0);
+            return; }
           _primSuf=lets[0]; sb.title='Открыть риваят '+_scn+lets[0]+' на sunnah.com';
           if(lets.length>1){ sb.textContent='🌐 sunnah.com ('+_scn+lets[0]+')';
             const wrap=document.createElement('span'); wrap.style.cssText='display:inline-flex;gap:4px;flex-wrap:wrap;align-items:center;margin-inline-start:4px;vertical-align:middle';
@@ -14692,7 +14717,28 @@ async function dzChainInto(host, bid, num){
     // хадисах срабатывали два. Ставим отметку на вставленный блок и второй раз не рисуем.
     if(host && host.querySelector && host.querySelector('[data-dzchain]')) return;
     const _rec=await codifChain(bid,num);
-    const naChain=(_rec&&_rec.na&&_rec.na.length)? _rec.na : null;
+    let naChain=(_rec&&_rec.na&&_rec.na.length)? _rec.na : null;
+    /* 🔴 ЗАЯВКА №310 («опять обманул меня?», скрин 21.06). На скрине — Муслим 987, риваят 4/6,
+       текст начинается с «قتيبة بن سعيد», а под ним цепь ПЕРВОГО риваята во главе с «سويد بن سعيد»
+       и зелёная надпись «совпадает с sunnah.com». Сохранённая цепь у нас ОДНА НА НОМЕР, а иснад у
+       каждого риваята свой.
+       Мерка простая и общая: имён предлагаемой цепи в тексте ЭТОЙ карточки нет (или меньше
+       половины) — цепь не про неё. Держим мерку ОДНОЙ функцией и прикладываем её к КАЖДОМУ
+       источнику цепи, а не к первому попавшемуся: вчера я поставил её только на na — и та же
+       чужая цепь тут же пришла следом из verify/, потому что verify тоже ключуется НОМЕРОМ.
+       Заслон у одного из двух входов не заслон. Отвергли — каскад ниже соберёт цепь ИЗ ТЕКСТА
+       этого риваята, он это умеет; цепь из текста лучше чужой по номеру. */
+    const _чужаяЦепь=(host2,имена)=>{ try{
+      if(!host2||!host2.querySelector||!имена||!имена.length) return false;
+      const _ар=(host2.querySelector('.ar')||{}).textContent||''; if(!_ар) return false;
+      const _ч=s=>String(s||'').replace(/[ً-ْٰـ]/g,'')
+                    .replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه');
+      const _т=_ч(_ар); let _есть=0;
+      for(const им0 of имена){ const _им=_ч(им0).split('،')[0].trim();
+        if(_им.length>2 && _т.indexOf(_им)>=0) _есть++; }
+      return (_есть===0 || _есть<Math.ceil(имена.length/2));
+    }catch(e){_тихо(e,"L310riw"); return false; } };
+    if(naChain && _чужаяЦепь(host, naChain.map(p=>String(p[0]||'')))) naChain=null;
     const full=await dzChainFull(bid, num);
     const seq=(full&&full.seq&&full.seq.length)? full.seq : null;
     // ⛓ С38 ЕДИНЫЙ РЕЗОЛВЕР (П-04, унификация): цепь питается ТЕМ ЖЕ, что Сверка и подсветка → они совпадают.
@@ -14702,6 +14748,7 @@ async function dzChainInto(host, bid, num){
     else {
       // С38 (П-04): verify/ (эталон sunnah.com, 5 книг) ПЕРЕД codif — авторитетно, как Сверка; чинит «0/2» при пустом na (Насаи 3921: 85/93 покрыто verify).
       let _vr=null; try{ _vr=await _verifyChain(bid, num); }catch(e){_тихо(e,"L11634")}
+      if(_vr && _vr.length && _чужаяЦепь(host, _vr.map(r=>String((r&&r[1])||'')))) _vr=null;   // №310: та же мерка и здесь — verify/ ключуется номером, а не риваятом
       if(_vr && _vr.length){ const _vm=_vr.filter(r=>r[2]).map(r=>Number(r[2])); if(_vm.length){ codes=_vm; dispFromNa=true; _src='verify'; } }
       if(!codes || !codes.length){
         let _txt=''; try{ const _ar=host.querySelector&&host.querySelector('.ar'); if(_ar) _txt=_ar.textContent||''; }catch(e){_тихо(e,"L11637")}
