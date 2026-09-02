@@ -8238,6 +8238,13 @@ def _мух_подготовить():
     пересобирать её на каждое голосовое — расточительство."""
     if _МУХ_ПОИСК["тройки"] is not None and time.time() - _МУХ_ПОИСК["когда"] < 21600:
         return _МУХ_ПОИСК["тройки"]
+    # 🔴 Тот же счёт Railway. Срок годности у этого указателя был, а ВЫБРАСЫВАНИЯ не было:
+    # просроченный он всё равно лежал в памяти до следующего вопроса, а вопросов голосом
+    # бывает один в неделю. Указатель немаленький — тройки слов по всем 7 631 риваяту.
+    # Освобождаем сразу, как только он просрочен: пересобрать его дешевле, чем платить за
+    # то, что месяц лежит без дела.
+    if _МУХ_ПОИСК["тройки"] is not None:
+        _МУХ_ПОИСК["тройки"] = None
     try:
         get_muhaymin(1)                       # подтянуть индекс в _muhaymin_cache
         баз = _muhaymin_cache or {}
@@ -8258,7 +8265,16 @@ def _мух_подготовить():
 # в матне стоит «مَذْهَب», ищут «مذهب», и совпадения нет, хотя слово на месте. Проверено на
 # живом Абу Дауде: с огласовками ноль совпадений, без них — три хадиса.
 _АР_ЗНАКИ = re.compile(r'[ؐ-ًؚ-ٰٟۖ-ۭـ]')
+# ═══ СЧЁТЧИК ОТДАННЫХ БАЙТ (счёт Railway 02.09.2026) ═══
+# Владельцу выставили 23 доллара, разбор по его же экрану: память 1,27 + процессор 0,06 +
+# ИСХОДЯЩИЙ ТРАФИК 17,37 (347,38 ГБ за месяц). То есть 93% счёта — байты, которые мы отдали.
+# А куда именно — сказать было нечем: у нас считались вызовы ИИ, но не отданные байты.
+# Копилка живёт в памяти инстанса и обнуляется в полночь: этого хватает, чтобы назвать
+# виновный маршрут, а хранить историю в ветке данных значило бы платить трафиком за учёт
+# трафика.
+_ТРАФИК = {'день': '', 'байт': 0, 'по_маршрутам': {}}
 _ИЗДАНИЯ_КЭШ = {}
+_ИЗДАНИЯ_ВРЕМЯ = {}   # когда книгой пользовались в последний раз (см. счёт Railway)
 
 
 def _голый_араб(с):
@@ -8293,7 +8309,22 @@ def _издание_слова(код):
     Пробуем ОБА вида хранения: сперва зеркало, потом наши страницы. Порядок не важен для
     правды, важен для скорости — зеркало отдаёт быстрее.
     """
+    # 🔴 02.09.2026, СЧЁТ RAILWAY. Владелец получил долг 23 доллара, и виновата не работа, а
+    # ПАМЯТЬ: у них она стоит около 10 долларов за гигабайт в месяц, а мы держали книги вечно.
+    # Один Ахмад — 26 МБ текста, а поиск хадиса по словам перебирает ВОСЕМЬ сводов подряд:
+    # промах по всем — и в памяти навсегда оседает под сотню мегабайт. Плата идёт за то, что
+    # лежит, а не за то, что читают.
+    # Держим не больше двух книг и выбрасываем те, к которым не обращались четверть часа.
+    # Цена решения честная: редкий повторный вопрос по третьей книге заново её скачает.
+    _теперь = time.time()
+    try:
+        for _к in [_к for _к, _в in list(_ИЗДАНИЯ_ВРЕМЯ.items()) if _теперь - _в > 900]:
+            _ИЗДАНИЯ_КЭШ.pop(_к, None)
+            _ИЗДАНИЯ_ВРЕМЯ.pop(_к, None)
+    except Exception:
+        pass
     if код in _ИЗДАНИЯ_КЭШ:
+        _ИЗДАНИЯ_ВРЕМЯ[код] = _теперь
         return _ИЗДАНИЯ_КЭШ[код]
     сп = []
     for адрес in _ЗЕРКАЛО:
@@ -8316,6 +8347,16 @@ def _издание_слова(код):
         except Exception:
             pass
     _ИЗДАНИЯ_КЭШ[код] = сп
+    _ИЗДАНИЯ_ВРЕМЯ[код] = time.time()
+    while len(_ИЗДАНИЯ_КЭШ) > 2:                 # больше двух книг разом нам не нужно
+        try:
+            _стар = min(_ИЗДАНИЯ_ВРЕМЯ, key=lambda k: _ИЗДАНИЯ_ВРЕМЯ.get(k, 0))
+            if _стар == код:
+                break
+            _ИЗДАНИЯ_КЭШ.pop(_стар, None)
+            _ИЗДАНИЯ_ВРЕМЯ.pop(_стар, None)
+        except Exception:
+            break
     return сп
 
 
@@ -22829,9 +22870,18 @@ async def _api_serve(application=None):
                     'запущен': _ЗАПУЩЕН_В}
         except Exception:
             _код = {'снимок': 'не сказан'}
+        # счёт отданных байт за сутки — по нему видно, какой маршрут жжёт трафик (счёт Railway)
+        try:
+            _тр = {'день': _ТРАФИК.get('день'),
+                   'мб_отдано': round(_ТРАФИК.get('байт', 0) / 1048576.0, 1),
+                   'верх': sorted(_ТРАФИК.get('по_маршрутам', {}).items(),
+                                  key=lambda x: -x[1])[:6]}
+        except Exception:
+            _тр = None
         return _cors(web.json_response({
             'ok': True,
             'код': _код,
+            'трафик': _тр,
             'ai': {'groq': bool(GROQ_API_KEY), 'gemini': bool(GEMINI_API_KEY),
                    'openrouter': bool(OPENROUTER_API_KEY), 'deepseek': bool(DEEPSEEK_API_KEY),
                    'nvidia_nim': bool(NVIDIA_NIM_API_KEY)},
@@ -26387,7 +26437,33 @@ async def _api_serve(application=None):
             return web.json_response({'error': 'relay_failed', 'kind': type(e).__name__},
                                      status=502)
 
-    a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
+    @web.middleware
+    async def _счёт_трафика(запрос, дальше):
+        """Считать байты надо там, где они РЕАЛЬНО уходят, — в общей двери на выход."""
+        ответ = await дальше(запрос)
+        try:
+            _д = datetime.now().strftime('%Y-%m-%d')
+            if _ТРАФИК.get('день') != _д:
+                _ТРАФИК.clear()
+                _ТРАФИК.update({'день': _д, 'байт': 0, 'по_маршрутам': {}})
+            _н = 0
+            try:
+                _н = int(ответ.content_length or 0)
+            except Exception:
+                _н = 0
+            if not _н:
+                try:
+                    _н = len(getattr(ответ, 'body', b'') or b'')
+                except Exception:
+                    _н = 0
+            _п = (getattr(запрос, 'path', '') or '?')[:40]
+            _ТРАФИК['байт'] = _ТРАФИК.get('байт', 0) + _н
+            _ТРАФИК['по_маршрутам'][_п] = _ТРАФИК['по_маршрутам'].get(_п, 0) + _н
+        except Exception:
+            pass
+        return ответ
+
+    a = web.Application(middlewares=[_счёт_трафика], client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
     a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/vyzov', vyzov), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
