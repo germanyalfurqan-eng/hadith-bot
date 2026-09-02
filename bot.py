@@ -22862,8 +22862,30 @@ async def _api_serve(application=None):
         # обновить нельзя — в отличие от номера версии, вписанного в код.
         _код = {}
         try:
+            # 🔴 ПЕРЕЕЗД НА СВОЮ МАШИНУ (03.09.2026). Снимок брался ТОЛЬКО из переменных,
+            # которые подставляет сам Railway. На Oracle их нет — и здоровье отвечало
+            # «снимок: не сказан», то есть проверить, какой код реально запущен, стало нечем.
+            # А это главная моя проверка после каждой выкатки: сверить снимок со своим
+            # последним коммитом. Без неё «выкатил» и «работает выкаченное» снова разъезжаются.
+            # Берём по порядку: переменная площадки → отпечаток самого репозитория на машине →
+            # отпечаток файла бота. Последний работает всегда, даже без git.
             _сн = (os.environ.get('RAILWAY_GIT_COMMIT_SHA')
-                   or os.environ.get('RAILWAY_DEPLOYMENT_ID') or '')
+                   or os.environ.get('RAILWAY_DEPLOYMENT_ID')
+                   or os.environ.get('GIT_COMMIT') or '')
+            if not _сн:
+                try:
+                    import subprocess as _сп
+                    _сн = _сп.check_output(['git', 'rev-parse', 'HEAD'],
+                                           cwd=os.path.dirname(os.path.abspath(__file__)),
+                                           stderr=_сп.DEVNULL, timeout=5).decode().strip()
+                except Exception:
+                    _сн = ''
+            if not _сн:
+                try:
+                    _сн = 'файл-' + hashlib.md5(
+                        open(os.path.abspath(__file__), 'rb').read()).hexdigest()[:8]
+                except Exception:
+                    _сн = ''
             _код = {'снимок': _сн[:12] or 'не сказан',
                     'файл_правлен': datetime.utcfromtimestamp(
                         os.path.getmtime(__file__) + 3 * 3600).strftime('%d.%m.%Y %H:%M МСК'),
