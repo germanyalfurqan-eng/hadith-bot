@@ -4449,9 +4449,8 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
                 _дуб = req_dup(_зт)
             except Exception:
                 _дуб = None
-            if _дуб:
-                return ('КАК_ЕСТЬ|📌 Это уже записано — <b>заявка приложения №%s</b>. '
-                        'Второй раз не завожу.' % _дуб)
+            # №591: отказ записывать «похожее» терял просьбу целиком. Записываем всегда,
+            # о похожести говорим человеку — решать ему, а не мерке по буквам.
             try:
                 _рид = req_add('🟩 [DSOC] ' + _зт, src='🤝 помощник')
             except Exception as _e:
@@ -4468,8 +4467,11 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
             except Exception:
                 pass
             return ('КАК_ЕСТЬ|📌 <b>Записал — заявка приложения №%d.</b> Технадзор увидит, '
-                    'владельцу ушло уведомление.\n\n<blockquote>%s</blockquote>'
-                    % (_рид, _зт[:700].replace('&', '&amp;')
+                    'владельцу ушло уведомление.%s\n\n<blockquote>%s</blockquote>'
+                    % (_рид,
+                       (('\n⚠️ Похожа на заявку №%s — если это правда повтор, '
+                         'скажи, закрою.') % _дуб) if _дуб else '',
+                       _зт[:700].replace('&', '&amp;')
                        .replace('<', '&lt;').replace('>', '&gt;')))
 
         # 👤 КОГДА ЧЕЛОВЕК ЗАШЁЛ В ЧАТ (обращение #177). Событие о входе бот получал всегда,
@@ -18065,17 +18067,27 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pend = pending_edits.pop(chat_id)
             if text.lower().strip() in ["да", "ок", "ok", "yes", "записать", "запиши", "верно", "ага"]:
                 vtxt = pend.get("text", "")
+                # 🔴 ЗАЯВКА №591 (17.07.2026). Владелец: «590 надо пропустить она не
+                # дублируется братан». Заслон от повторов ОТКАЗЫВАЛСЯ ЗАПИСЫВАТЬ — и просьба
+                # пропадала совсем: он видел «не дублирую», а в реестре не появлялось ничего.
+                # Похожесть считается по буквам (SequenceMatcher > 0.9), а две разные просьбы
+                # про одно место приложения похожи почти дословно — заслон бил по живым.
+                # Соседняя дверь (заявка со скрином) это уже поняла и заслон там снят с
+                # прямой пометкой: «лишняя строка в реестре дешевле потерянной поломки».
+                # Здесь тот же вывод: ЗАПИСЫВАЕМ ВСЕГДА, а на похожесть только УКАЗЫВАЕМ.
+                # Решает человек: он один знает, повтор это или нет.
                 dup = req_dup(vtxt)
-                if dup:
-                    await _мсообщ(update).reply_text(f"⚠️ Похоже, уже есть — заявка №{dup}. Не дублирую.")
-                else:
+                if True:      # записываем ВСЕГДА — см. разбор №591 выше
                     rid = req_add(vtxt)
                     try:
                         if update.effective_chat.id != LOG_CHAT_ID:
                             await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца #{rid} (голосом, {_now_msk()}):\n{обрезать(vtxt, 1500, 'полностью — в реестре заявок')}")
                     except Exception:
                         pass
-                    await _мсообщ(update).reply_text(f"📥 Заявка #{rid} записана ✅ (голосом). Ищи в журнале командой «заявки».")
+                    await _мсообщ(update).reply_text(
+                        f"📥 Заявка #{rid} записана ✅ (голосом). Ищи в журнале командой «заявки»."
+                        + (f"\n⚠️ Похожа на №{dup} — если это правда повтор, скажи «закрой {rid}»."
+                           if dup else ""))
             else:
                 await _мсообщ(update).reply_text("❌ Не записал. Надиктуй заново или поправь текстом «заявка <текст>».")
             return
@@ -18374,16 +18386,18 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if pending.get("action") == "voice_request_confirm":
                 if t_lower in ["да", "ок", "ok", "yes", "верно"]:
                     txt = pending["transcribed_text"]; pending_edits.pop(chat_id)
+                    # №591, вторая такая же дверь: записываем всегда, о похожести говорим.
                     dup = req_dup(txt)
-                    if dup:
-                        await _мсообщ(update).reply_text(f"⚠️ Похоже, это уже есть — *заявка №{dup}*. Не дублирую.", parse_mode="Markdown")
-                    else:
+                    if True:      # записываем ВСЕГДА — см. разбор №591
                         rid = req_add(txt)
                         try:
                             if update.effective_chat.id != LOG_CHAT_ID:
                                 await context.bot.send_message(LOG_CHAT_ID, f"📥 Заявка владельца (голосом) #{rid} ({_now_msk()}):\n{обрезать(txt, 1500, 'полностью — в реестре заявок')}")
                         except Exception: pass
-                        await _мсообщ(update).reply_text(f"📥 *Заявка #{rid}* записана ✅ · 🤖 бот ({_now_msk()})", parse_mode="Markdown")   # M287
+                        await _мсообщ(update).reply_text(
+                            f"📥 *Заявка #{rid}* записана ✅ · 🤖 бот ({_now_msk()})"
+                            + (f"\n⚠️ Похожа на №{dup} — если это правда повтор, скажи «закрой {rid}»."
+                               if dup else ""), parse_mode="Markdown")   # M287
                 elif t_lower in ["нет", "не надо", "отмена", "no"]:
                     pending_edits.pop(chat_id)
                     await _мсообщ(update).reply_text("❌ Отмена. Пришли голос снова или напиши текстом.")
