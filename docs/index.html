@@ -994,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1532</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1533</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1532';
+const APPVER = 'v1533';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6759,8 +6759,18 @@ async function _bookLoad(){
   const my=(window._bkSeq=(window._bkSeq||0)+1);   // QA#2: токен против гонки быстрого листания (устаревший ответ не перетирает текущую страницу)
   const tEl=m.querySelector('#bookText'), navEl=m.querySelector('#bookNav'), ttl=m.querySelector('#bookTitle');
   tEl.innerHTML='<span class="hint">📖 Загружаю страницу…</span>';
+  /* 📕 ЗАЯВКА №658 «обеспечь все книги». На скрине владельца — «Страница не открылась:
+     сбой при разборе страницы: Attempted to assign to readonly property» на книге
+     «الجرح والتعديل — ابن أبي حاتم». Сама страница при этом СЕРВЕРОМ ОТДАНА: проверено,
+     /api/book_page для этой книги возвращает текст. То есть текст у нас на руках был, а
+     человек видел пустой экран — падало ОФОРМЛЕНИЕ, а не добыча.
+     Ошибка Safari-специфичная (в Chrome тот же путь проходит целиком, проверено на
+     v1532), и воспроизвести её здесь нечем. Поэтому чиню не догадку о её причине, а
+     ПОСЛЕДСТВИЕ: добытый текст держим отдельно, и если разбор упал — показываем его
+     как есть. Книга без украшений лучше, чем красная рамка вместо книги. */
+  var _сырьё=null;
   try{
-    const j=await bjson(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+_bookView.pg+'&initData='+encodeURIComponent(INITDATA), 30000); const meta=j.meta||{};   // QA-свип: таймаут 30с (был голый fetch → белый экран при зависании /book_page)
+    const j=await bjson(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+_bookView.pg+'&initData='+encodeURIComponent(INITDATA), 30000); _сырьё=j;   /* №658: сохраняем СРАЗУ — до первого же чтения полей, иначе сбой в них оставит нас без текста, который уже добыт */ const meta=j.meta||{};   // QA-свип: таймаут 30с (был голый fetch → белый экран при зависании /book_page)
     if(my!==window._bkSeq) return;   // QA#2: пока грузили — пользователь перелистнул дальше; этот ответ устарел, не рисуем
     // #582/#632/#539/#576 (скрины: «Не удалось загрузить книгу — попробуй позже 🔧» без единого пояснения):
     // сервер теперь называет ПРИЧИНУ (нет такой книги в источнике / лист вне диапазона / код ответа) — показываем её
@@ -7231,9 +7241,19 @@ async function _bookLoad(){
     var _why = /abort|timeout|таймаут/i.test(_m) ? 'сервер не ответил вовремя (бэкенд мог «спать» — второй заход обычно проходит)'
              : /fail|network|load/i.test(_m) ? 'нет связи с сервером'
              : ('сбой при разборе страницы: ' + _m.slice(0, 90));
+    var _тхт=(_сырьё && String(_сырьё.text||'').trim()) || '';
+    if(_тхт){
+      // №658: текст добыт, упало оформление — показываем книгу как есть и говорим об этом честно.
+      tEl.innerHTML='<div class="hint" style="margin-bottom:8px">⚠️ Оформление страницы не собралось ('
+        +esc(_m.slice(0,60))+') — показываю текст как есть.</div>'
+        +'<div id="bookMain" style="direction:rtl;text-align:right;white-space:pre-wrap;line-height:1.9">'
+        +esc(_тхт)+'</div>'
+        +'<div class="bb" style="margin-top:10px"><button class="go" id="_bkRetry2" style="font-size:calc(12.5px * var(--txtScale,1));padding:7px 12px">🔄 повторить</button></div>';
+    } else {
     tEl.innerHTML='<div class="stateBox err"><div class="ic">📕</div><div class="tt">Страница не открылась</div>'
       +'<div class="hh">'+esc(_why)+'</div>'
       +'<div class="bb"><button class="go" id="_bkRetry2" style="font-size:calc(12.5px * var(--txtScale,1));padding:7px 12px">🔄 повторить</button></div></div>';
+    }
     try{ var _r2=tEl.querySelector('#_bkRetry2'); if(_r2) _r2.onclick=()=>{ try{ _bookLoad(); }catch(_x){_тихо(_x,"L5677")} }; }catch(_x){_тихо(_x,"L5677")}
   }
 }
