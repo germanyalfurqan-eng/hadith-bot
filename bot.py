@@ -2976,7 +2976,7 @@ def _страница_в_обход(url, таймаут=40):
     return None
 
 
-async def dsoc_инструмент(строка, бот=None, чат=None, кто=0):
+async def dsoc_инструмент(строка, бот=None, чат=None, кто=0, ответ_на=None):
     """Выполнить «ВЫЗОВ: …» и вернуть НАСТОЯЩИЕ данные из нашей базы (либо None).
 
     Почти все инструменты только читают. Пишущих ровно два, и оба заведены по прямому слову
@@ -4650,6 +4650,49 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
                       'проверена». Оценок достоверности по этим книгам у нас нет.']
             return chr(10).join(_из_а)
 
+        # ✏️ ПОДПИСЬ УЖЕ ВЫШЕДШЕГО ПОСТА (заявка №734, 27.08.2026).
+        # Владелец: «Вот этот пост не добавляя новый измени описание его по русски а именно что
+        # ты видишь на видео напиши в описании». Помощник отказался (журнал неудач, запись 76) —
+        # и отказ был вынужденный: описание кадров у него на руках было, а руки переписать
+        # подпись не было ни одной. Правка подписи и отправка нового поста — разные вещи, и
+        # владелец сказал прямо «не добавляя новый»: лента не должна засоряться повтором.
+        #
+        # ⚠️ ГЛАВНАЯ ТОНКОСТЬ — ГДЕ ЛЕЖИТ ПОСТ. Владелец отвечает на пост в ОБСУЖДЕНИИ, а сам
+        # пост живёт в КАНАЛЕ: то, что видно в группе, — лишь его копия, и правка копии канала
+        # не коснётся. Поэтому если у сообщения есть родитель в канале, правим ЕГО.
+        м = re.match(r'^(?:подпись|описание)\s+(.+)$', с, re.S | re.I)
+        if м and бот:
+            _новая = м.group(1).strip()
+            if not ответ_на:
+                return ('Не понял, у КАКОГО поста менять подпись: человек не ответил на пост. '
+                        'Попроси его ответить на нужное сообщение и повторить просьбу.')
+            _чат_ц = чат
+            _мид_ц = getattr(ответ_на, 'message_id', None)
+            try:
+                _род = getattr(ответ_на, 'forward_from_chat', None)
+                _род_ид = getattr(ответ_на, 'forward_from_message_id', None)
+                if _род is not None and _род_ид:
+                    _чат_ц, _мид_ц = getattr(_род, 'id', _чат_ц), _род_ид
+            except Exception:
+                pass
+            if not _мид_ц:
+                return 'У этого сообщения нет номера — переписать подпись нечему.'
+            _есть_медиа = any(getattr(ответ_на, _п, None) for _п in
+                              ('photo', 'video', 'animation', 'document', 'audio', 'voice'))
+            try:
+                if _есть_медиа:
+                    await бот.edit_message_caption(chat_id=_чат_ц, message_id=_мид_ц,
+                                                   caption=_новая[:1024])
+                else:
+                    await бот.edit_message_text(chat_id=_чат_ц, message_id=_мид_ц,
+                                                text=_новая[:4096])
+            except Exception as _еп:
+                return ('Переписать подпись не вышло: %s. Скажи человеку ПРИЧИНУ дословно, '
+                        'а не «не могу»: чаще всего это чужой пост либо он старше двух суток '
+                        '(Telegram правку такого не даёт).' % str(_еп)[:180])
+            return ('ГОТОВО: подпись поста переписана, новый пост НЕ создавался. Скажи об этом '
+                    'коротко и НЕ повторяй сам текст подписи — человек её и так видит.')
+
         м = re.match(r'^(?:ссылка|открой|прочитай ссылку|url)\s+(\S+)\s*$', с, re.I)
         if м:
             _url = м.group(1).strip().strip('<>«»"\'')
@@ -6216,6 +6259,7 @@ def dsoc_системный_запасной():
         "Спросили аят, суру, «что значит такой-то аят», просят объяснить язык или контекст — "
         "СПЕРВА возьми аят вызовом, потом разбирай. По памяти аят не приводи НИКОГДА: "
         "это Слово Аллаха, ошибка в букве недопустима.\n"
+        "ВЫЗОВ: подпись <новый текст> — ПЕРЕПИСАТЬ описание уже вышедшего поста, НЕ создавая новый. Человек отвечает на пост и просит «измени описание», «напиши, что на видео», «поправь подпись» — бери этот вызов. Работает по сообщению, на которое ответили; если пост пришёл из канала — правится он сам, а не копия в обсуждении. Видео и картинки ты уже видишь разобранными — описывай их своими словами по-русски.\n"
         "ВЫЗОВ: ссылка <адрес>       — ПРОЧИТАТЬ страницу по ссылке и получить её текст "
         "(годится и для t.me). Прислали ссылку и просят сказать, что там, озвучить или "
         "разобрать — БЕРИ ЭТОТ ВЫЗОВ. Говорить «я не могу прочитать по ссылке» больше нельзя: "
@@ -15387,7 +15431,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
             данные = await dsoc_инструмент(очистить_вызов(_вз.group(1)), бот=context.bot, чат=chat_id,
-                                           кто=(update.effective_user.id if update.effective_user else 0))
+                                           кто=(update.effective_user.id if update.effective_user else 0),
+                                           ответ_на=update.message.reply_to_message)
             if not данные:
                 # 🔴 08.08.2026, обращение #184: «он творит дичь». Помощник позвал
                 # «ВЫЗОВ: поиск …» — глагола с таким именем у нас нет, — инструмент вернул
@@ -21977,6 +22022,44 @@ async def _api_serve(application=None):
         except Exception as e:
             return _cors(web.json_response({'ok': False, 'error': str(e)[:300]}, status=500))
 
+    async def vyzov(r):
+        """Прогнать ВЫЗОВ помощника тем же кодом, что работает с людьми, и вернуть ЕГО ответ.
+
+        🔴 02.09.2026. Правил помощнику вызовы — и не мог проверить ни одного, кроме как
+        попросив владельца написать боту. То есть каждая моя проверка упиралась в него: ровно
+        та беда, ради которой рядом стоит `samotest` для зрения и слуха. А правило П-01 говорит
+        прямо: не объявлять сделанным то, чего не видел работающим.
+
+        Дверь отдаёт НЕ «ok: true», а сам текст, который инструмент вернул бы модели, — его
+        можно сверить с ожидаемым. Проверка, не показывающая добытое, доказывает лишь то, что
+        запрос не упал.
+
+        Бот и чат сюда НЕ передаём: пусть дверь только ДОСТАЁТ данные и ничего не отправляет
+        людям. Вызовы, которым нужны руки (подпись, озвучка), честно скажут, что им не хватает
+        собеседника, — и это правильный ответ, а не поломка.
+        """
+        if not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            return _cors(web.json_response({'error': 'bad_json'}, status=400))
+        if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        строка = str(body.get('вызов') or body.get('vyzov') or '').strip()
+        if not строка:
+            return _cors(web.json_response({'error': 'нужен «вызов»'}, status=400))
+        нач = time.time()
+        try:
+            итог = await dsoc_инструмент(строка)
+        except Exception as e:
+            return _cors(web.json_response({'ok': False, 'вызов': строка,
+                                            'беда': '%s: %s' % (type(e).__name__, str(e)[:300]),
+                                            'сек': round(time.time() - нач, 1)}, status=200))
+        return _cors(web.json_response({'ok': итог is not None, 'вызов': строка,
+                                        'ответ': итог, 'знаков': len(итог or ''),
+                                        'сек': round(time.time() - нач, 1)}))
+
     async def samotest(r):
         """Прогнать ЗРЕНИЕ и СЛУХ на присланной пробе — тем же кодом, что работает с людьми.
 
@@ -25027,7 +25110,7 @@ async def _api_serve(application=None):
                                      status=502)
 
     a = web.Application(client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/vyzov', vyzov), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
