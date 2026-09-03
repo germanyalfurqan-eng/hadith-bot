@@ -827,13 +827,25 @@ def интернет_поиск(запрос, timeout=90):
 
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")   # 🆓 Groq — бесплатный, очень быстрый (указ владельца: первым). Ключ в Railway env.
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+# 🔴 03.09.2026 (№697, «почему они не смогли его перевести»). Здесь стояла модель
+# llama-3.3-70b-versatile — Groq СНЯЛ её с сервиса, и на каждый запрос приходило
+# 404 «model does not exist». Groq — первая ступень бесплатной лестницы и самая
+# быстрая: значит вся лестница начиналась с мёртвой ступени, и работу тянула платная
+# подписка. Замер 03.09: перевод занимал 16–33 с, а живая модель Groq отвечает за
+# 0,5 с — то есть разница в полсотни раз, и всё это время шло за деньги.
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+# Порядок пересадки, если и эта будет снята (список — от крупной к мелкой):
+GROQ_ЗАПАС = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "qwen/qwen3.6-27b",
+              "openai/gpt-oss-20b", "groq/compound", "groq/compound-mini"]
+_groq_живая = None   # модель, на которую пересели после отказа (на время работы бота)
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 # 🆓 GitHub Models (GPT-4o и др. бесплатно для разработчиков). Токен с правом Models. Фолбэк на GITHUB_TOKEN.
 GITHUB_MODELS_TOKEN = os.environ.get("GITHUB_MODELS_TOKEN", "") or GITHUB_TOKEN
 # 🆓 NVIDIA NIM (build.nvidia.com) — бесплатный тир, добавлен владельцем 05.07.2026 в Railway (аккаунт "germany", ОТДЕЛЬНЫЙ от Хермеса).
 NVIDIA_NIM_API_KEY = os.environ.get("NVIDIA_NIM_API_KEY") or os.environ.get("NVIDIANIM_API_KEY") or ""   # владелец назвал переменную в Railway БЕЗ подчёркивания (NVIDIANIM_API_KEY) — читаем оба варианта
-NVIDIA_NIM_MODEL = os.environ.get("NVIDIA_NIM_MODEL", "meta/llama-3.1-70b-instruct")
+# 🔴 03.09.2026 (№697): meta/llama-3.1-70b-instruct снята — сервис отвечал 410, и это
+# читалось как «NVIDIA недоступна». Сам сервис ЖИВ (200, 82 модели), умерло имя.
+NVIDIA_NIM_MODEL = os.environ.get("NVIDIA_NIM_MODEL", "nvidia/nemotron-3-super-120b-a12b")
 GITHUB_MODELS_MODEL = os.environ.get("GITHUB_MODELS_MODEL", "openai/gpt-4o-mini")
 # 🆓 #573 (владелец: «я сказал: API перед дипсиком, там 12 API или больше»): ещё две бесплатные ступени
 # ПЕРЕД платным DeepSeek. Ключей может не быть в env — тогда ступень просто пропускается.
@@ -9824,8 +9836,40 @@ def _годен(о):
     return bool(о) and not str(о).lstrip().startswith(('⚠', '❌', '⏸'))
 
 
-def ask_groq(prompt, system=None, max_tokens=None):
-    """Groq — бесплатный, очень быстрый, OpenAI-совместимый. Ключ GROQ_API_KEY на Railway. Возвращает текст или None/⚠️."""
+def _groq_подобрать_модель():
+    """Спросить у самого Groq, какие модели живы, и выбрать первую из нашего порядка.
+
+    №697, 03.09.2026. Модель, прописанную в коде, сервис однажды снимает — и ступень
+    умирает молча: снаружи это «бесплатные не ответили», хотя ключ цел и лимит не тронут.
+    Такое уже стоило нам скорости: перевод шёл через платную подписку по 16–33 секунды,
+    пока Groq отвечает за полсекунды. Поэтому не гадаем и не ждём правки руками —
+    спрашиваем список у сервиса. Не вышло — возвращаем None, и лестница идёт дальше.
+    """
+    global _groq_живая
+    try:
+        r = requests.get("https://api.groq.com/openai/v1/models",
+                         headers={"Authorization": f"Bearer {GROQ_API_KEY}"}, timeout=20)
+        if r.status_code != 200:
+            return None
+        живые = {m.get("id") for m in (r.json().get("data") or [])}
+        for м in GROQ_ЗАПАС:
+            if м in живые:
+                _groq_живая = м
+                print("ask_groq: модель пересажена на «%s» (прежняя снята сервисом)" % м)
+                return м
+        # ни одной из нашего списка — берём любую пригодную для беседы
+        for м in sorted(живые):
+            if not any(s in м for s in ("whisper", "guard", "orpheus", "tts")):
+                _groq_живая = м
+                print("ask_groq: моделей из списка нет, взята «%s»" % м)
+                return м
+    except Exception as e:
+        print("ask_groq, подбор модели: %s" % str(e)[:120])
+    return None
+
+
+def ask_groq(prompt, system=None, max_tokens=None, _повтор=False):
+    """Groq — бесплатный, очень быстрый, OpenAI-совместимый. Ключ GROQ_API_KEY. Возвращает текст или None/⚠️."""
     if not GROQ_API_KEY:
         return None
     try:
@@ -9835,10 +9879,19 @@ def ask_groq(prompt, system=None, max_tokens=None):
         r = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},   # UA обязателен — без него Cloudflare 403 (1010)
-            json={"model": GROQ_MODEL, "messages": msgs, "max_tokens": max_tokens or 1500, "temperature": 0.3},
+            json={"model": (_groq_живая or GROQ_MODEL), "messages": msgs,
+                  "max_tokens": max_tokens or 1500, "temperature": 0.3},
             timeout=60)
         if r.status_code == 200:
             return r.json()["choices"][0]["message"]["content"].strip()
+        # «модели не существует» — не беда ключа и не лимит: сервис снял модель.
+        # Один раз пересаживаемся на живую и повторяем тот же запрос. Повтор ровно один:
+        # если и он не прошёл, честно отдаём ошибку, а не крутимся по кругу.
+        if (not _повтор and r.status_code in (400, 404)
+                and ("does not exist" in r.text or "model_not_found" in r.text
+                     or "decommissioned" in r.text)):
+            if _groq_подобрать_модель():
+                return ask_groq(prompt, system, max_tokens, _повтор=True)
         return f"⚠️ Groq код {r.status_code}: {r.text[:150]}"
     except Exception as e:
         return f"⚠️ Groq недоступен: {e}"
@@ -9950,7 +10003,8 @@ def ask_neuro(prompt, system, max_tokens=2000):
     if sn and not str(sn).startswith("⚠️"):
         return sn + "\n\n⚡ *Модель:* 🆓 SambaNova — бесплатно"
     if OPENROUTER_API_KEY:
-        for _m in ("meta-llama/llama-3.3-70b-instruct:free", "deepseek/deepseek-r1:free", "qwen/qwen3-235b-a22b:free"):
+        # 03.09.2026 (№697): прежние три имени сняты с бесплатного доступа — взяты живые.
+        for _m in ("nvidia/nemotron-3-ultra-550b-a55b:free", "nvidia/nemotron-3-super-120b-a12b:free", "minimax/minimax-m3:free"):
             try:
                 _r = requests.post("https://openrouter.ai/api/v1/chat/completions",
                                    headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
@@ -10230,19 +10284,24 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None):
     _sn = ask_sambanova(prompt, system, max_tokens)  # 3.7) SambaNova (free, #573)
     if _sn and not str(_sn).startswith("⚠️"):
         return _sn + "\n\n⚡ *Модель:* 🆓 SambaNova — бесплатно\n" + _ai_left()
+    # 🔴 03.09.2026 (№697). Здесь перебирались llama-3.3-70b, deepseek-r1, qwen3-235b и
+    # phi-4-reasoning — спросил у самого OpenRouter список бесплатных (18 штук на эту дату):
+    # НИ ОДНОЙ из этих четырёх там больше нет, все сняты с бесплатного доступа. То есть
+    # ступень перебирала мёртвые имена и отдавала 404, а снаружи это выглядело как
+    # «бесплатные не ответили». Ниже — модели ИЗ ЖИВОГО списка, от крупной к мелкой.
     модели = [
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "deepseek/deepseek-r1:free",
-        "qwen/qwen3-235b-a22b:free",
-        "microsoft/phi-4-reasoning-plus:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "minimax/minimax-m3:free",
+        "google/gemma-4-31b-it:free",
         "openrouter/auto",
     ]
 
     имена = {
-        "meta-llama/llama-3.3-70b-instruct:free": "🦙 Llama 3.3 70B (Meta)",
-        "deepseek/deepseek-r1:free": "🧠 DeepSeek R1",
-        "qwen/qwen3-235b-a22b:free": "⚡ Qwen3 235B (Alibaba)",
-        "microsoft/phi-4-reasoning-plus:free": "🔬 Phi-4 Reasoning (Microsoft)",
+        "nvidia/nemotron-3-ultra-550b-a55b:free": "🟩 Nemotron 3 Ultra 550B (NVIDIA)",
+        "nvidia/nemotron-3-super-120b-a12b:free": "🟩 Nemotron 3 Super 120B (NVIDIA)",
+        "minimax/minimax-m3:free": "🌀 MiniMax M3",
+        "google/gemma-4-31b-it:free": "💎 Gemma 4 31B (Google)",
         "openrouter/auto": "🔄 Auto (OpenRouter)",
     }
 
