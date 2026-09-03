@@ -4743,8 +4743,7 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
                 for _адр in ('https://opencode.ai/zen/go/v1/balance',
                              'https://opencode.ai/zen/v1/balance'):
                     _о = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda a=_адр: await _зов_сети('get', 
-                            a, timeout=20, headers={'Authorization': 'Bearer ' + (OPENCODE_KEY or '')}))
+                        None, lambda a=_адр: requests.get(a, timeout=20, headers={'Authorization': 'Bearer ' + (OPENCODE_KEY or '')}))
                     if _о.status_code == 200:
                         _пров = _о.text[:300]
                         break
@@ -5069,8 +5068,7 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
                 if not _нужен_анг:
                     raise StopIteration     # английский не просили — и запрос не шлём
                 _о = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: await _зов_сети('get', 
-                        'https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/'
+                    None, lambda: requests.get('https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/'
                         'eng-abdullahyusufal/%d/%d.min.json' % (_с, _а), timeout=15))
                 if _о.status_code == 200:
                     _ан = (_о.json() or {}).get('text', '')
@@ -5149,8 +5147,7 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
             if not _рк:
                 try:
                     _рк = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda: await _зов_сети('get', 
-                            'https://germanyalfurqan-eng.github.io/hadith-bot/quran_roots.json',
+                        None, lambda: requests.get('https://germanyalfurqan-eng.github.io/hadith-bot/quran_roots.json',
                             timeout=90).json())
                     _КОРНИ_КОРАНА[0], _КОРНИ_КОРАНА[1] = _рк, time.time()
                 except Exception as _ек:
@@ -5300,8 +5297,7 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
                 _url = 'https://' + _url
             try:
                 _о = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: await _зов_сети('get', 
-                        _url, timeout=45, allow_redirects=True,
+                    None, lambda: requests.get(_url, timeout=45, allow_redirects=True,
                         headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}))
                 if _о.status_code != 200:
                     return ('Страница «%s» не открылась: код %s. Скажи это прямо и предложи '
