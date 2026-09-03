@@ -1198,8 +1198,42 @@ def convert_to_mp3(input_path, output_path, artist="", title="", comment=""):
         return False
 
 def transcribe_audio(path):
-    """Расшифровка речи (OpenAI Whisper, ключ OPENAI_API_KEY на Railway). Возвращает текст или None.
-    Поддерживает ru/ar и др. Whisper принимает ogg/oga/mp3/m4a/wav до ~25 МБ."""
+    """Расшифровка речи. Сначала Groq (бесплатно), потом OpenAI. Текст или None.
+
+    🔴 03.09.2026, заявка №630. Владелец просил: «обеспечь, чтобы он мог читать аудио и
+    находить оригинал». Дверь была ОДНА — OpenAI Whisper, а на его счёте кончились деньги:
+    прямой запрос отвечает `credit_balance_exhausted`. То есть бот молча не понимал НИ ОДНОГО
+    голосового, а в справке у него написано «расшифрую речь и найду оригинал хадиса».
+    Обещание без исполнения хуже отсутствия обещания.
+
+    У Groq тот же whisper есть бесплатно, и он ЖИВ: проверено 03.09 — обе модели отвечают за
+    0,1–0,2 с. Ставим его первым, OpenAI оставляем запасным: деньги на счёт могут вернуться,
+    и тогда путь снова заработает сам, без правок.
+    """
+    _файл = os.path.basename(path) or "audio.ogg"
+
+    # ① Groq — бесплатный и быстрый. turbo сначала: он вдвое шустрее при том же качестве.
+    if GROQ_API_KEY:
+        for _м in ("whisper-large-v3-turbo", "whisper-large-v3"):
+            try:
+                with open(path, "rb") as fh:
+                    r = requests.post(
+                        "https://api.groq.com/openai/v1/audio/transcriptions",
+                        headers={"Authorization": "Bearer " + GROQ_API_KEY,
+                                 "User-Agent": "Mozilla/5.0"},
+                        files={"file": (_файл, fh, "application/octet-stream")},
+                        data={"model": _м},
+                        timeout=300)
+                if r.status_code == 200:
+                    _т = ((r.json() or {}).get("text") or "").strip()
+                    if _т:
+                        return _т
+                else:
+                    print("groq whisper %s: код %d %s" % (_м, r.status_code, r.text[:150]))
+            except Exception as e:
+                print("groq whisper %s: %s" % (_м, str(e)[:150]))
+
+    # ② OpenAI — запасной путь.
     if not OPENAI_API_KEY:
         return None
     try:
@@ -1207,7 +1241,7 @@ def transcribe_audio(path):
             r = requests.post(
                 "https://api.openai.com/v1/audio/transcriptions",
                 headers={"Authorization": "Bearer " + OPENAI_API_KEY},
-                files={"file": (os.path.basename(path) or "audio.ogg", fh, "application/octet-stream")},
+                files={"file": (_файл, fh, "application/octet-stream")},
                 data={"model": "whisper-1"},
                 timeout=300)
         if r.status_code == 200:
@@ -19149,8 +19183,39 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try: await _vst.edit_text("❌ Не удалось распознать голосовое (нужен OPENAI_API_KEY/Whisper на Railway). Можешь текстом: «заявка <текст>».")
                 except Exception: pass
                 return
+            # 🔴 03.09.2026, заявка №630: «обеспечь, чтобы он мог читать аудио и НАХОДИТЬ ОРИГИНАЛ».
+            # Читать бот умел, второй половины не делал: распознал — и сразу спрашивал про
+            # заявку. Человек наговаривал хадис, а в ответ получал вопрос о заявке.
+            # Ищем тем же поиском по словам, что стоит за «ВЫЗОВ: тахкик» (З-33).
+            # Только при арабской речи: наши издания арабские, по русской фразе искать нечего.
+            _найдено_вслух = ''
+            try:
+                if re.search(r'[\u0621-\u064a]{3}', vtxt or ''):
+                    # Речь распознаётся с мелкими огрехами: проба показала
+                    # «وإنما لكل إمر إنما نوى» вместо «وإنما لكل امرئ ما نوى». Точное вхождение
+                    # такого не найдёт, а НАЧАЛО фразы распознаётся верно почти всегда.
+                    # Поэтому пробуем всю речь, потом первые семь слов, потом пять, потом три:
+                    # первое же попадание и есть ответ. Ниже трёх слов не опускаемся — там
+                    # совпадёт что угодно, и мы назовём владельцу не тот хадис.
+                    _слова_г = vtxt.strip().split()
+                    _мс = None
+                    for _к_г in (len(_слова_г), 7, 5, 3):
+                        if _к_г < 3 or _к_г > len(_слова_г):
+                            continue
+                        _мс = _хадис_по_словам(' '.join(_слова_г[:_к_г]))
+                        if _мс:
+                            break
+                    if _мс:
+                        _найдено_вслух = ('\n\n📖 Нашёл оригинал: %s, хадис %s.'
+                                          % (NAMES.get(_мс[0], _мс[0]), _мс[1]))
+                    else:
+                        _найдено_вслух = ('\n\n📖 По этим словам оригинал в наших изданиях не '
+                                          'нашёлся — скажи иначе или наговори кусок подлиннее.')
+            except Exception as _ег:
+                print('голосовое, поиск оригинала: %s' % str(_ег)[:150])
+
             pending_edits[chat_id] = {"action": "add_request_voice", "text": vtxt.strip()}
-            _msg = f"📝 Я распознал так:\n\n«{vtxt.strip()[:1200]}»\n\nЗаписать как заявку? (да / нет). В аудио бывают ошибки — проверь текст."
+            _msg = f"📝 Я распознал так:\n\n«{vtxt.strip()[:1200]}»{_найдено_вслух}\n\nЗаписать как заявку? (да / нет). В аудио бывают ошибки — проверь текст."
             try: await _vst.edit_text(_msg)
             except Exception: await update.message.reply_text(_msg)
             return
