@@ -18229,6 +18229,45 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # «напоминание» — прислать одно прямо сейчас, сюда же. «напоминания вкл [часы]» —
         # слать в ЭТОТ чат сами. Слово «вкл» обязательно: сам я авторассылку в общий чат не
         # включаю — владелец не назвал ни чата, ни частоты, а гадать тут значит спамить людям.
+        # 📊 «трафик» — сколько израсходовано из бесплатного предела сервера.
+        # Заведено 03.09.2026 по слову владельца после счёта Railway на 23 доллара:
+        # «чтобы мы видели лимиты рядом». Там нас подвело именно то, что расход никто
+        # не смотрел — 347 ГБ утекли молча. Здесь предел щедрее (10 ТБ в месяц), но
+        # правило то же: предел, за которым не следят, однажды окажется пройденным.
+        # Цифры берём у vnstat — он считает ВЕСЬ трафик машины, а не только ответы бота
+        # (счётчик внутри бота видит лишь свои маршруты и обнуляется при перезапуске).
+        if re.match(r'^трафик\b', _tl):
+            _тр = None
+            for _п in ('/state/trafik.json', '/opt/muslimoon/state/trafik.json'):
+                try:
+                    _тр = json.load(open(_п, encoding='utf-8'))
+                    break
+                except Exception:
+                    continue
+            if not _тр:
+                await _мсообщ(update).reply_text(
+                    'Счётчик трафика молчит: файла с показаниями нет. Он пишется на самой '
+                    'машине раз в час (vnstat + сторож). Если бот живёт не на нашей машине, '
+                    'показаний и не будет — так и есть на арендованных площадках.')
+                return
+            _отд = float(_тр.get('отдано_гб') or 0)
+            _пред = float(_тр.get('предел_гб') or 0) or 1
+            _проц = float(_тр.get('израсходовано_процентов') or 0)
+            _полос = int(max(0, min(20, round(_проц / 5))))
+            await _мсообщ(update).reply_text(
+                ('📊 <b>Трафик сервера за этот месяц</b>' + chr(10) + chr(10) +
+                 '%s %.2f%%' + chr(10) +
+                 'Отдано: <b>%.2f ГБ</b> из %.0f ГБ бесплатных' + chr(10) +
+                 'Принято: %.2f ГБ (за входящий не берут)' + chr(10) + chr(10) +
+                 'Осталось: <b>%.0f ГБ</b>' + chr(10) +
+                 '<i>Показания сняты %s. Считает vnstat на самой машине — весь трафик, '
+                 'а не только ответы бота.</i>')
+                % ('█' * _полос + '░' * (20 - _полос), _проц, _отд, _пред,
+                   float(_тр.get('принято_гб') or 0), max(0.0, _пред - _отд),
+                   _тр.get('когда') or '?'),
+                parse_mode='HTML')
+            return
+
         if re.match(r'^напоминани[ея]\b', _tl):
             _чат_н = getattr(update.effective_chat, 'id', 0)
             if re.search(r'\bвыкл|стоп|хватит|отключ', _tl):
@@ -22900,10 +22939,22 @@ async def _api_serve(application=None):
                                   key=lambda x: -x[1])[:6]}
         except Exception:
             _тр = None
+        # расход из бесплатного предела машины (пишет vnstat-сторож раз в час)
+        _предел = None
+        try:
+            for _п in ('/state/trafik.json', '/opt/muslimoon/state/trafik.json'):
+                try:
+                    _предел = json.load(open(_п, encoding='utf-8'))
+                    break
+                except Exception:
+                    continue
+        except Exception:
+            _предел = None
         return _cors(web.json_response({
             'ok': True,
             'код': _код,
             'трафик': _тр,
+            'предел_машины': _предел,
             'ai': {'groq': bool(GROQ_API_KEY), 'gemini': bool(GEMINI_API_KEY),
                    'openrouter': bool(OPENROUTER_API_KEY), 'deepseek': bool(DEEPSEEK_API_KEY),
                    'nvidia_nim': bool(NVIDIA_NIM_API_KEY)},
