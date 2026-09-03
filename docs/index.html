@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1550';
+const APPVER = 'v1551';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -13588,6 +13588,36 @@ function _ragРисоватьСпасение(res, спас, порог, зап�
     });
   }catch(e){_тихо(e,"L10521")}
 }
+async function _ragПоОстальным(res, вопрос, head){
+  /* Спросить сервер по ВСЕМ сводам и показать найденное. Ответ приходит уже отсортированным
+     по близости, книга у каждого хадиса названа — человеку важно знать, откуда он. */
+  if(!BACKEND_URL) return;
+  const пометка=document.createElement('div'); пометка.className='hint';
+  пометка.style.cssText='margin:8px 0;font-size:calc(12.5px * var(--txtScale,1))';
+  пометка.textContent='🔎 Смотрю в остальных сводах…';
+  res.appendChild(пометка);
+  let j=null;
+  try{
+    const о=await fetch(BACKEND_URL+'/rag_find', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({q: вопрос, 'книга': 'все'})});
+    j=await о.json();
+  }catch(e){ пометка.textContent='🔎 В остальных сводах спросить не вышло — сервер не ответил.'; return; }
+  const сп=(j&&j['нашёл'])||[];
+  if(!сп.length){ пометка.textContent='🔎 В остальных пяти сводах тоже ничего подходящего.'; return; }
+  const ИМЕНА={bukhari:'Бухари', muslim:'Муслим', abudawud:'Абу Дауд',
+               tirmidhi:'Тирмизи', nasai:'Насаи', ibnmajah:'Ибн Маджа'};
+  пометка.textContent='🔎 Нашлось в других сводах: '+сп.length;
+  for(const z of сп.slice(0,6)){
+    const к=document.createElement('div'); к.className='card';
+    const ш=document.createElement('div'); ш.className='meta';
+    ш.textContent='📖 '+(ИМЕНА[z['книга']]||z['книга'])+' · хадис '+(z.n||'?');
+    const ар=document.createElement('div'); ар.className='ar';
+    ар.textContent=String(z['текст']||'').slice(0,900);
+    к.appendChild(ш); к.appendChild(ар); res.appendChild(к);
+  }
+}
+
 async function ragSearch(qRaw, seq, shownQ){
   const res=document.getElementById('res'); res.innerHTML='';
   const head=document.createElement('div'); head.className='hint'; head.style.cssText='color:#cdb8ff;font-size:calc(13px * var(--txtScale,1));margin:0 0 8px';
@@ -13699,6 +13729,12 @@ async function ragSearch(qRaw, seq, shownQ){
        мусор» и никогда «не показали нужное». Это две РАЗНЫЕ границы порога: 👎 говорит, что он
        низок, «не нашлось» — что высок. Калибровать по одной из них — всё равно что мерить
        комнату, зная только один угол. */
+    /* 🔴 03.09.2026. Раньше на этом всё и кончалось: в Бухари не нашлось — значит нигде.
+       Теперь на сервере лежат ещё пять сводов (Муслим, Абу Дауд, Тирмизи, Насаи, Ибн Маджа),
+       посчитанные той же мерой. Спрашиваем их ПРЕЖДЕ, чем сказать человеку «нет»: пустой экран
+       при живых данных — худший из ответов.
+       Своего поиска здесь не пишем (З-33) — зовём ту же дверь, что и бот. */
+    try{ _ragПоОстальным(res, shownQ||qRaw, head); }catch(e){_тихо(e,"L_ragост")}
     res.appendChild(_ragНеНашлось(shownQ||qRaw, ранж.length?ранж[0][1]:0));
     _ragРисоватьСпасение(res, спас, порог, shownQ||qRaw);   // #689: но если тема совпала по названию главы — покажем отдельно
     return;
