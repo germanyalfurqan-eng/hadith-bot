@@ -20684,15 +20684,42 @@ def _вектор_запасным(q, таймаут=45):
     _ЗАПАС_ОСТЫВАНИЕ['беда'] = беда
     return None, беда, ''
 
-def _rag_load_sync():
-    """Грузим базу книги с Pages. Синхронно и один раз — вызывается из потока, событийный цикл не держим."""
-    if _RAGB['готово']:
+RAG_КНИГИ = ('bukhari', 'muslim', 'abudawud', 'tirmidhi', 'nasai', 'ibnmajah')
+RAG_ПАПКА = '/rag'          # том со своими базами; в контейнере монтируется только чтением
+
+
+def _rag_load_sync(книга='bukhari'):
+    """Грузим базу НАЗВАННОЙ книги: сперва со своей машины, потом с Pages.
+
+    🔴 03.09.2026, заявки №646/647/650 («а где тут поиск раг? ты настроил вообще раг, нужно же
+    проверять на каждой книге»). Здесь была ровно одна книга — Бухари, и имя её стояло прямо
+    в коде. Остальные сорок не считались, потому что вектор давало облако Cloudflare с пределом
+    10 000 в сутки: на них ушло бы 27 дней.
+    Нашёлся путь короче: та же работа у NVIDIA идёт 47–95 векторов в секунду и без такого
+    предела. Качество сверено честно — одни и те же 300 хадисов, пять вопросов с известным
+    ответом: обе модели дали 4 верных из 5. Собраны шесть сводов, 121 МБ.
+    Лежат они НА СВОЕЙ МАШИНЕ, а не в приложении: все книги весят под гигабайт, а в Pages уже
+    739 МБ — не поместились бы. Раньше базу держали в приложении, чтобы не зависеть от
+    арендованного сервера; теперь сервер свой и бесплатный, и довод отпал.
+    """
+    if _RAGB.get('готово') and _RAGB.get('книга') == книга:
         return True
+    if книга not in RAG_КНИГИ:
+        return False
     try:
-        import base64 as _b64, array as _arr
-        base = 'https://germanyalfurqan-eng.github.io/hadith-bot/rag/'
-        v = requests.get(base + 'bukhari.vec.json', timeout=120).json()
-        m = requests.get(base + 'bukhari.meta.json', timeout=120).json()
+        import base64 as _b64, array as _arr, os as _os
+        v = m = None
+        # ① своя машина — быстрее и не зависит от чужой раздачи
+        _вп = _os.path.join(RAG_ПАПКА, '%s.vec.json' % книга)
+        _мп = _os.path.join(RAG_ПАПКА, '%s.meta.json' % книга)
+        if _os.path.exists(_вп) and _os.path.exists(_мп):
+            v = json.load(io.open(_вп, encoding='utf-8'))
+            m = json.load(io.open(_мп, encoding='utf-8'))
+        # ② запасной путь — витрина: так работало раньше и пусть работает, если тома нет
+        if v is None:
+            base = 'https://germanyalfurqan-eng.github.io/hadith-bot/rag/'
+            v = requests.get(base + '%s.vec.json' % книга, timeout=120).json()
+            m = requests.get(base + '%s.meta.json' % книга, timeout=120).json()
         сырое = _b64.b64decode(v['v'])
         # Владелец 26.07: бот сказал «ищу» и завис. Перебор 14344 векторов по 1024 измерения — это
         # 14.7 млн умножений; чистым Python на сервере это МИНУТЫ. numpy делает то же одним
@@ -20707,7 +20734,10 @@ def _rag_load_sync():
             body = _arr.array('b'); body.frombytes(сырое); быстро = False
         _RAGB.update({'ids': v['id'], 'поля': v.get('поле'), 'body': body, 's': v['s'],
                       'dim': v['dim'], 'n': v['n'], 'мета': m.get('м') or {},
-                      'быстро': быстро, 'готово': True})
+                      'быстро': быстро, 'готово': True,
+                      # Чья база лежит и какой моделью её считали: вопрос ОБЯЗАН считаться той же
+                      # моделью, иначе сравниваем несравнимое и поиск молча врёт.
+                      'книга': книга, 'модель': v.get('модель') or 'bge-m3'})
         return True
     except Exception:
         return False
@@ -20837,10 +20867,34 @@ def _cf_neurons_sync():
         return None
 
 def _rag_query_vec_sync(q):
-    _к = ' '.join((q or '').lower().split())[:300]
+    # 🔴 03.09.2026. Ключ кэша теперь включает МОДЕЛЬ. Базы у нас разные: старая на bge-m3
+    # (1024 числа), новые на nemotron-3-embed-1b (2048). Вектор одного вопроса, посчитанный
+    # разными моделями, — разные числа разной длины; общий кэш подсунул бы чужой вектор,
+    # и поиск молча врал бы, а не падал.
+    _мод = (_RAGB.get('модель') or 'bge-m3')
+    _к = _мод + '|' + ' '.join((q or '').lower().split())[:300]
     if _к in _ВЕК_КЭШ:                      # уже спрашивали — лимит не тратим
         _ВЕК_СЧЁТ['из_кэша'] += 1
         return _ВЕК_КЭШ[_к]
+    # Новые базы считаны у NVIDIA — вопрос к ним идёт туда же. Обращение к книге и к вопросу
+    # разное («passage» против «query»): модель для того и различает, что ищут, а что хранят.
+    if 'nemotron' in _мод or 'nvidia' in _мод:
+        try:
+            _о = requests.post('https://integrate.api.nvidia.com/v1/embeddings',
+                               json={'model': _мод, 'input': [q[:600]],
+                                     'input_type': 'query', 'encoding_format': 'float'},
+                               headers={'Authorization': 'Bearer ' + NVIDIA_NIM_API_KEY,
+                                        'Content-Type': 'application/json'}, timeout=60)
+            if _о.status_code == 200:
+                _в = ((_о.json() or {}).get('data') or [{}])[0].get('embedding')
+                if _в:
+                    _ВЕК_КЭШ[_к] = _в
+                    _ВЕК_СЧЁТ['посчитано'] = _ВЕК_СЧЁТ.get('посчитано', 0) + 1
+                    return _в
+            print('rag: вектор вопроса у NVIDIA не вышел, код %d' % _о.status_code)
+        except Exception as _ев:
+            print('rag: вектор вопроса у NVIDIA: %s' % str(_ев)[:140])
+        return None
     # 🔴 23.08.2026. Здесь бралась ОДНА пара — и если она не подошла, поиск по смыслу вставал
     # у всех, хотя вторая пара рядом и рабочая. Перебираем ВСЕ пары: первая, что отдала вектор,
     # и выигрывает. Пары берём у _cf_пары — своего разбора переменных тут нет и не будет.
@@ -20888,10 +20942,10 @@ def _rag_query_vec_sync(q):
             pass
     return None
 
-def _rag_find_sync(q, top=6):
-    """Поиск по книге: косинус со всеми векторами + порог отсечки мусора."""
-    if not _rag_load_sync():
-        return None, 'база не загрузилась'
+def _rag_find_sync(q, top=6, книга='bukhari'):
+    """Поиск по НАЗВАННОЙ книге: косинус со всеми векторами + порог отсечки мусора."""
+    if not _rag_load_sync(книга):
+        return None, 'база «%s» не загрузилась' % книга
     qv = _rag_query_vec_sync(q)
     if not qv:
         return None, 'нет ключа для вектора вопроса'
@@ -25868,15 +25922,20 @@ async def _api_serve(application=None):
         шаги = {}
         т0 = _t.time()
         try:
-            загр = await asyncio.get_event_loop().run_in_executor(None, _rag_load_sync)
+            книга = (d.get('книга') or d.get('book') or 'bukhari').strip()[:20]
+            шаги['книга'] = книга
+            загр = await asyncio.get_event_loop().run_in_executor(None, _rag_load_sync, книга)
             шаги['база_загружена'] = загр
             шаги['на_загрузку_с'] = round(_t.time() - т0, 1)
             шаги['векторов'] = _RAGB.get('n')
+            шаги['модель'] = _RAGB.get('модель')
+            шаги['книги_готовы'] = list(RAG_КНИГИ)
             шаги['режим'] = 'numpy' if _RAGB.get('быстро') else 'цикл (медленно!)'
             if not загр:
                 return _cors(web.json_response({'ошибка': 'база не загрузилась', **шаги}))
             т1 = _t.time()
-            найдено, беда = await asyncio.get_event_loop().run_in_executor(None, _rag_find_sync, q, 3)
+            найдено, беда = await asyncio.get_event_loop().run_in_executor(
+                None, _rag_find_sync, q, 3, книга)
             шаги['на_поиск_с'] = round(_t.time() - т1, 1)
             if not найдено:
                 return _cors(web.json_response({'ошибка': 'ничего не найдено', 'подробность': str(беда)[:200], **шаги}))

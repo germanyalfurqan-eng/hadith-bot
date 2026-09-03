@@ -39,7 +39,7 @@ echo "③ перезапускаю"
 sudo docker stop "$NAME" >/dev/null 2>&1
 sudo docker rm "$NAME" >/dev/null 2>&1
 sudo docker run -d --name "$NAME" --restart unless-stopped -p 8080:8080 \
-  --env-file "$HOME_DIR/.env" -v "$HOME_DIR/state:/state:ro" "$NAME:latest" >/dev/null \
+  --env-file "$HOME_DIR/.env" -v "$HOME_DIR/state:/state:ro" -v "$HOME_DIR/rag:/rag:ro" "$NAME:latest" >/dev/null \
   || { echo "❌ контейнер не запустился"; exit 1; }
 
 echo "④ жду и проверяю здоровье"
