@@ -16646,15 +16646,43 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "max_tokens": DSOC_ВЫВОД_МАКС, "temperature": 0.4, "stream": True}
                 _кл, _имя_кл = opencode_ключ()      # ← сюда уходит основной расход помощника
                 opencode_отметить(_имя_кл)
-                о = requests.post(OPENCODE_URL, json=тело, stream=True, timeout=600,
-                                  headers={"Content-Type": "application/json",
-                                           "Authorization": "Bearer " + _кл})
+                # 🔴 03.09.2026. Здесь стоял СИНХРОННЫЙ запрос с потоковым чтением, а рядом,
+                # в том же цикле, — асинхронная правка сообщения (живая печать ответа).
+                # Пока библиотека ждала следующий кусок от модели, событийный цикл СТОЯЛ: бот
+                # не отвечал НИКОМУ — ни в чате, ни по своим дверям, — и так десятки секунд,
+                # всё время ответа. Отсюда и жалобы «бот завис», хотя он просто ждал модель.
+                # Нашлось не глазами, а разбором кода: 37 таких мест, и это самое горячее.
+                # Лечим не отказом от потока (живая печать — ценность), а разделением ролей:
+                # ЧИТАЕТ отдельный поток и складывает куски в очередь, а событийный цикл их
+                # разбирает и правит сообщение. Никто никого не держит.
+                _оч_кусков = asyncio.Queue()
+                _цикл_с = asyncio.get_event_loop()
+
+                def _качать_поток(_к=_кл, _т=тело, _о=_оч_кусков, _ц=_цикл_с):
+                    try:
+                        _отв = requests.post(OPENCODE_URL, json=_т, stream=True, timeout=600,
+                                             headers={"Content-Type": "application/json",
+                                                      "Authorization": "Bearer " + _к})
+                        for _стр in _отв.iter_lines(decode_unicode=False):
+                            _ц.call_soon_threadsafe(_о.put_nowait, _стр)
+                    except Exception as _е:
+                        _ц.call_soon_threadsafe(_о.put_nowait, ('__беда__', str(_е)[:200]))
+                    finally:
+                        _ц.call_soon_threadsafe(_о.put_nowait, None)   # знак конца
+
+                _чтение = _цикл_с.run_in_executor(None, _качать_поток)
                 # 🔴 05.08.2026: было decode_unicode=True — и владелец получил «ÐÐµÑÐµÐ²Ð¾Ð´»
                 # вместо «Перевод». В этом режиме библиотека берёт кодировку из заголовка ответа,
                 # а поток событий её не объявляет — и русские байты молча разбираются как латиница.
                 # И модель, и сеть отработали безупречно: испортилось на последнем шаге, у нас.
                 # Лечение: не доверять угадыванию, разбирать байты самим и всегда в utf-8.
-                for сырое in о.iter_lines(decode_unicode=False):
+                while True:
+                    сырое = await _оч_кусков.get()
+                    if сырое is None:          # поток кончился
+                        break
+                    if isinstance(сырое, tuple) and сырое and сырое[0] == '__беда__':
+                        print('поток помощника оборвался: %s' % сырое[1])
+                        break
                     if not сырое:
                         continue
                     строка = сырое.decode("utf-8", "replace") if isinstance(сырое, bytes) else сырое
