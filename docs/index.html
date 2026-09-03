@@ -994,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1548</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1555</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1554';
+const APPVER = 'v1555';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3883,6 +3883,14 @@ const selExtra=new Set(); // M44: выбранные «другие сборни
 const COLL_BIDS={bukhari:['1681','735','907','1284','1376'], muslim:['1727','711'], abudawud:['1726','654','117359'],
  tirmidhi:['1435','1363','7895'], ibnmajah:['1198','1194','98138'], nasai:['829','1339'],
  malik:['1699','8140','16050','28107'], ahmad:['25794','98139']};
+/* A-247 (сторож ошибок, 03.09.2026: «ReferenceError: VERIFY_BIDS is not defined», проглочено
+   3 раза за сеанс). Имя употреблялось в одном месте — при отрисовке «подробнее» в карточке
+   сверки — и НИГДЕ не объявлялось: ошибку глушил _тихо, а вместе с ней пропадала вся рамка.
+   Список — bid тех пяти сборников, для которых у нас лежит эталон sunnah.com (папка verify/).
+   Считаем из COLL_BIDS, а не выписываем заново: вторая копия тех же номеров разошлась бы
+   с первой при первом же добавленном издании. */
+const VERIFY_BIDS=['bukhari','muslim','abudawud','nasai','ibnmajah']
+  .reduce((с,к)=>с.concat(COLL_BIDS[к]||[]),[]);
 // #39/#43: turath/shamela bid для EXTRA-сборников («Другие сборники») — чтобы «📖 Страница в Мактабе» была НА КАЖДОЙ карточке, не только у 8 основных.
 // Каждый bid СВЕРЕН backend-ом (verify_extra_bids.py): реальный матн нашего издания найден ВНУТРИ этой книги → сборник верный (анти-В-07). Точная страница резолвится по матну (openMaktabaPage).
 const EXTRA_BIDS={ ibnhibban:'1729', ibnkhuzayma:'121382', darimi:'36114', adabmufrad:'9647',
@@ -14909,6 +14917,36 @@ function _dzReserve(host){
     host.appendChild(ph);
   }catch(e){_тихо(e,"L11616")}
 }
+/* #549 (владелец: «отправляет в поиск как конструктор БЕЗ ФОРМ, а формы же отвечают код цепи;
+   формы обязательно вставлялось надо»). Разбор 04.09.2026 показал, ПОЧЕМУ подстановка форм,
+   написанная в обработчике ниже, на живых цепях не срабатывала ни разу: `forms` заполняется
+   ТОЛЬКО из старой dz-ветки (`full.forms`), а звенья почти всегда опознаются новым каскадом
+   na/verify/codif — он переписывает `codes`, но форм не приносит, и они остаются пустыми.
+   Между тем формы стоят в самом тексте иснада и УЖЕ размечены разметчиком как `.tword`
+   (حدثنا/أخبرني/سمعت), а имена — как `.nhl`. Берём их прямо оттуда: форма, стоящая
+   непосредственно перед именем, и есть та, которой это звено передало предыдущему —
+   ровно соглашение `forms[k]` из _dzChips.
+   Условие честности прежнее: подставляем, только если число подсвеченных имён СОВПАЛО
+   с числом звеньев цепи. Разошлось — значит сопоставление сдвинуто, и молча сузить поиск
+   на неверную форму хуже, чем оставить «любая». */
+function _формыИзТекста(host, нужно){
+  try{
+    if(!host || !нужно) return null;
+    const кар = (host.closest && host.closest('.card')) || host;
+    const ар = кар.querySelector ? кар.querySelector('.ar') : null;
+    if(!ар) return null;
+    const узлы = [].slice.call(ар.querySelectorAll('.tword,.nhl'));
+    const имён = узлы.filter(function(e){ return !e.classList.contains('tword'); }).length;
+    if(имён !== нужно) return null;
+    const out=[]; let форма='';
+    for(let i=0;i<узлы.length;i++){
+      const у=узлы[i];
+      if(у.classList.contains('tword')) форма=(у.textContent||'').trim();
+      else { out.push(форма); форма=''; }
+    }
+    return out;
+  }catch(_e){ return null; }
+}
 async function dzChainInto(host, bid, num){
   try{
     // #474 (скрин: Ибн Маджа 831 — блок «Цепочка передатчиков + код цепи + другие печати» отрисован ДВАЖДЫ):
@@ -15019,12 +15057,13 @@ async function dzChainInto(host, bid, num){
             window._chainForms=[]; window._chainFormPre=''; window._chainFormPost='';
             window._chainFormsOff=false;   // цепь пришла С формами — прятать их нельзя
             let _вставленоФорм=0;
-            try{ if(forms && forms.length){
+            const _фрм=(forms&&forms.length)?forms:(_формыИзТекста(host, codes.length)||[]);
+            try{ if(_фрм && _фрм.length){
               // соглашение _dzChips: forms[k] — чем звено k передало звену k-1
-              if(_selИнд[0]===0 && forms[0]){ window._chainFormPre=forms[0]; _вставленоФорм++; }
+              if(_selИнд[0]===0 && _фрм[0]){ window._chainFormPre=_фрм[0]; _вставленоФорм++; }
               for(let j=0;j<_selИнд.length-1;j++){
                 const рядом=(_selИнд[j+1]===_selИнд[j]+1);
-                const ф=рядом?(forms[_selИнд[j+1]]||''):'';
+                const ф=рядом?(_фрм[_selИнд[j+1]]||''):'';
                 window._chainForms[j]=ф; if(ф) _вставленоФорм++;
               }
             } }catch(_e){_тихо(_e,"L11689f")}
