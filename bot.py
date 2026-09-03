@@ -12409,7 +12409,7 @@ async def _nisht_extract_one(msg):
     m = re.search(r'https?://\S+', t) if t else None
     if m and not vid:
         try:
-            page = requests.get(m.group(0), headers={"User-Agent": "Mozilla/5.0"}, timeout=15).text
+            page = await _зов_сети('get', m.group(0), headers={"User-Agent": "Mozilla/5.0"}, timeout=15).text
             page = re.sub(r'<script[^>]*>.*?</script>', ' ', page, flags=re.S | re.I)
             page = re.sub(r'<style[^>]*>.*?</style>', ' ', page, flags=re.S | re.I)
             page = re.sub(r'<[^>]+>', ' ', page)
@@ -23494,7 +23494,7 @@ async def _api_serve(application=None):
         try:
             t0 = time.time()
             msgs = [{"role": "system", "content": "Ты тестовый ассистент."}, {"role": "user", "content": "ответь одним словом: тест"}]
-            rr = requests.post(
+            rr = await _зов_сети('post', 
                 "https://integrate.api.nvidia.com/v1/chat/completions",
                 headers={"Authorization": f"Bearer {NVIDIA_NIM_API_KEY}", "Content-Type": "application/json"},
                 json={"model": NVIDIA_NIM_MODEL, "messages": msgs, "max_tokens": 20, "temperature": 0.3},
@@ -23509,7 +23509,7 @@ async def _api_serve(application=None):
             out['ok'] = False
             out['error'] = str(e)[:300]
         try:
-            mr = requests.get("https://integrate.api.nvidia.com/v1/models",
+            mr = await _зов_сети('get', "https://integrate.api.nvidia.com/v1/models",
                                headers={"Authorization": f"Bearer {NVIDIA_NIM_API_KEY}"}, timeout=20)
             if mr.status_code == 200:
                 ids = [m.get('id') for m in mr.json().get('data', [])]
@@ -23528,7 +23528,7 @@ async def _api_serve(application=None):
         for m in _sample_models:
             try:
                 t1 = time.time()
-                rr2 = requests.post("https://integrate.api.nvidia.com/v1/chat/completions",
+                rr2 = await _зов_сети('post', "https://integrate.api.nvidia.com/v1/chat/completions",
                     headers={"Authorization": f"Bearer {NVIDIA_NIM_API_KEY}", "Content-Type": "application/json"},
                     json={"model": m, "messages": [{"role": "user", "content": "тест"}], "max_tokens": 10}, timeout=30)
                 multi.append({'model': m, 'ok': rr2.status_code == 200, 'code': rr2.status_code,
@@ -24274,7 +24274,7 @@ async def _api_serve(application=None):
                       'https://opencode.ai/zen/v1/balance',
                       'https://opencode.ai/api/billing/balance'):
             try:
-                о = requests.get(адрес, timeout=25,
+                о = await _зов_сети('get', адрес, timeout=25,
                                  headers={'Authorization': 'Bearer ' + (OPENCODE_KEY or '')})
                 попытки[адрес] = {'код': о.status_code, 'ответ': о.text[:200]}
                 if о.status_code == 200:
@@ -24564,7 +24564,7 @@ async def _api_serve(application=None):
                                             'номер': номер}))
         нота = ''
         try:
-            rq = requests.get(
+            rq = await _зов_сети('get', 
                 f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_notes_queue.json",
                 headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {},
                 timeout=10)
@@ -27275,7 +27275,7 @@ async def _setup(application):
     note = ""
     try:
         try:
-            rr = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_note.txt",
+            rr = await _зов_сети('get', f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_note.txt",
                               headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
             if rr.status_code == 200:
                 note = base64.b64decode(rr.json().get("content", "")).decode("utf-8").strip()
@@ -27298,7 +27298,7 @@ async def _setup(application):
         # Закон владельца: ошибку решил → отчитайся в журнал в тот же день. Я пишу journal_note.txt, бот постит при рестарте (дедуп).
         try:
             jn = ""
-            rj = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/journal_note.txt",
+            rj = await _зов_сети('get', f"https://api.github.com/repos/{GITHUB_REPO}/contents/journal_note.txt",
                               headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
             if rj.status_code == 200:
                 jn = base64.b64decode(rj.json().get("content", "")).decode("utf-8").strip()
