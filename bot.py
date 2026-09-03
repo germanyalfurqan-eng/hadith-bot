@@ -5122,15 +5122,24 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
         м_к = re.match(r'^корень\s+(.{1,40})$', с, re.I)
         if м_к:
             _зпр = м_к.group(1).strip()
+            # 🔴 Тем же днём, что и завёл: тянул этот файл СИНХРОННО прямо здесь. Он весит
+            # 14 МБ — а синхронный запрос в async-функции держит событийный цикл, то есть на
+            # секунды замирает ВЕСЬ бот, у всех сразу. Проверка кода это и показала: таких мест
+            # в боте 33, и два из них на горячем пути. Уносим в поток и помним готовое: файл
+            # меняется раз в месяц, качать его на каждый вопрос незачем.
+            _рк = None
             try:
-                _рк = _взять_данные_гх('quran_roots.json') or {}
+                if _КОРНИ_КОРАНА[0] and time.time() - _КОРНИ_КОРАНА[1] < 3600:
+                    _рк = _КОРНИ_КОРАНА[0]
             except Exception:
-                _рк = {}
+                _рк = None
             if not _рк:
                 try:
-                    _рк = requests.get(
-                        'https://germanyalfurqan-eng.github.io/hadith-bot/quran_roots.json',
-                        timeout=60).json()
+                    _рк = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: requests.get(
+                            'https://germanyalfurqan-eng.github.io/hadith-bot/quran_roots.json',
+                            timeout=90).json())
+                    _КОРНИ_КОРАНА[0], _КОРНИ_КОРАНА[1] = _рк, time.time()
                 except Exception as _ек:
                     return 'Разбор Корана по корням сейчас не читается: %s' % str(_ек)[:120]
             _корни, _слова = (_рк.get('r') or {}), (_рк.get('f') or {})
