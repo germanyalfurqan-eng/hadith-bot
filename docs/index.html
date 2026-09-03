@@ -994,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1556</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1557</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1556';
+const APPVER = 'v1557';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -14938,19 +14938,45 @@ function _формыИзТекста(host, нужно){
     const узлы = [].slice.call(ар.querySelectorAll('.tword,.nhl'));
     const имён = узлы.filter(function(e){ return !e.classList.contains('tword'); }).length;
     if(имён !== нужно) return null;
-    const out=[]; let форма='';
+    const out=[];
     for(let i=0;i<узлы.length;i++){
       const у=узлы[i];
-      if(у.classList.contains('tword')){
-        /* Селекты цепи держат КОДЫ (TH/AKHi/SAM/AN…), а в тексте стоит само слово с огласовками.
-           Перевод уже написан — _ISNAD_FORM_MAP поверх _isnNorm; своей карты не заводим.
-           Слово вне карты (например «سمع» в третьем лице) даёт пусто — это честнее выдумки. */
-        форма=_ISNAD_FORM_MAP[_isnNorm((у.textContent||'').trim())]||'';
+      if(у.classList.contains('tword')) continue;
+      const пред = узлы[i-1];
+      /* Селекты цепи держат КОДЫ (TH/AKHi/SAM/AN…), а в тексте стоит само слово с огласовками.
+         Перевод уже написан — _ISNAD_FORM_MAP поверх _isnNorm; своей карты не заводим. */
+      let код = (пред && пред.classList.contains('tword'))
+        ? (_ISNAD_FORM_MAP[_isnNorm((пред.textContent||'').trim())]||'') : '';
+      if(!код){
+        /* Разметчик знает не все формы: в Бухари 1 между محمد بن إبراهيم и علقمة стоит
+           «أنه سمع», и как термин передачи оно не помечено — стык оставался пустым.
+           Смотрим сам промежуток между именами теми же мерками. */
+        let кус='';
+        try{
+          const r=document.createRange();
+          if(пред) r.setStartAfter(пред); else r.setStart(ар,0);
+          r.setEndBefore(у); кус=r.toString();
+        }catch(_e){}
+        код=_формаИзКуска(кус);
       }
-      else { out.push(форма); форма=''; }
+      out.push(код);
     }
     return out;
   }catch(_e){ return null; }
+}
+/* Форма из куска текста между двумя именами. Берём ПОСЛЕДНЮЮ узнанную: в «قال حدثنا» решает
+   ближайшая к имени. Третье лицо «سمع» в общую карту не добавляю — она работает и по матну
+   («سمع الله لمن حمده»), а здесь промежуток заведомо внутри иснада. */
+function _формаИзКуска(кус){
+  try{
+    const слова=_isnNorm(String(кус||'')).split(/[^ء-ي]+/).filter(Boolean);
+    for(let i=слова.length-1;i>=0;i--){
+      const с=слова[i];
+      if(_ISNAD_FORM_MAP[с]) return _ISNAD_FORM_MAP[с];
+      if(с==='سمع'||с==='سمعه'||с==='سمعا') return 'SAM';
+    }
+  }catch(_e){}
+  return '';
 }
 async function dzChainInto(host, bid, num){
   try{
