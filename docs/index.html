@@ -994,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1557</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1558</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1557';
+const APPVER = 'v1558';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -14041,7 +14041,29 @@ async function _aliasGroup(id){
   for(const k in _narrAliases){ if(_narrAliases[k]===main) g.add(+k); }
   return [...g];
 }
+/* 🔴 A-248/A-249 (сторож отклика, 04.09.2026). Владельцу пришли две «ошибки приложения»
+   «Нажатие без отклика: goBtn» — на РАБОТАЮЩЕМ поиске цепи. Причина не в поиске, а в том,
+   что режим Цепь не сообщал о себе ничего: `_goBusy` здесь не звался, значит кнопка не
+   превращалась в «ищу», не появлялось ни спиннера, ни скелета, и `window.__поискЗавершён`
+   не обновлялся. Сторож через 2,5 с видел неизменный экран без единого признака работы —
+   и честно, по своим меркам, объявлял отказ.
+   Две беды одним лечением: человек теперь видит, что идёт работа (в режиме цепи она может
+   занимать секунды), а сторож — что действие состоялось. Обёртка отдельной функцией, потому
+   что у тела три выхода (нет узла, ветка seq, обычная ветка), и снимать отметку надо на
+   каждом: finally делает это без оглядки на путь. */
 async function chainRun(){
+  try{ _goBusy(true); }catch(_e){_тихо(_e,"L_chBusy1")}
+  try{ return await _chainRunТело(); }
+  finally{
+    try{ _goBusy(false); }catch(_e){_тихо(_e,"L_chBusy2")}
+    /* _goBusy возвращает НАДПИСЬ, запомненную при первом же вызове, а она у кнопки разная:
+       «Найти» в обычном режиме и «🔎 Найти цепь» в режиме Цепь. Без этой строки кнопка
+       после поиска цепи подписалась бы «Найти» — сама по себе мелочь, но ровно та, из-за
+       которой потом ищут несуществующую поломку. Надпись ставит _chainSyncGo по режиму. */
+    try{ _chainSyncGo(); }catch(_e){_тихо(_e,"L_chBusy3")}
+  }
+}
+async function _chainRunТело(){
   chainRender();
   try{ _actPush({t:'chain', sel:_chainSel.slice(), adj:!!window._chainAdj, mode:window._chainMode||'any', names:_chainSel.map(c=>String(c.nm||'').split(' ').slice(0,2).join(' '))}); }catch(e){_тихо(e,"L10816")}   // M462/M463
   const out=document.getElementById('chainOut'); if(!out) return;
