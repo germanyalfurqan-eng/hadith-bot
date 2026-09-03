@@ -1197,6 +1197,19 @@ def convert_to_mp3(input_path, output_path, artist="", title="", comment=""):
         print(f"Convert error: {e}")
         return False
 
+async def _зов_сети(метод, *а, **к):
+    """Сетевой запрос ИЗ ПОТОКА, а не из событийного цикла.
+
+    🔴 03.09.2026. Синхронный requests внутри async-функции держит весь бот: пока запрос
+    идёт, не отвечает никто — ни чат, ни двери приложения, ни сторожа. Разбор кода нашёл
+    таких мест 37; самое горячее (потоковый ответ помощника) уже вынесено, эта обёртка —
+    для остальных. Пишется одинаково с обычным вызовом, только через await:
+        _r = await _зов_сети('get', адрес, timeout=15)
+    """
+    _ф = getattr(requests, метод)
+    return await asyncio.get_event_loop().run_in_executor(None, lambda: _ф(*а, **к))
+
+
 def transcribe_audio(path):
     """Расшифровка речи. Сначала Groq (бесплатно), потом OpenAI. Текст или None.
 
@@ -3465,7 +3478,7 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
             _цепь = None
             for _бид in _биды:
                 try:
-                    _r = requests.get('https://germanyalfurqan-eng.github.io/hadith-bot/'
+                    _r = await _зов_сети('get', 'https://germanyalfurqan-eng.github.io/hadith-bot/'
                                       'verify/%s_%d.json' % (_бид, int(_ном) // 500), timeout=20)
                     if _r.status_code == 200:
                         _цепь = (_r.json() or {}).get(str(int(_ном)))
@@ -3574,7 +3587,7 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
                             'цепи не нуждается.')
                 _сег = int(int(_ном) // 500)
                 try:
-                    _r = requests.get('https://germanyalfurqan-eng.github.io/hadith-bot/'
+                    _r = await _зов_сети('get', 'https://germanyalfurqan-eng.github.io/hadith-bot/'
                                       'neuro/%s_%d.json' % (_бид, _сег), timeout=20)
                     _д = _r.json() if _r.status_code == 200 else None
                 except Exception:
@@ -4061,7 +4074,7 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
         if м:
             _ключ = (м.group(1) or '').strip().lower()
             try:
-                _r = requests.get(
+                _r = await _зов_сети('get', 
                     'https://raw.githubusercontent.com/%s/main/test_otvety.md' % GITHUB_REPO,
                     timeout=15)
                 _т = _r.text if _r.status_code == 200 else ''
@@ -4087,7 +4100,7 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
         # Архив без карты — склад без описи: всё сохранено и ничего не найти.
         if re.match(r'^(?:архив|карта\s+архива|что\s+в\s+архиве)\s*$', с, re.I):
             try:
-                _к = requests.get('https://raw.githubusercontent.com/%s/main/КАРТА_АРХИВА.md'
+                _к = await _зов_сети('get', 'https://raw.githubusercontent.com/%s/main/КАРТА_АРХИВА.md'
                                   % GITHUB_REPO, timeout=20)
                 _т = _к.text if _к.status_code == 200 else ''
             except Exception:
@@ -4357,7 +4370,7 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
                 # У X страница пустая для всех, кто не браузер. Но есть открытая витрина
                 # fxtwitter — она отдаёт тот же пост разобранным, вместе с картинками.
                 try:
-                    _фх = requests.get('https://api.fxtwitter.com/%s/status/%s'
+                    _фх = await _зов_сети('get', 'https://api.fxtwitter.com/%s/status/%s'
                                        % (_твит.group(1), _твит.group(2)), timeout=20,
                                        headers={'User-Agent': 'Mozilla/5.0'})
                     _тв = (_фх.json() or {}).get('tweet') or {}
@@ -4374,7 +4387,7 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
                 except Exception:
                     pass
             try:
-                _о = requests.get(_url, timeout=25, allow_redirects=True, stream=True,
+                _о = await _зов_сети('get', _url, timeout=25, allow_redirects=True, stream=True,
                                   headers={'User-Agent': 'Mozilla/5.0 (compatible; MuslimoonBot)',
                                            'Accept-Language': 'ru,en;q=0.8'})
                 _тип = (_о.headers.get('Content-Type') or '').lower()
@@ -4483,7 +4496,7 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
         if м:
             _бид, _стр = м.group(1), int(м.group(2) or 1)
             try:
-                _о = requests.get('https://api.turath.io/page',
+                _о = await _зов_сети('get', 'https://api.turath.io/page',
                                   params={'book_id': _бид, 'pg': _стр},
                                   headers={'User-Agent': 'Mozilla/5.0',
                                            'Referer': 'https://app.turath.io/'}, timeout=25)
@@ -4730,7 +4743,7 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
                 for _адр in ('https://opencode.ai/zen/go/v1/balance',
                              'https://opencode.ai/zen/v1/balance'):
                     _о = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda a=_адр: requests.get(
+                        None, lambda a=_адр: await _зов_сети('get', 
                             a, timeout=20, headers={'Authorization': 'Bearer ' + (OPENCODE_KEY or '')}))
                     if _о.status_code == 200:
                         _пров = _о.text[:300]
@@ -5056,7 +5069,7 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
                 if not _нужен_анг:
                     raise StopIteration     # английский не просили — и запрос не шлём
                 _о = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: requests.get(
+                    None, lambda: await _зов_сети('get', 
                         'https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/'
                         'eng-abdullahyusufal/%d/%d.min.json' % (_с, _а), timeout=15))
                 if _о.status_code == 200:
@@ -5136,7 +5149,7 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
             if not _рк:
                 try:
                     _рк = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda: requests.get(
+                        None, lambda: await _зов_сети('get', 
                             'https://germanyalfurqan-eng.github.io/hadith-bot/quran_roots.json',
                             timeout=90).json())
                     _КОРНИ_КОРАНА[0], _КОРНИ_КОРАНА[1] = _рк, time.time()
@@ -5287,7 +5300,7 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
                 _url = 'https://' + _url
             try:
                 _о = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: requests.get(
+                    None, lambda: await _зов_сети('get', 
                         _url, timeout=45, allow_redirects=True,
                         headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}))
                 if _о.status_code != 200:
@@ -17857,7 +17870,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     for н, (т, а) in enumerate(пары, 1):
                         try:
                             _u = 'https://api.cloudflare.com/client/v4/accounts/%s/ai/run/@cf/baai/bge-m3' % а
-                            _r = requests.post(_u, json={'text': ['проба']},
+                            _r = await _зов_сети('post', _u, json={'text': ['проба']},
                                                headers={'Authorization': 'Bearer ' + т}, timeout=25)
                             _j = _r.json()
                             _ok = bool(((_j.get('result') or {}).get('data') or [None])[0])
@@ -18250,7 +18263,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # никогда не срабатывал. ANNOUNCE_CHAT_ID/release_notes.txt больше нигде в коде не используются —
         # мёртвый канал. "анонс" убран отсюда, чтобы дойти до правильного обработчика.
         try:
-            r = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/release_notes.txt", timeout=8)
+            r = await _зов_сети('get', f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/release_notes.txt", timeout=8)
             note = r.text if r.status_code == 200 else "Нет release_notes.txt"
             await context.bot.send_message(ANNOUNCE_CHAT_ID, note)
             await _мсообщ(update).reply_text("✅ Опубликовано в канале обновлений.")
@@ -18574,7 +18587,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             note = custom
             if not note:
                 try:
-                    rr = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_note.txt",
+                    rr = await _зов_сети('get', f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_note.txt",
                                       headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
                     if rr.status_code == 200:
                         note = base64.b64decode(rr.json().get("content", "")).decode("utf-8").strip()
@@ -18700,11 +18713,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 breqs = []
             st = {}; corr = {}
             try:
-                rs = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/miniapp/requests_status.json", timeout=8)
+                rs = await _зов_сети('get', f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/miniapp/requests_status.json", timeout=8)
                 if rs.status_code == 200: st = rs.json()
             except Exception: pass
             try:
-                rc = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/corrections.json", timeout=8)
+                rc = await _зов_сети('get', f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/corrections.json", timeout=8)
                 if rc.status_code == 200: corr = rc.json()
             except Exception: pass
             ICON = {"done": "✅", "open": "🔴", "wait": "⏳", "progress": "🟡"}
@@ -19130,7 +19143,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _j = _data_get("journal.json", {}) or {}
                 _мид = _j.get('app_post_msgids') or {}
                 try:
-                    _rq = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_notes_queue.json",
+                    _rq = await _зов_сети('get', f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_notes_queue.json",
                                        headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=10)
                     _оч = json.loads(base64.b64decode(_rq.json().get("content", "")).decode("utf-8") or "[]") if _rq.status_code == 200 else []
                 except Exception:
@@ -27754,7 +27767,7 @@ async def _app_channel_watcher(application):
             # clean_posts.txt (по номеру в строке) — их видно прямо в ссылке t.me/muslimoonapp/NNNN.
             # Каждый пост перечитываем, прогоняем через _clean_announce и переписываем.
             try:
-                rc = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/clean_posts.txt",
+                rc = await _зов_сети('get', f"https://api.github.com/repos/{GITHUB_REPO}/contents/clean_posts.txt",
                                   headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
                 # ⚠️ 14.08.2026, ТОТ ЖЕ КЛАСС, ЧТО У НОТЫ НИЖЕ (З-40 — чинить класс, а не случай).
                 # contents API отвечает из кэша дольше raw. Пока он отдаёт ПРЕЖНИЙ clean_posts.txt,
@@ -27763,7 +27776,7 @@ async def _app_channel_watcher(application):
                 # запасным путём.
                 _спис_raw = None
                 try:
-                    _rc2 = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/clean_posts.txt",
+                    _rc2 = await _зов_сети('get', f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/clean_posts.txt",
                                         headers={"Cache-Control": "no-cache"}, timeout=10)
                     if _rc2.status_code == 200 and (_rc2.text or "").strip():
                         _спис_raw = _rc2.text.strip()
@@ -27814,14 +27827,14 @@ async def _app_channel_watcher(application):
                                     # raw обновляется быстрее; contents оставлен запасным путём.
                                     _оч2 = []
                                     try:
-                                        _rr = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/update_notes_queue.json",
+                                        _rr = await _зов_сети('get', f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/update_notes_queue.json",
                                                            headers={"Cache-Control": "no-cache"}, timeout=10)
                                         if _rr.status_code == 200:
                                             _оч2 = json.loads(_rr.text or "[]")
                                     except Exception:
                                         _оч2 = []
                                     if not _оч2:
-                                        _rq2 = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_notes_queue.json",
+                                        _rq2 = await _зов_сети('get', f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_notes_queue.json",
                                                             headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
                                         _оч2 = json.loads(base64.b64decode(_rq2.json().get("content", "")).decode("utf-8") or "[]") if _rq2.status_code == 200 else []
                                     _нота = next((x.get("note", "") for x in _оч2 if x.get("id") == _вер), "")
@@ -27895,7 +27908,7 @@ async def _app_channel_watcher(application):
             # объявление вышли, обрадуй»). Тот же приём, что с манифестом: маркер-файл в репо,
             # бот шлёт один раз и запоминает метку — повторов не будет.
             try:
-                rj = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/jamaat_note.txt",
+                rj = await _зов_сети('get', f"https://api.github.com/repos/{GITHUB_REPO}/contents/jamaat_note.txt",
                                   headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
                 if rj.status_code == 200:
                     _текст = base64.b64decode(rj.json().get("content", "")).decode("utf-8").strip()
@@ -27911,7 +27924,7 @@ async def _app_channel_watcher(application):
 
             # M373: разовая отправка МАНИФЕСТА (PDF) в канал — по маркеру manifest_flag.txt в корне репо
             try:
-                rf = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/manifest_flag.txt",
+                rf = await _зов_сети('get', f"https://api.github.com/repos/{GITHUB_REPO}/contents/manifest_flag.txt",
                                   headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
                 if rf.status_code == 200:
                     flag = base64.b64decode(rf.json().get("content", "")).decode("utf-8").strip()
@@ -27926,7 +27939,7 @@ async def _app_channel_watcher(application):
                 print("manifest post error:", e)
             # ЗАКОН 17.06 (владелец, «сто раз»): бэкап → в рабочий журнал (LOG_CHAT) + владельцу в ЛС, куда идут ошибки.
             try:
-                rb = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/backup_note.txt",
+                rb = await _зов_сети('get', f"https://api.github.com/repos/{GITHUB_REPO}/contents/backup_note.txt",
                                   headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=8)
                 if rb.status_code == 200:
                     bnote = base64.b64decode(rb.json().get("content", "")).decode("utf-8").strip()
@@ -27967,14 +27980,14 @@ async def _app_channel_watcher(application):
                 # из двух. Теперь сперва raw, contents — запасной путь.
                 queue = []
                 try:
-                    _rq_raw = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/update_notes_queue.json",
+                    _rq_raw = await _зов_сети('get', f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/update_notes_queue.json",
                                            headers={"Cache-Control": "no-cache"}, timeout=15)
                     if _rq_raw.status_code == 200:
                         queue = json.loads(_rq_raw.text or "[]")
                 except Exception:
                     queue = []
                 if not queue:
-                    rq = requests.get(f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_notes_queue.json",
+                    rq = await _зов_сети('get', f"https://api.github.com/repos/{GITHUB_REPO}/contents/update_notes_queue.json",
                                       headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}, timeout=10)
                     if rq.status_code == 200:
                         queue = json.loads(base64.b64decode(rq.json().get("content", "")).decode("utf-8") or "[]")
