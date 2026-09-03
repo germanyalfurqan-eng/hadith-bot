@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1553';
+const APPVER = 'v1554';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -8009,17 +8009,51 @@ async function _renderScopeList(){ var box=document.getElementById('scopeListBox
   const _вес=b=>{ const н=String((b&&b.n)||'').trim();
     for(const [обр,в] of _ВЕС_КНИГ){ if(обр.test(н)) return в; }
     return 99; };
-  const books=[..._scopeIds].map(id=>mp[id]).filter(Boolean)
+  /* 🔴 #599, слово владельца: «надо добавить такой режим чтобы наоборот добавить только
+     выделенные то есть не минусовать а наоборот выбирать что плюсовать». Раздел даёт разом
+     тысячу с лишним книг, и убирать лишние по одной — работа на вечер. Держим ДВА режима:
+     «убрать лишние» (как было) и «выбрать нужные», где список пуст, а нажатие добавляет.
+     Полный состав раздела запоминаем при первом показе: в режиме выбора _scopeIds пуст,
+     и восстановить его было бы уже неоткуда. */
+  if(!window._scopeВсе || !window._scopeВсе.length || !window._scopeРежимВыбора)
+    window._scopeВсе=[..._scopeIds];
+  const _исходные = window._scopeРежимВыбора ? window._scopeВсе : [..._scopeIds];
+  const books=_исходные.map(id=>mp[id]).filter(Boolean)
     .map((b,i)=>[_вес(b), i, b]).sort((x,y)=>x[0]-y[0] || x[1]-y[1]).map(z=>z[2]);
   // #599 (скрин: выбрал раздел كتب السنة — список из 1241 книги занял весь экран): рисуем первые 200 строк,
   // остальные считаем цифрой. В поиске участвуют ВСЕ выбранные — режем только показ, не область поиска.
   const _SHOWN=200, _more=Math.max(0, books.length-_SHOWN);
-  let html='<div class="hint" style="font-size:calc(11px * var(--txtScale,1));margin-bottom:4px">Выбрано '+_scopeIds.size+' книг'+(_more?(' · показаны первые '+_SHOWN):'')+' — лишнюю убери «−»:</div><div style="border:1px solid var(--border);border-radius:8px;max-height:38vh;overflow:auto;background:var(--card)">';
+  let html='<div style="display:flex;gap:6px;margin-bottom:7px">'
+    +'<button id="scMinus" style="flex:1;padding:7px 6px;border-radius:9px;border:1px solid var(--border);'
+    +'background:'+(window._scopeРежимВыбора?'transparent':'var(--btn)')+';color:'+(window._scopeРежимВыбора?'var(--fg)':'var(--btn-t)')
+    +';font-size:calc(12px * var(--txtScale,1))">✖ убрать лишние</button>'
+    +'<button id="scPlus" style="flex:1;padding:7px 6px;border-radius:9px;border:1px solid var(--border);'
+    +'background:'+(window._scopeРежимВыбора?'var(--btn)':'transparent')+';color:'+(window._scopeРежимВыбора?'var(--btn-t)':'var(--fg)')
+    +';font-size:calc(12px * var(--txtScale,1))">✓ выбрать нужные</button></div>';
+  html+='<div class="hint" style="font-size:calc(11px * var(--txtScale,1));margin-bottom:4px">Выбрано '+_scopeIds.size+' книг'+(_more?(' · показаны первые '+_SHOWN):'')+' — лишнюю убери «−»:</div><div style="border:1px solid var(--border);border-radius:8px;max-height:38vh;overflow:auto;background:var(--card)">';
   books.slice(0,_SHOWN).forEach(b=>{ const ru=(_catTr.map[b.n]&&_catTr.map[b.n].ru)||'';
-    html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 9px;border-bottom:1px solid var(--border)"><span style="flex:1;min-width:0">'+(ru?('<div style="font-size:calc(13px * var(--txtScale,1))">📖 '+esc(ru)+'</div>'):'')+'<div style="font-size:calc(12.5px * var(--txtScale,1));color:#9fb6d6;direction:rtl;text-align:right">'+esc(b.n)+'</div></span><button class="scDel" data-id="'+String(b.i)+'" style="border:1px solid #b3502e;color:#ff9b7a;background:transparent;padding:2px 11px;font-size:15px;border-radius:7px;cursor:pointer;flex:none">−</button></div>'; });
+    html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 9px;border-bottom:1px solid var(--border)"><span style="flex:1;min-width:0">'+(ru?('<div style="font-size:calc(13px * var(--txtScale,1))">📖 '+esc(ru)+'</div>'):'')+'<div style="font-size:calc(12.5px * var(--txtScale,1));color:#9fb6d6;direction:rtl;text-align:right">'+esc(b.n)+'</div></span>'+(window._scopeРежимВыбора
+      ? ('<button class="scAdd" data-id="'+String(b.i)+'" style="border:1px solid '+(_scopeIds.has(String(b.i))?'#2e9b5b':'var(--border)')+';color:'+(_scopeIds.has(String(b.i))?'#7fe0a4':'var(--fg)')+';background:transparent;padding:2px 11px;font-size:15px;border-radius:7px;cursor:pointer;flex:none">'+(_scopeIds.has(String(b.i))?'✓':'+')+'</button>')
+      : ('<button class="scDel" data-id="'+String(b.i)+'" style="border:1px solid #b3502e;color:#ff9b7a;background:transparent;padding:2px 11px;font-size:15px;border-radius:7px;cursor:pointer;flex:none">−</button>'))+'</div>'; });
   html+='</div>';
   if(_more) html+='<div class="hint" style="font-size:calc(11px * var(--txtScale,1));margin-top:5px">…и ещё '+_more+' книг — они тоже участвуют в поиске. Чтобы выбрать точечно, открой «➕ Другие сборники».</div>';
   box.innerHTML=html;
+  /* Переключатели режима. «Выбрать нужные» ОЧИЩАЕТ выбор: смысл режима в том, чтобы начать
+     с чистого листа и добавить пять книг, а не выкидывать тысячу двести. Возврат к «убрать
+     лишние» восстанавливает полный состав раздела — тот, что запомнили при первом показе. */
+  const _кМинус=box.querySelector('#scMinus'), _кПлюс=box.querySelector('#scPlus');
+  if(_кМинус) _кМинус.onclick=()=>{ try{hap('light');}catch(_){}
+    window._scopeРежимВыбора=false;
+    (window._scopeВсе||[]).forEach(id=>_scopeIds.add(String(id)));
+    _scopeName='Выбранные книги ('+_scopeIds.size+')'; renderScopeChip(); _renderScopeList(); };
+  if(_кПлюс) _кПлюс.onclick=()=>{ try{hap('light');}catch(_){}
+    if(!window._scopeРежимВыбора){ window._scopeВсе=[..._scopeIds]; }
+    window._scopeРежимВыбора=true; _scopeIds.clear();
+    _scopeName='Выбранные книги (0)'; renderScopeChip(); _renderScopeList(); };
+  box.querySelectorAll('.scAdd').forEach(a=>a.onclick=()=>{ try{hap('light');}catch(_){}
+    const id=String(a.dataset.id);
+    if(_scopeIds.has(id)) _scopeIds.delete(id); else _scopeIds.add(id);
+    _scopeName='Выбранные книги ('+_scopeIds.size+')'; renderScopeChip(); _renderScopeList(); });
   box.querySelectorAll('.scDel').forEach(d=>d.onclick=()=>{ _scopeIds.delete(d.dataset.id); try{_pickIds.delete(d.dataset.id);}catch(e){_тихо(e,"L6342")}
     if(!_scopeIds.size){ clearSearchScope(); } else { _scopeName='Выбранные книги ('+_scopeIds.size+')'; renderScopeChip(); var bb=document.getElementById('scopeListBox'); if(bb){ bb.style.display='block'; var sl=document.getElementById('scopeList'); if(sl) sl.textContent='📋 скрыть'; _renderScopeList(); } } });
 }
