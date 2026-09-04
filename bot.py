@@ -25142,6 +25142,32 @@ async def _api_serve(application=None):
         text = str(body.get('text', '')).strip()
         if not secret or secret != (BACKUP_SECRET or '').strip():
             return _cors(web.json_response({'error': 'auth'}, status=403))
+        # 🔴 04.09.2026, слово владельца: «сделай так, чтобы этот сторож тебе тоже докладывал,
+        # чтобы ты видел тоже это и контролировал; а если какая-то другая сессия это запускает,
+        # то ты можешь у неё спрашивать сведения».
+        # Сторож фона (`scratch_marathon/storozh_fona.py`) докладывал ТОЛЬКО владельцу в личку —
+        # и тот оставался посыльным между своими работниками, ровно как было с ошибками
+        # приложения до 03.09. Режим «в_очередь» кладёт доклад в очередь технадзора, откуда он
+        # приходит зовом сам. Дверь та же: своей заводить не стал (З-33), у второй были бы
+        # своё расписание и своя тишина при поломке.
+        if body.get('в_очередь'):
+            if not text:
+                return _cors(web.json_response({'ok': False, 'error': 'пустой текст'}))
+            try:
+                _оч = _data_get(DSOC_ОЧЕРЕДЬ_ФАЙЛ, None)
+                if not isinstance(_оч, list):
+                    return _cors(web.json_response({'ok': False, 'error': 'очередь недоступна'}))
+                _n = max([int(з.get('n') or 0) for з in _оч], default=0) + 1
+                _оч.append({'n': _n, 'd': _now_msk(), 'чат': 0, 'смс': 0,
+                            'текст': text[:4000],
+                            'кто': str(body.get('кто') or 'сторож')[:60],
+                            'взято': False, 'исполнено': None, 'отмечено': {},
+                            'важность': str(body.get('важность') or 'обычно')[:20]})
+                _data_put(DSOC_ОЧЕРЕДЬ_ФАЙЛ, _оч,
+                          'очередь технадзора: %s' % str(body.get('кто') or 'сторож')[:40])
+                return _cors(web.json_response({'ok': True, 'n': _n}))
+            except Exception as _e:
+                return _cors(web.json_response({'ok': False, 'error': str(_e)[:160]}))
         # режим «в_чат»: ответить реплаем на последний «раг» владельца — там, где он спрашивал
         if body.get('в_чат'):
             # «на_вопрос»: кусок текста вопроса — ответим именно на него, а не на последний
