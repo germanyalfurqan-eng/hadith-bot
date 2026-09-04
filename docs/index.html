@@ -994,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1564</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1565</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1564';
+const APPVER = 'v1565';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -12552,7 +12552,21 @@ function highlightNarratorsInDiv(ad, names, onClick, idMap){
           _зап = new RegExp(_b2+'(?!['+DIAC+']*[ء-ي])');
         }catch(e){ _зап = null; }
       }
-      return {nm, re:new RegExp(body+'(?!['+DIAC+']*[ء-ي])'), reЗапас:_зап};
+      /* 04.09.2026, R-08 причина ③: в цепи имя полное («يونس بن يزيد»), а в тексте стоит
+         только «يونس» — полное совпадение невозможно, и звено остаётся неподсвеченным.
+         Заводим ВТОРОЙ запасной образец — по первому слову имени. Он опаснее первого
+         (тёзок среди равиев много), поэтому применяется с двумя ограничениями: слово не
+         короче четырёх букв И встречается в узле РОВНО ОДИН РАЗ. Одно вхождение в иснаде
+         почти всегда и есть тот, кого назвали кратко; два и больше — уже гадание, и тогда
+         честнее не подсвечивать вовсе. */
+      let _кор = null;
+      if(_сл.length >= 2 && _сл[0].length >= 4){
+        try{
+          const _b3 = [..._сл[0]].map(ch => letterClass(ch)+'['+DIAC+']*').join('');
+          _кор = new RegExp('(?:^|[\s،,])('+_b3+')(?!['+DIAC+']*[ء-ي])');
+        }catch(e){ _кор = null; }
+      }
+      return {nm, re:new RegExp(body+'(?!['+DIAC+']*[ء-ي])'), reЗапас:_зап, reКоротко:_кор};
     }catch(e){ return null; } }).filter(Boolean);
   const walker=document.createTreeWalker(ad, NodeFilter.SHOW_TEXT, null); const nodes=[];
   while(walker.nextNode()) nodes.push(walker.currentNode);
@@ -12581,7 +12595,16 @@ function highlightNarratorsInDiv(ad, names, onClick, idMap){
       // нашлось. Порядок важен: пока полное совпадает, укороченное не трогаем, иначе имя
       // подсвечивалось бы короче, чем оно есть в тексте.
       if(ms.length===_былоМс && p.reЗапас){ const re2=new RegExp(p.reЗапас.source,'g');
-        while((m=re2.exec(txt))){ ms.push({i:m.index,len:m[0].length,nm:p.nm}); if(!m[0].length) re2.lastIndex++; } } }
+        while((m=re2.exec(txt))){ ms.push({i:m.index,len:m[0].length,nm:p.nm}); if(!m[0].length) re2.lastIndex++; } }
+      /* Последняя попытка — по первому слову имени, и только при ОДНОМ вхождении в узле:
+         «يونس» вместо «يونس بن يزيد». Сперва считаем, сколько раз слово встречается; два и
+         больше — молчим, потому что тёзок среди равиев много и выбирать между ними наугад
+         хуже, чем не подсветить. */
+      if(ms.length===_былоМс && p.reКоротко){ const re3=new RegExp(p.reКоротко.source,'g');
+        const _сов=[]; let m3;
+        while((m3=re3.exec(txt))){ _сов.push(m3); if(!m3[0].length) re3.lastIndex++; }
+        if(_сов.length===1){ const _m=_сов[0]; const _сдвиг=_m[0].length-_m[1].length;
+          ms.push({i:_m.index+_сдвиг, len:_m[1].length, nm:p.nm}); } } }
     if(!ms.length) return;
     ms.sort((a,b)=>a.i-b.i || b.len-a.len);
     const picked=[]; let lastEnd=-1;
