@@ -994,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1561</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1562</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1561';
+const APPVER = 'v1562';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -13695,7 +13695,10 @@ async function _ragПоОстальным(res, вопрос, head){
   try{
     const о=await fetch(BACKEND_URL+'/rag_find', {method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({q: вопрос, 'книга': 'все'})});
+      /* Сводов стало 23 — просим до двенадцати находок вместо шести по умолчанию:
+         иначе выдача из двух десятков книг вся уходила в шесть строк и половина сводов
+         не показывалась никогда, даже когда у них было ближе. */
+      body: JSON.stringify({q: вопрос, 'книга': 'все', top: 12})});
     j=await о.json();
   }catch(e){ пометка.textContent='🔎 В остальных сводах спросить не вышло — сервер не ответил.'; return; }
   const сп=(j&&j['нашёл'])||[];
@@ -13707,8 +13710,13 @@ async function _ragПоОстальным(res, вопрос, head){
      в поиске есть, а в списке книг приложения его нет, и bookRuOf о нём не знает. */
   const ИМЯ=(к)=>{ try{ return bookRuOf(к) || ({jihad:'Ибн аль-Мубарак — аль-Джихад'})[к] || к; }
                    catch(_e){ return к; } };
-  пометка.textContent='🔎 Нашлось в других сводах: '+сп.length;
-  for(const z of сп.slice(0,6)){
+  /* Человеку важно не только «нашлось», но и ГДЕ искали: свод, о котором он не знал,
+     обесценивается, если непонятно, сколько их было. Числа берём из самого ответа. */
+  const сводов=((j&&j['книги_готовы'])||[]).length;
+  const разных=new Set(сп.map(z=>z['книга'])).size;
+  пометка.textContent='🔎 Искал по '+(сводов||'нескольким')+' сводам · нашлось '+сп.length
+    +(разных>1?(' в '+разных+' из них'):'');
+  for(const z of сп.slice(0,12)){
     const к=document.createElement('div'); к.className='card';
     const ш=document.createElement('div'); ш.className='meta';
     ш.textContent='📖 '+ИМЯ(z['книга'])+' · хадис '+(z.n||'?');
