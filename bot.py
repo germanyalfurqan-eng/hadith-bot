@@ -10544,6 +10544,53 @@ def ask_opencode(prompt, system, max_tokens=None, только_облако=Fals
         return None
 
 
+def ask_glm(prompt, system=None, max_tokens=None):
+    """🆓 GLM (Zhipu / open.bigmodel.cn) — бесплатный тир, ключ GLM_API_KEY.
+
+    🔴 05.09.2026, слово владельца: «а почему ты не предложил глм 5.3 флаш на фри токене?
+    он даст жару тоже». Он был прав дважды.
+
+    Первое: ключ GLM_API_KEY лежал в окружении, а в коде бота этого канала НЕ БЫЛО ВОВСЕ.
+    Рабочий бесплатный канал стоял неиспользованным — ровно как три книги у ЛОКАЛОК,
+    которые сборщик прошёл молча, потому что искал другое расширение.
+
+    Второе: он не просто «тоже годится», он ЛУЧШЕ платных на нашей задаче. Проверено на
+    одном и том же куске приложения, одной меркой:
+        GLM-4.5-Flash (бесплатно)          13 находок за 27 с
+        deepseek-v4-pro (платная подписка)  7 находок
+        glm-5.3 через подписку OpenCode     0 находок — лила рассуждение вместо списка
+    Та же семья моделей через другой канал давала ноль: дело не в модели, а в том, как
+    канал её отдаёт.
+
+    Ставим ПЕРЕД Groq: он бесплатный, держит формат и лучше слушается вызовов.
+    """
+    ключ = os.environ.get('GLM_API_KEY', '')
+    if not ключ:
+        return None
+    try:
+        о = requests.post(
+            'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+            timeout=120,
+            headers={'Content-Type': 'application/json',
+                     'Authorization': 'Bearer ' + ключ,
+                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'},
+            json={'model': os.environ.get('GLM_MODEL', 'glm-4.5-flash'),
+                  'messages': [{'role': 'system', 'content': system or ''},
+                               {'role': 'user', 'content': prompt}],
+                  'max_tokens': int(max_tokens or 2000), 'temperature': 0.4})
+        if о.status_code != 200:
+            return None
+        j = о.json()
+        м = ((j.get('choices') or [{}])[0].get('message') or {})
+        # у части моделей содержательное поле пустое, а текст лежит в размышлении:
+        # сегодня это стоило нам 12 тысяч токенов на пустые ответы, пока не догадались
+        т = м.get('content') or м.get('reasoning_content') or ''
+        т = re.sub(r'<think>.*?</think>', '', str(т), flags=re.S).strip()
+        return т or None
+    except Exception:
+        return None
+
+
 def ask_ai(prompt, system=None, owner=False, max_tokens=None):
     # 🚨 авто-рубильник убран сверху: он защищал ПЛАТНЫЙ DeepSeek от спама. Теперь бесплатный Groq первый → бесплатные работают ВСЕГДА (эндпоинты сами rate-лимитят), килл гейтит ТОЛЬКО DeepSeek (ниже). Чинит «рубильник сам включается».
     _ai_tick()
@@ -10596,6 +10643,11 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None):
     # журнал, и узнать о подмене должен там же, где видит её последствия.
     _прип = (('\n\n🟥 *OpenCode молчит* (%s) — отвечает бесплатная модель, она слабее в '
               'арабском и хуже слушается вызовов.' % _падение[:120]) if _падение else '')
+    # 0.5) 🆓 GLM (Zhipu) — бесплатный и на нашей пробе лучше платных: 13 находок против 7
+    # у deepseek-v4-pro на одном и том же куске. Ключ лежал в окружении, а канала не было.
+    _glm = ask_glm(prompt, system, max_tokens)
+    if _glm and not str(_glm).startswith(chr(9888)):
+        return _glm + "\n\n⚡ *Модель:* 🆓 GLM-Flash — бесплатно" + _прип + "\n" + _ai_left()
     g = ask_groq(prompt, system, max_tokens)   # 1) Groq (free, очень быстрый)
     if g and not str(g).startswith("⚠️"):
         return g + "\n\n⚡ *Модель:* 🆓 Groq (Llama 3.3 70B) — бесплатно" + _прип + "\n" + _ai_left()
