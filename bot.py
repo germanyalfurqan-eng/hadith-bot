@@ -26151,7 +26151,14 @@ async def _api_serve(application=None):
             uid = _uid(user, r)
             if not rate_ok('errlog:' + uid, 8, 60):
                 return _cors(web.json_response({'ok': False, 'rate': True}))
-            cur = _data_get("errors.json", []) or []
+            # 🔴 04.09.2026. Сверка подсветки с эталоном — это НАБЛЮДЕНИЕ, а не поломка.
+            # Она писалась сюда же, и 135 её записей раздували журнал ошибок вчетверо,
+            # делая счётчик лживым: «269 ошибок» читается как «269 поломок», а поломок
+            # там почти нет. И закрыть их нельзя — закрывать нечего, это замеры.
+            # Разводим по месту хранения. Приложение не трогаем: оно кэшируется в Telegram
+            # и обновляется у людей не сразу, а правка здесь действует сразу для всех версий.
+            _файл = 'sverka.json' if where.startswith('сверка-') else 'errors.json'
+            cur = _data_get(_файл, []) or []
             if not isinstance(cur, list): cur = []
             # M350 (владелец: «журнал ошибок шумит» — CDN-фолбэк штатный, но сыпался по 9-10 записей): ключ дедупа
             # включал ver (версию аппа) → КАЖДЫЙ деплой давал НОВУЮ запись для той же самой штатной ошибки
@@ -26230,7 +26237,7 @@ async def _api_serve(application=None):
                                   'очередь технадзора: ошибка %s' % _eid)
                 except Exception:
                     pass
-            await loop.run_in_executor(None, _data_put, "errors.json", cur, f"errlog: {msg[:40]}")
+            await loop.run_in_executor(None, _data_put, _файл, cur, f"errlog: {msg[:40]}")
             return _cors(web.json_response({'ok': True}))
         except Exception as e:
             return _cors(web.json_response({'ok': False, 'error': str(e)}))
