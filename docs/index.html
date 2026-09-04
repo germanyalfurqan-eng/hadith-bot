@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1578';
+const APPVER = 'v1579';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2534,7 +2534,15 @@ let _appReport=function(){};
     if(!_боевой()){ try{ console.warn('[не боевой адрес — в журнал НЕ шлём]', where, msg); }catch(e){} return false; } if(_benign(msg, where)) return false; const k=(msg+'|'+where).slice(0,160); if(_sent[k]) return false; _sent[k]=1; _cnt++;
     msg=_безЛичного(msg); where=_безЛичного(where); stack=_безЛичного(stack);
     const simple=_безЛичного(_simplifyError(msg, where));
-    fetch(BACKEND_URL+'/errlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:String(msg).slice(0,300),where:String(where||'').slice(0,120),stack:String(stack||'').slice(0,600),simple:simple,ver:(typeof APPVER!=='undefined'?APPVER:''),initData:INITDATA})}).catch(()=>{}); return true; }catch(e){ return false; } }
+    /* 🔴 05.09.2026. Я проверял починку прямо в живом приложении — и владельцу прилетела
+       «ОШИБКА ПРИЛОЖЕНИЯ A-250: полная загрузка Ахмада». Сторож сработал верно, беды не было:
+       загрузку позвал я из консоли. Но со стороны это неотличимо от настоящей поломки, и
+       человек ночью читает тревогу, которой нет.
+       Отличить можно: вызов из консоли браузера подписывается в стеке как `<anonymous>`.
+       Помечаем такие записи, чтобы они не терялись (проверка тоже может вскрыть беду),
+       но и не пугали. */
+    const _из_консоли = /<anonymous>|at eval|debugger eval/i.test(String(stack||''));
+    fetch(BACKEND_URL+'/errlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:(_из_консоли?'[проверка из консоли] ':'')+String(msg).slice(0,300),where:String(where||'').slice(0,120),stack:String(stack||'').slice(0,600),simple:(_из_консоли?'Это не поломка: код запущен вручную из консоли браузера. ':'')+simple,ver:(typeof APPVER!=='undefined'?APPVER:''),initData:INITDATA})}).catch(()=>{}); return true; }catch(e){ return false; } }
   window._репортОшибки=_report;   // наружу: замер загрузки шлёт свои находки этим же путём, второй канал заводить незачем
   window.addEventListener('error', e=>{ try{ _report(e.message||'error',(e.filename||'').split('/').pop()+':'+(e.lineno||''), e.error&&e.error.stack); }catch(_){_тихо(_,"L2118")} });
   window.addEventListener('unhandledrejection', e=>{ try{ const r=e.reason; _report((r&&r.message)||String(r)||'promise rejection','unhandledrejection', r&&r.stack); }catch(_){_тихо(_,"L2119")} });
