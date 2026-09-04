@@ -56,13 +56,15 @@ d = json.load(open('/tmp/hh.json'))
 k = d.get('код') or {}
 print('   здоровье: ok=%s · снимок: %s' % (d.get('ok'), k.get('снимок') if isinstance(k, dict) else k))
 "
-echo "â¤ Ð¿Ð¸ÑÑ ÑÐ»ÐµÐ´ Ð² Ð¶ÑÑÐ½Ð°Ð» Ð²ÑÐºÐ°ÑÐ¾Ðº"
+echo "5) пишу след в журнал выкаток"
 COMMIT=$(git -C "$HOME_DIR" rev-parse HEAD 2>/dev/null || echo "?")
-SNAP=$(python3 -c "
+SNAP=$(python3 - <<'PYEOF' 2>/dev/null || echo "?"
+# -*- coding: utf-8 -*-
 import json
 d = json.load(open('/tmp/hh.json'))
-k = d.get('ÐºÐ¾Ð´') or {}
-print(k.get('ÑÐ½Ð¸Ð¼Ð¾Ðº') if isinstance(k, dict) else k)
-" 2>/dev/null || echo "?")
-python3 "$HOME_DIR/sled_vykatki.py" "$COMMIT" "$SNAP"   || echo "   â ï¸ ÑÐ»ÐµÐ´ Ð½Ðµ Ð·Ð°Ð¿Ð¸ÑÐ°Ð»ÑÑ (Ð²ÑÐºÐ°ÑÐºÐ° Ð¿ÑÐ¸ ÑÑÐ¾Ð¼ Ð¿ÑÐ¾ÑÐ»Ð°)"
+k = d.get('код') or {}
+print(k.get('снимок') if isinstance(k, dict) else k)
+PYEOF
+)
+python3 "$HOME_DIR/sled_vykatki.py" "$COMMIT" "$SNAP" || echo "   [!] sled ne zapisan (vykatka proshla)"
 echo "✅ выкачено"
