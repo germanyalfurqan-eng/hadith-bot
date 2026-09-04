@@ -26100,6 +26100,43 @@ async def _api_serve(application=None):
         except Exception:
             return str(x or '')
 
+    async def errlog_fixed(r):
+        """Отметить ошибки приложения решёнными (технадзор, по секрету).
+
+        🔴 04.09.2026. Чинил ошибки я, а закрывать их мог только владелец командой — и потому
+        не закрывал никто: 272 записи, ни одной отмеченной. Журнал, где ничего не
+        закрывается, перестаёт отличать живую беду от вылеченной.
+
+        Только по ТОЧНОМУ номеру (A-247). Закрывать «всё похожее» машине не даём: у владельца
+        такое право есть, потому что он смотрит глазами, а машина однажды закроет за компанию
+        живую беду.
+        """
+        try:
+            d = await r.json()
+        except Exception:
+            return _cors(web.json_response({'ok': False, 'error': 'нужен json'}, status=400))
+        if not BACKUP_SECRET or (d.get('secret') or '') != BACKUP_SECRET:
+            return _cors(web.json_response({'ok': False, 'error': 'ключ не тот'}, status=403))
+        ids = [str(x).strip().upper() for x in (d.get('ids') or []) if str(x).strip()]
+        if not ids:
+            return _cors(web.json_response({'ok': False, 'error': 'не сказано, что закрывать'},
+                                           status=400))
+        почему = str(d.get('почему') or '')[:200]
+        errs = _data_get("errors.json", []) or []
+        закрыто = []
+        for e in errs:
+            if str(e.get('eid', '')).upper() in ids and not e.get('fixed'):
+                e['fixed'] = True
+                e['кем'] = 'технадзор'
+                if почему:
+                    e['почему'] = почему
+                закрыто.append(e.get('eid'))
+        if закрыто:
+            _data_put("errors.json", errs, 'errlog: закрыто технадзором — %s' % ', '.join(закрыто))
+        осталось = len([e for e in errs if not e.get('fixed')])
+        return _cors(web.json_response({'ok': True, 'закрыто': закрыто,
+                                        'осталось_открытых': осталось}))
+
     async def errlog(r):
         # Журнал ошибок приложения: клиент шлёт ошибку → data/errors.json (с дедупом) + уведомление владельцу.
         try:
@@ -27662,7 +27699,7 @@ async def _api_serve(application=None):
                   web.post('/api/booksearch', booksearch),
                   web.post('/api/booktrans', booktrans), web.post('/api/bookinfo', bookinfo),
                   web.post('/api/authorinfo', authorinfo), web.get('/api/qaudio', qaudio),
-                  web.post('/api/errlog', errlog), web.post('/api/narrator_rijal', narrator_rijal),
+                  web.post('/api/errlog', errlog), web.post('/api/errlog_fixed', errlog_fixed), web.post('/api/narrator_rijal', narrator_rijal),
                   web.post('/api/structure', structure_results),
                   web.get('/api/book_page', book_page), web.get('/api/book_toc', book_toc), web.get('/api/book_meta', book_meta), web.post('/api/isnad_ai', isnad_ai_h),
                   web.post('/api/devfeedback', devfeedback), web.post('/api/worklog', worklog),
