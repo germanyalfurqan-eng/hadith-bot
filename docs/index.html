@@ -994,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1565</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1567</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1565';
+const APPVER = 'v1567';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -12909,11 +12909,28 @@ async function _loadGuar(){ if(_guarMap!==null) return _guarMap;
     .then(j=>{ _guarMap=j||{}; return _guarMap; })
     .catch(()=>{ _guarPromise=null; _guarMap=null; return {}; });   // провал не запоминаем
   return _guarPromise; }   // QA-свип: таймаут (гарант-карта тёзок не виснет)
+let _curKeys=null;   // привычное имя (канон) → id, из narr_curated.json (#2652)
 async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.length) return null; const cn=_narrCanon(name); if(!cn) return null;
   // #169/#170 (тёзка-резолвер): ГАРАНТ знаменитых ПЕРВЫМ — лечит «مالك→ат-Таии вместо б.Анаса», «قتادة→ар-Рахави вместо ас-Садуси». Неоднозначные (2 Суфьяна) в карту НЕ попали → их решает контекст цепи.
   { try{ const g=await _loadGuar(); if(g && g[cn]!=null) return g[cn]; }catch(e){_тихо(e,"L10016")} }
   // #157/M382: фолбэк по ШУХРЕ/КУНЬЕ (أبو الزناد, и др.) — namesake-safe индекс narr_shuhra.json (только однозначные формы)
   { try{ const sh=await _loadShuhra(); if(sh && sh[cn]!=null) return sh[cn]; }catch(e){_тихо(e,"L10018")} }
+  /* #2652 (владелец: «найди карточку А‘маша»). Прозвища вроде الأعمش нет ни в шухре, ни
+     в общем списке имён: человек лежит там полным именем سليمان بن مهران. Но он есть
+     в narr_curated.json — 98 записей, выверенных РУКАМИ, где привычное имя стоит рядом
+     с полным. Раньше этот файл использовался только для сверки статей Википедии.
+     Машинный сбор прозвищ я до этого пробовал и забраковал: 2 верных из 10 и ложные пары
+     (человеку приписался его ученик). Здесь сбора нет — только готовые пары от человека,
+     поэтому и тёзка-безопасно. */
+  { try{
+      const cur=await loadNarrCurated();
+      if(cur && !_curKeys){
+        _curKeys={};
+        for(const id in cur){ const v=cur[id]; if(!v||typeof v!=='object') continue;
+          const k=_narrCanon(v.ar||''); if(k && _curKeys[k]==null) _curKeys[k]=id; }
+      }
+      if(_curKeys && _curKeys[cn]!=null) return _curKeys[cn];
+    }catch(e){_тихо(e,"L10018b")} }
   /* #655 (С67): порог «короче 4 символов» стоял в самом начале и отсекал имя ДО опроса гаранта/шухры —
      хотя однозначный id для روح/انس/ليث/بهز там уже лежит. Теперь порог работает ПОСЛЕ карт: их ответ
      тёзка-безопасен по построению, а гадать по общему индексу имён на трёх буквах по-прежнему нельзя. */
