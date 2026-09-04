@@ -29665,6 +29665,24 @@ app.add_handler(MessageHandler(filters.ChatType.GROUPS | filters.ChatType.CHANNE
 app.add_handler(MessageHandler(filters.ALL, видеомост), group=11)
 async def _on_error(update, context):
     err = str(context.error); print("ERR:", err)
+    # 🔴 04.09.2026. Стек НЕ выбрасываем. Раньше в журнал уходило только сообщение, и запись
+    # B-011 («'NoneType' object has no attribute 'strip'», четыре раза) оказалась ненаходимой:
+    # такая строка может стоять в сотне мест. Единственная улика лежала в `context.error`
+    # и мы её сами стирали. Тот же урок, что уже записан: поток ошибок печатать всегда.
+    _след_ошибки = ''
+    try:
+        import traceback as _тб
+        _e = context.error
+        if _e is not None and getattr(_e, '__traceback__', None) is not None:
+            _кадры = _тб.format_tb(_e.__traceback__)[-12:]   # последние 12 — путь до места
+            _след_ошибки = ''.join(_кадры)[-2000:]
+    except Exception:
+        _след_ошибки = ''
+    if _след_ошибки:
+        try:
+            print("ERR-СЛЕД:", _след_ошибки[-600:])
+        except Exception:
+            pass
     if 'Conflict' in err:  # две копии бота — не спамим, settle сам
         return
     # M338: ошибки БОТА регистрируются в общий журнал с номером B-NNN (B=Bot), с дедупом и существом
@@ -29685,7 +29703,8 @@ async def _on_error(update, context):
             eid = 'B-%03d' % _seq
             try: _where = (update and getattr(update, 'effective_chat', None) and str(update.effective_chat.id)) or 'bot'
             except Exception: _where = 'bot'
-            cur.append({'key': key, 'msg': err[:500], 'where': _where, 'ver': 'bot', 'stack': '',
+            cur.append({'key': key, 'msg': err[:500], 'where': _where, 'ver': 'bot',
+                        'stack': _след_ошибки,
                         'uid': '', 'count': 1, 'fixed': False, 'bseq': _seq, 'eid': eid,
                         't': _now_msk()})   # #664 (С67): время первого появления — как в errlog()
             cur = cur[-400:]
