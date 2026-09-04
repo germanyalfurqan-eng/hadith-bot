@@ -994,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1563</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1564</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1563';
+const APPVER = 'v1564';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -19776,6 +19776,23 @@ async function _codifHighlight(text, card, out, place){
         // v1076 (852b «محمد» не опознан): ПО-БУКВЕННЫЙ эталон несёт готовые пары имя→mid В ФОРМУЛИРОВКЕ ЭТОГО риваята —
         // кладём их в подсветку напрямую (короткие имена типа «محمد» _narrLookup не резолвит из-за тёзка-риска, а эталон уже разрешил).
         if(_vr._letter){ for(const _r of _vr){ const _nm=_r[1], _md=_r[2]; if(_nm && _md!=null && _md!=='?' && !(_nm in f2id)){ f2id[_nm]=String(_md); names.push(_nm); } } }
+        /* 04.09.2026, замер: подсвечено 82% звеньев. Разбор недобора показал, что чипы цепи и
+           подсветка питаются РАЗНЫМИ источниками: цепь рисует каскад na→verify→codif→dz, а сюда
+           шли только пары из `na` — и звенья, пришедшие из эталона, не подсвечивались вовсе,
+           хотя стояли в тексте буквально (пример: «عبيد الله بن عبد الله بن عتبة» в Бухари).
+           Берём пары и из ОБЫЧНОГО эталона, но с условием, которого нет у побуквенного:
+           имя должно БУКВАЛЬНО встречаться в тексте этого хадиса. Условие снимает главный риск —
+           у одного номера бывает несколько риваятов со своими цепями (A-121), и чужое имя иначе
+           пришло бы с чужим id. Имя, которого в тексте нет, всё равно не подсветилось бы;
+           опасно было бы только совпадение тёзки, а буквальная проверка его и отсекает. */
+        else { try{
+          const _ктек = canonИмя(text||'');
+          for(const _r of _vr){ const _nm=_r[1], _md=_r[2];
+            if(!_nm || _md==null || _md==='?' || (_nm in f2id)) continue;
+            const _к = canonИмя(_nm);
+            if(_к.length < 6 || !_ктек.includes(_к)) continue;
+            f2id[_nm]=String(_md); names.push(_nm); }
+        }catch(_e){_тихо(_e,"L15253v")} }
         naMids.forEach(x=>_vIds.add(String(x))); } }catch(e){_тихо(e,"L15253")}
       for(const nm of _extra){ if(nm in f2id) continue; let _mid=null; try{ _mid=await _narrLookup(nm); }catch(e){_тихо(e,"L15254")} if(_mid==null) continue;
         if(_vIds && !_vIds.has(String(_mid))) continue;   // чужой id на эталонном хадисе — не подсвечиваем (тёзка-риск)
