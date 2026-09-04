@@ -26100,6 +26100,48 @@ async def _api_serve(application=None):
         except Exception:
             return str(x or '')
 
+    async def neudachi_razobrano(r):
+        """Пометить неудачи помощника разобранными (технадзор, по секрету).
+
+        🔴 04.09.2026. Сторож журналов (З-102) первым же прогоном показал: 99 неудач из 100
+        числятся неразобранными. Я их разобрал по классам и починил главную причину, но
+        пометить не мог — закрытие было только кнопкой владельца под сообщением.
+
+        Чинит один, закрывать вправе другой — не закрывает никто. Кнопка владельца остаётся,
+        просто теперь закрыть может и тот, кто разбирал.
+        """
+        try:
+            d = await r.json()
+        except Exception:
+            return _cors(web.json_response({'ok': False, 'error': 'нужен json'}, status=400))
+        if not BACKUP_SECRET or (d.get('secret') or '') != BACKUP_SECRET:
+            return _cors(web.json_response({'ok': False, 'error': 'ключ не тот'}, status=403))
+        номера = []
+        for x in (d.get('n') or []):
+            try:
+                номера.append(int(x))
+            except Exception:
+                pass
+        if not номера:
+            return _cors(web.json_response({'ok': False, 'error': 'не сказано, что помечать'},
+                                           status=400))
+        чем = str(d.get('чем') or '')[:300]
+        сп = _data_get(DSOC_НЕУДАЧИ_ФАЙЛ, []) or []
+        помечено = []
+        for з in сп:
+            if int(з.get('n') or 0) in номера and not з.get('разобрано'):
+                з['разобрано'] = True
+                з['кем'] = 'технадзор'
+                if чем:
+                    з['чем'] = чем
+                помечено.append(з.get('n'))
+        if помечено:
+            _data_put(DSOC_НЕУДАЧИ_ФАЙЛ, сп,
+                      'неудачи: разобрано технадзором — %s' % ', '.join(str(x) for x in помечено))
+        осталось = len([з for з in сп if not з.get('разобрано')])
+        return _cors(web.json_response({'ok': True, 'помечено': помечено,
+                                        'осталось_неразобранных': осталось}))
+
     async def errlog_fixed(r):
         """Отметить ошибки приложения решёнными (технадзор, по секрету).
 
@@ -27706,7 +27748,7 @@ async def _api_serve(application=None):
                   web.post('/api/booksearch', booksearch),
                   web.post('/api/booktrans', booktrans), web.post('/api/bookinfo', bookinfo),
                   web.post('/api/authorinfo', authorinfo), web.get('/api/qaudio', qaudio),
-                  web.post('/api/errlog', errlog), web.post('/api/errlog_fixed', errlog_fixed), web.post('/api/narrator_rijal', narrator_rijal),
+                  web.post('/api/errlog', errlog), web.post('/api/errlog_fixed', errlog_fixed), web.post('/api/neudachi_razobrano', neudachi_razobrano), web.post('/api/narrator_rijal', narrator_rijal),
                   web.post('/api/structure', structure_results),
                   web.get('/api/book_page', book_page), web.get('/api/book_toc', book_toc), web.get('/api/book_meta', book_meta), web.post('/api/isnad_ai', isnad_ai_h),
                   web.post('/api/devfeedback', devfeedback), web.post('/api/worklog', worklog),
