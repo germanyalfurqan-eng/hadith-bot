@@ -18960,11 +18960,15 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 breqs = jj.get("requests", []) or []
             except Exception:
                 breqs = []
-            st = {}; corr = {}
+            st = {}; corr = {}; _ст_беда = ''
             try:
-                rs = await _зов_сети('get', f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/miniapp/requests_status.json", timeout=8)
-                if rs.status_code == 200: st = rs.json()
-            except Exception: pass
+                rs = await _зов_сети('get', f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/docs/requests_status.json", timeout=8)
+                if rs.status_code == 200:
+                    st = rs.json()
+                else:
+                    _ст_беда = 'ответ ' + str(rs.status_code)
+            except Exception as _e_ст:
+                _ст_беда = str(_e_ст)[:60]
             try:
                 rc = await _зов_сети('get', f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/corrections.json", timeout=8)
                 if rc.status_code == 200: corr = rc.json()
@@ -18974,8 +18978,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for k, v in st.items():
                 if k.startswith("_"): continue
                 s = (v or {}).get("s", "open"); cnt[s] = cnt.get(s, 0) + 1
+            # Немота недопустима: нули от неудачного запроса выглядят как честные нули,
+            # а решение по ним принимает человек. Не прочлось — так и скажем.
+            _ст_строка = ('\n🔴 СТАТУСЫ НЕ ПРОЧЛИСЬ (%s) — показаны ВСЕ заявки, '
+                          'а не только невыполненные' % _ст_беда) if _ст_беда else ''
             head = ("📋 ЖУРНАЛ ЗАЯВОК (общий: бот + мастер)\n"
-                    f"🕐 актуально на {_now_msk()}\n"
+                    f"🕐 актуально на {_now_msk()}{_ст_строка}\n"
                     f"✅ выполнено {cnt['done']} · 🔴 открыто {cnt['open']} · ⏳ ждут {cnt['wait']} · 🟡 в работе {cnt['progress']}\n"
                     "——— НЕвыполненные (заявки бота):")
             lines = [head]
