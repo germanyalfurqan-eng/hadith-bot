@@ -994,7 +994,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1560</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1561</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1560';
+const APPVER = 'v1561';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4697,9 +4697,40 @@ var _mm=document.getElementById('moreModes'); if(_mm) _mm.onclick=()=>{ const b=
    оно человеку ничего не говорит — вот разбор рядом, по нажатию. Список книг РОВНО тот, что реально
    готов: обещать несделанное здесь нельзя, это первое, куда посмотрит недоверчивый читатель. */
 const RAG_ГОТОВЫ=[{код:'bukhari', имя:'Сахих аль-Бухари', мест:7490, изд:'султанская печать'}];
+/* 🔴 04.09.2026. Этот список — то, по чему приложение решает, показывать ли в читалке кнопку
+   «спросить по смыслу», и что написать в справке «какие книги готовы». Он стоял здесь одной
+   книгой. За ночь собрали 23 свода, 132 009 мест — а кнопка так и осталась у одного Бухари,
+   и справка честно обещала одну книгу, потому что список жил отдельно от самих баз.
+   Теперь его приносит сервер (дешёвая дверь /rag_limits, та же, что отдаёт остаток запросов).
+   Здешние значения остаются запасом на случай, если сервер не ответил: показать Бухари
+   правдивее, чем не показать ничего. */
+let _ragСписокЖдёт=false;
+function _ragПринятьСписок(j){
+  try{
+    const сп=j&&j['книги'];
+    if(!Array.isArray(сп)||!сп.length) return;
+    RAG_ГОТОВЫ.length=0;
+    сп.forEach(б=>RAG_ГОТОВЫ.push({
+      код: б['код'],
+      имя: ((typeof bookRuOf==='function'&&bookRuOf(б['код']))||б['название']||б['код']),
+      мест: (+б['мест']||0), изд: ''}));
+    window._ragСписокГотов=true;
+    try{ _ragBtnSync(); }catch(_e){}
+  }catch(_e){}
+}
+async function _ragСписок(){
+  if(window._ragСписокГотов || _ragСписокЖдёт || !BACKEND_URL) return;
+  _ragСписокЖдёт=true;
+  try{
+    const r=await fetch(BACKEND_URL+'/rag_limits',{method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify({initData:INITDATA})});
+    _ragПринятьСписок(await r.json().catch(()=>null));
+  }catch(_e){}
+  _ragСписокЖдёт=false;
+}
 function ragHelp(){
   const m=document.getElementById('helpModal')||document.getElementById('modal');
-  const книги=RAG_ГОТОВЫ.map(b=>'<li><b>'+esc(b.имя)+'</b> — '+b.мест.toLocaleString('ru')+' мест книги ('+esc(b.изд)+')</li>').join('');
+  const книги=RAG_ГОТОВЫ.map(b=>'<li><b>'+esc(b.имя)+'</b> — '+b.мест.toLocaleString('ru')+' мест книги'+(b.изд?(' ('+esc(b.изд)+')'):'')+'</li>').join('');
   const html='<div class="panel" style="max-width:560px">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px">'
     +'<b style="font-size:16px">🧠 Что такое RAG</b><button class="mini" id="ragHelpX">✕</button></div>'
@@ -4724,6 +4755,7 @@ var _rhc=document.getElementById('ragHelpChip'); if(_rhc) _rhc.onclick=(e)=>{ e.
 function _ragBtnSync(){
   try{
     const b=document.getElementById('readRagBtn'); if(!b) return;
+    try{ _ragСписок(); }catch(_e){}   /* список ещё не спрашивали — спросим и вернёмся сюда сами */
     const есть=RAG_ГОТОВЫ.some(x=>x.код===_readCode);
     b.style.display=есть?'':'none';
   }catch(e){_тихо(e,"L3699")}
@@ -13396,6 +13428,7 @@ async function _ragLimShow(){
       body:JSON.stringify({initData:INITDATA})});
     const j=await r.json().catch(()=>null);
     _RAG.лимиты=j||null;
+    try{ _ragПринятьСписок(j); }catch(_e){}   /* тот же ответ несёт и список готовых книг */
     const s=_ragLimFmt(j);
     if(s){ el.textContent=s; el.style.animation='fadeInUp .25s ease-out both'; }
     else el.style.display='none';   // сервер цифр не дал — молчим, а не пишем «неизвестно»
