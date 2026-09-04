@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1568';
+const APPVER = 'v1577';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2925,10 +2925,24 @@ function hl(text,groups){
   return _linkAyatHtml(r);
 }
 // поиск аята по тексту-фрагменту (для клика по ﴿…﴾): canon-содержание в Коране
-let _qAyIdx=null;
+let _qAyIdx=null, _qAyIdxP=null;   /* 05.09.2026: _qAyIdxP — общее обещание на время загрузки, чтобы два нажатия не тянули Коран дважды */
 // канон для матчинга аятов: фолд расширенных коранических символов (ٱ алиф-васла, дагger-алиф, ی/ۇ) ПЕРЕД диапазон-фильтром
 function _qc(s){ return canon(String(s||'').replace(/[ٱآأإٲٳٵ]/g,'ا').replace(/[ىیئ]/g,'ي').replace(/[ؤۇۆ]/g,'و')).replace(/[^ء-ي ]/g,'').replace(/ا/g,'').replace(/\s+/g,' ').trim(); }   // скелет БЕЗ алифа: убирает двусмысленность дагger-алифа Корана (اعطينٰك=اعطيناك, إلٰه=اله)
-async function _buildQAyIdx(){ if(_qAyIdx) return _qAyIdx; try{ const arr=await loadQuran(); _qAyIdx=arr.map(v=>({s:v.s,a:v.a,c:_qc(v.text)})); }catch(e){ _qAyIdx=[]; } return _qAyIdx; }
+/* 🔴 05.09.2026, находка роя, проверена. Было: `if(_qAyIdx) return _qAyIdx` и `catch → _qAyIdx=[]`.
+   Пустой массив в JS ИСТИНЕН — значит после одной неудачи сети индекс навсегда оставался пустым,
+   и поиск по аятам молча не находил ничего до перезагрузки приложения. Плюс гонка: два быстрых
+   нажатия проходили проверку оба и оба тянули весь Коран.
+   Теперь: неудачу не запоминаем (остаётся null — следующая попытка сработает), а пока идёт
+   загрузка, держим общее обещание: второй нажавший ждёт первую, а не начинает свою. */
+async function _buildQAyIdx(){
+  if(_qAyIdx && _qAyIdx.length) return _qAyIdx;
+  if(_qAyIdxP) return _qAyIdxP;
+  _qAyIdxP = (async()=>{ try{ const arr=await loadQuran();
+                              _qAyIdx=arr.map(v=>({s:v.s,a:v.a,c:_qc(v.text)}));
+                              return _qAyIdx; }
+                         catch(e){ _qAyIdx=null; return []; }
+                         finally{ _qAyIdxP=null; } })();
+  return _qAyIdxP; }
 async function _findAyah(seg){ let c=_qc(seg); if(c.length<8) return null;
   const idx=await _buildQAyIdx();
   for(const v of idx){ if(v.c && v.c.indexOf(c)>=0) return {s:v.s,a:v.a}; }   // сегмент целиком в аяте
@@ -3437,7 +3451,19 @@ async function fetchEdition(code){
     catch(e2){ return await fetchJSON(EDITION_URL(code), 45000); } }
 }
 let ahmadArr=null;
-async function loadAhmad(){ if(ahmadArr)return ahmadArr;
+let _ahmadP=null;   /* 05.09.2026: общее обещание — иначе два вызова тянут 25 МБ дважды */
+async function loadAhmad(){
+  /* 🔴 05.09.2026, находка роя, проверена. `if(ahmadArr)` истинно и для ПУСТОГО массива:
+     если разбор дал [], повторной попытки не будет никогда. И защиты на время загрузки не
+     было вовсе — два вызова подряд качали по 25 МБ каждый. Путей к этой функции много,
+     владелец жаловался трижды, и в журнале ошибок это была треть всех записей: след вызова
+     мы добавили, а саму гонку — нет. */
+  if(ahmadArr && ahmadArr.length) return ahmadArr;
+  if(_ahmadP) return _ahmadP;
+  _ahmadP = (async()=>{ try{ return await _loadAhmadРеально(); }
+                        finally{ _ahmadP=null; } })();
+  return _ahmadP; }
+async function _loadAhmadРеально(){
   // 26.07.2026, владелец трижды: «Ахмад загрузка, я сто раз сказал». Найти виновника по коду вышло
   // не сразу — путей к этой функции много. Поэтому она сама сообщает, кто её позвал: в журнал ошибок
   // уходит след вызова. Если 25 МБ поедут снова, мы увидим ОТКУДА, а не будем гадать.
