@@ -28326,11 +28326,20 @@ async def _app_channel_watcher(application):
                                     return obj
                                 # П-С56-2 (скрин владельца 02:25: алерт каждые 5 мин ВЕЧНО): пропущенный как дубль id
                                 # ОБЯЗАН помечаться обработанным — иначе на следующем тике он снова pending и снова алерт.
-                                def _mk_alert2(obj, _item=item, _sim=sim, _base=_mk_alert):
+                                _я_пометил = []          # [True], если id добавили именно мы
+                                def _mk_alert2(obj, _item=item, _sim=sim, _base=_mk_alert, _флаг=_я_пометил):
                                     obj = _base(obj)
                                     ids = obj.get("app_post_ids") or []
+                                    # 🔴 04.09.2026 (#2665): при двух живых ботах сюда приходят оба.
+                                    # Первый добавляет id, второй видит его уже на месте — и раньше
+                                    # ОБА слали владельцу «я остановил повтор». Повторялось не
+                                    # действие, а рассказ о нём. Помечаем, кто вправду добавил;
+                                    # список чистим на случай повторного вызова при состязании
+                                    # за файл — важен итог последней попытки, а не первой.
+                                    _флаг.clear()
                                     if _item["id"] not in ids:
                                         ids.append(_item["id"])
+                                        _флаг.append(True)
                                     obj["app_post_ids"] = ids
                                     return obj
                                 _ok_a, _newj_a = _data_atomic_mutate("journal.json", _mk_alert2, f"app_post → пропущен как дубль, id {item['id']} помечен")
@@ -28338,6 +28347,10 @@ async def _app_channel_watcher(application):
                                     _journal_cache["app_post_ids"] = _newj_a.get("app_post_ids", [])
                                 if _ok_a and _newj_a is not None and _journal_cache is not None:
                                     _journal_cache["dup_alerts"] = _newj_a.get("dup_alerts", [])
+                                if not _я_пометил:
+                                    # Остановил не я — значит и говорить нечего: об этом уже
+                                    # доложил тот, кто пометил заметку первым.
+                                    continue
                                 _atxt = ("✅ Я сам заметил и ОСТАНОВИЛ повторную публикацию в канал @muslimoonapp — "
                                          "чуть не вышло ДВА одинаковых поста подряд про одно и то же обновление. "
                                          "Это моя защита сработала как надо, действий от тебя не требуется.\n\n"
