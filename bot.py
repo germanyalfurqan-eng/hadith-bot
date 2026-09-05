@@ -11092,6 +11092,26 @@ def _is_mostly_arabic(s):
     ar = len(re.findall(r'[؀-ۿ]', s)); ru = len(re.findall(r'[А-Яа-яЁё]', s))
     return ar >= 8 and ar >= ru
 
+def _тот_же_арабский(a, b):
+    """Один ли это хадис. Мерка — вложенность по трёхбуквенным кускам, как заслон M280 в
+    читалке (miniapp/index.html, arSimilar): доля кусков КОРОТКОГО текста, нашедшихся в
+    длинном. Считаем от короткого, а не от длинного: наши печати режут риваяты по-разному,
+    и доля от длинного топит верные пары (проверено 05.09.2026 на сцепке Муслима)."""
+    def _голо(с):
+        с = re.sub(r'[ً-ْٰـ]', '', с or '')
+        с = re.sub(r'[أإآ]', 'ا', с)
+        с = с.replace('ة', 'ه').replace('ى', 'ي')
+        return re.sub(r'\s+', ' ', с).strip()
+    ca, cb = _голо(a), _голо(b)
+    if len(ca) < 60 or len(cb) < 60:
+        return True          # судить не по чему — не мешаем работе кэша
+    sa = set(ca[и:и + 3] for и in range(len(ca) - 2))
+    sb = set(cb[и:и + 3] for и in range(len(cb) - 2))
+    if not sa or not sb:
+        return True
+    return len(sa & sb) / float(min(len(sa), len(sb))) >= 0.55
+
+
 def _chunk_by_paras(text, maxlen=1200):
     """Режем длинный текст на куски по абзацам (≤maxlen): free-модели переводят короткое надёжнее длинного."""
     chunks = []; cur = ''
@@ -27638,6 +27658,13 @@ async def _api_serve(application=None):
             stored = None
             if not force and source and num not in (None, ''):
                 stored = await loop.run_in_executor(None, lambda: (_coll_load(source) or {}).get(str(num)))
+            # 🔴 05.09.2026. Кэш отдавался по одному НОМЕРУ, хотя в записи лежит и арабский,
+            # с которого переводили. 16.06 матн Муслима переключили с Абд аль-Баки на турецкую
+            # печать (УКАЗ-3) — и переводы, сложенные до этого, отдавались под ДРУГОЙ текст:
+            # человек видел под одним хадисом перевод другого (замер: 3 записи из 75). Тот же
+            # заслон уже второй месяц стоит в читалке (M280); сюда он не был унаследован.
+            if stored and stored.get('ar') and not _тот_же_арабский(stored.get('ar'), text):
+                stored = None   # перевод не от этого текста — считаем промахом кэша, переведём заново
             if stored and stored.get('ru') and not _is_mostly_arabic(stored['ru']):   # битый арабский кэш игнорируем → переведём заново через DeepSeek
                 await loop.run_in_executor(None, usage_log, user, "перевод", False, len(text), source, str(num or ""))
                 await _notify_usage(user, "перевод", False, source, num, None, frag=(stored.get('ru') or text))   # ♻️ из базы, ключ НЕ потрачен
