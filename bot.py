@@ -21360,7 +21360,25 @@ def _rag_load_sync(книга='bukhari'):
             быстро = True
         except Exception:
             body = _arr.array('b'); body.frombytes(сырое); быстро = False
+        # 🔴 05.09.2026. ВТОРОЙ НАБОР — по русскому переводу. Замер на Бухари №1: русский
+        # запрос к арабскому тексту 0,084, к русскому переводу 0,350 — вчетверо. Владелец
+        # спрашивает по-русски, а отпечатки были только по арабскому: нужный хадис лежал
+        # в базе и не поднимался. Нет файла — работаем как раньше, до буквы.
+        body_ru = ids_ru = None
+        try:
+            _рп = _os.path.join(RAG_ПАПКА, '%s.ru.vec.json' % книга)
+            if _os.path.exists(_рп):
+                vru = json.load(io.open(_рп, encoding='utf-8'))
+                _сыр_ru = _b64.b64decode(vru['v'])
+                import numpy as _np2
+                Mru = _np2.frombuffer(_сыр_ru, dtype=_np2.int8).reshape(vru['n'], vru['dim']).astype(_np2.float32)
+                Mru *= _np2.asarray(vru['s'], dtype=_np2.float32)[:, None]
+                body_ru, ids_ru = Mru, vru['id']
+                print('rag: %s — второй набор по русскому тексту, %d мест' % (книга, vru['n']))
+        except Exception as _ер:
+            print('rag: русский набор %s не прочёлся: %s' % (книга, str(_ер)[:80]))
         _RAGB.update({'ids': v['id'], 'поля': v.get('поле'), 'body': body, 's': v['s'],
+                      'body_ru': body_ru, 'ids_ru': ids_ru,
                       'dim': v['dim'], 'n': v['n'], 'мета': m.get('м') or {},
                       'быстро': быстро, 'готово': True,
                       # Чья база лежит и какой моделью её считали: вопрос ОБЯЗАН считаться той же
@@ -21934,6 +21952,21 @@ def _rag_find_sync(q, top=6, книга='bukhari'):
             cid = ids[i]
             if s > лучшее.get(cid, -2):
                 лучшее[cid] = s
+    # 🔴 05.09.2026. Второй набор — по русскому переводу. Берём ЛУЧШЕЕ из двух: место
+    # могло не отозваться на арабском, но отозваться на переводе (или наоборот, если
+    # спросили по-арабски). Набора нет — этот кусок просто не выполнится.
+    try:
+        _тело_ru = _RAGB.get('body_ru')
+        _ид_ru = _RAGB.get('ids_ru')
+        if _тело_ru is not None and _ид_ru:
+            import numpy as _np3
+            _бл = _тело_ru.dot(_np3.asarray(qv, dtype=_np3.float32))
+            for _i2, _cid2 in enumerate(_ид_ru):
+                _з = float(_бл[_i2])
+                if _з > лучшее.get(_cid2, -2):
+                    лучшее[_cid2] = _з
+    except Exception as _ер2:
+        print('rag: русский набор не сравнился: %s' % str(_ер2)[:80])
     ранж = sorted(лучшее.items(), key=lambda x: -x[1])
     мета = _RAGB.get('мета') or {}
 
