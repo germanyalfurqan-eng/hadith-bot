@@ -1868,7 +1868,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1582';
+const APPVER = 'v1583';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -21798,9 +21798,30 @@ function arSimilar(a,b){ const clean=s=>s.normalize('NFC').replace(/[ً-ْٰ]/g,
 async function doTranslate(text,out,btn,ref,force){
   const _silent=ref&&ref.silent;   // #159-фикс: префетч-режим — подавить пользовательские тосты на путях ошибки
   const orig=btn.textContent, origStyle=btn.style.cssText; btn.disabled=true; btn.textContent='⏳…';
-  if(out){ out.style.display='block'; out.innerHTML='<span class="hint">⏳ Перевожу… (несколько секунд)</span>'; }   // сразу видно, что идёт загрузка
+  /* 🔴 06.09.2026, замечание владельца: «перевод долгий, как минимум надо показывать
+     каждый шаг — допустим, если ты запускаешь гемму». Раньше висело неподвижное
+     «⏳ Перевожу…», и через полминуты человек не мог отличить работу от зависания.
+     Показываем СЕКУНДОМЕР и честно называем порядок: сперва бесплатные облачные, если
+     молчат — наша Гемма на сервере (она пишет до минуты), платное последним.
+     Врать про «сейчас работает такой-то» не станем: дверь отвечает один раз в конце и
+     сказать, на каком мы шаге прямо сейчас, ей нечем. Зато КТО перевёл — скажем после. */
+  var _трТик=null, _трСек=0;
+  if(out){ out.style.display='block';
+    /* Формулировки УСЛОВНЫЕ намеренно. Дверь отвечает один раз в конце, и сказать,
+       на каком шаге мы прямо сейчас, ей нечем. Писать «сейчас работает Гемма» значило бы
+       выдавать догадку за факт — а кто перевёл на самом деле, честно скажем ПОСЛЕ. */
+    const _рисуй=()=>{ const п=_трСек<4 ? 'сначала бесплатные модели'
+                       : (_трСек<20 ? 'если бесплатные молчат, дальше наша Гемма'
+                                    : 'похоже, переводит наша Гемма — это до минуты');
+      out.innerHTML='<span class="hint">⏳ Перевожу… '+_трСек+' с — '+п+'</span>'; };
+    _рисуй(); _трТик=setInterval(()=>{ _трСек++; _рисуй(); }, 1000); }
+  const _трСтоп=()=>{ if(_трТик){ clearInterval(_трТик); _трТик=null; } };
   const lbl=(tag)=>'<span style="color:var(--hint);font-style:italic">'+tag+'</span> ';
-  const restore=()=>{ btn.disabled=false; btn.textContent=orig; btn.style.cssText=origStyle; };
+  /* Секундомер гасим ЗДЕСЬ, а не на каждом выходе: у doTranslate их семь (готовый перевод,
+     отказ по квоте, таймаут, ошибка сети, пустой ответ…), и забыть хоть один — значит
+     оставить тикающий счётчик поверх готового ответа. Общая дверь надёжнее семи заплат. */
+  const restore=()=>{ try{ if(typeof _трСтоп==='function') _трСтоп(); }catch(e){}
+    btn.disabled=false; btn.textContent=orig; btn.style.cssText=origStyle; };
   // 1) Готовый профессиональный перевод (Бухари/Муслим/Абу Дауд) — бесплатно, мгновенно, без траты ключа
   if(ref && READY_RU.indexOf(ref.source)!==-1 && (ref.num||ref.num===0)){
     let rnum=String(ref.num).replace(/#.*/,'');   // срезать #риваят (987#1→987) — иначе готовый перевод не находился у риваят-карточек → падало на ИИ
@@ -21834,7 +21855,11 @@ async function doTranslate(text,out,btn,ref,force){
                 : (j.cached ? ('♻️ Перевод (из нашей базы'+(e&&e.d?(', ИИ от '+e.d):'')+', бесплатно):') : '🧠 Перевод (сделал ИИ — возможны ошибки):');
       // «🔄 обновить» — переперевести заново (чинит оборванный/неточный перевод). Тратит ключ → подтверждение.
       const redo='<span class="trRedo" style="cursor:pointer;color:var(--link);text-decoration:underline;font-size:calc(12px * var(--txtScale,1));white-space:nowrap">🔄 обновить перевод</span>';
-      out.innerHTML=trHead(ref)+lbl(tag)+esc(j.translation)+'<div style="margin-top:7px;opacity:.85">'+redo+'</div>'; out.dataset.tr=j.translation; out.style.display='block'; btn.disabled=false;
+      _трСтоп();
+      // кто именно перевёл — владелец просил видеть шаг; после ответа это уже не догадка
+      const кто=(j['модель']||'').trim();
+      const строкаКто = кто ? ('<div style="margin-top:5px;font-size:calc(11.5px * var(--txtScale,1));color:var(--hint)">🔧 перевёл: '+esc(кто)+(_трСек?(' · '+_трСек+' с'):'')+'</div>') : '';
+      out.innerHTML=trHead(ref)+lbl(tag)+esc(j.translation)+строкаКто+'<div style="margin-top:7px;opacity:.85">'+redo+'</div>'; out.dataset.tr=j.translation; out.style.display='block'; btn.disabled=false;
       const rb=out.querySelector('.trRedo'); if(rb) rb.onclick=()=>{ if(confirm('Переперевести заново нейросетью? (потратит запрос к ИИ)')) doTranslate(text,out,btn,ref,true); };
       if(src && (num||num===0)) setTrBase(btn, e||{}, src);   // дальше эта кнопка = «♻️ из базы»
       else restore();

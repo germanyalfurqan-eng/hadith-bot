@@ -27729,7 +27729,8 @@ async def _api_serve(application=None):
             if stored and stored.get('ru') and not _is_mostly_arabic(stored['ru']):   # битый арабский кэш игнорируем → переведём заново через DeepSeek
                 await loop.run_in_executor(None, usage_log, user, "перевод", False, len(text), source, str(num or ""))
                 await _notify_usage(user, "перевод", False, source, num, None, frag=(stored.get('ru') or text))   # ♻️ из базы, ключ НЕ потрачен
-                return _cors(web.json_response({'translation': stored['ru'], 'cached': True}))
+                return _cors(web.json_response({'translation': stored['ru'], 'cached': True,
+                                                'модель': 'из нашей базы'}))
             # 2) нет в базе (или force) → переводим заново и копим (перезаписываем оборванный)
             _model_used = []   # тревога 04.07.2026: узнать РЕАЛЬНУЮ модель, а не рапортовать «DeepSeek» по умолчанию
             tr = await loop.run_in_executor(None, lambda: translate_matn(text, source, True, force, _model_used))   # P0-2: source ('jarh_*'/'tafsir_*') → джарх-аварный промт в translate_matn
@@ -27740,7 +27741,12 @@ async def _api_serve(application=None):
             if tr:   # #348: не списывать ключ и не слать «потрачено», если перевод реально не удался (tr пустой)
                 await loop.run_in_executor(None, usage_log, user, "перевод", True, len(text), source, str(num or ""))
                 await _notify_usage(user, "перевод", True, source, num, saved, frag=(tr or text), model=(_model_used[-1] if _model_used else ""))
-            return _cors(web.json_response({'translation': tr, 'cached': False}))
+            # 🔴 06.09.2026, замечание владельца: «перевод долгий, как минимум надо
+            # показывать каждый шаг — допустим, если ты запускаешь гемму». Показывать было
+            # НЕЧЕМ: дверь отдавала только текст, и приложение не знало, кто ответил —
+            # бесплатная облачная, наша Гемма или платный канал. Теперь говорит.
+            return _cors(web.json_response({'translation': tr, 'cached': False,
+                                            'модель': (_model_used[-1] if _model_used else '')}))
         except Exception as e:
             return _cors(web.json_response({'translation': '', 'error': str(e)}))
 
