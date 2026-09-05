@@ -10639,7 +10639,14 @@ def ask_glm(prompt, system=None, max_tokens=None):
         return None
 
 
-def ask_ai(prompt, system=None, owner=False, max_tokens=None):
+def ask_ai(prompt, system=None, owner=False, max_tokens=None, порядок='обычный'):
+    """`порядок` — чем спрашивать раньше (указ владельца 06.09.2026, только для перевода):
+      'обычный'            платный OpenCode первым, дальше бесплатные — КАК БЫЛО ВСЕГДА;
+      'сначала_бесплатные' пропустить платный нулевой шаг, начать с бесплатных;
+      'только_бесплатные'  бесплатные и ничего платного вовсе (для перевода: не вышло —
+                           дальше пробует наша Гемма, и лишь потом платное).
+    Умолчание оставлено прежним намеренно: правка не должна менять поведение тех, кто её
+    не просил. Новый порядок передаёт только `translate_matn`."""
     # 🚨 авто-рубильник убран сверху: он защищал ПЛАТНЫЙ DeepSeek от спама. Теперь бесплатный Groq первый → бесплатные работают ВСЕГДА (эндпоинты сами rate-лимитят), килл гейтит ТОЛЬКО DeepSeek (ниже). Чинит «рубильник сам включается».
     _ai_tick()
     if system is None:
@@ -10660,7 +10667,7 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None):
     # и раньше: хуже не станет ни в одном случае, меняется только КТО отвечает, когда живы
     # оба.
     _падение = ''
-    if not ai_kill_active() and (owner or not _AI_PUBLIC_OFF):
+    if порядок == 'обычный' and not ai_kill_active() and (owner or not _AI_PUBLIC_OFF):
         _oc0 = ask_opencode(prompt, system, max_tokens)
         if _oc0 and not str(_oc0).startswith("⚠️"):
             return _oc0 + "\n\n🟩 *Модель:* DeepSeek Flash через OpenCode (подписка)\n" + _ai_left()
@@ -10779,6 +10786,8 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None):
         if _oc and not str(_oc).startswith("⚠️"):
             return _oc + "\n\n🟩 *Модель:* DeepSeek через OpenCode (дешевле прямого)\n" + _ai_left()
     # 4) 💎 DeepSeek (ПЛАТНЫЙ, дешевле GPT) — только владельцу ИЛИ «дипсик всем вкл» (_AI_PUBLIC_OFF=False), И не при killswitch. Бесплатные выше молчат.
+    if порядок == 'только_бесплатные':
+        return ''          # платное не трогаем: зовущий сам решит, что дальше
     if not ai_kill_active() and (owner or not _AI_PUBLIC_OFF) and DEEPSEEK_API_KEY:
         d = ask_deepseek(prompt, system, max_tokens or 2000)
         if d is not None and not str(d).startswith("⚠️"):
@@ -11165,8 +11174,49 @@ def translate_matn(arabic, src="", owner=False, force=False, model_out=None):
                   "Ответ ДОЛЖЕН быть на РУССКОМ — НЕ копируй арабский, НЕ оставляй арабские предложения. "
                   "Имена и термины передавай по-русски. "
                   "Без вступлений, без пояснений, без кавычек, без указания модели — только перевод.")
+    def _наша_гемма(t):
+        """Перевод НАШЕЙ нейронкой на сервере Oracle — даром и без чужих лимитов.
+
+        Проверена по эталону 05.09.2026: близость к готовому ЧЕЛОВЕЧЕСКОМУ переводу
+        Бухари 0,807 на двенадцати хадисах, доля русского 100%, срывов ноль.
+        Ответ НАЧИНАЕМ ЗА НЕЁ: Gemma иначе рассуждает вслух и до перевода не доходит.
+        Живёт на хосте, из контейнера видна по мосту docker."""
+        _укз = ("Переведи хадис на русский язык. Переводи точно, ничего не добавляя от себя "
+                "и ничего не выбрасывая. Цепочку передатчиков переводи тоже. "
+                "Ответь только переводом.")
+        _промпт = ("<start_of_turn>user" + chr(10) + _укз + chr(10) + chr(10) + t[:4000]
+                   + "<end_of_turn>" + chr(10) + "<start_of_turn>model" + chr(10) + "Перевод: ")
+        for _адрес in ("http://172.17.0.1:8097/completion", "http://127.0.0.1:8097/completion"):
+            try:
+                _о = requests.post(_адрес, json={"prompt": _промпт, "n_predict": 700,
+                                                 "temperature": 0.2,
+                                                 "stop": ["<end_of_turn>", "<start_of_turn>"]},
+                                   timeout=600)
+                if _о.status_code != 200:
+                    continue
+                _т = (_о.json().get("content") or "").strip()
+                if _т and len(_т) > 20 and not _is_mostly_arabic(_т):
+                    return _т
+            except Exception:
+                continue
+        return ""
+
     def _one(t):
-        r = ask_ai("Переведи на русский:\n" + t, sysmsg, owner=owner, max_tokens=4000)
+        # 🔴 Указ владельца 06.09.2026: «поставь сначала бесплатный — гемини, грок и так
+        # далее, а после них уже гемма». Порядок для ПЕРЕВОДА: бесплатные облачные → наша
+        # Гемма на сервере → платное крайним средством. Люди платили подпиской за перевод
+        # тех самых сводов, которые наша нейронка переводит даром (замер: 9 обращений за
+        # неделю), — теперь не будут.
+        r = ask_ai("Переведи на русский:" + chr(10) + t, sysmsg, owner=owner,
+                   max_tokens=4000, порядок='только_бесплатные')
+        if not r or not _годен(r) or r.startswith("❌") or r.startswith("⏸"):
+            _наш = _наша_гемма(t)
+            if _наш:
+                if model_out is not None:
+                    model_out.append("gemma-4 (наш сервер, даром)")
+                return _наш
+            r = ask_ai("Переведи на русский:" + chr(10) + t, sysmsg, owner=owner,
+                       max_tokens=4000)
         if not _годен(r) or r.startswith("❌") or r.startswith("⏸"):
             return None
         if model_out is not None:
