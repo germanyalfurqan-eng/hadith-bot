@@ -26175,8 +26175,33 @@ async def _api_serve(application=None):
             потолок = max(50, min(4000, int(d.get('потолок') or 600)))
         except Exception:
             потолок = 600
+        # Можно спросить ОДИН названный канал — иначе сравнить их между собой нечем:
+        # лестница всегда отдаёт первого, кто ответил, и остальные молчат неизвестно как.
+        _канал = str(d.get('канал') or '').strip().lower()
+        _каналы = {'groq': lambda: ask_groq(промт, система, потолок),
+                   'glm': lambda: ask_glm(промт, система, потолок),
+                   'gemini': lambda: ask_gemini(промт, система),
+                   'nvidia': lambda: ask_nvidia_nim(промт, система, потолок),
+                   'github': lambda: ask_github(промт, система, потолок),
+                   'cerebras': lambda: ask_cerebras(промт, система, потолок),
+                   'sambanova': lambda: ask_sambanova(промт, система, потолок),
+                   'opencode': lambda: ask_opencode(промт, система, потолок)}
+        if _канал and _канал not in _каналы:
+            return _cors(web.json_response(
+                {'error': 'канал: ' + ' | '.join(sorted(_каналы))}, status=400))
         import time as _tп
         _т0 = _tп.time()
+        if _канал:
+            try:
+                _от = await asyncio.get_event_loop().run_in_executor(
+                    None, _каналы[_канал])
+            except Exception as _ек:
+                return _cors(web.json_response({'error': str(_ек)[:200], 'канал': _канал},
+                                               status=500))
+            _от = str(_от or '')
+            return _cors(web.json_response({
+                'ответ': _от.strip(), 'модель': _канал,
+                'секунд': round(_tп.time() - _т0, 1), 'порядок': 'названный канал'}))
         try:
             ответ = await asyncio.get_event_loop().run_in_executor(
                 None, lambda: ask_ai(промт, система, True, потолок, порядок))
