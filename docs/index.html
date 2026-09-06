@@ -1873,7 +1873,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1590';
+const APPVER = 'v1591';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2616,6 +2616,9 @@ async function fetchJSON(url, ms, opts){ ms=ms||20000;
 // (#301 ishaq / #326 abuyala / #338,#342 ahmad / #341 muslim_baqi): Telegram WebView часто перезагружает
 // аппу — раньше каждый заход пере-качивал 5-25МБ по флакающей мобильной сети и рвался по таймауту.
 // ⚠️ При ПЕРЕСБОРКЕ данных любой кэшируемой книги — поднять _BOOK_CACHE_NS (это инвалидирует кэш у всех).
+// ⚠️⚠️ С v1591 здесь же лежит hadith_ru.json — РУССКИЕ ПЕРЕВОДЫ. Их пересборка тоже
+//     обязана поднимать имя кеша: иначе человек, однажды скачавший старые переводы,
+//     не увидит исправленных НИКОГДА. Мост переводов Муслима перепишет этот файл.
 // Совместим с fetchJSON по сигнатуре и формату ошибки (журнал /api/errlog, opts.silent).
 const _BOOK_CACHE_NS='muslimoon-books-v1';
 async function cachedFetchJSON(url, ms, opts){ ms=ms||60000; opts=opts||{};
@@ -3912,7 +3915,18 @@ async function loadQuranTr(ed){ if(_qTrC[ed]) return _qTrC[ed];
 let hadithRu=null, hadithRuP=null;
 async function loadHadithRu(silent){ if(hadithRu)return hadithRu; if(hadithRuP) return hadithRuP;   // #159: guard от гонки (N карточек → 1 фетч) + тихий префетч
   if(!silent){ try{ setStatus('Загружаю русские переводы хадисов…'); }catch(e){_тихо(e,"L2943")} }
-  hadithRuP=(async()=>{ const j=await (await fetch('./hadith_ru.json')).json();
+  /* 🔴 06.09.2026, замер на живом v1590. Первый русский поиск — 40,6 секунды, и ПОСЛЕ
+     него в памяти устройства по-прежнему пусто: hadith_ru.json шёл голым fetch, мимо
+     нашего кеша. Все книги ходят через cachedFetchJSON и оседают на устройстве, а этот
+     файл — единственный, кто не оседал. Значит каждый новый заход человек платил заново:
+     2,78 МБ по сети, 12,52 МБ в разбор. А русский поиск — то, ради чего приложение и
+     открывают.
+     Срок 180 с — как у самых больших книг; у cachedFetchJSON с v1587 сроки на дозвон и
+     на чтение тела разные, поэтому большой файл он больше не рвёт посреди чтения.
+     ⚠️ ПЕРЕСОБРАЛ hadith_ru.json — ПОДНИМИ _BOOK_CACHE_NS, иначе люди останутся на
+     старых переводах навсегда. Это не общее пожелание: мост переводов Муслима готов и
+     ждёт слова владельца, он перепишет ровно этот файл. */
+  hadithRuP=(async()=>{ const j=await cachedFetchJSON('./hadith_ru.json', 180000, {silent:!!silent});
     hadithRu=j.map(x=>{ const t=cleanRu(x.t); return {s:x.s,n:x.n,t:t,norm:t.toLowerCase()}; }); return hadithRu; })();
   return hadithRuP; }
 // арабский оригинал хадиса по коду+номеру (для русских карточек: тахридж/передатчики/Arabus/огласовки)
