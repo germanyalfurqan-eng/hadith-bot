@@ -30485,7 +30485,15 @@ async def _app_channel_watcher(application):
                                 # не узнавала — вечный «временный» провал вместо честного
                                 # «этот пост не поправить»
                                 _txt_e_l = _txt_e.lower()
-                                if "can't be edited" in _txt_e_l or "message to edit not found" in _txt_e_l:
+                                # 🔴 07.09.2026. «Message is not modified» означает, что
+                                # текст поста УЖЕ совпадает с нашим — работа сделана, а не
+                                # провалена. Механизм считал это ВРЕМЕННОЙ осечкой: признак
+                                # выполнения не ставил и заходил ещё дважды. Три круга
+                                # правок Telegram по постам, которые и так стоят как надо,
+                                # и вечное «не вышло» там, где чинить нечего.
+                                if "not modified" in _txt_e_l:
+                                    _почищено.append(_мид)
+                                elif "can't be edited" in _txt_e_l or "message to edit not found" in _txt_e_l:
                                     _мимо.append("%s — СТАРШЕ 48 ЧАСОВ, бот править не может: открой "
                                                  "https://t.me/muslimoonapp/%s и поправь или удали сам" % (_мид, _мид))
                                 else:
