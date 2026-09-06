@@ -653,17 +653,37 @@ OPENCODE_KEY_2 = (os.environ.get("OPENCODE_ZEN_M_API_KEY", "")
 OPENCODE_КЛЮЧИ = [(к, и) for к, и in ((OPENCODE_KEY, 'основной'),
                                       (OPENCODE_KEY_2, 'второй (M)')) if к]
 
-def opencode_ключ():
-    """Ключ, на котором сегодня меньше вызовов. Возвращает (ключ, имя_для_журнала)."""
-    if len(OPENCODE_КЛЮЧИ) < 2:
+def opencode_ключ(только_живые=False):
+    """Ключ, на котором сегодня меньше вызовов, СРЕДИ ЖИВЫХ. Возвращает (ключ, имя).
+
+    🔴 06.09.2026. Проверил оба кошелька живьём: основной отвечает «Invalid API key» (401),
+    второй — «Monthly usage limit reached, resets in 5hr 40min» (429). То есть платного
+    канала сейчас нет вовсе, а лестница честно стучалась в него на КАЖДОМ вопросе и
+    ждала: замер через /api/proba_ii дал 27,9 с с платным первым против 15,4 с без него.
+    Двенадцать секунд ожидания за ответ, которого не будет.
+    Отказ ключа теперь запоминается (тот же сон, что у бесплатных каналов): «ключ не
+    принят» — шесть часов, «месячный предел» — час, потом пробуем снова, потому что
+    предел сам отпускает. Спят КЛЮЧИ по отдельности: у них разные кошельки и разные беды.
+    """
+    живые = [(к, и) for к, и in OPENCODE_КЛЮЧИ
+             if _КАНАЛ_СПИТ.get('opencode:' + и, 0) <= time.time()]
+    if not живые:
+        # Пустоту отдаём ТОЛЬКО тому, кто прямо попросил живой ключ (это ask_opencode —
+        # он умеет промолчать). Прочие места зовут эту функцию ради заголовка запроса и
+        # на None упали бы с ошибкой типа: у них свой договор, и менять его исподтишка
+        # нельзя — сон канала не должен ломать соседей.
+        if только_живые:
+            return (None, '')
         return (OPENCODE_КЛЮЧИ[0] if OPENCODE_КЛЮЧИ else (OPENCODE_KEY, 'основной'))
+    if len(живые) < 2:
+        return живые[0]
     try:
         сег = datetime.now().strftime('%d.%m.%Y')
         j = _journal_load()
         сч = ((j.get('usage') or {}).get('opencode_by_key') or {}).get(сег) or {}
-        return min(OPENCODE_КЛЮЧИ, key=lambda п: int(сч.get(п[1]) or 0))
+        return min(живые, key=lambda п: int(сч.get(п[1]) or 0))
     except Exception:
-        return OPENCODE_КЛЮЧИ[0]
+        return живые[0]
 
 def opencode_отметить(имя):
     """Записать вызов на этот кошелёк — по этой записи и считается равномерность."""
@@ -10534,7 +10554,9 @@ def ask_opencode(prompt, system, max_tokens=None, только_облако=Fals
     if not OPENCODE_КЛЮЧИ:
         return None
     try:
-        _кл, _имя_кл = opencode_ключ()
+        _кл, _имя_кл = opencode_ключ(только_живые=True)
+        if not _кл:
+            return None          # оба кошелька спят после отказа — не тратим время
         opencode_отметить(_имя_кл)
         о = requests.post(OPENCODE_URL, timeout=120,
                           headers={"Content-Type": "application/json",
@@ -10554,6 +10576,13 @@ def ask_opencode(prompt, system, max_tokens=None, только_облако=Fals
                                 # когда сказала всё.
                                 "max_tokens": max(max_tokens or 2000, 3000)})
         if о.status_code != 200:
+            # Отказ по ключу — не «канал занят», а состояние кошелька: оно не изменится
+            # через секунду. Запоминаем, чтобы следующий вопрос не ждал впустую.
+            if о.status_code in (401, 402, 403):
+                _усыпить_канал('opencode:' + (_имя_кл or '?'), 6,
+                               'ключ не принят (код %d)' % о.status_code)
+            elif о.status_code == 429:
+                _усыпить_канал('opencode:' + (_имя_кл or '?'), 1, 'месячный предел')
             return None
         j = о.json()
         _вб = (j.get("choices") or [{}])[0]
