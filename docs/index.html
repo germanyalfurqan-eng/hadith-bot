@@ -1873,7 +1873,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1587';
+const APPVER = 'v1588';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6536,23 +6536,50 @@ function loadDarimi(){ if(_darimiCache) return Promise.resolve(_darimiCache); if
    живёт (у Муслима Абд аль-Баки, у Дарими своя печать). Взять источник «поточнее» значило бы
    показать под номером другой хадис — это хуже медленной загрузки.
    Прежний путь оставлен запасным: куска нет — грузим как раньше, ни один номер не пропадёт. */
-const _HNUM={}, _HNUMP={};
+const _HNUM={}, _HNUMP={}, _HNUM_ЕСТЬ={};
 const _HNUM_КОД={ibnmaja:'ibnmajah'};      // данные грузятся по ec, куски названы по коду читалки
 const _HNUM_КУСОК=200;                     // столько же, сколько в build_num_shards.py
+/* 🔴 06.09.2026, замер на живом v1587. Спросить у Муслима №7400 стоило 15,1 с и 8,95 МБ —
+   и кончалось словом «не нашлось». Номер из ДРУГОЙ нумерации (у Абд аль-Баки Муслим кончается
+   на 3033, на sunnah.com тот же свод идёт до 7563), кусок hnum/muslim/37 отвечает 404, и
+   запасной путь тянул reader/muslim.json ЦЕЛИКОМ, чтобы убедиться в том, что кусок уже сказал.
+   А блок «⚡ наше издание» спрашивает так КАЖДЫЙ из восьми сводов — один хадис с большим
+   номером мог утянуть десятки мегабайт впустую. Ровно то, ради чего куски и нарезали.
+
+   Различаем ДВА разных «нет»: «такого номера в своде нет» (кусок ответил и это его слово —
+   искать больше негде) и «не смог узнать» (сеть подвела — тогда прежний путь нужен).
+   Право куска говорить за свод проверено сверкой ВСЕХ номеров на живом приложении: Муслим
+   3008=3008, Абу Дауд 5274=5274, Тирмизи 3954=3954, расхождений ноль ни в одну сторону.
+   Куски строятся из тех же reader-файлов (build_num_shards.py), потому и совпадают.
+
+   ⚠️ 404 значит «номера нет» только у свода, у которого куски ВООБЩЕ нарезаны. У свода без
+   нарезки 404 придёт на любой номер, и молчать было бы потерей данных — поэтому один раз на
+   свод спрашиваем HEAD кусок 0 и запоминаем ответ. */
+const _НЕТ_НОМЕРА={_нет:true};             // «в этом своде такого номера нет» ≠ «не смог узнать»
+async function _естьКуски(c){
+  if(!(c in _HNUM_ЕСТЬ)) _HNUM_ЕСТЬ[c]=fetch('./hnum/'+c+'/0.json?v='+APPVER,{method:'HEAD'})
+      .then(r=>!!r.ok).catch(()=>false);
+  return await _HNUM_ЕСТЬ[c]; }
 async function _хадисИзКуска(code,num){
   const c=_HNUM_КОД[String(code)]||String(code);
   const n=String(num==null?'':num).replace(/#.*/,'').replace(/[^0-9]/g,''); if(!n) return null;
   const k=c+'/'+Math.floor(+n/_HNUM_КУСОК);
   if(!(k in _HNUM)){
-    if(!_HNUMP[k]) _HNUMP[k]=fetch('./hnum/'+k+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
+    if(!_HNUMP[k]) _HNUMP[k]=fetch('./hnum/'+k+'.json?v='+APPVER)
+        .then(r=> r.ok ? r.json() : (r.status===404 ? _НЕТ_НОМЕРА : null)).catch(()=>null);
     _HNUM[k]=await _HNUMP[k]; }
-  const м=_HNUM[k]; if(!м) return null;
-  const т=м[n]; if(т==null) return null;
+  const м=_HNUM[k];
+  if(м===_НЕТ_НОМЕРА) return (await _естьКуски(c)) ? _НЕТ_НОМЕРА : null;   // куска нет: номер вне свода
+  if(!м) return null;                                    // сеть подвела — нужен запасной путь
+  const т=м[n];
+  if(т==null) return _НЕТ_НОМЕРА;          // кусок пришёл, номера в нём нет — значит нет и в своде
   return {num:n, text:т, grade:'', norm:''}; }
 async function _хадисПоНомеру(code, num){
   const ec=(code==='ibnmajah')?'ibnmaja':code;
   if(ec==='ahmad'){ try{ const x=await loadAhmadOne(num); if(x) return x; }catch(e){_тихо(e,"L4930")} }
-  try{ const s=await _хадисИзКуска(ec,num); if(s) return s; }catch(e){_тихо(e,"L4930h")}
+  try{ const s=await _хадисИзКуска(ec,num);
+       if(s===_НЕТ_НОМЕРА) return null;    // кусок сказал «нет» — весь свод ради этого не тянем
+       if(s) return s; }catch(e){_тихо(e,"L4930h")}
   const arr=await loadByCode(ec); if(!arr) return null;
   return arr.find(x=>String(x.num)===String(num))||null;
 }
