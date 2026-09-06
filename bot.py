@@ -852,7 +852,7 @@ GITHUB_MODELS_MODEL = os.environ.get("GITHUB_MODELS_MODEL", "openai/gpt-4o-mini"
 CEREBRAS_API_KEY = os.environ.get("CEREBRAS_API_KEY", "")
 CEREBRAS_MODEL = os.environ.get("CEREBRAS_MODEL", "llama-3.3-70b")
 SAMBANOVA_API_KEY = os.environ.get("SAMBANOVA_API_KEY", "")
-SAMBANOVA_MODEL = os.environ.get("SAMBANOVA_MODEL", "Meta-Llama-3.3-70B-Instruct")
+SAMBANOVA_MODEL = os.environ.get("SAMBANOVA_MODEL", "gemma-4-31B-it")   # 06.09.2026: Llama-3.3-70B у них вечно 429 «high demand», gemma-4-31B-it отвечает
 BACKUP_SECRET = os.environ.get("BACKUP_SECRET", "")   # #259/#261: общий секрет для приёма локального бэкапа (ps1 -> /api/backup_push -> журнал/ЛС)
 OWNER_ID = 131827895
 OWNER_CHANNEL_ID = -1001660979432
@@ -10640,6 +10640,52 @@ def ask_glm(prompt, system=None, max_tokens=None):
         return None
 
 
+_КАНАЛ_СПИТ = {}      # имя канала → до какого времени его не звать
+
+
+def _усыпить_канал(имя, часов, почему):
+    """Канал отказал так, что повтор через секунду бессмыслен, — не зовём его до срока."""
+    _КАНАЛ_СПИТ[имя] = time.time() + часов * 3600
+    try:
+        print('🛌 канал %s спит %.1f ч: %s' % (имя, часов, почему[:120]), flush=True)
+    except Exception:
+        pass
+
+
+def _зов_канала(имя, функция, *арг):
+    """Позвать бесплатный канал, помня его вчерашние отказы.
+
+    🔴 06.09.2026, указ владельца: «полностью ревизию надо сделать бесплатными апи… там
+    смотри лимиты». Ревизия нашла три мёртвых ступени, и каждый запрос честно стучался во
+    все три, прежде чем дойти до живой:
+        GitHub Models — 410, «github_models_retirement_brownout», канал закрывают;
+        Cerebras      — 404 на настроенной модели, а все три доступные отвечают 402
+                        «payment required»: бесплатного тира у них больше нет;
+        SambaNova     — 429 «high demand» на крупных, но gemma-4-31B-it отвечает.
+    Это тот же класс, что и 03.09 (№697), когда лестница перебирала снятые имена моделей
+    OpenRouter. Лечить перечислением имён бесполезно: список у провайдеров меняется, а мы
+    узнаём об этом от владельца — «почему долго».
+
+    Поэтому канал теперь ЗАПОМИНАЕТ свой отказ. Смысл кода отказа разный, и сон разный:
+      401/402/403/410 — «тебе сюда нельзя» или «канала больше нет»: спим 6 часов;
+      404             — имени модели не существует: спим 6 часов (лечится правкой имени);
+      429             — упёрлись в лимит: спим 15 минут, лимиты отпускает само время.
+    Ответ канала при этом возвращаем как есть — решать, годится ли он, будет вызывающий.
+    """
+    if _КАНАЛ_СПИТ.get(имя, 0) > time.time():
+        return None
+    о = функция(*арг)
+    с = str(о or '')
+    if с.startswith(chr(9888)):
+        м = re.search(r'код (\d{3})', с[:120])
+        код = int(м.group(1)) if м else 0
+        if код in (401, 402, 403, 404, 410):
+            _усыпить_канал(имя, 6, с[:150])
+        elif код == 429:
+            _усыпить_канал(имя, 0.25, с[:150])
+    return о
+
+
 def ask_ai(prompt, system=None, owner=False, max_tokens=None, порядок='обычный'):
     """`порядок` — чем спрашивать раньше (указ владельца 06.09.2026, только для перевода):
       'обычный'            платный OpenCode первым, дальше бесплатные — КАК БЫЛО ВСЕГДА;
@@ -10701,28 +10747,28 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None, порядок='о
               'арабском и хуже слушается вызовов.' % _падение[:120]) if _падение else '')
     # 0.5) 🆓 GLM (Zhipu) — бесплатный и на нашей пробе лучше платных: 13 находок против 7
     # у deepseek-v4-pro на одном и том же куске. Ключ лежал в окружении, а канала не было.
-    _glm = ask_glm(prompt, system, max_tokens)
+    _glm = _зов_канала('glm', ask_glm, prompt, system, max_tokens)
     if _glm and not str(_glm).startswith(chr(9888)):
         return _glm + "\n\n⚡ *Модель:* 🆓 GLM-Flash — бесплатно" + _прип + "\n" + _ai_left()
-    g = ask_groq(prompt, system, max_tokens)   # 1) Groq (free, очень быстрый)
+    g = _зов_канала('groq', ask_groq, prompt, system, max_tokens)   # 1) Groq (free, очень быстрый)
     if g and not str(g).startswith("⚠️"):
         return g + "\n\n⚡ *Модель:* 🆓 Groq (Llama 3.3 70B) — бесплатно" + _прип + "\n" + _ai_left()
     if GEMINI_API_KEY:                          # 2) Gemini (free)
-        _ga = ask_gemini(prompt, system)
+        _ga = _зов_канала('gemini', ask_gemini, prompt, system)
         if _ga and not str(_ga).startswith("⚠️"):
             return _ga + "\n\n⚡ *Модель:* 🆓 Gemini — бесплатно\n" + _ai_left()
     if GITHUB_MODELS_TOKEN:                      # 3) GitHub Models (GPT-4o-mini, free)
-        _gh = ask_github(prompt, system, max_tokens)
+        _gh = _зов_канала('github', ask_github, prompt, system, max_tokens)
         if _gh and not str(_gh).startswith("⚠️"):
             return _gh + "\n\n⚡ *Модель:* 🆓 GitHub GPT-4o-mini — бесплатно\n" + _ai_left()
     if NVIDIA_NIM_API_KEY:                       # 3.5) NVIDIA NIM (free, добавлен 05.07.2026) — до OpenRouter-цикла (тот перебирает 5 моделей подряд, дольше)
-        _nv = ask_nvidia_nim(prompt, system, max_tokens)
+        _nv = _зов_канала('nvidia', ask_nvidia_nim, prompt, system, max_tokens)
         if _nv and not str(_nv).startswith("⚠️"):
             return _nv + "\n\n⚡ *Модель:* 🆓 NVIDIA NIM — бесплатно\n" + _ai_left()
-    _cb = ask_cerebras(prompt, system, max_tokens)   # 3.6) Cerebras (free, #573)
+    _cb = _зов_канала('cerebras', ask_cerebras, prompt, system, max_tokens)   # 3.6) Cerebras (free, #573)
     if _cb and not str(_cb).startswith("⚠️"):
         return _cb + "\n\n⚡ *Модель:* 🆓 Cerebras — бесплатно\n" + _ai_left()
-    _sn = ask_sambanova(prompt, system, max_tokens)  # 3.7) SambaNova (free, #573)
+    _sn = _зов_канала('sambanova', ask_sambanova, prompt, system, max_tokens)  # 3.7) SambaNova (free, #573)
     if _sn and not str(_sn).startswith("⚠️"):
         return _sn + "\n\n⚡ *Модель:* 🆓 SambaNova — бесплатно\n" + _ai_left()
     # 🔴 03.09.2026 (№697). Здесь перебирались llama-3.3-70b, deepseek-r1, qwen3-235b и
