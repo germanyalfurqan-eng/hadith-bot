@@ -1873,7 +1873,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1588';
+const APPVER = 'v1589';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3561,8 +3561,28 @@ async function _loadAhmadРеально(){
   ahmadArr=(Array.isArray(j)?j:[]).map(x=>({num:String(x.n),text:x.t||'',grade:x.g||'',norm:''})); return ahmadArr; }   /* F3(аудит): guard — cachedFetchJSON при ошибке даёт не-массив, .map крашил экран */
 // A-136 шардинг: открыть ОДИН хадис Ахмада по номеру → грузим шард ~900КБ (ahmad/<num//1000>.json), НЕ весь 25МБ
 const _ahmOne={};
+/* 🔴 06.09.2026, v1589. Замер на живом: спросить у Ахмада №40000 стоило 67,1 секунды и
+   полный ahmad.json (25 МБ) — ради ответа «не нашлось». Кусок ahmad/40.json отвечает 404,
+   и запасной путь тянул ВЕСЬ Муснад, чтобы повторить то, что кусок сказал сразу.
+   Это самая частая запись журнала ошибок приложения — «Полная загрузка Ахмада», 79 из 276.
+
+   Лечим тем же, чем Муслима в v1588: различаем «такого номера нет» и «не смог узнать».
+   ⚠️ Но договор самой loadAhmadOne НЕ меняем: у неё пять зовущих, и вернуть им особую
+   «пустоту-признак» значило бы, что кто-то покажет служебный объект вместо хадиса. Поэтому
+   знание кладётся РЯДОМ, справкой _ахмадВнеСвода, и спрашивает её только тот, кто собрался
+   грузить весь свод.
+
+   Право куска отвечать за Муснад проверено сверкой на живом приложении: 27 086 номеров в
+   кусках и 27 086 в полном своде, расхождений ноль ни в одну сторону. */
+const _ahmНЕТ={};   // куски, которых нет вовсе: номер за пределами Муснада (наибольший 27647)
+function _ахмадВнеСвода(num){
+  const b=Math.floor((+num)/1000);
+  if(_ahmНЕТ[b]) return true;                      // куска нет вовсе — номер за пределами свода
+  const m=_ahmOne[b];
+  return !!(m && m[String(num)]==null);            // кусок пришёл, номера в нём нет
+}
 async function loadAhmadOne(num){ if(ahmadArr){ return ahmadArr.find(x=>x.num===String(num))||null; }   // если полный массив уже в памяти (поиск/читалка) — берём оттуда
-  const b=Math.floor((+num)/1000); if(!(b in _ahmOne)){ try{ _ahmOne[b]=await cachedFetchJSON('./ahmad/'+b+'.json', 60000, {silent:true}); }catch(e){ delete _ahmOne[b]; return null; } }   // провал не запоминаем: `b in _ahmOne` после null был бы true навсегда
+  const b=Math.floor((+num)/1000); if(!(b in _ahmOne)){ try{ _ahmOne[b]=await cachedFetchJSON('./ahmad/'+b+'.json', 60000, {silent:true}); }catch(e){ delete _ahmOne[b]; if(/HTTP 404/.test(String((e&&e.message)||e))) _ahmНЕТ[b]=1; return null; } }   // провал не запоминаем: `b in _ahmOne` после null был бы true навсегда. 404 — запоминаем: это не провал, а ответ
   const m=_ahmOne[b]; const r=m&&m[String(num)]; return r?{num:String(num),text:r[0]||'',grade:r[1]||'',norm:''}:null; }
 
 /* 🚀 ЧИТАЛКА МУСНАДА БЕЗ ДВАДЦАТИ ПЯТИ МЕГАБАЙТ (сессия 71, 12.08.2026)
@@ -6165,7 +6185,7 @@ async function showHadithRefs(refs, sr, shown, seq){
   for(const rf of (refs||[]).slice(0,8)){ const code=_srcToCode(rf.src); const num=String(rf.num||'').replace(/[^0-9]/g,''); if(!code||!num) continue;
     try{ let h=null, a=null; const C=COLLECTIONS.find(x=>x.code===code), X=EXTRA_MAP[code];
       if(code==='muhaymin'){ a=await loadMuhaymin(); h=a.find(x=>String(x.n)===num); }
-      else if(code==='ahmad'){ h=await loadAhmadOne(num); if(!h && phr.length){ a=await loadAhmad(); h=a.find(x=>x.num===num); } }   // быстрый шард; полный 25МБ только если номер не найден И нужен текст-фолбэк (M207)
+      else if(code==='ahmad'){ h=await loadAhmadOne(num); if(!h && phr.length && !_ахмадВнеСвода(num)){ a=await loadAhmad(); h=a.find(x=>x.num===num); } }   // быстрый шард; полный 25МБ только если номер не найден И нужен текст-фолбэк (M207)
       else if(X&&X.file){ a=await loadLocal(code,X.file); h=a.find(x=>x.num===num); }
       else if(X){ a=await loadExtra(code); h=a.find(x=>x.num===num); }
       else if(C&&C.file){ a=await loadLocal(code,C.file); h=a.find(x=>x.num===num); }
@@ -6599,7 +6619,7 @@ async function getOne(code,num){
   // он лежит рядом (loadAhmadOne, A-136) и по номеру берёт ahmad/<num//1000>.json. Полный массив
   // остаётся только запасным путём — если шард не дал ответа (пробел в шардировании).
   if(code==='ahmad'){ let x=await loadAhmadOne(num);
-    if(!x){ const a=await loadAhmad(); x=a.find(y=>String(y.num)===String(num)); }
+    if(!x && !_ахмадВнеСвода(num)){ const a=await loadAhmad(); x=a.find(y=>String(y.num)===String(num)); }   // v1589: кусок уже сказал «нет» — 25 МБ ради того же слова не тянем
     return x?{num:String(x.num),text:(x.text||'').replace(/\s+/g,' ').trim(),grade:x.grade||'',norm:''}:null; }   // #171: Ахмад — локальный (CDN ara-ahmad даёт иную нумерацию → клик не открывал)
   try{ const _X=EXTRA_MAP[code]; if(_X && (_X.file || (!_X.soon && !_X.muhaymin))){ const a=await loadByCode(code); const x=a.find(y=>String(y.num)===String(num)); if(x) return {num:String(x.num),text:(x.text||x.ar||'').replace(/\s+/g,' ').trim(),grade:x.grade||'',norm:''}; } }catch(e){_тихо(e,"L4944")}   // #171: прочие локальные первоисточники/издания (Ибн Хиббан, Насаи-Кубра, Абу Я‘ля…) — из наших editions, не с CDN
   /* 🔴 #354 (С79, 21.08.2026): «Сунан ат-Тирмизи №3717 не найден (пусто в источнике)».
