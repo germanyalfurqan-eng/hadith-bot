@@ -3442,6 +3442,22 @@ def сеть_прочитать(адрес, предел=6000):
     ок, почему = сеть_можно(адрес)
     if not ок:
         return '(не читаю: %s)' % почему
+    # 🔴 Живая проба 06.09.2026: «страница https://ru.wikipedia.org/wiki/Хадис» падала с
+    # «'ascii' codec can't encode characters». urllib шлёт адрес как есть, а в сети адрес
+    # обязан быть в процентной записи. Русские ссылки — половина того, что даёт поиск,
+    # значит без этого умение работало бы только на латинице.
+    try:
+        from urllib.parse import urlsplit as _рс, urlunsplit as _сс, quote as _цт
+        _ч = _рс(адрес)
+        _хост = _ч.netloc
+        try:
+            _хост.encode('ascii')
+        except UnicodeEncodeError:
+            _хост = _хост.encode('idna').decode('ascii')
+        адрес = _сс((_ч.scheme, _хост, _цт(_ч.path, safe='/%:@'),
+                     _цт(_ч.query, safe='=&%+:/?@'), ''))
+    except Exception:
+        pass
     зпр = urllib.request.Request(адрес, headers={'User-Agent': _СЕТЬ_БРАУЗЕР,
                                                  'Accept-Language': 'ru,en;q=0.8'})
     with urllib.request.urlopen(зпр, timeout=25) as о:
