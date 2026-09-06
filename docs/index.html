@@ -999,7 +999,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1586</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1587</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1873,7 +1873,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1586';
+const APPVER = 'v1587';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2646,9 +2646,23 @@ async function cachedFetchJSON(url, ms, opts){ ms=ms||60000; opts=opts||{};
           try{ const _д = await hit.json(); try{ _снятьКэш(); }catch(_){} return _д; }
           catch(_){ try{ _снятьКэш(); }catch(__){} try{ await cache.delete(url); }catch(__){_тихо(__,"L2145")} }
         } } }catch(e){ cache=null; }
-  const ctl=new AbortController(); const t=setTimeout(()=>{ try{ctl.abort();}catch(e){_тихо(e,"L2146")} }, ms);
+  const ctl=new AbortController(); let t2=null;
+  const t=setTimeout(()=>{ try{ctl.abort();}catch(e){_тихо(e,"L2146")} }, ms);
   try{ const r=await fetch(url,{signal:ctl.signal}); if(!r.ok) throw new Error('HTTP '+r.status);
-    try{ if(cache) await cache.put(url, r.clone()); }catch(e){_тихо(e,"L2148")}   // кладём сырой ответ; ошибки квоты глотаем (фолбэк = текущее поведение)
+    /* 🔴 06.09.2026. Журнал приложения показывал две беды, и корень у них ОДИН:
+         · «AbortError: Cache.put() was aborted» — проглочено по 3 раза за сеанс;
+         · «Загрузка книги не удалась (таймаут 90с): ibnhibban.json» — а это 11 МБ.
+       Часы обрыва заводились ПЕРЕД запросом и снимались только в самом конце, после разбора.
+       То есть один и тот же срок покрывал и дозвон, и скачивание всего тела. На большой книге
+       и слабой связи он истекал ПОСРЕДИ ЧТЕНИЯ: рвалась и запись в кэш, и сама загрузка.
+       Хуже всего, что рвался кэш: книга не сохранялась, и в следующий раз качалась заново —
+       беда сама себя воспроизводила.
+       Чиним по существу: срок на ДОЗВОН снимаем, как только пришли заголовки, и заводим
+       отдельный — на чтение тела. Стоять вечно он не даст, а честному скачиванию не помешает. */
+    clearTimeout(t); t2=setTimeout(()=>{ try{ctl.abort();}catch(e){_тихо(e,"L2147б")} }, Math.max(ms, 120000));
+    /* Кэш кладём БЕЗ ожидания: он услуга, а не часть дела. Раньше `await` ставил запись в кэш
+       на пути данных — и её обрыв задерживал ответ человеку. Ошибки по-прежнему глотаем. */
+    try{ if(cache) cache.put(url, r.clone()).catch(e=>{_тихо(e,"L2148")}); }catch(e){_тихо(e,"L2148")}
     // ПОЛОСА ЗАГРУЗКИ (заявка владельца 26.07.2026: «это универсальная вещь, должна быть везде,
     // где загрузка»). Встроена ИМЕННО СЮДА: cachedFetchJSON — единственная дверь, через которую
     // грузятся все книги, значит одна правка покрывает все случаи разом, без обхода по вызовам.
@@ -2686,7 +2700,7 @@ async function cachedFetchJSON(url, ms, opts){ ms=ms||60000; opts=opts||{};
     const reason=ab?('таймаут '+Math.round(ms/1000)+'с'):((e&&e.message)||'сбой сети');
     if(!(opts&&opts.silent)){ try{ _appReport('Загрузка книги не удалась ('+reason+'): '+String(url).split('/').pop().slice(0,50), 'fetchJSON'); }catch(_){_тихо(_,"L2170")} }
     const err=new Error('fetchJSON: '+reason); err._url=url; err._timeout=ab; throw err; }
-  finally{ clearTimeout(t); }
+  finally{ clearTimeout(t); if(t2) clearTimeout(t2); }
 }
 async function bjson(url, ms){ ms=ms||20000; const _ac=new AbortController(); const _to=setTimeout(()=>{ try{_ac.abort();}catch(e){_тихо(e,"L2174")} }, ms);
   try{ const r=await fetch(url,{signal:_ac.signal}); return await r.json().catch(()=>({})); }
@@ -3734,9 +3748,14 @@ async function loadExtra(code){ if(_local[code])return _local[code]; const e=EXT
   // запрос либо стоял в очереди за другими крупными загрузками, либо оборвался на слабой сети. Одна попытка
   // на 90 секунд для такого случая — тупик, поэтому даём ВТОРОЙ заход: короткий (30с), сразу после провала.
   // Кэш Cache Storage: удачная загрузка второй раз уже не потребуется.
+  /* 🔴 06.09.2026. Второй заход был КОРОЧЕ первого — 30 секунд после 90. Для 11 МБ Ибн
+     Хиббана это гарантированный второй провал: раз не хватило полутора минут, полминуты не
+     хватит тем более. Довод «первый запрос стоял в очереди» верен, но лечится он не
+     урезанием срока, а тем, что очередь к тому времени уже разошлась.
+     Даём второму заходу БОЛЬШЕ времени, как Ахмаду с его 25 МБ (180 с). */
   let j; try{ j=await cachedFetchJSON(EXTRA_BASE+code+'.json', 90000); }
   catch(_e1){ setStatus('Повторяю загрузку '+(e?e.short:code)+'…');
-    j=await cachedFetchJSON(EXTRA_BASE+code+'.json', 30000); }
+    j=await cachedFetchJSON(EXTRA_BASE+code+'.json', 180000); }
   // (из прежней правки A-124: крупные издания — Ибн Хиббан 11МБ, Абу Авана 22МБ; кэш Cache Storage →
   //  повторное открытие мгновенно, #301 ishaq / #326 abuyala)
   _local[code]=(Array.isArray(j)?j:[]).map(x=>{ const raw=_muslimStripApparatus((x.ar||x.t||'').replace(/\s+/g,' ').trim()); return {num:String(x.num),text:raw,grade:'',norm:''}; }); try{ _снять(); }catch(_){} return _local[code]; }   /* F3(аудит): guard массива */   // v1062: чистка аппарата (Заваид и др.) для локальных изданий
