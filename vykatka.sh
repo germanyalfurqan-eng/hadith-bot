@@ -35,11 +35,16 @@ echo "   на коммите: $NEW"
 echo "② собираю образ"
 sudo docker build -q -t "$NAME:latest" . >/dev/null 2>&1 || { echo "❌ сборка не удалась"; exit 1; }
 
+# /obmen — единственная папка, открытая контейнеру НА ЗАПИСЬ (06.09.2026): туда бот кладёт
+# отметку «человек ждёт» для фоновых работ и запомненные отказы каналов, чтобы знание
+# «этот ключ мёртв» переживало перезапуск. Остальное состояние остаётся только для чтения.
+# ⚠️ Правку монтирования делать ЗДЕСЬ, в репозитории: ниже выкатка выполняет
+# git reset --hard origin/main и стирает любые местные изменения этого файла.
 echo "③ перезапускаю"
 sudo docker stop "$NAME" >/dev/null 2>&1
 sudo docker rm "$NAME" >/dev/null 2>&1
 sudo docker run -d --name "$NAME" --restart unless-stopped -p 8080:8080 \
-  --env-file "$HOME_DIR/.env" -v "$HOME_DIR/state:/state:ro" -v "$HOME_DIR/rag:/rag:ro" "$NAME:latest" >/dev/null \
+  --env-file "$HOME_DIR/.env" -v "$HOME_DIR/state:/state:ro" -v "$HOME_DIR/rag:/rag:ro" -v "$HOME_DIR/obmen:/obmen" "$NAME:latest" >/dev/null \
   || { echo "❌ контейнер не запустился"; exit 1; }
 
 echo "④ жду и проверяю здоровье"
