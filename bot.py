@@ -11571,7 +11571,16 @@ def translate_matn(arabic, src="", owner=False, force=False, model_out=None):
             try:
                 _о = requests.post(_адрес, json={"prompt": _промпт, "n_predict": 700,
                                                  "temperature": 0.2,
-                                                 "stop": ["<end_of_turn>", "<start_of_turn>"]},
+                                                 # 🔴 06.09.2026: мозг на 8097 сменён на
+                                                 # Qwen3-4B (владелец #2860 «Поставь»).
+                                                 # Список стоп-слов был написан под Gemma, и
+                                                 # Qwen закрывает ответ своими метками — в
+                                                 # текст владельцу утекало «</end_of_turn>».
+                                                 # Держим обе семьи: модель на этом порту
+                                                 # ещё будет меняться, а список — общий.
+                                                 "stop": ["<end_of_turn>", "<start_of_turn>",
+                                                          "</end_of_turn>", "</start_of_turn>",
+                                                          "<|im_end|>", "<|im_start|>"]},
                                    timeout=600)
                 if _о.status_code != 200:
                     continue
