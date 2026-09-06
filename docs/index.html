@@ -613,6 +613,11 @@ window.тихоОтчёт = function () {
     #res .meta{gap:5px}
     #res .meta .tr-btn,#res .meta .mini{padding:5px 9px;font-size:calc(12px * var(--txtScale,1));max-width:100%}
       }
+  /* Крутящийся кружок ожидания: анимация средствами CSS, без перерисовки текста —
+     иначе выходит не анимация, а мерцание (замечание владельца 06.09.2026). */
+  .трКруг{width:16px;height:16px;border-radius:50%;border:2px solid var(--border);
+    border-top-color:var(--link);animation:трВращение .8s linear infinite}
+  @keyframes трВращение{to{transform:rotate(360deg)}}
   .tr-out{margin-top:8px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:calc(14px * var(--readScale,1));display:none}
   mark{background:var(--mark);color:#241c00;border-radius:3px;padding:0 1px}
   mark.hlx{background:#ff7a18;color:#1a0a00;font-weight:700;box-shadow:inset 0 0 0 1.5px #b34d0a;border-radius:3px;padding:0 2px}  /* точное совпадение с огласовками в режиме «Огласовки» — ярче однокоренных */
@@ -1868,7 +1873,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1583';
+const APPVER = 'v1584';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -13814,8 +13819,18 @@ function _ragРисоватьСпасение(res, спас, порог, зап�
         a.style.cssText='font-size:16px;line-height:1.95;margin-top:5px'; a.textContent=c.a; card.appendChild(a); }
       if(c.r){ const rr=document.createElement('div');
         rr.style.cssText='font-size:calc(13px * var(--txtScale,1));color:#c3cedb;margin-top:5px;line-height:1.55;'+_RF; rr.textContent=c.r; card.appendChild(rr); }
-      if(c.n){ const b=document.createElement('div');
-        b.style.cssText='margin-top:6px;font-size:calc(12.5px * var(--txtScale,1));color:#7ee08a;cursor:pointer;font-weight:600';
+      /* 🔴 06.09.2026, замечание владельца: «открыть номер… странно выглядит, кнопка не
+         такая как у всех». Он прав дважды. Здесь стоял голый <div> с зелёным текстом —
+         ни фона, ни рамки, ни отступов, тогда как ТАКАЯ ЖЕ кнопка в карточке хадиса
+         сделана как `button.mini.nbBtn` с отступом 6×12. Одно и то же действие выглядело
+         в двух местах по-разному.
+         И второе: <div> без отступов — это ещё и крошечная область для пальца, против
+         чего в этом же файле стоит правило v1504 (меньше 44 px — мимо). Кнопка и ведёт
+         себя как кнопка: её берёт клавиатура и читалка экрана, чего <div> не умеет. */
+      if(c.n){ const b=document.createElement('button');
+        b.className='mini nbBtn';
+        b.style.cssText='margin-top:6px;font-size:calc(12.5px * var(--txtScale,1));'
+          +'color:#7ee08a;cursor:pointer;font-weight:600;padding:6px 12px';
         b.textContent='📖 Открыть №'+c.n+' в читалке';
         b.onclick=()=>{ try{ hap('light'); }catch(e){_тихо(e,"L10517")} try{ openReader('bukhari', String(c.n)); }catch(e){_тихо(e,"L10517")} };
         card.appendChild(b); }
@@ -13823,6 +13838,16 @@ function _ragРисоватьСпасение(res, спас, порог, зап�
     });
   }catch(e){_тихо(e,"L10521")}
 }
+function _обрезать(текст, предел){
+  /* Обрезка по границе слова с видимым многоточием. Голый slice рвал арабское слово
+     пополам, и человек не понимал: это текст такой или приложение сломалось. */
+  const т = String(текст || '');
+  if(т.length <= предел) return т;
+  const кусок = т.slice(0, предел);
+  const пробел = кусок.lastIndexOf(' ');
+  return (пробел > предел * 0.6 ? кусок.slice(0, пробел) : кусок).trimEnd() + '…';
+}
+
 async function _ragПоОстальным(res, вопрос, head){
   /* Спросить сервер по ВСЕМ сводам и показать найденное. Ответ приходит уже отсортированным
      по близости, книга у каждого хадиса названа — человеку важно знать, откуда он. */
@@ -13864,11 +13889,17 @@ async function _ragПоОстальным(res, вопрос, head){
     // и оно всегда было арабским; с появлением перевода русский текст поехал бы в блок
     // с арабским начертанием — справа налево, чужим шрифтом. Молча и криво.
     const ар=document.createElement('div'); ар.className='ar';
-    ар.textContent=String(z['a']||z['текст']||'').slice(0,900);
+    /* 🔴 06.09.2026, замечание владельца: «арабский текст разрыв непонятный».
+       Здесь стояло `.slice(0,900)` — текст обрывался ровно на 900-м знаке, ПОСРЕДИ СЛОВА
+       и без всякой пометки. Замер по своду: 424 места из 3000 (14%) длиннее 900 знаков,
+       то есть каждый седьмой хадис в выдаче выглядел оборванным.
+       Переносов строки внутри арабского нет ни одного — проверено, дело было только в обрезке.
+       Режем по границе слова и ставим многоточие: обрыв должен быть виден как обрыв. */
+    ар.textContent=_обрезать(String(z['a']||z['текст']||''), 900);
     к.appendChild(ш); к.appendChild(ар);
     const ру=String(z['r']||'').trim();
     if(ру){ const рб=document.createElement('div'); рб.style.cssText='margin-top:6px;opacity:.92';
-            рб.textContent=ру.slice(0,900); к.appendChild(рб); }
+            рб.textContent=_обрезать(ру, 900); к.appendChild(рб); }
     res.appendChild(к);
   }
 }
@@ -14025,8 +14056,18 @@ async function ragSearch(qRaw, seq, shownQ){
         a.style.cssText='font-size:16px;line-height:1.95;margin-top:5px'; a.textContent=c.a; card.appendChild(a); }
       if(c.r){ const rr=document.createElement('div');
         rr.style.cssText='font-size:calc(13px * var(--txtScale,1));color:#c3cedb;margin-top:5px;line-height:1.55;'+_RF; rr.textContent=c.r; card.appendChild(rr); }
-      if(c.n){ const b=document.createElement('div');
-        b.style.cssText='margin-top:6px;font-size:calc(12.5px * var(--txtScale,1));color:#7ee08a;cursor:pointer;font-weight:600';
+      /* 🔴 06.09.2026, замечание владельца: «открыть номер… странно выглядит, кнопка не
+         такая как у всех». Он прав дважды. Здесь стоял голый <div> с зелёным текстом —
+         ни фона, ни рамки, ни отступов, тогда как ТАКАЯ ЖЕ кнопка в карточке хадиса
+         сделана как `button.mini.nbBtn` с отступом 6×12. Одно и то же действие выглядело
+         в двух местах по-разному.
+         И второе: <div> без отступов — это ещё и крошечная область для пальца, против
+         чего в этом же файле стоит правило v1504 (меньше 44 px — мимо). Кнопка и ведёт
+         себя как кнопка: её берёт клавиатура и читалка экрана, чего <div> не умеет. */
+      if(c.n){ const b=document.createElement('button');
+        b.className='mini nbBtn';
+        b.style.cssText='margin-top:6px;font-size:calc(12.5px * var(--txtScale,1));'
+          +'color:#7ee08a;cursor:pointer;font-weight:600;padding:6px 12px';
         b.textContent='📖 Открыть №'+c.n+' в читалке';
         b.onclick=()=>{ try{ hap('light'); }catch(e){_тихо(e,"L10615")} try{ openReader('bukhari', String(c.n)); }catch(e){_тихо(e,"L10615")} };
         card.appendChild(b); }
@@ -21805,16 +21846,25 @@ async function doTranslate(text,out,btn,ref,force){
      молчат — наша Гемма на сервере (она пишет до минуты), платное последним.
      Врать про «сейчас работает такой-то» не станем: дверь отвечает один раз в конце и
      сказать, на каком мы шаге прямо сейчас, ей нечем. Зато КТО перевёл — скажем после. */
+  /* 🔴 06.09.2026, владелец: «анимация нужна, а не тупо мерцания. Во-вторых, нормально
+     объясняй что делается, а не просто если наши и так далее».
+     Прав дважды. Мерцало оттого, что я перерисовывал ВЕСЬ блок каждую секунду — текст
+     пересобирался, и глаз ловил вспышку. Теперь блок рисуется ОДИН раз, крутится настоящая
+     анимация (поворот средствами CSS, без перерисовки), а меняется только число секунд
+     в своём отдельном месте. И объяснение написано по-человечески, а не намёками. */
   var _трТик=null, _трСек=0;
   if(out){ out.style.display='block';
-    /* Формулировки УСЛОВНЫЕ намеренно. Дверь отвечает один раз в конце, и сказать,
-       на каком шаге мы прямо сейчас, ей нечем. Писать «сейчас работает Гемма» значило бы
-       выдавать догадку за факт — а кто перевёл на самом деле, честно скажем ПОСЛЕ. */
-    const _рисуй=()=>{ const п=_трСек<4 ? 'сначала бесплатные модели'
-                       : (_трСек<20 ? 'если бесплатные молчат, дальше наша Гемма'
-                                    : 'похоже, переводит наша Гемма — это до минуты');
-      out.innerHTML='<span class="hint">⏳ Перевожу… '+_трСек+' с — '+п+'</span>'; };
-    _рисуй(); _трТик=setInterval(()=>{ _трСек++; _рисуй(); }, 1000); }
+    out.innerHTML=
+      '<div style="display:flex;gap:10px;align-items:flex-start">'
+      + '<div class="трКруг" style="flex:none;margin-top:2px"></div>'
+      + '<div style="font-size:calc(12.5px * var(--txtScale,1));line-height:1.5;color:var(--hint)">'
+      +   '<div><b>Перевожу…</b> <span id="трСек">0</span> с</div>'
+      +   '<div style="margin-top:3px">Сначала спрашиваю бесплатные ИИ — они отвечают за '
+      +   'несколько секунд. Если ни один не ответил, перевод делает наша нейронка на нашем '
+      +   'сервере: она медленнее, до минуты, зато бесплатна и всегда доступна.</div>'
+      + '</div></div>';
+    const _ч=out.querySelector('#трСек');
+    _трТик=setInterval(()=>{ _трСек++; if(_ч) _ч.textContent=_трСек; }, 1000); }
   const _трСтоп=()=>{ if(_трТик){ clearInterval(_трТик); _трТик=null; } };
   const lbl=(tag)=>'<span style="color:var(--hint);font-style:italic">'+tag+'</span> ';
   /* Секундомер гасим ЗДЕСЬ, а не на каждом выходе: у doTranslate их семь (готовый перевод,
