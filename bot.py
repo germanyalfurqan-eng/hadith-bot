@@ -20475,6 +20475,32 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         has_media = update.message.audio or update.message.voice or update.message.video or update.message.photo or update.message.document
         is_forward = update.message.forward_origin is not None
 
+        # ============ ПУСТОЕ ПИСЬМО ОТ ВЛАДЕЛЬЦА — СКАЗАТЬ, А НЕ МОЛЧАТЬ ============
+        # 🔴 06.09.2026, #2855: «Клод я тебе отправил вот смс отмечаю ответом огромное но не
+        # передает бот че делать». Он отправлял; я не получил. Поднял переписку по номерам:
+        # между двумя его сообщениями стоит пустое — ни текста, ни вложения. Так доезжает
+        # очень длинная вставка либо пересылка из чата, где запрещено копирование.
+        # Бот в этом случае МОЛЧАЛ. Молчание — худший из возможных ответов: владелец решил,
+        # что его не слышат, и написал об этом трижды, прежде чем я начал искать.
+        # Теперь пустота НАЗЫВАЕТСЯ вслух и сразу говорится, что делать.
+        try:
+            if (chat_type == "private" and not (text or '').strip()
+                    and not (getattr(update.message, 'caption', None) or '').strip()
+                    and not (update.message.audio or update.message.voice
+                             or update.message.video or update.message.photo
+                             or update.message.document or update.message.sticker
+                             or update.message.video_note or update.message.location
+                             or update.message.poll or update.message.contact)):
+                await _мсообщ(update).reply_text(
+                    "📭 Получил от вас сообщение, но прочитать не смог: в нём не оказалось "
+                    "ни текста, ни файла.\n\nТак бывает, когда текст вставлен очень длинным "
+                    "куском или переслан из чата, где запрещено копирование.\n\n"
+                    "Пришлите, пожалуйста, частями по 2–3 сообщения — или файлом, "
+                    "и следом строкой «клод, прочитай файл».")
+                return
+        except Exception:
+            pass
+
         # ============ ПРАВКА СВОИХ ПОСТОВ В КАНАЛЕ (владелец 26.07.2026) ============
         # «Обеспечь, чтобы бот умел исправлять любое своё смс, тем более в канале!!!»
         # Команда владельца: «почини анонс v1228» — бот берёт номер сообщения из журнала
@@ -30684,6 +30710,39 @@ app.add_handler(CallbackQueryHandler(on_spam, pattern=r'^spam:'))   # #178: ре
 app.add_handler(CommandHandler("start", start_cmd))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
+
+
+# ===== ПУСТОЕ ПИСЬМО ВЛАДЕЛЬЦА: СКАЗАТЬ, А НЕ ПРОМОЛЧАТЬ (06.09.2026, #2855) =====
+# «Клод я тебе отправил вот смс отмечаю ответом огромное но не передает бот че делать».
+# Он отправлял, я не получил. Поднял переписку по номерам: между двумя его сообщениями
+# стоит ПУСТОЕ — ни текста, ни вложения. Так доезжает очень длинная вставка либо пересылка
+# из чата, где запрещено копирование.
+# 🔴 Главное: два хендлера выше ловят ТОЛЬКО текст и только известные вложения. Сообщение,
+# в котором нет ни того ни другого, не попадало ни в один из них — бот его даже не видел и
+# потому МОЛЧАЛ. Владелец решил, что его не слышат, и написал об этом трижды.
+# Поэтому нужен отдельный хендлер: не «ещё одна ветка внутри handle» (туда управление не
+# доходит вовсе), а свой фильтр — всё, что осталось за бортом.
+async def handle_pustoe(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        if not update.message or not is_owner(update):
+            return
+        await update.message.reply_text(
+            "📭 Получил от вас сообщение, но прочитать не смог: в нём не оказалось "
+            "ни текста, ни файла.\n\nТак бывает, когда текст вставлен очень длинным куском "
+            "или переслан из чата, где запрещено копирование.\n\n"
+            "Пришлите, пожалуйста, частями по 2–3 сообщения — или файлом, "
+            "и следом строкой «клод, прочитай файл».")
+    except Exception:
+        pass
+
+
+app.add_handler(MessageHandler(
+    filters.ChatType.PRIVATE & ~filters.COMMAND & ~filters.TEXT
+    & ~(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO
+        | filters.Document.ALL | filters.Sticker.ALL | filters.ANIMATION
+        | filters.VIDEO_NOTE | filters.LOCATION | filters.POLL | filters.CONTACT
+        | filters.StatusUpdate.ALL),
+    handle_pustoe))
 # ===== TB-9: уведомление владельцу о ЗАКРЕПЕ в группе/канале, где сидит бот =====
 # Сервисное сообщение о закрепе НЕ ловится TEXT/media-фильтрами выше — отдельный хендлер на StatusUpdate.PINNED_MESSAGE.
 async def handle_pinned(update: Update, context: ContextTypes.DEFAULT_TYPE):
