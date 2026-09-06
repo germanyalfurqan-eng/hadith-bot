@@ -11248,6 +11248,7 @@ def _chunk_by_paras(text, maxlen=1200):
     return chunks
 
 _СЛОВАРЬ_ГЕММЫ = [None]      # читается с диска один раз за жизнь процесса
+_ПРОВЕРКА_ПИСАЛА = [0.0]     # когда проверяющий последний раз сохранял базу переводов
 
 
 def translate_matn(arabic, src="", owner=False, force=False, model_out=None):
@@ -11445,8 +11446,13 @@ def translate_matn(arabic, src="", owner=False, force=False, model_out=None):
             if лучше and (араб or '').strip() == (arabic or '').strip():
                 cache[key] = {"ar": arabic[:600], "ru": лучше, "src": (src or "")[:120],
                               "правил": судья}
+                # Запись базы — это коммит в ветку данных, её тянут все клиенты. Проверяющий
+                # работает в стороне и может исправлять часто, поэтому пишем не чаще раза в
+                # две минуты: правка уже лежит в памяти и уйдёт на диск с ближайшим сохранением.
                 try:
-                    _save_trans()
+                    if time.time() - _ПРОВЕРКА_ПИСАЛА[0] > 120:
+                        _ПРОВЕРКА_ПИСАЛА[0] = time.time()
+                        _save_trans()
                 except Exception:
                     pass
 
