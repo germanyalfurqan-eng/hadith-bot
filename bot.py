@@ -25809,6 +25809,55 @@ async def _api_serve(application=None):
             except Exception:
                 pass
 
+    async def proba_ii(r):
+        """Задать вопрос ЛЕСТНИЦЕ ИИ тем же кодом, каким её задаёт прод. Только по секрету.
+
+        🔴 06.09.2026, из моей же аварии. Чтобы замерить каналы, я написал скрипт с
+        `import bot` — и поднял ВТОРОЙ живой экземпляр бота внутри боевого контейнера:
+        внизу файла стоит `run_polling` на уровне модуля. Двадцать минут два бота дрались
+        за очередь Telegram, а замер не дал ни строчки.
+        Причина, по которой я вообще полез в импорт, проста: снаружи не было способа
+        спросить ЛЕСТНИЦУ. Перевод меряется через /translate, поиск через /rag_find, а
+        «ответь вот это вот таким порядком каналов» — никак.
+        Теперь есть. Дверь закрыта секретом бэкапа (её ответ стоит денег и лимитов) и
+        отдаёт, КТО ответил, — иначе замер снова будет мерить не тот путь.
+
+        Тело: {secret, промт, система?, порядок?, потолок?}
+              порядок: обычный | сначала_бесплатные | только_бесплатные
+        """
+        if not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        d = await _body(r)
+        if str(d.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        промт = str(d.get('промт') or d.get('prompt') or '').strip()[:6000]
+        if len(промт) < 3:
+            return _cors(web.json_response({'error': 'пустой промт'}, status=400))
+        порядок = str(d.get('порядок') or 'обычный').strip()
+        if порядок not in ('обычный', 'сначала_бесплатные', 'только_бесплатные'):
+            return _cors(web.json_response(
+                {'error': 'порядок: обычный | сначала_бесплатные | только_бесплатные'},
+                status=400))
+        система = str(d.get('система') or '').strip()[:2000] or None
+        try:
+            потолок = max(50, min(4000, int(d.get('потолок') or 600)))
+        except Exception:
+            потолок = 600
+        import time as _tп
+        _т0 = _tп.time()
+        try:
+            ответ = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: ask_ai(промт, система, True, потолок, порядок))
+        except Exception as _еп:
+            return _cors(web.json_response({'error': str(_еп)[:200]}, status=500))
+        ответ = str(ответ or '')
+        # хвост «⚡ *Модель:* …» дописывает сама лестница — из него и узнаём, кто ответил
+        _м = re.search(r'(?:⚡|🟩)\s*\*Модель:\*\s*(.+)', ответ)
+        return _cors(web.json_response({
+            'ответ': re.sub(r'(\n*(?:⚡|🟩)\s*\*Модель:\*.*)$', '', ответ, flags=re.S).strip(),
+            'модель': (_м.group(1).strip()[:80] if _м else '—'),
+            'секунд': round(_tп.time() - _т0, 1), 'порядок': порядок}))
+
     async def oc_balans(r):
         """Остаток на счёте OpenCode — по данным самого OpenCode, а не нашего журнала.
 
@@ -28880,7 +28929,7 @@ async def _api_serve(application=None):
         return ответ
 
     a = web.Application(middlewares=[_счёт_трафика], client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/vyzov', vyzov), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/proba_ii', proba_ii), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/vyzov', vyzov), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
