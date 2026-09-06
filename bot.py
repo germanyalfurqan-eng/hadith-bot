@@ -2236,6 +2236,35 @@ def _без_размышления(текст):
         # Пока функция никуда не была подключена, вреда не было; при подключении она
         # испортила бы вёрстку каждого ответа помощника. Убираем только пустоту по краям
         # и тройные пустые строки — переносы внутри ответа принадлежат ответу.
+        # 🔴 06.09.2026, #2918: «Технадзор, это че за дичь». В чат ушёл ответ, начинавшийся
+        # словами «We need to respond to the user's request: "владелец: проверь источник и
+        # нейротахкик". The user gave a hadith in Arabic…» — то есть РАЗМЫШЛЕНИЕ модели,
+        # опубликованное как ответ. Чистка выше ловила только тег <think>; эта модель тега не
+        # ставит, она пишет рассуждение простым текстом с первой строки.
+        # Режем по существу: если ответ НАЧИНАЕТСЯ с английской формулы рассуждения, ищем
+        # первый абзац с русскими или арабскими буквами — с него и начинается настоящий ответ.
+        # Не нашли такого абзаца — отдаём пустоту НАМЕРЕННО: пусть сработает заслон «ответа не
+        # вышло» и человек получит честное «сбой», а не чужую кухню на английском.
+        try:
+            _рассужд = re.compile(
+                r'(?i)^\s*(we need to|we should|we must|the user (wants|asked|gave|is|has)|'
+                r'let me|i need to|i should|i will|i\'ll |first,|okay, so|alright,|'
+                r'let\'s (start|think|see)|so the user|now, )')
+            if _рассужд.match(_т.lstrip()[:200]):
+                # Отрезаем ВЕДУЩИЕ абзацы рассуждения по одному, пока они не кончатся.
+                # ⚠️ Нельзя выбрасывать «всё английское»: рассуждение цитирует просьбу
+                # человека, а в ней и русский, и арабский — по языку эти абзацы неотличимы
+                # от ответа. Отличает их НАЧАЛО: «We need to…», «The user gave…».
+                _куски = [к for к in re.split(r'\n\s*\n', _т) if к.strip()]
+                while _куски and _рассужд.match(_куски[0].lstrip()[:200]):
+                    _куски.pop(0)
+                _т = ('\n\n'.join(_куски)).strip()
+                try:
+                    print('РАЗМЫШЛЕНИЕ БЕЗ ТЕГА поймано: «%s…»' % _нач[:60], flush=True)
+                except Exception:
+                    pass
+        except Exception:
+            pass
         _т = re.sub(r'[ \t]+', ' ', _т)
         _т = re.sub(r'\n{3,}', '\n\n', _т)
         return _т.strip()
@@ -11030,7 +11059,11 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None, порядок='о
     if len(prompt or '') + len(system or '') > 20000:
         _нв0 = _зов_канала('nvidia', ask_nvidia_nim, prompt, system, max_tokens)
         if _нв0 and not str(_нв0).startswith(chr(9888)):
-            return (_нв0 + "\n\n⚡ *Модель:* 🆓 NVIDIA NIM — бесплатно" + _прип
+            # 🔴 06.09.2026, #2918 «это че за дичь». Чистка размышления стояла ТОЛЬКО на
+            # платном канале, а в группу ушло рассуждение бесплатной модели: «We need to
+            # respond to the user's request…». Ставим её на все выходы: думают вслух
+            # бесплатные модели чаще платных, а не реже.
+            return (_без_размышления(_нв0) + "\n\n⚡ *Модель:* 🆓 NVIDIA NIM — бесплатно" + _прип
                     + "\n" + _ai_left())
     # 0.45) 🆓 GROQ ПЕРВЫМ НА КОРОТКИХ — по двум замерам 06.09.2026, а не по вкусу.
     # ① Экзамен судьи выдачи (24 случая с известным ответом): Groq 17 из 24 · 0,5 с,
@@ -11041,15 +11074,18 @@ def ask_ai(prompt, system=None, owner=False, max_tokens=None, порядок='о
     if len(prompt or '') + len(system or '') <= 20000:
         _грк = _зов_канала('groq', ask_groq, prompt, system, max_tokens)
         if _грк and not str(_грк).startswith(chr(9888)):
-            return (_грк + "\n\n⚡ *Модель:* 🆓 Groq — бесплатно" + _прип + "\n" + _ai_left())
+            return (_без_размышления(_грк) + "\n\n⚡ *Модель:* 🆓 Groq — бесплатно"
+                    + _прип + "\n" + _ai_left())
     # 0.5) 🆓 GLM (Zhipu) — бесплатный и на нашей пробе лучше платных: 13 находок против 7
     # у deepseek-v4-pro на одном и том же куске. Ключ лежал в окружении, а канала не было.
     _glm = _зов_канала('glm', ask_glm, prompt, system, max_tokens)
     if _glm and not str(_glm).startswith(chr(9888)):
-        return _glm + "\n\n⚡ *Модель:* 🆓 GLM-Flash — бесплатно" + _прип + "\n" + _ai_left()
+        return (_без_размышления(_glm) + "\n\n⚡ *Модель:* 🆓 GLM-Flash — бесплатно"
+                + _прип + "\n" + _ai_left())
     g = _зов_канала('groq', ask_groq, prompt, system, max_tokens)   # 1) Groq (free, очень быстрый)
     if g and not str(g).startswith("⚠️"):
-        return g + "\n\n⚡ *Модель:* 🆓 Groq (Llama 3.3 70B) — бесплатно" + _прип + "\n" + _ai_left()
+        return (_без_размышления(g) + "\n\n⚡ *Модель:* 🆓 Groq (Llama 3.3 70B) — бесплатно"
+                + _прип + "\n" + _ai_left())
     if GEMINI_API_KEY:                          # 2) Gemini (free)
         _ga = _зов_канала('gemini', ask_gemini, prompt, system)
         if _ga and not str(_ga).startswith("⚠️"):
