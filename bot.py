@@ -20573,7 +20573,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if s != "open" and (meta.get("why") or meta.get("r")):
                     tail += " · " + (meta.get("why") or meta.get("r"))[:45]
                 lines.append(f"{ICON.get(s, '🔴')} #{rid} ({r.get('d','')[:16]}): {quote}{tail}")
-            lines.append(f"\n📄 Полный дашборд: github.com/{GITHUB_REPO}/blob/main/requests_dashboard.html")
+            # 🔴 07.09.2026, слово владельца (#3032 «Клод не работает ссылка»). Ссылка вела
+            # на blob в хранилище и была мёртвой дважды. Во-первых, файла там нет вовсе:
+            # витрина собирается на ноутбуке и в хранилище не клалась, отсюда честный 404.
+            # Во-вторых, даже лежи он там, blob показал бы ИСХОДНИК на 700 КБ, а не витрину:
+            # хранилище такие файлы не рисует. Ведём на сайт, там она открывается страницей.
+            lines.append("\n📄 Полный дашборд: https://germanyalfurqan-eng.github.io/hadith-bot/requests_dashboard.html")
             lines.append("📒 Мастер-журнал (575 кодов M/TB/Э/R/Ф): ЗАЯВКИ.md в репо.")
             txt = "\n".join(lines)
             for i in range(0, len(txt), 3900):
