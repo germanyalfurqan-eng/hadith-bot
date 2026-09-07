@@ -24993,6 +24993,66 @@ def _отпечаток(значение):
     except Exception:
         return "u?"
 
+def _в_фоне(корутина):
+    """Пустить корутину в фоне и забрать её исключение.
+
+    Нужен там, где в фон уходит НИТКА из нескольких шагов: сперва запись, потом доклад,
+    которому нужен итог записи. Одиночные вызовы обслуживают _учесть_фоном и
+    _записать_фоном — этот для составных.
+    """
+    def _забрать(задача):
+        try:
+            if not задача.cancelled():
+                задача.exception()
+        except Exception:
+            pass
+    try:
+        задача = asyncio.ensure_future(корутина)
+        задача.add_done_callback(_забрать)
+        return задача
+    except Exception:
+        try:
+            корутина.close()
+        except Exception:
+            pass
+        return None
+
+
+def _записать_фоном(функция, *а):
+    """Любая запись в ветку data — В ФОНЕ, если ответ её результат не использует.
+
+    🔴 07.09.2026, продолжение разбора заявки #2947. Всякая такая запись идёт через
+    _data_put, а он ходит в api.github.com дважды (GET за sha, PUT-коммит) — около трёх
+    секунд. Двери отдавали ответ ТОЛЬКО после коммита, хотя ответ от него не зависел:
+    огласовки возвращали текст, а журнал поиска и статистика выборов вообще отвечают
+    «ok» — и всё равно держали человека три секунды.
+
+    ⚠️ Ставить сюда можно ТОЛЬКО запись, чей результат в ответ не попадает. Где результат
+    нужен человеку — например, feedback_add возвращает номер обращения, который ему
+    показывают, — там ожидание законно и остаётся.
+    """
+    def _забрать(задача):
+        try:
+            if not задача.cancelled():
+                задача.exception()
+        except Exception:
+            pass
+    try:
+        цикл = asyncio.get_running_loop()
+    except RuntimeError:
+        try:
+            функция(*а)
+        except Exception:
+            pass
+        return None
+    try:
+        задача = цикл.run_in_executor(None, lambda: функция(*а))
+        задача.add_done_callback(_забрать)
+        return задача
+    except Exception:
+        return None
+
+
 def _учесть_фоном(*а, **к):
     """Тот же usage_log, но В ФОНЕ: ответ человеку его больше не ждёт.
 
@@ -29292,11 +29352,13 @@ async def _api_serve(application=None):
             ex = re.sub(r'\s*⚡.*$', '', (ex or ''), flags=re.S).strip()
             if not ex:
                 return _cors(web.json_response({'explanation': '', 'error': 'no-ai'}))
-            saved = None
-            if num not in (None, ''):
-                saved = await loop.run_in_executor(None, coll_add_translation, store_src, num, text, ex)
             _учесть_фоном(user, "объяснение", True, len(text), source, str(num or ""))
-            _notify_usage_фоном(user, "объяснение", True, source, num, saved, model=_exModel)
+            async def _накопить_объяснение():   # см. разбор у перевода: коммит в data — три секунды
+                saved = None
+                if num not in (None, ''):
+                    saved = await loop.run_in_executor(None, coll_add_translation, store_src, num, text, ex)
+                await _notify_usage(user, "объяснение", True, source, num, saved, model=_exModel)
+            _в_фоне(_накопить_объяснение())
             return _cors(web.json_response({'explanation': ex, 'cached': False}))
         except Exception as e:
             return _cors(web.json_response({'explanation': '', 'error': str(e)}))
@@ -29335,12 +29397,20 @@ async def _api_serve(application=None):
             _model_used = []   # тревога 04.07.2026: узнать РЕАЛЬНУЮ модель, а не рапортовать «DeepSeek» по умолчанию
             tr = await loop.run_in_executor(None, lambda: translate_matn(text, source, True, force, _model_used))   # P0-2: source ('jarh_*'/'tafsir_*') → джарх-аварный промт в translate_matn
             tr = re.sub(r'\s*⚡.*$', '', (tr or ''), flags=re.S).strip()
-            saved = None
-            if tr and source and num not in (None, ''):
-                saved = await loop.run_in_executor(None, coll_add_translation, source, num, text, tr)
+            # 🔴 07.09.2026, вторая половина заявки #2947. Копить перевод в общую базу —
+            # это коммит в ветку data, то есть два обращения к api.github.com, около трёх
+            # секунд. Они стояли ПЕРЕД ответом: человек уже дождался перевода от ИИ, а мы
+            # держали его ещё три секунды, пока запишем перевод для СЛЕДУЮЩИХ людей.
+            # Уводим и запись, и доклад в фон одной ниткой: доклад ждёт записи (ему нужен
+            # её итог), а человек не ждёт ни того, ни другого.
             if tr:   # #348: не списывать ключ и не слать «потрачено», если перевод реально не удался (tr пустой)
                 _учесть_фоном(user, "перевод", True, len(text), source, str(num or ""))
-                _notify_usage_фоном(user, "перевод", True, source, num, saved, frag=(tr or text), model=(_model_used[-1] if _model_used else ""))
+                async def _накопить_перевод():
+                    saved = None
+                    if source and num not in (None, ''):
+                        saved = await loop.run_in_executor(None, coll_add_translation, source, num, text, tr)
+                    await _notify_usage(user, "перевод", True, source, num, saved, frag=(tr or text), model=(_model_used[-1] if _model_used else ""))
+                _в_фоне(_накопить_перевод())
             # 🔴 06.09.2026, замечание владельца: «перевод долгий, как минимум надо
             # показывать каждый шаг — допустим, если ты запускаешь гемму». Показывать было
             # НЕЧЕМ: дверь отдавала только текст, и приложение не знало, кто ответил —
@@ -29551,7 +29621,7 @@ async def _api_serve(application=None):
         _tkModel = _neuroModelTag(out)
         out = re.sub(r'\s*⚡.*$', '', out, flags=re.S).strip()
         if out and source and num not in (None, ''):
-            await loop.run_in_executor(None, tashkeel_add, source, num, out)
+            _записать_фоном(tashkeel_add, source, num, out)
         _учесть_фоном(user, "огласовки", True, len(text), source, str(num or ""))
         _notify_usage_фоном(user, "огласовки", True, source, num, None, model=_tkModel)
         return _cors(web.json_response({'text': out, 'cached': False}))
@@ -29568,7 +29638,7 @@ async def _api_serve(application=None):
         try: cnt = int(d.get('count') or 0)
         except Exception: cnt = 0
         if q:
-            await loop.run_in_executor(None, searchlog_add, q, tab, cnt)
+            _записать_фоном(searchlog_add, q, tab, cnt)
         return _cors(web.json_response({'ok': True}))
 
     # M459 Э-С2: статистика ВЫБОРОВ всех юзеров — «после такого запроса чаще выбирают то-то» (ранжирование).
@@ -29594,7 +29664,7 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'ok': False}))
         kind = (d.get('kind') or '')[:10]; q = (d.get('q') or '')[:60]; key = str(d.get('key') or '')[:40]
         if kind and q and key:
-            await loop.run_in_executor(None, _picks_add, kind, q, key)
+            _записать_фоном(_picks_add, kind, q, key)
         return _cors(web.json_response({'ok': True}))
     async def topclicks(r):
         # отдать агрегат по запросу (фронт бустит «как выбирают люди» — Э-С3)
