@@ -999,7 +999,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1596</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1597</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1873,7 +1873,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1596';
+const APPVER = 'v1597';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3519,12 +3519,35 @@ async function loadCollection(code){
 // M464 «исправь навсегда» (13.06): jsdelivr 403-ил то одно издание, то другое (ibnmaja v285→, потом тупили другие
 // по 20с таймаута) → ВСЕ издания fawazahmed0 ЗАЗЕРКАЛЕНЫ к нам (docs/editions/, R37) и грузятся СРАЗУ со своего;
 // CDN — только фолбэк на случай отсутствия зеркала.
+/* 🔴 07.09.2026, ошибки A-245 и A-255 («Загрузка книги не удалась: ibnhibban.json»,
+   «ara-darimi.min.json HTTP 404»). Разобрал — и оказалось, что КНИГИ НА МЕСТЕ, а мы
+   спрашивали их не тем именем.
+
+   У нас в editions/ лежат файлы ДВУХ пород, и имена у них разные:
+   · семь изданий fawazahmed0 — «ara-<код>.min.json», внутри {metadata, hadiths:[…]};
+   · пятнадцать наших разборов Шамилы — просто «<код>.json», внутри плоский массив
+     [{num, ar}]: darimi, ibnhibban, abuyala, ishaq, ibnabishayba, nasaikubra, abuawana,
+     adabmufrad, humaydi, ibnaljad, ibnkhuzayma, ibnmubarak, ismail, tayalisi, abdbinhumayd.
+
+   Спрашивали мы ВСЕГДА первым именем. Для пятнадцати книг это 404, дальше мёртвый
+   запасной путь на jsdelivr — и человек получал «загрузка не удалась» у книги, которая
+   лежит на сайте и отдаётся за секунду. Проверено делом: под коротким именем живы 15 из 15.
+
+   ⚠️ Формат приводим к длинному, а не наоборот: длинный ждут все, кто зовёт fetchEdition.
+   Оценок достоверности в коротком нет — там их и не было; пусто честнее выдумки. */
 async function fetchEdition(code){
   // A-034/035: большие издания (Бухари 9.4МБ, Абу Дауд 6.6МБ) рвутся на мобильной сети → 2 попытки зеркала + CDN с 45с
   const local='./editions/ara-'+code+'.min.json';
   try{ return await cachedFetchJSON(local, 120000, {silent:true}); }
-  catch(e){ try{ return await cachedFetchJSON(local, 120000, {silent:true}); }   // A-137: 60с не хватало на медленной мобиле (ibnmaja 4.7МБ, Бухари 9.2МБ) → 120с + 2 попытки; CDN-фолбэк jsdelivr мёртв (403/404), оставлен последним
-    catch(e2){ return await fetchJSON(EDITION_URL(code), 45000); } }
+  catch(e){ try{ return await cachedFetchJSON(local, 120000, {silent:true}); }   // A-137: 60с не хватало на медленной мобиле (ibnmaja 4.7МБ, Бухари 9.2МБ) → 120с + 2 попытки
+    catch(e2){
+      try{ const _наш = await cachedFetchJSON('./editions/'+code+'.json', 120000, {silent:true});
+           if(Array.isArray(_наш) && _наш.length){
+             return {metadata:{name:code, вид:'наш разбор Шамилы'},
+                     hadiths:_наш.map(x=>({hadithnumber:x.num, arabicnumber:x.num,
+                                           text:(x.ar||x.text||''), grades:[]}))}; }
+      }catch(_e3){ /* короткого тоже нет — идём в CDN, как раньше */ }
+      return await fetchJSON(EDITION_URL(code), 45000); } }
 }
 let ahmadArr=null;
 let _ahmadP=null;   /* 05.09.2026: общее обещание — иначе два вызова тянут 25 МБ дважды */
