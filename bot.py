@@ -61,7 +61,8 @@ import urllib.parse             # 09.08.2026: quote() для адреса кар
 #                                 urllib.request тянет parse за собой, — но держаться за
 #                                 побочный эффект чужого импорта нельзя: уберут строку выше,
 #                                 и мой вызов упадёт в месте, к которому не имеет отношения.
-import urllib.request           # 27.07.2026: сторож имён нашёл ЧЕТВЁРТЫЙ случай того же класса —
+import urllib.request
+import uuid           # 27.07.2026: сторож имён нашёл ЧЕТВЁРТЫЙ случай того же класса —
 from urllib.parse import parse_qsl   # в /api/qaudio зовётся urllib.request, а импортирован был
                                      # только urllib.parse. Аудио Корана упало бы с NameError.
                                      # Найдено ДО жалобы владельца — ради этого сторож и писался.
@@ -703,6 +704,24 @@ def opencode_отметить(имя):
     except Exception:
         pass
 OPENCODE_URL = "https://opencode.ai/zen/go/v1/chat/completions"
+
+# 🔴 07.09.2026. Подписка Go ОТКАЗЫВАЕТ без заголовка `x-opencode-session`: отвечает 400
+# «Request is missing x-opencode-session and cannot be routed efficiently». Бот его не слал
+# вовсе — то есть новый ключ владельца не заработал бы, сколько его ни прописывай.
+# Заголовок подобран пробой на живой подписке: `x-opencode-session-id` НЕ годится, работает
+# ровно `x-opencode-session`.
+# Значение — один опознавательный номер на запуск бота: подписке он нужен, чтобы разложить
+# запросы по сеансам, а нам достаточно, чтобы он был постоянным и своим.
+_ОПЕНКОД_СЕАНС = uuid.uuid4().hex
+
+
+def _шапка_опенкод(ключ):
+    """Заголовки для подписки OpenCode. Одна на все шесть мест вызова — чинить класс, а не
+    дописывать заголовок шесть раз руками: седьмое место через месяц окажется забытым."""
+    return {"Content-Type": "application/json",
+            "Authorization": "Bearer " + (ключ or ""),
+            "x-opencode-session": _ОПЕНКОД_СЕАНС}
+
 OPENCODE_MODEL = os.environ.get("OPENCODE_MODEL", "deepseek-v4-flash")
 # Настоящие потолки — сервер назвал их САМ в ответе на заведомый перебор:
 #   «maximum context length is 1048576 tokens» · «valid range of max_tokens is [1, 393216]»
@@ -2176,8 +2195,7 @@ def _проба_облачной(модель, таймаут=60):
     _кл, _имя_кл = opencode_ключ()
     try:
         о = requests.post(OPENCODE_URL, timeout=таймаут,
-                          headers={"Content-Type": "application/json",
-                                   "Authorization": "Bearer " + (_кл or "")},
+                          headers=_шапка_опенкод(_кл),
                           json={"model": модель, "max_tokens": 1200, "temperature": 0,
                                 "messages": [{"role": "user",
                                               "content": "Ответь одним словом: как тебя зовут?"}]})
@@ -2517,7 +2535,10 @@ def dsoc_запрос(сообщения, потолок=3000, температ�
             _адрес, _модель, _местная = OPENCODE_URL, OPENCODE_MODEL, False
         # Заслон перед местными моделями пускает только со знанием общего секрета: голая
         # модель, открытая наружу, — это чужие люди на видеокарте владельца за его счёт.
-        _заг = {"Content-Type": "application/json", "Authorization": "Bearer " + _кл}
+        # 07.09.2026: у подписки OpenCode свой обязательный заголовок сеанса, а у
+        # местной модели его нет и быть не должно — она про него ничего не знает.
+        _заг = ({"Content-Type": "application/json", "Authorization": "Bearer " + _кл}
+                if _местная else _шапка_опенкод(_кл))
         if _местная and BACKUP_SECRET:
             _заг["X-Secret"] = BACKUP_SECRET.strip()
         о = requests.post(_адрес, timeout=180, headers=_заг,
@@ -2542,8 +2563,7 @@ def dsoc_запрос(сообщения, потолок=3000, температ�
                 _кл2, _имя_кл2 = opencode_ключ()
                 opencode_отметить(_имя_кл2)
                 о = requests.post(OPENCODE_URL, timeout=180,
-                                  headers={"Content-Type": "application/json",
-                                           "Authorization": "Bearer " + _кл2},
+                                  headers=_шапка_опенкод(_кл2),
                                   json={"model": _облачная_сейчас(), "messages": сообщения,
                                         "max_tokens": потолок, "temperature": температура})
             if о.status_code != 200:
@@ -2592,8 +2612,7 @@ def dsoc_запрос(сообщения, потолок=3000, температ�
         _съела_чистка = _пусто and bool(str(_м.get("content") or '').strip())
         if (_пусто and (_м.get("reasoning_content") or '').strip()) or _оборван or _съела_чистка:
             о2 = requests.post(OPENCODE_URL, timeout=240,
-                               headers={"Content-Type": "application/json",
-                                        "Authorization": "Bearer " + _кл},
+                               headers=_шапка_опенкод(_кл),
                                json={"model": _облачная_сейчас(), "messages": сообщения,
                                      "max_tokens": min(int(потолок) * 3, 16000),
                                      "temperature": 0.4})
@@ -10920,8 +10939,7 @@ def ask_opencode(prompt, system, max_tokens=None, только_облако=Fals
             return None          # оба кошелька спят после отказа — не тратим время
         opencode_отметить(_имя_кл)
         о = requests.post(OPENCODE_URL, timeout=120,
-                          headers={"Content-Type": "application/json",
-                                   "Authorization": "Bearer " + _кл},
+                          headers=_шапка_опенкод(_кл),
                           json={"model": _облачная_сейчас(),
                                 "messages": [{"role": "system", "content": system},
                                              {"role": "user", "content": prompt}],
@@ -10956,8 +10974,7 @@ def ask_opencode(prompt, system, max_tokens=None, только_облако=Fals
         if (_вб.get("finish_reason") or "") == "length":
             try:
                 о2 = requests.post(OPENCODE_URL, timeout=180,
-                                   headers={"Content-Type": "application/json",
-                                            "Authorization": "Bearer " + _кл},
+                                   headers=_шапка_опенкод(_кл),
                                    json={"model": _облачная_сейчас(),
                                          "messages": [{"role": "system", "content": system},
                                                       {"role": "user", "content": prompt}],
@@ -17947,8 +17964,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 def _качать_поток(_к=_кл, _т=тело, _о=_оч_кусков, _ц=_цикл_с):
                     try:
                         _отв = requests.post(OPENCODE_URL, json=_т, stream=True, timeout=600,
-                                             headers={"Content-Type": "application/json",
-                                                      "Authorization": "Bearer " + _к})
+                                             headers=_шапка_опенкод(_к))
                         for _стр in _отв.iter_lines(decode_unicode=False):
                             _ц.call_soon_threadsafe(_о.put_nowait, _стр)
                     except Exception as _е:
