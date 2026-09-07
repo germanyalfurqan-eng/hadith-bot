@@ -25887,6 +25887,36 @@ async def _api_serve(application=None):
                 await app.bot.send_message(LOG_CHAT_ID, f"#ии {ftag} {feat}: {who_plain}{loc_plain} — {tag}{extra}{_qs}{_fr}")
             except Exception:
                 pass
+    def _notify_usage_фоном(*а, **к):
+        """То же уведомление, но В ФОНЕ: ответ человеку его больше не ждёт.
+
+        🔴 07.09.2026, заявка владельца #2947 «перевод долго грузился». Замер живым
+        браузером: ответ «из нашей базы» — то есть готовый, уже лежащий у нас, — приходил
+        за 3,0–3,3 с. Считать там нечего; дверь ждала, пока уйдут ДВА сообщения в Telegram
+        (расход + журнал), и только потом отдавала перевод. Человек ждал не перевода,
+        а чужой переписки. Так делали все пятнадцать дверей ИИ, не только перевод.
+
+        Почему это безопасно: _notify_usage сам глотает свои ошибки и ничего не возвращает —
+        ответ от него не зависел никогда. Значит ему место в фоне, а не на пути ответа.
+
+        ⚠️ Не возвращать сюда await «чтобы наверняка доставилось»: доставка уведомления
+        не стоит секунд ожидания человека. Если уведомления начнут теряться — чинить
+        доставку, а не возвращать ожидание.
+        """
+        def _забрать(задача):
+            # забрать исключение, иначе питон ругается «exception was never retrieved»
+            try:
+                if not задача.cancelled():
+                    задача.exception()
+            except Exception:
+                pass
+        try:
+            задача = asyncio.ensure_future(_notify_usage(*а, **к))
+            задача.add_done_callback(_забрать)
+            return задача
+        except Exception:
+            return None
+
     async def _notify(text):
         if app:
             try:
@@ -27891,7 +27921,7 @@ async def _api_serve(application=None):
             akey = 'assist|' + q.lower()
             cached = await loop.run_in_executor(None, neuro_get, akey)
             if cached and isinstance(cached, dict) and cached.get('answer'):
-                await _notify_usage(user, "помощник", False, "", "", None, q=q)
+                _notify_usage_фоном(user, "помощник", False, "", "", None, q=q)
                 out = dict(cached)
                 out['cached'] = True
                 return _cors(web.json_response(out))
@@ -27913,7 +27943,7 @@ async def _api_serve(application=None):
             if ans and ans[0] not in '⚠❌⏸':
                 await loop.run_in_executor(None, neuro_put, akey, out)
             await loop.run_in_executor(None, usage_log, user, "помощник", True, len(q), "", "")
-            await _notify_usage(user, "помощник", True, "", "", None, q=q, model=_asModel)   # #421-класс: раньше ВСЕГДА логировался как fresh=False — трата ИИ была невидима в учёте
+            _notify_usage_фоном(user, "помощник", True, "", "", None, q=q, model=_asModel)   # #421-класс: раньше ВСЕГДА логировался как fresh=False — трата ИИ была невидима в учёте
             return _cors(web.json_response(out))
         except Exception as e:
             return _cors(web.json_response({'answer': '', 'error': str(e)[:120]}))
@@ -27958,7 +27988,7 @@ async def _api_serve(application=None):
                 if isinstance(cached, list):   # старый формат (только фразы)
                     cached = {'phrases': cached, 'quran': [], 'note': '', 'fixed': ''}
                 await loop.run_in_executor(None, usage_log, user, "нейро", False, len(meaning), "", "")
-                await _notify_usage(user, "нейро", False, "", "", None, q=meaning, frag=_neuroResultFrag(cached))   # #502: в журнале теперь виден и РЕЗУЛЬТАТ, не только запрос
+                _notify_usage_фоном(user, "нейро", False, "", "", None, q=meaning, frag=_neuroResultFrag(cached))   # #502: в журнале теперь виден и РЕЗУЛЬТАТ, не только запрос
                 out = dict(cached); out['cached'] = True
                 return _cors(web.json_response(out))
             # 2) УМНЫЙ ИИ-поиск: понять смысл (исправить опечатки), дать НОМЕР аята и/или характерную арабскую фразу
@@ -28008,7 +28038,7 @@ async def _api_serve(application=None):
                 try: saved = {"new": True, "total": await loop.run_in_executor(None, neuro_put, nkey, result)}
                 except Exception: saved = None
             await loop.run_in_executor(None, usage_log, user, "нейро", True, len(meaning), "", "")
-            await _notify_usage(user, "нейро", True, "", "", saved, q=meaning, model=_neuroModelTag(txt), frag=_neuroResultFrag(result))   # #502: в журнале теперь виден и РЕЗУЛЬТАТ, не только запрос
+            _notify_usage_фоном(user, "нейро", True, "", "", saved, q=meaning, model=_neuroModelTag(txt), frag=_neuroResultFrag(result))   # #502: в журнале теперь виден и РЕЗУЛЬТАТ, не только запрос
             out = dict(result); out['cached'] = False
             return _cors(web.json_response(out))
         except Exception as e:
@@ -28070,7 +28100,7 @@ async def _api_serve(application=None):
                     saved = {"new": True, "total": _tot, "what": f"книга «{q[:30]}» → {_ttl}"}
                 except Exception: saved = None
             await loop.run_in_executor(None, usage_log, user, "поиск книги", True, len(q), "", "")
-            await _notify_usage(user, "поиск книги", True, "", "", saved, model=_neuroModelTag(txt))
+            _notify_usage_фоном(user, "поиск книги", True, "", "", saved, model=_neuroModelTag(txt))
             out = dict(result); out['cached'] = False
             return _cors(web.json_response(out))
         except Exception as e:
@@ -28173,7 +28203,7 @@ async def _api_serve(application=None):
                 try: saved = {"new": True, "total": await loop.run_in_executor(None, binfo_put, key, result)}
                 except Exception: saved = None
             await loop.run_in_executor(None, usage_log, user, "описание книги", True, len(title), "", "")
-            await _notify_usage(user, "описание книги", True, "", "", saved, model=_neuroModelTag(txt))
+            _notify_usage_фоном(user, "описание книги", True, "", "", saved, model=_neuroModelTag(txt))
             out = dict(result); out['cached'] = False
             return _cors(web.json_response(out))
         except Exception as e:
@@ -28292,7 +28322,7 @@ async def _api_serve(application=None):
                     saved = {"new": True, "total": len(cache)}
                 except Exception: pass
             await loop.run_in_executor(None, usage_log, user, "разбор передатчика", True, len(name), "", "")
-            await _notify_usage(user, "разбор передатчика", True, "", "", saved, model=_neuroModelTag(txt))
+            _notify_usage_фоном(user, "разбор передатчика", True, "", "", saved, model=_neuroModelTag(txt))
             out = dict(result); out['cached'] = False
             return _cors(web.json_response(out))
         except Exception as e:
@@ -28583,7 +28613,7 @@ async def _api_serve(application=None):
                 try: saved = {"new": True, "total": await loop.run_in_executor(None, binfo_put, key, result)}
                 except Exception: saved = None
             await loop.run_in_executor(None, usage_log, user, "биография автора", True, len(author), "", "")
-            await _notify_usage(user, "биография автора", True, "", "", saved, model=_neuroModelTag(txt))
+            _notify_usage_фоном(user, "биография автора", True, "", "", saved, model=_neuroModelTag(txt))
             out = dict(result); out['cached'] = False
             return _cors(web.json_response(out))
         except Exception as e:
@@ -29177,7 +29207,7 @@ async def _api_serve(application=None):
             _rgModel = _neuroModelTag(txt)
             answer = re.sub(r'\s*[⚡💎].*$', '', txt, flags=re.S).strip()
             await loop.run_in_executor(None, usage_log, user, "RAG по книге", True, len(question), "", "")
-            await _notify_usage(user, "RAG по книге", True, "", "", None, q=question, model=_rgModel)
+            _notify_usage_фоном(user, "RAG по книге", True, "", "", None, q=question, model=_rgModel)
             return _cors(web.json_response({'answer': answer}))
         except Exception as e:
             return _cors(web.json_response({'answer': '', 'error': str(e)}))
@@ -29204,7 +29234,7 @@ async def _api_serve(application=None):
                 stored = await loop.run_in_executor(None, lambda: (_coll_load(store_src) or {}).get(str(num)))
                 if stored and stored.get('ru'):
                     await loop.run_in_executor(None, usage_log, user, "объяснение", False, len(text), source, str(num or ""))
-                    await _notify_usage(user, "объяснение", False, source, num, None)
+                    _notify_usage_фоном(user, "объяснение", False, source, num, None)
                     return _cors(web.json_response({'explanation': stored['ru'], 'cached': True}))
             ref = ("Коран " + str(num)) if kind == 'quran' else ((source.capitalize() if source != 'x' else "хадис") + (" №" + str(num) if num not in (None, '') else ""))
             sysm = ("Ты — знающий и осторожный исламский учитель. Объясни СУПЕР-ЛАКОНИЧНО и ясно смысл этого "
@@ -29221,7 +29251,7 @@ async def _api_serve(application=None):
             if num not in (None, ''):
                 saved = await loop.run_in_executor(None, coll_add_translation, store_src, num, text, ex)
             await loop.run_in_executor(None, usage_log, user, "объяснение", True, len(text), source, str(num or ""))
-            await _notify_usage(user, "объяснение", True, source, num, saved, model=_exModel)
+            _notify_usage_фоном(user, "объяснение", True, source, num, saved, model=_exModel)
             return _cors(web.json_response({'explanation': ex, 'cached': False}))
         except Exception as e:
             return _cors(web.json_response({'explanation': '', 'error': str(e)}))
@@ -29253,7 +29283,7 @@ async def _api_serve(application=None):
                 stored = None   # перевод не от этого текста — считаем промахом кэша, переведём заново
             if stored and stored.get('ru') and not _is_mostly_arabic(stored['ru']):   # битый арабский кэш игнорируем → переведём заново через DeepSeek
                 await loop.run_in_executor(None, usage_log, user, "перевод", False, len(text), source, str(num or ""))
-                await _notify_usage(user, "перевод", False, source, num, None, frag=(stored.get('ru') or text))   # ♻️ из базы, ключ НЕ потрачен
+                _notify_usage_фоном(user, "перевод", False, source, num, None, frag=(stored.get('ru') or text))   # ♻️ из базы, ключ НЕ потрачен
                 return _cors(web.json_response({'translation': stored['ru'], 'cached': True,
                                                 'модель': 'из нашей базы'}))
             # 2) нет в базе (или force) → переводим заново и копим (перезаписываем оборванный)
@@ -29265,7 +29295,7 @@ async def _api_serve(application=None):
                 saved = await loop.run_in_executor(None, coll_add_translation, source, num, text, tr)
             if tr:   # #348: не списывать ключ и не слать «потрачено», если перевод реально не удался (tr пустой)
                 await loop.run_in_executor(None, usage_log, user, "перевод", True, len(text), source, str(num or ""))
-                await _notify_usage(user, "перевод", True, source, num, saved, frag=(tr or text), model=(_model_used[-1] if _model_used else ""))
+                _notify_usage_фоном(user, "перевод", True, source, num, saved, frag=(tr or text), model=(_model_used[-1] if _model_used else ""))
             # 🔴 06.09.2026, замечание владельца: «перевод долгий, как минимум надо
             # показывать каждый шаг — допустим, если ты запускаешь гемму». Показывать было
             # НЕЧЕМ: дверь отдавала только текст, и приложение не знало, кто ответил —
@@ -29468,7 +29498,7 @@ async def _api_serve(application=None):
             cached = await loop.run_in_executor(None, lambda: (_tk_load(source) or {}).get(str(num)))
         if cached:
             await loop.run_in_executor(None, usage_log, user, "огласовки", False, len(text), source, str(num or ""))
-            await _notify_usage(user, "огласовки", False, source, num, None)
+            _notify_usage_фоном(user, "огласовки", False, source, num, None)
             return _cors(web.json_response({'text': cached, 'cached': True}))
         sysm = ("Ты расставляешь огласовки (تشكيل) в арабском тексте. "
                 "Верни ТОТ ЖЕ текст с полной огласовкой. Без перевода, без пояснений, без кавычек — только огласованный текст.")
@@ -29478,7 +29508,7 @@ async def _api_serve(application=None):
         if out and source and num not in (None, ''):
             await loop.run_in_executor(None, tashkeel_add, source, num, out)
         await loop.run_in_executor(None, usage_log, user, "огласовки", True, len(text), source, str(num or ""))
-        await _notify_usage(user, "огласовки", True, source, num, None, model=_tkModel)
+        _notify_usage_фоном(user, "огласовки", True, source, num, None, model=_tkModel)
         return _cors(web.json_response({'text': out, 'cached': False}))
 
     async def searchlog(r):
