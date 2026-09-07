@@ -1873,7 +1873,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1591';
+const APPVER = 'v1592';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2606,7 +2606,7 @@ async function fetchJSON(url, ms, opts){ ms=ms||20000;
   try{ const r=await fetch(url,{signal:ctl.signal}); if(!r.ok) throw new Error('HTTP '+r.status); return await r.json(); }
   catch(e){ const ab=(e&&e.name==='AbortError');
     const reason=ab?('таймаут '+Math.round(ms/1000)+'с'):((e&&e.message)||'сбой сети');
-    if(!(opts&&opts.silent)){ try{ _appReport('Загрузка книги не удалась ('+reason+'): '+String(url).split('/').pop().slice(0,50), 'fetchJSON'); }catch(_){_тихо(_,"L2129")} }   // M350: silent — когда выше есть штатный фолбэк
+    if(!(opts&&(opts.silent||opts.без_доклада))){ try{ _appReport('Загрузка книги не удалась ('+reason+'): '+String(url).split('/').pop().slice(0,50), 'fetchJSON'); }catch(_){_тихо(_,"L2129")} }   // M350: silent — когда выше есть штатный фолбэк
     const err=new Error('fetchJSON: '+reason); err._url=url; err._timeout=ab; throw err; }
   finally{ clearTimeout(t); }
 }
@@ -2701,7 +2701,7 @@ async function cachedFetchJSON(url, ms, opts){ ms=ms||60000; opts=opts||{};
     return await r.json(); }
   catch(e){ const ab=(e&&e.name==='AbortError');
     const reason=ab?('таймаут '+Math.round(ms/1000)+'с'):((e&&e.message)||'сбой сети');
-    if(!(opts&&opts.silent)){ try{ _appReport('Загрузка книги не удалась ('+reason+'): '+String(url).split('/').pop().slice(0,50), 'fetchJSON'); }catch(_){_тихо(_,"L2170")} }
+    if(!(opts&&(opts.silent||opts.без_доклада))){ try{ _appReport('Загрузка книги не удалась ('+reason+'): '+String(url).split('/').pop().slice(0,50), 'fetchJSON'); }catch(_){_тихо(_,"L2170")} }
     const err=new Error('fetchJSON: '+reason); err._url=url; err._timeout=ab; throw err; }
   finally{ clearTimeout(t); if(t2) clearTimeout(t2); }
 }
@@ -3560,7 +3560,7 @@ async function _loadAhmadРеально(){
          _appReport('Полная загрузка Ахмада 25 МБ (штатно: поиск по тексту). Позвали: '+_кто, 'ahmad-full'); }catch(_){_тихо(_,"L2811")}
   }
   setStatus('Загружаю Муснад Ахмада (большой)…');
-  let j; try{ j=await cachedFetchJSON(AHMAD_URL, 180000); }catch(_e){ j=await cachedFetchJSON(AHMAD_URL, 180000); }   // A-136: 25МБ — самый большой; кэш Cache Storage (повтор мгновенно) + таймаут 180с + 2 попытки (90с не хватало на медленной мобиле)
+  let j; try{ j=await cachedFetchJSON(AHMAD_URL, 180000, {без_доклада:true}); }catch(_e){ j=await cachedFetchJSON(AHMAD_URL, 180000); }   /* 07.09: докладывает только ПОСЛЕДНЯЯ попытка — см. A-254 */   // A-136: 25МБ — самый большой; кэш Cache Storage (повтор мгновенно) + таймаут 180с + 2 попытки (90с не хватало на медленной мобиле)
   ahmadArr=(Array.isArray(j)?j:[]).map(x=>({num:String(x.n),text:x.t||'',grade:x.g||'',norm:''})); return ahmadArr; }   /* F3(аудит): guard — cachedFetchJSON при ошибке даёт не-массив, .map крашил экран */
 // A-136 шардинг: открыть ОДИН хадис Ахмада по номеру → грузим шард ~900КБ (ahmad/<num//1000>.json), НЕ весь 25МБ
 const _ahmOne={};
@@ -3761,7 +3761,7 @@ async function loadMuslimOne(num){ if(cache['muslim']){ return cache['muslim'].f
   const m=_musOne[b]; const r=m&&m[String(num)]; return r?{num:String(num),text:_muslimStripApparatus(r[0]||''),grade:'',fw:r[1]||null,norm:''}:null; }
 const _local={};
 async function loadLocal(code,file){ if(_local[code])return _local[code]; const _снять=_статусСвой('Загружаю '+nameOf(code)+'…');   /* 19.08.2026 #711/#631: кто зажёг, тот и тушит */
-  let j; try{ j=await cachedFetchJSON('./'+file, 180000); }catch(_e){ j=await cachedFetchJSON('./'+file, 180000); }   // A-124/A-137: крупные книги (muslim_baqi 8.4МБ, Абу Авана 22МБ, Насаи-Кубра/Абу Яʿля 12-13МБ); кэш Cache Storage + таймаут 180с + 2 попытки (60-90с не хватало на медленной мобиле)
+  let j; try{ j=await cachedFetchJSON('./'+file, 180000, {без_доклада:true}); }catch(_e){ j=await cachedFetchJSON('./'+file, 180000); }   /* 07.09: докладывает только ПОСЛЕДНЯЯ попытка — см. A-254 */   // A-124/A-137: крупные книги (muslim_baqi 8.4МБ, Абу Авана 22МБ, Насаи-Кубра/Абу Яʿля 12-13МБ); кэш Cache Storage + таймаут 180с + 2 попытки (60-90с не хватало на медленной мобиле)
   _local[code]=(Array.isArray(j)?j:[]).map(x=>{ const raw=_muslimStripApparatus((x.ar||x.t||'').replace(/\s+/g,' ').trim()); return {num:String(x.num),text:raw,grade:'',norm:''}; }); try{ _снять(); }catch(_){} return _local[code]; }   /* F3(аудит): guard массива */   // v1062: чистка аппарата (Заваид и др.) для локальных изданий
 async function loadExtra(code){ if(_local[code])return _local[code]; const e=EXTRA_MAP[code]; const _снять=_статусСвой('Загружаю '+(e?e.short:nameOf(code))+'…');   /* 19.08.2026 #711: кто зажёг, тот и тушит */   // #711: не узнали книгу в EXTRA_MAP — спросим общий справочник, а не покажем код
   if(e&&e.cdn){ const j=await fetchEdition(code);
@@ -3776,7 +3776,7 @@ async function loadExtra(code){ if(_local[code])return _local[code]; const e=EXT
      хватит тем более. Довод «первый запрос стоял в очереди» верен, но лечится он не
      урезанием срока, а тем, что очередь к тому времени уже разошлась.
      Даём второму заходу БОЛЬШЕ времени, как Ахмаду с его 25 МБ (180 с). */
-  let j; try{ j=await cachedFetchJSON(EXTRA_BASE+code+'.json', 90000); }
+  let j; try{ j=await cachedFetchJSON(EXTRA_BASE+code+'.json', 90000, {без_доклада:true}); }
   catch(_e1){ setStatus('Повторяю загрузку '+(e?e.short:code)+'…');
     j=await cachedFetchJSON(EXTRA_BASE+code+'.json', 180000); }
   // (из прежней правки A-124: крупные издания — Ибн Хиббан 11МБ, Абу Авана 22МБ; кэш Cache Storage →
@@ -3795,7 +3795,7 @@ function _статусСвой(t){ try{ setStatus(t); }catch(_){}
 async function loadQuran(){ if(quran)return quran;
   let _снятьКоран=function(){};
   try{ if(!(typeof modes!=='undefined'&&(modes.narr||modes.chain))) _снятьКоран=_статусСвой('Загружаю Коран…'); }catch(e){_тихо(e,"L2845")}   // в режимах равиев фоновая загрузка молчит («зачем при поиске передатчика грузить Коран»)
-  let j; try{ j=await cachedFetchJSON(QURAN_URL, 60000); }catch(e){ try{ j=await cachedFetchJSON(QURAN_URL, 60000); }catch(e2){ try{ setStatus('Не удалось загрузить Коран — проверь сеть'); }catch(_){_тихо(_,"L2846")} throw e2; } }   // A-135: Cache Storage (повтор мгновенно) + 60с + 2 попытки (1.5МБ рвался за 30с на медленной мобиле)
+  let j; try{ j=await cachedFetchJSON(QURAN_URL, 60000, {без_доклада:true}); }catch(e){ try{ j=await cachedFetchJSON(QURAN_URL, 60000, {без_доклада:true}); }catch(e2){ try{ setStatus('Не удалось загрузить Коран — проверь сеть'); }catch(_){_тихо(_,"L2846")} throw e2; } }   // A-135: Cache Storage (повтор мгновенно) + 60с + 2 попытки (1.5МБ рвался за 30с на медленной мобиле)
   const _qRaws=j.map(v=>(v.text||'').replace(/﻿/g,'').replace(/\s+/g,' ').trim());
   // владелец (03.07.2026, срочно): «бисмилля не часть аятов!!!» — в исходнике (Tanzil Uthmani) басмаля вклеена
   // в текст 1-го аята КАЖДОЙ суры (кроме ат-Тауба №9, где её нет) — расходится со «готовым переводом» (Кулиев её
