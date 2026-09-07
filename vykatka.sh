@@ -43,7 +43,16 @@ sudo docker build -q -t "$NAME:latest" . >/dev/null 2>&1 || { echo "❌ сбор
 echo "③ перезапускаю"
 sudo docker stop "$NAME" >/dev/null 2>&1
 sudo docker rm "$NAME" >/dev/null 2>&1
+# 🔴 07.09.2026, закон З-108 (слово владельца: «время всегда основа мск»).
+# Контейнер жил по UTC, и 34 места в bot.py писали в журналы время СЕРВЕРА — на три часа
+# назад. Свежая запись выглядела трёхчасовой давности, и на этом терялось время.
+# Правим ПОЯС, а не 34 места в коде: одна строка вместо тридцати четырёх и без риска
+# задеть пять мест, где время вычитают, а не показывают. _now_msk() считает от utcnow()
+# явно и дважды не сдвинется — проверено.
+# ⚠️ И правим ЗДЕСЬ, в репозитории: выкатка делает git reset --hard origin/main, поэтому
+# та же правка на сервере живёт ровно до следующей выкатки. Один раз я так и попался.
 sudo docker run -d --name "$NAME" --restart unless-stopped -p 8080:8080 \
+  -e TZ=Europe/Moscow \
   --env-file "$HOME_DIR/.env" -v "$HOME_DIR/state:/state:ro" -v "$HOME_DIR/rag:/rag:ro" -v "$HOME_DIR/obmen:/obmen" "$NAME:latest" >/dev/null \
   || { echo "❌ контейнер не запустился"; exit 1; }
 
