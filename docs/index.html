@@ -999,7 +999,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1614</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1615</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1873,7 +1873,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1614';
+const APPVER = 'v1615';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3519,7 +3519,7 @@ function _muslimStripApparatus(t){ if(!t) return t;
 // ЗДЕСЬ НЕ ХВАТАЛО СТОРОЖА «ЗАПРОС В ПОЛЁТЕ». Кэш ставился по ГОТОВОМУ результату, и два
 // вызова, начавшиеся одновременно, оба проходили мимо `if(cache[code])` и грузили сборник
 // дважды. У loadBooksMap такой сторож есть (_booksMapP), здесь его не было.
-// ЗАМЕРЕНО на боевом v1614, первый поиск за сеанс по запросу «الصبر»: muslim_clean.json
+// ЗАМЕРЕНО на боевом v1615, первый поиск за сеанс по запросу «الصبر»: muslim_clean.json
 // приезжал ДВАЖДЫ — 1348 КБ и 1347 КБ, 1,32 МБ впустую. Остальные сборники это не задело
 // только потому, что идут через cachedFetchJSON (Cache Storage), а muslim_clean — через
 // обычный fetchJSON.
@@ -16907,9 +16907,15 @@ function loadNarrWikiImg(){ if(_narrWikiImg) return Promise.resolve(_narrWikiImg
   return fetch('./narr_wiki_img.json?v='+APPVER).then(r=>r.ok?r.json():{}).then(j=>{_narrWikiImg=j||{};return _narrWikiImg;}).catch(()=>{_narrWikiImg={};return _narrWikiImg;}); }
 // С41: курированные имена известнейших сподвижников/таби'инов (id→{ar,ru,ruf}). ПРИОРИТЕТНЫЙ источник шапки/≈/полного —
 // чинит стену «وقيل» (Абу Хурайра→«Вкил»), огласовку-генитив («Аби Харира») и ложную шухру из родословной. Ключи выверены через _narrLookup.
-let _narrCur=null;
+let _narrCur=null,_narrCurP=null;
+// 🔴 08.09.2026 (смена 90). Не хватало сторожа «запрос уже в полёте»: между проверкой
+// `if(_narrCur)` и присвоением проходили ДРУГИЕ вызовы, и файл ехал заново. Замерено на
+// боевом v1615, один поиск: narr_curated.json приезжал ДЕВЯТЬ раз (46 КБ вместо 5).
+// Держим ОБЕЩАНИЕ, а не только результат — как в loadBooksMap.
 function loadNarrCurated(){ if(_narrCur) return Promise.resolve(_narrCur);
-  return fetch('./narr_curated.json?v='+APPVER).then(r=>r.ok?r.json():{}).then(j=>{_narrCur=j||{};return _narrCur;}).catch(()=>{_narrCur={};return _narrCur;}); }
+  if(_narrCurP) return _narrCurP;
+  _narrCurP=fetch('./narr_curated.json?v='+APPVER).then(r=>r.ok?r.json():{}).then(j=>{_narrCur=j||{};return _narrCur;}).catch(()=>{_narrCur={};return _narrCur;});
+  return _narrCurP; }
 function _narrRow(c){   // строка-кандидат: ПРИВЫЧНОЕ имя (M385) + полное + рус + мета (وفاة/ранг)
   const r=document.createElement('div');
   r.style.cssText='padding:8px 11px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center';
@@ -21537,7 +21543,17 @@ const ISNAD_SLUG={bukhari:'sahih-al-buhari',muslim:'sahih-muslim',abudawud:'suna
 let _isnadCh=undefined;
 // тройная нумерация Муслима: основа = №хадиса (Абд аль-Баки, как в h.num), доп. = сквозной + внутри-раздела
 let _mNums=undefined;
-async function _muslimNums(num){ if(_mNums===undefined){ try{ const r=await fetch('./isnad/muslim_nums.json?v='+APPVER); _mNums=r.ok?await r.json():{}; }catch(e){ _mNums={}; } } return _mNums[String(num)]||null; }
+// 🔴 08.09.2026 (смена 90). Та же дыра, что в loadNarrCurated, и цена выше: между
+// `if(_mNums===undefined)` и присвоением успевали пройти другие вызовы. Замерено на боевом
+// v1615, один поиск: isnad/muslim_nums.json приезжал ДЕСЯТЬ раз — 181 КБ вместо 18.
+let _mNumsP=null;
+async function _muslimNums(num){
+  if(_mNums===undefined){
+    if(!_mNumsP) _mNumsP=fetch('./isnad/muslim_nums.json?v='+APPVER)
+                   .then(r=>r.ok?r.json():{}).catch(()=>({}));
+    _mNums=await _mNumsP;
+  }
+  return _mNums[String(num)]||null; }
 async function _isnadUrl(source,num){ const slug=ISNAD_SLUG[source]; if(!slug) return null; num=parseInt(num); if(!num) return null;
   if(_isnadCh===undefined){ try{ const r=await fetch('./isnad/chapters.json?v='+APPVER); _isnadCh=r.ok?await r.json():{}; }catch(e){ _isnadCh={}; } }
   const chs=(_isnadCh[source]||[]); let best=null;
