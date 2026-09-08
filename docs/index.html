@@ -999,7 +999,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1602</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1603</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1873,7 +1873,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1602';
+const APPVER = 'v1603';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2596,7 +2596,15 @@ let _appReport=function(){};
     fetch(BACKEND_URL+'/errlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:(_из_консоли?'[проверка из консоли] ':'')+String(msg).slice(0,300),where:String(where||'').slice(0,120),stack:String(stack||'').slice(0,600),simple:(_из_консоли?'Это не поломка: код запущен вручную из консоли браузера. ':'')+simple,ver:(typeof APPVER!=='undefined'?APPVER:''),initData:INITDATA})}).catch(()=>{}); return true; }catch(e){ return false; } }
   window._репортОшибки=_report;   // наружу: замер загрузки шлёт свои находки этим же путём, второй канал заводить незачем
   window.addEventListener('error', e=>{ try{ _report(e.message||'error',(e.filename||'').split('/').pop()+':'+(e.lineno||''), e.error&&e.error.stack); }catch(_){_тихо(_,"L2118")} });
-  window.addEventListener('unhandledrejection', e=>{ try{ const r=e.reason; _report((r&&r.message)||String(r)||'promise rejection','unhandledrejection', r&&r.stack); }catch(_){_тихо(_,"L2119")} });
+  /* 🔴 08.09.2026, A-256. Тихая загрузка (silent / без_доклада) — та, у которой выше по коду
+     есть штатный запасной путь, и мы СОЗНАТЕЛЬНО решили о её провале не докладывать. Но её
+     отказ всё равно доходил сюда вторым путём и ложился в журнал как беда приложения:
+     обещали молчать в одном месте, а говорили из другого. Живой случай — «unhandledrejection:
+     fetchJSON: таймаут 180с» от тихого прогрева hadith_ru.json, пока человек просто печатал
+     запрос по-русски. Метку ставит сам fetchJSON. Настоящие поломки как докладывались, так и
+     докладываются: молчим ровно о том, о чём решили молчать. */
+  window.addEventListener('unhandledrejection', e=>{ try{ const r=e.reason; if(r&&r._тихая) return;
+    _report((r&&r.message)||String(r)||'promise rejection','unhandledrejection', r&&r.stack); }catch(_){_тихо(_,"L2119")} });
   _appReport=_report;   // экспонируем для логгера зависших загрузок
 })();
 // 🛡 Защита загрузок: fetch с таймаутом. Зависшая книга (напр. Ибн аль-Мубарак) больше не вешает прогу:
@@ -2607,7 +2615,8 @@ async function fetchJSON(url, ms, opts){ ms=ms||20000;
   catch(e){ const ab=(e&&e.name==='AbortError');
     const reason=ab?('таймаут '+Math.round(ms/1000)+'с'):((e&&e.message)||'сбой сети');
     if(!(opts&&(opts.silent||opts.без_доклада))){ try{ _appReport('Загрузка книги не удалась ('+reason+'): '+String(url).split('/').pop().slice(0,50), 'fetchJSON'); }catch(_){_тихо(_,"L2129")} }   // M350: silent — когда выше есть штатный фолбэк
-    const err=new Error('fetchJSON: '+reason); err._url=url; err._timeout=ab; throw err; }
+    const err=new Error('fetchJSON: '+reason); err._url=url; err._timeout=ab;
+    err._тихая=!!(opts&&(opts.silent||opts.без_доклада)); throw err; }   /* A-256: метку читает перехватчик окна */
   finally{ clearTimeout(t); }
 }
 // 💾 Постоянный кэш книг (Cache Storage). Крупные СТАБИЛЬНЫЕ издания (Ахмад 25МБ, Муслим 8.6МБ, Абу Авана,
@@ -2664,8 +2673,18 @@ async function cachedFetchJSON(url, ms, opts){ ms=ms||60000; opts=opts||{};
        отдельный — на чтение тела. Стоять вечно он не даст, а честному скачиванию не помешает. */
     clearTimeout(t); t2=setTimeout(()=>{ try{ctl.abort();}catch(e){_тихо(e,"L2147б")} }, Math.max(ms, 120000));
     /* Кэш кладём БЕЗ ожидания: он услуга, а не часть дела. Раньше `await` ставил запись в кэш
-       на пути данных — и её обрыв задерживал ответ человеку. Ошибки по-прежнему глотаем. */
-    try{ if(cache) cache.put(url, r.clone()).catch(e=>{_тихо(e,"L2148")}); }catch(e){_тихо(e,"L2148")}
+       на пути данных — и её обрыв задерживал ответ человеку. Ошибки по-прежнему глотаем.
+       🔴 08.09.2026, A-244 («Cache.put() was aborted», проглочено 3 раза за сеанс). 06.09
+       мы правильно назвали беду — «рвался кэш, книга не сохранялась, и в следующий раз
+       качалась заново, беда сама себя воспроизводила» — но вылечили только ЧАСЫ, оставив
+       вторую половину: запись шла КЛОНОМ ТОЙ ЖЕ ЗАГРУЗКИ, то есть по тому же сигналу
+       обрыва. Срок истекал — обрывалась и загрузка, и запись, ровно как описано.
+       Теперь в кэш кладём УЖЕ СОБРАННЫЕ БАЙТЫ, отдельным ответом: обрывать нечего, тело
+       заведомо целое, и клон больше не держит в памяти вторую копию книги. */
+    const _вКэш=function(тело){
+      try{ if(cache) cache.put(url, new Response(тело, {headers:{'content-type':'application/json'}}))
+                          .catch(e=>{_тихо(e,"L2148")}); }catch(e){_тихо(e,"L2148")}
+    };
     // ПОЛОСА ЗАГРУЗКИ (заявка владельца 26.07.2026: «это универсальная вещь, должна быть везде,
     // где загрузка»). Встроена ИМЕННО СЮДА: cachedFetchJSON — единственная дверь, через которую
     // грузятся все книги, значит одна правка покрывает все случаи разом, без обхода по вызовам.
@@ -2695,14 +2714,17 @@ async function cachedFetchJSON(url, ms, opts){ ms=ms||60000; opts=opts||{};
         _plHide();
         const всё=new Uint8Array(готово); let сдвиг=0;
         for(const к of куски){ всё.set(к,сдвиг); сдвиг+=к.length; }
+        _вКэш(всё);                        /* тело целиком дочитано — только теперь в память */
         return JSON.parse(new TextDecoder('utf-8').decode(всё));
       }
     }
-    return await r.json(); }
+    /* Мелочь и случай без потока: тоже кладём ПОСЛЕ полного чтения, а не клоном на лету. */
+    const _текст=await r.text(); _вКэш(_текст); return JSON.parse(_текст); }
   catch(e){ const ab=(e&&e.name==='AbortError');
     const reason=ab?('таймаут '+Math.round(ms/1000)+'с'):((e&&e.message)||'сбой сети');
     if(!(opts&&(opts.silent||opts.без_доклада))){ try{ _appReport('Загрузка книги не удалась ('+reason+'): '+String(url).split('/').pop().slice(0,50), 'fetchJSON'); }catch(_){_тихо(_,"L2170")} }
-    const err=new Error('fetchJSON: '+reason); err._url=url; err._timeout=ab; throw err; }
+    const err=new Error('fetchJSON: '+reason); err._url=url; err._timeout=ab;
+    err._тихая=!!(opts&&(opts.silent||opts.без_доклада)); throw err; }   /* A-256: метку читает перехватчик окна */
   finally{ clearTimeout(t); if(t2) clearTimeout(t2); }
 }
 async function bjson(url, ms){ ms=ms||20000; const _ac=new AbortController(); const _to=setTimeout(()=>{ try{_ac.abort();}catch(e){_тихо(e,"L2174")} }, ms);
@@ -4571,7 +4593,16 @@ document.getElementById('q').addEventListener('input', function(){
     const _v = this.value || '';
     if(_v.length >= 3 && /[а-яё]/i.test(_v)){
       window.__форуДали = true;
-      try{ loadHadithRu(true); }catch(_e){}
+      /* 🔴 08.09.2026, ОШИБКА A-256 («unhandledrejection: fetchJSON: таймаут 180с»).
+         Здесь стояло `try{ loadHadithRu(true); }catch(_e){}` — и это заслон, которого нет.
+         try/catch ловит только СИНХРОННЫЙ бросок, а loadHadithRu возвращает обещание:
+         человек печатает по-русски, тихо заводится загрузка hadith_ru.json (13 МБ), на
+         слабой связи она не успевает за 180 с — и отказ уходит мимо заслона в окно как
+         необработанный. Внешне заслон выглядел защитой и не защищал ничего.
+         Отказ здесь ждать нечего: загрузка тихая, впрок; кому она вправду понадобится,
+         тот позовёт снова и получит честную ошибку. */
+      try{ const _п = loadHadithRu(true); if(_п && _п.catch) _п.catch(function(){}); }
+      catch(_e){}
     }
   }catch(_e){}
 });
