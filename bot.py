@@ -28950,6 +28950,52 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': True, 'закрыто': закрыто,
                                         'осталось_открытых': осталось}))
 
+    async def neudacha_razobrana(r):
+        """Отметить неудачи помощника разобранными (технадзор, по секрету).
+
+        🔴 08.09.2026. Пометить неудачу разобранной можно было ТОЛЬКО кнопкой в Telegram,
+        и только владельцу. А чинит их технадзор — то есть закрывать было некому, ровно та
+        же беда, что уже лечили у заявок (18.08) и у журнала ошибок (04.09): счётчик растёт,
+        живое от вылеченного не отличить, и владелец видит «не сделано ничего».
+
+        Только по ТОЧНЫМ номерам и только с причиной от 20 знаков: «разобрано» без
+        доказательства ничем не лучше «не разобрано» — ради галочки счётчик и молчал.
+        """
+        try:
+            d = await r.json()
+        except Exception:
+            return _cors(web.json_response({'ok': False, 'error': 'нужен json'}, status=400))
+        if not BACKUP_SECRET or (d.get('secret') or '') != BACKUP_SECRET:
+            return _cors(web.json_response({'ok': False, 'error': 'ключ не тот'}, status=403))
+        try:
+            _ном = [int(x) for x in (d.get('ids') or [])]
+        except Exception:
+            _ном = []
+        _почему = str(d.get('почему') or '').strip()
+        if not _ном:
+            return _cors(web.json_response({'ok': False, 'error': 'не сказано, что закрывать'},
+                                           status=400))
+        if len(_почему) < 20:
+            return _cors(web.json_response(
+                {'ok': False, 'error': 'нужно «почему» — чем именно разобрано (от 20 знаков)'},
+                status=400))
+        сп = _data_get(DSOC_НЕУДАЧИ_ФАЙЛ, []) or []
+        _закрыто = []
+        for з in сп:
+            if int(з.get('n') or 0) in _ном and not з.get('разобрано'):
+                з['разобрано'] = True
+                з['кем'] = 'технадзор'
+                з['почему'] = _почему[:400]
+                з['когда_разобрано'] = _now_msk()
+                _закрыто.append(int(з.get('n')))
+        if _закрыто:
+            _data_put(DSOC_НЕУДАЧИ_ФАЙЛ, сп,
+                      'неудачи разобраны технадзором: %s'
+                      % ', '.join(str(x) for x in _закрыто))
+        _осталось = len([з for з in сп if not з.get('разобрано')])
+        return _cors(web.json_response({'ok': True, 'разобрано': _закрыто,
+                                        'осталось_неразобранных': _осталось}))
+
     async def errlog(r):
         # Журнал ошибок приложения: клиент шлёт ошибку → data/errors.json (с дедупом) + уведомление владельцу.
         try:
@@ -30565,7 +30611,7 @@ async def _api_serve(application=None):
                   web.post('/api/booksearch', booksearch),
                   web.post('/api/booktrans', booktrans), web.post('/api/bookinfo', bookinfo),
                   web.post('/api/authorinfo', authorinfo), web.get('/api/qaudio', qaudio),
-                  web.post('/api/errlog', errlog), web.post('/api/errlog_fixed', errlog_fixed), web.post('/api/neudachi_razobrano', neudachi_razobrano), web.post('/api/narrator_rijal', narrator_rijal),
+                  web.post('/api/errlog', errlog), web.post('/api/errlog_fixed', errlog_fixed), web.post('/api/neudacha_razobrana', neudacha_razobrana), web.post('/api/neudachi_razobrano', neudachi_razobrano), web.post('/api/narrator_rijal', narrator_rijal),
                   web.post('/api/structure', structure_results),
                   web.get('/api/book_page', book_page), web.get('/api/book_toc', book_toc), web.get('/api/book_meta', book_meta), web.post('/api/isnad_ai', isnad_ai_h),
                   web.post('/api/devfeedback', devfeedback), web.post('/api/worklog', worklog),
