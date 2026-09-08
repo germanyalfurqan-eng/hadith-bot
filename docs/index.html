@@ -999,7 +999,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1616</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1617</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1873,7 +1873,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1616';
+const APPVER = 'v1617';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3519,7 +3519,7 @@ function _muslimStripApparatus(t){ if(!t) return t;
 // ЗДЕСЬ НЕ ХВАТАЛО СТОРОЖА «ЗАПРОС В ПОЛЁТЕ». Кэш ставился по ГОТОВОМУ результату, и два
 // вызова, начавшиеся одновременно, оба проходили мимо `if(cache[code])` и грузили сборник
 // дважды. У loadBooksMap такой сторож есть (_booksMapP), здесь его не было.
-// ЗАМЕРЕНО на боевом v1616, первый поиск за сеанс по запросу «الصبر»: muslim_clean.json
+// ЗАМЕРЕНО на боевом v1617, первый поиск за сеанс по запросу «الصبر»: muslim_clean.json
 // приезжал ДВАЖДЫ — 1348 КБ и 1347 КБ, 1,32 МБ впустую. Остальные сборники это не задело
 // только потому, что идут через cachedFetchJSON (Cache Storage), а muslim_clean — через
 // обычный fetchJSON.
@@ -16729,9 +16729,22 @@ function _genBadge(rk, death){
 // M386: رجال الشيخين/البخاري/مسلم — флаги из штудирования иснадов (dz)
 let _narrFlags=null;
 let _lakab=null;
-function loadLakab(){ if(_lakab) return Promise.resolve(_lakab); return fetch('./lakab_map.json?v='+APPVER).then(r=>r.ok?r.json():{}).then(j=>{_lakab=j||{};return _lakab;}).catch(()=>{_lakab={};return _lakab;}); }
+// 🔴 08.09.2026 (смена 90). ЧЕТЫРЁМ ЗАГРУЗЧИКАМ НЕ ХВАТАЛО СТОРОЖА «ЗАПРОС В ПОЛЁТЕ».
+// Кэш ставился по ГОТОВОМУ ответу, и вызовы, начавшиеся одновременно, все шли грузить
+// заново. Замерено на боевом: narrators_wiki.json приезжал ДВАЖДЫ на каждое открытие
+// карточки передатчика — 477 КБ впустую (заявка #694 «передатчики долго грузятся»).
+// Раньше тем же способом починены loadCollection (v1614), narr_curated и muslim_nums
+// (v1615). Держим ОБЕЩАНИЕ, а не результат — как это давно сделано в loadBooksMap.
+let _lakabP=null;
+function loadLakab(){ if(_lakab) return Promise.resolve(_lakab);
+  if(_lakabP) return _lakabP;
+  _lakabP=fetch('./lakab_map.json?v='+APPVER).then(r=>r.ok?r.json():{}).then(j=>{_lakab=j||{};return _lakab;}).catch(()=>{_lakab={};return _lakab;});
+  return _lakabP; }
+let _narrFlagsP=null;
 function loadNarrFlags(){ if(_narrFlags) return Promise.resolve(_narrFlags);
-  return fetch('./narrators_flags.json?v='+APPVER).then(r=>r.ok?r.json():{}).then(j=>{_narrFlags=j||{};return _narrFlags;}).catch(()=>{_narrFlags={};return _narrFlags;}); }
+  if(_narrFlagsP) return _narrFlagsP;
+  _narrFlagsP=fetch('./narrators_flags.json?v='+APPVER).then(r=>r.ok?r.json():{}).then(j=>{_narrFlags=j||{};return _narrFlags;}).catch(()=>{_narrFlags={};return _narrFlags;});
+  return _narrFlagsP; }
 function _flagBadge(f, nm){ if(!f) return '';
   const t=f==='bm'?'رجال الشيخين':(f==='b'?'رجال البخاري':'رجال مسلم');
   return '<span dir="rtl" class="flgB" data-f="'+esc(f)+'" data-nm="'+esc(nm||'')+'" style="display:inline-block;cursor:pointer;font-size:calc(10.5px * var(--txtScale,1));border:1px solid #2e9b5b;color:#bff5d4;background:rgba(46,155,91,.12);border-radius:7px;padding:1px 7px;margin-top:2px" title="По нашему штудированию иснадов. ТАП: его хадисы в '+(f==='bm'?'обоих Сахихах':(f==='b'?'Сахихе аль-Бухари':'Сахихе Муслима'))+'">📗 '+t+' ↗</span>'; }
@@ -16899,18 +16912,24 @@ function _викиРусскоеВыверено(u, id){ try{
 }catch(e){ return false; } }
 const _WIKI_NARR_OK=true;   // #258 (С32): включено на ВЫВЕРЕННЫХ ссылках v7 (резолв реальной статьи ru→en→ar, тёзка-проверка: ism+отец+⊆+различающий токен+эпоха+категория). Король Саудии/Пророк/эмир Кордовы отсекаются. narrators_wiki.json = narrators_wiki_v7
 let _narrWiki=null;
+let _narrWikiP=null;
 function loadNarrWiki(){ if(_narrWiki) return Promise.resolve(_narrWiki);
-  return fetch('./narrators_wiki.json').then(r=>r.ok?r.json():{}).then(j=>{_narrWiki=j||{};return _narrWiki;}).catch(()=>{_narrWiki={};return _narrWiki;}); }
+  if(_narrWikiP) return _narrWikiP;
+  _narrWikiP=fetch('./narrators_wiki.json').then(r=>r.ok?r.json():{}).then(j=>{_narrWiki=j||{};return _narrWiki;}).catch(()=>{_narrWiki={};return _narrWiki;});
+  return _narrWikiP; }
 // Карта изображений равиев с Википедии (собрана ОФЛАЙН в narr_img/, закон суверенности) — аватар вместо 👤
 let _narrWikiImg=null;
+let _narrWikiImgP=null;
 function loadNarrWikiImg(){ if(_narrWikiImg) return Promise.resolve(_narrWikiImg);
-  return fetch('./narr_wiki_img.json?v='+APPVER).then(r=>r.ok?r.json():{}).then(j=>{_narrWikiImg=j||{};return _narrWikiImg;}).catch(()=>{_narrWikiImg={};return _narrWikiImg;}); }
+  if(_narrWikiImgP) return _narrWikiImgP;
+  _narrWikiImgP=fetch('./narr_wiki_img.json?v='+APPVER).then(r=>r.ok?r.json():{}).then(j=>{_narrWikiImg=j||{};return _narrWikiImg;}).catch(()=>{_narrWikiImg={};return _narrWikiImg;});
+  return _narrWikiImgP; }
 // С41: курированные имена известнейших сподвижников/таби'инов (id→{ar,ru,ruf}). ПРИОРИТЕТНЫЙ источник шапки/≈/полного —
 // чинит стену «وقيل» (Абу Хурайра→«Вкил»), огласовку-генитив («Аби Харира») и ложную шухру из родословной. Ключи выверены через _narrLookup.
 let _narrCur=null,_narrCurP=null;
 // 🔴 08.09.2026 (смена 90). Не хватало сторожа «запрос уже в полёте»: между проверкой
 // `if(_narrCur)` и присвоением проходили ДРУГИЕ вызовы, и файл ехал заново. Замерено на
-// боевом v1616, один поиск: narr_curated.json приезжал ДЕВЯТЬ раз (46 КБ вместо 5).
+// боевом v1617, один поиск: narr_curated.json приезжал ДЕВЯТЬ раз (46 КБ вместо 5).
 // Держим ОБЕЩАНИЕ, а не только результат — как в loadBooksMap.
 function loadNarrCurated(){ if(_narrCur) return Promise.resolve(_narrCur);
   if(_narrCurP) return _narrCurP;
@@ -21567,7 +21586,7 @@ let _isnadCh=undefined;
 let _mNums=undefined;
 // 🔴 08.09.2026 (смена 90). Та же дыра, что в loadNarrCurated, и цена выше: между
 // `if(_mNums===undefined)` и присвоением успевали пройти другие вызовы. Замерено на боевом
-// v1616, один поиск: isnad/muslim_nums.json приезжал ДЕСЯТЬ раз — 181 КБ вместо 18.
+// v1617, один поиск: isnad/muslim_nums.json приезжал ДЕСЯТЬ раз — 181 КБ вместо 18.
 let _mNumsP=null;
 async function _muslimNums(num){
   if(_mNums===undefined){
