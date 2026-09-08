@@ -999,7 +999,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1612</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1613</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1873,7 +1873,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1612';
+const APPVER = 'v1613';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6775,6 +6775,11 @@ let _booksMap=null,_booksMapP=null;
 function loadBooksMap(){ if(_booksMap) return Promise.resolve(_booksMap); if(_booksMapP) return _booksMapP;
   _booksMapP=fetch('./books_map.json').then(r=>r.ok?r.json():null).then(j=>{_booksMap=j||{};return _booksMap;}).catch(()=>{_booksMap={};return _booksMap;}); return _booksMapP; }
 function bookName(id){ id=String(id||''); return (_booksMap&&_booksMap[id])||''; }
+// M237: справочник книг sunnah.one (код → имя). ОТДЕЛЬНЫЙ от _booksMap: нумерации разные,
+// и путать их — ровно та беда, из-за которой 35% карточек несли чужое имя.
+let _s1books=null,_s1booksP=null;
+function loadS1Books(){ if(_s1books) return Promise.resolve(_s1books); if(_s1booksP) return _s1booksP;
+  _s1booksP=fetch('./sunnah_one_books.json').then(r=>r.ok?r.json():null).then(j=>{_s1books=j||{};return _s1books;}).catch(()=>{_s1books={};return _s1books;}); return _s1booksP; }
 function bookAuthorOf(id){ id=String(id||''); try{ if(_catalog){ const b=_catalog.find(x=>String(x.i)===id); return b?(b.a||''):''; } }catch(e){_тихо(e,"L4957")} return ''; }
 // M216: читалка любой книги Мактабы (через turath /api/book_page) — листание + Arabus
 let _bookView={id:null,pg:1};
@@ -7661,10 +7666,27 @@ function wideCard(x){ const card=document.createElement('div');card.className='c
   // словами («أخرجه البخاري (1)، ومسلم (1907)…») — он от самого sunnah.one и точен.
   // ЧТО ОСТАЛОСЬ СДЕЛАТЬ (сама заявка M237/M216 об этом и говорит): свой указатель
   // sunnah.one → книга. Без него открыть книгу отсюда нечем, и врать вместо этого нельзя.
+  // ✅ 08.09.2026, тем же заходом: ВЕРНОЕ имя всё-таки нашлось — у самого sunnah.one.
+  // Поисковый API справочника не отдаёт (семь точек входа, все 400), но его ГЛАВНАЯ
+  // СТРАНИЦА несёт список книг полем `books:[[код,`имя`]]`, 741 запись. Сняли и положили
+  // рядом: sunnah_one_books.json (29 КБ). Проверено на заведомых из тахриджа — 6216
+  // «صحيح البخاري», 6267 «سنن أبي داود», 6264 «سنن ابن ماجة». Охват на живой выдаче:
+  // 100 карточек из 100 получили имя.
+  // Насколько это меняет дело: код 93 показывался как «المطرب من أشعار أهل المغرب»
+  // (сборник магрибских СТИХОВ), а это «الأوسط لابن المنذر»; код 7733 — как «دروس للشيخ
+  // عمر العيد», а это «التاريخ الكبير» самого аль-Бухари.
+  // ⚠️ КЛИКАБЕЛЬНОЙ строку НЕ делаем, и вот замер, почему. Связать имя с нашим каталогом
+  // удалось лишь у 142 книг из 741 (19%), и связь берёт ДРУГОЕ ИЗДАНИЕ: «صحيح البخاري»
+  // ложится на нашу 735 (ت البغا), а не на каноничную 1681 (ط السلطانية). У другого
+  // издания другая пагинация, значит номер от sunnah.one привёл бы не на ту страницу —
+  // ложь помельче прежней, но всё равно ложь. Открытие книги отсюда остаётся незакрытым.
   const loc=x.loc||x.source_location||'';
-  if(x.source){ const sh=document.createElement('div'); sh.style.cssText='font-size:calc(13px * var(--txtScale,1));color:var(--hint);margin-bottom:5px;direction:rtl;text-align:right;font-weight:600';
-    sh.innerHTML='📕 '+esc('источник (Мактаба)')+(loc?(' · <span style="font-weight:400">'+esc(String(loc))+'</span>'):'');
-    sh.title='Название книги sunnah.one не сообщает, а его номера не совпадают с нашим каталогом — угадывать не станем. Своды перечислены в тахридже ниже.';
+  if(x.source){ const nm=(_s1books&&_s1books[String(x.source)])||'';
+    const sh=document.createElement('div'); sh.style.cssText='font-size:calc(13px * var(--txtScale,1));color:'+(nm?'var(--link)':'var(--hint)')+';margin-bottom:5px;direction:rtl;text-align:right;font-weight:600';
+    sh.innerHTML=(nm?'📖 ':'📕 ')+esc(nm||'источник (Мактаба)')+(loc?(' · <span style="color:var(--hint);font-weight:400">'+esc(String(loc))+'</span>'):'');
+    sh.title=nm?('Книга по справочнику sunnah.one. Открыть её в нашей читалке пока нельзя: '
+                +'у нас другое издание, и номер страницы отсюда к нему не подходит.')
+              :'Этой книги нет в справочнике sunnah.one — своды перечислены в тахридже ниже.';
     card.appendChild(sh); }
   const ar=document.createElement('div');ar.className='ar';
   ar.innerHTML=esc(x.text||'').replace(/&lt;mark&gt;/g,'<mark>').replace(/&lt;\/mark&gt;/g,'</mark>'); card.appendChild(ar);
@@ -7741,6 +7763,7 @@ async function appendWide(seq, q, primary){
     const data=j.data||[];
     if(!data.length){ sec.textContent=primary?'🤷 По всей библиотеке не нашёл. Попробуй характерную фразу из матна хадиса.':'🌐 В большой библиотеке дополнительно ничего не нашлось.'; if(primary){ try{ addNotFoundBtn(res, q); }catch(e){_тихо(e,"L5759")} } return; }
     await loadBooksMap();   // M211: имена книг
+    try{ await loadS1Books(); }catch(e){_тихо(e,"M237a")}   // M237: имена книг sunnah.one
     sec.textContent=(primary?'🌐 Найдено по всей Мактабе · ':'🌐 Ещё из Мактабы · ')+data.length+(j.count>data.length?(' из ~'+j.count):'');
     data.forEach(x=>res.appendChild(wideCard(x)));
     res.appendChild(wideMoreBtn(seq, q, {page:(j.page||1), shown:data.length, count:(j.count||data.length)}));
@@ -7761,7 +7784,8 @@ async function appendWideMulti(seq, cands){
       if(r.status===403){ sec.textContent='🌐 Большая библиотека: доступ пока не открыт.'; return; }
       if(r.status===429){ sec.textContent='🌐 Слишком часто, подожди немного.'; return; }
       const j=await r.json().catch(()=>({})); const data=j.data||[];
-      if(data.length){ await loadBooksMap(); sec.textContent='🌐 Найдено по всей Мактабе · '+data.length+(j.count>data.length?(' из ~'+j.count):''); data.forEach(x=>res.appendChild(wideCard(x))); res.appendChild(wideMoreBtn(seq, c, {page:(j.page||1), shown:data.length, count:(j.count||data.length)})); return; }
+      if(data.length){ await loadBooksMap(); try{ await loadS1Books(); }catch(e){_тихо(e,"M237b")}   // M237
+        sec.textContent='🌐 Найдено по всей Мактабе · '+data.length+(j.count>data.length?(' из ~'+j.count):''); data.forEach(x=>res.appendChild(wideCard(x))); res.appendChild(wideMoreBtn(seq, c, {page:(j.page||1), shown:data.length, count:(j.count||data.length)})); return; }
     }catch(e){_тихо(e,"L5782")}
   }
   sec.textContent='🤷 Точное совпадение не нашёл. Попробуй вставить характерную фразу из матна (без иснада/имён).';
