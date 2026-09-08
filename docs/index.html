@@ -999,7 +999,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1605</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1606</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1873,7 +1873,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1605';
+const APPVER = 'v1606';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3416,6 +3416,7 @@ const _GRIDX_КОД={ibnmaja:'ibnmajah'};      // данные грузятся 
 async function _gradesByNum(code,num){
   const c=_GRIDX_КОД[String(code)]||String(code);
   if(!(c in _GRIDX)){
+    if(!(await _естьФайл('grades', c))){ _GRIDX[c]=null; return null; }
     if(!_GRIDXP[c]) _GRIDXP[c]=fetch('./grades/'+c+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
     _GRIDX[c]=await _GRIDXP[c];
   }
@@ -3702,6 +3703,23 @@ async function _ahmВсё(){          // дочитать книгу целик�
    возвращаем null, и работает прежний путь целиком; поиск внутри книги сперва дочитывает её. */
 let _lazyCode='', _lazyArr=null; const _lazyЕсть={}, _rdxУказ={};
 const _RSH=1000;                                   // столько записей в куске (как при нарезке)
+/* 🔴 R-02, 08.09.2026. У КОГО ЕСТЬ ГЛАВЫ И ОЦЕНКИ — чтобы не спрашивать пустоту.
+   Читалка на каждое открытие книги ходила за chapters/<код>.json и grades/<код>.json.
+   Файлы есть у пяти и пяти книг, а кодов в приложении три десятка: на остальных оба
+   запроса уходили в никуда и возвращали 404. Поймано живьём на Ибн Аби Шейбе.
+   404 — это ОТВЕТ, а не сбой, и приложение его переживало молча. Но два лишних
+   похода к серверу стоят времени ровно там, где человек и так ждёт книгу.
+   Список СОБИРАЕТСЯ С ПАПКИ (sobrat_est_dlya_chitalki.py), а не пишется руками:
+   рукописный разошёлся бы с данными в первый же раз, когда файл добавят и забудут.
+   ⚠️ Не приехал список — спрашиваем, КАК РАНЬШЕ: одна неудачная загрузка крошечного
+   файла не вправе отнять главы у Бухари. */
+let _естьП=null;
+function _естьСписок(){ if(!_естьП) _естьП=fetch('./reader_est.json?v='+APPVER)
+    .then(r=>r.ok?r.json():null).catch(()=>null); return _естьП; }
+async function _естьФайл(папка, code){
+  try{ const е=await _естьСписок();
+       if(!е || !Array.isArray(е[папка])) return true;   // списка нет — спрашиваем как раньше
+       return е[папка].indexOf(code)>=0; }catch(e){ return true; } }
 /* Книги, чей текст до нарезки чистился в loadLocal/loadExtra. Свод в этой карте
    обязан быть нарезан ИЗ СЫРОГО исходника (narezat_knigu.py кладёт текст как есть),
    иначе чистка пройдёт дважды. Восьми главных сводов здесь нет и быть не должно:
@@ -24048,6 +24066,7 @@ async function _readLoad(code){
 const _chapCache={}, _chapCacheP={};
 async function _chapGet(code){
   if(code in _chapCache) return _chapCache[code];
+  if(!(await _естьФайл('chapters', code))){ _chapCache[code]=null; return null; }
   if(!_chapCacheP[code]) _chapCacheP[code]=fetch('./chapters/'+code+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
   _chapCache[code]=await _chapCacheP[code];
   return _chapCache[code];
