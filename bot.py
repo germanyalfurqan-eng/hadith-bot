@@ -31652,12 +31652,35 @@ async def handle_pustoe(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _когда = _now_msk()
             _номер_смс = getattr(update.message, 'message_id', 0)
             _чьё = ('на сообщение сессии «%s»' % _чей) if _чей else 'АДРЕСАТ НЕИЗВЕСТЕН'
+            # 🔴 08.09.2026. Владелец прислал такое трижды подряд и написал «срочно, почему не
+            # работает связь». Мы отвечали ему «ни текста, ни файла» — и это ВСЁ, что он узнавал.
+            # Гадать, что именно пришло, бессмысленно: Телеграм придумывает новые виды сообщений
+            # быстрее, чем мы дописываем перечни. Поэтому спрашиваем само сообщение, ЧТО в нём
+            # непусто, и называем это владельцу. Неизвестное надо НАЗЫВАТЬ, а не глотать.
+            _поля = []
+            for _п in ("story", "giveaway", "giveaway_winners", "paid_media", "dice", "game",
+                       "venue", "invoice", "poll", "contact", "location", "video_note",
+                       "sticker", "animation", "photo", "video", "audio", "voice", "document",
+                       "forward_origin", "quote", "external_reply", "link_preview_options",
+                       "caption", "text", "effect_id", "entities", "caption_entities"):
+                try:
+                    _з = getattr(update.message, _п, None)
+                    if _з:
+                        _поля.append(_п)
+                except Exception:
+                    pass
+            _вид = (", ".join(_поля) if _поля else "ни одного знакомого поля")
+            try:
+                print("пустое письмо владельца: поля = %s" % _вид, flush=True)
+            except Exception:
+                pass
             _что = ('📭 ОТ ВЛАДЕЛЬЦА ПРИШЛО НЕЧИТАЕМОЕ ПИСЬМО (%s).\n'
                     'Номер смс в переписке: %s. Это ответ %s.\n'
                     'В сообщении не было ни текста, ни файла — так доезжает очень длинная '
                     'вставка либо пересылка из чата, где запрещено копирование.\n'
                     'Разберись: на какое твоё сообщение он отвечал и о чём речь; при нужде '
                     'переспроси его прямо.' % (_когда, _номер_смс, _чьё))
+            _что += (chr(10) + "Что в нём есть на самом деле: %s." % _вид)
             await asyncio.get_event_loop().run_in_executor(
                 None, lambda: dsoc_позвать_клода(update.effective_chat.id, _номер_смс, _что,
                                                  'владелец', важность='срочно'))
