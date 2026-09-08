@@ -18471,11 +18471,26 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
                 await dsoc_неудача(context.bot, chat_id, _dsoc, '', 'молчат все каналы')
                 return
+            # 🔴 08.09.2026. Здесь стояло `собрано[:3800]` — ответ резался, хвост исчезал
+            # молча. Это путь, по которому помощник отвечает, когда основной канал не
+            # ответил и выручил запасной: то есть ровно тогда, когда человек уже подождал.
+            # Получить за ожидание обрубок вдвойне обидно, а понять, что ответ неполон,
+            # по нему нельзя — он обрывается на полуслове.
+            # Раздаём по сообщениям общим резаком, как в выдаче хадиса (ОБР-656).
             try:
-                await живое.edit_text(собрано[:3800], parse_mode='HTML')
+                _куски_о = _резать_html(собрано, 3900, нумеровать=True) or [собрано[:3800]]
+                await живое.edit_text(_куски_о[0], parse_mode='HTML',
+                                      disable_web_page_preview=True)
+                for _к_о in _куски_о[1:]:
+                    await _мсообщ(update).reply_text(_к_о, parse_mode='HTML',
+                                                     disable_web_page_preview=True)
             except Exception:
                 try:
-                    await живое.edit_text(re.sub(r'<[^>]+>', '', собрано)[:3800])
+                    _гол_о = re.sub(r'<[^>]+>', '', собрано)
+                    _кг_о = _резать_html(_гол_о, 3900, нумеровать=True) or [_гол_о[:3800]]
+                    await живое.edit_text(_кг_о[0])
+                    for _к_о in _кг_о[1:]:
+                        await _мсообщ(update).reply_text(_к_о)
                 except Exception:
                     pass
             реплики.append({"role": "assistant", "content": собрано, "t": time.time()})
@@ -18781,10 +18796,21 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                         pass
                         _готово = _готово.replace(_обещание, '') + _хв_д
                 except Exception:
-                    try:      # разметка не зашла — ответ всё равно обязан дойти
-                        await живое.edit_text(re.sub(r'<[^>]+>', '', _готово)[:3600])
+                    # 08.09.2026: «ответ всё равно обязан дойти» — но доходил ОБРУБОК на
+                    # 3600 знаков. У длинного хадиса (Муслим 2403 — 6286 знаков арабского)
+                    # это ровно половина, и именно на таких запасной путь и включается.
+                    # Дойти обязан ВЕСЬ ответ, а не его начало.
+                    try:
+                        _гол_г = re.sub(r'<[^>]+>', '', _готово)
+                        _кг_г = _резать_html(_гол_г, 3900, нумеровать=True) or [_гол_г[:3600]]
+                        try:
+                            await живое.edit_text(_кг_г[0])
+                        except Exception:
+                            await _мсообщ(update).reply_text(_кг_г[0])
+                        for _к_г in _кг_г[1:]:
+                            await _мсообщ(update).reply_text(_к_г)
                     except Exception:
-                        await _мсообщ(update).reply_text(re.sub(r'<[^>]+>', '', _готово)[:3600])
+                        pass
                 реплики.append({"role": "assistant", "content": _готово[:1500], "t": time.time()})
                 DSOC_ПАМЯТЬ[chat_id] = реплики
                 dsoc_сохранить(силой=True)
