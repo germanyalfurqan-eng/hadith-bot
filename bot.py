@@ -28878,19 +28878,28 @@ async def _api_serve(application=None):
         if not BACKUP_SECRET or (d.get('secret') or '') != BACKUP_SECRET:
             return _cors(web.json_response({'ok': False, 'error': 'ключ не тот'}, status=403))
         ids = [str(x).strip().upper() for x in (d.get('ids') or []) if str(x).strip()]
-        if not ids:
+        # 🔴 08.09.2026. В журнале нашлись записи БЕЗ НОМЕРА — старого образца, до починки
+        # 05.09. Их нельзя закрыть ничем: эта дверь ищет по `eid`, а его нет. Значит они
+        # числятся открытыми ВЕЧНО и врут в счётчике, который смотрит владелец.
+        # Даём вторую ручку — по ТОЧНОМУ тексту, и только для безномерных. Совпадение полное,
+        # а не «похоже»: оговорка ниже про «всё похожее» остаётся в силе, машине по-прежнему
+        # нельзя закрывать за компанию живую беду.
+        по_тексту = [str(x) for x in (d.get('по_тексту') or []) if str(x).strip()]
+        if not ids and not по_тексту:
             return _cors(web.json_response({'ok': False, 'error': 'не сказано, что закрывать'},
                                            status=400))
         почему = str(d.get('почему') or '')[:200]
         errs = _data_get("errors.json", []) or []
         закрыто = []
         for e in errs:
-            if str(e.get('eid', '')).upper() in ids and not e.get('fixed'):
+            _по_номеру = str(e.get('eid', '')).upper() in ids and e.get('eid')
+            _по_слову = (not e.get('eid')) and str(e.get('msg') or '') in по_тексту
+            if (_по_номеру or _по_слову) and not e.get('fixed'):
                 e['fixed'] = True
                 e['кем'] = 'технадзор'
                 if почему:
                     e['почему'] = почему
-                закрыто.append(e.get('eid'))
+                закрыто.append(e.get('eid') or ('без номера: ' + str(e.get('msg') or '')[:60]))
         if закрыто:
             _data_put("errors.json", errs, 'errlog: закрыто технадзором — %s' % ', '.join(закрыто))
         осталось = len([e for e in errs if not e.get('fixed')])
