@@ -999,7 +999,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1613</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1614</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1873,7 +1873,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1613';
+const APPVER = 'v1614';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3515,7 +3515,24 @@ function _muslimStripApparatus(t){ if(!t) return t;
   t=t.replace(/[Pp]?\s*=\s*"[^"]{1,30}"\s*\[[\d٠-٩\s\/،,]+\]\s*/g,' ');   // v1065: инлайн-ссылки тахкика вида ="المشكل" [10/144] (ас-Синари, кейс Абу Яʿля 7411)
   t=t.replace(/[Pp�□]+\s*$/,'');   // v1062: хвостовой P-маркер/битый глиф после среза аппарата («بهذا»P◻)
   return t.replace(/\s+/g,' ').trim(); }
+// 🔴 08.09.2026 (смена 90), заявки #664/#665/#678 «подвисает, ужасно долго».
+// ЗДЕСЬ НЕ ХВАТАЛО СТОРОЖА «ЗАПРОС В ПОЛЁТЕ». Кэш ставился по ГОТОВОМУ результату, и два
+// вызова, начавшиеся одновременно, оба проходили мимо `if(cache[code])` и грузили сборник
+// дважды. У loadBooksMap такой сторож есть (_booksMapP), здесь его не было.
+// ЗАМЕРЕНО на боевом v1614, первый поиск за сеанс по запросу «الصبر»: muslim_clean.json
+// приезжал ДВАЖДЫ — 1348 КБ и 1347 КБ, 1,32 МБ впустую. Остальные сборники это не задело
+// только потому, что идут через cachedFetchJSON (Cache Storage), а muslim_clean — через
+// обычный fetchJSON.
+// Держим ОБЕЩАНИЕ, а не результат: второй вызов дожидается первого, а не начинает свой.
+const _collP={};
 async function loadCollection(code){
+  if(cache[code]) return cache[code];
+  if(_collP[code]) return _collP[code];
+  _collP[code]=(async()=>{ try{ return await _loadCollection(code); }
+                           finally{ delete _collP[code]; } })();
+  return _collP[code];
+}
+async function _loadCollection(code){
   if(cache[code]) return cache[code];
   if(code==='muslim'){   // Муслим — нумерация Абд аль-Баки (как sunnah.com): 2363=пальмы. fw = номер fawazahmed0 для готового перевода
     /* #690 (С67, владелец: «мы ушли от издания баки. Муслим не баки, запомни»): надпись называла изданием
