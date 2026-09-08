@@ -30571,7 +30571,7 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'error': 'disabled', 'message': 'BACKUP_SECRET не задан в env Railway'}, status=503))
         try:
             secret = ''; caption = ''; filename = 'Muslimoon_RECOVERY.zip'; data = None
-            куда_чат = None; вид = 'документ'
+            куда_чат = None; вид = 'документ'; кто_автор = ''
             reader = await r.multipart()
             async for part in reader:
                 if part.name == 'secret':
@@ -30591,6 +30591,17 @@ async def _api_serve(application=None):
                         куда_чат = None
                 elif part.name == 'вид':
                     вид = (await part.text()).strip().lower()
+                # 🔴 08.09.2026 (смена 90). ОТВЕТ ВЛАДЕЛЬЦА НА КАРТИНКУ ТЕРЯЛСЯ.
+                # Реестр авторства (kto_skazal) заполняет только `skazat` — дверь текста.
+                # Файлы и картинки ходят ЗДЕСЬ и автора не называли, поэтому ответ на них
+                # искать было не по чему: он доставался линии по последней нажатой кнопке.
+                # Поймано на себе: прислал владельцу снимок с вариантами логотипа, он через
+                # две минуты ответил «Лого пока отложи» — и ответ лёг на линию «локалки».
+                # Я нашёл его случайно, разбирая очередь руками, спустя час с лишним.
+                # Класс тот же, что лечили реестром (#269-#278): через одного бота говорят
+                # четверо, и если автор не назван, ответ уходит не туда.
+                elif part.name == 'кто':
+                    кто_автор = (await part.text()).strip().lower()
                 elif part.name == 'file':
                     filename = part.filename or filename
                     data = await part.read(decode=False)
@@ -30678,6 +30689,14 @@ async def _api_serve(application=None):
                     sent.append(chat)
                     try:
                         номера[str(chat)] = _м.message_id
+                    except Exception:
+                        pass
+                    # Реестр авторства — чтобы ответ на этот файл нашёл того, кто прислал.
+                    # Пишем ТОЛЬКО известный ключ: чужое слово в реестре хуже пустоты —
+                    # ответ ушёл бы уверенно и не туда.
+                    try:
+                        if кто_автор and кто_автор in ПОДПИСИ_СЕССИЙ:
+                            автор_запомнить(chat, _м.message_id, кто_автор)
                     except Exception:
                         pass
                 except Exception:
