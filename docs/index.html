@@ -999,7 +999,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1604</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1605</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1873,7 +1873,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1604';
+const APPVER = 'v1605';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3702,6 +3702,12 @@ async function _ahmВсё(){          // дочитать книгу целик�
    возвращаем null, и работает прежний путь целиком; поиск внутри книги сперва дочитывает её. */
 let _lazyCode='', _lazyArr=null; const _lazyЕсть={}, _rdxУказ={};
 const _RSH=1000;                                   // столько записей в куске (как при нарезке)
+/* Книги, чей текст до нарезки чистился в loadLocal/loadExtra. Свод в этой карте
+   обязан быть нарезан ИЗ СЫРОГО исходника (narezat_knigu.py кладёт текст как есть),
+   иначе чистка пройдёт дважды. Восьми главных сводов здесь нет и быть не должно:
+   их reader/<код>.json уже готов. */
+const _RSHЧИСТИТЬ={muqbil:1, abuawana:1, ibnabishayba:1, abuyala:1,
+                   nasaikubra:1, ibnhibban:1, ibnkhuzayma:1};
 /* ⚠️ КЭШ ХРАНИТ ДАННЫЕ, А НЕ ОТМЕТКУ «УЖЕ СДЕЛАНО» — иначе ВТОРАЯ открытая книга остаётся
    пустой (поймано на проде v1361, сессия 71). Сперва здесь лежало обещание «кусок разложен»:
    при повторном заходе оно возвращалось готовым, а раскладывать было уже некуда — массив к
@@ -3727,8 +3733,19 @@ async function _rshКусок(code,b){
   const m=await обещ;
   if(!m){ delete _lazyЕсть[ключ]; return false; }                  // провал не запоминаем
   if(_lazyCode!==code || !_lazyArr) return false;
-  const с=b*_RSH;
-  for(let i=0;i<m.length;i++){ const z=_lazyArr[с+i]; if(z && z._пусто){ z.text=m[i]||''; z._пусто=false; } }
+  const с=b*_RSH, _ч=_RSHЧИСТИТЬ[code];
+  /* 🔴 R-02, 08.09.2026. Восемь сводов лежат в reader/<код>.json уже готовыми, и их
+     текст берётся как есть. Мукбиль и другие «местные» книги прежде шли через
+     loadLocal, а там текст ЧИСТИЛСЯ от аппарата издателя (постраничные маркеры P¬,
+     вставки тахкика). Отдай нарезанного Мукбиля без чистки — и человек увидит НЕ ТОТ
+     текст, что видел вчера, с мусором посреди хадиса. Поэтому чистка осталась ровно
+     одна и ровно здесь: в резак (питон) её не переносили намеренно — вторая
+     реализация одного правила рано или поздно разойдётся с первой, и никто не
+     скажет, какой текст книги верный. */
+  for(let i=0;i<m.length;i++){ const z=_lazyArr[с+i];
+    if(z && z._пусто){ const _t=m[i]||'';
+      z.text=_ч?_muslimStripApparatus(_t.replace(/\s+/g,' ').trim()):_t;
+      z._пусто=false; } }
   return true;
 }
 async function _rshВсё(code){                      // дочитать книгу целиком — для поиска по ней
