@@ -999,7 +999,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1607</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1608</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1873,7 +1873,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1607';
+const APPVER = 'v1608';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -22785,8 +22785,31 @@ var _mh=document.getElementById('maktabaTopBtn'); if(_mh) _mh.onclick=()=>{
   catch(e){ _тихо(e,"L17048"); _вернуть(); }
 };
 /* Прогрев аль-Мухаймина (8.4МБ) + reverse_index в ФОНЕ на простое — чтобы первый поиск не ждал загрузку (тихо, без статуса). */
-(function(){ const warm=()=>{ try{ const p=loadMuhaymin(true); if(p&&p.catch) p.catch(()=>{}); }catch(e){_тихо(e,"L17050")} try{ if(typeof loadReverse==='function'){ const q=loadReverse(); if(q&&q.catch) q.catch(()=>{}); } }catch(e){_тихо(e,"L17050")} };   // #265/A-115: ловим async-реджект префетча — иначе сбой загрузки = ложный unhandledrejection в журнал ошибок
-  if('requestIdleCallback' in window){ requestIdleCallback(()=>setTimeout(warm,1000),{timeout:7000}); } else { setTimeout(warm, 3000); } })();
+(function(){ const warm=()=>{ try{ const p=loadMuhaymin(true); if(p&&p.catch) p.catch(()=>{}); }catch(e){_тихо(e,"L17050")} };   /* обратный индекс греет warmReverse — иначе поедет дважды */   // #265/A-115: ловим async-реджект префетча — иначе сбой загрузки = ложный unhandledrejection в журнал ошибок
+  /* 🔴 08.09.2026, смена 89. ЗАМЕР ХОЛОДНОГО СТАРТА: 3,3 МБ за 26 запросов, и 1,5 МБ
+     из них — один muhaymin.json. Почти половина веса уходит на книгу, которую человек
+     не просил: она едет «на всякий случай», чтобы первый поиск не ждал.
+     Довод верный, прогрев не убираем. Но платят за него ВСЕ, включая тех, кто открыл
+     приложение почитать Бухари и в поиск не пойдёт вовсе. На слабой мобильной связи
+     это тот же класс, что A-254: большая умозрительная загрузка рвётся там, где её не
+     просили.
+     Теперь прогрев начинается по НАМЕРЕНИЮ — человек коснулся строки поиска или начал
+     печатать. Намерение приходит раньше самого поиска, поэтому выигрыш сохраняется.
+     А у кого связь заведомо хорошая (браузер говорит 4g/wifi и экономия выключена) —
+     греем как раньше, на простое. Браузер молчит (так на айфонах) — ждём намерения:
+     молчание прибора не повод тратить чужой трафик.
+     ⚠️ Обратный индекс (104 КБ) греется на простое ВСЕГДА — спорить там не о чем. */
+  const warmReverse=()=>{ try{ if(typeof loadReverse==='function'){ const q=loadReverse(); if(q&&q.catch) q.catch(()=>{}); } }catch(e){_тихо(e,'L17050r')} };
+  let _грелся=false;
+  const warmOnce=()=>{ if(_грелся) return; _грелся=true; warm(); };
+  const _связьХороша=()=>{ try{ const c=navigator.connection; if(!c) return false;
+      if(c.saveData) return false;
+      return ['4g','wifi',undefined].indexOf(c.effectiveType)>=0; }catch(e){ return false; } };
+  try{ const _q=document.getElementById('q');
+       if(_q){ _q.addEventListener('focus', warmOnce, {once:true});
+               _q.addEventListener('input', warmOnce, {once:true}); } }catch(e){_тихо(e,'L17050f')}
+  if('requestIdleCallback' in window){ requestIdleCallback(()=>setTimeout(()=>{ warmReverse(); if(_связьХороша()) warmOnce(); },1000),{timeout:7000}); }
+  else { setTimeout(()=>{ warmReverse(); if(_связьХороша()) warmOnce(); }, 3000); } })();
 var _is=document.getElementById('isnadSw'); if(_is){ _is.classList.toggle('on',!!cfg.isnad); _is.onclick=()=>{ cfg.isnad=!cfg.isnad; saveCfg(cfg); _is.classList.toggle('on',!!cfg.isnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _hi=document.getElementById('hideIsnadSw'); if(_hi){ _hi.classList.toggle('on',!!cfg.hideIsnad); _hi.onclick=()=>{ cfg.hideIsnad=!cfg.hideIsnad; saveCfg(cfg); _hi.classList.toggle('on',!!cfg.hideIsnad); if(document.getElementById('q').value.trim()) runSearch(); }; }
 var _ac=document.getElementById('acSw'); if(_ac){ _ac.classList.toggle('on',!!cfg.ac); _ac.onclick=()=>{ cfg.ac=!cfg.ac; saveCfg(cfg); _ac.classList.toggle('on',!!cfg.ac); updateQuranHelper(); }; }
