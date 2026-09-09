@@ -21,13 +21,29 @@ NAME=muslimoon-bot
 cd "$HOME_DIR" || { echo "нет папки $HOME_DIR"; exit 1; }
 
 echo "① тяну свежий код"
+# 🔴 09.09.2026, смена 91. ЗДЕСЬ ОШИБКА GIT УХОДИЛА В /dev/null, И ВЫКАТКА ГАДАЛА О ПРИЧИНЕ.
+# Она шесть раз печатала «GitHub придержал» и отменяла себя — а GitHub был ни при чём:
+# на сервере не было прав записи в собственное хранилище («insufficient permission for
+# adding an object to repository database .git/objects»; 1112 объектов принадлежали root
+# после давнего запуска под sudo). Причина постоянная, а сообщение выглядело временным —
+# и починка безопасности полтора часа считалась «сейчас само доедет».
+# По делу скрипт НЕ соврал: старый код под видом нового он не выкатил. Врал он только в
+# объяснении — а по неверному объяснению не чинят. Теперь ошибка git видна с первой попытки.
 OK=0
 for i in 1 2 3 4 5 6; do
-  if git fetch -q origin 2>/dev/null; then OK=1; echo "   получено с попытки $i"; break; fi
-  echo "   попытка $i: GitHub придержал, жду"
+  OSHIBKA=$(git fetch origin 2>&1) && { OK=1; echo "   получено с попытки $i"; break; }
+  echo "   попытка $i не удалась, git сказал:"
+  echo "$OSHIBKA" | tail -4 | sed 's/^/     /'
+  # Права на хранилище — беда постоянная: ждать её бессмысленно, надо чинить руками.
+  case "$OSHIBKA" in
+    *"insufficient permission"*|*"Permission denied"*|*"failed to write object"*)
+      echo "   ⛔ это НЕ GitHub, а права на сервере. Лечится один раз:"
+      echo "      sudo chown -R \$(id -un):\$(id -gn) $HOME_DIR/.git"
+      break;;
+  esac
   sleep 40
 done
-[ "$OK" = "1" ] || { echo "❌ код не скачался за шесть попыток — выкатка отменена"; exit 1; }
+[ "$OK" = "1" ] || { echo "❌ код не скачался — выкатка отменена (причина выше)"; exit 1; }
 git reset -q --hard origin/main
 NEW=$(git log --oneline -1)
 echo "   на коммите: $NEW"
