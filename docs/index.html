@@ -999,7 +999,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1617</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1618</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1838,6 +1838,9 @@ window.тихоОтчёт = function () {
     <div style="margin-top:8px;display:flex;align-items:center;gap:9px;flex-wrap:wrap">
       <label for="fbImg" class="mini" style="cursor:pointer;border:1px dashed var(--btn);color:var(--text);padding:8px 13px;border-radius:9px;font-size:calc(13px * var(--txtScale,1))">📷 Приложить скриншот <span style="color:var(--hint)">(по желанию)</span></label>
       <input type="file" id="fbImg" accept="image/*" style="display:none">
+      <!-- 🎤 Голосовой ввод замечания (заявка dfb#29). Кнопка появляется ТОЛЬКО там, где
+           браузер умеет распознавание речи: показать мёртвую кнопку хуже, чем не показать. -->
+      <button class="mini" id="fbMic" type="button" style="display:none;cursor:pointer;border:1px dashed var(--btn);color:var(--text);padding:8px 13px;border-radius:9px;font-size:calc(13px * var(--txtScale,1))">🎤 Надиктовать</button>
       <span id="fbImgName" class="hint" style="font-size:calc(12px * var(--txtScale,1))"></span>
     </div>
     <div id="fbImgPrev" style="display:none;margin-top:7px;position:relative">
@@ -1873,7 +1876,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1617';
+const APPVER = 'v1618';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -22780,6 +22783,47 @@ var _fbc=document.getElementById('fbClose'); if(_fbc) _fbc.onclick=()=>{ documen
 var _fbs=document.getElementById('fbSend'); if(_fbs) _fbs.onclick=sendFeedback;
 var _fbImg=document.getElementById('fbImg'); if(_fbImg) _fbImg.onchange=()=>{ const file=_fbImg.files&&_fbImg.files[0]; const pv=document.getElementById('fbImgPrev'), pvi=document.getElementById('fbImgPrevI'), nm=document.getElementById('fbImgName'); if(!file){ if(pv) pv.style.display='none'; if(nm) nm.textContent=''; return; } if(nm) nm.textContent=(file.size>3500000)?'⚠️ скрин >3.5МБ — сожми/обрежь, иначе уйдёт без него':'📎 '+(file.name||'скрин').slice(0,40); try{ const u=URL.createObjectURL(file); if(pvi) pvi.src=u; if(pv) pv.style.display='block'; }catch(e){_тихо(e,"L17011")} };
 var _fbic=document.getElementById('fbImgClr'); if(_fbic) _fbic.onclick=()=>_fbImgReset();
+    /* 🎤 ГОЛОСОВОЙ ВВОД ЗАМЕЧАНИЯ — заявка dfb#29 («добавить голосовой ввод замечаний»).
+       Зачем: замечание чаще всего пишут на ходу и с телефона, где набирать длинный текст
+       неудобно, — и половина замечаний из-за этого приходит в три слова.
+       Как: распознавание речи самого браузера, без сети и без ключей.
+       ⚠️ Кнопку показываем ТОЛЬКО там, где оно есть: мёртвая кнопка хуже отсутствующей —
+       человек нажмёт, ничего не случится, и он решит, что сломано всё приложение.
+       ⚠️ Текст ДОПИСЫВАЕМ, а не заменяем: надиктовал, поправил руками, надиктовал ещё —
+       и ни одно слово не пропало. */
+    (function(){
+      var _мик=document.getElementById('fbMic'); if(!_мик) return;
+      var _Рас=window.SpeechRecognition||window.webkitSpeechRecognition;
+      if(!_Рас) return;                       // браузер не умеет — кнопки просто не будет
+      _мик.style.display='';
+      var _слух=null, _идёт=false;
+      _мик.onclick=function(){
+        var поле=document.getElementById('fbText'); if(!поле) return;
+        if(_идёт){ try{ _слух&&_слух.stop(); }catch(e){} return; }
+        try{
+          _слух=new _Рас(); _слух.lang='ru-RU'; _слух.interimResults=false; _слух.continuous=true;
+          _слух.onstart=function(){ _идёт=true; _мик.textContent='⏹ Остановить'; _мик.style.borderStyle='solid'; };
+          _слух.onresult=function(e){
+            var кусок='';
+            for(var i=e.resultIndex;i<e.results.length;i++){ if(e.results[i].isFinal) кусок+=e.results[i][0].transcript; }
+            if(!кусок) return;
+            поле.value=(поле.value?поле.value.replace(/\s+$/,'')+' ':'')+кусок.trim();
+            поле.dispatchEvent(new Event('input',{bubbles:true}));
+          };
+          _слух.onerror=function(ev){
+            _идёт=false; _мик.textContent='🎤 Надиктовать'; _мик.style.borderStyle='dashed';
+            // Отказ в микрофоне — самая частая беда, и молчать о ней нельзя: человек
+            // будет думать, что не сработало распознавание, а дело в разрешении.
+            var п=(ev&&ev.error)||'';
+            toast(п==='not-allowed'||п==='service-not-allowed'
+                  ? 'Микрофон запрещён — разреши доступ в настройках браузера'
+                  : (п==='no-speech' ? 'Не расслышал — попробуй ещё раз' : 'Диктовка не удалась: '+п));
+          };
+          _слух.onend=function(){ _идёт=false; _мик.textContent='🎤 Надиктовать'; _мик.style.borderStyle='dashed'; };
+          _слух.start();
+        }catch(e){ _тихо(e,"L-fbmic"); toast('Диктовка недоступна в этом браузере'); }
+      };
+    })();
 var _fbtg=document.getElementById('fbTg'); if(_fbtg) _fbtg.onclick=()=>openLink('https://t.me/jamaat_ru');
 var _setFbB=document.getElementById('setFbBtn'); if(_setFbB) _setFbB.onclick=()=>{ var s=document.getElementById('settingsModal'); if(s) s.style.display='none'; try{ openFeedback(''); }catch(e){_тихо(e,"L17014")} };
 var _menuFbB=document.getElementById('menuFbBtn'); if(_menuFbB) _menuFbB.onclick=()=>{ var s=document.getElementById('menuModal'); if(s) s.style.display='none'; try{ openFeedback(''); }catch(e){_тихо(e,"L17015")} };
