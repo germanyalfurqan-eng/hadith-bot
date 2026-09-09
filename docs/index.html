@@ -999,7 +999,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1618</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1619</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1876,7 +1876,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1618';
+const APPVER = 'v1619';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -22203,7 +22203,12 @@ function arSimilar(a,b){ const clean=s=>s.normalize('NFC').replace(/[ً-ْٰ]/g,
   const sa=tri(ca),sb=tri(cb); if(!sa.size&&!sb.size) return true; if(!sa.size||!sb.size) return false;
   let common=0; for(const t of sa) if(sb.has(t)) common++;
   return (common/Math.max(sa.size,sb.size))>=0.55; }
-async function doTranslate(text,out,btn,ref,force){
+async function doTranslate(text,out,btn,ref,force,повод){
+  /* «повод» — слова человека о том, ЧТО не так в прежнем переводе (заявка M204).
+     Приходит только с кнопки «🔄 обновить перевод»; при первом переводе его нет и быть
+     не может. Уезжает в запрос отдельным полем: сервер сегодня его не читает и молча
+     пропускает, но сигнал начинает копиться СРАЗУ, а не с той минуты, когда бот научится
+     им пользоваться. Копить с первого дня дешевле, чем потом просить людей повторить. */
   const _silent=ref&&ref.silent;   // #159-фикс: префетч-режим — подавить пользовательские тосты на путях ошибки
   const orig=btn.textContent, origStyle=btn.style.cssText; btn.disabled=true; btn.textContent='⏳…';
   /* 🔴 06.09.2026, замечание владельца: «перевод долгий, как минимум надо показывать
@@ -22260,7 +22265,7 @@ async function doTranslate(text,out,btn,ref,force){
   if(force) btn.textContent='🔄…';
   const _ac=new AbortController(); const _to=setTimeout(()=>{try{_ac.abort();}catch(e){_тихо(e,"L16624")}}, 60000);   // #323: перевод не висит вечно — таймаут 60с → ошибка ловится ниже, кнопка не залипает «⏳»
   try{ const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text, source:ref&&ref.source, num:ref&&ref.num, force:!!force, initData:INITDATA}), signal:_ac.signal});
+      body:JSON.stringify({text, source:ref&&ref.source, num:ref&&ref.num, force:!!force, повод:(повод||''), initData:INITDATA}), signal:_ac.signal});
     clearTimeout(_to);
     const j=await r.json().catch(()=>({}));
     if(r.status===403){ if(!_silent) toast(j.message||'Перевод тебе пока не открыт.'); restore(); return; }
@@ -22277,7 +22282,25 @@ async function doTranslate(text,out,btn,ref,force){
       const кто=(j['модель']||'').trim();
       const строкаКто = кто ? ('<div style="margin-top:5px;font-size:calc(11.5px * var(--txtScale,1));color:var(--hint)">🔧 перевёл: '+esc(кто)+(_трСек?(' · '+_трСек+' с'):'')+'</div>') : '';
       out.innerHTML=trHead(ref)+lbl(tag)+esc(j.translation)+строкаКто+'<div style="margin-top:7px;opacity:.85">'+redo+'</div>'; out.dataset.tr=j.translation; out.style.display='block'; btn.disabled=false;
-      const rb=out.querySelector('.trRedo'); if(rb) rb.onclick=()=>{ if(confirm('Переперевести заново нейросетью? (потратит запрос к ИИ)')) doTranslate(text,out,btn,ref,true); };
+      /* 🔴 M204 (владелец): «перед нажатием показывать „Сообщить нам“ — юзер ОБОСНОВЫВАЕТ, где
+   ошибка; это вход для ИИ-перепроверки и сигнал нам».
+   Было: голое «Переперевести заново? (потратит запрос к ИИ)». Такое подтверждение стоит
+   ключа и не даёт ВЗАМЕН НИЧЕГО: ни ИИ не знает, что чинить, ни мы не знаем, что было не
+   так, — и следующий человек нажмёт ту же кнопку на том же хадисе.
+   Стало: спрашиваем, ЧТО именно не так. Ответ уходит двумя дорогами разом — нам в отзывы
+   (с номером хадиса, чтобы не гадать, о чём речь) и в сам запрос перевода.
+   ⚠️ Пустой ответ и отказ означают «не перепереводить»: тратить ключ, не узнав причины,
+   — ровно то, от чего заявка и заводилась. */
+const rb=out.querySelector('.trRedo'); if(rb) rb.onclick=async ()=>{
+  const повод=(prompt('Что именно не так в переводе? Одной фразой — это поможет и ИИ, и нам.\n\n(например: «оборвался на середине», «имя передатчика переведено как слово», «смысл перевёрнут»)')||'').trim();
+  if(!повод){ toast('Переперевод отменён: без причины ключ не тратим'); return; }
+  const где=(ref&&ref.source?ref.source:'?')+' №'+(ref&&(ref.num||ref.num===0)?ref.num:'?');
+  try{
+    await fetch(BACKEND_URL+'/devfeedback',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text:'ПЕРЕВОД НЕТОЧЕН ('+где+'): '+повод, ctx:'переперевод '+где, img:'', initData:INITDATA})});
+  }catch(e){ _тихо(e,"L-m204"); }   // не дошло до нас — переперевод всё равно делаем
+  doTranslate(text,out,btn,ref,true,повод);
+};
       if(src && (num||num===0)) setTrBase(btn, e||{}, src);   // дальше эта кнопка = «♻️ из базы»
       else restore();
       return;
