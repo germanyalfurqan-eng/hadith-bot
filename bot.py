@@ -1078,7 +1078,8 @@ def load_memory():
 
 def save_memory(data):
     try:
-        content = json.dumps(data, ensure_ascii=False, indent=2)
+        # Заслон от утечки ключей (09.09.2026): память бота уезжает в ПУБЛИЧНУЮ ветку main.
+        content = _замазать_секреты(json.dumps(data, ensure_ascii=False, indent=2))
         b64 = base64.b64encode(content.encode()).decode()
         api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{MEMORY_FILE}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}"}
@@ -1119,7 +1120,8 @@ def load_registry():
 
 def save_registry(data):
     try:
-        content = json.dumps(data, ensure_ascii=False, indent=2)
+        # Заслон от утечки ключей (09.09.2026): реестр тоже уезжает в ПУБЛИЧНУЮ ветку main.
+        content = _замазать_секреты(json.dumps(data, ensure_ascii=False, indent=2))
         b64 = base64.b64encode(content.encode()).decode()
         api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{REGISTRY_FILE}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}"}
@@ -24479,16 +24481,30 @@ def _data_get(path, default=None):
 # Виноват не владелец: прислать ключ своему боту — обычное дело. Виноват код, который вынес его
 # наружу. Поэтому проверка ставится не в одном месте приёма, а здесь — в ЕДИНСТВЕННОЙ двери,
 # через которую вообще что-либо попадает в публичную ветку (журнал, ошибки, отклики, переписка).
+# 🔴 09.09.2026, смена 91. ЭТОТ ЗАСЛОН БЫЛ МЁРТВ С РОЖДЕНИЯ, И УБИЛА ЕГО ОДНА БУКВА.
+# Каждый образец начинался с `\b` — границы слова. Но в JSON перенос строки хранится
+# ДВУМЯ знаками: обратная косая и `n`. Ключ владельца лежит сразу после переноса, то есть
+# перед `gsk_` стоит буква `n`, а между двумя буквами границы слова НЕТ. Образец не
+# находил ничего и никогда: проверено на живых файлах — `\bgsk_…` даёт False там, где
+# `gsk_…` даёт True.
+# Цена: ключ Groq из заявки №383 прожил в ПУБЛИЧНОЙ ветке 73 дня, переживая каждую
+# перезапись журнала, и его отдавал живой сайт. Заслон при этом числился поставленным.
+# Теперь начало разрешено и после экранирующей последовательности. Подобрано и проверено
+# на живых данных (scratch_marathon/podbor_obrazcov_91.py): три настоящих ключа из трёх
+# прячутся, и НИ ОДНО из 2946 живых сообщений владельца не испорчено зря.
+_НАЧАЛО_КЛЮЧА = r'(?:(?<=\\n)|(?<=\\r)|(?<=\\t)|(?<![A-Za-z0-9]))'
 _СЕКРЕТЫ = [
-    re.compile(r'\bsk-[A-Za-z0-9_\-]{20,}'),          # OpenAI, OpenRouter, DeepSeek
-    re.compile(r'\bgsk_[A-Za-z0-9]{20,}'),            # Groq — тот самый случай
-    re.compile(r'\bcsk-[A-Za-z0-9]{20,}'),            # Cerebras
-    re.compile(r'\bAIza[A-Za-z0-9_\-]{30,}'),         # Google / Gemini
-    re.compile(r'\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}'),   # GitHub
-    re.compile(r'\bgithub_pat_[A-Za-z0-9_]{20,}'),
-    re.compile(r'\bhf_[A-Za-z0-9]{20,}'),             # HuggingFace
-    re.compile(r'\bxox[baprs]-[A-Za-z0-9\-]{10,}'),   # Slack
-    re.compile(r'\b\d{8,10}:AA[A-Za-z0-9_\-]{30,}'),  # токен телеграм-бота
+    re.compile(_НАЧАЛО_КЛЮЧА + r'sk-[A-Za-z0-9_\-]{20,}'),  # OpenAI, OpenRouter, OpenCode
+    re.compile(r'gsk_[A-Za-z0-9]{20,}'),              # Groq — тот самый случай
+    re.compile(r'csk-[A-Za-z0-9]{20,}'),              # Cerebras
+    re.compile(r'AIza[A-Za-z0-9_\-]{30,}'),           # Google / Gemini
+    re.compile(r'(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}'),   # GitHub
+    re.compile(r'github_pat_[A-Za-z0-9_]{20,}'),
+    re.compile(r'hf_[A-Za-z0-9]{20,}'),               # HuggingFace
+    re.compile(r'xox[baprs]-[A-Za-z0-9\-]{10,}'),     # Slack
+    re.compile(r'\d{8,10}:AA[A-Za-z0-9_\-]{30,}'),    # токен телеграм-бота
+    re.compile(r'nvapi-[A-Za-z0-9_\-]{20,}'),         # NVIDIA
+    re.compile(r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
 ]
 
 
@@ -24546,7 +24562,13 @@ def _data_atomic_mutate(path, mutate_fn, message, retries=4):
             obj, sha = {}, ""
         obj = mutate_fn(obj)
         try:
-            content = json.dumps(obj, ensure_ascii=False, indent=1)
+            # 🔴 09.09.2026, смена 91. ЗДЕСЬ ЗАСЛОНА НЕ БЫЛО, И ИМЕННО ЧЕРЕЗ ЭТУ ДВЕРЬ
+            # УТЕКАЛИ КЛЮЧИ. Заслон `_замазать_секреты` стоял только в старом `_data_put`,
+            # а эта функция заведена позже (04.07.2026, против гонки двух инстансов) и
+            # писала БЕЗ него. Журнал заявок ходит именно здесь — потому ключ Groq из
+            # заявки №383 и прожил в публичной ветке 73 дня, переживая каждую перезапись.
+            # Класс беды: починили случай, а новая дверь открылась мимо починки.
+            content = _замазать_секреты(json.dumps(obj, ensure_ascii=False, indent=1))
             b64 = base64.b64encode(content.encode("utf-8")).decode()
             payload = {"message": message, "content": b64, "branch": "data"}
             if sha:
