@@ -1045,7 +1045,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1621</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1622</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1923,7 +1923,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1621';
+const APPVER = 'v1622';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -15903,7 +15903,13 @@ async function openTahrijTable(){
   if(_thMeta===undefined){ try{ const r=await fetch('./tahrij/meta.json?v='+APPVER); _thMeta=r.ok?await r.json():null; }catch(e){ _thMeta=null; } }
   if(!_thMeta){ list.innerHTML='<div class="hint">Недоступно.</div>'; return; }
   try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr()]); }catch(e){_тихо(e,"L11907")}
-  info.innerHTML='Хадисов 64 первоисточников: <b>'+_thMeta.total.toLocaleString('ru')+'</b> · уникальных хадисов: <b>'+_thMeta.uniq.toLocaleString('ru')+'</b> · из них с версиями (тахридж): <b style="color:#9fd3a8">'+_thMeta.multi.toLocaleString('ru')+'</b>';
+  /* 🔴 10.09.2026 (смена 92). ЗДЕСЬ СТОЯЛО «уникальных хадисов: <uniq>», и рядом «с версиями».
+     Беда: в meta total и uniq РАВНЫ (190 959 = 190 959), потому что su выдаётся КАЖДОМУ месту
+     свой (мост 1:1, regen_app_tahrij.py), а объединяет не он, а семья sp_*. Владелец читал
+     строку, где сказано «всех столько же, сколько уникальных, и при этом у 97 308 есть версии» —
+     утверждение, противоречащее самому себе. Число uniq тут не значит ничего и убрано;
+     показываем то, что проверяемо: сколько мест, у скольких версии нашлись, сколько одиночек. */
+  info.innerHTML='Хадисов 64 первоисточников: <b>'+_thMeta.total.toLocaleString('ru')+'</b> · с найденными версиями (тахридж): <b style="color:#9fd3a8">'+_thMeta.multi.toLocaleString('ru')+'</b> · одиночек: <b>'+Math.max(0,(_thMeta.total-_thMeta.multi)).toLocaleString('ru')+'</b><br><span style="opacity:.8">В списке ниже — только те, у кого версии есть.</span>';
   list.innerHTML=''; let loaded=[], pg=0, shown=0; const step=30;
   async function ensure(upto){ while(loaded.length<upto && pg<(_thMeta.idx_pages||0)){ let p=_thIdxPage[pg];
     if(!p){ try{ const r=await fetch('./tahrij/idx_p'+pg+'.json?v='+APPVER); p=r.ok?await r.json():[]; }catch(e){ p=[]; } _thIdxPage[pg]=p; }
@@ -16083,7 +16089,7 @@ async function openHadithTable(){
   if(_htMeta===undefined){ try{ const r=await fetch('./htab/meta.json?v='+APPVER); _htMeta=r.ok?await r.json():null; }catch(e){ _htMeta=null; } }
   if(!_htMeta){ list.innerHTML='<div class="hint">Таблица недоступна.</div>'; return; }
   try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr()]); }catch(e){_тихо(e,"L12072")}
-  info.innerHTML='Хадисов: <b>'+_htMeta.total.toLocaleString('ru')+'</b> · общих №: <b>'+_htMeta.general.toLocaleString('ru')+'</b> · уник. версий: <b>'+_htMeta.uniq_ver.toLocaleString('ru')+'</b> · уник. хадисов: <b>'+_htMeta.uniq_had.toLocaleString('ru')+'</b>'+(_htMeta.uniq_tahrij?(' · 🌿 ТАХРИДЖ — уникальных хадисов: <b style="color:#9fd3a8">'+_htMeta.uniq_tahrij.toLocaleString('ru')+'</b> (с версиями '+(_htMeta.multi_tahrij||0).toLocaleString('ru')+')'):'')+' · точных копий: '+_htMeta.dups.toLocaleString('ru');
+  info.innerHTML='Хадисов: <b>'+_htMeta.total.toLocaleString('ru')+'</b> · общих №: <b>'+_htMeta.general.toLocaleString('ru')+'</b> · уник. версий: <b>'+_htMeta.uniq_ver.toLocaleString('ru')+'</b> · уник. хадисов: <b>'+_htMeta.uniq_had.toLocaleString('ru')+'</b>'+(_htMeta.uniq_tahrij?(' · 🌿 ТАХРИДЖ: <b style="color:#9fd3a8">'+_htMeta.uniq_tahrij.toLocaleString('ru')+'</b> хадисов, из них с версиями <b style="color:#9fd3a8">'+(_htMeta.multi_tahrij||0).toLocaleString('ru')+'</b>'+(_htMeta.no_tahrij?(' · без тахриджа: <b>'+_htMeta.no_tahrij.toLocaleString('ru')+'</b>'):'')):'')+' · точных копий: '+_htMeta.dups.toLocaleString('ru');
   let loaded=[], pagesLoaded=0, shown=0; const step=40; let filt='';
   async function ensure(upto){ while(loaded.length<upto && pagesLoaded<_htMeta.pages){ let pg=_htPage[pagesLoaded];
     if(!pg){ try{ const r=await fetch('./htab/p'+pagesLoaded+'.json?v='+APPVER); pg=r.ok?await r.json():[]; }catch(e){ pg=[]; } _htPage[pagesLoaded]=pg; }
