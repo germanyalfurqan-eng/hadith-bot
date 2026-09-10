@@ -1045,7 +1045,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1625</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1626</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1923,7 +1923,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1625';
+const APPVER = 'v1626';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -13607,6 +13607,36 @@ function _isnadFormOpts(cur){ return _ISNAD_FORM_LIST.map(o=>'<option value="'+o
 function _dzShU(code){ return parseInt(_md5x(code).slice(0,4),16)%64; }
 async function dzUReg(code){ const sh=_dzShU(code); const m=await _dzFetch(_dzUC,sh,'./dz/u'+sh+'.json'); return (m&&m[code])||null; }
 async function dzUPart(code){ const sh=_dzShU(code); const m=await _dzFetch(_dzUNC,sh,'./dz/un'+sh+'.json'); return (m&&m[code])||null; }
+/* ⚡ СКОЛЬКО ЦЕПЕЙ ИДЁТ ЧЕРЕЗ РАВИЯ — ОДНИМ ФАЙЛОМ (dz_count.json, 85,6 КБ; build_dz_count.py).
+
+   🔴 10.09.2026 (смена 93), заявки #665 «подвисает поиск», #678 «ужасно долго, как будто
+   глюченная игра собирается поиск», #694 «передатчики долго грузятся».
+   ЗАМЕР НА БОЮ, живой браузер: первый поиск на холодной странице — 3,59 с до первых
+   находок, 94 запроса, 5,63 МБ. Самая крупная доля — 32 файла dz/n*.json на 1,67 МБ.
+
+   Тянулись они ради ОДНОГО ЧИСЛА на кандидата: упорядочивание списка по участию в цепях
+   (кто чаще в иснадах, тот выше) звало dzPart(id), а тот грузит шард на ~50 КБ. Кандидатов
+   до восьмидесяти, шарды у них разные — до восьмидесяти запросов на одно нажатие «Найти».
+
+   Приём не новый: он уже применён рядом к признаку сподвижника (narr_sah.json, заявка #694 —
+   было 72 запроса и 71,9 с). Здесь то же: 85,6 КБ против 13,9 МБ шардов.
+
+   ⚠️ Счёт НЕ пересчитывается своей формулой — он собран из тех же шардов, что читает
+   dzPart. Вторая реализация однажды разошлась бы с первой, и приложение начало бы
+   упорядочивать людей по выдумке. Пересобирать после каждой пересборки dz/.
+   ⚠️ Файл не пришёл (сеть) — молча нулей не ставим: возвращаем null, и зовущий берёт
+   прежний путь через шард. Ноль вместо неизвестности перемешал бы список молча. */
+let _dzCnt=null,_dzCntP=null;
+async function dzCountMap(){ if(_dzCnt) return _dzCnt;
+  if(!_dzCntP) _dzCntP=fetch('./dz_count.json?v='+APPVER).then(r=>r.ok?r.json():null)
+      .catch(()=>{ _dzCntP=null; return null; });   // неудачу НЕ запоминаем: следующий зов попробует снова
+  _dzCnt=await _dzCntP; if(!_dzCnt) _dzCntP=null; return _dzCnt; }
+async function dzCount(id){ if(id==null) return null;
+  const m=await dzCountMap(); if(!m) return null;            // null = «не знаю», а не «ноль»
+  return m[String(id)]||0; }
+/* Число участий ДЁШЕВО: сперва общий счётчик, и только если его нет — прежний путь через шард. */
+async function dzCountOrPart(id){ const c=await dzCount(id); if(c!==null) return c;
+  try{ const p=await dzPart(id); return Array.isArray(p)?p.length:0; }catch(e){ return 0; } }
 async function dzPart(id){ const sh=Math.floor(id/200); const m=await _dzFetch(_dzNC,sh,'./dz/n'+sh+'.json'); return (m&&m[String(id)])||null; }
 /* ===== M447 Э-Ц1: РЕЖИМ «ЦЕПЬ» — хадисы по сочетанию передатчиков в иснаде (MVP по dz-разметке Э1.1).
    Якорь = самый редкий из выбранных (его участие НЕ усечено кэпом) → его места проверяем цепочками dz/b:
@@ -16692,7 +16722,7 @@ async function narrCandidates(qRaw){
          таблице равиев — известная беда (1080 пар), но выбирать из них можно осмысленно. */
       if(hits.length){ let hit=hits.reduce((a,b)=>((b[3]||0)>(a[3]||0)?b:a));
         if(hits.length>1){ try{
-          const _уч=await Promise.all(hits.map(async h=>{ try{ const p=await dzPart(h[1]); return p?p.length:0; }catch(e){ return 0; } }));
+          const _уч=await Promise.all(hits.map(h=>dzCountOrPart(h[1])));   // #665/#678: было по шарду на кандидата
           let _л=0; for(let _i=1;_i<hits.length;_i++){ if(_уч[_i]>_уч[_л] || (_уч[_i]===_уч[_л] && (hits[_i][3]||0)>(hits[_л][3]||0))) _л=_i; }
           if(_уч[_л]>0) hit=hits[_л];
         }catch(e){_тихо(e,"L231gar")} }
@@ -16749,7 +16779,7 @@ async function narrCandidates(qRaw){
     const top=out.slice(0, single?80:36);
     const sahW=c=>(c.sah==='bm'?2:(c.sah?1:0));   // #169: رجال الشيخين выше; обе книги (bm) выше одной
     try{ await Promise.all(top.map(async c=>{ if(c.id==null){ c.pp=0; return; }
-      try{ const p=await dzPart(c.id); c.pp=p?p.length:0; }catch(e){ c.pp=0; }
+      try{ c.pp=await dzCountOrPart(c.id); }catch(e){ c.pp=0; }   // #665/#678: до 80 шардов на один поиск
       try{ c.sah=await _sahGet(c.id); }catch(e){ c.sah=null; } }));   // #169: флаг Сахихайн (تик-брейк «если на равных»)
       if(single) top.sort((a,b)=>((b.sc===999)-(a.sc===999))||((b.pp||0)-(a.pp||0))||(sahW(b)-sahW(a))||(b.sc-a.sc));   // гарант не перебивается участием; Сахихайн — тай-брейк
       else top.sort((a,b)=>((b.sc===999)-(a.sc===999))||((b.sc+Math.min(b.pp||0,600)*0.06)-(a.sc+Math.min(a.pp||0,600)*0.06))||(sahW(b)-sahW(a)));   // score-primary + буст участия + Сахихайн тай-брейк
@@ -19255,7 +19285,7 @@ async function showNarratorCardLocal(name, host, forceId){
   // владелец #365/#370: «надёжный» и «мудаллис» звучат противоречиво (будто надёжный слабее мудаллиса). Пояснить связку, когда равий И надёжен, И мудаллис.
   const _relPos = /ثقة|ثقه|حجة|حافظ|امام|ثبت|متقن|صدوق|لا باس|مقبول|صالح|عدل|مامون/.test(stripDiac(fold(String(c[5]||'')+' '+String(c[6]||''))));
   let _snSid=''; try{ _snSid=(await loadMid2Sid())[String(c[0])]||''; }catch(e){_тихо(e,"L14148")}
-  let _hc=0; try{ const _pp=await dzPart(c[0]); _hc=Array.isArray(_pp)?_pp.length:0; }catch(e){_тихо(e,"L14149")}
+  let _hc=0; try{ _hc=await dzCountOrPart(c[0]); }catch(e){_тихо(e,"L14149")}
   const _rumz=(String(_hdrName||c[1]||'').trim()[0]||'؟')+'.';
   let _wkImg=null; try{ _wkImg=(await loadNarrWikiImg())[String(id)]||null; }catch(e){_тихо(e,"L14151")}   // картинка равия с Википедии (локально, narr_img/) вместо 👤
   // R-61 Э1 (владелец 16.07): без вики-картинки — НЕ безликий 👤, а первое слово имени вязью (мини-каллиграфия в круге, единый вид для всех 19k равиев)
