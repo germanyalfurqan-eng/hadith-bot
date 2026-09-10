@@ -25025,12 +25025,55 @@ def _data_atomic_mutate(path, mutate_fn, message, retries=4):
     api = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
     h = {"Authorization": f"token {GITHUB_TOKEN}"}
     for _ in range(retries):
+        # 🔴 11.09.2026. ФАЙЛ ПЕРЕШАГНУЛ 1 МБ — И ВСЯ ЗАПИСЬ ВСТАЛА МОЛЧА.
+        # journal.json дорос до 1 049 667 байт при пределе contents API 1 048 576.
+        # API стал отдавать метаданные БЕЗ содержимого: size и sha есть, content —
+        # пустая строка, encoding "none". Дальше по шагам: b64decode("") → b"" →
+        # json.loads("") бросает → прежний except подставлял obj={} и sha="".
+        # То есть журнал читался как ПУСТОЙ, и запись уходила БЕЗ отпечатка. GitHub
+        # такую запись для существующего файла отвергает — и только поэтому журнал жив:
+        # приняв её, он затёр бы 738 заявок владельца почти пустым объектом.
+        # Видимое следствие: с 00:49 в канал не выходило НИЧЕГО. Захват заявки идёт
+        # через эту же дверь — не записался, значит «не захвачено», значит пост не
+        # отправляется. Ни ошибки, ни следа.
+        # Содержимое берём с raw (там предела нет), отпечаток — из contents (он есть
+        # и при пустом content). Это ТО ЖЕ правило, что уже записано в этом файле про
+        # очередь анонсов; оно было применено в одном месте из двух.
         try:
             r = requests.get(api + "?ref=data", headers=h, timeout=8)
-            sha = r.json().get("sha", "") if r.status_code == 200 else ""
-            obj = json.loads(base64.b64decode(r.json().get("content", "")).decode("utf-8")) if r.status_code == 200 else {}
-        except Exception:
-            obj, sha = {}, ""
+            if r.status_code != 200:
+                obj, sha = {}, ""          # файла ещё нет — законно создаём новый
+            else:
+                _мета = r.json()
+                sha = _мета.get("sha", "") or ""
+                _сод = _мета.get("content") or ""
+                if _сод.strip():
+                    obj = json.loads(base64.b64decode(_сод).decode("utf-8"))
+                else:
+                    # Больше мегабайта. Берём по sha через Git Blobs — ровно так же, как
+                    # это уже сделано в _data_get (12.08.2026, та же беда, тот же размер).
+                    # ⚠️ Blobs, а НЕ raw, и вот почему: raw кэшируется до пяти минут, а
+                    # читаем мы ПЕРЕД записью — по устаревшей копии мы затёрли бы чужие
+                    # записи, сделанные за эти минуты. Blobs отдаёт точную версию по sha
+                    # и CDN его не кэширует. Предел там 100 МБ.
+                    obj = None
+                    try:
+                        _b = requests.get(
+                            f"https://api.github.com/repos/{GITHUB_REPO}/git/blobs/{sha}",
+                            headers=dict(h, Accept="application/vnd.github.raw"), timeout=25)
+                        if _b.status_code == 200 and _b.content:
+                            obj = json.loads(_b.content.decode("utf-8"))
+                    except Exception:
+                        obj = None
+                    if obj is None:
+                        print("ВЕТКА ДАННЫХ: %s больше мегабайта, blobs его не отдал — "
+                              "НЕ пишу, чтобы не затереть" % path)
+                        return False, None
+        except Exception as _e_чт:
+            # ⛔ НЕ мутируем то, чего не прочитали. Прежде здесь стояло obj, sha = {}, ""
+            # — и это ровно та дорога, по которой журнал уходит в пустоту.
+            print("ВЕТКА ДАННЫХ: не прочитал %s (%s) — НЕ пишу" % (path, str(_e_чт)[:120]))
+            return False, None
         obj = mutate_fn(obj)
         try:
             # 🔴 09.09.2026, смена 91. ЗДЕСЬ ЗАСЛОНА НЕ БЫЛО, И ИМЕННО ЧЕРЕЗ ЭТУ ДВЕРЬ
