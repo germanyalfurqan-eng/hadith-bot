@@ -1045,7 +1045,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1624</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1625</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1923,7 +1923,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1624';
+const APPVER = 'v1625';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -13256,6 +13256,17 @@ function loadNarrNames(){ if(_narrNames && (_narr2Ok || _narr2Попыток>=3)
     try{ const n2=await fetchJSON('./narrators_names2.json?v='+APPVER, 45000, {silent:true});
       if(n2 && ((n2.u&&n2.u.length) || (n2.m&&n2.m.length))){
         (n2.u||[]).forEach(p=>_narrNames.push(p)); window._narrMulti=n2.m||[]; _narr2Ok=true;
+        /* 🔴 10.09.2026 (смена 93). window._narrMulti ПРИСВАИВАЛСЯ И НИГДЕ НЕ ЧИТАЛСЯ —
+           проверено перечислением всех вхождений: одно, вот это. 7 769 многозначных форм
+           ехали человеку внутри 400 КБ и ложились мёртвым грузом: разбор тёзок был сделан,
+           а показать его было некому.
+           Заводим карту «форма → кандидаты». В _narrNames она НЕ вливается и привязкой стать
+           не может: многозначная форма одного человека не называет. Урок 92-й смены —
+           правило «единственный кандидат по вхождению» привязало сподвижника к его дочери.
+           Её дело честное и скромное: сказать, что имя известно и под ним столько-то людей. */
+        try{ const M=Object.create(null);
+             (n2.m||[]).forEach(p=>{ const k=p&&p[0], v=p&&p[1]; if(k&&v&&v.length) M[k]=v; });
+             window._narrMultiMap=M; }catch(e){_тихо(e,"narrmulti")}
       } }catch(e){_тихо(e,"L9996")}
     /* не пришёл — не запоминаем половину как целое: следующий зов попробует заново (до трёх раз).
        Потолок поднят с 20 до 45 секунд: файл 1,4 МБ, и двадцати ему на слабой связи не хватает. */
@@ -13263,7 +13274,18 @@ function loadNarrNames(){ if(_narrNames && (_narr2Ok || _narr2Попыток>=3)
     // Сессия21: набор ПЕРВЫХ слов имён равиев موسوعة — проверка подсветки (واحد/رحمة/صدور — НЕ имена → не метим)
     try{ const S=new Set(), F=new Set(), N=new Set(); _narrNames.forEach(p=>{ const nm=p[0]||''; if(!nm) return; F.add(nm); const ws=nm.split(' '); const f=ws[0]; if(f&&f.length>1){ S.add(f); S.add(f.replace(/^ال/,'')); }
       const last=ws[ws.length-1]; if(last && last.length>=5 && /^ال/.test(last) && last!=='الله' && last!=='الذي' && last!=='التي') N.add(last);   // паритет sunnah.com: нисба-сет из ПОСЛЕДНИХ слов полных имён (الجريري/الناقد/الزهري) — чист от قال/في (те — first-words)
-    }); window._narrKnownW=S; window._narrKnownF=F; window._narrKnownNisba=N; }catch(e){_тихо(e,"L10000")}
+    }); 
+       /* 🔴 10.09.2026 (смена 93). Множества подсветки строились ТОЛЬКО по однозначным
+          формам, и имена вроде «أبو الحسن» фильтр не пропускал — при том что мы точно знаем,
+          что это имя передатчика. Человек видел их серым текстом наравне со служебными
+          словами. Подсветка — утверждение «это имя», а не «это такой-то»: многозначность
+          ей не мешает, поэтому формы из карты тёзок вливаем сюда, а в привязку — нет. */
+       try{ const M=window._narrMultiMap; if(M) for(const nm in M){ if(!nm) continue; F.add(nm);
+              const ws=nm.split(' '); const f=ws[0]; if(f&&f.length>1){ S.add(f); S.add(f.replace(/^ال/,'')); }
+              const last=ws[ws.length-1];
+              if(last && last.length>=5 && /^ال/.test(last) && last!=='الله' && last!=='الذي' && last!=='التي') N.add(last); }
+       }catch(e){_тихо(e,"narrmulti2")}
+       window._narrKnownW=S; window._narrKnownF=F; window._narrKnownNisba=N; }catch(e){_тихо(e,"L10000")}
     // ДВЕНАДЦАТОЕ место того же класса, и оно било больнее всех. Здесь индекс ИМЁН
     // передатчиков — узкое место подсветки. `_narrNames=[]` после одной сетевой икоты делал
     // проверку `if(_narrNames)` вечно истинной (пустой массив истинен), и подсветка имён не
@@ -13339,11 +13361,11 @@ async function _loadGuar(){ if(_guarMap!==null) return _guarMap;
     .catch(()=>{ _guarPromise=null; _guarMap=null; return {}; });   // провал не запоминаем
   return _guarPromise; }   // QA-свип: таймаут (гарант-карта тёзок не виснет)
 let _curKeys=null;   // привычное имя (канон) → id, из narr_curated.json (#2652)
-async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.length) return null; const cn=_narrCanon(name); if(!cn) return null;
+async function _narrLookup(name, opts){ const _ист=(v,откуда)=>((opts&&opts.сИсточником)?{id:v,откуда:откуда}:v); const idx=await loadNarrNames(); if(!idx.length) return null; const cn=_narrCanon(name); if(!cn) return null;
   // #169/#170 (тёзка-резолвер): ГАРАНТ знаменитых ПЕРВЫМ — лечит «مالك→ат-Таии вместо б.Анаса», «قتادة→ар-Рахави вместо ас-Садуси». Неоднозначные (2 Суфьяна) в карту НЕ попали → их решает контекст цепи.
-  { try{ const g=await _loadGuar(); if(g && g[cn]!=null) return g[cn]; }catch(e){_тихо(e,"L10016")} }
+  { try{ const g=await _loadGuar(); if(g && g[cn]!=null) return _ист(g[cn],'гарант'); }catch(e){_тихо(e,"L10016")} }
   // #157/M382: фолбэк по ШУХРЕ/КУНЬЕ (أبو الزناد, и др.) — namesake-safe индекс narr_shuhra.json (только однозначные формы)
-  { try{ const sh=await _loadShuhra(); if(sh && sh[cn]!=null) return sh[cn]; }catch(e){_тихо(e,"L10018")} }
+  { try{ const sh=await _loadShuhra(); if(sh && sh[cn]!=null) return _ист(sh[cn],'шухра'); }catch(e){_тихо(e,"L10018")} }
   /* #2652 (владелец: «найди карточку А‘маша»). Прозвища вроде الأعمش нет ни в шухре, ни
      в общем списке имён: человек лежит там полным именем سليمان بن مهران. Но он есть
      в narr_curated.json — 98 записей, выверенных РУКАМИ, где привычное имя стоит рядом
@@ -13358,12 +13380,12 @@ async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.lengt
         for(const id in cur){ const v=cur[id]; if(!v||typeof v!=='object') continue;
           const k=_narrCanon(v.ar||''); if(k && _curKeys[k]==null) _curKeys[k]=id; }
       }
-      if(_curKeys && _curKeys[cn]!=null) return _curKeys[cn];
+      if(_curKeys && _curKeys[cn]!=null) return _ист(_curKeys[cn],'выверено руками');
     }catch(e){_тихо(e,"L10018b")} }
   /* #655 (С67): порог «короче 4 символов» стоял в самом начале и отсекал имя ДО опроса гаранта/шухры —
      хотя однозначный id для روح/انس/ليث/بهز там уже лежит. Теперь порог работает ПОСЛЕ карт: их ответ
      тёзка-безопасен по построению, а гадать по общему индексу имён на трёх буквах по-прежнему нельзя. */
-  if(cn.length<4) return null;
+  if(cn.length<4) return _ист(null,'коротко');
   // Ф-04б (M377): ДВУСТОРОННИЙ префикс — иснад бывает и КОРОЧЕ базы (سفيان → سفيان بن سعيد…), и ДЛИННЕЕ
   // (с нисбой: عبد الرحمن بن غنم الأشعري при базе عبد الرحمن بن غنم) → cover-матч (имя базы = префикс запроса, ≥2 слов, длиннейшее)
   let exact=null, pref=null, prefLen=1e9, cover=null, coverLen=0;
@@ -13372,7 +13394,7 @@ async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.lengt
     if(nm.indexOf(cn+' ')===0 && nm.length<prefLen){ pref=it[1]; prefLen=nm.length; }
     if(cn.indexOf(nm+' ')===0 && nm.length>coverLen && nm.indexOf(' ')>0){ cover=it[1]; coverLen=nm.length; } }
   const _поИмени = exact!=null?exact:(cover!=null?cover:pref);
-  if(_поИмени!=null) return _поИмени;
+  if(_поИмени!=null) return _ист(_поИмени,'общий индекс имён');
   /* 🔴 #684 (владелец открыл «أبي الشعثاء المحاربي», получил «не удалось опознать точно» и
      спросил: почему так). А он у нас есть — id 2561, кунья أبو الشعثاء, нисба المحاربي.
      Не нашли потому, что искали среди ИМЁН: кунья лежит в своём поле, нисба — в описании, и
@@ -13386,14 +13408,14 @@ async function _narrLookup(name){ const idx=await loadNarrNames(); if(!idx.lengt
     if(кн){
       // кунья склоняется: в цепи «أبي/أبا фулян», в базе «أبو фулян» — приводим к именительному
       const _ф=cn.replace(/^(?:\u0627\u0628\u064a|\u0627\u0628\u0627)(?= )/, '\u0627\u0628\u0648');
-      if(кн[_ф]!=null) return кн[_ф];
+      if(кн[_ф]!=null) return _ист(кн[_ф],'кунья+нисба');
       // «أبو الشعثاء المحاربي الكوفي» — нисба не обязательно второе слово: пробуем каждое
       const _сл=_ф.split(' ');
       if(_сл.length>=3){ const _к2=_сл[0]+' '+_сл[1];
-        for(let i=2;i<_сл.length;i++){ const _кл=_к2+' '+_сл[i]; if(кн[_кл]!=null) return кн[_кл]; } }
+        for(let i=2;i<_сл.length;i++){ const _кл=_к2+' '+_сл[i]; if(кн[_кл]!=null) return _ист(кн[_кл],'кунья+нисба'); } }
     }
   }catch(e){_тихо(e,"L_куньяНисба")}
-  return null; }
+  return _ист(null,'нет'); }
 /* Загрузчик указателя «кунья+нисба». Правила те же, что у соседей (см. _loadShuhra):
    один общий промис на всех зовущих и НЕ запоминаем неудачу — иначе секунда сети выключила бы
    опознание по кунье до перезагрузки приложения. Файл тянем ЛЕНИВО, только когда опознание по
@@ -15779,8 +15801,73 @@ async function ibDoSearch(q, focusEl, listEl){
   }
   // имя передатчика → id (Ф-04)
   focusEl.innerHTML='<div class="hint">⏳ опознаю «'+esc(q)+'»…</div>';
-  let id=null; try{ await loadNarrNames(); id=await _narrLookup(q); }catch(e){_тихо(e,"L11779")}
-  if(id==null){ focusEl.innerHTML='<div class="hint">Передатчик «'+esc(q)+'» не опознан — уточни имя (или это короткая форма, ждёт дизамбигуации).</div>'; return; }
+  /* 🔴 10.09.2026 (смена 93). ПРОВЕРКА ДЕЙСТВИЕМ ВСКРЫЛА ХУДШЕЕ, ЧЕМ ОЖИДАЛОСЬ.
+     Я шёл чинить отказ «ждёт дизамбигуации» и на живом окне обнаружил, что до отказа дело
+     не доходит: на «أبو الحسن» приложение уверенно отвечало «id 172» — одним человеком
+     из ТРИДЦАТИ, носящих эту кунью. И на уточнённое «أبو الحسن العسقلاني» отвечало тем же
+     172, хотя под этой формой в базе двое: 3 и 175. То есть это была не недоделка,
+     а утверждение — и неверное.
+     Откуда бралось: _narrLookup опрашивает по порядку выверенные карты (гарант, шухра,
+     сто записей, сделанных руками) и, если они молчат, ищет по ОБЩЕМУ списку имён. Там
+     у равия 172 записано имя «ابو الحسن», совпадение точное — и оно уходило как ответ.
+     Совпадение по общему списку — догадка, а не опознание: список не знает, что форма
+     принадлежит ещё двадцати девяти.
+     Поэтому теперь спрашиваем ИСТОЧНИК ответа. Выверенные карты остаются главными и
+     отвечают как прежде — их ответ тёзка-безопасен по построению. А догадку по общему
+     списку на многозначной форме не выдаём за человека: показываем всех кандидатов.
+     Одного не выбираем даже когда очень похоже: в хадисе ложная привязка дороже
+     недоделки (слово владельца; урок 92-й смены, где «единственный кандидат по
+     вхождению» привязал сподвижника к его дочери). */
+  let id=null, _откуда='';
+  try{ await loadNarrNames();
+       const _о=await _narrLookup(q, {сИсточником:true});
+       if(_о && typeof _о==='object'){ id=_о.id; _откуда=_о.откуда||''; } else { id=_о; }
+  }catch(e){_тихо(e,"L11779")}
+  let _канд=null;
+  try{ const M=window._narrMultiMap; const cn=_narrCanon(q);
+       if(M && cn) _канд=M[cn]||M[cn.replace(/^ال/,'')]||null; }catch(e){_тихо(e,"L11780m")}
+  const _догадка=(_откуда==='общий индекс имён');
+  if(_канд && _канд.length>1 && (id==null || _догадка)) id=null;   // тёзки решают: одного не называем
+  /* 🔴 10.09.2026 (смена 93), приказ Э1.1 «дизамбигуация ОБЯЗАТЕЛЬНА».
+     Здесь стояло «не опознан — уточни имя (или это короткая форма, ждёт дизамбигуации)».
+     Отказ был честным лишь наполовину: форма ждала дизамбигуации, а данные для неё УЖЕ
+     лежали в приложении — 7 769 многозначных форм из narrators_names2.json, которые
+     загружались и не читались ни одной строкой кода.
+     Теперь «не опознан» отделено от «опознано, но это тёзки». Второе — не отказ, а ответ:
+     имя известно, людей под ним столько-то, вот они, выбирай глазами. Одного кандидата
+     сами НЕ выбираем даже когда совпадение выглядит точным: см. разбор выше.
+     недоделки (слово владельца, и урок 92-й смены).
+     Имена кандидатов берём из narr_disp.json — он один на всех (1,5 МБ) вместо шардов
+     по 128 КБ на каждую сотню id. Грузим ЛЕНИВО и только здесь: человек спросил про
+     конкретное имя, это ответ на его просьбу, а не фоновая трата его трафика. */
+  if(id==null){
+    if(!_канд || !_канд.length){
+      focusEl.innerHTML='<div class="hint">Передатчик «'+esc(q)+'» не опознан — уточни имя.</div>'; return; }
+    focusEl.innerHTML='<div class="hint">⏳ имя известно, разбираю тёзок…</div>';
+    let _имена={}; try{ await _narrDisp(_канд[0]); _имена=_ndCache||{}; }catch(e){_тихо(e,"L11780d")}
+    const _пок=_канд.slice(0,40);
+    let _h='<div style="border:1px solid #8a6d3b;border-radius:11px;padding:10px;margin-bottom:9px;background:rgba(200,150,60,.10)">'
+      +'<div style="direction:rtl;text-align:right;font-weight:700;color:#ffd9a0">🪞 '+esc(q)+'</div>'
+      +'<div style="font-size:calc(12px * var(--txtScale,1));color:var(--hint);margin:4px 0 7px">'
+      +'Это имя в базе есть, но оно <b>не одного человека</b>: под ним '+_канд.length+' '
+      +'(по одному имени определить, кто именно, нельзя — нужен контекст цепи). '
+      +'Выбери, чью карточку открыть'+(_канд.length>_пок.length?' (показаны первые '+_пок.length+')':'')+':</div>'
+      +'<div style="display:flex;gap:5px;flex-wrap:wrap;direction:rtl">';
+    _пок.forEach(_id=>{ const _z=_имена[String(_id)]||{};
+      const _ар=_z.ar||('id '+_id), _ру=_z.ru||'';
+      _h+='<button class="mini _mcand" data-id="'+_id+'" style="padding:5px 9px;border:1px solid var(--border);border-radius:8px;font-size:calc(12px * var(--txtScale,1))" title="'+esc(_ру)+'">'+esc(_ар)+'</button>'; });
+    _h+='</div></div>';
+    focusEl.innerHTML=_h;
+    try{ focusEl.querySelectorAll('._mcand').forEach(b=>{ b.onclick=async()=>{
+           const _i=+b.getAttribute('data-id');
+           let _cc=null; try{ _cc=await _narrCard(_i); }catch(e){_тихо(e,"L11780c")}
+           const _z=_имена[String(_i)]||{};
+           focusEl.innerHTML='<div style="border:1px solid #2e9b5b;border-radius:11px;padding:10px;margin-bottom:9px;background:rgba(46,155,91,.08)">'
+             +'<div style="direction:rtl;text-align:right;font-weight:700;color:#bff5d4">👤 '+esc(_z.ar||(_cc?_cc[1]:q))+' <span style="font-size:calc(11px * var(--txtScale,1));color:var(--hint)">id '+_i+'</span></div>'
+             +(_z.ru?'<div style="font-size:calc(12px * var(--txtScale,1));color:var(--hint);margin-top:2px">'+esc(_z.ru)+'</div>':'')
+             +'<div style="font-size:calc(12px * var(--txtScale,1));color:var(--hint);margin-top:3px">Выбран из '+_канд.length+' тёзок под именем «'+esc(q)+'» — выбор твой, приложение его не угадывало.</div></div>'; }; });
+    }catch(e){_тихо(e,"L11780b")}
+    return; }
   let cc=null; try{ cc=await _narrCard(id); }catch(e){_тихо(e,"L11781")}
   focusEl.innerHTML='<div style="border:1px solid #2e9b5b;border-radius:11px;padding:10px;margin-bottom:9px;background:rgba(46,155,91,.08)"><div style="direction:rtl;text-align:right;font-weight:700;color:#bff5d4">👤 '+esc(cc?cc[1]:q)+' <span style="font-size:calc(11px * var(--txtScale,1));color:var(--hint)">id '+id+'</span></div>'
     +'<div style="font-size:calc(12px * var(--txtScale,1));color:var(--hint);margin-top:3px">Чтобы увидеть ВСЕ цепи и хадисы с этим передатчиком — режим <b>«🔗 Цепь»</b> или <b>«👤 Передатчик»</b> в поиске (добавь его чипом). Здесь ищи по коду цепи (C…).</div></div>';
