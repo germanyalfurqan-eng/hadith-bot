@@ -1045,7 +1045,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1627</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1628</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1923,7 +1923,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1627';
+const APPVER = 'v1628';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -8946,9 +8946,43 @@ function _муТахридж(){ if(_муТахрП) return _муТахрП;
   _муТахрП=fetch('./muhaymin_tahrij.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({}));
   return _муТахрП; }
 function m_ключ(м,h,i){ try{ return м[String(h.n)+'|'+i]||''; }catch(e){ return ''; } }
+/* ═══ fb#7 «Каша в хадисе и слова автора» · fb#8 «Почему часть без огласовок или не хадис это часть?» ═══
+
+   🔴 Две жалобы владельца об одном. Проверил счётом по всем 7 447 риваятам Мухэймина:
+      · 10 — вместо хадиса стоит ТАХРИДЖ АВТОРА: «صحيح: أخرجه مسلم [855]، والنسائى [1367]…»
+        (номера 429, 644, 713, 1736, 2308 и другие). Это слова Муршида о хадисе, а не хадис.
+        Показанные как «риваят 3/4», они и читаются кашей — в них ни иснада, ни матна.
+      · 11 — ОБРЫВКИ разбора: «(.», «.(», «تيئا فقلته")".». Не хадис вовсе.
+      ·  4 — почти пусто, меньше двенадцати арабских букв.
+      Итого 23 из 7 447 (0,31%). Мало по доле, но каждый — прямо на глазах.
+
+   ЧТО ДЕЛАЕМ И ЧЕГО НЕ ДЕЛАЕМ. Данные НЕ правим: это текст хадисов, и правило владельца
+   прямое — сперва показать, потом трогать. Правим ПОКАЗ, и он от этого честнее:
+      · тахридж автора показываем как тахридж — в его собственной зелёной рамке ниже,
+        подписанный именем автора. Он полезен, просто стоял не в своём поле;
+      · обрывок как «риваят» не показываем вовсе, а говорим прямо, что это огрех разбора
+        книги, — молчаливая подмена хуже честного признания;
+      · нумерация «риваят i/N» считается по НАСТОЯЩИМ риваятам, иначе «риваят 3/4» врал бы
+        о числе версий.  */
+/* ⚠️ Без \b: в JavaScript граница слова определена через [A-Za-z0-9_], и после арабской
+   буквы её НЕ БЫВАЕТ — тот же шаблон в Python отработал, а здесь молча не ловил ничего.
+   Поймано пробой в живом окне: «صحيح: أخرجه مسلم» опознавался как хадис. */
+const _АВТОР_ТАХРИДЖ=/^\s*[()«»"'.\-–—]*\s*(صحيح|حسن|ضعيف|منكر|شاذ|موضوع|أخرجه|رواه|وأخرجه|إسناده|متفق)(?=[\s:：،؛.]|$)/;
+function _видРиваята(t){
+  const s=String(t||'').replace(/\s+/g,' ').trim();
+  const букв=(s.match(/[ء-ي]/g)||[]).length;
+  if(букв<12) return 'обрывок';
+  if(_АВТОР_ТАХРИДЖ.test(s)) return 'тахридж';
+  return 'хадис'; }
+
 function cardMuh(d,groups){
   const {h}=d; const card=document.createElement('div');card.className='card';
-  const rv=(h.rv&&h.rv.length)?h.rv:[{t:h.text||'',s:''}];
+  const _всё=(h.rv&&h.rv.length)?h.rv:[{t:h.text||'',s:''}];
+  // fb#7/fb#8: отделяем настоящие риваяты от слов автора и обрывков разбора (см. _видРиваята).
+  const _вид=_всё.map(r=>_видРиваята((typeof r==='string')?r:r.t));
+  const rv=_всё.filter((r,k)=>_вид[k]==='хадис');
+  const _чужие=_всё.filter((r,k)=>_вид[k]!=='хадис').map((r,k2)=>({r:r, вид:_вид[_всё.indexOf(r)]}));
+  if(!rv.length && _всё.length) rv.push(_всё[0]);   // всё опознано как чужое — лучше показать как есть, чем пустую карточку
   rv.forEach((r,i)=>{
     const t=(typeof r==='string')?r:r.t; const s=((typeof r==='object'&&r.s)?r.s:'');
     const head=document.createElement('div'); head.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--hint);font-size:calc(12px * var(--txtScale,1));margin:8px 0 2px';
@@ -8972,6 +9006,26 @@ function cardMuh(d,groups){
         +'<div dir="rtl" style="font-size:calc(13.5px * var(--txtScale,1));line-height:1.75;margin-top:6px">'+esc(п)+'</div>';
       card.insertBefore(бл, ar.nextSibling);
     }).catch(()=>{}); }catch(e){_тихо(e,"L6790")}
+  });
+  /* fb#7/fb#8: то, что не является риваятом, показываем ПОД СВОИМ ИМЕНЕМ, а не молчим о нём.
+     Тахридж автора ценен сам по себе — он говорит, кто ещё передаёт хадис; беда была лишь
+     в том, что он стоял в поле текста и читался как обрывок хадиса. Обрывок разбора не
+     прячем тоже: скрытая потеря хуже видимой, владелец должен знать, что тут огрех книги. */
+  _чужие.forEach(({r, вид})=>{
+    const t=((typeof r==='string')?r:r.t)||'';
+    const бл=document.createElement('div');
+    if(вид==='тахридж'){
+      бл.style.cssText='margin:6px 0 2px;border:1px solid #4a5a3a;border-radius:9px;padding:6px 9px;background:rgba(90,140,70,.10)';
+      бл.innerHTML='<div style="color:#bfe3a8;font-size:calc(12px * var(--txtScale,1));font-weight:600">📜 تخريج автора — где ещё передаётся</div>'
+        +'<div style="color:var(--hint);font-size:calc(11.5px * var(--txtScale,1));margin:2px 0 5px">Это слова автора книги о хадисе, а не сам хадис. Прежде они показывались как отдельный риваят — оттого и читались кашей.</div>'
+        +'<div dir="rtl" style="font-size:calc(13.5px * var(--txtScale,1));line-height:1.75">'+esc(t)+'</div>';
+    } else {
+      бл.style.cssText='margin:6px 0 2px;border:1px dashed #8a6d3b;border-radius:9px;padding:6px 9px;background:rgba(200,150,60,.07)';
+      бл.innerHTML='<div style="color:#ffd9a0;font-size:calc(12px * var(--txtScale,1));font-weight:600">✂️ обрывок разбора книги — не хадис</div>'
+        +'<div style="color:var(--hint);font-size:calc(11.5px * var(--txtScale,1));margin:2px 0 5px">Кусок, оставшийся при разборе книги на хадисы. Как версию хадиса не показываем и за хадис не выдаём.</div>'
+        +'<div dir="rtl" style="font-size:calc(13px * var(--txtScale,1));opacity:.75">'+esc(t.slice(0,300))+'</div>';
+    }
+    card.appendChild(бл);
   });
   const warn=document.createElement('div'); warn.className='hint'; warn.style.cssText='margin:6px 0 0;color:#ffb74d;font-size:calc(12px * var(--txtScale,1))';
   warn.textContent='⚠️ Книга в обработке — возможны ошибки распознавания. Автор: مرشد بن يوسف.';
