@@ -1065,7 +1065,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1633</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1634</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1943,7 +1943,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1633';
+const APPVER = 'v1634';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -17875,6 +17875,21 @@ async function narrOpen(nm){
   try{ window.scrollTo({top:res.offsetTop-8,behavior:'smooth'}); }catch(e){_тихо(e,"L13085")}
 }
 async function narrRun(q, seq){
+  // 🔴 ЗАЯВКА №177 (владелец, 15.06.2026, «дай оценку»), закрыта 12.09.2026 — смена 95.
+  // На скрине владельца в режиме «Передатчик» набрано «"عائشة بنت أبي"» и получен ответ
+  // «По такому написанию не нашёл». Проверил сегодня вживую, обе формы подряд:
+  //   عائشة بنت أبي    → 2 кандидата, первая — عائشه بنت ابي بكر الصديق (id 3026);
+  //   "عائشة بنت أبي"  → 0.
+  // То есть беда не в написании имени, а в КАВЫЧКАХ. Кавычки — синтаксис поиска по ТЕКСТУ
+  // («точное словосочетание», так и написано в подсказке под полем), и человек переносит
+  // привычку в соседний режим. Здесь они уходили в подбор имени как обычные буквы, а имён
+  // с кавычкой внутри не существует — отсюда «не нашёл» на живого и самого известного равия.
+  // Подсказка под полем при этом обвиняла ПОЛЬЗОВАТЕЛЯ («попробуй часть имени, только нисбу»),
+  // хотя имя он написал верно. Ложное объяснение хуже молчания: оно уводит от починки —
+  // три месяца заявка и лежала.
+  // Снимаем кавычки всех начертаний. Скобки/звёздочки не трогаю: их поведение не проверял,
+  // а править по догадке — это и есть то, за что чиню сейчас.
+  q = String(q == null ? '' : q).replace(/[«»"“”„‟‘’']/g, ' ').replace(/\s+/g, ' ').trim();
   hideNarrSugg();   // дропдаун-подсказки гасим — список кандидатов рисуем в результатах
   const res=document.getElementById('res'); res.innerHTML='';
   const head=info('👤 Ищу передатчика…'); res.appendChild(head);
