@@ -1065,7 +1065,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1634</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1635</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1943,7 +1943,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1634';
+const APPVER = 'v1635';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -12407,7 +12407,24 @@ function addTr(meta,card,text,ayah,fav){
       const wasActive=(sp.textContent==='⏹')||speechSynthesis.speaking||speechSynthesis.pending;
       try{ speechSynthesis.cancel(); }catch(e){_тихо(e,"L9200")}
       if(wasActive){ sp.textContent='🔊'; return; }
-      let mt=String(text||'').replace(/[«»]/g,'').replace(/\([^)]*\)/g,' ').trim(); if(!mt) return;   // #146: читаем ВЕСЬ хадис (иснад+матн), не только матн
+      /* 🔴 ЗАЯВКА M907 (приложение). Разобрано 13.09.2026 (смена 96): в боте текст перед
+         озвучкой чистится (_для_голоса), а ЗДЕСЬ, в клиентской озвучке, чистились только
+         «» и скобки. Синтез речи читал вслух служебный мусор: решётки, звёздочки, обратные
+         кавычки, ссылки, хештеги, номера сносок, коды вида (¬١) — всё это человек слышал.
+         Владелец просил «правильные символы и акценты» — значит чистить, как в боте.
+         Огласовки (ташкыль) НЕ трогаем: это и есть правильное чтение арабского, без них
+         синтез прочтёт слово неверно. */
+      let mt=String(text||'')
+        .replace(/https?:\/\/\S+/g,' ')          // ссылки не читаем вслух
+        .replace(/<\/?[a-zA-Z][^>]*>/g,' ')      // остатки HTML-разметки
+        .replace(/\*{1,3}|_{1,3}|`{1,3}|~{1,3}/g,' ')   // markdown-акценты
+        .replace(/#[\wА-Яа-яЁё]+/g,' ')          // хештеги
+        .replace(/\([^)]*\)/g,' ')               // сноски/пояснения в скобках
+        .replace(/[«»"“”„]/g,' ')
+        .replace(/[\[\]{}<>|]/g,' ')
+        .replace(/[\u200b-\u200f\u2028-\u202f\ufeff\u180e]/g,' ')   // невидимые и управляющие — ТОЛЬКО эскейпами: живые символы в узоре ломают движок (проверено 13.09.2026)
+        .replace(/\s{2,}/g,' ')
+        .trim(); if(!mt) return;   // #146: читаем ВЕСЬ хадис (иснад+матн), не только матн
       const u=new SpeechSynthesisUtterance(mt); u.lang='ar-SA'; u.rate=0.88;
       // #192: берём голос из кэша; getVoices() пробуем как фолбэк, но при пустом ответе НЕ затираем ранее найденный кэш.
       let av=window._arVoice; if(!av){ try{ const vs=speechSynthesis.getVoices()||[]; const f=vs.find(v=>/^ar/i.test(v.lang)); if(f){ av=f; window._arVoice=f; } }catch(e){_тихо(e,"L9205")} }
@@ -14376,7 +14393,22 @@ async function _ragПоОстальным(res, вопрос, head){
   for(const z of сп.slice(0,12)){
     const к=document.createElement('div'); к.className='card';
     const ш=document.createElement('div'); ш.className='meta';
-    ш.textContent='📖 '+ИМЯ(z['книга'])+' · хадис '+(z.n||'?');
+    /* 🔴 ЗАЯВКА M944 (владелец, письмо #2670 от 04.09.2026, дословно): «Технадзор где перевод?
+       Почему красивее не опыляешь? Сборник имя на арабском и но по рядом перевод».
+       Разобрано 13.09.2026 (смена 96): имя сборника здесь подписывалось ТОЛЬКО по-русски.
+       Владелец просит ОБА имени рядом — арабское и русское. Арабское с огласовками у нас
+       есть (book_titles_voc.json, выверено вручную), оно уже грузится в _catTr.map[имя].voc.
+       Ставим арабское ПЕРВЫМ (человек ищет глазами знакомое начертание), русское — рядом.
+       Нет арабского в словаре — показываем как раньше, одно русское: выдумывать имя сборника
+       нельзя, это подпись источника. */
+    const _арИмя=(function(){ try{ const v=(_catTr&&_catTr.map&&_catTr.map[z['книга']]||{}).voc; return v||''; }catch(e){ return ''; } })();
+    const _русИмя=ИМЯ(z['книга']);
+    if(_арИмя){
+      ш.innerHTML='📖 <span class="ar" style="font-family:var(--arFont)">'+esc(_арИмя)+'</span>'
+        +' <span style="opacity:.85">'+esc(_русИмя||'')+'</span> · хадис '+esc(String(z.n||'?'));
+    } else {
+      ш.textContent='📖 '+_русИмя+' · хадис '+(z.n||'?');
+    }
     // 04.09.2026: арабский и перевод — РАЗНЫМИ блоками. Раньше дверь слала одно поле,
     // и оно всегда было арабским; с появлением перевода русский текст поехал бы в блок
     // с арабским начертанием — справа налево, чужим шрифтом. Молча и криво.
@@ -14392,6 +14424,27 @@ async function _ragПоОстальным(res, вопрос, head){
     const ру=String(z['r']||'').trim();
     if(ру){ const рб=document.createElement('div'); рб.style.cssText='margin-top:6px;opacity:.92';
             рб.textContent=_обрезать(ру, 900); к.appendChild(рб); }
+    /* 🔴 ЗАЯВКА M940 (владелец, письмо #1622 от 26.08.2026, дословно): «И где ссылки в
+       приложение наше читалку соответсвующей книги».
+       Разобрано 13.09.2026 (смена 96): у находок блока «🔎 Ищу по N сводам» стояли имя
+       сборника и номер хадиса, а перехода в НАШУ читалку не было вовсе — в отличие от
+       карточки RAG по Бухари, где клик по источнику открывает читалку на этом хадисе.
+       Владелец сказал «где ссылки» — значит ссылка должна быть НА КАЖДОЙ находке.
+       Кнопку собираем только для книг, которые читалка действительно держит (isReadable) —
+       вести в несуществующую читалку хуже, чем не вести никуда. */
+    try{
+      const _код=String(z['книга']||z['код']||z['code']||'').trim();
+      if(_код && typeof isReadable==='function' && isReadable(_код)){
+        const _н=String(z['n']||'').replace(/[^0-9]/g,'');
+        const _чб=document.createElement('div'); _чб.style.cssText='margin-top:7px';
+        const _кн=document.createElement('span'); _кн.className='mini';
+        _кн.style.cssText='cursor:pointer';
+        _кн.textContent='📖 Читать у нас' + (_н?(' — хадис '+_н):'');
+        _кн.onclick=function(ev){ try{ ev.stopPropagation(); }catch(e){_тихо(e,"L_rag940")}
+          try{ openByCodeNum(_код, _н?Number(_н):null); }catch(e){ _тихо(e,"L_rag940b") } };
+        _чб.appendChild(_кн); к.appendChild(_чб);
+      }
+    }catch(e){_тихо(e,"L_rag940c")}
     res.appendChild(к);
   }
 }
