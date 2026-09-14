@@ -1071,7 +1071,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1645</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1646</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1949,7 +1949,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1645';
+const APPVER = 'v1646';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5203,12 +5203,20 @@ async function smartSearch(meaning, force){
   return localObj();
 }
 async function smartPhrases(meaning, force){ return (await smartSearch(meaning, force)).phrases; }
-let _redoPrev=null, _redoN=0;   // M170: прежний подбор (для «↩ вернуть как было») + счётчик повторов
+let _redoPrev=null, _redoN=0, _redoУжеСпросил=false;   // M170: прежний подбор (для «↩ вернуть как было») + счётчик повторов
 async function redoSmart(){ const q=(document.getElementById('q').value||'').trim(); if(!q) return;
   // M170 (заявка владельца): повторная генерация = ГЛУБЖЕ (не хуже), а не «ещё раз то же самое».
   // ① первый повтор запоминает прежний подбор и прежнюю строку поиска (для возврата);
   // ② новые фразы ИИ ОБЪЕДИНЯЮТСЯ со старыми (дубли вычищаются) — поиск шире, глубже;
   // ③ выдача после повторного поиска сортируется «лучшие вперёд» (relMode) с пометкой и кнопкой возврата.
+  // M171: при ПОВТОРНОМ повторе ИИ просит уточнить — окно с выбором (сузить/расширить/просто повторить)
+  if(_redoN>=1 && !_redoУжеСпросил){
+    _redoУжеСпросил=true;
+    const дет = await _уточнитьПовтор(q);
+    if(дет==='отмена'){ toast('Повтор отменён'); return; }
+    if(дет==='глубже'){ /* пусто — просто идём глубже */ }
+    else if(дет){ document.getElementById('q').value = (q + ' ' + дет).trim(); }
+  }
   delete _aiCache[tab+'|'+q.toLowerCase()]; toast('Переподбираю глубже…⏳');
   const старФраз=_neuroPh.filter(ф=>ф.вкл).map(ф=>ф.текст);
   if(!_redoPrev) _redoPrev={фразы:_neuroPh.map(ф=>({текст:ф.текст,вкл:ф.вкл})), запрос:document.getElementById('q').value};
@@ -5219,10 +5227,26 @@ async function redoSmart(){ const q=(document.getElementById('q').value||'').tri
   applyPhrases(объед);
   toast('Глубже: '+объед.length+' фраз (было '+старФраз.length+') — нажми «Искать по выбранным»'); }
 document.addEventListener('click',e=>{ if(e.target && e.target.classList && e.target.classList.contains('redoAi')) redoSmart(); });
+// M171: окно уточнения при повторном повторе — ИИ «запрашивает детали» у пользователя
+function _уточнитьПовтор(q){ return new Promise(реш=>{ try{
+  const m=document.createElement('div'); m.className='modal';
+  m.innerHTML='<div class="modalBox" style="max-width:460px;padding:16px">'
+    +'<div style="font-weight:700;font-size:16px;margin-bottom:6px">🧠 Уточнить запрос?</div>'
+    +'<div style="color:var(--hint);font-size:13.5px;margin-bottom:10px">ИИ уже искал по «'+esc(q.slice(0,60))+'» '+_redoN+' раз(а). Что уточнить, чтобы найти точнее?</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +'<button class="go" id="_uD" style="padding:8px 14px">✏️ Вписать детали (книга, тема, имя)</button>'
+    +'<button class="go" id="_uR" style="padding:8px 14px">🔄 Искать ещё глубже без деталей</button>'
+    +'<button class="go" id="_uC" style="padding:8px 14px">Отмена</button></div></div>';
+  document.body.appendChild(m); modalTop(m); m.style.display='flex';
+  m.querySelector('#_uD').onclick=()=>{ const д=prompt('Что уточнить? (добавлю к запросу)',''); m.style.display='none'; m.remove(); реш((д||'').trim()); };
+  m.querySelector('#_uR').onclick=()=>{ m.style.display='none'; m.remove(); реш('глубже'); };
+  m.querySelector('#_uC').onclick=()=>{ m.style.display='none'; m.remove(); реш('отмена'); };
+  m.addEventListener('click',e=>{ if(e.target===m){ m.style.display='none'; m.remove(); реш('отмена'); } });
+}catch(e){_тихо(e,"L4812"); реш('глубже');} }); }
 // M170: «↩ вернуть как было» — откат повтора: прежний набор фраз и прежняя строка поиска, сортировка сброшена
 async function redoRevert(){ if(!_redoPrev) { toast('Возвращать нечего — повтора ещё не было'); return; }
   _neuroPh=_redoPrev.фразы; document.getElementById('q').value=_redoPrev.запрос;
-  const прежний=_redoN; _redoPrev=null; _redoN=0;
+  const прежний=_redoN; _redoPrev=null; _redoN=0; _redoУжеСпросил=false;
   try{ relMode=false; renderResultsView(); }catch(e){_тихо(e,"L4810")}
   toast('Вернул как было (повторов было '+прежний+') — фразы прежние, строка поиска прежняя'); }
 document.addEventListener('click',e=>{ if(e.target && e.target.classList && e.target.classList.contains('redoRevert')) redoRevert(); });
@@ -5804,6 +5828,7 @@ async function runSearch(explicit){
      поиска. Живёт вне #res — чистится здесь, вместе с соседом. */
   try{ const _rh=document.getElementById('rootHint'); if(_rh) _rh.remove(); }catch(e){_тихо(e,"L4265r")}
   const seq=++_seq; groupSrc=false; uniqMode=false; relMode=false; _lastQueryTerms=[];   // новый поиск — сброс режимов вывода
+  _redoУжеСпросил=false;   // M171: уточнение снова доступно в новом поиске
   /* v1434: какие книги НЕ СКАЧАЛИСЬ за этот поиск. Объявлено на уровне функции намеренно —
      сообщение о них рисуется в finally, а объявление внутри try туда бы не дотянулось. */
   const _неСкачалось=[];
