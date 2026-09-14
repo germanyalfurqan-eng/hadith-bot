@@ -1071,7 +1071,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1648</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1649</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1949,7 +1949,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1648';
+const APPVER = 'v1649';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -22338,8 +22338,28 @@ async function doTafsir(s,a,out,btn,key,lang){
         +'<span class="tfcopy chip" title="Скопировать текст толкования" style="cursor:pointer;font-size:calc(12px * var(--txtScale,1))">⧉ Копировать</span>'
       +'</div>'
       +'<div style="display:flex;gap:6px;margin-bottom:6px"><input class="tfFind" placeholder="🔎 найти слово в этом толковании…" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:calc(13px * var(--txtScale,1))"><span class="tfFindInfo hint" style="font-size:calc(11px * var(--txtScale,1));align-self:center;white-space:nowrap"></span></div>'
+      +'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:5px" class="tfToc"></div>'
       +'<div class="tafsirText" style="'+(isAr?'direction:rtl;text-align:right;font-size:17px;line-height:1.9':'font-size:14px;line-height:1.65')+';max-height:340px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:10px">'+(txt?esc(txt).replace(/\n+/g,'<br>'):'Для этого аята в этом тафсире нет текста.')+'</div><div class="tftrOut" style="margin-top:8px"></div></div>';
     out.innerHTML=html;
+    // M177 (остаток заявки): УМНАЯ РАЗБИВКА длинного тафсира — оглавление абзацев сверху.
+    // Текст длиннее ~1200 знаков: каждый абзац получает якорь; в .tfToc — кнопки «▸ N», клик = скролл к абзацу.
+    try{ const tt=out.querySelector('.tafsirText'), toc=out.querySelector('.tfToc');
+      if(tt&&toc&&txt&&txt.length>1200&&txt.indexOf('\n')!==-1){
+        const абзацы=tt.innerHTML.split(/<br>/);
+        const anchors=[];
+        tt.innerHTML='';
+        абзацы.forEach((пс,i)=>{ if(!пс.trim()) return;
+          const div=document.createElement('div'); div.id='tfA'+i;
+          div.style.cssText='margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed var(--border)';
+          div.innerHTML=пс; tt.appendChild(div); anchors.push(i); });
+        if(anchors.length>2){ toc.innerHTML='<span class="hint" style="font-size:calc(11px * var(--txtScale,1));align-self:center">Оглавление:</span>';
+          anchors.forEach((ii,n)=>{ const b=document.createElement('span'); b.className='chip';
+            b.style.cssText='cursor:pointer;font-size:calc(12px * var(--txtScale,1))'; b.textContent='▸ '+(n+1);
+            b.onclick=()=>{ const al=tt.querySelector('#tfA'+ii); if(al) al.scrollIntoView({block:'start',behavior:'smooth'}); };
+            toc.appendChild(b); });
+        } else { toc.remove(); }
+      } else { const tc=out.querySelector('.tfToc'); if(tc) tc.remove(); }
+    }catch(e){_тихо(e,"L16208")}
     // M30: заметка «Muslimoon рекомендует» (если есть наш выбор тафсира на этот аят)
     try{ loadOurTafsir().then(ot=>{ const rec=ot&&ot[s+':'+a]; if(!rec) return; const tfn=(TAFSIRS.find(t=>t.key===rec.tafk)||{}).nm||rec.tafk||''; const c=out.firstElementChild; if(!c) return;
       const nb=document.createElement('div'); nb.style.cssText='background:rgba(46,155,107,.1);border:1px solid #2e9b6b;border-radius:9px;padding:7px 10px;margin-bottom:7px;font-size:calc(12.5px * var(--txtScale,1));color:#bff5d4';
