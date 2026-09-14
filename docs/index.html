@@ -953,6 +953,12 @@ window.тихоОтчёт = function () {
   .gate p{color:var(--hint);max-width:360px}
   /* modal управление */
   .modal{position:fixed;inset:0;background:#000d;-webkit-backdrop-filter:blur(2.5px);backdrop-filter:blur(2.5px);display:none;align-items:flex-start;justify-content:center;z-index:80;padding:14px;padding-top:calc(46px + var(--tgTop,0px) + env(safe-area-inset-top,0px));overflow:auto;overscroll-behavior:contain}   /* #657/#659 (С67): было 40px без учёта панели Telegram — верх окна уходил ей под кнопки · #681: прокрутка окна не «протекает» на фон */
+  /* M175 (заявка 🔴 «при выделении текста страница тянется вниз»): протечка инерции длинного
+     документа в WebView — при растяжении выделения касание дотягивает документ до конца.
+     overscroll-behavior:none на корневых контейнерах гасит цепочку протечки (в .modal уже
+     был contain — то же самое для главного потока), выделение и обычный скролл не ломает. */
+  html,body{overscroll-behavior:none}
+  #res,#bookText,#readBody{overscroll-behavior:contain}
   /* #681 (С67): пока открыто хоть одно окно — страница под ним заморожена. Иначе палец тянул сразу
      три прокрутки (страница → окно → панель), и окно на глазах «шагало». Класс ставит _bodyLock(). */
   /* #681 (С67, ПОВТОРНАЯ правка — прошлая не работала, замерено живьём): прокручиваемый элемент здесь
@@ -1065,7 +1071,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1643</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1644</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1943,7 +1949,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1643';
+const APPVER = 'v1644';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7812,9 +7818,33 @@ function wideCard(x){ const card=document.createElement('div');card.className='c
   const nwout=document.createElement('div');nwout.className='tr-out';
   nw.onclick=()=>doNarrators(cleanTxt,nwout,nw); meta.appendChild(nw);
   // ⛓ НейроТахкик — анализ цепи (БЕТА-демо): схема-древо иснада с цветными звеньями + словами учёных. Р-27: ярлык «· скоро» врал — кнопка РАБОЧАЯ (openNeuroTahkik открывает БЕТА-демо с иллюстративными данными) → переименовано в «· бета», чтобы ярлык соответствовал содержимому (не скрывал рабочую фичу).
-  const nt=document.createElement('button');nt.className='tr-btn';nt.textContent='⛓ НейроТахкик · бета';nt.title='БЕТА-демо: схема-древо иснада — цветные звенья (надёжный/слабый/лжец/тадлис), клик по звену → слова учёных, клик по связи → доказательство сама‘. Данные пока иллюстративные.';
-  nt.style.cssText='background:#2e1d4a;border:1px solid #6c5ce7;color:#d9ccff;padding:6px 11px';
-  nt.onclick=()=>{ try{ openNeuroTahkik(); }catch(e){ toast('🔬 Нейро-Тахкик — схема скоро'); } }; meta.appendChild(nt);
+  /* 🔴 ЗАЯВКА M924 (владелец, письмо n=2670 от 04.09.2026, дословно): «Технадзор где перевод?
+     Почему красивее не опыляешь? Сборник имя на арабском и но по рядом перевод, потом ниже
+     арабский идёт правильно, но перевод нужен? Плюс кнопка свёрнутая ли активная ссылка
+     вызова нейротахкик».
+     Разобрано 14.09.2026 (смена 96). Владелец просил ДВЕ вещи; первая (арабское имя сборника
+     рядом с русским) сделана — см. M944. Вторая — «активная ссылка вызова нейротахкика» —
+     и вот тут беда: кнопка БЫЛА, но вела в ДЕМО с иллюстративными данными, а НАСТОЯЩИЙ разбор
+     цепи лежит готовым (neuro/, 176 423 хадиса, neuroVerdict) и открывался сам по себе, без
+     всякой кнопки — на листе книги. То есть владелец жал кнопку, видел выдуманную схему и не
+     мог добраться до настоящей. Активная ссылка вела не туда — это хуже отсутствующей.
+
+     СДЕЛАНО: кнопка ведёт к НАСТОЯЩЕМУ разбору — он раскрывает тот же блок, что и на листе
+     (doNarrators + нейротахкик по цепи этого хадиса). Демо-схема остаётся отдельной кнопкой
+     и честно подписана, чтобы её не приняли за настоящий разбор (Р-27: ярлык не должен врать). */
+  const nt=document.createElement('button');nt.className='tr-btn';nt.textContent='⛓ Нейротахкик';nt.title='Разбор ЦЕПИ этого хадиса: слабые звенья с именами и номерами, слова учёных, ссылки на Мактабу и sunnah. Считается заранее по нашим правилам — это не ИИ.';
+  nt.style.cssText='background:transparent;border:1px solid #6c5ce7;color:#d9ccff;padding:6px 11px';
+  nt.onclick=()=>{ try{
+      /* Открываем настоящий разбор: тот же путь, что у «👤 Передатчики», — он тянет цепь
+         и вердикт нейротахкика по этому хадису. Своей двери не заводим (З-33). */
+      doNarrators(cleanTxt, nwout, nw);
+      try{ nwout.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){_тихо(e,"L_M924s")}
+    }catch(e){ try{ toast('🔬 Нейротахкик: разбор не открылся — '+e.message); }catch(_e){} } };
+  meta.appendChild(nt);
+  const ntd=document.createElement('button');ntd.className='tr-btn';ntd.textContent='🔬 демо-схема';
+  ntd.title='ИЛЛЮСТРАТИВНАЯ схема древа иснада (данные выдуманы для показа вида). Настоящий разбор — кнопка «⛓ Нейротахкик».';
+  ntd.style.cssText='background:#2e1d4a;border:1px solid #4a3d6a;color:#b9a7ff;padding:6px 11px;font-size:calc(11px * var(--txtScale,1))';
+  ntd.onclick=()=>{ try{ openNeuroTahkik(); }catch(e){ toast('🔬 демо-схема не открылась'); } }; meta.appendChild(ntd);
   const ab=document.createElement('button'); ab.className='tr-btn arabusToggle'; ab.title='Разбор слов: включи и тапай любое слово в тексте → корень и значения';
   ab.style.cssText='border:1px solid #1e7d5a;color:#7fe3bf;padding:6px 9px;background:'+(_arabusOn?'#173d30':'transparent');
   ab.textContent='📕 Arabus';
@@ -9037,7 +9067,25 @@ function cardMuh(d,groups){
        Сшито по честному ключу (номер хадиса + метка источника автора), вернулось 2660.
        ⚠️ Подписываем ИМЕНЕМ АВТОРА. Это его слова, а не наш вывод: наш собственный тахридж
        по 64 печатям — отдельная вещь и живёт своей кнопкой «Где ещё передаётся». */
-    try{ _муТахридж().then(м=>{ const п=м&&m_ключ(м,h,i); if(!п) return;
+    /* 🔴 ЗАЯВКА M919 (письмо #462 от 12.08.2026) — вторая половина, найденная скептиком роя
+       14.09.2026. Тахридж автора сшит не для всех хадисов (покрыто 1467 номеров из 3307, и
+       это честная причина — базы разошлись при переразбивке). Но интерфейс на непокрытом
+       хадисе МОЛЧАЛ: стояло `if(!п) return` — человек не отличал «у автора тахриджа нет»
+       от «мы его потеряли». Разница огромная: в первом случае смотреть нечего, во втором —
+       это наш долг. Молчание выглядело как «всё хорошо».
+       Теперь на непокрытом хадисе стоит честная строка: тахриджа автора здесь нет, и почему.
+       Обещать «скоро» не буду — не знаю срока; вру, если напишу. */
+    try{ _муТахридж().then(м=>{ const п=м&&m_ключ(м,h,i);
+      if(!п){
+        try{
+          const _подп=document.createElement('div');
+          _подп.style.cssText='margin:4px 0 2px;padding:5px 9px;border-left:2px solid #6a6a4a;color:var(--hint);font-size:calc(11.5px * var(--txtScale,1))';
+          _подп.textContent='📜 Тахриджа автора у этого хадиса нет — не потеряли, а его не было '
+            +'в исходнике (сшито 1467 из 3307 номеров; остальное не сошлось при переразбивке базы).';
+          card.insertBefore(_подп, ar.nextSibling);
+        }catch(e){_тихо(e,"L_M919")}
+        return;
+      }
       const бл=document.createElement('details');
       бл.style.cssText='margin:4px 0 2px;border:1px solid #4a5a3a;border-radius:9px;padding:6px 9px;background:rgba(90,140,70,.10)';
       бл.innerHTML='<summary style="cursor:pointer;color:#bfe3a8;font-size:calc(12px * var(--txtScale,1));font-weight:600">📜 تخريج — где ещё передаётся <span style="opacity:.75;font-weight:400">· по словам автора</span></summary>'
@@ -11158,7 +11206,40 @@ async function openCatalog(q0){   // q0 (опц.) — начальный зап�
         +_wkNameLine
         +((wk||_shamChip(b.i))?('<div style="direction:ltr;text-align:left;margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">'+_wkChip+_shamChip(b.i)+'</div>'):'')
         +((!wk&&tr&&tr.ru)?('<div style="direction:ltr;text-align:left;font-size:calc(13px * var(--txtScale,1));color:#bcd0ff;margin-top:2px">'+esc(tr.ru)+'</div>'):'')
-        +(b.a?('<div style="font-size:calc(12px * var(--txtScale,1));color:var(--hint);margin-top:2px">'+esc(b.a)+(b.c?(' · '+esc(catLabel(b.c).split(' — ')[1]||b.c)):'')+'</div>'):'');
+        +(b.a?('<div style="font-size:calc(12px * var(--txtScale,1));color:var(--hint);margin-top:2px">'+esc(b.a)+(b.c?(' · '+esc(catLabel(b.c).split(' — ')[1]||b.c)):'')+'</div>'):'')
+        /* 🔴 ЗАЯВКА M939 (владелец, письмо 25.08.2026): «проверь есть ли у нас в базе эта
+           книга. Если нет — закон: в апптурасе и сунна ком не может быть книги, доступной,
+           кроме как у нас».
+           РАЗОБРАНО 14.09.2026 (смена 96) — и вот что вышло числами: в каталоге 8589 книг,
+           а тексты лежат У НАС только у 64. Человек видел книгу в списке, жал — и уходил
+           наружу, в Мактабу, потому что текста у нас нет. Главная беда была даже не в
+           неполноте, а в МОЛЧАНИИ о ней: по списку нельзя было понять, какая книга читается
+           у нас, а какая — только по ссылке. Владелец справедливо считал это нарушением.
+           Ставим честную пометку у каждой строки: «📖 текст у нас» или «↗ текст по ссылке».
+           Маленькая, тихая, у самого названия — но по ней видно, куда ведёт нажатие.
+           Обещать «скоро скачаем» не буду: это 8525 книг, и врать про срок нельзя. */
+        +(function(){ try{
+            /* ⚠️ ЧЕСТНО ПРО СПИСКИ, иначе пометка соврёт. Первым порывом я сверялся с
+               READABLE (9 сводов) и _BID2READ (14 изданий) — но замер показал: тексты есть
+               у 39 книг, а в этих списках их 10 и 14, и при этом в списках есть книги БЕЗ
+               текста (1363, 1435, 8140, 117359 — файлов нет). То есть оба списка про ДРУГОЕ:
+               они про «есть наш ридер с русским переводом», а не про «текст лежит у нас».
+               Пометку строю на том же признаке, по которому openBook РЕАЛЬНО решает:
+               откроется нашим ридером (книга в COLL_BIDS/EXTRA_BIDS и есть код) или уйдёт
+               наружу в Мактабу. Так подпись не расходится с поведением — жмёшь и видишь
+               ровно то, что обещано. */
+            let _код=null;
+            try{
+              for(const cd in COLL_BIDS){ if((COLL_BIDS[cd]||[]).map(String).indexOf(String(b.i))>=0){ _код=cd; break; } }
+              if(!_код){ for(const cd in EXTRA_BIDS){ if(String(EXTRA_BIDS[cd])===String(b.i)){ _код=cd; break; } } }
+            }catch(e){ _код=null; }
+            const _уНас=!!(_код && typeof isReadable==='function' && isReadable(_код));
+            return '<div style="font-size:calc(10.5px * var(--txtScale,1));margin-top:3px;'
+              +(_уНас?'color:#8fd6a4':'color:#a99a6a')+'">'
+              +(_уНас?'📖 читается у нас — своя читалка, перевод, инструменты'
+                      :'↗ откроется по ссылке (Мактаба) — своей копии текста у нас нет')
+              +'</div>';
+          }catch(e){ return ''; } })();
       const _wl=main.querySelector('.wkLink'); if(_wl) _wl.onclick=(e)=>{ e.stopPropagation(); try{ openLink(_wl.dataset.u); }catch(_e){_тихо(_e,"L8098")} };
       main.onclick=()=>{ openBook(b.i); };   // не прячем catModal (как narrModal/hadModal) — читалка/turath-книга встаёт ПОВЕРХ (z-index 10005), закрыл → каталог с поиском/скроллом на месте (не улетаем на главный экран)
       const tools=document.createElement('div'); tools.style.cssText='display:flex;gap:8px;margin-top:5px;direction:ltr';
@@ -14446,6 +14527,35 @@ async function _ragПоОстальным(res, вопрос, head){
         _чб.appendChild(_кн); к.appendChild(_чб);
       }
     }catch(e){_тихо(e,"L_rag940c")}
+    /* 🔴 ЗАЯВКА M943 (владелец, письмо #2663 от 04.09.2026): «Технадзор как выдавать результат рага
+       я уже объяснял — что хадисы как сворачиваются, переводы, ссылки, передатчики».
+       Разобрано 14.09.2026 (смена 96): перевод и ссылка в выдаче RAG были, а ПЕРЕДАТЧИКОВ
+       не было вовсе — ни цепи, ни счётчика звеньев. Владелец назвал их третьим пунктом
+       наравне с переводом и ссылкой, значит без них ответ неполный.
+       Берём цепь готовой функцией _codifNa (она уже грузит codif по книге и номеру) —
+       вторую дорогу не заводим (З-33). Показываем счётчик опознанных звеньев и первые
+       имена: этого хватает, чтобы понять, от кого хадис, и перейти в полный разбор.
+       Не вышло (книга без опознанных цепей) — молчим, а не рисуем пустую строку. */
+    try{
+      const _кодЦ=String(z['книга']||z['код']||'').trim();
+      const _номЦ=String(z['n']||'').replace(/[^0-9]/g,'');
+      const _bidЦ=(window._htbMeta&&_htbMeta[_кодЦ]&&_htbMeta[_кодЦ].bid)||null;
+      if(_bidЦ && _номЦ && typeof _codifNa==='function'){
+        _codifNa(_bidЦ, _номЦ).then(function(na){
+          try{
+            if(!na || !na.length) return;
+            const _имена=na.map(x=>_narrDispName?(_narrDispName(x)||x):x).filter(Boolean);
+            if(!_имена.length) return;
+            const б=document.createElement('div');
+            б.style.cssText='margin-top:6px;font-size:calc(11.5px * var(--txtScale,1));color:var(--hint)';
+            б.innerHTML='🌀 <b style="color:#bcd0ff">'+_имена.length+'</b> звень'
+              +(_имена.length===1?'о':'ев')+' в цепи: '
+              +esc(_имена.slice(0,5).join(' › '))+( _имена.length>5?' …':'');
+            к.appendChild(б);
+          }catch(e){_тихо(e,"L_rag943b")}
+        }).catch(function(){});
+      }
+    }catch(e){_тихо(e,"L_rag943")}
     res.appendChild(к);
   }
 }
