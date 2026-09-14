@@ -1071,7 +1071,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1644</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1645</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1949,7 +1949,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1644';
+const APPVER = 'v1645';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5203,10 +5203,29 @@ async function smartSearch(meaning, force){
   return localObj();
 }
 async function smartPhrases(meaning, force){ return (await smartSearch(meaning, force)).phrases; }
+let _redoPrev=null, _redoN=0;   // M170: прежний подбор (для «↩ вернуть как было») + счётчик повторов
 async function redoSmart(){ const q=(document.getElementById('q').value||'').trim(); if(!q) return;
-  delete _aiCache[tab+'|'+q.toLowerCase()]; toast('Переподбираю заново…⏳');
-  const ph=await smartPhrases(q, true); if(ph&&ph.length){ applyPhrases(ph); } else toast('ИИ не подобрал — уточни запрос'); }
+  // M170 (заявка владельца): повторная генерация = ГЛУБЖЕ (не хуже), а не «ещё раз то же самое».
+  // ① первый повтор запоминает прежний подбор и прежнюю строку поиска (для возврата);
+  // ② новые фразы ИИ ОБЪЕДИНЯЮТСЯ со старыми (дубли вычищаются) — поиск шире, глубже;
+  // ③ выдача после повторного поиска сортируется «лучшие вперёд» (relMode) с пометкой и кнопкой возврата.
+  delete _aiCache[tab+'|'+q.toLowerCase()]; toast('Переподбираю глубже…⏳');
+  const старФраз=_neuroPh.filter(ф=>ф.вкл).map(ф=>ф.текст);
+  if(!_redoPrev) _redoPrev={фразы:_neuroPh.map(ф=>({текст:ф.текст,вкл:ф.вкл})), запрос:document.getElementById('q').value};
+  _redoN++;
+  const ph=await smartPhrases(q, true);
+  if(!ph||!ph.length){ toast('ИИ не подобрал — уточни запрос'); return; }
+  const объед=старФраз.slice(); for(const п of ph){ if(!объед.some(x=>x===п)) объед.push(п); }
+  applyPhrases(объед);
+  toast('Глубже: '+объед.length+' фраз (было '+старФраз.length+') — нажми «Искать по выбранным»'); }
 document.addEventListener('click',e=>{ if(e.target && e.target.classList && e.target.classList.contains('redoAi')) redoSmart(); });
+// M170: «↩ вернуть как было» — откат повтора: прежний набор фраз и прежняя строка поиска, сортировка сброшена
+async function redoRevert(){ if(!_redoPrev) { toast('Возвращать нечего — повтора ещё не было'); return; }
+  _neuroPh=_redoPrev.фразы; document.getElementById('q').value=_redoPrev.запрос;
+  const прежний=_redoN; _redoPrev=null; _redoN=0;
+  try{ relMode=false; renderResultsView(); }catch(e){_тихо(e,"L4810")}
+  toast('Вернул как было (повторов было '+прежний+') — фразы прежние, строка поиска прежняя'); }
+document.addEventListener('click',e=>{ if(e.target && e.target.classList && e.target.classList.contains('redoRevert')) redoRevert(); });
 let _logT2;
 function logSearch(q,tab,count){
   try{ if(count>0) _histPush(q,tab); }catch(e){_тихо(e,"L3760")}   // #167: личная история (только удачные поиски) для персональных рекомендаций
@@ -5938,7 +5957,7 @@ async function runSearch(explicit){
   const setHead=(done)=>{ const n = count
       ? ('Найдено: '+count+(count>CAP?' (показаны первые '+CAP+')':'')+(done?'':' · ищу…'))
       : (done?'':'');   // v1093 П-2: «ничего не найдено» больше не строка в шапке — рисуем блоком-состоянием ниже
-    head.innerHTML = (smartNote?('<div style="color:var(--link);margin-bottom:4px;font-size:calc(13px * var(--txtScale,1))">'+esc(smartNote)+' <span class="redoAi" style="cursor:pointer;text-decoration:underline;white-space:nowrap">🔄 повторить глубже (ИИ)</span></div>'):'')+n;
+    head.innerHTML = (smartNote?('<div style="color:var(--link);margin-bottom:4px;font-size:calc(13px * var(--txtScale,1))">'+esc(smartNote)+' <span class="redoAi" style="cursor:pointer;text-decoration:underline;white-space:nowrap">🔄 повторить глубже (ИИ)</span>'+( _redoN?('<span class="redoRevert" style="cursor:pointer;text-decoration:underline;white-space:nowrap;margin-left:10px">↩ вернуть как было</span> <span style="opacity:.7">(сортировка изменена ИИ · повтор '+_redoN+')</span>'):'')+'</div>'):'')+n;
     if(done){ _goBusy(false); _skelOff();
       // v1093 П-2 (гугл-апп: у них пустое/ошибочное состояние — аккуратный блок, а не сухая строка):
       // причина + КНОПКИ-ВЫХОДЫ. Раньше было «Ничего не найдено 🤷» и тупик.
@@ -22683,6 +22702,8 @@ function _neuroИскать(){
   if(!вкл.length){ toast('Все фразы выключены — включи хотя бы одну'); return; }
   document.getElementById('q').value = вкл.map(function(p){
     return p.indexOf(' ')!==-1 ? ('"'+p+'"') : p; }).join(' | ');
+  // M170: после повтора выдача сортируется «лучшие вперёд» — повтор = глубже, пометка и возврат в head
+  if(_redoN) relMode=true;
   runSearch();
 }
 
