@@ -1071,7 +1071,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1650</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1651</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1949,7 +1949,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1650';
+const APPVER = 'v1651';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6167,6 +6167,34 @@ async function runSearch(explicit){
     // Длинный вставленный ХАДИС (целиком) → сразу широкий поиск (sunnah.one). Пробуем НЕСКОЛЬКО фраз-кандидатов
     // из разных мест матна (иснад бывает и в начале, и в конце) — берём первую, что нашла.
     if(explicit && !modes.ai && !numMode && isArabic(shown)){
+      // M292 (заявка владельца): НЕСКОЛЬКО хадисов в одном тексте → определить КАЖДЫЙ.
+      const маркеры=[/(?:عَنْ|عن)\s+(?:النَّبِيِّ|النبي)/, /(?:قَالَ|قال)\s+(?:رَسُولُ|رسول)\s+(?:الله|اللهِ)/, /(?:حَدَّثَنَا|حدثنا)/, /(?:أَخْبَرَنَا|أخبرنا)/];
+      let попаданий=0; for(const м_ of маркеры){ попаданий += (shown.match(м_)||[]).length; }
+      if(попаданий>=2){
+        const сегм=String(q).split(/(?=(?:حَدَّثَنَا|حدثنا|أَخْبَرَنَا|أخبرنا|عَنْ|عن)\s)/).map(s=>s.trim()).filter(s=>canon(s).split(' ').filter(w=>w.length>1).length>=6).slice(0,5);
+        if(сегм.length>=2){
+          res.innerHTML='';
+          const заг=document.createElement('div'); заг.className='hint'; заг.style.cssText='color:#4ade80;font-size:calc(13px * var(--txtScale,1));margin:0 0 8px';
+          заг.textContent='🧩 Вижу '+сегм.length+' хадиса в тексте — ищу каждый отдельно…'; res.appendChild(заг);
+          let нашелось=0;
+          for(let i=0;i<сегм.length;i++){
+            const сег=canon(сегм[i]).split(' ').filter(w=>w.length>1); const N2=сег.length;
+            const канд=[...new Set([0.45,0.6,0.3].map(p=>сег.slice(Math.floor(N2*p),Math.floor(N2*p)+6).join(' ')))].filter(s=>s.split(' ').length>=4);
+            for(const c2 of канд){
+              try{ const rr=await fetch(BACKEND_URL+'/wide?q='+encodeURIComponent(c2)+'&initData='+encodeURIComponent(INITDATA));
+                if(seq!==_seq) return; if(rr.status===403||rr.status===429) continue;
+                const jj=await rr.json().catch(()=>({})); const dd=jj.data||[];
+                if(dd.length){ if(!нашлось){ await loadBooksMap(); try{ await loadS1Books(); }catch(e2){_тихо(e2,"M292a")} }
+                  const hd=document.createElement('div'); hd.className='hint'; hd.style.cssText='color:#d6b25a;font-size:calc(12.5px * var(--txtScale,1));font-weight:700;margin:10px 0 4px';
+                  hd.textContent='Хадис '+(i+1)+' · первые '+Math.min(3,dd.length)+' совпадения:'; res.appendChild(hd);
+                  dd.slice(0,3).forEach(x=>res.appendChild(wideCard(x)));
+                  нашелось+=dd.length; break; }
+              }catch(e2){_тихо(e2,"M292b")}
+            }
+          }
+          setStatus(''); logSearch(shown,tab,нашелось); return;
+        }
+      }
       const cwAll=canon(q).split(' ').filter(w=>w.length>1);
       if(cwAll.length>12){ const N=cwAll.length;
         const cands=[...new Set([0.45,0.6,0.3,0.75,0.5].map(p=>cwAll.slice(Math.floor(N*p),Math.floor(N*p)+6).join(' ')))].filter(s=>s.split(' ').length>=4);
