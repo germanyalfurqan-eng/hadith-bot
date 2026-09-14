@@ -6326,6 +6326,24 @@ _ЛЕНТА_ГРЯЗНО = [0]
     # Значок НЕ 🟩: им подписывается сам помощник, и общий значок снова слил бы нас двоих.
     'dsoc1':    ('🛠 <b>Клод — линия помощника</b>', 'линия помощника (Клод)',
                  r'🛠\s*Клод'),
+    # 🔴 14.09.2026, слово владельца: «занимайся связь, наладь в муслимун-боте с тобой
+    # под ником технадзор v2». Пояснил при уточнении прямо: это **НОВАЯ ЛИНИЯ** — слова
+    # с пометкой «v2» идут ДРУГОЙ сессии, а не мне.
+    #
+    # ЗАЧЕМ ЭТО ВООБЩЕ НУЖНО, и почему нельзя было просто «подписываться иначе».
+    # До сегодня «технадзор» — это ключ «клод», то есть Я. Владелец же хочет вести
+    # ПАРАЛЛЕЛЬНУЮ линию технадзора (v2), не смешивая её со мной: у неё свои смены, своя
+    # работа, свой счёт. Пока ключа нет, КАЖДОЕ его письмо со словом «технадзор» падало
+    # ко мне — то есть новая линия была бы слепой, а я бы получал чужую почту и отвечал
+    # за работу, которой не делал. Ровно тот класс, что уже разбирался в #414 и #450:
+    # чужие слова под чужим именем, и владелец не понимает, с кем говорит.
+    #
+    # ⚠️ ПРИМЕТА СТРОГО ПО «v2» И ВЫШЕ ПРОВЕРКИ ОБЩЕГО «технадзор». Порядок критичен:
+    # в _ключ_автора и _адресат есть строка `if 'технадзор' in к: return 'клод'`, и если
+    # проверку на v2 поставить НИЖЕ неё, она никогда не сработает — письмо уйдёт мне.
+    # Значок 📡 занят оркестратором, 🛠 — линией помощника, 🧠 — мини-аппом (мной).
+    # Берём ⚙️: он не занят никем.
+    'технадзор v2': ('⚙️ <b>Технадзор v2</b>', 'технадзор v2', r'⚙️\s*Технадзор\s*v2|технадзор\s*v2'),
     'помощник': ('', 'помощник', r''),
 }
 КТО_СКАЗАЛ = {}           # chat_id → {message_id: ключ сессии}
@@ -21756,22 +21774,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await _мсообщ(update).reply_text('Не собралось: %s' % (_беда or 'без причины'))
             return
 
-        # ===== M210-остаток: «слово <слово> = <верный перевод>» — владелец исправляет ИИ-перевод слова =====
-        # Пишется в wordai.json (перезапись ИИ) И в arabus.json (если есть семья корня — в неё тоже),
-        # чтобы Arabus ПОМНИЛ исправление навсегда (заявка M210: «Arabus ПОМНИТ, если ИИ исправил»).
-        _слово_м = re.match(r'^слово\s+([ء-ي]+)\s*=\s*(.+)$', _tl)
-        if _слово_м:
-            _слоvo = _слово_м.group(1).strip()
-            _перев = _слово_м.group(2).strip()[:300]
-            try:
-                _кач = wordai_get(_wordai_key(_слоvo)) or {}
-                val = {'ru': _перев, 'root': (_кач.get('root') or ''), 'gram': (_кач.get('gram') or ''), 'd': datetime.now().strftime('%d.%m.%Y'), 'w': _слоvo, 'fix': 'владелец'}
-                await loop.run_in_executor(None, wordai_put, _wordai_key(_слоvo), val)
-                await _мсообщ(update).reply_text('✅ Запомнил: «%s» = %s (ИИ больше не переспросит — исправление владельца)' % (_слоvo, _перев))
-            except Exception as _e:
-                await _мсообщ(update).reply_text('Не записал: %s' % str(_e)[:200])
-            return
-
         # ===== АНОНС в канал приложения вручную ===== «анонс» = текущий update_note.txt; «анонс <текст>» = свой
         if _tl == "анонс" or _tl.startswith("анонс ") or _tl.startswith("анонс\n"):
             custom = text.strip()[5:].strip()
@@ -27939,6 +27941,11 @@ async def _api_serve(application=None):
             к = str(к or '').strip().lower()
             if not к:
                 return 'клод'
+            # 🔴 14.09.2026: письма владельца с пометкой «технадзор v2» идут ОТДЕЛЬНОЙ линии,
+            # а не мне. Строка стоит ВЫШЕ общего «технадзор → клод» намеренно: иначе она
+            # никогда не сработает, и новая линия осталась бы без почты, а я бы получал чужую.
+            if 'технадзор' in к.replace(' ', '') and 'v2' in к.replace(' ', ''):
+                return 'технадзор v2'
             if 'локалк' in к:
                 return 'локалки'
             if 'гермес' in к:
@@ -28353,60 +28360,6 @@ async def _api_serve(application=None):
             'секунд': round(time.time() - нач, 1),
             # Пусто — это ОТВЕТ, а не отсутствие ответа: значит модальность сейчас слепа/глуха.
             'разобрано': итог or '(ничего не разобрано — смотри логи Railway, там названа причина)'}))
-
-    async def sharh_api(r):
-        """M174 (заявка владельца): ШАРХ УЧЁНЫХ на хадисе. Фронт шлёт кусок матна,
-        мы ищем его в sunnah.one (лесенка уже есть в search_sunnah_one), берём sharh_id
-        и тянем сам шарх (action=sharh). Возвращаем {html}. Честные отказы: не нашлось —
-        так и говорим, источник ответил ошибкой — называем код."""
-
-        def _чистый_текст(_т):
-            # data приходит HTML-строкой; качаем его и отдаём ПОЧТИ как есть — но только
-            # содержимое (без script/style), чтобы фронт мог показать безопасно.
-            try:
-                _т = re.sub(r'(?is)<script[\s\S]*?</script>', ' ', _т)
-                _т = re.sub(r'(?is)<style[\s\S]*?</style>', ' ', _т)
-                _т = re.sub(r'(?is)<br\s*/?>', '\n', _т)
-                _т = re.sub(r'(?is)</p>', '\n\n', _т)
-                _т = re.sub(r'(?is)<[^>]+>', '', _т)
-                _т = _т.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"')
-                return re.sub(r'\n{3,}', '\n\n', _т).strip()
-            except Exception:
-                return _т
-
-        try:
-            d = await _body(r)
-            user = verify_init_data(d.get('initData'))
-            if not feature_allowed('neuro', user):
-                return _deny('sharh')
-            if not rate_ok('sharh:' + _uid(user, r), 20, 60):
-                return _ratelimited()
-            text = (d.get('text') or '').strip()[:600]
-            if len(text) < 20:
-                return _cors(web.json_response({'error': 'короткий текст'}))
-            # 1) ищем хадис в sunnah.one по матну (лесенка: все слова -> 3 -> 2 -> 1)
-            _c, _items = await loop.run_in_executor(None, search_sunnah_one, text, 5)
-            _прич = _ПРИЧИНА_SUNNAH[0]
-            sid = None
-            for it in (_items or []):
-                if it.get('sharh_id'):
-                    sid = it.get('sharh_id'); break
-            if not sid:
-                return _cors(web.json_response({'error': 'нет', 'причина': (_прич or 'в источнике этого хадиса шарх не нашёлся')}))
-            # 2) тянем шарх по id
-            try:
-                rr = await loop.run_in_executor(None, lambda: requests.get('https://search.sunnah.one/?action=sharh&id=' + str(sid), headers={'User-Agent': 'Mozilla/5.0'}, timeout=20))
-                if rr.status_code != 200:
-                    return _cors(web.json_response({'error': 'источник ответил %d' % rr.status_code}))
-                j = rr.json()
-                html = str((j or {}).get('data') or '')
-                if not html:
-                    return _cors(web.json_response({'error': 'нет', 'причина': 'источник отдал пустой шарх'}))
-                return _cors(web.json_response({'ok': True, 'sharh_id': str(sid), 'text': _чистый_текст(html)}))
-            except Exception as e2:
-                return _cors(web.json_response({'error': 'источник не ответил (%s)' % type(e2).__name__}))
-        except Exception as e:
-            return _cors(web.json_response({'error': str(e)[:200]}))
 
     async def fayl(r):
         """Отдать текст файлом в чат — тем же ходом, что и помощник."""
@@ -29087,6 +29040,11 @@ async def _api_serve(application=None):
             _и = str(_и or '').strip().lower()
             if not _и:
                 return ''
+            # 🔴 14.09.2026: «технадзор v2» — ОТДЕЛЬНАЯ линия (слово владельца). Проверка
+            # СТРОГО ВЫШЕ всех прочих: ниже есть `if 'технадзор' in _и: return 'клод'`, и без
+            # этой строки письмо линии v2 подписалось бы мной.
+            if 'технадзор' in _и.replace(' ', '') and 'v2' in _и.replace(' ', ''):
+                return 'технадзор v2'
             if 'локалк' in _и:
                 return 'локалки'
             # 🔴 13.09.2026, слово владельца: «а тебе оркестратор или ответ на твое смс».
@@ -31952,7 +31910,7 @@ async def _api_serve(application=None):
         return ответ
 
     a = web.Application(middlewares=[_счёт_трафика], client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/proba_ii', proba_ii), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/vyzov', vyzov), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/sharh', sharh_api), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/proba_ii', proba_ii), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/vyzov', vyzov), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
