@@ -28338,6 +28338,60 @@ async def _api_serve(application=None):
             # Пусто — это ОТВЕТ, а не отсутствие ответа: значит модальность сейчас слепа/глуха.
             'разобрано': итог or '(ничего не разобрано — смотри логи Railway, там названа причина)'}))
 
+    async def sharh_api(r):
+        """M174 (заявка владельца): ШАРХ УЧЁНЫХ на хадисе. Фронт шлёт кусок матна,
+        мы ищем его в sunnah.one (лесенка уже есть в search_sunnah_one), берём sharh_id
+        и тянем сам шарх (action=sharh). Возвращаем {html}. Честные отказы: не нашлось —
+        так и говорим, источник ответил ошибкой — называем код."""
+
+        def _чистый_текст(_т):
+            # data приходит HTML-строкой; качаем его и отдаём ПОЧТИ как есть — но только
+            # содержимое (без script/style), чтобы фронт мог показать безопасно.
+            try:
+                _т = re.sub(r'(?is)<script[\s\S]*?</script>', ' ', _т)
+                _т = re.sub(r'(?is)<style[\s\S]*?</style>', ' ', _т)
+                _т = re.sub(r'(?is)<br\s*/?>', '\n', _т)
+                _т = re.sub(r'(?is)</p>', '\n\n', _т)
+                _т = re.sub(r'(?is)<[^>]+>', '', _т)
+                _т = _т.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"')
+                return re.sub(r'\n{3,}', '\n\n', _т).strip()
+            except Exception:
+                return _т
+
+        try:
+            d = await _body(r)
+            user = verify_init_data(d.get('initData'))
+            if not feature_allowed('neuro', user):
+                return _deny('sharh')
+            if not rate_ok('sharh:' + _uid(user, r), 20, 60):
+                return _ratelimited()
+            text = (d.get('text') or '').strip()[:600]
+            if len(text) < 20:
+                return _cors(web.json_response({'error': 'короткий текст'}))
+            # 1) ищем хадис в sunnah.one по матну (лесенка: все слова -> 3 -> 2 -> 1)
+            _c, _items = await loop.run_in_executor(None, search_sunnah_one, text, 5)
+            _прич = _ПРИЧИНА_SUNNAH[0]
+            sid = None
+            for it in (_items or []):
+                if it.get('sharh_id'):
+                    sid = it.get('sharh_id'); break
+            if not sid:
+                return _cors(web.json_response({'error': 'нет', 'причина': (_прич or 'в источнике этого хадиса шарх не нашёлся')}))
+            # 2) тянем шарх по id
+            try:
+                rr = await loop.run_in_executor(None, lambda: requests.get('https://search.sunnah.one/?action=sharh&id=' + str(sid), headers={'User-Agent': 'Mozilla/5.0'}, timeout=20))
+                if rr.status_code != 200:
+                    return _cors(web.json_response({'error': 'источник ответил %d' % rr.status_code}))
+                j = rr.json()
+                html = str((j or {}).get('data') or '')
+                if not html:
+                    return _cors(web.json_response({'error': 'нет', 'причина': 'источник отдал пустой шарх'}))
+                return _cors(web.json_response({'ok': True, 'sharh_id': str(sid), 'text': _чистый_текст(html)}))
+            except Exception as e2:
+                return _cors(web.json_response({'error': 'источник не ответил (%s)' % type(e2).__name__}))
+        except Exception as e:
+            return _cors(web.json_response({'error': str(e)[:200]}))
+
     async def fayl(r):
         """Отдать текст файлом в чат — тем же ходом, что и помощник."""
         if not application or not BACKUP_SECRET:
@@ -31882,7 +31936,7 @@ async def _api_serve(application=None):
         return ответ
 
     a = web.Application(middlewares=[_счёт_трафика], client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/proba_ii', proba_ii), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/vyzov', vyzov), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/proba_ii', proba_ii), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/vyzov', vyzov), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/sharh', sharh_api), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
