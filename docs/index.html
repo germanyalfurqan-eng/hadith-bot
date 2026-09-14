@@ -1071,7 +1071,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1646</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1647</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1949,7 +1949,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1646';
+const APPVER = 'v1647';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -12450,6 +12450,28 @@ function addTr(meta,card,text,ayah,fav){
       const _hn=!!_noteByRef(_nrk); nb.style.color=_hn?'var(--mark)':'var(--text)'; nb.title=_hn?t('Заметка есть — изменить','Note exists — edit'):t('Добавить заметку','Add a note');   // M15 i18n(T3): addTr не имеет локального t → безопасно
       nb.onclick=()=>openNoteEditor(_nrk,_nlbl,_nref); meta.appendChild(nb); }
   }catch(e){_тихо(e,"L9153")}
+  // M174 (заявка владельца): кнопка «📜 Шарх» — пояснения учёных к этому хадису (sunnah.one).
+  // Спрашиваем бэк по КУСКУ МАТНА (лесенка поиска уже на бэке), рисуем текст под матном.
+  try{ if(text && text.length>40 && BACKEND_URL && !ayah){
+    const sb=document.createElement('button'); sb.className='tr-btn'; sb.textContent='📜'; 
+    sb.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
+    sb.title='Шарх учёных (Ибн Хаджар и др.) — поиск в источнике по тексту хадиса';
+    const out=document.createElement('div'); out.style.cssText='display:none;width:100%;direction:rtl;text-align:right;font-size:calc(14px * var(--txtScale,1));line-height:1.9;color:var(--text);white-space:pre-wrap;border-top:1px dashed var(--border);margin-top:7px;padding-top:7px';
+    let busy=false;
+    sb.onclick=async()=>{
+      if(out.dataset.got){ out.style.display=(out.style.display==='none')?'block':'none'; return; }
+      if(busy) return; busy=true; const _т=sb.textContent; sb.textContent='⏳'; sb.disabled=true;
+      try{
+        const rr=await fetch(BACKEND_URL+'/sharh',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({text:String(text).slice(0,600),initData:INITDATA})});
+        const j=await rr.json().catch(()=>({}));
+        if(j && j.ok && j.text){ out.textContent=j.text; out.style.display='block'; out.dataset.g='1'; sb.textContent='📜'; }
+        else { sb.textContent=_т; toast('Шарх не нашёлся'+(j&&j.причина?(' — '+j.причина):'')); }
+      }catch(e){ _тихо(e,"L6608"); sb.textContent=_т; toast('Источник не ответил — попробуй ещё раз'); }
+      finally{ busy=false; sb.disabled=false; }
+    };
+    meta.appendChild(sb); meta.appendChild(out);
+  } }catch(e){_тихо(e,"L6608")}
   const cp=document.createElement('button');cp.className='tr-btn';cp.textContent='⧉';
   cp.style.cssText='background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 11px';
   cp.title=t('Копировать','Copy');
