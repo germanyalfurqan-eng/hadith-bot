@@ -21756,6 +21756,22 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await _мсообщ(update).reply_text('Не собралось: %s' % (_беда or 'без причины'))
             return
 
+        # ===== M210-остаток: «слово <слово> = <верный перевод>» — владелец исправляет ИИ-перевод слова =====
+        # Пишется в wordai.json (перезапись ИИ) И в arabus.json (если есть семья корня — в неё тоже),
+        # чтобы Arabus ПОМНИЛ исправление навсегда (заявка M210: «Arabus ПОМНИТ, если ИИ исправил»).
+        _слово_м = re.match(r'^слово\s+([ء-ي]+)\s*=\s*(.+)$', _tl)
+        if _слово_м:
+            _слоvo = _слово_м.group(1).strip()
+            _перев = _слово_м.group(2).strip()[:300]
+            try:
+                _кач = wordai_get(_wordai_key(_слоvo)) or {}
+                val = {'ru': _перев, 'root': (_кач.get('root') or ''), 'gram': (_кач.get('gram') or ''), 'd': datetime.now().strftime('%d.%m.%Y'), 'w': _слоvo, 'fix': 'владелец'}
+                await loop.run_in_executor(None, wordai_put, _wordai_key(_слоvo), val)
+                await _мсообщ(update).reply_text('✅ Запомнил: «%s» = %s (ИИ больше не переспросит — исправление владельца)' % (_слоvo, _перев))
+            except Exception as _e:
+                await _мсообщ(update).reply_text('Не записал: %s' % str(_e)[:200])
+            return
+
         # ===== АНОНС в канал приложения вручную ===== «анонс» = текущий update_note.txt; «анонс <текст>» = свой
         if _tl == "анонс" or _tl.startswith("анонс ") or _tl.startswith("анонс\n"):
             custom = text.strip()[5:].strip()
