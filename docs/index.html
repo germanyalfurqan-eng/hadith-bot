@@ -1071,7 +1071,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1656</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1657</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1949,7 +1949,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1656';
+const APPVER = 'v1657';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4009,8 +4009,9 @@ async function loadQuranRu(){
     const j = JSON.parse(текст);
     if(ed==='rus-abuadel'){ ((j&&j.quran)||[]).forEach(v=>{ map[v.chapter+':'+v.verse]=v.text; }); }
     else { j.forEach(v=>{ map[v.s+':'+v.a]=v.t; }); }
-  }catch(e){   // фолбэк — локальный Кулиев, чтобы перевод не пропал совсем
-    try{ const j=await (await fetch(QURAN_RU_URL)).json(); j.forEach(v=>{ map[v.s+':'+v.a]=v.t; }); }catch(_e){_тихо(_e,"L2884")}
+  }catch(e){   // фолбэк — локальный Кулиев только для другого выбранного перевода
+    // Для Кулиева повтор того же URL не помогает; для Абу Аделя Кулиев остаётся запасным.
+    if(ed!=='rus-elmirkuliev') try{ const текст=await _грузитьСоШкалой(QURAN_RU_URL,'резервный перевод Корана (Кулиев)'); const j=JSON.parse(текст); j.forEach(v=>{ map[v.s+':'+v.a]=v.t; }); }catch(_e){_тихо(_e,"L2884")}
   }finally{ try{ setStatus(''); }catch(_){_тихо(_,"L2885")} }
   /* 🔴 05.09.2026, находка роя, проверена. Защита ниже спасала только если кеш УЖЕ был:
      `!map.length && quranRu` → вернуть старый. А при ПЕРВОЙ неудаче (кеша ещё нет) пустой
@@ -4035,15 +4036,16 @@ async function _грузитьСоШкалой(url, что){
   // ошибки, а ждать его нечему. Тогда приложение стоит молча, и даже в журнал ничего не
   // ложится — сторож ждёт первый байт, которого не будет.
   // Ставим предел на само соединение: полминуты и обрыв с внятной ошибкой.
-  // ⚠️ ЧЕРЕЗ ПРОВЕРКУ, А НЕ НАПРЯМУЮ: AbortSignal.timeout есть не во всех оболочках Telegram
-  // на старых Android. Обратись мы к нему вслепую — на таком телефоне рухнула бы ЛЮБАЯ
-  // загрузка, а не только зависшая. Нет поддержки — грузим как раньше, без предела.
-  const _срок = (typeof AbortSignal !== 'undefined' && AbortSignal.timeout)
-    ? { signal: AbortSignal.timeout(30000) } : undefined;
-  const r = await fetch(url, _срок);
-  if(!r.ok) throw new Error('HTTP '+r.status);
+  // AbortSignal.timeout есть не во всех Telegram WebView. Используем совместимый
+  // AbortController + таймер: один предел покрывает соединение и чтение всего ответа.
+  const _контроллер = (typeof AbortController==='function') ? new AbortController() : null;
+  const _таймер = _контроллер ? setTimeout(()=>{try{_контроллер.abort();}catch(_){ }},30000) : null;
+  let r;
+  try{ r=await fetch(url,_контроллер?{signal:_контроллер.signal}:undefined); }
+  catch(e){ if(_таймер) clearTimeout(_таймер); throw e; }
+  if(!r.ok){ if(_таймер) clearTimeout(_таймер); throw new Error('HTTP '+r.status); }
   const всего = +(r.headers.get('content-length') || 0);
-  if(!r.body || !всего){ try{ setStatus('Загружаю '+что+'…'); }catch(_){_тихо(_,"L2899")} return await r.text(); }
+  if(!r.body || !всего){ try{ setStatus('Загружаю '+что+'…'); }catch(_){_тихо(_,"L2899")} try{return await r.text();}finally{if(_таймер) clearTimeout(_таймер);} }
   const чтец = r.body.getReader();
   const куски = []; let принято = 0, былоПринято = 0, тихо = 0;
   const сторож = setInterval(()=>{
@@ -4067,7 +4069,7 @@ async function _грузитьСоШкалой(url, что){
       try{ setStatus('Загружаю '+что+' — '+проц+'% · '+
         (скор>900 ? (скор/1024).toFixed(1)+' МБ/с' : Math.round(скор)+' КБ/с')); }catch(_){_тихо(_,"L2920")}
     }
-  } finally { clearInterval(сторож);
+  } finally { clearInterval(сторож); if(_таймер) clearTimeout(_таймер);
     try{ if(window._netInd && window._netInd.потокСнять) window._netInd.потокСнять(что); }catch(_){}   // #717
   }
   const сек = Math.max(.15,(Date.now()-t0)/1000);
