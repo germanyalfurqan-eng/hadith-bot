@@ -1949,7 +1949,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1658';
+const APPVER = 'v1659';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2140,6 +2140,7 @@ const REVERSE_INDEX_URL = "./reverse_index.json";
 const REVERSE_INDEX_ЗАПАС = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/reverse_index.json";
 const QURAN_URL = "./quran.json";
 const QURAN_RU_URL = "./quran_ru.json";
+const QURAN_RU_CDN_URL = "https://cdn.jsdelivr.net/gh/germanyalfurqan-eng/hadith-bot@main/docs/quran_ru.json";
 const MUHAYMIN_URL = "./muhaymin.json";
 const AHMAD_URL = "./ahmad.json";
 const EDITION_URL = code => `https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-${code}.min.json`;
@@ -3995,6 +3996,10 @@ async function loadQuranRu(){
   if(quranRu && window._quranRuEd===ed) return quranRu;
   const nm=ed==='rus-abuadel'?'Абу Адель':'Кулиев';
   const map={};
+  const _загрузитьКулиева=async (название)=>{
+    try{ return JSON.parse(await _грузитьСоШкалой(QURAN_RU_URL,название)); }
+    catch(первичнаяОшибка){ return JSON.parse(await _грузитьСоШкалой(QURAN_RU_CDN_URL,название+' (резервный CDN)')); }
+  };
   // 27.07.2026, владелец: «разберись с этой загрузкой вечной». Разобрался: статус «Загружаю перевод
   // Корана…» СТАВИЛСЯ, но никогда не снимался — ни при успехе, ни при ошибке. Файл при этом приходит
   // за 1.3 секунды (1.58 МБ), то есть ничего не висело: висела только надпись. Классическая ловушка —
@@ -4002,15 +4007,13 @@ async function loadQuranRu(){
   // Заодно, как просил владелец: живая шкала с процентами и скоростью, а если скорость упала до нуля
   // или загрузка ползёт — пишем в журнал ошибок, чтобы это не осталось незамеченным.
   try{
-    const url = (ed==='rus-abuadel')
-      ? 'https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/rus-abuadel.min.json'
-      : QURAN_RU_URL;
-    const текст = await _грузитьСоШкалой(url, 'перевод Корана ('+nm+')');
-    const j = JSON.parse(текст);
+    const j = ed==='rus-abuadel'
+      ? JSON.parse(await _грузитьСоШкалой('https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/rus-abuadel.min.json','перевод Корана ('+nm+')'))
+      : await _загрузитьКулиева('перевод Корана ('+nm+')');
     if(ed==='rus-abuadel'){ ((j&&j.quran)||[]).forEach(v=>{ map[v.chapter+':'+v.verse]=v.text; }); }
     else { j.forEach(v=>{ map[v.s+':'+v.a]=v.t; }); }
   }catch(e){   // фолбэк/повтор — локальный Кулиев через тот же ограниченный загрузчик
-    try{ const текст=await _грузитьСоШкалой(QURAN_RU_URL,'повторный перевод Корана (Кулиев)'); const j=JSON.parse(текст); j.forEach(v=>{ map[v.s+':'+v.a]=v.t; }); }catch(_e){_тихо(_e,"L2884")}
+    try{ const j=await _загрузитьКулиева('повторный перевод Корана (Кулиев)'); j.forEach(v=>{ map[v.s+':'+v.a]=v.t; }); }catch(_e){_тихо(_e,"L2884")}
   }finally{ try{ setStatus(''); }catch(_){_тихо(_,"L2885")} }
   /* 🔴 05.09.2026, находка роя, проверена. Защита ниже спасала только если кеш УЖЕ был:
      `!map.length && quranRu` → вернуть старый. А при ПЕРВОЙ неудаче (кеша ещё нет) пустой
