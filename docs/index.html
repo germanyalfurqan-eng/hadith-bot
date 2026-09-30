@@ -1071,7 +1071,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1658</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1660</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1949,7 +1949,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1659';
+const APPVER = 'v1660';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3996,9 +3996,11 @@ async function loadQuranRu(){
   if(quranRu && window._quranRuEd===ed) return quranRu;
   const nm=ed==='rus-abuadel'?'Абу Адель':'Кулиев';
   const map={};
+  // Основной адрес: 10 с без новых байт → перейти на независимый CDN. Сам сбой основного пути
+  // не докладываем как поломку, пока резерв ещё может восстановить перевод.
   const _загрузитьКулиева=async (название)=>{
-    try{ return JSON.parse(await _грузитьСоШкалой(QURAN_RU_URL,название)); }
-    catch(первичнаяОшибка){ return JSON.parse(await _грузитьСоШкалой(QURAN_RU_CDN_URL,название+' (резервный CDN)')); }
+    try{ return JSON.parse(await _грузитьСоШкалой(QURAN_RU_URL,название,30000,10000,false)); }
+    catch(первичнаяОшибка){ return JSON.parse(await _грузитьСоШкалой(QURAN_RU_CDN_URL,название+' (резервный CDN)',30000,10000,true)); }
   };
   // 27.07.2026, владелец: «разберись с этой загрузкой вечной». Разобрался: статус «Загружаю перевод
   // Корана…» СТАВИЛСЯ, но никогда не снимался — ни при успехе, ни при ошибке. Файл при этом приходит
@@ -4030,7 +4032,8 @@ async function loadQuranRu(){
    или медленно — должна ошибка кидать в журнал».
    Читаем ответ потоком, считаем проценты и скорость. Если за 6 секунд не прибавилось НИ БАЙТА —
    это зависание, и о нём надо знать: пишем в журнал ошибок приложения. */
-async function _грузитьСоШкалой(url, что){
+async function _грузитьСоШкалой(url, что, предел=30000, пределТишины=0, докладывать=true){
+  // предел — общая длительность; пределТишины — максимум ожидания одного сетевого чанка.
   const t0 = Date.now();
   // 09.08.2026, находка роя — и она дополняет то, что уже написано выше, а не повторяет.
   // Сторож ниже следит за ПОТОКОМ: не прибавилось ни байта за 6 секунд — пишем в журнал.
@@ -4041,7 +4044,7 @@ async function _грузитьСоШкалой(url, что){
   // AbortSignal.timeout есть не во всех Telegram WebView. Используем совместимый
   // AbortController + таймер: один предел покрывает соединение и чтение всего ответа.
   const _контроллер = (typeof AbortController==='function') ? new AbortController() : null;
-  const _таймер = _контроллер ? setTimeout(()=>{try{_контроллер.abort();}catch(_){ }},30000) : null;
+  const _таймер = _контроллер ? setTimeout(()=>{try{_контроллер.abort();}catch(_){ }},предел) : null;
   let r;
   try{ r=await fetch(url,_контроллер?{signal:_контроллер.signal}:undefined); }
   catch(e){ if(_таймер) clearTimeout(_таймер); throw e; }
@@ -4049,11 +4052,21 @@ async function _грузитьСоШкалой(url, что){
   const всего = +(r.headers.get('content-length') || 0);
   if(!r.body || !всего){ try{ setStatus('Загружаю '+что+'…'); }catch(_){_тихо(_,"L2899")} try{return await r.text();}finally{if(_таймер) clearTimeout(_таймер);} }
   const чтец = r.body.getReader();
+  const _читатьСОграничениемТишины=()=>{
+    if(!пределТишины) return чтец.read();
+    let _ожидатель;
+    return Promise.race([чтец.read(),new Promise((_,reject)=>{
+      _ожидатель=setTimeout(()=>{
+        try{if(_контроллер)_контроллер.abort();else Promise.resolve(чтец.cancel()).catch(()=>{});}catch(_){}
+        reject(new Error('нет новых байт '+пределТишины+' мс'));
+      },пределТишины);
+    })]).finally(()=>clearTimeout(_ожидатель));
+  };
   const куски = []; let принято = 0, былоПринято = 0, тихо = 0;
   const сторож = setInterval(()=>{
     if(принято === былоПринято){
       тихо += 2;
-      if(тихо === 6){
+      if(тихо === 6 && докладывать){
         try{ if(typeof _appReport==='function')
           _appReport('загрузка встала: '+что+' — 0 байт за 6 с ('+Math.round(принято/1024)+' КБ из '+Math.round(всего/1024)+' КБ)', 'load-stall'); }catch(_){_тихо(_,"L2907")}
       }
@@ -4061,7 +4074,7 @@ async function _грузитьСоШкалой(url, что){
   }, 2000);
   try{
     for(;;){
-      const {done, value} = await чтец.read();
+      const {done, value} = await _читатьСОграничениемТишины();
       if(done) break;
       куски.push(value); принято += value.length;
       try{ if(window._netInd && window._netInd.поток) window._netInd.поток(что, принято, всего); }catch(_){}   // #717
@@ -4075,7 +4088,7 @@ async function _грузитьСоШкалой(url, что){
     try{ if(window._netInd && window._netInd.потокСнять) window._netInd.потокСнять(что); }catch(_){}   // #717
   }
   const сек = Math.max(.15,(Date.now()-t0)/1000);
-  if(принято/1024/сек < 40 && принято > 200*1024){        // ползёт — тоже повод записать
+  if(докладывать && принято/1024/сек < 40 && принято > 200*1024){        // ползёт — тоже повод записать
     try{ if(typeof _appReport==='function')
       _appReport('медленная загрузка: '+что+' — '+Math.round(принято/1024/сек)+' КБ/с за '+сек.toFixed(1)+' с', 'load-slow'); }catch(_){_тихо(_,"L2926")}
   }
