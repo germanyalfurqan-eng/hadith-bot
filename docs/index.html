@@ -1071,7 +1071,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1660</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1661</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1949,7 +1949,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1660';
+const APPVER = 'v1661';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -13456,7 +13456,7 @@ function _hlYaniKunya(root){
         const frag=document.createDocumentFragment();
         if(before) frag.appendChild(document.createTextNode(before));
         const ks=document.createElement('span');
-        ks.className='nhl'; ks.textContent=kun;
+        ks.className='nhl'; ks.textContent=kun; ks.dataset.yani='1';
         ks.dataset.nm=sp.dataset.nm||''; if(sp.dataset.id) ks.dataset.id=sp.dataset.id;
         ks.style.cssText=sp.style.cssText; ks.title=(sp.title||'')+' · كنية (через «يعني»)';
         ks.onclick=(e)=>{ e.stopPropagation(); try{ sp.click(); }catch(_e){_тихо(_e,"L9875")} };
@@ -13464,6 +13464,50 @@ function _hlYaniKunya(root){
         if(after) frag.appendChild(document.createTextNode(after));
         prev.parentNode.replaceChild(frag, prev);
       }catch(e){_тихо(e,"L9879")}
+    });
+    /* #553, обратное направление (06.10.2026, МИНИ АПП 99). Живой замер на v1660, Абу Дауд 555:
+       «عَنْ أَبِي سَهْلٍ، - يَعْنِي عُثْمَانَ بْنَ حَكِيمٍ -». Подсвечена КУНЬЯ («أبي سهل» — её знает цепь),
+       а полное имя ПОСЛЕ «يعني» оставалось серым. Правило выше смотрело только влево от подсветки.
+       Смотрим и вправо: подсветка → пунктуация → «يعني» → имя до «-»/«،»/глагола передачи (не длиннее
+       восьми слов). Тот же id, тот же стиль, клик открывает ту же карточку. */
+    const _СТОП=/^(?:حدثنا|حدثني|اخبرنا|اخبرني|انبانا|عن|قال|سمعت|ثنا|ان)$/;
+    [...root.querySelectorAll('span.nhl')].forEach(sp=>{
+      try{
+        if(sp.dataset.yani) return;
+        const next=sp.nextSibling;
+        if(!next || next.nodeType!==3) return;
+        const toks=(next.nodeValue||'').split(/(\s+)/);
+        const wi=[]; toks.forEach((t,i)=>{ if(t && !/^\s+$/.test(t)) wi.push(i); });
+        let k=0;
+        while(k<wi.length && !_pure(toks[wi[k]])) k++;          // проскочить «،», «-»
+        if(k>=wi.length || _pure(toks[wi[k]])!=='يعني') return;
+        k++;
+        const k0=k; let k1=-1;
+        for(; k<wi.length && k-k0<8; k++){
+          const t=toks[wi[k]], p=_pure(t);
+          if(!p || _СТОП.test(p)) break;                        // «-», «،» отдельным словом или глагол — конец имени
+          k1=k;
+          if(/[،,\-–—]$/.test(t)) break;                         // знак, приклеенный к слову, — тоже конец
+        }
+        if(k1<0) return;
+        // одно слово — имя, только если это нисба: «يعني الدراوردي». Иначе («يعني الصلاة» уже отсечена
+        // глаголом выше) одиночное слово не трогаем.
+        if(k1===k0 && !/^ال[ء-ي]{3,}ي$/.test(_pure(toks[wi[k0]]))) return;
+        const iA=wi[k0], iB=wi[k1];
+        const before=toks.slice(0,iA).join(''); let nm=toks.slice(iA,iB+1).join(''); let after=toks.slice(iB+1).join('');
+        const _хв=nm.match(/[\s،,.:؛\-–—]+$/);
+        if(_хв){ nm=nm.slice(0, nm.length-_хв[0].length); after=_хв[0]+after; }
+        const frag=document.createDocumentFragment();
+        if(before) frag.appendChild(document.createTextNode(before));
+        const ns=document.createElement('span');
+        ns.className='nhl'; ns.textContent=nm; ns.dataset.yani='1';
+        ns.dataset.nm=sp.dataset.nm||''; if(sp.dataset.id) ns.dataset.id=sp.dataset.id;
+        ns.style.cssText=sp.style.cssText; ns.title=(sp.title||'')+' · имя (через «يعني»)';
+        ns.onclick=(e)=>{ e.stopPropagation(); try{ sp.click(); }catch(_e){_тихо(_e,"L9880я")} };
+        frag.appendChild(ns);
+        if(after) frag.appendChild(document.createTextNode(after));
+        next.parentNode.replaceChild(frag, next);
+      }catch(e){_тихо(e,"L9880я")}
     });
   }catch(e){_тихо(e,"L9881")}
 }
@@ -16104,7 +16148,7 @@ async function dzChainInto(host, bid, num){
       setTimeout(()=>{ try{
         const вЦепи=row.querySelectorAll('[data-mid],.dzChip,span').length ? codes.length : codes.length;
         const карточка=box.closest ? box.closest('.card') : null;
-        const вТексте=карточка ? карточка.querySelectorAll('.ar .nhl').length : 0;
+        const вТексте=карточка ? карточка.querySelectorAll('.ar .nhl:not([data-yani])').length : 0;   // второе имя того же равия через «يعني» — не отдельный человек (06.10.2026)
         const п=document.createElement('div'); п.className='hint';
         п.style.cssText='font-size:calc(11.5px * var(--txtScale,1));margin-top:5px;line-height:1.5';
         п.textContent='В цепочке '+вЦепи+' — столько передатчиков мы опознали в базе равиев (у каждого открывается карточка).'
@@ -25003,6 +25047,16 @@ async function _chapGet(code){
   _chapCache[code]=await _chapCacheP[code];
   return _chapCache[code];
 }
+// Сноски Шамилы в тексте записи: «…матн»P<упр.символ> текст сноски [P<упр.символ> следующая сноска…].
+// Возвращает {матн, сноски[]} или null, если разделителя нет (или он в самом начале — тогда это не сноска).
+function _сноскиШамилы(t){
+  const s=String(t||''); const m=/[Pp][\x01-\x08\x0b\x0c\x0e-\x1f]/.exec(s);
+  if(!m || m.index<20) return null;
+  const матн=s.slice(0,m.index).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').trim();
+  const сноски=s.slice(m.index).split(/[Pp]?[\x01-\x08\x0b\x0c\x0e-\x1f]/).map(x=>x.replace(/\s+/g,' ').trim()).filter(Boolean);
+  if(!матн) return null;
+  return {матн, сноски};
+}
 function _readRender(){
   if(!_readArr||!_readArr.length) return;
   if(_readIdx<0)_readIdx=0; if(_readIdx>=_readArr.length)_readIdx=_readArr.length-1;
@@ -25092,8 +25146,27 @@ function _readRender(){
       _hПоказ=Object.assign({}, h, {text:_раз.остаток});
     }
   }catch(e){_тихо(e,"L_глава661")}
+  /* 🔴 06.10.2026, МИНИ АПП 99 (заявка #76 «текст без мусора, подписи отмечены подписями и сворачиваются»;
+     живой замер на Абу Дауде 555: в конце матна стояло «لَيْلَةٍ»P صحيح»).
+     В книгах читалки ~26 тыс. разделителей сносок Шамилы: латинская «P» + управляющий символ, за ними
+     текст сноски (у Абу Дауда и Ибн Маджи — оценка аль-Альбани, у Муслима и Ахмада — пояснения тахкика).
+     Показывались они слитно с матном. Режем на ПОКАЗЕ: матн до первого разделителя уходит в карточку,
+     сноски — отдельным свёрнутым блоком под ней. Данные не трогаем: по номеру записи ходят указатели. */
+  let _сноски=null;
+  try{ const _сн=_сноскиШамилы(_hПоказ && _hПоказ.text);
+    if(_сн){ _hПоказ=Object.assign({}, _hПоказ, {text:_сн.матн}); _сноски=_сн.сноски; } }catch(e){_тихо(e,"L_сноски")}
   const sg=_groups;                 // #311: в читалке СОХРАНЯЕМ подсветку искомого слова (зашёл из поиска → sg непуст; из меню/новый поиск → []) — тот же hl(), Arabus не затронут
-  try{ body.appendChild(cardHadith({code:_readCode,h:_hПоказ,noNav:true},sg||[])); }
+  try{ body.appendChild(cardHadith({code:_readCode,h:_hПоказ,noNav:true},sg||[]));
+    if(_сноски && _сноски.length){ try{
+      const _дт=document.createElement('details'); _дт.className='shamFn';
+      _дт.style.cssText='margin:6px 2px 10px;border:1px dashed var(--border);border-radius:10px;padding:6px 10px;color:var(--hint);font-size:calc(12.5px * var(--txtScale,1))';
+      const _сум=document.createElement('summary'); _сум.style.cssText='cursor:pointer;'+_RF;
+      _сум.textContent='📝 Примечания издания ('+_сноски.length+') — не часть хадиса';
+      _дт.appendChild(_сум);
+      _сноски.forEach(_т=>{ const _п=document.createElement('div'); _п.dir='rtl';
+        _п.style.cssText=_AF+';font-size:calc(14.5px * var(--txtScale,1));line-height:1.9;margin-top:5px;color:var(--text)';
+        _п.textContent=_т; _дт.appendChild(_п); });
+      body.appendChild(_дт); }catch(e){_тихо(e,"L_сноски2")} } }
   catch(e){   // M496: сбой полной карточки → НЕ голый текст, а мини-карточка с addTr
     try{ console.warn('reader-card fail', _readCode, h&&h.num, e); }catch(_e){_тихо(_e,"L18210")}
     const card=document.createElement('div'); card.className='card';
