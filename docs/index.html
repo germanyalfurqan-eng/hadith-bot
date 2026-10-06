@@ -1071,7 +1071,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1662</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1663</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1949,7 +1949,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1662';
+const APPVER = 'v1663';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5503,10 +5503,27 @@ async function relaxArabicHadith(codes, groups, modes, seq, add){
     arrs[code]=arr; for(const doc of arr) for(const t of pos) if(termMatch(t,doc,modes)) df.set(t,df.get(t)+1); await _yield(); }
   const tryScan=async rg=>{ let found=0; for(const code of codes){ if(seq!==_seq) return -1; const arr=arrs[code]; if(!arr) continue;
       for(const doc of arr){ if(docMatch(doc,rg,modes)){ add(code==='muhaymin'?{type:'m',h:doc}:{type:'h',code,h:doc}); found++; } } await _yield(); } return found; };
+  /* ⓪ 06.10.2026 (МИНИ АПП 99, заявка №328): «إِذَا بُويِعَ خَلِيفَتَانِ» не находил Муслим 1853 —
+     в тексте «لِخَلِيفَتَيْنِ». Совпадение у нас подстрокой, и падежная форма двойственного/множественного
+     числа его ломает; шаг ① просто выбрасывал слово. Прежде чем выбросить — ищем по ОСНОВЕ: без
+     артикля/предлога спереди и без «ان/ين/ون/ات» сзади («خليفت» ловит и خليفتان, и لخليفتين).
+     Основа короче 4 букв не берётся — слишком много случайных совпадений. */
+  const _основы=[];
+  try{
+    for(const t of pos){
+      if(df.get(t)>0 || t.phrase || !/[؀-ۿ]/.test(t.t)) continue;
+      let c=canon(t.t).replace(/^(?:وال|فال|بال|كال|لل|ال)/,'');
+      const m=c.match(/^(.{4,}?)(?:ان|ين|ون|ات)$/); if(!m) continue;
+      const st={t:m[1], phrase:false, neg:false, _основа:t.t};
+      let n=0; for(const code of codes){ const arr=arrs[code]; if(!arr) continue; for(const doc of arr) if(termMatch(st,doc,modes)) n++; }
+      if(n>0){ const i=pos.indexOf(t); pos[i]=st; df.set(st,n); const gi=g.indexOf(t); if(gi>=0) g[gi]=st; _основы.push(t.t+'→'+st.t); }
+    }
+  }catch(e){_тихо(e,"L_основа")}
   const dropped=[]; let keep=pos.filter(t=>df.get(t)>0);            // ① убрать термы с df=0 (их нет в текстах)
   pos.filter(t=>df.get(t)===0).forEach(t=>dropped.push(t));
   if(!keep.length) return {dropped:dropped.map(t=>t.t), used:[]};
   if(dropped.length){ const f=await tryScan([keep.concat(neg)]); if(f<0) return null; if(f) return {dropped:dropped.map(t=>t.t), used:keep.map(t=>t.t)}; }
+  if(_основы.length && !dropped.length){ const f=await tryScan([keep.concat(neg)]); if(f<0) return null; if(f) return {dropped:[], used:keep.map(t=>t.t), основы:_основы}; }
   const order=[...keep].sort((a,b)=>df.get(b)-df.get(a)); let cur=keep.slice(); const floorKeep=Math.max(2, keep.length-1);   // ② убрать самые частые — НО не больше 1 присутствующего слова (закон строго-как-ввёл, С-46)
   for(const drop of order){ if(cur.length<=floorKeep) break; cur=cur.filter(t=>t!==drop); dropped.push(drop);
     const f=await tryScan([cur.concat(neg)]); if(f<0) return null; if(f) return {dropped:dropped.map(t=>t.t), used:cur.map(t=>t.t)}; }
@@ -5915,7 +5932,7 @@ async function runSearch(explicit){
   }catch(e){_тихо(e,"L4287")}
   saveRecent(shown); hideRecent();   // 🕐 запомнить запрос для «недавних»
   try{ _qHistPush(shown, tab); }catch(e){_тихо(e,"L4289")}   // M254: история для кнопки «↩ Назад»
-  const res=document.getElementById('res'); _clearRenderQ(); res.innerHTML=''; _results=[]; _pick={items:[],sel:new Set(),excl:new Set(),kind:'',meaning:''};
+  const res=document.getElementById('res'); _clearRenderQ(); res.innerHTML=''; _results=[]; _pick={items:[],sel:new Set(),excl:new Set(),kind:'',meaning:''}; window._нотаОсновы=null;
   // v1093 П-1/П-5/П-7 (гугл-апп): вместо голого «⏳ Ищу…» — скелет + названный этап, кнопка гаснет и крутится
   _goBusy(true);
   const head=info(''); res.appendChild(head);
@@ -6365,6 +6382,9 @@ async function runSearch(explicit){
     setHead(true); finishPick(rootMode?rootForms:null, aiPhrases, shown);
     if(relaxA && relaxA.dropped.length && count) relaxBanner(relaxA.dropped, relaxA.used);
     if(count){ if(relMode && count>2){ renderResultsView(); } else { ensureGrpToggle(); ensureUniqToggle(); ensureRelToggle(); } try{ensureStructureBtn();}catch(e){_тихо(e,"L4570")} }
+    if(relaxA && relaxA.основы && relaxA.основы.length && count){ try{   // №328: слово найдено по основе — говорим прямо
+      window._нотаОсновы='🔎 Точной формы слова в текстах нет — искал по основе: <b dir="rtl">'+relaxA.основы.map(esc).join(', ')+'</b> (падеж и число не важны). Точная форма — в кавычках: "…"';
+      _вставитьНотуОсновы(document.getElementById('res')); }catch(e){_тихо(e,"L_основа2")} }
     /* 📖 #699: если человек вставил в поиск АЯТ, поднимаем Коран НАД выдачей сборников.
        Считаем ПОСЛЕ отрисовки хадисов, чтобы не задерживать их ни на миллисекунду, и
        вставляем сверху, когда готово. Не нашлось — не показываем ничего. */
@@ -6823,6 +6843,11 @@ function _placeMaktabaRow(){ try{
 (function(){ try{ const res=document.getElementById('res'); if(!res||!window.MutationObserver) return;
   new MutationObserver(()=>{ _placeMaktabaRow(); }).observe(res,{childList:true}); _placeMaktabaRow();
 }catch(e){_тихо(e,"L4867")} })();
+// №328: пометка «искал по основе» живёт весь поиск — перерисовка выдачи (догрузка первоисточников,
+// переключение вида) иначе стирала её через секунду после показа.
+function _вставитьНотуОсновы(res){ try{ if(!res || !window._нотаОсновы || document.getElementById('stemNote')) return;
+  const b=document.createElement('div'); b.id='stemNote'; b.className='hint'; b.style.cssText='color:var(--link);font-size:calc(13px * var(--txtScale,1));margin:2px 0 8px';
+  b.innerHTML=window._нотаОсновы; res.insertBefore(b, res.children[1]||null); }catch(e){_тихо(e,"L_основа3")} }
 function renderResultsView(){
   const res=document.getElementById('res'); _clearRenderQ(); res.innerHTML='';
   let list=_results, hid=0;
@@ -6830,6 +6855,7 @@ function renderResultsView(){
   if(uniqMode){ const dd=dedupResults(list, uniqMode); list=dd.list; hid=dd.hidden; }
   const cnt='найдено: '+_results.length+(relMode?' · по релевантности':'')+(uniqMode?(' · '+(uniqMode==='version'?'уникальных версий':'уникальных хадисов')+' '+list.length+(hid?(' · свёрнуто '+hid):'')+(uniqMode==='hadith'?' · основная версия':'')):'');
   res.appendChild(info((groupSrc?('📚 Сгруппировано по '+(tab==='quran'?'сурам':'сборникам')+' · '):'')+cnt));
+  _вставитьНотуОсновы(res);
   res.appendChild(grpToggleEl()); res.appendChild(uniqToggleEl()); res.appendChild(relToggleEl()); try{ if(!document.getElementById('resFilter')) res.appendChild(resFilterEl()); }catch(e){_тихо(e,"L4875")}
   // #346: лента — первые 200 сразу, остальные подгружаются по скроллу (раньше жёстко обрезалось на 400 → 401+ были недостижимы)
   /* #678/#665 (С67): здесь стоял `for(i<200) res.appendChild(makeCard(...))` — 200 карточек одним
