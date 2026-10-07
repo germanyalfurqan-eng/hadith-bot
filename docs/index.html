@@ -797,15 +797,26 @@ window.тихоОтчёт = function () {
   #qrBody .qrPlayBtn:active{ transform:scale(.92); box-shadow:0 1px 4px rgba(0,0,0,.4) }
   /* Играющий аят: кнопку видно издалека. Владелец 27.07.2026: «плеер играет, а я не вижу, где
      кнопку нажать паузу». Иконка ⏸ и раньше подставлялась, но кнопка была тусклой и терялась. */
-  @keyframes igraetPuls{
-    0%,100%{ box-shadow:0 0 0 0 rgba(45,212,167,.55), 0 2px 8px rgba(0,0,0,.35) }
-    50%    { box-shadow:0 0 0 8px rgba(45,212,167,0), 0 2px 14px rgba(45,212,167,.35) }
+  /* 08.10.2026 · МИНИ АПП 99 · заявка №211: «…но не допусти, чтобы давала [тормоза] у слабых телефонов.
+     И вообще посмотри — анимация и быстрота нормальная чтобы везде была».
+     Пульс играющей кнопки был анимацией box-shadow на БЕСКОНЕЧНОМ цикле: тень пересчитывается
+     главным потоком каждый кадр всё время, пока играет сура (минуты и часы), — ровно то, что на
+     слабом телефоне дёргает прокрутку текста под аудио и греет батарею. Вид тот же — кольцо
+     расходится от кнопки на ~8 px и гаснет, — но теперь это отдельный слой ::after, у которого
+     меняются только transform и opacity: их ведёт видеокарта, главный поток свободен. */
+  @keyframes igraetVolna{
+    0%       { transform:scale(1);    opacity:.85 }
+    70%,100% { transform:scale(1.35); opacity:0 }
   }
-  #qrBody .qrPlay.igraet{ width:44px; height:44px; font-size:18px;
+  #qrBody .qrPlay.igraet{ width:44px; height:44px; font-size:18px; position:relative;
     background:linear-gradient(160deg, rgba(45,212,167,.34), rgba(45,212,167,.14));
-    border-color:var(--ok); color:#bff5d4; animation:igraetPuls 2s ease-in-out infinite }
-  @media (prefers-reduced-motion:reduce){ #qrBody .qrPlay.igraet{ animation:none;
-    box-shadow:0 0 0 3px rgba(45,212,167,.45) } }
+    border-color:var(--ok); color:#bff5d4;
+    box-shadow:0 2px 10px rgba(0,0,0,.35), 0 0 12px rgba(45,212,167,.30) }
+  #qrBody .qrPlay.igraet::after{ content:''; position:absolute; top:-2px; left:-2px; right:-2px; bottom:-2px;
+    border-radius:50%; border:2px solid rgba(45,212,167,.7); pointer-events:none;
+    animation:igraetVolna 1.8s cubic-bezier(.2,.6,.35,1) infinite }
+  @media (prefers-reduced-motion:reduce){ #qrBody .qrPlay.igraet::after{ animation:none; display:none }
+    #qrBody .qrPlay.igraet{ box-shadow:0 0 0 3px rgba(45,212,167,.45) } }
   #qrBody .qrToolsBtn{ font-size:16px; padding:7px 10px; line-height:1; border-radius:11px;
     background:linear-gradient(160deg, rgba(127,160,200,.14), rgba(127,160,200,.05));
     border:1px solid var(--border);
@@ -813,6 +824,27 @@ window.тихоОтчёт = function () {
     transition:transform .12s ease, box-shadow .18s ease, border-color .18s ease }
   #qrBody .qrToolsBtn:hover{ border-color:var(--acc); box-shadow:0 4px 12px rgba(0,0,0,.38) }
   #qrBody .qrToolsBtn:active{ transform:scale(.92) }
+  /* 08.10.2026 · МИНИ АПП 99 · заявка №133: «анимацию включения кнопки таблички аята внутри читалки
+     сделай … где инструменты в этом режиме». Кнопка 🛠 включалась мгновенно: значок молча менялся
+     на ✕, а панель инструментов под аятом выпрыгивала рывком (display:none → block).
+     Теперь при включении кнопка «щёлкает» с поворотом и подсвечивает рамку (видно, что ВКЛЮЧЕНА),
+     при выключении — так же поворачивается обратно; панель проявляется и съезжает на 6 px — глаз
+     видит, ЧТО открылось и откуда. Только transform/opacity, 0,2 с.
+     JS не тронут: кнопка и так ставит data-on="1" / data-on="" — по нему и рисуем; панель — это
+     единственный div сразу за .qrCtl. У нетронутых кнопок атрибута нет вовсе — поэтому при открытии
+     суры 286 кнопок аль-Бакары НЕ анимируются, играет только та, которую нажали.
+     Заливку (fill-mode) у панели не ставим: transform, застывший после конца анимации, сделал бы
+     её «контейнером» для position:fixed внутри инструментов.
+     Рамка включённой кнопки — var(--link), а не var(--acc) как у :hover выше: --acc в файле нигде
+     не объявлена, и рамка там молча падает в currentColor. */
+  @keyframes qrTbVkl{ 0%{ opacity:.35; transform:scale(.7) rotate(-25deg) } 60%{ opacity:1; transform:scale(1.08) rotate(3deg) } 100%{ opacity:1; transform:none } }
+  @keyframes qrTbVykl{ from{ opacity:.35; transform:scale(.7) rotate(25deg) } to{ opacity:1; transform:none } }
+  #qrBody .qrToolsBtn[data-on="1"]{ border-color:var(--link); animation:qrTbVkl .22s cubic-bezier(.2,.8,.25,1) }
+  #qrBody .qrToolsBtn[data-on=""]{ animation:qrTbVykl .2s cubic-bezier(.2,.8,.25,1) }
+  @keyframes qrInstrVhod{ from{ opacity:0; transform:translateY(-6px) } to{ opacity:1; transform:none } }
+  #qrBody .qrAyah > .qrCtl + div{ animation:qrInstrVhod .2s cubic-bezier(.2,.8,.25,1) }
+  @media (prefers-reduced-motion:reduce){
+    #qrBody .qrToolsBtn[data-on="1"], #qrBody .qrToolsBtn[data-on=""], #qrBody .qrAyah > .qrCtl + div{ animation:none } }
   @media(max-width:520px){ #qrBody .qrAyah{ padding-inline-start:48px } }
   /* #47 (владелец: «сделай удобнее, экономнее экран читалки, пол экрана забирает верх.
      Может за счёт возможности включения режима скрытия»). Замер на экране 812 px: заголовок
@@ -894,6 +926,31 @@ window.тихоОтчёт = function () {
     transition:transform .12s ease, box-shadow .2s ease }
   .ahPlayBig:hover{ box-shadow:0 8px 24px rgba(29,107,86,.66), inset 0 1px 0 rgba(255,255,255,.22) }
   .ahPlayBig:active{ transform:scale(.92) }
+  /* 08.10.2026 · МИНИ АПП 99 · заявка №133: «анимацию включения … таблички аята внутри читалки
+     сделай». Тап по аяту открывал карточку общим для всех окон движением (mIn: с прозрачности .3
+     и 10 px снизу), а затемнение фона вспыхивало разом — карточка «моргала», а не открывалась.
+     Теперь: фон проявляется за 0,14 с, карточка поднимается и чуть дорастает (0,2 с), ряд кнопок
+     догоняет её на 0,06 с позже — карточка собирается, а не возникает. Закладка/избранное при
+     включении делают короткий «щелчок» (класс .on) — видно, что кнопка включилась.
+     Всё на transform/opacity: слабый телефон их не перерисовывает, а сдвигает готовый слой (тени
+     карточки рисуются один раз). will-change не ставим: на время анимации браузер сам выносит
+     элемент в слой и сам снимает его после, а постоянный will-change держал бы память видеокарты,
+     пока карточка открыта. Заливки (fill) нет — по концу анимации ничего не «застывает».
+     Карточка, которая сама переходит на следующий аят под аудио (_isFollow), не «открывается
+     заново» на каждом аяте — у неё мягкая смена (класс ahSmena ставит openAyahCard). */
+  @keyframes ahFon{ from{ opacity:0 } to{ opacity:1 } }
+  @keyframes ahVhod{ from{ opacity:0; transform:translateY(16px) scale(.965) } to{ opacity:1; transform:none } }
+  @keyframes ahPolka{ from{ opacity:0; transform:translateY(8px) } to{ opacity:1; transform:none } }
+  @keyframes ahSmena{ from{ opacity:.4 } to{ opacity:1 } }
+  @keyframes ahVkl{ 0%{ transform:scale(.8) } 55%{ transform:scale(1.12) } 100%{ transform:none } }
+  #ayahCardModal{ animation:ahFon .14s ease-out }
+  #ayahCardModal .ahCard{ transform-origin:50% 0; animation:ahVhod .2s cubic-bezier(.2,.8,.25,1) }
+  #ayahCardModal .ahBar{ animation:ahPolka .2s cubic-bezier(.2,.8,.25,1) .06s backwards }
+  #ayahCardModal .ahBar > .on{ animation:ahVkl .24s cubic-bezier(.2,.8,.25,1) }
+  #ayahCardModal.ahSmena .ahCard{ animation:ahSmena .16s ease-out }
+  #ayahCardModal.ahSmena .ahBar{ animation:none }
+  @media (prefers-reduced-motion:reduce){
+    #ayahCardModal, #ayahCardModal .ahCard, #ayahCardModal .ahBar, #ayahCardModal .ahBar > .on{ animation:none!important } }
   /* ПЛАШКА — белая табличка с чёрным текстом. Владелец 27.07.2026: «этот стиль, белая и чёрный
      шрифт, на заметные элементы будешь вставлять — он в принципе очень заметно выглядит… но там
      всегда следи, чтобы ровно стоял».
@@ -916,18 +973,35 @@ window.тихоОтчёт = function () {
      на возможность искать слово везде в Коране».
      Анимация играет ОДИН раз при открытии карточки и затихает: постоянное мигание превратилось бы
      в тот самый фарс, которого владелец просил избегать. */
-  @keyframes plashkaZov{
-    0%   { transform:scale(.94); opacity:0 }
-    45%  { transform:scale(1.03); opacity:1;
-           box-shadow:0 2px 10px rgba(0,0,0,.45), 0 0 22px 6px rgba(120,190,255,.55) }
-    100% { transform:scale(1); opacity:1;
-           box-shadow:0 2px 10px rgba(0,0,0,.45), 0 0 14px rgba(160,200,255,.28) }
-  }
+  /* 08.10.2026 · МИНИ АПП 99 · заявка №211: «анимацию появления корня в Коране читалки сделай более
+     анимированной, красивой и быстрой, но не допусти, чтобы давала [тормоза] у слабых телефонов».
+     Было: 0,85 с и анимация box-shadow с размытием 22 px — тень пересчитывается главным потоком
+     каждый кадр, на слабом телефоне это и «даёт». Да ещё заливка both: застывший конец анимации
+     перебивал :hover и :active — плашка не отзывалась на нажатие.
+     Стало: плашка выезжает и дорастает за 0,22 с сразу вслед за карточкой слова, а свечение —
+     отдельный слой ::after с уже нарисованной тенью, у которого меняется только прозрачность:
+     вспыхнул и погас за 0,55 с. Видеокарта двигает готовую картинку, главный поток свободен.
+     Масштаб без перелёта за 1: карточка слова прокручивается (overflow:auto), и плашка шириной 100%,
+     раздутая на 3%, на миг давала бы горизонтальную прокрутку. Итоговый вид плашки тот же. */
+  @keyframes plashkaZov{ from{ opacity:0; transform:translateY(6px) scale(.92) } to{ opacity:1; transform:none } }
+  @keyframes plashkaSvet{ 0%{ opacity:0 } 35%{ opacity:1 } 100%{ opacity:0 } }
   .wpGlavnoe{ cursor:pointer; margin-top:10px; font-size:14px; width:100%; justify-content:center;
-    animation:plashkaZov .85s cubic-bezier(.2,.9,.3,1.2) both }
+    position:relative; animation:plashkaZov .22s cubic-bezier(.2,.8,.25,1) .05s backwards }
+  .wpGlavnoe::after{ content:''; position:absolute; top:0; left:0; right:0; bottom:0; border-radius:inherit;
+    box-shadow:0 0 22px 6px rgba(120,190,255,.55); opacity:0; pointer-events:none;
+    animation:plashkaSvet .55s ease-out .1s }
   .wpGlavnoe:hover{ box-shadow:0 2px 12px rgba(0,0,0,.5), 0 0 18px rgba(160,200,255,.45) }
   .wpGlavnoe:active{ transform:scale(.97) }
-  @media (prefers-reduced-motion:reduce){ .wpGlavnoe{ animation:none } }
+  @media (prefers-reduced-motion:reduce){ .wpGlavnoe, .wpGlavnoe::after{ animation:none } }
+  /* Та же заявка №211 — сама карточка слова с корнем (#wordPop). Было общее для всех карточек
+     fadeIn: 4 px за 0,16 с — на телефоне почти незаметно, карточка будто «включалась» без перехода.
+     Стало: подъезд 10 px за 0,18 с с мягким торможением. Только сдвиг, БЕЗ масштаба — и это не вкус:
+     showWordPopup дотягивает карточку в экран по getBoundingClientRect (ResizeObserver), а масштаб
+     занижал бы эту мерку на (1−s)·высоту, и карточка могла остаться за нижним краем. Сдвиг меняет
+     только положение, высоту мерка видит верную — итоговое место то же. */
+  @keyframes wpVhod{ from{ opacity:0; transform:translateY(10px) } to{ opacity:1; transform:none } }
+  #wordPop{ animation:wpVhod .18s cubic-bezier(.2,.8,.25,1) }
+  @media (prefers-reduced-motion:reduce){ #wordPop{ animation:none } }
   /* Плавная сборка карточек (владелец: «анимация сборки карточки грубая и местами дёргается;
      в основе всё должно быть гладко и стабильно»). Карточка не выпрыгивает, а проявляется. */
   @keyframes kartochkaVhod{ from{ opacity:0; transform:translateY(6px) } to{ opacity:1; transform:none } }
@@ -1071,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1663</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1664</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1949,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1663';
+const APPVER = 'v1664';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3519,7 +3593,27 @@ async function gradesTopUp(code, num, meta){
        «ожидается». Ошибка была беззвучной — исключение глоталось в catch. */
     const пм=meta.querySelector('.srcchk'); if(!пм||!пм.parentNode) return false;
     const box=document.createElement('span'); box.innerHTML=html;
-    пм.parentNode.replaceChild(box, пм);
+    /* 08.10.2026, МИНИ АПП 99, заявка №495 (03.07): «почему в читалках отметка о достоверности
+       отсутствует и меньше полезности?». Сверено Python-ом и node на боевых данных (v1663):
+       HTML бейджей в читалке побайтно тот же, что в поиске под тем же номером, у всех записей:
+       Абу Дауд 5288, Тирмизи 3954, Насаи 5692, Ибн Маджа 4341, Малик 1834. Оценка учёных стоит у
+       всех, кроме трёх, где её нет и в самом издании (Тирмизи №1709 и №3374, Насаи №4939), —
+       там «ожидается» и в поиске.
+       Расходился только ПОРЯДОК ряда. Оценки вставлялись внутрь обёртки-span, а нейротахкик
+       (neuroBadgeCard) встаёт «за последней .grade, если она прямо в meta» — обёртки он не видел
+       и вставал ПЕРЕД оценками (сразу за номером) либо под русской строкой источника. В поиске он
+       стоит сразу ЗА оценками. Поэтому кладём бейджи прямо в meta, без обёртки, а если нейротахкик
+       успел встать раньше оценок — переносим его за последнюю оценку. Ряд — как в поиске. */
+    const _оцВсе=box.querySelectorAll('.grade'), _оцПосл=_оцВсе.length?_оцВсе[_оцВсе.length-1]:null;
+    const _фр=document.createDocumentFragment(); while(box.firstChild) _фр.appendChild(box.firstChild);
+    пм.parentNode.replaceChild(_фр, пм);
+    try{ const _нт=meta.querySelector('.ntBadge'), _нтО=_нт&&_нт.parentNode;
+      if(_оцПосл && _оцПосл.parentNode===meta && _нтО && _нтО!==meta && _нтО.parentNode===meta && _оцПосл.nextSibling!==_нтО){
+        const _пр=_нтО.previousElementSibling;
+        // переносим только из тех двух мест, куда neuroBadgeCard ставит его, пока оценок ещё нет
+        if(_пр && (_пр===meta.firstElementChild || (_пр.classList && _пр.classList.contains('srcru'))))
+          meta.insertBefore(_нтО, _оцПосл.nextSibling);
+      } }catch(_e){ try{_тихо(_e,'gradesTopUp-nt');}catch(_e2){} }
     return true;
   }catch(e){ try{_тихо(e,'gradesTopUp');}catch(_e){} return false; } }
 /* `кратко` — не печатать в самом бейдже длинную приписку «оценка учёных источника, не наша».
@@ -5944,6 +6038,10 @@ async function runSearch(explicit){
   if(seq!==_seq) return;
   // 👤 РЕЖИМ ПЕРЕДАТЧИКА (Сессия 13): ищем равия по имени (араб/рус), не хадисы.
   // ЧИСЛА — НЕ имена: «5590» должен открыть хадис по номеру → пропускаем в обычный поиск (замечание владельца)
+  // №500: вставили в поиск ЦЕПЬ — разобрать её в конструктор сами и искать хадисы с этой цепью
+  // ВЫКЛЮЧЕНО 08.10.2026: голое имя («هشام») опознаётся тёзкой — ждёт разбора по соседям (черновик роя M4)
+  try{ if(false && tab==='hadith' && !_narrBypass && typeof modes!=='undefined' && !modes.chain && !modes.narr && _похожеНаИснад(q)){
+    if(await _иснадВЦепь(q, seq)) return; } }catch(e){_тихо(e,"L_иснад500")}
   if(_narrBypass){ _narrBypass=false; }   // «🔎 Хадисы с его участием»: один запуск мимо narr-перехвата (текст имени → обычный поиск)
   else if(modes.narr && (/^#\s*\d{1,5}$/.test(q.trim()) || !/^[\d٠-٩\s:№#×.]+$/.test(q))){ await narrRun(q, seq); logSearch(shown,'narr',0); return; }   // M405: «#2433» = равий по ID
   else if(typeof modes!=='undefined' && modes.any && q.trim() && !/^\d{1,4}$/.test(q.trim())){ _actPush({t:'q',q:shown,tab:tab}); await anyTextSearch(q, seq); return; }   // 🌐 M461
@@ -9125,7 +9223,8 @@ function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
         try{ const _vb=(COLL_BIDS[code]&&COLL_BIDS[code][0])||EXTRA_BIDS[code];
           const _vr=_vb?await _verifyChain(_vb,h.num):null;
           if(_vr&&_vr.length){ const _lr=_vr[_vr.length-1];
-            if(_lr&&_lr[2]!=null&&_lr[2]!=='?' && _narrCanon(_lr[1]||_lr[0]||'')===_narrCanon(_rw)) _id=Number(_lr[2]); } }catch(_ev){_тихо(_ev,"L6637")}
+            // 08.10.2026 (МИНИ АПП 99, М3): пустой id эталона ('') проходил проверку, Number('') давал id 0 — кнопка вела на несуществующего равия
+            if(_lr&&_idЭталона(_lr[2])!=null && _narrCanon(_lr[1]||_lr[0]||'')===_narrCanon(_rw)) _id=Number(_idЭталона(_lr[2])); } }catch(_ev){_тихо(_ev,"L6637")}
         if(_id==null) _id=await _narrLookup(_rw);   // фолбэк: гарант-карта/шухра (namesake-safe формы)
         if(_id==null) return;
         const _d=await _narrDisp(_id); const _full=(_d&&_d.ar)||null;
@@ -11947,6 +12046,9 @@ async function openAyahCard(s,a,_isFollow){ s=+s; a=+a; if(!s||!a) return;
      сам аят было негде: помощник открывался пустым и не знал, о чём речь. Кнопку дорисовываем в ряд
      действий отдельно (ниже), чтобы не трогать разметку с юникод-экранированиями выше. */
   const _press=function(el){ try{ el.style.transform='scale(.82)'; setTimeout(function(){ try{el.style.transform='';}catch(e){_тихо(e,"L8602")} },130); }catch(e){_тихо(e,"L8602")} };   // #80: видимый отклик нажатия
+  // 08.10.2026 · МИНИ АПП 99 · заявка №133: при следовании за аудио (_isFollow) карточка сама меняет аят —
+  // анимацию открытия заново не играем, только мягкую смену (CSS #ayahCardModal.ahSmena). Логика не меняется.
+  try{ m.classList.toggle('ahSmena', !!_isFollow); }catch(e){_тихо(e,"M99-133")}
   m.style.display='flex';
   // #183: word-tap в попапе аята (как в читалке) — тап по слову → корень/Arabus/перевод
   const _ahAr=m.querySelector('#ahArabic'); if(_ahAr){ try{ loadRoots(); }catch(e){_тихо(e,"L8605")}
@@ -15209,6 +15311,45 @@ async function _aliasGroup(id){
    занимать секунды), а сторож — что действие состоялось. Обёртка отдельной функцией, потому
    что у тела три выхода (нет узла, ветка seq, обычная ветка), и снимать отметку надо на
    каждом: finally делает это без оглядки на путь. */
+/* №500 (владелец 04.07: «я цепь скидываю, а он должен её идентифицировать… когда я ввёл и нажал поиск —
+   сама идентифицировать и настроить все настройки, будто я вручную собрал способы передачи и передатчиков»).
+   Признак цепи: в запросе ≥3 глагола передачи, а текста ПОСЛЕ иснада почти нет (иначе это целый хадис —
+   его ищем обычным поиском по тексту, как и раньше). */
+function _похожеНаИснад(q){
+  const s=stripDiac(String(q||'')).replace(/ـ/g,'');
+  const глаг=(s.match(/(?:^|[\s،,])(?:و)?(?:حدثنا|حدثني|حدثناه|أخبرنا|أخبرني|اخبرنا|اخبرني|أنبأنا|انبانا|سمعت|ثنا|عن)\s/g)||[]).length;
+  if(глаг<3) return false;
+  if(/قال رسول|رسول الله|النبي|صلى الله عليه|ﷺ|«|"/.test(s)) return false;   // есть слова Пророка — это хадис, а не голая цепь
+  // splitIsnad на чистой цепи без текста хадиса отдаёт «иснада нет, всё — матн», поэтому меряем иначе:
+  // сколько букв стоит ПОСЛЕ последнего глагола передачи. Одно имя — это цепь; длинный хвост — хадис.
+  const re=/(?:^|[\s،,])(?:و)?(?:حدثنا|حدثني|حدثناه|أخبرنا|أخبرني|اخبرنا|اخبرني|أنبأنا|انبانا|سمعت|ثنا|عن)\s/g;
+  let посл=0, м; while((м=re.exec(s))) посл=м.index+м[0].length;
+  return s.slice(посл).replace(/[^ء-ي]/g,'').length<30;
+}
+async function _иснадВЦепь(q, seq){
+  const имена=isnadNarrators(q)||[];
+  if(имена.length<2) return false;
+  const формы=_isnadForms(q)||[];
+  const звенья=[];   // {id, nm, i} — i: номер звена в цепи (для форм между соседями)
+  for(let i=0;i<имена.length;i++){ let id=null; try{ id=await _narrLookup(имена[i]); }catch(e){}
+    if(id!=null) звенья.push({id:+id, nm:имена[i], i}); }
+  if(seq!==undefined && seq!==_seq) return true;
+  if(звенья.length<2){ toast('⛓ Похоже на цепь, но опознать звенья не вышло ('+звенья.length+' из '+имена.length+') — ищу как текст'); return false; }
+  const взято=звенья.slice(0,5);
+  window._chainSel=взято.map(z=>({id:z.id, nm:z.nm}));
+  window._chainForms=[]; window._chainFormPre=''; window._chainFormPost='';
+  window._chainFormsOff=false;
+  // форма перед звеном i — формы[i] (у каждого имени свой глагол перед ним); между выбранными — только если стоят подряд
+  if(взято[0].i===0 && формы[0]) window._chainFormPre=формы[0];
+  for(let j=0;j<взято.length-1;j++){ const рядом=(взято[j+1].i===взято[j].i+1); window._chainForms[j]=рядом?(формы[взято[j+1].i]||''):''; }
+  window._chainMode='seq'; window._chainAdj=false;
+  try{ const qi=document.getElementById('q'); if(qi) qi.value=''; }catch(e){}   // до включения режима: иначе он откроет подсказки по всей вставленной цепи
+  try{ const chp=document.querySelector('.chip[data-mode="chain"]'); if(chp && !modes.chain) chp.click(); else modes.chain=true; }catch(e){ modes.chain=true; }
+  chainRender();
+  toast('⛓ Узнал цепь: '+взято.length+' звеньев из '+имена.length+(звенья.length>5?' (в конструкторе максимум 5)':'')+' — ищу хадисы с ней');
+  try{ await chainRun(); }catch(e){_тихо(e,"L_иснад500run")}
+  return true;
+}
 async function chainRun(){
   try{ _goBusy(true); }catch(_e){_тихо(_e,"L_chBusy1")}
   try{ return await _chainRunТело(); }
@@ -16297,9 +16438,9 @@ async function dzChainInto(host, bid, num){
           const bbi=await _backInfo(seq||codes);
           if(bbi && bbi.n>info.n){
             const bb=document.createElement('div'); bb.style.cssText='margin-top:7px;font-size:calc(11.5px * var(--txtScale,1));color:var(--hint);line-height:1.5';
-            bb.innerHTML='🧬 Эта цепочка <b>опознанных передатчиков</b> встречается <b style="color:#9fd3a8">'+bbi.n+' раз'+(bbi.n%10===1&&bbi.n%100!==11?'':'а')+'</b> '
+            bb.innerHTML='🧬 <b>Тот же СОСТАВ передатчиков</b> (те же люди, формы передачи любые) встречается <b style="color:#9fd3a8">'+bbi.n+' раз'+(bbi.n%10===1&&bbi.n%100!==11?'':'а')+'</b> '
               +'<span style="cursor:help" title="Тот же набор опознанных передатчиков записан '+bbi.v+' кодами цепи — В ОСНОВНОМ из-за НЕопознанных кратких звеньев (U-код: один человек в разных хадисах получает разный код); форма передачи (حدثنا/عن) влияет минимально (≈2%). Варианты собраны по именованным передатчикам.">(из '+bbi.v+' вариантов записи ⓘ)</span> '+_qBadge(bbi.q);
-            const bp=document.createElement('span'); bp.style.cssText='margin-right:8px;cursor:pointer;color:var(--link)'; bp.textContent=' 📍 где встречается';
+            const bp=document.createElement('span'); bp.style.cssText='margin-right:8px;cursor:pointer;color:var(--link)'; bp.textContent=' 📍 ещё хадисы с этим составом';   // №350: «помимо кнопки „ещё хадисы с цепью“ сделай „ещё хадисы с составом“» — механизм был, не было его имени
             const blst=document.createElement('div'); blst.style.cssText='display:none;margin-top:4px';
             bp.onclick=async()=>{ if(blst.style.display!=='none'){ blst.style.display='none'; return; } blst.style.display='block';
               if(blst.dataset.b) return; blst.dataset.b='1';
@@ -19223,7 +19364,11 @@ async function renderTestimoniesCard(mid, host){
   const sec=document.createElement('div'); sec.style.cssText='margin-top:13px;border:1px solid #36703d;border-radius:12px;overflow:hidden;background:#0f1712';
   const hdr=document.createElement('div'); hdr.style.cssText='padding:12px 13px;background:rgba(63,185,80,.08);display:flex;justify-content:space-between;align-items:center;cursor:pointer';
   // #366/#367 (владелец: «непонятно что за список, читается тяжело»): заголовок + ЯСНЫЙ подзаголовок что это.
-  hdr.innerHTML='<div><b style="font-size:15px;font-weight:600;color:#e6edf3">⚖️ Что сказали о нём учёные-критики</b><div style="font-size:calc(11px * var(--txtScale,1));color:#7c9a85;margin-top:2px;font-weight:400">джарх и таʿдиль — порицание и похвала, кто как оценил надёжность равия</div></div><span style="font-size:calc(12px * var(--txtScale,1));color:#7ee08a;white-space:nowrap">'+order.length+' 👤 <span class="ttTg">▴</span></span>';
+  // 08.10.2026 · МИНИ АПП 99 · №367 (владелец: «сходу непонятно, что это список»): в заголовке — ЧТО это и СКОЛЬКО.
+  // Число — все свидетельства (записи всех учёных, включая поздние своды); 👤 справа — сколько учёных.
+  const _пл=(n,a,b,c)=>{ const n10=n%10, n100=n%100; return (n10===1&&n100!==11)?a:((n10>=2&&n10<=4&&(n100<12||n100>14))?b:c); };
+  const _свидN=order.reduce((s,k)=>s+((byc[k]||[]).length),0);
+  hdr.innerHTML='<div><b style="font-size:15px;font-weight:600;color:#e6edf3">'+(_sahMode?'⭐ Что сказали имамы о сподвижнике':'⚖️ Что сказали критики о передатчике')+' — '+_свидN+' '+_пл(_свидN,'свидетельство','свидетельства','свидетельств')+'</b><div style="font-size:calc(11px * var(--txtScale,1));color:#7c9a85;margin-top:2px;font-weight:400">джарх и таʿдиль — порицание и похвала, кто как оценил надёжность равия<br>👉 это список: нажми на строку — все слова учёного выедут справа</div></div><span style="font-size:calc(12px * var(--txtScale,1));color:#7ee08a;white-space:nowrap">'+order.length+' 👤 <span class="ttTg">▴</span></span>';
   const bd=document.createElement('div'); bd.style.cssText='padding:6px 13px 13px';
   // #641 (владелец: «кнопки оценок критиков не ведут на реальные страницы»): явная кнопка → карточка равия на sunnah.com, где все оценки критиков с источниками
   try{ const _snSid=String((await loadMid2Sid())[String(mid)]||''); if(_snSid){ const _snB=document.createElement('div'); _snB.style.cssText='margin:2px 0 9px';
@@ -19247,6 +19392,68 @@ async function renderTestimoniesCard(mid, host){
     d.style.cssText='font-size:'+(fs||13)+'px;color:#9aa7b5;margin-top:4px;line-height:1.5;'+_RF;
     d.innerHTML='≈ '+esc(String(t))+(_ruDraft(t)?(' <span title="Черновой машинный перевод — в нём осталось непереведённое или неверно передано название книги. Эталон — арабский текст выше." style="font-size:calc(9.5px * var(--txtScale,1));color:#c9a24a;border:1px solid #5e4d23;border-radius:6px;padding:0 5px;cursor:help;white-space:nowrap">черновой ⚠</span>'):'');
     return d; };
+  // 08.10.2026 · МИНИ АПП 99 · №367 («когда кликаешь, надо чтобы удобно открывалось и уходило назад … справа будет
+  // выходить»). ① каждая строка — явный ПУНКТ списка: номер слева, «›» справа (значит — откроется);
+  // ② нажатие по строке выдвигает СПРАВА панель (_ttSideOpen) со ВСЕМИ словами этого учёного об этом равии.
+  // В строке видна лишь первая запись критика (c0), в панели — каждая запись целиком: оценка, цитата без обрезки,
+  // перевод, первоисточник. Панель строится ЗАНОВО, а не копией строки: cloneNode теряет обработчики кнопок
+  // «Читать у нас»/«Шамиля». Имя критика по-прежнему открывает ЕГО карточку (указ 01.07.2026) — этот и прочие
+  // свои клики строки (кнопки ссылок, «цитата целиком») не перехватываем.
+  const _знакСлов=(t)=>{ const s=_ttScore(t)||0; return s>0?1:(s<0?-1:0); };
+  const _ttPanel=(cr, items, знак)=>{ const зн0=(typeof знак==='function')?знак:_знакСлов;
+    const w=document.createElement('div'); const ru=_ruName(cr); const yr=_yrOf(cr);
+    const top=document.createElement('div'); top.style.cssText='margin:2px 0 10px';
+    top.innerHTML='<div style="font-size:calc(17px * var(--txtScale,1));font-weight:700;color:var(--text);line-height:1.3">'+esc(ru)+'</div>'
+      +((ru!==cr)?('<div dir="rtl" style="font-size:calc(15px * var(--txtScale,1));color:var(--hint);'+_AF+'">'+esc(cr)+'</div>'):'')
+      +'<div style="font-size:calc(12px * var(--txtScale,1));color:var(--hint);margin-top:4px">'+(yr?('ум. '+esc(String(yr))+' г.х. · '):'')+'что он сказал об этом передатчике: '+items.length+' '+_пл(items.length,'запись','записи','записей')+'</div>';
+    w.appendChild(top);
+    const _pz=items.filter(c=>зн0(c[1])>0).length, _ng=items.filter(c=>зн0(c[1])<0).length;
+    if(_pz && _ng){ const mx=document.createElement('div'); mx.style.cssText='margin:0 0 10px;font-size:calc(12px * var(--txtScale,1));color:#e0c07a;line-height:1.55;border:1px dashed #6b5c33;border-radius:8px;padding:6px 9px;background:#0f1712';
+      mx.textContent='⚖ У этого учёного об этом равии разные оценки: похвала — '+_pz+', порицание — '+_ng+'. Каждая запись — ниже.'; w.appendChild(mx); }
+    const box=document.createElement('div'); box.style.cssText='border:1px solid #36703d;border-radius:12px;background:#0f1712;padding:2px 12px 12px';
+    items.forEach((c,i)=>{ const it=document.createElement('div'); it.style.cssText=i?'border-top:1px solid #20302a;margin-top:12px;padding-top:11px':'padding-top:10px';
+      const зн=зн0(c[1]); const col=зн>0?'#7ee08a':(зн<0?'#ff9b7a':'#9aa7b5');
+      const qb=(зн<0?'border:1px solid #A32D2D;background:rgba(226,75,74,.09)':(зн>0?'border:1px solid #2d6a45;background:rgba(63,185,80,.07)':'border:1px solid #3a434d;background:rgba(122,134,147,.07)'));
+      const mk=(зн>0?'#c9f0d3;color:#0d3a1c':(зн<0?'#f6cfcb;color:#4a1210':'#ece3d0;color:#2b2416'));
+      const q3=String(c[3]||'').trim(); const t1=String(c[1]||'').trim();
+      const hd=document.createElement('div'); hd.style.cssText='display:flex;justify-content:space-between;align-items:baseline;gap:8px';
+      hd.innerHTML='<span style="font-size:calc(11.5px * var(--txtScale,1));color:#7c9a85;white-space:nowrap">запись '+(i+1)+' из '+items.length+'</span>'+((t1 && t1!==q3)?('<span dir="rtl" style="font-size:calc(15.5px * var(--txtScale,1));'+_AF+';color:'+col+';min-width:0;overflow-wrap:anywhere">'+esc(t1)+'</span>'):'');
+      it.appendChild(hd);
+      if(q3){ let parts=null; try{ if(/،?\s*و?\s*مرة\s*[:：]/.test(q3)){ parts=q3.split(/،?\s*و?\s*مرة\s*[:：]\s*/).map(s=>s.trim()).filter(Boolean); if(parts.length<2) parts=null; } }catch(_e){ parts=null; }
+        (parts||[q3]).forEach((v,vi)=>{ const q=document.createElement('div'); q.dir='rtl';
+          q.style.cssText='font-size:calc(17px * var(--txtScale,1));'+_AF+';color:#eaf2ea;'+qb+';border-radius:8px;padding:6px 10px;margin-top:6px;line-height:1.75';
+          let h=esc(v); const te=t1?esc(t1):''; if(te && te!==h) h=h.split(te).join('<mark style="background:'+mk+';border-radius:3px;padding:0 3px;font-weight:700">'+te+'</mark>');
+          q.innerHTML=(parts?('<span style="display:inline-flex;width:17px;height:17px;border-radius:50%;background:#1c2b44;color:#9cc3f0;font-size:calc(10.5px * var(--txtScale,1));align-items:center;justify-content:center;margin-left:6px;vertical-align:middle">'+(vi+1)+'</span>'):'')+h;
+          it.appendChild(q); }); }
+      const ruT=((c[9]&&String(c[9]).trim())||_ruVerdict([c[1]]));
+      if(ruT) it.appendChild(_ruLine(ruT,13));
+      try{ if(i===0 || (c[5]&&Number(c[5])>0)) it.appendChild(_ttLinkRow(c[5],c[6],mid,c[7],c[4],c[3],c[0])); }catch(_e){_тихо(_e,"ttSide-lnk")}
+      box.appendChild(it); });
+    w.appendChild(box);
+    const cb=document.createElement('button'); cb.type='button'; cb.className='mini';
+    cb.style.cssText='display:block;width:100%;margin-top:12px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;font-size:calc(13px * var(--txtScale,1));font-weight:600;text-align:center';
+    cb.textContent='👤 Карточка учёного: '+ru+' ›';
+    cb.onclick=(e)=>{ try{ e.stopPropagation(); }catch(_e){_тихо(_e,"ttSide-cb")} _ttSideClose(true); try{ openNarratorRijal(cr); }catch(_e){_тихо(_e,"ttSide-card")} };
+    w.appendChild(cb);
+    return w; };
+  const _ttПункт=(row, cr, items, знак, n)=>{ try{ _ttSideCss(); }catch(_e){_тихо(_e,"ttSide-css")}
+    const hd=row.firstElementChild; const nm=row.querySelector('.critNameCl');
+    if(hd && nm && n && nm.parentNode===hd){ const L=document.createElement('span'); L.style.cssText='display:flex;align-items:baseline;gap:7px;min-width:0;flex:1 1 auto';
+      const N=document.createElement('span'); N.setAttribute('aria-hidden','true'); N.textContent=String(n);
+      N.style.cssText='flex:none;align-self:center;display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;border-radius:10px;background:rgba(63,185,80,.12);border:1px solid #2d6a45;color:#7ee08a;font-size:calc(11px * var(--txtScale,1));font-weight:700;line-height:1';
+      hd.insertBefore(L, nm); L.appendChild(N); L.appendChild(nm); }
+    if(hd){ const ch=document.createElement('span'); ch.className='ttChev'; ch.title='Все слова этого учёного — панель справа'; ch.textContent='›';
+      ch.style.cssText='flex:none;align-self:center;font-size:calc(24px * var(--txtScale,1));line-height:1;color:#7ee08a;padding-left:4px;opacity:.85'; hd.appendChild(ch); }
+    row.classList.add('rowTap'); row.style.cursor='pointer';
+    row.addEventListener('click', (e)=>{ try{
+      for(let t=e.target; t && t!==row; t=t.parentElement){
+        if(t.classList && t.classList.contains('critNameCl')) return;
+        const тег=t.tagName; if(тег==='A'||тег==='BUTTON'||тег==='INPUT'||тег==='SUMMARY') return;
+        if(typeof t.onclick==='function' || (t.style && t.style.cursor==='pointer')) return; }
+      try{ const сл=window.getSelection?getSelection():null; if(сл && !сл.isCollapsed && String(сл).trim()) return; }catch(_e){_тихо(_e,"ttSide-sel")}   // выделяют цитату — не мешаем
+      _ttSideOpen(row, _ruName(cr), ()=>_ttPanel(cr, items, знак));
+    }catch(_e){_тихо(_e,"ttSide-tap")} });
+  };
   const _TT_TOP=6;
   const _emap={}, _eord=[]; _early.forEach(cr=>{ const key=_ruName(cr); if(!_emap[key]){_emap[key]={ar:cr,items:[]}; _eord.push(key);} byc[cr].forEach(it=>_emap[key].items.push(it)); });
   // Свидетельства этой карточки — для «Свода ИИ» (владелец 26.07.2026: «строго в пределах наших
@@ -19410,6 +19617,7 @@ async function renderTestimoniesCard(mid, host){
     try{ row.appendChild(_ttLinkRow(c0[5],c0[6],mid,c0[7],c0[4],c0[3],c0[0])); }catch(e){_тихо(e,"L13839")}
     // R-61 Э4: у ОСТАЛЬНЫХ записей группы тоже есть свои книги-носители (bid+стр) — раньше рисовалась только первая
     try{ items.slice(1).forEach(cx=>{ if(cx[5]&&Number(cx[5])>0){ const _x=_ttLinkRow(cx[5],cx[6],mid,cx[7],cx[4],cx[3],cx[0]); _x.style.marginTop='3px'; row.appendChild(_x); } }); }catch(e){_тихо(e,"L13841")}
+    try{ _ttПункт(row, cr, items, _ttЗнак, idx+1); }catch(e){_тихо(e,"ttSide-row")}   // 08.10.2026 · МИНИ АПП 99 · №367: пункт списка → панель справа
     bd.appendChild(row);
   });
   if(_eord.length>_TT_TOP){ const more=document.createElement('div'); more.style.cssText='text-align:center;font-size:calc(13.5px * var(--txtScale,1));font-weight:600;color:#7ee08a;margin-top:11px;cursor:pointer;border:1px solid #2d6a45;border-radius:9px;padding:8px;background:rgba(63,185,80,.06)';
@@ -19432,6 +19640,7 @@ async function renderTestimoniesCard(mid, host){
       if(ruv) rr.appendChild(_ruLine(ruv,13));
       try{ const _cnEl=rr.querySelector('.critNameCl'); if(_cnEl) _cnEl.onclick=(e)=>{ e.stopPropagation(); try{ openNarratorRijal(cr); }catch(_e){_тихо(_e,"L13862")} }; }catch(e){_тихо(e,"L13862")}
       lb.appendChild(rr);
+      try{ _ttПункт(rr, cr, items, null, 0); }catch(e){_тихо(e,"ttSide-late")}   // 08.10.2026 · МИНИ АПП 99 · №367: и поздние своды выезжают справа (закон единообразия R45)
       // R-61 Э4 (владелец 16.07 «ссылок нету»): у поздних сводов КАК РАЗ есть bid+страница (تقريب/الكاشف)، а чипы
       // «Читать у нас — к цитате» рисовались только в основном списке — записи Ибн Хаджара/Захаби были без ссылок.
       try{ const _wb=items.find(c=>c[5]&&Number(c[5])>0);
@@ -19525,6 +19734,91 @@ async function renderTestimoniesCard(mid, host){
   hdr.onclick=()=>{ const op=bd.style.display!=='none'; bd.style.display=op?'none':'block'; hdr.querySelector('.ttTg').textContent=op?'▸':'▴'; };
   sec.appendChild(hdr); sec.appendChild(bd); host.appendChild(sec);
 }
+/* 08.10.2026 · МИНИ АПП 99 · заявка №367 (скрин владельца 27.06): «как-то читается тяжело, сходу непонятно, что это
+   список; когда кликаешь, надо чтобы удобно открывалось и уходило назад» и следом: «может справа будет выходить, когда
+   нажимаешь на них, и уходить вправо, когда возвращаешься? ты кстати это не внедрил».
+   БОКОВАЯ ПАНЕЛЬ СПРАВА для списка критиков в карточке передатчика (строит её renderTestimoniesCard → _ttПункт).
+   Выезжает справа (transform:translateX, 200 мс; при prefers-reduced-motion — без анимации) и уезжает вправо же:
+   кнопкой «‹ Назад», нативной «Назад» Telegram, тапом по затемнению слева, свайпом вправо, Esc. Список под панелью
+   не трогаем, а прокрутку его предков запоминаем при открытии и возвращаем при закрытии — человек там же, где был.
+   ПОЧЕМУ на классе .modal, а не своим механизмом: тогда панель сама получает верхний слой (_zLift), фон под ней
+   замораживается (_bodyLock), а «Назад» Telegram (_closeTopModal) жмёт её кнопку с id …Close. modalTop НЕ зовём:
+   он гасит прочие окна, и карточка равия, из которой панель открыли, пропала бы под ней. */
+var _ttSideSt=null;   // где стоял список при открытии: {sc:[[прокручиваемый предок, scrollTop],…], foc: фокус}
+function _ttSideCss(){ if(document.getElementById('_ttSideCss')) return;
+  const st=document.createElement('style'); st.id='_ttSideCss';
+  st.textContent='#ttSideModal{padding:0;overflow:hidden;justify-content:flex-end;align-items:stretch;background:rgba(0,0,0,0);-webkit-backdrop-filter:none;backdrop-filter:none;transition:background-color .2s ease}'
+    +'#ttSideModal.on{background:rgba(0,0,0,.5)}'
+    +'#ttSideModal .ttSidePn{width:calc(100% - 28px);max-width:520px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;background-color:var(--bg,#0f1620);background-image:linear-gradient(var(--card),var(--card));color:var(--text);border-left:1px solid var(--border);box-shadow:-16px 0 40px -12px rgba(0,0,0,.65);transform:translateX(100%);transition:transform .2s cubic-bezier(.22,.61,.36,1);will-change:transform;touch-action:pan-y}'
+    +'#ttSideModal.on .ttSidePn{transform:translateX(0)}'
+    +'#ttSideModal .ttSideHd{flex:none;display:flex;align-items:center;gap:8px;padding:10px 12px;padding-top:calc(10px + var(--tgTop,0px) + env(safe-area-inset-top,0px));border-bottom:1px solid var(--border)}'
+    +'#ttSideModal .ttSideBd{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:12px 12px calc(18px + env(safe-area-inset-bottom,0px))}'
+    +'@media (prefers-reduced-motion:reduce){#ttSideModal,#ttSideModal .ttSidePn{transition:none!important}}';
+  document.head.appendChild(st); }
+function _ttSideReduce(){ try{ return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); }catch(e){ return false; } }
+function _ttSideClose(instant){ try{
+  const m=document.getElementById('ttSideModal'); if(!m) return;
+  const d=m.style.display; if(!d || d==='none') return;
+  // уже уезжает (класса on нет) — второй вызов закрывает сразу: иначе goHome (цикл _closeTopModal) и двойное
+  // «Назад» Telegram 12 раз жали бы кнопку уезжающей панели и не доходили до окна под ней
+  const уезжает=!m.classList.contains('on');
+  const pn=m.querySelector('.ttSidePn'); const st=_ttSideSt; _ttSideSt=null;
+  if(pn){ pn.style.transition=''; pn.style.transform=''; }   // после свайпа палец оставил своё смещение — снимаем, CSS довезёт до 100%
+  m.classList.remove('on');
+  const done=()=>{ try{ m.style.display='none';
+    if(st){ st.sc.forEach(p=>{ try{ if(p[0].isConnected && Math.abs(p[0].scrollTop-p[1])>1) p[0].scrollTop=p[1]; }catch(_e){_тихо(_e,"ttSide-sc2")} });
+      try{ if(st.foc && st.foc.isConnected && st.foc.focus) st.foc.focus({preventScroll:true}); }catch(_e){_тихо(_e,"ttSide-foc2")} }
+  }catch(_e){_тихо(_e,"ttSide-done")} };
+  clearTimeout(m._ttT);
+  if(instant || уезжает || _ttSideReduce()) done(); else m._ttT=setTimeout(done, 210);
+}catch(e){_тихо(e,"ttSide-close")} }
+function _ttSideOpen(from, title, build){ try{
+  _ttSideCss();
+  let m=document.getElementById('ttSideModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='ttSideModal';
+    m.setAttribute('role','dialog'); m.setAttribute('aria-modal','true');
+    m.innerHTML='<div class="ttSidePn"><div class="ttSideHd"><button type="button" class="mini" id="ttSideClose" aria-label="Назад к списку критиков" style="flex:none;min-height:36px;border:1px solid var(--border);border-radius:10px;padding:5px 12px;font-size:calc(13.5px * var(--txtScale,1));font-weight:600">‹ Назад</button><b class="ttSideTt" style="flex:1;min-width:0;font-size:calc(15px * var(--txtScale,1));overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></b></div><div class="ttSideBd"></div></div>';
+    m.querySelector('#ttSideClose').onclick=(e)=>{ try{ e.stopPropagation(); }catch(_e){_тихо(_e,"ttSide-x")} _ttSideClose(); };
+    m.addEventListener('click', e=>{ if(e.target===m) _ttSideClose(); });   // тап по затемнению слева от панели
+    // свайп вправо: панель едет за пальцем; отпустил дальше трети ширины (или резким движением) — уезжает, иначе возвращается
+    const pn0=m.querySelector('.ttSidePn'); let sw=null;
+    pn0.addEventListener('touchstart', e=>{ const t=e.touches&&e.touches[0]; sw=(t && e.touches.length===1)?{x:t.clientX,y:t.clientY,t:Date.now(),dx:0,h:null}:null; }, {passive:true});
+    pn0.addEventListener('touchmove', e=>{ if(!sw) return; const t=e.touches&&e.touches[0]; if(!t) return;
+      const dx=t.clientX-sw.x, dy=t.clientY-sw.y;
+      if(sw.h===null){ if(Math.abs(dx)<10 && Math.abs(dy)<10) return; sw.h=(dx>0 && Math.abs(dx)>Math.abs(dy)*1.3); if(sw.h) pn0.style.transition='none'; }
+      if(!sw.h) return; sw.dx=Math.max(0,dx); pn0.style.transform='translateX('+sw.dx+'px)'; }, {passive:true});
+    pn0.addEventListener('touchend', ()=>{ if(!sw) return; const s=sw; sw=null; if(!s.h) return;
+      pn0.style.transition='';
+      const v=s.dx/Math.max(1,Date.now()-s.t);
+      if(s.dx>Math.min(120,pn0.offsetWidth*0.3) || (v>0.45 && s.dx>35)) _ttSideClose(); else pn0.style.transform=''; }, {passive:true});
+    pn0.addEventListener('touchcancel', ()=>{ if(sw && sw.h){ pn0.style.transition=''; pn0.style.transform=''; } sw=null; }, {passive:true});
+    // Esc: общий обработчик гасит верхнее окно мгновенно и без возврата прокрутки — перехватываем раньше него,
+    // но только когда панель действительно верхняя (над ней не открыто другое окно)
+    window.addEventListener('keydown', e=>{ try{ if(e.key!=='Escape') return; const mm=document.getElementById('ttSideModal');
+      if(!mm || mm.style.display!=='flex') return;
+      const z=+mm.style.zIndex||0;
+      const выше=[...document.querySelectorAll('.modal')].some(o=>o!==mm && (o.style.display==='flex'||o.style.display==='block') && (+o.style.zIndex||0)>z);
+      if(выше) return;
+      e.preventDefault(); e.stopImmediatePropagation(); _ttSideClose(); }catch(_e){_тихо(_e,"ttSide-esc")} }, true);
+  }
+  clearTimeout(m._ttT);
+  const pn=m.querySelector('.ttSidePn'), bd=m.querySelector('.ttSideBd');
+  m.querySelector('.ttSideTt').textContent=String(title||'');
+  bd.innerHTML=''; let node=null; try{ node=build?build():null; }catch(e){_тихо(e,"ttSide-build")}
+  if(node) bd.appendChild(node);
+  bd.scrollTop=0;
+  // запомнить, где стоял список: все прокручиваемые предки строки (окно карточки, его .panel и т.п.)
+  const sc=[]; try{ for(let p=from&&from.parentElement; p && p!==document.body && p!==document.documentElement; p=p.parentElement){ if(p.scrollHeight>p.clientHeight+1) sc.push([p,p.scrollTop]); } }catch(e){_тихо(e,"ttSide-sc")}
+  _ttSideSt={sc:sc, foc:document.activeElement};
+  if(document.body.lastElementChild!==m) document.body.appendChild(m);   // последним в DOM: «Назад» Telegram закрывает последнее открытое окно
+  m.classList.remove('on'); pn.style.transition=''; pn.style.transform='';
+  try{ _zLift(m); }catch(e){ m.style.zIndex='19900'; }
+  m.style.display='flex';
+  void pn.offsetWidth;   // зафиксировать стартовую точку (за правым краем) — иначе браузер не проиграет выезд
+  m.classList.add('on');
+  try{ hap('light'); }catch(e){_тихо(e,"ttSide-hap")}
+  try{ m.querySelector('#ttSideClose').focus({preventScroll:true}); }catch(e){_тихо(e,"ttSide-focus")}
+}catch(e){_тихо(e,"ttSide-open")} }
 // M371: ЕДИНЫЙ порядок критиков ВЕЗДЕ — хронология по году смерти, РАННИЕ ПЕРВЫМИ (дух R38: ранние имамы — эталон)
 const _CRIT_DEATH={'аш-Шафии':820,'Яхья ибн Маин':847,'Али ибн аль-Мадини':849,'Ахмад ибн Ханбаль':855,'аль-Бухари':870,'Муслим':875,
  'Абу Зураа ар-Рази':878,'Абу Дауд ас-Сиджистани':889,'аль-Фасауи':890,'ат-Тирмизи':892,'Ибн Аби Шайба (М. б. Усман)':909,'ан-Насаи':915,
@@ -21084,7 +21378,8 @@ async function _codifHighlight(text, card, out, place){
       if(_vr && _vr.length){
         const _кт=canonИмя(text||''); const f2id={}, names=[];
         for(const _r of _vr){ const _nm=_r[1], _md=_r[2];
-          if(!_nm || _md==null || _md==='?' || (_nm in f2id)) continue;
+          // 08.10.2026 (МИНИ АПП 99, М3): пустой id ('') = нет id, как null и '?' — иначе имя светилось и вело на несуществующего равия
+          if(!_nm || _idЭталона(_md)==null || (_nm in f2id)) continue;
           const _к=canonИмя(_nm); if(_к.length<3 || !_кт.includes(_к)) continue;
           f2id[_nm]=String(_md); names.push(_nm); }
         if(names.length>=2){
@@ -21110,10 +21405,12 @@ async function _codifHighlight(text, card, out, place){
     try{ const _extra=isnadNarrators(text).filter(_keepNarr);
       // A-010 (Муслим 777, 11.07): добор давал ЧУЖОЙ id (тёзка _narrLookup) → DOM-сверка честно краснела «лишний».
       // П-05: на хадисах С ЭТАЛОНОМ (verify) добор разрешён ТОЛЬКО из id эталона/na; без эталона — как раньше.
-      let _vIds=null; try{ const _vr=await _verifyChain(place.bid,place.num,place.riw); if(_vr&&_vr.length){ _vIds=new Set(_vr.filter(r=>r[2]!=null&&r[2]!=='?').map(r=>String(r[2])));
+      // 08.10.2026 (МИНИ АПП 99, М3): '' в наборе эталонных id — не id; мерка общая (_idЭталона), как у буквенной и обычной ветки ниже
+      let _vIds=null; try{ const _vr=await _verifyChain(place.bid,place.num,place.riw); if(_vr&&_vr.length){ _vIds=new Set(_vr.filter(r=>_idЭталона(r[2])!=null).map(r=>_idЭталона(r[2])));
         // v1076 (852b «محمد» не опознан): ПО-БУКВЕННЫЙ эталон несёт готовые пары имя→mid В ФОРМУЛИРОВКЕ ЭТОГО риваята —
         // кладём их в подсветку напрямую (короткие имена типа «محمد» _narrLookup не резолвит из-за тёзка-риска, а эталон уже разрешил).
-        if(_vr._letter){ for(const _r of _vr){ const _nm=_r[1], _md=_r[2]; if(_nm && _md!=null && _md!=='?' && !(_nm in f2id)){ f2id[_nm]=String(_md); names.push(_nm); } } }
+        // 08.10.2026 (МИНИ АПП 99, М3): все 701 пустых id лежат именно в буквенных ключах (16b, 23b, 37c…) — '' здесь = нет id; имя без id доберёт проверенный путь _extra ниже
+        if(_vr._letter){ for(const _r of _vr){ const _nm=_r[1], _md=_idЭталона(_r[2]); if(_nm && _md!=null && !(_nm in f2id)){ f2id[_nm]=_md; names.push(_nm); } } }
         /* 04.09.2026, замер: подсвечено 82% звеньев. Разбор недобора показал, что чипы цепи и
            подсветка питаются РАЗНЫМИ источниками: цепь рисует каскад na→verify→codif→dz, а сюда
            шли только пары из `na` — и звенья, пришедшие из эталона, не подсвечивались вовсе,
@@ -21126,7 +21423,8 @@ async function _codifHighlight(text, card, out, place){
         else { try{
           const _ктек = canonИмя(text||'');
           for(const _r of _vr){ const _nm=_r[1], _md=_r[2];
-            if(!_nm || _md==null || _md==='?' || (_nm in f2id)) continue;
+            // 08.10.2026 (МИНИ АПП 99, М3): пустой id ('') = нет id — та же мерка, что в буквенной ветке выше
+            if(!_nm || _idЭталона(_md)==null || (_nm in f2id)) continue;
             const _к = canonИмя(_nm);
             if(_к.length < 6 || !_ктек.includes(_к)) continue;
             f2id[_nm]=String(_md); names.push(_nm); }
@@ -21259,6 +21557,15 @@ function autoHighlightNarr(text, card, out, ref){
   try{ _отметитьБезПередатчиков(card, false); }catch(e){_тихо(e,"L15347")}   // #735: место хадиса не опознано — сказать честно, а не молчать
 }
 // ===== НЕЗАВИСИМАЯ СИСТЕМА СВЕРКИ ПЕРЕДАТЧИКОВ (стратегич. заявка) =====
+/* 08.10.2026 (МИНИ АПП 99), неудача М3: «пустой id из эталона считается настоящим».
+   В боевом verify/1727_* (Муслим) 701 звено в 578 буквенных риваятах (16b, 16d, 23b, 27b, 33d, 37c…)
+   несёт id '' — пустую строку: «خالد - يعني ابن الحارث -», «عكرمة بن خالد يحدث طاوسا»… У остальных
+   шести книг таких звеньев нет (проверено по всем 70 боевым файлам verify, в codif пустых id нет).
+   Проверки вида «!=null && !=='?'» пустую строку пропускали: имя подсвечивалось, а нажатие вело
+   на несуществующего равия (Number('') = 0, карточка по id ''), и сверка путалась.
+   Пустой id — то же отсутствие id, что null и '?'. Мерка ОДНА на все входы эталона,
+   чтобы следующее место не пришлось чинить отдельно и по-своему. */
+function _idЭталона(x){ if(x==null) return null; const s=String(x).trim(); return (s===''||s==='?')?null:s; }
 // Эталон = цепь sunnah.com (= Мактаба): verify/<bid>_<num/500>.json {num:[[sid,имя,mid]]}. mid = id Мактабы (=наш id).
 // Сверяем: сколько передатчиков по эталону vs сколько подсветило ПРИЛОЖЕНИЕ (codif n). Расхождение (кол-во ИЛИ состав иснада) → 🚨 тревога + регистрация ошибки.
 let _verCache={}, _verCacheP={};
@@ -22256,8 +22563,14 @@ async function verifyNarr(card, place, text){
               if(/حدثن|سمعت|اخبرن|أخبرن|سمع/.test(f)){ cc='#7ee08a'; ct='слышание доказано формой «'+f+'» (تصريح بالسماع)'; ci='✓'; }
               else if(a&&b){ let proof='';
                 try{ const tl=await _tlinkGet(+a); if(tl&&tl[b]) proof='встреча подтверждена تهذيب الكمال'; }catch(_e){_тихо(_e,"L15901")}
-                if(!proof){ try{ const eg=await _edgesGet(+a); const n=(eg&&eg[b])||0; if(n>=3) proof='совместная передача в цепях ×'+n; }catch(_e){_тихо(_e,"L15902")} }
+                /* №470 (владелец 03.07: «~ «عن» — совместная передача в цепях ×3 — ты как этим встречу
+                   подтвердил?»). Никак: то, что пара стоит рядом в чужих цепях через «عن», и есть
+                   предмет проверки, а не доказательство. Жёлтым «~» остаётся только встреча из
+                   تهذيب الكمال; совпадение в цепях — серым, с прямой оговоркой. */
+                let _совм=0;
+                if(!proof){ try{ const eg=await _edgesGet(+a); _совм=(eg&&eg[b])||0; }catch(_e){_тихо(_e,"L15902")} }
                 if(proof){ cc='#e6c578'; ct='«'+(f||'عن')+'» — '+proof; ci='~'; }
+                else if(_совм>=3){ cc='#8a93a0'; ci='?'; ct='«'+(f||'عن')+'» — рядом в '+_совм+' цепях через «عن», но встреча этим НЕ доказана (нужна форма слышания или تهذيب الكمال)'; }
                 else ct='«'+(f||'عن')+'» — '+ct;
               } else if(f){ cc='#8a93a0'; ct='«'+f+'» — сосед не опознан, слышание не проверить'; ci='?'; }
               out+='<div style="display:flex;align-items:center;gap:7px;margin:1px 0 1px 14px"><span style="border-left:2px solid '+cc+';height:16px"></span><span style="font-size:calc(10px * var(--txtScale,1));color:'+cc+'">'+ci+' '+esc(ct)+'</span></div>';
@@ -23675,39 +23988,162 @@ var _fbic=document.getElementById('fbImgClr'); if(_fbic) _fbic.onclick=()=>_fbIm
        человек нажмёт, ничего не случится, и он решит, что сломано всё приложение.
        ⚠️ Текст ДОПИСЫВАЕМ, а не заменяем: надиктовал, поправил руками, надиктовал ещё —
        и ни одно слово не пропало. */
-    (function(){
-      var _мик=document.getElementById('fbMic'); if(!_мик) return;
-      var _Рас=window.SpeechRecognition||window.webkitSpeechRecognition;
-      if(!_Рас) return;                       // браузер не умеет — кнопки просто не будет
-      _мик.style.display='';
-      var _слух=null, _идёт=false;
-      _мик.onclick=function(){
-        var поле=document.getElementById('fbText'); if(!поле) return;
-        if(_идёт){ try{ _слух&&_слух.stop(); }catch(e){} return; }
+    /* 🎤✅ 08.10.2026 · МИНИ АПП 99 · ЗАЯВКА №163, владелец: «сделай интерфейс голосовой записи
+       заявок, но перед принятием ты должен спросить, правильно ли я тебя понял, объяснив, что
+       собираешься делать, потому что в аудио может быть ошибка распознавания речи».
+       БЫЛО: надиктованное молча дописывалось в поле, и «Отправить» уносило его как есть. Ошибку
+       распознавания (слово не то, номер хадиса не тот) человек видел уже ПОСЛЕ отправки, когда
+       заявка ушла и по ней начали работать.
+       СТАЛО: всё, что пришло ГОЛОСОМ и ещё не подтверждено, держится «на весах». Кончилась
+       диктовка — и ещё раз, если жмут «Отправить» в обход, — показываем «Я понял так: «…».
+       Отправить как заявку?» и три кнопки: ✅ отправить · ✏️ исправить (текст остаётся в поле,
+       дальше это обычный ручной ввод) · ✖ отмена (надиктованное убирается, но с «↩ вернуть»:
+       нечаянное нажатие не должно съесть длинную диктовку — «ни одно слово не пропало»).
+       ⚠️ Заслонка стоит на ПЕРЕХВАТЕ клика (capture) у окна, а не внутри sendFeedback: так она
+       одна держит обе кнопки отправки, а ручной ввод без диктовки проходит мимо неё нетронутым.
+       ⚠️ Микрофон с тем же вопросом подключён и к полю «Что не так / что добавить…» в Кабинете —
+       именно им владелец шлёт заявки, а микрофона там не было вовсе.
+       ⚠️ Где распознавания нет — кнопки нет (правило dfb#29 выше остаётся в силе). */
+    function _голосСПодтверждением(о){ try{
+      var Рас=window.SpeechRecognition||window.webkitSpeechRecognition;
+      var мик=о.мик, поле=о.поле, кнопка=о.кнопка;
+      if(!Рас||!мик||!поле||!кнопка) return;   // браузер не умеет — кнопки просто не будет
+      мик.style.display='';
+      var слух=null, идёт=false, ждём=false, доГолоса='', убрано=null, хотелОтправить=false;
+      // Кабинет: черновик df_draft переживает перезагрузку — пусть переживёт её и отметка «голос не
+      // подтверждён»; иначе восстановленная после перезагрузки диктовка ушла бы без вопроса.
+      var ключ=о.ключ||'';
+      var помнить=function(){ if(!ключ) return; try{ if(ждём) localStorage.setItem(ключ, JSON.stringify({до:доГолоса})); else localStorage.removeItem(ключ); }catch(e){} };
+      var ждать=function(в){ ждём=!!в; помнить(); };
+      if(ключ){ try{ var з=JSON.parse(localStorage.getItem(ключ)||'null');
+        if(з && поле.value.trim()){ ждём=true; доГолоса=String(з.до||''); } else localStorage.removeItem(ключ); }catch(e){} }
+      var окноСкрыто=function(){ try{ return !!(о.окно && о.окно.style.display==='none'); }catch(e){ return false; } };
+      // ── блок «Я понял так» ──
+      var блок=document.createElement('div');
+      блок.style.cssText='display:none;margin-top:8px;padding:10px 11px;border:1px solid var(--btn);border-radius:10px;background:var(--card);text-align:left';
+      var основное=document.createElement('div');
+      var шапка=document.createElement('div'); шапка.style.cssText='font-weight:700;color:var(--text);font-size:calc(13.5px * var(--txtScale,1))'; шапка.textContent='🎤 Я понял так:';
+      var цитата=document.createElement('div'); цитата.style.cssText='margin:5px 0 6px;white-space:pre-wrap;word-break:break-word;max-height:30vh;overflow:auto;color:var(--text);font-size:calc(14px * var(--txtScale,1));line-height:1.5';
+      var вопрос=document.createElement('div'); вопрос.style.cssText='font-weight:700;color:var(--text);font-size:calc(13.5px * var(--txtScale,1))'; вопрос.textContent='Отправить как заявку?';
+      var пояснение=document.createElement('div'); пояснение.className='hint'; пояснение.style.cssText='margin-top:3px;font-size:calc(12px * var(--txtScale,1))';
+      var ряд=document.createElement('div'); ряд.style.cssText='display:flex;gap:7px;flex-wrap:wrap;margin-top:8px';
+      var да=document.createElement('button'); да.type='button'; да.className='go'; да.style.cssText='padding:7px 13px;min-height:0'; да.textContent='✅ Да, отправить';
+      var испр=document.createElement('button'); испр.type='button'; испр.className='mini'; испр.style.cssText='border:1px solid var(--border);border-radius:9px;padding:7px 12px;color:var(--text)'; испр.textContent='✏️ Исправить';
+      var отм=document.createElement('button'); отм.type='button'; отм.className='mini'; отм.style.cssText='border:1px solid var(--border);border-radius:9px;padding:7px 12px;color:var(--text)'; отм.textContent='✖ Отмена';
+      ряд.appendChild(да); ряд.appendChild(испр); ряд.appendChild(отм);
+      основное.appendChild(шапка); основное.appendChild(цитата); основное.appendChild(вопрос); основное.appendChild(пояснение); основное.appendChild(ряд);
+      var отменено=document.createElement('div'); отменено.className='hint'; отменено.style.cssText='display:none;font-size:calc(12.5px * var(--txtScale,1))';
+      var отмТекст=document.createElement('span'); отмТекст.textContent='✖ Заявка не отправлена, надиктованное убрано из поля. ';
+      var вернуть=document.createElement('button'); вернуть.type='button'; вернуть.className='mini'; вернуть.textContent='↩ вернуть текст';
+      отменено.appendChild(отмТекст); отменено.appendChild(вернуть);
+      блок.appendChild(основное); блок.appendChild(отменено);
+      var место=(о.перед&&о.перед.parentNode)?о.перед:кнопка;
+      место.parentNode.insertBefore(блок, место);
+      var скрыть=function(){ блок.style.display='none'; };
+      var обновить=function(){
+        цитата.textContent='«'+поле.value.trim()+'»';
+        var к=''; try{ к=о.куда?о.куда():''; }catch(e){}
+        пояснение.textContent=(к?к+' ':'')+'Речь распознаёт машина и может ошибиться в словах — проверь текст, прежде чем отправлять.';
+      };
+      var показать=function(){
+        if(!поле.value.trim()){ ждать(false); скрыть(); return; }
+        обновить(); основное.style.display=''; отменено.style.display='none'; блок.style.display='';
+        try{ блок.scrollIntoView({block:'nearest'}); }catch(e){}
+        try{ блок.style.boxShadow='0 0 0 2px var(--btn)'; setTimeout(function(){ блок.style.boxShadow=''; },700); }catch(e){}
+      };
+      var микВыкл=function(){ идёт=false; мик.textContent='🎤 Надиктовать'; мик.style.borderStyle='dashed'; };
+      var послеКонца=function(){ микВыкл();
+        if(окноСкрыто()){ хотелОтправить=false; return; }
+        if(ждём) показать();                              // №163: диктовка кончилась — сразу спросить
+        else if(хотелОтправить) toast('Диктовка остановлена — нажми «Отправить» ещё раз');
+        хотелОтправить=false; };
+      // stop() обязан кончиться событием end. Не пришло за 4 с (бывает в WebView) — снимаем «идёт» сами:
+      // иначе заслонка навсегда держала бы кнопку «Отправить», и замечание стало бы не отправить вовсе.
+      var стоп=function(){ var я=слух; try{ я&&я.stop(); }catch(e){}
+        setTimeout(function(){ try{ if(идёт && слух===я) послеКонца(); }catch(e){_тихо(e,"L-golos163g")} },4000); };
+      да.onclick=function(){ ждать(false); убрано=null; скрыть(); try{ кнопка.click(); }catch(e){_тихо(e,"L-golos163a")} };
+      испр.onclick=function(){ ждать(false); скрыть();
+        try{ поле.focus(); var д=поле.value.length; поле.setSelectionRange(д,д); }catch(e){}
+        toast('Поправь текст и нажми «Отправить»'); };
+      отм.onclick=function(){ убрано=поле.value; ждать(false);
+        поле.value=доГолоса; поле.dispatchEvent(new Event('input',{bubbles:true}));
+        основное.style.display='none'; отменено.style.display=''; блок.style.display=''; };
+      вернуть.onclick=function(){ if(убрано==null) return; поле.value=убрано; убрано=null; ждать(true);
+        поле.dispatchEvent(new Event('input',{bubbles:true})); показать(); };
+      // правят руками, пока вопрос открыт — цитата идёт следом; стёрли всё — спрашивать не о чем
+      поле.addEventListener('input',function(e){ try{
+        if(блок.style.display==='none') return;
+        if(отменено.style.display!=='none'){ if(e&&e.isTrusted){ убрано=null; скрыть(); } return; }
+        if(!поле.value.trim()){ ждать(false); скрыть(); } else обновить();
+      }catch(_e){_тихо(_e,"L-golos163b")} });
+      // ЗАСЛОНКА: неподтверждённый голос кнопкой «Отправить» не уходит — сперва вопрос
+      (о.заслонка||кнопка.parentNode).addEventListener('click',function(e){ try{
+        var ц=e.target; if(!(ц===кнопка || (кнопка.contains&&кнопка.contains(ц)))) return;
+        if(идёт){ e.stopPropagation(); e.preventDefault(); хотелОтправить=true; стоп(); return; }   // вопрос покажет onend
+        if(!ждём) return;                                      // ручной ввод — как было
+        if(!поле.value.trim()){ ждать(false); return; }
+        e.stopPropagation(); e.preventDefault(); показать();
+      }catch(_e){_тихо(_e,"L-golos163c")} }, true);
+      // скрин приложили/сменили при открытом вопросе — пояснение «со скриншотом» обновляем
+      (о.заслонка||кнопка.parentNode).addEventListener('change',function(){ try{
+        if(блок.style.display!=='none' && основное.style.display!=='none') обновить(); }catch(_e){} }, true);
+      // окно закрыли посреди диктовки — слушать дальше незачем; у окна замечаний поле при новом открытии пустое
+      if(о.окно && window.MutationObserver){ try{ new MutationObserver(function(){
+          if(!окноСкрыто()) return;
+          if(идёт) стоп();
+          if(о.сбросПриЗакрытии){ ждать(false); убрано=null; хотелОтправить=false; скрыть(); }
+        }).observe(о.окно,{attributes:true,attributeFilter:['style']}); }catch(e){_тихо(e,"L-golos163d")} }
+      мик.onclick=function(){
+        if(идёт){ стоп(); return; }
         try{
-          _слух=new _Рас(); _слух.lang='ru-RU'; _слух.interimResults=false; _слух.continuous=true;
-          _слух.onstart=function(){ _идёт=true; _мик.textContent='⏹ Остановить'; _мик.style.borderStyle='solid'; };
-          _слух.onresult=function(e){
+          if(!ждём) доГолоса=поле.value;   // что было ДО диктовки — «Отмена» это не тронет
+          убрано=null; хотелОтправить=false; скрыть();
+          var я=new Рас(); слух=я; я.lang='ru-RU'; я.interimResults=false; я.continuous=true;
+          я.onstart=function(){ if(слух!==я) return; идёт=true; мик.textContent='⏹ Остановить'; мик.style.borderStyle='solid'; };
+          я.onresult=function(e){
+            if(окноСкрыто()) return;
             var кусок='';
             for(var i=e.resultIndex;i<e.results.length;i++){ if(e.results[i].isFinal) кусок+=e.results[i][0].transcript; }
             if(!кусок) return;
+            ждать(true);
             поле.value=(поле.value?поле.value.replace(/\s+$/,'')+' ':'')+кусок.trim();
             поле.dispatchEvent(new Event('input',{bubbles:true}));
           };
-          _слух.onerror=function(ev){
-            _идёт=false; _мик.textContent='🎤 Надиктовать'; _мик.style.borderStyle='dashed';
+          я.onerror=function(ev){ if(слух!==я) return;
+            микВыкл();
             // Отказ в микрофоне — самая частая беда, и молчать о ней нельзя: человек
             // будет думать, что не сработало распознавание, а дело в разрешении.
             var п=(ev&&ev.error)||'';
+            if(п==='aborted') return;
             toast(п==='not-allowed'||п==='service-not-allowed'
                   ? 'Микрофон запрещён — разреши доступ в настройках браузера'
                   : (п==='no-speech' ? 'Не расслышал — попробуй ещё раз' : 'Диктовка не удалась: '+п));
           };
-          _слух.onend=function(){ _идёт=false; _мик.textContent='🎤 Надиктовать'; _мик.style.borderStyle='dashed'; };
-          _слух.start();
+          я.onend=function(){ if(слух!==я) return; послеКонца(); };
+          я.start();
         }catch(e){ _тихо(e,"L-fbmic"); toast('Диктовка недоступна в этом браузере'); }
       };
-    })();
+    }catch(e){ _тихо(e,"L-golos163"); } }
+    // окно «⚠️ Сообщить об ошибке / замечание»
+    try{ _голосСПодтверждением({ мик:document.getElementById('fbMic'), поле:document.getElementById('fbText'),
+      кнопка:document.getElementById('fbSend'), перед:document.getElementById('fbSend'),
+      заслонка:document.getElementById('fbModal'), окно:document.getElementById('fbModal'), сбросПриЗакрытии:true,
+      куда:function(){ var fi=document.getElementById('fbImg');
+        return 'Уйдёт ИИ-разработчику как заявка'+((typeof _fbCtx!=='undefined'&&_fbCtx)?(' · '+_fbCtx):'')+(fi&&fi.files&&fi.files[0]?' · со скриншотом':'')+'.'; } }); }catch(e){_тихо(e,"L-golos163e")}
+    // Кабинет → «📝 Замечание / правка для Claude»: микрофона не было, ставим тот же, с тем же вопросом
+    (function(){ try{
+      var поле=document.getElementById('dfText'), кн=document.getElementById('dfSend'); if(!поле||!кн) return;
+      if(!(window.SpeechRecognition||window.webkitSpeechRecognition)) return;   // нет распознавания — нет кнопки
+      var мик=document.createElement('button'); мик.className='mini'; мик.id='dfMic'; мик.type='button';
+      мик.style.cssText='cursor:pointer;border:1px dashed var(--btn);color:var(--text);padding:7px 12px;border-radius:9px;font-size:calc(13px * var(--txtScale,1))';
+      мик.textContent='🎤 Надиктовать';
+      кн.parentNode.insertBefore(мик, кн);
+      _голосСПодтверждением({ мик:мик, поле:поле, кнопка:кн, перед:document.getElementById('dfOut'),
+        заслонка:поле.closest?(поле.closest('.accf')||кн.parentNode):кн.parentNode,
+        окно:document.getElementById('devModal'), сбросПриЗакрытии:false, ключ:'df_voice_wait',   // черновик Кабинета живёт и после закрытия — вопрос тоже
+        куда:function(){ var f=document.getElementById('dfImg');
+          return 'Уйдёт Claude в журнал разработки — внесу в заявки'+(f&&f.files&&f.files[0]?' (со скрином)':'')+'.'; } });
+    }catch(e){_тихо(e,"L-golos163f")} })();
 var _fbtg=document.getElementById('fbTg'); if(_fbtg) _fbtg.onclick=()=>openLink('https://t.me/jamaat_ru');
 var _setFbB=document.getElementById('setFbBtn'); if(_setFbB) _setFbB.onclick=()=>{ var s=document.getElementById('settingsModal'); if(s) s.style.display='none'; try{ openFeedback(''); }catch(e){_тихо(e,"L17014")} };
 var _menuFbB=document.getElementById('menuFbBtn'); if(_menuFbB) _menuFbB.onclick=()=>{ var s=document.getElementById('menuModal'); if(s) s.style.display='none'; try{ openFeedback(''); }catch(e){_тихо(e,"L17015")} };
