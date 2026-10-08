@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1664</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1665</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1664';
+const APPVER = 'v1665';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -9077,7 +9077,7 @@ async function _applyIsnadMatn(ar, code, num, text){
     if(!ar.isConnected && !ar.parentNode) return;
     const isn=text.slice(0,idx), matn=text.slice(idx);
     const g=ar._mkpGroups||null;
-    const H=(t)=>{ try{ return hl(t,g); }catch(e){ try{ return esc(t); }catch(e2){ return t; } } };
+    const H=(t)=>{ try{ return _hlАбзацы(t,g,slug); }catch(e){ try{ return esc(t); }catch(e2){ return t; } } };   // М1 (08.10): абзацы Малика переживают разметку иснад/матн
     let matnCore=matn, sharhTail='';
     if(rec.sharh||slug==='muslim'){ const m=matn.match(/^([\s\S]*["»][.،؛]?)\s*(\([\s\S]+)$/); if(m && m[2].length<matn.length*0.6){ matnCore=m[1]; sharhTail=m[2]; } }
     // Р-02: отделить СЛОВА АВТОРА СБОРНИКА от слов Пророка ﷺ
@@ -9111,11 +9111,19 @@ function _muslimTailSplit(t){ try{
 }catch(e){ return { body:String(t||''), chap:'' }; } }
 function _cleanMuslimTail(t){ return _muslimTailSplit(t).body; }   // обратная совместимость (тело без хвоста-главы)
 function _cardHadithOne(code, h, text, riwNo, riwTot, groups, noNav){
+  /* 🔴 08.10.2026, МИНИ АПП 99 · М1: ОБЩАЯ ТОЧКА ПОКАЗА ТЕКСТА. Сюда приходит хадис и из читалки, и из
+     поиска, и из выдачи по номеру, — а сноски Шамилы снимались только в читалке (_readRender), и в поиске
+     человек видел «…صَلَاةٍ»P+ صحيح دون جملة العشاء» прямо в хадисе. Чистим здесь: сноски — в свёрнутый
+     блок «Примечания издания» под текстом, обрывки разметки (⦗N⦘, (¬N), номер соседа, остатки span) — прочь.
+     Читалка отдаёт уже очищенный матн: второй проход ничего не находит, и блок не дублируется. */
+  let _сноскиК=[];
+  try{ const _ч=_текстБезАппарата(text, code, h&&h.num); text=_ч.матн; _сноскиК=_ч.сноски; }catch(e){_тихо(e,"L_М1карт")}
   try{ text=_cleanShamela(text); }catch(e){_тихо(e,"L6553")}
   let _musTailChap='';
   if(code==='muslim'){ try{ const _sp=_muslimTailSplit(text); text=_sp.body; _musTailChap=_sp.chap; }catch(e){_тихо(e,"L6555")} }   // fb#1: заголовок след. главы — В ОТДЕЛЬНЫЙ блок, не клеим к матну (владелец 05.07 С57: издательские хвосты)
   const card=document.createElement('div');card.className='card';
-  const ar=document.createElement('div');ar.className='ar';ar.innerHTML=hl(text,groups);_styleCollectorNote(ar);card.appendChild(ar);
+  const ar=document.createElement('div');ar.className='ar';ar.innerHTML=_hlАбзацы(text,groups,code);_styleCollectorNote(ar);card.appendChild(ar);   // М1 (08.10): у Малика абзацы, у остальных — тот же hl()
+  if(_сноскиК.length){ try{ card.appendChild(_блокСносок(_сноскиК)); }catch(e){_тихо(e,"L_М1блок")} }   // М1 (08.10, МИНИ АПП 99): примечания издания — свёрнуто, под текстом, не в нём
   // fb#1 (Муслим 2162 риваят 3): заголовок главы/раздела (باب/كتاب) из хвоста риваята — ОТДЕЛЬНЫМ блоком с
   // разделителем (не слитно с концом хадиса). Как СИБЛИНГ после .ar (внутрь .ar нельзя — _applyIsnadMatn перерисует .ar).
   if(_musTailChap){ try{ const _chb=document.createElement('div');
@@ -25603,15 +25611,105 @@ async function _chapGet(code){
   _chapCache[code]=await _chapCacheP[code];
   return _chapCache[code];
 }
-// Сноски Шамилы в тексте записи: «…матн»P<упр.символ> текст сноски [P<упр.символ> следующая сноска…].
-// Возвращает {матн, сноски[]} или null, если разделителя нет (или он в самом начале — тогда это не сноска).
+// Сноски Шамилы в тексте записи: «…матн»P<байт длины> текст сноски [P<байт> следующая сноска…].
+// Возвращает {матн, сноски[]} или null, если ни разделителя, ни комментария редактора нет.
+/* 🔴 08.10.2026, МИНИ АПП 99 · М1 «чистый текст хадиса при показе» (заявка #76 владельца: «текст без
+   мусора, подписи отмечены подписями и сворачиваются»; проверка данных 08.10).
+   ① РАЗДЕЛИТЕЛЬ БЫЛ УЗОК. Ловился как «P + управляющий символ». Но за «P» у Шамилы стоит байт ДЛИНЫ
+      сноски, и он бывает любым знаком ASCII: \n, пробел, «, = + ( ) * > O z [ #». Замер по всем
+      reader/*.json: 1780 записей (из них 1752 хадиса) показывали примечание прямо в тексте — Ибн Маджа 789,
+      Муслим 690, Абу Дауд 285, Бухари 11, Тирмизи 5 (Абу Дауд 46 «…صَلَاةٍ»P+ صحيح دون جملة العشاء»,
+      Ибн Маджа 9 «…نَصَرَهُمْ»P> [ش (ظاهرون) أي غالبون] . صحيح», Муслим 161 «…أُنْزِلْتُ".Pz(فشرح صدري)…»).
+      Теперь разделитель — латинская «P», перед которой НЕ латинская буква, и ровно один знак ASCII
+      за ней. Во всех восьми книгах читалки за таким «P» стоит только ASCII, ни разу не арабская буква, —
+      поэтому байт съедаем, а букву матна не тронем. Латинское слово не разделитель: «.PageHead {font…}»
+      (обрывки CSS в editions/*) отсекаются тем, что за «P» две латинские буквы, — в reader/*.json 0 раз.
+   ② ДО ПЕРВОЙ СНОСКИ — хотя бы 4 арабские буквы. Ряд точек «. . . .P\x11١٧٣ - [حَدَّثَنَا…» у Бухари и
+      «٢٠٨٦ (¬١).P (¬١) قوله: حدثنا…» у Тирмизи — не сноска после матна, а сам текст записи: там снимаем
+      только разделитель. Прежний порог «20 знаков» не пускал короткие главы: «بَابُ الْقَافَةِP\x01 [ش …]».
+   ③ ДАРИМИ: у 2813 из 2895 хадисов в матн вклеено «[تعليق المحقق] إسناده صحيح» — слово редактора, не
+      хадис. Уносим в примечания. Конец комментария — следующий номер («٤٠ -», «١٢٢٤ م -»: в запись №39
+      вклеен №40, он остаётся в тексте), следующая метка или первое огласованное слово (№2501: после
+      «إسناده صحيح» снова «قَالَ عَبْد اللَّهِ» — речь самого ад-Дарими). Комментарии пишутся без огласовок:
+      из 2905 огласованное слово внутри нашлось один раз — это и есть №2501.
+   ПРОВЕРЕНО скриптом на всех 48 243 записях: у каждой осталось ≥99,5% арабских букв текста до первой сноски
+   (у Дарими — за вычетом комментария). Данные не трогаем: по номеру записи ходят указатели. */
+function _шамРазделители(s){
+  const поз=[]; let i=s.indexOf('P');
+  while(i>=0){
+    if(i+1<s.length && s.charCodeAt(i+1)<128 && !/[A-Za-z]/.test(s.charAt(i-1))
+       && !/[A-Za-z]{2}/.test(s.substr(i+1,2))){ поз.push(i); i=s.indexOf('P',i+2); }
+    else i=s.indexOf('P',i+1);
+  }
+  return поз;
+}
+function _арБукв(s){ return (String(s).match(/[\u0621-\u064A]/g)||[]).length; }
 function _сноскиШамилы(t){
-  const s=String(t||''); const m=/[Pp][\x01-\x08\x0b\x0c\x0e-\x1f]/.exec(s);
-  if(!m || m.index<20) return null;
-  const матн=s.slice(0,m.index).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').trim();
-  const сноски=s.slice(m.index).split(/[Pp]?[\x01-\x08\x0b\x0c\x0e-\x1f]/).map(x=>x.replace(/\s+/g,' ').trim()).filter(Boolean);
+  const s=String(t||''), МЕТ='[تعليق المحقق]', поз=_шамРазделители(s);
+  let матн=s, сноски=[], было=false;
+  if(поз.length){ было=true;
+    let k=-1; for(let j=0;j<поз.length;j++){ if(_арБукв(s.slice(0,поз[j]))>=4){ k=j; break; } }
+    const до=(k<0)?поз.length:k; let m='', от=0;
+    for(let j=0;j<до;j++){ m+=s.slice(от,поз[j])+' '; от=поз[j]+2; }   // ранние разделители — только мусор, текст на месте
+    if(k<0) m+=s.slice(от);
+    else { m+=s.slice(от,поз[k]);
+      for(let j=k;j<поз.length;j++) сноски.push(s.slice(поз[j]+2, j+1<поз.length?поз[j+1]:s.length)); }
+    матн=m; }
+  let i=матн.indexOf(МЕТ);
+  if(i>=0 && _арБукв(матн.slice(0,i))>=4){ было=true;
+    const ред=[]; let m='', от=0;
+    while(i>=0){ m+=матн.slice(от,i)+' ';
+      const нач=i+МЕТ.length, хв=матн.slice(нач);
+      const кон=/[\u0660-\u0669]+\s*(?:\u0645\s*)?-\s|\[تعليق المحقق\]|\S*[\u064B-\u0652]\S*[\u064B-\u0652]/.exec(хв);
+      const ком=кон?хв.slice(0,кон.index):хв;
+      ред.push(МЕТ+' '+ком); от=нач+ком.length; i=матн.indexOf(МЕТ,от); }
+    m+=матн.slice(от); матн=m; сноски=ред.concat(сноски); }
+  if(!было) return null;
+  матн=матн.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').replace(/[ \t]{2,}/g,' ').trim();
   if(!матн) return null;
+  сноски=сноски.map(x=>x.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,' ').replace(/\s+/g,' ').trim()).filter(Boolean);
   return {матн, сноски};
+}
+/* М1 (08.10.2026, МИНИ АПП 99): мусор издания, который стоит прямо в строке матна, — не сноска, а обрыв
+   разметки. Только показ: поиск ищет по данным, а подсветка от чистки лишь выигрывает (имя не рвётся). */
+function _матнДляПоказа(t, code, num){
+  let s=String(t==null?'':t);
+  s=s.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g,'');                       // байты длины сносок: невидимы, но рвут слово
+  s=s.replace(/^(?:\s*\.){5,}\s*/,'');                                       // Бухари: ряд точек на месте опущенного в печати
+  s=s.replace(/<?\/?span\b[^<>]{0,120}>/g,' ');                              // «span data-type="title" id=toc-N>» без «<» — _cleanTextArtifacts его не видит (14 записей)
+  s=s.replace(/(\s*)\u2997[^\u2997\u2998]{0,24}\u2998(\s*)/g,(m,a,b)=>(a||b)?' ':'');           // метки страниц «⦗١٠⦘», «⦗ص: ١٠⦘» (Насаи 1644, Муслим 466): «حُمَيْدُ ⦗١٠⦘ بْنُ هِلَالٍ» рвало имя и подсветку
+  s=s.replace(/\s*\(\s*\u00AC\s*[\d\u0660-\u0669]+\s*\)/g,'').replace(/\u00AC\s*[\d\u0660-\u0669]*/g,'');  // обрывки ссылок на сноски «(¬١)» (Бухари, Тирмизи, Насаи) — сама сноска уже в примечаниях
+  if(code==='bukhari' && num!=null && /^\d+$/.test(String(num).trim())){     // Бухари: запись №408 начиналась с «٤٠٩ -» — номер соседа (105 записей; бывает и два подряд)
+    for(let k=0;k<3;k++){ const m=/^\s*([\d\u0660-\u0669]+)\s*-\s*/.exec(s);
+      if(!m || +m[1].replace(/[\u0660-\u0669]/g,d=>d.charCodeAt(0)-0x660)===+num || m[0].length>=s.length) break;
+      s=s.slice(m[0].length); } }
+  if(code==='malik') s=s.replace(/[ \t]*\n\s*/g,'\n');                       // Малик: абзацы («\n\n٤ - قَالَ يَحْيَى…») — их рисует _hlАбзацы
+  return s.replace(/[ \t]{2,}/g,' ').trim();
+}
+function _текстБезАппарата(t, code, num){   // → {матн, сноски[]} всегда; сбой чистки не роняет показ
+  let матн=String(t==null?'':t), сноски=[];
+  try{ const сн=_сноскиШамилы(матн); if(сн){ матн=сн.матн; сноски=сн.сноски; } }catch(e){_тихо(e,"L_М1сн")}
+  try{ матн=_матнДляПоказа(матн, code, num); }catch(e){_тихо(e,"L_М1чист")}
+  return {матн, сноски};
+}
+// Малик: hl() сводит все пробелы в один, и абзацы пропадали. Рисуем абзацы по одному и сшиваем переносом.
+function _hlАбзацы(t, groups, code){
+  const s=String(t==null?'':t);
+  if(code!=='malik' || s.indexOf('\n')<0) return hl(s,groups);
+  return s.split(/\s*\n\s*/).filter(Boolean).map(p=>hl(p,groups)).join('<br>');
+}
+// Свёрнутый блок «Примечания издания» — тот же вид, что в читалке (_readRender), для карточек поиска и глав.
+function _блокСносок(сноски){
+  const дт=document.createElement('details'); дт.className='shamFn';
+  дт.style.cssText='margin:6px 2px 4px;border:1px dashed var(--border);border-radius:10px;padding:6px 10px;color:var(--hint);font-size:calc(12.5px * var(--txtScale,1));direction:ltr;text-align:left';
+  const сум=document.createElement('summary'); сум.style.cssText='cursor:pointer;'+_RF;
+  сум.textContent='📝 Примечания издания ('+сноски.length+') — не часть хадиса';
+  сум.onclick=(e)=>{ try{ e.stopPropagation(); }catch(_){} };
+  дт.appendChild(сум);
+  сноски.forEach(т=>{ const п=document.createElement('div'); п.dir='rtl';
+    п.style.cssText=_AF+';font-size:calc(14.5px * var(--txtScale,1));line-height:1.9;margin-top:5px;color:var(--text);text-align:right';
+    п.textContent=т; дт.appendChild(п); });
+  return дт;
 }
 function _readRender(){
   if(!_readArr||!_readArr.length) return;
@@ -25666,7 +25764,12 @@ function _readRender(){
         : 'font-size:16.5px;color:#cfe0d6;background:rgba(122,134,147,.08);border:1px solid #3a434d';
     const d=document.createElement('div'); d.dir='rtl';
     d.style.cssText=st+';'+_AF+';border-radius:10px;padding:11px 14px;line-height:2;text-align:justify';
-    try{ d.innerHTML=hl(String(h.text||''), _groups||[]); }catch(e){ d.textContent=String(h.text||''); }
+    /* М1 (08.10.2026, МИНИ АПП 99): главы и китабы тоже несут сноски Шамилы и обрывки разметки
+       («بَابُ الْقَافَةِ» + сноска «[ش …]», «span data-type="title" id=toc-16>بَابٌ»). Чистим, как карточку хадиса. */
+    let _тГл=String(h.text||''), _снГл=[];
+    try{ const _ч=_текстБезАппарата(_тГл, _readCode, null); _тГл=_ч.матн; _снГл=_ч.сноски; }catch(e){_тихо(e,"L_М1глава")}
+    try{ d.innerHTML=hl(_тГл, _groups||[]); }catch(e){ d.textContent=_тГл; }
+    if(_снГл.length){ try{ d.appendChild(_блокСносок(_снГл)); }catch(e){_тихо(e,"L_М1глава2")} }
     const cap=document.createElement('div');
     cap.style.cssText='font-size:calc(11.5px * var(--txtScale,1));color:var(--hint);margin:0 0 5px;'+_RF;
     cap.textContent=(kind==='китаб'?'📕 Книга (китаб)':kind==='глава'?'📑 Глава (باب)':'📄 Из книги — вне нумерации (муалляк, слова автора)')+(h.стр?(' · стр. '+h.стр):'');
@@ -26136,7 +26239,9 @@ function makeHadithAdapter(code){
   function _ruQuick(){ return Promise.race([_ruMap(), new Promise(function(r){ setTimeout(function(){ r({}); },2500); })]); }
   function _map(item, rm){
     var ru=(rm&&rm[String(item.num)])||item.ru||null;
-    return { id:code+'_'+item.num, type:'hadith', arabic:item.text||item.ar||'', translation:ru,
+    /* М1 (08.10.2026, МИНИ АПП 99): единая читалка (бета) показывает тот же текст — без сносок и мусора издания */
+    var _ar=item.text||item.ar||''; try{ if(typeof _текстБезАппарата==='function') _ar=_текстБезАппарата(_ar,code,item.num).матн; }catch(e){}
+    return { id:code+'_'+item.num, type:'hadith', arabic:_ar, translation:ru,
       metadata:{ sourceName:title, number:item.num } };
   }
   return { title:title,
