@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1666</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1667</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1666';
+const APPVER = 'v1667';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -14806,6 +14806,7 @@ function _ragРисоватьСпасение(res, спас, порог, зап�
         b.onclick=()=>{ try{ hap('light'); }catch(e){_тихо(e,"L10517")} try{ openReader('bukhari', String(c.n)); }catch(e){_тихо(e,"L10517")} };
         card.appendChild(b); }
       res.appendChild(card);
+      if(c.n) _ragКарточкуПозже(card, {code:'bukhari', num:c.n, образец:c.a, шапка:top, глава:c.g, перевод:c.r});   // 08.10.2026 · МИНИ АПП 99 · №427/№431: та же карточка, золотая рамка «слабее» сохраняется
     });
   }catch(e){_тихо(e,"L10521")}
 }
@@ -14817,6 +14818,119 @@ function _обрезать(текст, предел){
   const кусок = т.slice(0, предел);
   const пробел = кусок.lastIndexOf(' ');
   return (пробел > предел * 0.6 ? кусок.slice(0, пробел) : кусок).trimEnd() + '…';
+}
+
+/* 🔴 08.10.2026 · МИНИ АПП 99 · заявки №427 и №431 (владелец 01.07.2026, дословно):
+   «передатчики не выделяются, не нажимаются, да ещё и текст выделить нельзя» и
+   «ну и где книга RAG поиска? Читалка единообразная должна же быть».
+   Корень: находки поиска по смыслу рисовались СВОЕЙ плашкой — голый текст, номер, близость.
+   У обычного поиска карточка другая (cardHadith): имя свода с огласовками, оценка, подсветка и
+   клик по передатчикам, перевод, цепь, переход в читалку по клику на источник. Две отрисовки
+   одного хадиса — нарушение единообразия (R-45), владелец его и увидел.
+   Делаем так: у находки есть свод из читалки и номер — достаём хадис из НАШЕЙ базы и рисуем
+   ТОЙ ЖЕ cardHadith(). Своей карточки не пишем.
+   ⚠️ Номер сервера НЕ берём на веру — сверяем текст. Замер 08.10.2026 (node, эта же сверка):
+   меты поиска obmen_vektory/*.meta.json и rag/bmeta против наших кусков hnum/, muslim/, ahmad/,
+   по 500 случайных находок на свод; «да» = не меньше половины пар соседних слов находки стоит
+   в нашем тексте под тем же номером:
+     Бухари 493/500 (в браузере 797/800) · Муслим 473/500 · Абу Дауд 497 · Тирмизи 490 ·
+     Насаи 491/491 · Ибн Маджа 500 · Малик 494 · Ахмад 500;
+     против СОСЕДНЕГО номера проходит 0–4,6% — почти всегда тот же матн с другой цепью.
+   У ад-Дарими нумерация поиска — другая печать (та же беда, что метка `_печать36114` у getOne):
+   «да» 29 из 399, «нет» 361 — под этими номерами в читалке чужие хадисы; все 29 «да» сверены
+   глазами по иснаду — настоящие. Собрать карточку по чужому номеру значило бы показать НЕ ТОТ
+   хадис. Поэтому: текст сошёлся — карточка; ясно не сошёлся — прежняя плашка, и по номеру в
+   читалку не ведём. Собираем, когда находка подъезжает к экрану (_приБлизости): сорок полных
+   разборов иснада разом посадили бы телефон. */
+function _ragСлова(s){
+  /* Свёртка та же, что у поиска (canon: без огласовок, алифы и та-марбута сведены — З-33, второй
+     не заводим). Формулы почтения снимаем с обеих сторон: в одном издании «صلى الله عليه وسلم»
+     словами, в другом знаком ﷺ (он не буква и сам станет разделителем). */
+  return canon(s).replace(/صلي الله عليه وسلم|رضي الله عن(ه|ها|هما|هم)/g,' ')
+    .split(/[^ء-ي]+/).filter(w=>w.length>=3);
+}
+/* 'да' — тот же текст: не меньше половины пар соседних слов находки есть в нашем тексте;
+   'похоже' — слова в основном те же, а пары не сошлись (иное издание; у Муслима в тексте находки
+   бывают примечания издателя, которых у нас нет) — карточку не собираем, но и номер не отвергаем;
+   'нет' — ни так, ни наоборот не набралось и половины: под этим номером у нас другой текст;
+   null — сверять не по чему (образец короче шести слов: сноски вида «بهذا الإسناد مثله»). */
+function _ragТекстСверка(образец, текст){
+  try{
+    const А=_ragСлова(образец), Т=_ragСлова(текст);
+    const а=А.slice(0,80), т=Т.slice(0,80); if(а.length<6) return null;
+    const доли=(x,Y)=>{ const одн=new Set(Y), пар=new Set();
+      for(let i=0;i+1<Y.length;i++) пар.add(Y[i]+' '+Y[i+1]);
+      let п=0, о=0;
+      for(let i=0;i+1<x.length;i++) if(пар.has(x[i]+' '+x[i+1])) п++;
+      for(const w of x) if(одн.has(w)) о++;
+      return [п/Math.max(1,x.length-1), о/Math.max(1,x.length)]; };
+    const [п1,о1]=доли(а,Т); if(п1>=0.5) return 'да';
+    const [п2,о2]=(т.length>=6) ? доли(т,А) : [0,0];
+    return (Math.max(п2,о1,о2)>=0.5) ? 'похоже' : 'нет';
+  }catch(e){ return null; }
+}
+/* Один хадис по своду и номеру — те же двери, что у поиска по номеру и у «Охвата» (_dzPlaceCard).
+   Муслим — через getOne: его куски muslim/ держат ВСЕ риваяты номера (⚬), а hnum/ — один, и сверка
+   с риваятом находки ложно сказала бы «другой текст». */
+async function _ragХадис(code, num){
+  if(code==='muslim'){ try{ const x=await getOne('muslim', num); if(x && x.text) return x; }catch(e){_тихо(e,'L_ragх1')} }
+  return await _хадисПоНомеру(code, num);
+}
+/* В читалку — тем же путём, что клик по источнику в cardHadith: включён единый ридер — он, иначе обычная читалка. */
+function _ragВЧиталку(code, num){
+  try{ hap('light'); }catch(e){_тихо(e,'L_ragч1')}
+  try{ if(typeof cfg!=='undefined' && cfg.urBeta && typeof openUnifiedReader==='function'){ openUnifiedReader(code, String(num)); return; } }catch(e){_тихо(e,'L_ragч2')}
+  try{ openReader(code, String(num)); }catch(e){_тихо(e,'L_ragч3')}
+}
+/* Один и тот же хадис может прийти в выдаче дважды (кусками «_ч2» длинного хадиса или ещё раз из
+   списка «по остальным сводам»). Полную карточку получает первый — иначе на экране два одинаковых
+   хадиса подряд; остальные остаются прежней плашкой со своим отрывком. Сброс — по номеру поиска. */
+const _ragУже={seq:-1, ключи:new Set()};
+/* Превратить плашку находки в обычную карточку. узел — сама плашка: класс .card с неё снимаем
+   (карточка в карточке дала бы двойную рамку), оставляем только шапку с близостью и 👎/👍 (по ним
+   калибруется порог) и уже открытую строку «что ждал вместо этого». Возвращает вердикт сверки. */
+async function _ragВКарточку(узел, о){
+  const code=String(о.code||''), н=String(о.num==null?'':о.num).replace(/[.#].*$/,'').replace(/[^0-9]/g,'');
+  if(!code || !н || typeof isReadable!=='function' || !isReadable(code)) return 'нельзя';
+  if(_ragУже.seq!==_seq){ _ragУже.seq=_seq; _ragУже.ключи=new Set(); }
+  const ключ=code+'|'+н;
+  if(_ragУже.ключи.has(ключ)) return 'повтор';
+  _ragУже.ключи.add(ключ);
+  let итог='сбой';
+  try{
+    const h=await _ragХадис(code, н);
+    if(!h || !h.text){ итог='нет данных'; return итог; }
+    const в=_ragТекстСверка(о.образец, h.text);
+    if(в!=='да'){ итог=в||'коротко'; return итог; }
+    if(!узел.isConnected){ итог='ушёл'; return итог; }   // за это время начали новый поиск — чужой экран не трогаем
+    const нов=cardHadith({code:code, h:h}, []);
+    if(!нов){ итог='нет данных'; return итог; }
+    try{ нов.querySelectorAll('.ar').forEach(a=>{ enableArabusTap(a); if(_arabusOn) a.style.cursor='pointer'; }); }catch(e){_тихо(e,'L_ragк2')}   // как в makeCard: сквозной Arabus
+    const рамка=узел.style.borderColor;
+    [...узел.children].forEach(ч=>{ if(ч===о.шапка || (ч.classList && ч.classList.contains('ragFbC'))) return; ч.remove(); });
+    узел.classList.remove('card'); узел.dataset.ragКарточка='1';
+    узел.style.cssText='margin-bottom:9px;-webkit-user-select:text;user-select:text;-webkit-touch-callout:default';
+    if(о.шапка) о.шапка.style.padding='0 4px 3px';
+    const перед=узел.querySelector('.ragFbC');
+    const вст=(эл)=>{ if(перед) узел.insertBefore(эл, перед); else узел.appendChild(эл); };
+    if(о.глава){ const g=document.createElement('div'); g.dir='rtl';
+      g.style.cssText='font-size:calc(13px * var(--txtScale,1));'+_AF+';color:#e8c35a;margin:0 4px 4px;line-height:1.7';
+      g.textContent='📑 '+о.глава; вст(g); }
+    if(рамка && нов.classList.contains('card')) нов.style.borderColor=рамка;   // «ниже порога» остаётся в своей золотой рамке
+    вст(нов);
+    if(о.перевод){ const rr=document.createElement('div');
+      rr.style.cssText='font-size:calc(13px * var(--txtScale,1));color:#c3cedb;margin-top:6px;line-height:1.55;-webkit-user-select:text;user-select:text;'+_RF;
+      rr.textContent=о.перевод;
+      const мета=нов.classList.contains('card') ? [...нов.children].find(x=>x.classList && x.classList.contains('meta')) : null;
+      if(мета) нов.insertBefore(rr, мета); else вст(rr); }
+    узел.style.animation='fadeInUp .25s ease-out both';
+    итог='да'; return итог;
+  }catch(e){ _тихо(e,'L_ragк1'); итог='сбой'; return итог; }
+  finally{ if(итог!=='да') _ragУже.ключи.delete(ключ); }
+}
+function _ragКарточкуПозже(узел, о, послеСверки){
+  try{ _приБлизости(узел, ()=>{ _ragВКарточку(узел, о).then(в=>{ try{ if(послеСверки) послеСверки(в); }catch(e){_тихо(e,'L_ragк3')} }); }, 600); }
+  catch(e){_тихо(e,'L_ragк4')}
 }
 
 async function _ragПоОстальным(res, вопрос, head){
@@ -14884,7 +14998,7 @@ async function _ragПоОстальным(res, вопрос, head){
     ар.textContent=_обрезать(String(z['a']||z['текст']||''), 900);
     к.appendChild(ш); к.appendChild(ар);
     const ру=String(z['r']||'').trim();
-    if(ру){ const рб=document.createElement('div'); рб.style.cssText='margin-top:6px;opacity:.92';
+    if(ру){ const рб=document.createElement('div'); рб.style.cssText='margin-top:6px;opacity:.92;-webkit-user-select:text;user-select:text;-webkit-touch-callout:default';   /* 08.10.2026 · МИНИ АПП 99 · №427 «текст выделить нельзя»: разрешаем явно, как .ar (iOS WebView без -webkit- не выделяет) */
             рб.textContent=_обрезать(ру, 900); к.appendChild(рб); }
     /* 🔴 ЗАЯВКА M940 (владелец, письмо #1622 от 26.08.2026, дословно): «И где ссылки в
        приложение наше читалку соответсвующей книги».
@@ -14897,13 +15011,20 @@ async function _ragПоОстальным(res, вопрос, head){
     try{
       const _код=String(z['книга']||z['код']||z['code']||'').trim();
       if(_код && typeof isReadable==='function' && isReadable(_код)){
-        const _н=String(z['n']||'').replace(/[^0-9]/g,'');
-        const _чб=document.createElement('div'); _чб.style.cssText='margin-top:7px';
+        /* 🔴 08.10.2026 · МИНИ АПП 99 · №431 («где книга RAG поиска? Читалка единообразная должна же быть»).
+           Эта кнопка была МЁРТВОЙ с рождения: openByCodeNum ждёт номер книги Мактабы (bid, цифры), а сюда
+           шёл код свода («muslim») — `replace(/[^0-9]/g,'')` давал пустоту, и функция молча выходила
+           (`if(!b) return`): ни перехода, ни ошибки. Теперь ведём в НАШУ читалку тем же путём, что клик
+           по источнику в cardHadith (_ragВЧиталку). И номер: у части находок он дробный («402.2» — вторая
+           часть хадиса 402 у Бухари, Тирмизи, Насаи); голое вычищение нецифр давало 4022 — чужой хадис.
+           Берём целую часть. Класс ragЧит — чтобы сверка ниже могла убрать кнопку, если номер чужой. */
+        const _н=String(z['n']||'').replace(/[.#].*$/,'').replace(/[^0-9]/g,'');
+        const _чб=document.createElement('div'); _чб.className='ragЧит'; _чб.style.cssText='margin-top:7px';
         const _кн=document.createElement('span'); _кн.className='mini';
         _кн.style.cssText='cursor:pointer';
         _кн.textContent='📖 Читать у нас' + (_н?(' — хадис '+_н):'');
         _кн.onclick=function(ev){ try{ ev.stopPropagation(); }catch(e){_тихо(e,"L_rag940")}
-          try{ openByCodeNum(_код, _н?Number(_н):null); }catch(e){ _тихо(e,"L_rag940b") } };
+          try{ if(_н) _ragВЧиталку(_код, _н); else openReader(_код); }catch(e){ _тихо(e,"L_rag940b") } };
         _чб.appendChild(_кн); к.appendChild(_чб);
       }
     }catch(e){_тихо(e,"L_rag940c")}
@@ -14918,12 +15039,13 @@ async function _ragПоОстальным(res, вопрос, head){
        Не вышло (книга без опознанных цепей) — молчим, а не рисуем пустую строку. */
     try{
       const _кодЦ=String(z['книга']||z['код']||'').trim();
-      const _номЦ=String(z['n']||'').replace(/[^0-9]/g,'');
+      const _номЦ=String(z['n']||'').replace(/[.#].*$/,'').replace(/[^0-9]/g,'');   // 08.10.2026 · МИНИ АПП 99: «402.2» → 402, а не 4022 (чужая цепь)
       const _bidЦ=(window._htbMeta&&_htbMeta[_кодЦ]&&_htbMeta[_кодЦ].bid)||null;
       if(_bidЦ && _номЦ && typeof _codifNa==='function'){
         _codifNa(_bidЦ, _номЦ).then(function(na){
           try{
             if(!na || !na.length) return;
+            if(к.dataset.ragКарточка) return;   // 08.10.2026 · МИНИ АПП 99 · №427: находка уже стала полной карточкой — у неё своя цепь и подсветка, строка-дубль не нужна
             const _имена=na.map(x=>_narrDispName?(_narrDispName(x)||x):x).filter(Boolean);
             if(!_имена.length) return;
             const б=document.createElement('div');
@@ -14937,6 +15059,24 @@ async function _ragПоОстальным(res, вопрос, head){
       }
     }catch(e){_тихо(e,"L_rag943")}
     res.appendChild(к);
+    /* 08.10.2026 · МИНИ АПП 99 · №427/№431: свод из читалки и номер есть — подъедет к экрану, станет
+       обычной карточкой хадиса (cardHadith: передатчики выделены и нажимаются, перевод, читалка).
+       Текст под этим номером у нас другой (иная печать, как у ад-Дарими) — кнопку «читать хадис N»
+       убираем и говорим почему: вести по чужому номеру значит открыть не тот хадис. */
+    try{
+      const _кодК=String(z['книга']||z['код']||z['code']||'').trim();
+      const _номК=String(z['n']||'').replace(/[.#].*$/,'').replace(/[^0-9]/g,'');
+      if(_кодК && _номК && typeof isReadable==='function' && isReadable(_кодК)){
+        _ragКарточкуПозже(к, {code:_кодК, num:_номК, образец:String(z['a']||''), перевод:(ру?_обрезать(ру, 900):'')}, function(в){
+          if(в!=='нет') return;
+          const _ч=к.querySelector('.ragЧит'); if(!_ч) return;
+          _ч.innerHTML=''; const _п=document.createElement('span'); _п.className='hint';
+          _п.style.cssText='font-size:calc(11.5px * var(--txtScale,1))';
+          _п.textContent='⚠️ Под №'+_номК+' в нашей читалке другой текст — по номеру не веду, чтобы не открыть чужой хадис.';
+          _ч.appendChild(_п);
+        });
+      }
+    }catch(e){_тихо(e,'L_rag427')}
   }
 }
 
@@ -15108,6 +15248,9 @@ async function ragSearch(qRaw, seq, shownQ){
         b.onclick=()=>{ try{ hap('light'); }catch(e){_тихо(e,"L10615")} try{ openReader('bukhari', String(c.n)); }catch(e){_тихо(e,"L10615")} };
         card.appendChild(b); }
       res.appendChild(card);
+      /* 08.10.2026 · МИНИ АПП 99 · №427/№431: у находки есть номер — подъедет к экрану, станет обычной карточкой
+         хадиса (cardHadith). Шапку с близостью и 👎/👍 оставляем: по ним калибруется порог (#671). */
+      if(c.n) _ragКарточкуПозже(card, {code:'bukhari', num:c.n, образец:c.a, шапка:top, глава:c.g, перевод:c.r});
     });
   };
   рисовать('📗 ХАДИСЫ','хадис'); рисовать('📑 ГЛАВЫ','глава'); рисовать('📄 ВНЕ НУМЕРАЦИИ (муалляки, слова автора)','муалляк');
@@ -19533,7 +19676,8 @@ async function renderTestimoniesCard(mid, host){
       it.appendChild(hd);
       if(q3){ let parts=null; try{ if(/،?\s*و?\s*مرة\s*[:：]/.test(q3)){ parts=q3.split(/،?\s*و?\s*مرة\s*[:：]\s*/).map(s=>s.trim()).filter(Boolean); if(parts.length<2) parts=null; } }catch(_e){ parts=null; }
         (parts||[q3]).forEach((v,vi)=>{ const q=document.createElement('div'); q.dir='rtl';
-          q.style.cssText='font-size:calc(17px * var(--txtScale,1));'+_AF+';color:#eaf2ea;'+qb+';border-radius:8px;padding:6px 10px;margin-top:6px;line-height:1.75';
+          // №402/№406 (владелец 29–30.06: «шрифт маленький и не такой, как в хадисах»), 08.10.2026 МИНИ АПП 99: цитаты критиков — размер текста хадиса (.ar: 19px × масштаб чтения)
+          q.style.cssText='font-size:calc(19px * var(--readScale,1));'+_AF+';color:#eaf2ea;'+qb+';border-radius:8px;padding:6px 10px;margin-top:6px;line-height:1.75';
           let h=esc(v); const te=t1?esc(t1):''; if(te && te!==h) h=h.split(te).join('<mark style="background:'+mk+';border-radius:3px;padding:0 3px;font-weight:700">'+te+'</mark>');
           q.innerHTML=(parts?('<span style="display:inline-flex;width:17px;height:17px;border-radius:50%;background:#1c2b44;color:#9cc3f0;font-size:calc(10.5px * var(--txtScale,1));align-items:center;justify-content:center;margin-left:6px;vertical-align:middle">'+(vi+1)+'</span>'):'')+h;
           it.appendChild(q); }); }
@@ -19705,7 +19849,7 @@ async function renderTestimoniesCard(mid, host){
       const _vhdr=document.createElement('div'); _vhdr.style.cssText='font-size:calc(11px * var(--txtScale,1));color:#9aa7b5;margin-bottom:3px'; _vhdr.textContent='передачи его мнения ('+_vars.length+') — в разное время/разными путями:'; vw.appendChild(_vhdr);
       _vars.forEach((v,vi)=>{ const b=document.createElement('div'); b.dir='rtl';
         var _qb2=(_shownSc<0?'border:1px solid #A32D2D;background:rgba(226,75,74,.07)':(_shownSc>0?'border:1px solid #2d6a45;background:rgba(63,185,80,.06)':'border:1px solid #3a434d;background:rgba(122,134,147,.06)'));   // #654 (С67): по знаку ПОКАЗАННОЙ записи, не по сумме
-        b.style.cssText='font-size:calc(16.5px * var(--txtScale,1));'+_AF+';color:#eaf2ea;'+_qb2+';border-radius:8px;padding:5px 9px;margin-top:4px;line-height:1.7';
+        b.style.cssText='font-size:calc(19px * var(--readScale,1));'+_AF+';color:#eaf2ea;'+_qb2+';border-radius:8px;padding:5px 9px;margin-top:4px;line-height:1.7';
         b.innerHTML='<span style="display:inline-flex;width:17px;height:17px;border-radius:50%;background:#1c2b44;color:#9cc3f0;font-size:calc(10.5px * var(--txtScale,1));align-items:center;justify-content:center;margin-left:6px;vertical-align:middle">'+(vi+1)+'</span>'+esc(v);
         vw.appendChild(b); });
       row.appendChild(vw);
@@ -19714,7 +19858,7 @@ async function renderTestimoniesCard(mid, host){
     if(!_vars && c0[3]){ const q=document.createElement('div'); q.dir='rtl';
       // владелец 02.07 (скрин «джарх в зелёной рамке»): рамка/фон цитаты — ПО ПОЛЯРНОСТИ вердикта: джарх ВСЕГДА красным, таусик зелёным, нейтральное серым
       var _qb=(_shownSc<0?'border:1px solid #A32D2D;background:rgba(226,75,74,.09)':(_shownSc>0?'border:1px solid #2d6a45;background:rgba(63,185,80,.07)':'border:1px solid #3a434d;background:rgba(122,134,147,.07)'));   // #654 (С67): по знаку ПОКАЗАННОЙ записи — иначе похвала ثقة сидела в красной рамке
-      q.style.cssText='font-size:calc(18px * var(--txtScale,1));'+_AF+';color:#eaf2ea;'+_qb+';border-radius:8px;padding:6px 10px;margin-top:6px;line-height:1.75';
+      q.style.cssText='font-size:calc(19px * var(--readScale,1));'+_AF+';color:#eaf2ea;'+_qb+';border-radius:8px;padding:6px 10px;margin-top:6px;line-height:1.75';
       // #486 (владелец, «сливается» — низкий контраст полупрозрачной подсветки на тёмном фоне): плотный светлый/бежевый
       // фон + почти чёрный текст (высокий контраст, читаемо), цвет фона по полярности (зелёный/красный/бежевый оттенок).
       var _mk=(scv>0?'#c9f0d3;color:#0d3a1c':(scv<0?'#f6cfcb;color:#4a1210':'#ece3d0;color:#2b2416'));
@@ -19747,7 +19891,7 @@ async function renderTestimoniesCard(mid, host){
       const _arT=terms.join('، '); const _longT=_arT.length>40;
       rr.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span class="critNameCl" style="font-size:14.5px;color:#aeb9c4;cursor:pointer;font-weight:600" title="Открыть карточку этого учёного">'+esc(_ruName(cr))+((_ruName(cr)!==cr)?(' <span dir="rtl" style="font-size:calc(12.5px * var(--txtScale,1));color:#8593a2;'+_AF+'">'+esc(cr)+'</span>'):'')+(c0[4]?(' · '+esc(c0[4])):'')+'</span>'+(_longT?'':('<span dir="rtl" style="font-size:15.5px;color:#e6edf3;'+_AF+'">'+esc(_arT)+'</span>'))+'</div>';
       if(_longT){ const aq=document.createElement('div'); aq.dir='rtl';
-        aq.style.cssText='font-size:calc(16.5px * var(--txtScale,1));'+_AF+';color:#e6edf3;background:rgba(122,134,147,.07);border:1px solid #3a434d;border-radius:8px;padding:5px 9px;margin-top:5px;line-height:1.75';
+        aq.style.cssText='font-size:calc(19px * var(--readScale,1));'+_AF+';color:#e6edf3;background:rgba(122,134,147,.07);border:1px solid #3a434d;border-radius:8px;padding:5px 9px;margin-top:5px;line-height:1.75';
         aq.textContent=_arT; rr.appendChild(aq); }
       if(ruv) rr.appendChild(_ruLine(ruv,13));
       try{ const _cnEl=rr.querySelector('.critNameCl'); if(_cnEl) _cnEl.onclick=(e)=>{ e.stopPropagation(); try{ openNarratorRijal(cr); }catch(_e){_тихо(_e,"L13862")} }; }catch(e){_тихо(e,"L13862")}
