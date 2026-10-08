@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1665</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1666</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1665';
+const APPVER = 'v1666';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6038,10 +6038,16 @@ async function runSearch(explicit){
   if(seq!==_seq) return;
   // 👤 РЕЖИМ ПЕРЕДАТЧИКА (Сессия 13): ищем равия по имени (араб/рус), не хадисы.
   // ЧИСЛА — НЕ имена: «5590» должен открыть хадис по номеру → пропускаем в обычный поиск (замечание владельца)
-  // №500: вставили в поиск ЦЕПЬ — разобрать её в конструктор сами и искать хадисы с этой цепью
-  // ВЫКЛЮЧЕНО 08.10.2026: голое имя («هشام») опознаётся тёзкой — ждёт разбора по соседям (черновик роя M4)
-  try{ if(false && tab==='hadith' && !_narrBypass && typeof modes!=='undefined' && !modes.chain && !modes.narr && _похожеНаИснад(q)){
-    if(await _иснадВЦепь(q, seq)) return; } }catch(e){_тихо(e,"L_иснад500")}
+  /* №500 (08.10.2026 · МИНИ АПП 99, владелец: «я цепь скидываю… когда я ввёл и нажал поиск — сама
+     идентифицировать и настроить все настройки»). Вставили в поиск ГОЛУЮ цепь → тот же разбор С40, что
+     по подсказке 🧬 (openIsnadParse): звенья опознаются с учётом соседей по цепи; всё уверенно — сам
+     строит конструктор и ищет, есть сомнения — открывает окно разбора с выбором. Прежняя самоделка
+     _иснадВЦепь опознавала имена поодиночке («هشام» → тёзка №14906 вместо Хишама ибн Хассана №6690
+     у Муслима 349) и находила пусто — убрана, путь один. Только явный поиск: живой поиск по голой
+     цепи не запускается вовсе (см. обработчик ввода), иначе цепь разбиралась бы, пока её правят. */
+  try{ if(explicit && tab==='hadith' && !_narrBypass && typeof modes!=='undefined' && !modes.chain && !modes.narr && !modes.ai && !modes.any && !modes.rag && _похожеНаИснад(q) && _parseIsnad(q).links.length>=2){
+    try{ _skelOff(); }catch(e){_тихо(e,"L_иснад500скел")}   // скелет «ищу в Бухари и Муслиме…» здесь врёт: идёт разбор цепи
+    if(await openIsnadParse(q, {сам:true, seq:seq})){ logSearch(shown,'иснад-цепь',0); return; } } }catch(e){_тихо(e,"L_иснад500")}
   if(_narrBypass){ _narrBypass=false; }   // «🔎 Хадисы с его участием»: один запуск мимо narr-перехвата (текст имени → обычный поиск)
   else if(modes.narr && (/^#\s*\d{1,5}$/.test(q.trim()) || !/^[\d٠-٩\s:№#×.]+$/.test(q))){ await narrRun(q, seq); logSearch(shown,'narr',0); return; }   // M405: «#2433» = равий по ID
   else if(typeof modes!=='undefined' && modes.any && q.trim() && !/^\d{1,4}$/.test(q.trim())){ _actPush({t:'q',q:shown,tab:tab}); await anyTextSearch(q, seq); return; }   // 🌐 M461
@@ -15319,45 +15325,6 @@ async function _aliasGroup(id){
    занимать секунды), а сторож — что действие состоялось. Обёртка отдельной функцией, потому
    что у тела три выхода (нет узла, ветка seq, обычная ветка), и снимать отметку надо на
    каждом: finally делает это без оглядки на путь. */
-/* №500 (владелец 04.07: «я цепь скидываю, а он должен её идентифицировать… когда я ввёл и нажал поиск —
-   сама идентифицировать и настроить все настройки, будто я вручную собрал способы передачи и передатчиков»).
-   Признак цепи: в запросе ≥3 глагола передачи, а текста ПОСЛЕ иснада почти нет (иначе это целый хадис —
-   его ищем обычным поиском по тексту, как и раньше). */
-function _похожеНаИснад(q){
-  const s=stripDiac(String(q||'')).replace(/ـ/g,'');
-  const глаг=(s.match(/(?:^|[\s،,])(?:و)?(?:حدثنا|حدثني|حدثناه|أخبرنا|أخبرني|اخبرنا|اخبرني|أنبأنا|انبانا|سمعت|ثنا|عن)\s/g)||[]).length;
-  if(глаг<3) return false;
-  if(/قال رسول|رسول الله|النبي|صلى الله عليه|ﷺ|«|"/.test(s)) return false;   // есть слова Пророка — это хадис, а не голая цепь
-  // splitIsnad на чистой цепи без текста хадиса отдаёт «иснада нет, всё — матн», поэтому меряем иначе:
-  // сколько букв стоит ПОСЛЕ последнего глагола передачи. Одно имя — это цепь; длинный хвост — хадис.
-  const re=/(?:^|[\s،,])(?:و)?(?:حدثنا|حدثني|حدثناه|أخبرنا|أخبرني|اخبرنا|اخبرني|أنبأنا|انبانا|سمعت|ثنا|عن)\s/g;
-  let посл=0, м; while((м=re.exec(s))) посл=м.index+м[0].length;
-  return s.slice(посл).replace(/[^ء-ي]/g,'').length<30;
-}
-async function _иснадВЦепь(q, seq){
-  const имена=isnadNarrators(q)||[];
-  if(имена.length<2) return false;
-  const формы=_isnadForms(q)||[];
-  const звенья=[];   // {id, nm, i} — i: номер звена в цепи (для форм между соседями)
-  for(let i=0;i<имена.length;i++){ let id=null; try{ id=await _narrLookup(имена[i]); }catch(e){}
-    if(id!=null) звенья.push({id:+id, nm:имена[i], i}); }
-  if(seq!==undefined && seq!==_seq) return true;
-  if(звенья.length<2){ toast('⛓ Похоже на цепь, но опознать звенья не вышло ('+звенья.length+' из '+имена.length+') — ищу как текст'); return false; }
-  const взято=звенья.slice(0,5);
-  window._chainSel=взято.map(z=>({id:z.id, nm:z.nm}));
-  window._chainForms=[]; window._chainFormPre=''; window._chainFormPost='';
-  window._chainFormsOff=false;
-  // форма перед звеном i — формы[i] (у каждого имени свой глагол перед ним); между выбранными — только если стоят подряд
-  if(взято[0].i===0 && формы[0]) window._chainFormPre=формы[0];
-  for(let j=0;j<взято.length-1;j++){ const рядом=(взято[j+1].i===взято[j].i+1); window._chainForms[j]=рядом?(формы[взято[j+1].i]||''):''; }
-  window._chainMode='seq'; window._chainAdj=false;
-  try{ const qi=document.getElementById('q'); if(qi) qi.value=''; }catch(e){}   // до включения режима: иначе он откроет подсказки по всей вставленной цепи
-  try{ const chp=document.querySelector('.chip[data-mode="chain"]'); if(chp && !modes.chain) chp.click(); else modes.chain=true; }catch(e){ modes.chain=true; }
-  chainRender();
-  toast('⛓ Узнал цепь: '+взято.length+' звеньев из '+имена.length+(звенья.length>5?' (в конструкторе максимум 5)':'')+' — ищу хадисы с ней');
-  try{ await chainRun(); }catch(e){_тихо(e,"L_иснад500run")}
-  return true;
-}
 async function chainRun(){
   try{ _goBusy(true); }catch(_e){_тихо(_e,"L_chBusy1")}
   try{ return await _chainRunТело(); }
@@ -15567,25 +15534,154 @@ function _isnadBox(){ let b=document.getElementById('isnadBox');
     b.querySelector('#isnadCancel').onclick=()=>{ b.style.display='none'; };
     b.querySelector('#isnadBuild').onclick=()=>{ _isnadCommit(); }; }
   return b; }
-async function openIsnadParse(text){ const p=_parseIsnad(text);
-  if(p.links.length<2){ toast('Не похоже на иснад из нескольких передатчиков'); return; }
+/* 08.10.2026 · МИНИ АПП 99 · заявка №500 (владелец 04.07: «я цепь скидываю, а он должен её
+   идентифицировать… когда я ввёл и нажал поиск — сама идентифицировать и настроить все настройки,
+   будто я вручную собрал способы передачи и передатчиков»).
+   Признак ГОЛОЙ цепи для «Найти»: ≥3 глагола передачи, а текста после иснада почти нет. Полный
+   хадис с матном сюда не попадает — его ищем по тексту, как раньше.
+   Хвост «عن النبي ﷺ» / «أن رسول الله ﷺ قال» — часть цепи (так её и копируют), а не матн: раньше
+   он один отбраковывал такую вставку целиком. Срезаем его ДО проверок; если за ним идёт матн,
+   срез не сработает (он только на самом конце), и хадис по-прежнему ищется текстом. */
+function _похожеНаИснад(q){
+  let s=stripDiac(String(q||'')).replace(/ـ/g,'');
+  s=s.replace(/[\s،,:]+(?:قال[\s،,:]+)?(?:عن|[أاإ]ن|سمعت|سمع|قال)\s+(?:رسول\s*الله|النبي|نبي\s*الله)(?:\s*(?:ﷺ|صلى\s*الله\s*عليه\s*و\s*سلم))?(?:[\s،,:]*(?:قال|[أا]نه\s*قال))?[\s،,:.]*$/,'');
+  const re=/(?:^|[\s،,])(?:و)?(?:حدثنا|حدثني|حدثناه|أخبرنا|أخبرني|اخبرنا|اخبرني|أنبأنا|انبانا|سمعت|ثنا|عن)\s/g;
+  if((s.match(re)||[]).length<3) return false;
+  if(/قال رسول|رسول الله|النبي|صلى الله عليه|ﷺ|«|"/.test(s)) return false;   // слова Пророка внутри — это хадис, а не голая цепь
+  // splitIsnad на чистой цепи без текста хадиса отдаёт «иснада нет, всё — матн», поэтому меряем иначе:
+  // сколько букв стоит ПОСЛЕ последнего глагола передачи. Одно имя — это цепь; длинный хвост — хадис.
+  re.lastIndex=0; let посл=0, м; while((м=re.exec(s))) посл=м.index+м[0].length;
+  return s.slice(посл).replace(/[^ء-ي]/g,'').length<30;
+}
+/* №500 · ТЁЗКИ ПО СОСЕДЯМ ПО ЦЕПИ (08.10.2026, МИНИ АПП 99). Звено опознавалось само по себе, и
+   голое «هشام» уходило к записи «هشام» №14906 (общий индекс имён), хотя у Муслима 349 это Хишам
+   ибн Хассан №6690 — поиск «строго по порядку» по такой цепи находил ПУСТО. Человек решает это
+   соседями: Абд аль-Аля передаёт от Хишама, Хишам — от Хумайда ибн Хиляля, значит, это тот
+   Хишам, у кого эти двое учитель и ученик. Так и считаем: из тёзок, подходящих по имени, берём
+   связанного с надёжными соседями (narr_edges — пары подряд в наших иснадах, tlink — учитель/
+   ученик по Тахзиб аль-Камаль, с учётом направления). Проверено на данных боевого сайта:
+   6690 связан с обоими соседями (11 и 7 пар), №14906 — только с одним (2), Хишам ибн Амир — с
+   одним и в обратную сторону; пары цепи 5898→3160→6690→1663→3080→3856 дают ровно одну цепь
+   реестра — Муслим 349.
+   Тем же ходом опознаётся «عن أبيه / عن جده»: отец/дед соседа слева — по его родословной (1-е или
+   2-е «بن»), из тех, кто с ним связан. Гарант-карту не переспориваем, кроме случая, когда её ответ
+   не связан ни с одним из двух соседей, а тёзка связан с обоими. */
+const _ИСН_ТВЁРДО=new Set(['гарант','шухра','выверено руками','кунья+нисба']);   // ответы _narrLookup, тёзко-безопасные по построению
+const _ИСН_РОДНЯ={'ابيه':1,'ابيها':1,'ابي':1,'جده':2,'جدها':2};   // «его отец» — после 1-го «بن» в имени соседа слева, «его дед» — после 2-го
+let _иснФормыId=null;
+async function _иснФормы(){   // id → все формы его имени из указателя (сверять тёзок с именем в цепи)
+  if(_иснФормыId) return _иснФормыId;
+  const idx=await loadNarrNames(); const M=new Map();
+  const доб=(nm,id)=>{ if(typeof nm!=='string'||!nm||id==null) return; const k=+id, a=M.get(k); if(a) a.push(nm); else M.set(k,[nm]); };
+  (idx||[]).forEach(p=>{ if(p) доб(p[0],p[1]); });
+  try{ const mm=window._narrMultiMap; if(mm) for(const nm in mm) (mm[nm]||[]).forEach(id=>доб(nm,id)); }catch(e){_тихо(e,"L_иснФормы")}
+  if(idx && idx.length && _narr2Ok) _иснФормыId=M;   // неполный указатель (второй файл не доехал) не запоминаем
+  return M; }
+function _иснБезДуа(raw){ const t=String(raw||'').split(/\s+/);   // «أنس رضي الله عنه» → «أنس»: дуа после имени — не часть имени
+  const k=t.findIndex((w,i)=>i>0 && _narrCanon(w)==='رضي' && _narrCanon(t[i+1]||'')==='الله'); return (k>0?t.slice(0,k):t).join(' '); }
+function _иснКанон(s){ return _narrCanon(s).replace(/عبدال/g,'عبد ال').replace(/عبيدال/g,'عبيد ال').replace(/^(?:ابي|ابا) /,'ابو ').trim(); }
+function _иснПодходит(cn, f){   // имя из цепи (канон) подходит к форме имени из базы
+  f=String(f||'').replace(/^(?:ابي|ابا) /,'ابو '); if(!cn||!f) return false;
+  if(f===cn || f.indexOf(cn+' ')===0) return true;             // в цепи короче: «هشام» ↔ «هشام بن حسان»
+  if(f.indexOf(' ')>0 && cn.indexOf(f+' ')===0) return true;    // в цепи длиннее (с нисбой)
+  const w=cn.split(' '), fw=f.split(' ');
+  return w.length>1 && w[0]===fw[0] && w.every(x=>fw.indexOf(x)>=0); }   // «هشام الدستوائي» ↔ «هشام بن ابي عبد الله الدستوائي»
+async function _иснСвязь(известный, другой, роль){   // роль другого для известного: 'T' — его учитель, 'S' — его ученик
+  let e=0, по=false;
+  try{ e=+((await _edgesGet(известный))[String(другой)]||0); }catch(_e){_тихо(_e,"L_иснСвязь1")}
+  try{ const T=await _tlinkGet(+известный); const r=T&&T[String(другой)]; по=!!(r && String(r)[0]===роль); }catch(_e){_тихо(_e,"L_иснСвязь2")}
+  return {e, по, есть:(e>0||по)}; }
+async function _иснОпора(c, i, links, толькоЯкоря){   // насколько кандидат c на звене i связан с соседями по цепи
+  let n=0, вес=0;
+  // сосед слева (ближе к собирателю) получил ОТ c — c его учитель; сосед справа (ближе к Пророку ﷺ) передал c — c его ученик
+  for(const [j,роль] of [[i-1,'T'],[i+1,'S']]){ const nb=links[j];
+    if(!nb || nb.pick==null || (толькоЯкоря && !nb._якорь)) continue;
+    const св=await _иснСвязь(+nb.pick, c, роль);
+    if(св.есть){ n++; вес+=Math.min(св.e,50)+(св.по?10:0); } }
+  return {n, оч:n*100+вес}; }
+function _иснИменаЗвена(l, i, links, F){   // какими именами искать звено: своё имя, а у «عن أبيه/جده» — отец/дед соседа слева
+  if(!l.rel) return [_иснКанон(_иснБезДуа(l.raw))];
+  const k=_ИСН_РОДНЯ[_isnNorm(l.raw)], nb=links[i-1];
+  if(!k || !nb || nb.pick==null || !nb._якорь) return [];
+  const out=[];
+  for(const f of (F.get(+nb.pick)||[])){ const ws=f.split(' '), поз=[]; ws.forEach((w,x)=>{ if(w==='بن') поз.push(x); });
+    if(поз.length>=k && поз[k-1]+1<ws.length){ const им=ws.slice(поз[k-1]+1).join(' '); if(out.indexOf(им)<0) out.push(им); } }
+  return out; }
+async function _иснПул(l, i, links, F, имена){   // тёзки звена: подходят по имени — из кандидатов поиска и из связей надёжных соседей
+  const P=[]; const годен=id=>(F.get(+id)||[]).some(f=>имена.some(cn=>_иснПодходит(cn,f)));
+  (l.cands||[]).forEach(c=>{ if(c && c.id!=null && P.indexOf(+c.id)<0 && годен(c.id)) P.push(+c.id); });
+  for(const j of [i-1,i+1]){ const nb=links[j]; if(!nb || nb.pick==null || !nb._якорь) continue;
+    let кл=[]; try{ кл=Object.keys(await _edgesGet(nb.pick)); }catch(_e){_тихо(_e,"L_иснПул1")}
+    try{ const T=await _tlinkGet(+nb.pick); if(T) кл=кл.concat(Object.keys(T)); }catch(_e){_тихо(_e,"L_иснПул2")}
+    for(const k of кл){ const id=+k; if(!isNaN(id) && P.indexOf(id)<0 && годен(id)) P.push(id); } }
+  if(l.pick!=null && P.indexOf(+l.pick)<0) P.push(+l.pick);
+  return P; }
+async function _isnadСоседи(links){
+  const F=await _иснФормы();
+  links.forEach(l=>{ l._якорь=!l.rel && l.pick!=null && _ИСН_ТВЁРДО.has(l.src); l.поСоседям=false; l.сомн=false; });
+  const взять=(l,id)=>{ l.pick=id; l.поСоседям=true;
+    if(!(l.cands||[]).some(x=>+x.id===id)) l.cands=[{nm:(F.get(id)||[])[0]||('#'+id), id:id, sc:1000}].concat(l.cands||[]).slice(0,7); };
+  // ① слабые и неопознанные звенья (и «его отец/дед») — по опоре на надёжных соседей; круги, пока надёжных прибавляется
+  for(let круг=0; круг<4; круг++){ let сдвиг=false;
+    for(let i=0;i<links.length;i++){ const l=links[i]; if(l._якорь) continue;
+      const им=_иснИменаЗвена(l,i,links,F); if(!им.length || !им[0]) continue;
+      let лучш=null, лучшОч=0, текОч=0;
+      for(const c of await _иснПул(l,i,links,F,им)){ const o=(await _иснОпора(c,i,links,true)).оч;
+        if(l.pick!=null && c===+l.pick) текОч=o; if(o>лучшОч){ лучш=c; лучшОч=o; } }
+      if(лучш==null || лучшОч<100) continue;   // ни один тёзка не связан с надёжным соседом — решает человек
+      if(l.pick==null || (лучш!==+l.pick && лучшОч>текОч)) взять(l,лучш);
+      l._якорь=true; сдвиг=true; }
+    if(!сдвиг) break; }
+  // ② ответ гарант-карты, не связанный ни с одним из двух соседей, когда тёзка связан с обоими, — берём тёзку
+  for(let i=1;i<links.length-1;i++){ const l=links[i]; if(l.rel || l.pick==null || !_ИСН_ТВЁРДО.has(l.src)) continue;
+    if((await _иснОпора(+l.pick,i,links,false)).n) continue;
+    for(const c of await _иснПул(l,i,links,F,_иснИменаЗвена(l,i,links,F))){ if((await _иснОпора(c,i,links,false)).n===2){ взять(l,c); break; } } }
+  // ③ под вопросом: не опознан; слабый выбор без связи с соседями; соседняя пара не связана
+  //    (поиск «строго по порядку» идёт по парам подряд — несвязанная пара даст пусто)
+  for(let i=0;i<links.length;i++){ const l=links[i];
+    if(l.pick==null){ l.сомн=true; continue; }
+    if(!l._якорь && !(await _иснОпора(+l.pick,i,links,false)).n) l.сомн=true; }
+  for(let i=0;i+1<links.length;i++){ const a=links[i], b=links[i+1]; if(a.pick==null || b.pick==null) continue;
+    if(!(await _иснСвязь(+a.pick, +b.pick, 'T')).есть){ a.сомн=true; b.сомн=true; } }
+}
+/* №500: opts.сам — вызов из «Найти» (runSearch): всё опознано уверенно → сразу строим конструктор
+   и ищем (_isnadCommit), есть сомнения → окно разбора с раскрытым выбором у ⚠️ звеньев.
+   Без opts — как раньше по подсказке 🧬: окно с подтверждением. Возвращает false, если иснада
+   из двух и больше звеньев нет (тогда поиск идёт обычным текстом). */
+async function openIsnadParse(text, opts){ opts=opts||{}; const сам=!!opts.сам;
+  const p=_parseIsnad(text);
+  if(p.links.length<2){ if(!сам) toast('Не похоже на иснад из нескольких передатчиков'); return false; }
   if(p.hadHa) toast('⚠️ Найден знак «ح» (переход на параллельный путь) — построен только ПЕРВЫЙ путь до него, второй путь НЕ примешан. Второй ряд передатчиков разбери отдельной вставкой.');
-  const links=p.links.map(l=>({raw:l.name, form:l.form, rel:l.rel, cands:[], pick:null, _open:false}));
-  window._isnadState={links, post:p.post};
+  const links=p.links.map(l=>({raw:l.name, form:l.form, rel:l.rel, cands:[], pick:null, src:'', _open:false}));
+  const st={links, post:p.post}; window._isnadState=st;
   const box=_isnadBox(); box.style.display='block';
   box.querySelector('#isnadBody').innerHTML='<div class="hint">⏳ Опознаю передатчиков по базе موسوعة الرواة…</div>';
   try{ box.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){_тихо(e,"L11002")}
   await Promise.all(links.map(async l=>{ if(l.rel){ l.cands=[]; l.pick=null; return; }
-    try{ let c=await narrCandidates(l.raw);
-      if(!c.length){ const w=l.raw.split(/\s+/); for(const k of [4,3,2]){ if(w.length>k){ const c2=await narrCandidates(w.slice(0,k).join(' ')); if(c2.length){ c=c2; break; } } } }
+    const имя=_иснБезДуа(l.raw);   // №500: «رضي الله عنه» после имени мешало опознанию
+    try{ let c=await narrCandidates(имя);
+      if(!c.length){ const w=имя.split(/\s+/); for(const k of [4,3,2]){ if(w.length>k){ const c2=await narrCandidates(w.slice(0,k).join(' ')); if(c2.length){ c=c2; break; } } } }
       l.cands=(c||[]).slice(0,6);
       // С40/[[tyozka-resolver-guar-card]]: дефолт-выбор через namesake-safe гарант-карту _narrLookup (مالك→Malik ibn Anas, ابن عمر→сподвижник), а НЕ топ скоринга (даёт тёзку #152). Кандидаты narrCandidates — для альтернатив.
-      let gid=null; try{ gid=await _narrLookup(l.raw); }catch(e){_тихо(e,"L11008")}
+      // №500: берём и ИСТОЧНИК ответа — гарант/шухра/кунья тёзко-безопасны, «общий индекс имён» на голом «هشام» — нет.
+      let gid=null; try{ const r=await _narrLookup(имя,{сИсточником:true}); if(r && r.id!=null){ gid=r.id; l.src=r.откуда||''; } }catch(e){_тихо(e,"L11008")}
       if(gid!=null){ l.pick=gid;
         if(!l.cands.some(x=>x.id===gid)){ let nm=''; for(const p of (_narrNames||[])){ if(p[1]===gid){ nm=p[0]; break; } } l.cands.unshift({nm:nm||('#'+gid), id:gid, sc:1000}); } }
-      else l.pick=l.cands.length?l.cands[0].id:null;
+      else { l.pick=l.cands.length?l.cands[0].id:null; l.src=l.pick!=null?'кандидат':''; }
     }catch(e){ l.cands=[]; l.pick=null; } }));
-  _isnadRender(); }
+  try{ await _isnadСоседи(links); }catch(e){_тихо(e,"L_иснСоседи")}   // №500: тёзки и «عن أبيه» — по соседям по цепи
+  if(window._isnadState!==st) return true;   // пока опознавали, разбор заменили новым — этот устарел
+  if(сам){
+    // человек уже ищет другое или закрыл окно — не перехватываем
+    if((opts.seq!==undefined && opts.seq!==_seq) || box.style.display==='none'){ box.style.display='none'; return true; }
+    const сомн=links.filter(l=>l.сомн);
+    if(!сомн.length){ _isnadCommit(); return true; }   // всё опознано уверенно — конструктор как собранный руками, и сразу поиск
+    сомн.forEach(l=>{ l._open=true; });
+    _isnadRender();
+    try{ box.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){_тихо(e,"L_иснОкно")}
+    toast('🧬 Цепь разобрана: звеньев '+links.length+', под вопросом '+сомн.length+' — выбери у ⚠️ и нажми «Построить цепь и искать»');
+    return true; }
+  _isnadRender(); return true; }
 function _isnSh(nm){ return esc(String(nm||'').split(' ').slice(0,2).join(' ')); }
 function _isnadLinkRow(l,i){
   const picked=l.pick!=null?(l.cands.find(c=>c.id===l.pick)||{nm:'#'+l.pick,id:l.pick}):null;
@@ -15593,7 +15689,11 @@ function _isnadLinkRow(l,i){
   h+='<div style="display:flex;align-items:center;gap:7px"><span style="font-size:calc(11px * var(--txtScale,1));color:var(--hint);flex:none">'+(i+1)+'.</span>';
   h+='<span style="flex:1;direction:rtl;text-align:right;font-size:14.5px;font-weight:700">'+esc(l.raw)+'</span>';
   h+='<span class="isnDel" data-i="'+i+'" title="Убрать звено" style="cursor:pointer;color:#e07f7f;font-weight:700;padding:0 4px;flex:none">✕</span></div>';
-  if(picked) h+='<div style="font-size:calc(12px * var(--txtScale,1));color:#9fd3a8;margin-top:3px;direction:rtl;text-align:right">✓ '+esc(picked.nm)+' <span style="color:var(--hint)">#'+esc(String(picked.id))+'</span> · <span class="isnAlt" data-i="'+i+'" style="cursor:pointer;color:var(--link)">другой вариант ▾</span></div>';
+  // №500 (08.10.2026, МИНИ АПП 99): видно, ПОЧЕМУ выбран этот тёзка и где нужен глаз человека
+  if(picked) h+='<div style="font-size:calc(12px * var(--txtScale,1));color:'+(l.сомн?'#e0b34a':'#9fd3a8')+';margin-top:3px;direction:rtl;text-align:right">'+(l.сомн?'⚠️ ':'✓ ')+esc(picked.nm)+' <span style="color:var(--hint)">#'+esc(String(picked.id))+'</span>'
+    +(l.поСоседям?' · <span title="Из тёзок выбран тот, кто связан (учитель↔ученик) с соседними звеньями этой цепи" style="color:#9fd3a8">🔗 по соседям</span>':'')
+    +(l.сомн?' · <span title="Связи с соседними звеньями цепи не нашлось — возможно, это тёзка" style="color:#e0b34a">проверь</span>':'')
+    +' · <span class="isnAlt" data-i="'+i+'" style="cursor:pointer;color:var(--link)">другой вариант ▾</span></div>';
   else if(l.rel) h+='<div style="font-size:calc(11.5px * var(--txtScale,1));color:#e0b34a;margin-top:3px">↪ относительная форма (его отец/дед) — <span class="isnAlt" data-i="'+i+'" style="cursor:pointer;color:var(--link)">указать человека ▾</span></div>';
   else h+='<div style="font-size:calc(11.5px * var(--txtScale,1));color:#e0b34a;margin-top:3px">⚠️ не опознан — <span class="isnAlt" data-i="'+i+'" style="cursor:pointer;color:var(--link)">выбрать вручную ▾</span></div>';
   if(l._open){ h+='<div style="margin-top:5px;border-top:1px dashed var(--border);padding-top:5px">';
@@ -15618,7 +15718,7 @@ function _isnadRender(){ const st=window._isnadState; if(!st) return;
   body.querySelectorAll('.isnFsel').forEach(s=>s.onchange=()=>{ const e=s.dataset.e; if(e==='post') st.post=s.value; else st.links[+e].form=s.value; });
   body.querySelectorAll('.isnDel').forEach(x=>x.onclick=()=>{ st.links.splice(+x.dataset.i,1); if(st.links.length) _isnadRender(); else { const ib=document.getElementById('isnadBox'); if(ib) ib.style.display='none'; toast('Все звенья убраны'); } });
   body.querySelectorAll('.isnAlt').forEach(b=>b.onclick=()=>{ const i=+b.dataset.i; st.links[i]._open=!st.links[i]._open; _isnadRender(); });
-  body.querySelectorAll('.isnPick').forEach(b=>b.onclick=()=>{ const i=+b.dataset.i, id=+b.dataset.id; st.links[i].pick=id; st.links[i]._open=false; _isnadRender(); });
+  body.querySelectorAll('.isnPick').forEach(b=>b.onclick=()=>{ const i=+b.dataset.i, id=+b.dataset.id; st.links[i].pick=id; st.links[i]._open=false; st.links[i].сомн=false; st.links[i].поСоседям=false; _isnadRender(); });   // №500: выбрал человек — пометки «проверь/по соседям» снимаются
   body.querySelectorAll('.isnSearch').forEach(inp=>{ let tm; inp.oninput=()=>{ clearTimeout(tm); const i=+inp.dataset.i, q=inp.value.trim();
     tm=setTimeout(async()=>{ if(q.length<2) return; try{ const c=await narrCandidates(q); st.links[i].cands=(c||[]).slice(0,6); st.links[i]._open=true; _isnadRender();
       const ni=document.querySelector('.isnSearch[data-i="'+i+'"]'); if(ni){ ni.value=q; ni.focus(); } }catch(e){_тихо(e,"L11049")} },260); }; });
@@ -15626,8 +15726,11 @@ function _isnadRender(){ const st=window._isnadState; if(!st) return;
 function _isnadCommit(){ const st=window._isnadState; if(!st) return;
   const kept=st.links.filter(l=>l.pick!=null);
   if(kept.length<2){ toast('Нужно минимум 2 опознанных передатчика — выбери их вручную (⚠️ красные)'); return; }
+  // №500 (08.10.2026, МИНИ АПП 99): поле чистим ДО включения режима Цепь — чип «Цепь» сразу открывает подсказки
+  // передатчиков по тому, что в поле, то есть по ВСЕЙ вставленной цепи. И гасим подсказку 🧬 — цепь уже разобрана.
+  try{ document.getElementById('q').value=''; const _ih=document.getElementById('isnadHint'); if(_ih) _ih.style.display='none'; }catch(e){_тихо(e,"L11055")}
   if(typeof modes!=='undefined' && !modes.chain){ const c=document.querySelector('.chip[data-mode="chain"]'); if(c) c.click(); else modes.chain=true; }
-  try{ document.getElementById('q').value=''; }catch(e){_тихо(e,"L11055")}
+  window._chainFormsOff=false;   // цепь пришла С формами — прятать их нельзя (как у «цепь хадиса → в конструктор»), иначе ищем по скрытым формам
   window._chainSel=kept.map(l=>{ const c=l.cands.find(x=>x.id===l.pick); return {id:l.pick, nm:(c?c.nm:('#'+l.pick))}; });
   window._chainMode='seq'; window._chainAdj=false;
   window._chainFormPre=kept[0].form||'';   // форма перед 1-м
@@ -15636,7 +15739,8 @@ function _isnadCommit(){ const st=window._isnadState; if(!st) return;
   const ib=document.getElementById('isnadBox'); if(ib) ib.style.display='none';
   window._isnadState=null;
   chainRender(); if(window._chainSel.length>=2) chainRun();
-  try{ document.getElementById('chainBox').scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){_тихо(e,"L11064")}
+  // №500: результаты поиска цепи выводятся в #chainOut (не в #res) — к ним и ведём
+  try{ (document.getElementById('chainOut')||document.getElementById('chainBox')).scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){_тихо(e,"L11064")}
   toast('⛓ Цепь построена из иснада ('+kept.length+' звен.) — ищу конструкцию'); }
 // #241: приоритет сборников для сортировки результатов поиска по цепи (первоисточники сначала: Бухари→Муслим→Абу Дауд→Тирмизи→Насаи→Ибн Маджа→Малик→Ахмад, затем остальные)
 const _BID2SLUG={'1681':'bukhari','1727':'muslim','711':'muslim','1726':'abudawud','829':'nasai','1198':'ibnmajah','28107':'malik','25794':'ahmad'};
@@ -24860,6 +24964,9 @@ document.getElementById('goBtn').onclick=()=>{ hap('medium'); try{ _lateQuiet(70
     if(modes.narr||modes.chain){ if(/^[\d٠-٩\s:№#×.]+$/.test(v)){ hideNarrSugg(); } else { t=setTimeout(()=>narrSuggest(v),230); return; } }   // 👤 передатчик/⛓ цепь: живые подсказки; ЧИСЛА идут дальше — обычный поиск по номеру
     // НЕ авто-искать НЕОДНОЗНАЧНЫЙ номер аята (235 → 2:35 / 23:5): пусть помощник покажет варианты, юзер выберет
     if(tab==='quran'){ const mn=v.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)); if(/^\d{2,6}$/.test(mn) && (mn.length>=4 || +mn>114) && ayahCandidates(mn).length>1){ return; } }
+    // №500 (08.10.2026, МИНИ АПП 99): голую ЦЕПЬ на лету не ищем — её разбирает «Найти»/Enter (runSearch → openIsnadParse).
+    // Живой поиск зовёт runSearch(true) через полсекунды после вставки, и разбор менял бы режим и чистил поле, пока цепь правят.
+    try{ if(tab==='hadith' && !modes.any && _похожеНаИснад(v)) return; }catch(e){_тихо(e,"L_иснад500ввод")}
     t=setTimeout(()=>{ runSearch(true); if(tab!=='quran'){ try{ _narrHintNormal(v); }catch(e){_тихо(e,"L17489")} } },500); });   // M334: 350→500мс — меньше тяжёлых перезапусков при наборе (плавность поля) · #85: подсказка карточки равия
 })();
 document.getElementById('neuroRun').onclick=neuroRun;
