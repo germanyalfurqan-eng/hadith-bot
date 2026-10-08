@@ -7699,6 +7699,107 @@ def dsoc_выговор_записать(текст, **поля):
     return итог
 
 
+# ── 📒 ЗАМЕТКИ СООБЩЕСТВА «JM» (заявка владельца №505, 04.07.2026; сделано 08.10.2026, МИНИ АПП 99) ──
+# «сделай команду для меня в чате джамаатру, где будут собираться заметки сообщества Джамаат
+# Муслимин. Команда начинается с „заметки JM“, и я говорю что-то. Ты должен это структурно,
+# красиво оформлять, нумеровать, дату… по необходимости весь список выдаешь, если большой —
+# текстом md… Это работает только по моей команде и только в джамаат ру».
+# Команды (только владелец, только @jamaat_ru):
+#   JM <текст> / заметки JM <текст>  — записать заметку №N с датой
+#   JM список / заметки JM           — все заметки (длинный список — файлом .md)
+#   JM готово N  ·  JM убрать N      — отметить выполненной · удалить
+# Напоминания по дате — следующим шагом (владелец: «будем развивать это направление»).
+JM_ФАЙЛ = "jm_zametki.json"
+_JM_РЕ = re.compile(r'^\s*(?:заметк[аиу]\s+)?(?:JM|ЖМ)\b[\s:.,—-]*(.*)$', re.I | re.S)
+
+
+async def jm_заметки(update, context, text):
+    """True — сообщение было командой заметок и обработано (дальше его не вести)."""
+    try:
+        _м = update.message
+        if not _м or not text or update.effective_chat.id != JAMAAT_RU_CHAT_ID or not is_owner(update):
+            return False
+        м = _JM_РЕ.match(text)
+        if not м:
+            return False
+        хв = (м.group(1) or '').strip()
+        цикл = asyncio.get_event_loop()
+
+        def _список(д):
+            return [з for з in (д or {}).get('заметки', []) if not з.get('удалена')]
+
+        if not хв or re.fullmatch(r'(?:список|все|покажи)', хв, re.I):
+            д = await цикл.run_in_executor(None, lambda: _data_get(JM_ФАЙЛ, {}) or {})
+            зс = _список(д)
+            if not зс:
+                await _м.reply_text('📒 Заметок JM пока нет. Записать: «JM текст заметки».')
+                return True
+            строки = []
+            for з in зс:
+                строки.append('%s №%s · %s\n%s' % ('✅' if з.get('готово') else '▫️', з['n'],
+                                                   з.get('d', ''), з.get('т', '')))
+            весь = '📒 ЗАМЕТКИ JAMAAT MUSLIMIN — всего %d (открыто %d)\n\n' % (
+                len(зс), sum(1 for з in зс if not з.get('готово'))) + '\n\n'.join(строки)
+            if len(весь) <= 3500:
+                await _м.reply_text(весь)
+            else:
+                # З-75: файл для глаз — с отметкой BOM, иначе Telegram покажет кракозябры
+                бф = io.BytesIO(b'\xef\xbb\xbf' + весь.replace('\n\n', '\n\n---\n\n').encode('utf-8'))
+                бф.name = 'zametki_JM.md'
+                await context.bot.send_document(update.effective_chat.id, бф, filename='zametki_JM.md',
+                                                caption='📒 Заметки JM — %d' % len(зс),
+                                                reply_to_message_id=_м.message_id)
+            return True
+
+        мд = re.fullmatch(r'(готово|сделано|выполнено|убрать|удалить)\s*№?\s*(\d+)', хв, re.I)
+        if мд:
+            действие, н = мд.group(1).lower(), int(мд.group(2))
+            итог = {}
+
+            def _изм(д):
+                д = д if isinstance(д, dict) else {}
+                for з in д.get('заметки', []):
+                    if з.get('n') == н and not з.get('удалена'):
+                        if действие in ('убрать', 'удалить'):
+                            з['удалена'] = _now_msk()
+                        else:
+                            з['готово'] = _now_msk()
+                        итог['т'] = з.get('т', '')
+                return д
+            ок, _ = await цикл.run_in_executor(None, lambda: _data_atomic_mutate(
+                JM_ФАЙЛ, _изм, 'jm: %s №%d' % (действие, н)))
+            if not ок or not итог:
+                await _м.reply_text('⚠️ Заметку №%d %s не вышло — %s.' % (
+                    н, 'убрать' if действие in ('убрать', 'удалить') else 'отметить',
+                    'такой нет' if ок else 'запись не сохранилась'))
+            else:
+                await _м.reply_text('%s Заметка №%d %s: %s' % (
+                    '🗑' if действие in ('убрать', 'удалить') else '✅', н,
+                    'убрана' if действие in ('убрать', 'удалить') else 'выполнена', итог['т'][:200]))
+            return True
+
+        запись = {}
+
+        def _доб(д):
+            д = д if isinstance(д, dict) else {}
+            зс = д.setdefault('заметки', [])
+            н = max([з.get('n', 0) for з in зс] or [0]) + 1
+            запись.update({'n': н, 'd': _now_msk(), 'т': хв[:4000], 'смс': _м.message_id})
+            зс.append(dict(запись))
+            return д
+        ок, _ = await цикл.run_in_executor(None, lambda: _data_atomic_mutate(
+            JM_ФАЙЛ, _доб, 'jm: заметка'))
+        if ок and запись.get('n'):
+            await _м.reply_text('📒 Заметка JM №%d записана · %s\n%s\n\nСписок: «JM список» · '
+                                'выполнено: «JM готово %d»' % (запись['n'], запись['d'], хв[:500], запись['n']))
+        else:
+            await _м.reply_text('⚠️ Заметку записать не вышло — хранилище недоступно. НЕ записана.')
+        return True
+    except Exception as е:
+        print('заметки JM: %s' % str(е)[:200])
+        return False
+
+
 async def dsoc_выговор_из_ответа(update, context, text):
     """Владелец ОТВЕТОМ на сообщение помощника сказал «выговор» — записать и назвать номер.
 
@@ -17983,6 +18084,13 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await dsoc_выговор_из_ответа(update, context, text)
     except Exception as _е_выг:
         print('выговор из ответа владельца: %s' % str(_е_выг)[:150])
+
+    # 📒 №505: заметки сообщества «JM» — только владелец, только @jamaat_ru (см. jm_заметки)
+    try:
+        if await jm_заметки(update, context, text):
+            return
+    except Exception as _е_jm:
+        print('заметки JM: %s' % str(_е_jm)[:150])
 
     # ── 🧠 «МОЗГ …» — СВОЯ НЕЙРОНКА НА СЕРВЕРЕ (задача владельца 05.09.2026) ────────────
     # «сделай чтобы в оракл сервере всегда работала нейронка маленькая… и в том числе
