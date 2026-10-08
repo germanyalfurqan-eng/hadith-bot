@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1668</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1669</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1668';
+const APPVER = 'v1669';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -11328,7 +11328,7 @@ async function openOurRazbory(){
       try{ var _refs=_razFindHadithRefs(c.text||'').filter(rf=>(rf.code+':'+rf.num)!==String(c.href||''));
         if(_refs.length){ html+='<div style="margin:5px 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="font-size:calc(11px * var(--txtScale,1));color:var(--hint)">📌 упомянуты:</span>'+_refs.map(rf=>'<span class="ourRazRef" data-code="'+esc(rf.code)+'" data-num="'+esc(rf.num)+'" style="display:inline-block;color:#ffd479;cursor:pointer;border:1px solid #a8862e;border-radius:8px;padding:3px 9px;font-size:calc(12px * var(--txtScale,1))">📖 '+esc(rf.label)+'</span>').join('')+'</div>'; } }catch(e){_тихо(e,"L7991")}
       html+='<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:calc(12.5px * var(--txtScale,1))">';
-      html+=(c.by?('<span class="ourRazL" data-u="'+esc(c.by_url||'https://t.me/hadis_isnad')+'" style="color:#c9b8ff;cursor:pointer;text-decoration:underline">✍️ '+esc(c.by)+' ↗</span>'):'<span style="color:#e0b34a">⚠️ автор требует уточнения</span>');
+      html+=(c.by?('<span class="ourRazL" data-u="'+esc(c.by_url||'https://t.me/hadis_isnad')+'" style="color:#c9b8ff;cursor:pointer;text-decoration:underline">✍️ '+esc(c.by)+' ↗</span>'):('<span style="color:#e0b34a">⚠️ автор требует уточнения</span>'+((typeof isOwner!=='undefined'&&isOwner)?(' <span class="razSetBy" data-mid="'+esc(String(c.mid))+'" style="cursor:pointer;color:#c9b8ff;border:1px solid #6c5ce7;border-radius:8px;padding:1px 8px">✍️ указать автора</span>'):'')));   // №200 (16.06): «кнопку там оставляй для разработчика, чтобы я выделил одного из списка наших мухаддисов» — 08.10.2026, МИНИ АПП 99
       html+='<span class="ourRazL" data-u="'+esc(c.url)+'" style="color:var(--link);cursor:pointer;text-decoration:underline">🔗 разбор '+(c.kind==='audio'?'(аудио ▶)':'(пост)')+' в канале</span>';
       html+='<span class="ourRazShare" data-mid="'+c.mid+'" style="color:#7fe0a0;cursor:pointer;text-decoration:underline">📤 поделиться</span>';   // З-30
       html+='</div></div></div>';
@@ -11349,6 +11349,24 @@ async function openOurRazbory(){
     body.querySelectorAll('.ourRazHadFltBtn').forEach(a=>a.onclick=(e)=>{ e.stopPropagation(); _hf=a.dataset.href||''; render(); });   // #202 фильтр по хадису из карточки
     body.querySelectorAll('.ourRazL,.ourRazCh,.tgLink').forEach(a=>a.onclick=(e)=>{ try{ e.stopPropagation(); }catch(_e){_тихо(_e,"L8012")} try{ openLink(a.dataset.u||'https://t.me/hadis_isnad'); }catch(_e2){_тихо(_e2,"L8012")} });   // #30: + .tgLink (t.me/@username в тексте)
     body.querySelectorAll('.razHead').forEach(hd=>hd.onclick=()=>{ const el=document.getElementById(hd.dataset.id); const ar=hd.querySelector('.razArrow'); if(el){ const vis=el.style.display!=='none'; el.style.display=vis?'none':'block'; if(ar) ar.textContent=vis?'▼':'▲'; } });
+    /* №200 (08.10.2026, МИНИ АПП 99): владелец выбирает автора разбора из списка наших мухаддисов.
+       Карточка сразу показывает выбор, а сам выбор уходит в отзывы разработчику (/devfeedback) — оттуда
+       его вписывают в razbory_cards.json. Без записи в данные выбор продержится до перезагрузки — и
+       мы об этом прямо говорим, а не делаем вид, что сохранили. */
+    body.querySelectorAll('.razSetBy').forEach(a=>a.onclick=(e)=>{ e.stopPropagation();
+      const _авт=_RAZ_AUTHORS.filter(x=>x.key!=='all'&&x.key!=='__none__');
+      const _сп=a.parentNode.querySelector('.razByPick'); if(_сп){ _сп.remove(); return; }
+      const box=document.createElement('span'); box.className='razByPick'; box.style.cssText='display:inline-flex;gap:6px;flex-wrap:wrap;margin-left:6px';
+      _авт.forEach(x=>{ const b=document.createElement('button'); b.className='mini'; b.textContent=x.label.split(' · ')[0];
+        b.onclick=async(ev)=>{ ev.stopPropagation(); const mid=a.dataset.mid; const крт=(cards||[]).find(k=>String(k.mid)===String(mid));
+          try{ await fetch(BACKEND_URL+'/devfeedback',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({text:'АВТОР РАЗБОРА №'+mid+': '+x.label+(крт&&крт.title?(' — «'+String(крт.title).slice(0,80)+'»'):''), ctx:'разборы · указать автора', img:'', initData:INITDATA})});
+            if(крт){ крт.by=x.label.split(' · ')[0]; }
+            toast('✍️ Автор разбора №'+mid+' отправлен: '+x.label.split(' · ')[0]+'. В данные его впишут — до этого виден только у вас до перезагрузки.');
+            render();
+          }catch(_e){ toast('Не отправилось — нет связи с сервером. Попробуйте ещё раз.'); } };
+        box.appendChild(b); });
+      a.parentNode.insertBefore(box, a.nextSibling); });
     body.querySelectorAll('.ourRazShare').forEach(a=>a.onclick=(e)=>{ e.stopPropagation(); try{ const u=deepLinkUrls('raz_'+a.dataset.mid).tg; copyText(u); toast('📤 Ссылка на разбор скопирована'); try{hap('light');}catch(_e){_тихо(_e,"L8014")} }catch(_e){_тихо(_e,"L8014")} });   // З-30
     body.querySelectorAll('.ourRazHadith,.ourRazRef').forEach(a=>a.onclick=(e)=>{ e.stopPropagation(); const c=a.dataset.code,n=a.dataset.num; if(!c||!n) return; try{ m.style.display='none'; }catch(_e){_тихо(_e,"L8015")}   // #204: открыть хадис разбора (привязанный или упомянутый в тексте)
       try{ openReader(c, String(n)); }catch(_e){ try{ const qi=document.getElementById('q'); if(qi){ const th=document.querySelector('.tab[data-tab="hadith"]'); if(th) th.click(); qi.value=c+' '+n; runSearch(true); } }catch(_e2){_тихо(_e2,"L8016")} } });
