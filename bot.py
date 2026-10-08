@@ -81,7 +81,7 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram import InlineKeyboardButton as _КБ, InlineKeyboardMarkup as _КЛ
 from telegram.ext import CallbackQueryHandler, ApplicationBuilder, MessageHandler, filters, ContextTypes, ChatMemberHandler, CommandHandler, PollAnswerHandler, MessageReactionHandler
 
-# ============ АЛЬ-МУХАЙМИН (الموحد المهيمن) — наша выверенная база ============
+# ============ АЛЬ-МУХАЙМИН (المهيمن) — наша выверенная база ============
 # Плоский индекс: { "907": {book, chapter, riwayat:[{text, short_ref, sources}], verified}, ... }
 MUHAYMIN_INDEX_URL = "https://raw.githubusercontent.com/germanyalfurqan-eng/hadith-bot/main/muhaymin_index.json"
 _muhaymin_cache = None
@@ -136,7 +136,7 @@ def fmt_books():
     bs = build_book_structure()
     if not bs:
         return "❌ База недоступна."
-    msg = "📚 الموحد المهيمن — 44 книги:\n\n"
+    msg = "📚 المهيمن — 44 книги:\n\n"
     for i, b in enumerate(bs, 1):
         nh = sum(c["count"] for c in b["chapters"])
         msg += f"{i}. {b['title']}  (№{b['start']}–{b['end']}, {nh} хад.)\n"
@@ -6898,6 +6898,23 @@ def слово_владельца_запомнить(м, текст):
             сп = []
         сп.append({'i': getattr(м, 'message_id', 0), 'd': _now_msk(), 'т': (текст or '')[:1500]})
         _data_put(СЛОВА_ВЛАДЕЛЬЦА_ФАЙЛ, сп[-500:], 'слово владельца')
+    except Exception:
+        pass
+
+
+def лента_бот(чат, мид, текст):
+    """Ответ самого бота — в ту же ленту чата (08.10.2026, МИНИ АПП 99, разбор работы помощника п.14).
+    Telegram не присылает боту его же сообщения, и лента держала только людей: 0 ответов бота из
+    1440 записей. По ней нельзя было проверить ни дубли, ни «кухню» наружу, ни ответ невпопад —
+    видно было вопрос, но не что на него сказали. Пишем в момент отправки; личку не пишем (как и людей)."""
+    try:
+        if not чат or чат == OWNER_ID or not (текст or '').strip():
+            return
+        л = ЧАТ_ЛЕНТА.setdefault(чат, [])
+        л.append({'i': мид or 0, 'кто': 'бот (помощник)', 'т': текст.strip()[:900]})
+        if len(л) > 400:
+            del л[:-400]
+        _ЛЕНТА_ГРЯЗНО[0] += 1
     except Exception:
         pass
 
@@ -22485,6 +22502,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await живое.edit_text(_сыр + подпись)
             except Exception:
                 await _мсообщ(update).reply_text(_сыр + подпись)
+        try:   # п.14: ответ помощника — и в ленту чата, чтобы по ней было видно, ЧТО он сказал
+            лента_бот(chat_id, getattr(живое, 'message_id', 0), собрано)
+        except Exception:
+            pass
         # 🔴 08.10.2026, МИНИ АПП 99, разбор К-1 ②. Память — ЗДЕСЬ, когда ответ уже ушёл:
         # в неё ложится ровно то, что получил человек (после резерва, заслонов и сторожа),
         # а не промежуточное молчание основного канала. Пустое не пишем вовсе.
@@ -25219,7 +25240,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if data:
             riw = data.get("riwayat", [])
             # ── шапка хадиса (отдельным сообщением) ──
-            head = f"📖 الموحد المهيمن — хадис №{number}\n"
+            head = f"📖 المهيمن — хадис №{number}\n"
             if data.get("book"):
                 head += f"📕 {data['book']}\n"
             if data.get("chapter"):
@@ -25646,7 +25667,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _мсообщ(update).reply_text(
             "📚 *Команды бота:*\n\n"
             "*Хадисы (8 сборников):*\nбухари 1 | муслим 1 | абу дауд 1\nтирмизи 1 | ибн маджа 1 | насаи 1 | муватта 1\nахмад 1\n\n"
-            "*Аль-Мухаймин (الموحد المهيمن):*\nмухаймин 907 | муршид 907\n"
+            "*Аль-Мухаймин (المهيمن):*\nмухаймин 907 | муршид 907\n"
             "📚 книги — список 44 книг\n📕 книга 5 | книга الصيام — главы книги\n\n"
             "*Первоисточники → где в Мухаймине:*\nтиялиси 323 | хумайди 28 | ибн аби шейба 100\n(а для бухари/муслим/ахмад отметка добавляется к самому хадису)\n\n"
             "*Передатчик (راوي):*\nпередатчик الزهري | передатчик Абу Хурайра\n(список рави → جرح وتعديل на موسوعة رواة الحديث)\n\n"
