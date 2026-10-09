@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1671</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1672</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1671';
+const APPVER = 'v1672';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4235,7 +4235,13 @@ async function loadHadithRu(silent){ if(hadithRu)return hadithRu; if(hadithRuP) 
      старых переводах навсегда. Это не общее пожелание: мост переводов Муслима готов и
      ждёт слова владельца, он перепишет ровно этот файл. */
   hadithRuP=(async()=>{ const j=await cachedFetchJSON('./hadith_ru.json', 180000, {silent:!!silent});
-    hadithRu=j.map(x=>{ const t=cleanRu(x.t); return {s:x.s,n:x.n,t:t,norm:t.toLowerCase()}; }); return hadithRu; })();
+    /* №173 (09.10.2026, замер): чистка всех переводов шла ОДНИМ куском и держала экран 1,3 с. Тихая подгрузка
+       заводится на третьей русской букве — то есть клавиатура замирала посреди набора. Теперь с передышкой
+       каждые ~30 мс счёта; hadithRu выставляется только целиком, чтобы поиск не увидел половину. */
+    const _ру=new Array(j.length); let _тш=performance.now();
+    for(let k=0;k<j.length;k++){ const x=j[k]; const t=cleanRu(x.t); _ру[k]={s:x.s,n:x.n,t:t,norm:t.toLowerCase()};
+      if((k&511)===511 && performance.now()-_тш>30){ await new Promise(r=>setTimeout(r,0)); _тш=performance.now(); } }
+    hadithRu=_ру; return hadithRu; })();
   /* Сорвалось — ЗАБЫВАЕМ обещание, иначе каждый следующий зовущий получит ту же
      старую неудачу и русский поиск умрёт до перезапуска приложения. Раньше это почти
      не всплывало: голый fetch без срока висел, но не отклонялся. Срок 180 с сделал
@@ -7478,9 +7484,13 @@ function _bkSavePos(){ try{ const pos=JSON.parse(localStorage.getItem('bk_pos')|
   const ks=Object.keys(pos); if(ks.length>60){ ks.sort((a,b)=>(pos[a].t||0)-(pos[b].t||0)); delete pos[ks[0]]; }
   localStorage.setItem('bk_pos', JSON.stringify(pos)); }catch(e){_тихо(e,"L5197")} }
 // дозагрузка соседней страницы В ТО ЖЕ окно (как в Шамиле: «тахмиль ас-сафха ат-талия/ас-сабика») — читать подряд, не перелистывая
+// ОБР-3497: мнемоники turath (&quot; &nbsp; &#NN; …) → знаки. ОДНА функция на оба пути текста листа: основной
+// показ (_bookLoad) и подгрузку соседних листов (_bookFetchClean) — иначе «quot&;» лечился в одном и оставался в другом.
+// Вывод дальше всё равно идёт через esc()/textContent, раскодированные < > снова экранируются.
+function _bkDecodeEnt(t){ return String(t||'').replace(/&nbsp;|&#160;/gi,' ').replace(/&quot;/gi,'"').replace(/&#(\d{1,5});/g,(m,n)=>{ const c=+n; return (c>=32&&c<=1114111)?String.fromCodePoint(c):' '; }).replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/&amp;/gi,'&'); }
 async function _bookFetchClean(pg){
   try{ const j=await bjson(BACKEND_URL+'/book_page?id='+_bookView.id+'&pg='+pg+'&initData='+encodeURIComponent(INITDATA), 25000); const meta=j.meta||{};
-    const clean=(j.text||'').replace(/<[^>]*>/g,'').replace(/ /g,' ');
+    const clean=_bkDecodeEnt((j.text||'').replace(/<[^>]*>/g,'').replace(/ /g,' '));
     return {clean, page:(typeof meta.page==='number'?meta.page:null), headings:(meta.headings||[]).filter(Boolean)};
   }catch(e){ return null; }
 }
@@ -7575,7 +7585,7 @@ async function _bookLoad(){
       // ОБР-3497 (09.10.2026): в тексте Муслима (1727, лист 1933) на экране стояло «quot&;» — turath отдаёт кавычку
       // мнемоникой &quot;, а дальше esc() экранирует «&» и мнемоника выходит буквами. Раскодируем здесь, один раз:
       // и обычный показ, и подсветка (doFind) берут текст отсюда. esc() потом всё равно экранирует < > " &.
-      clean=clean.replace(/&nbsp;|&#160;/gi,' ').replace(/&quot;/gi,'"').replace(/&#(\d{1,5});/g,(m,n)=>{ const c=+n; return (c>=32&&c<=1114111)?String.fromCodePoint(c):' '; }).replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/&amp;/gi,'&');
+      clean=_bkDecodeEnt(clean);
       tEl.dataset.txt=clean;
       // как в Шамиле: [⬆️ добавить пред.] [пред.] [ТЕКУЩАЯ] [след.] [⬇️ добавить след.] — читать подряд, не перелистывая
       const _addBtnCss='display:block;width:100%;box-sizing:border-box;padding:9px;border:1px dashed var(--btn);background:transparent;color:var(--link);border-radius:10px;font-size:calc(13px * var(--txtScale,1));font-weight:600;cursor:pointer';
@@ -17555,16 +17565,29 @@ function _vocApply(host, id, plainName){ loadNarrVoc().then(vm=>{ try{ const t=v
 let _narrExt=null, _narrExtP=null;   // расширение: id → [кунья+нисба (канон), год смерти, известность(трудов-критиков)] — матчинг «ас-Саури» + ранжирование знаменитостей
 function loadNarrExt(){ if(_narrExt) return Promise.resolve(_narrExt); if(_narrExtP) return _narrExtP;
   _narrExtP=fetch('./narrators_ext.json').then(r=>r.ok?r.json():null).then(a=>{ _narrExt=new Map(); (a||[]).forEach(x=>_narrExt.set(x[0],[x[1]||'',x[2]||0,x[3]||0])); return _narrExt; }).catch(()=>{ _narrExt=new Map(); return _narrExt; }); return _narrExtP; }
-let _narrSkelIdx=null;
-async function _narrSkelIndex(){ if(_narrSkelIdx) return _narrSkelIdx;
+/* №173 (владелец: «поиск бидʿа — нажимаю, сильно зависает»). Замер 09.10.2026 на свежей загрузке: первый
+   РУССКИЙ запрос держал экран намертво 2,8 с + 1,1 с, первая карточка через 4,1–4,9 с; повторный — 0,26 с.
+   Причина: русское слово заодно ищется как имя передатчика, и для этого здесь ОДНИМ куском строились
+   скелеты имён всех равиев (58 291 имя, 2,8 с). Строим теперь порциями по 1500 с передышкой (экран живёт) и одним обещанием
+   на всех (раньше два одновременных зова строили дважды), а начинаем, когда человек ставит курсор в
+   строку поиска (_прогревПоиска ниже) — пока он печатает, индекс готовится. */
+let _narrSkelIdx=null, _narrSkelP=null;
+async function _narrSkelIndex(){ if(_narrSkelIdx) return _narrSkelIdx; if(_narrSkelP) return _narrSkelP;
+  _narrSkelP=(async()=>{
   const [idx, ext]=await Promise.all([loadNarrNames(), loadNarrExt()]);
-  _narrSkelIdx=idx.map(it=>{ const e=ext.get(it[1]); const full=it[0]+(e&&e[0]?(' '+e[0]):'');
+  const _одно=(it=>{ const e=ext.get(it[1]); const full=it[0]+(e&&e[0]?(' '+e[0]):'');
     const pen=/ (عن|قال) /.test(' '+it[0]+' ')?8:0;   // «X عن Y» / «قال…» — составная запись, не имя; известность у них раздута текстовым матчингом
     let prof=null;   // «короткий профиль» = первое имя + нисба (без куний): паттерн шухры «Суфьян ас-Саури» матчится СМЕЖНО
     if(e&&e[0]){ let ew=e[0].split(' '); while(ew.length>1&&(ew[0]==='ابو'||ew[0]==='ام'||ew[0]==='ابن')) ew=ew.slice(2);
       if(ew.length) prof=[it[0].split(' ')[0]].concat(ew).map(_skelAr); }
     return [it[0], it[1], full.split(' ').map(_skelAr), e?(e[2]||0):0, pen, prof, e?(e[1]||0):0]; });   // [имя, id, скелеты, известность, штраф, профиль, год смерти]
-  return _narrSkelIdx; }
+  const _вс=new Array(idx.length);
+  for(let k=0;k<idx.length;k++){ _вс[k]=_одно(idx[k]); if(k%1500===1499) await new Promise(r=>setTimeout(r,0)); }
+  _narrSkelIdx=_вс; return _вс; })();
+  try{ return await _narrSkelP; }catch(e){ _narrSkelP=null; throw e; } }
+function _прогревПоиска(){ try{ const i=document.getElementById('q'); if(!i||i._прогрев) return; i._прогрев=1;
+  i.addEventListener('focus',()=>{ setTimeout(()=>{ try{ _narrSkelIndex().catch(()=>{}); }catch(e){} },150); },{once:true}); }catch(e){_тихо(e,"173прогрев")} }
+try{ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_прогревПоиска); else _прогревПоиска(); }catch(e){}
 const _NARR_RU_STOP=new Set(['имам','имама','хафиз','шейх','передатчик','равий','рави']);   // титулы — не часть имени
 // 🌟 ГАРАНТ-СЛОЙ знаменитостей (принцип Ф-09: не нашёл известного — добавь сюда): рус-шухра → точное начало канон-имени в базе
 const _NARR_FAMOUS={
