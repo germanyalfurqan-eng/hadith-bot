@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1695</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1696</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1695';
+const APPVER = 'v1696';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -20836,11 +20836,36 @@ async function showNarratorCardLocal(name, host, forceId){
           .replace(/^\s*(?:ما|و|هو|هي|هما|ابن|بنت)\s+(?=[؀-ۿ])/,'')   // «ما زينب…» → «زينب…»
           .replace(/\s{2,}/g,' ').replace(/^[،,\s]+|[،,\s]+$/g,'').replace(/\s+(?:بن|بنت|ابن|أبي|ابي)$/,'').trim(); }catch(e){ return s; } };   // хвост «محمد بن زيد بن» — обрывок
       const _relSplit=(v)=>{ if(Array.isArray(v)) return v.map(_relClean).filter(Boolean);
-        const s=_relClean(v); if(!s) return [];
+        const s=_relClean(v).replace(/صلى\s+الله\s+عليه\s+و\s*سلم/g,'ﷺ'); if(!s) return [];   // №554: «وسلم» рвалось как союз «و»: «ختن النبي صلى الله عليه، سلم»
         return s.split(/\s*[،,]\s*|\s+و(?=[؀-ۿ]{3,})\s*/).map(x=>_relClean(x)).filter(x=>x&&x.length>2); };
       /* «أمه زينب بنت مظعون أخت عثمان بن مظعون»: «сестра (кого-то)» сразу за матерью — это сама мать, а названный
          человек — её брат, то есть дядя по матери. Показывалось «Сестра (кого-то): عثمان بن مظعون» (Ибн Умар, 09.10). */
       const _relx=_nb.relx.map((p,i,a)=>(p[0]==='сестра (кого-то)' && i>0 && a[i-1][0]==='мать')?['брат матери (дядя по матери)',p[1]]:p);
+      /* №554/555 (ʿУсман ибн ʿАффан, rel: «…على ابنتيه رقية وأم كلثوم يقال أمه أروى… وخالته سعدى وأولاده عمرو وأبان
+         وسعيد … ومولاه أبو سهلة ومولاه أبو صالحبا بتاريخ الميلادب ب»). Разбор relx принимал КУНЬЮ за родство: «وأم كلثوم» →
+         «мать (кого-то): كلثوم», «ومولاه أبو سهلة» → «отец (кого-то): سهلة»; сыновья прилипали к тёте; в конец
+         затекали заголовки вики-таблицы. Чиним показ:
+         ① «мать/отец (кого-то)» сразу после «мавля» — это ещё мавли с куньей «أم/أبو»;
+         ② «мать (кого-то)» сразу после «связь» — кунья продолжает её («…رقية وأم كلثوم»);
+         ③ «…وأولاده A وB» внутри значения — отдельная строка «дети»;
+         ④ хвосты «يقال», «بتاريخ الميلاد…», «كاتبه» и повторы — прочь. */
+      const _relТрим=(x)=>String(x||'').split(/(?:با)?\s*ب?\s*(?:المذهب العقدي|تاريخ الميلاد|تاريخ الوفاة|مكان الميلاد)/)[0]
+          .replace(/ب+$/,'').replace(/\s+(?:يقال|ويقال)$/,'').replace(/^(?:كاتبه|ابن عمه)\s+/,'').trim();
+      const _relЧист=[];
+      for(const [k0,v0] of _relx){
+        const vv=(Array.isArray(v0)?v0:[v0]).map(_relТрим).filter(Boolean);
+        const пред=_relЧист[_relЧист.length-1];
+        if((k0==='мать (кого-то)'||k0==='отец (кого-то)') && пред && пред[0]==='мавля'){
+          const куня=(k0==='мать (кого-то)')?'أم ':'أبو ';
+          пред[1]=[].concat(пред[1], vv.map(x=>куня+x)); continue; }
+        if(k0==='мать (кого-то)' && пред && пред[0]==='связь' && vv.length===1){
+          пред[1]=[].concat(пред[1]).map(String).join('، ')+' وأم '+vv[0]; continue; }
+        const дети=[]; const vv2=vv.map(x=>{ const m=x.split(/\s+وأولاده\s+|\s+وأبناؤه\s+/); if(m.length>1){ дети.push(...m[1].split(/\s+و(?=[؀-ۿ])/)); return m[0]; } return x; });
+        const уник=[...new Set(vv2)].filter((x,i,a)=>!a.some((y,j)=>j!==i&&y!==x&&y.startsWith(x+' ')));   // «مروان بن الحكم» внутри «مروان بن الحكم بن أبي العاص»
+        _relЧист.push([k0, Array.isArray(v0)?уник:(уник.length>1?уник:(уник[0]||''))]);
+        if(дети.length) _relЧист.push(['дети', дети.map(_relТрим).filter(Boolean)]);
+      }
+      _relx.length=0; _relЧист.forEach(p=>_relx.push(p));
       const lines=_relx.map(([k,v0])=>{
         const _parts=_relSplit(v0); const v = (Array.isArray(v0)||_parts.length>1) ? _parts : (_parts[0]||'');
         if(Array.isArray(v)){ const head=v.slice(0,6).map(_arSpan).join('، '); const rest=v.length>6?' <span style="color:var(--muted)">и ещё '+(v.length-6)+'</span>':''; return (_IC[k]||'🧬')+' '+esc(k[0].toUpperCase()+k.slice(1))+' ('+v.length+'): '+head+rest; }
