@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1674</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1675</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1674';
+const APPVER = 'v1675';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6447,6 +6447,28 @@ async function runSearch(explicit){
           res.insertBefore(бл, head && head.parentNode===res ? head.nextSibling : res.firstChild);
         } }catch(e){_тихо(e,"L4530b")} }).catch(function(){}); }catch(e){_тихо(e,"L4530a")}
       setStatus(''); logSearch(shown,tab,count);
+      /* №195 (владелец: «ввожу пересказ — „какая женщина наилучшая… та, при взгляде на которую супруг радуется“
+         (ан-Насаи, Ахмад) — делай что хочешь, но поиск должен находить такие вещи легко; не допускай формальный
+         результат»). Замер 09.10: обычный русский поиск дал «похоже, не из сборников» и одну случайную карточку —
+         русские переводы у нас только для Бухари/Муслима/Абу Дауда. Серверный поиск по смыслу (rag_find, 26 сводов)
+         на тот же пересказ первыми двумя дал ровно этот хадис: Ахмад 9587 и ан-Насаи «аль-Кубра» 8912 (14 с).
+         Поэтому: длинный пересказ (≥6 русских слов) + слабый обычный результат → сами спрашиваем по смыслу и
+         ставим найденное НАВЕРХ. Своего поиска не пишу — зову готовый _ragПоОстальным (З-33). */
+      try{ const _рсл=String(shown||'').split(/\s+/).filter(w=>/[а-яё]{2,}/i.test(w)).length;
+        if(explicit && !strict && _рсл>=6 && (count<3 || (relax && relax.dropped && relax.dropped.length))){
+          const _бокс=document.createElement('div'); _бокс.className='ragAuto'; _бокс.style.cssText='border:1px solid #6b4fa8;border-radius:12px;padding:8px 10px;margin:4px 0 12px;background:rgba(124,92,196,.08)';
+          const _з=document.createElement('div'); _з.style.cssText='color:#cdb8ff;font-weight:700;font-size:calc(13px * var(--txtScale,1))';
+          _з.textContent='🧠 Похоже на пересказ хадиса — ищу по смыслу во всех сводах (до 20 с)…'; _бокс.appendChild(_з);
+          res.insertBefore(_бокс, head && head.parentNode===res ? head.nextSibling : res.firstChild);
+          /* Чистка пересказа: на сыром тексте владельца («ПРОРОКА МУХАММАДА • … [НАИБОЛЕЕ …] … ИСТОЧНИК: (АН-НАСАИ…)»)
+             поиск по смыслу дал чужие хадисы (Муслим 711, Бухари 2796); на очищенном — ат-Таялиси 2444 и Ахмад 9587
+             в первой тройке. Убираем подпись источника, скобки, ЗАГЛАВНЫЕ; если есть цитаты «…» — берём только их. */
+          const _чист=(function(t){ t=String(t||''); t=t.replace(/источник\s*:[\s\S]*$/i,'').replace(/\[[^\]]*\]/g,' ').replace(/\([^)]*\)/g,' ');
+            const _ц=t.match(/«[^»]+»/g); if(_ц && _ц.join(' ').length>=20) t=_ц.join(' ').replace(/[«»]/g,' ');
+            return t.replace(/[•·]/g,' ').replace(/\s+/g,' ').trim().toLowerCase(); })(shown);
+          _ragПоОстальным(_бокс, _чист||shown, head).then(()=>{ if(seq===_seq) _з.textContent='🧠 По смыслу во всех сводах — ближе всего к вашему пересказу:'; })
+            .catch(()=>{ _з.textContent='🧠 Поиск по смыслу сейчас не ответил — ниже обычный поиск по словам.'; });
+        } }catch(e){_тихо(e,'195смысл')}
       if(!count){ const s=document.createElement('div'); s.className='status';   // append, чтобы не стереть баннер исправления (M173)
         s.textContent='По-русски не нашёл'+(strict?' (строгий режим — как ввёл)':'')+'. Готовый перевод есть для Бухари/Муслим/Абу Дауд; для остальных включи 🧠 По смыслу.';
         res.appendChild(s); }
