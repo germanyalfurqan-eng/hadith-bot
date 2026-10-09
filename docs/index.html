@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1688</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1689</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1688';
+const APPVER = 'v1689';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -14481,6 +14481,7 @@ function _имяУзнаваемое(c){
     return пол.split(' ').slice(0,2).join(' ');
   }catch(e){ return String((c&&c.nm)||'').split(' ').slice(0,2).join(' '); }
 }
+function _chainSig(){ try{ return JSON.stringify([(_chainSel||[]).map(c=>c.id), window._chainMode||'any', !!window._chainFormsOff, window._chainForms||[], window._chainFormPre||'', window._chainFormPost||'']); }catch(e){ return ''; } }
 function chainRender(){
   const b=_chainBox(); const n=_chainSel.length;
   b.style.display=(typeof modes!=='undefined'&&modes.chain)?'block':'none';
@@ -14511,6 +14512,12 @@ function chainRender(){
     }
   });
   const chips=chipParts.join('');
+  /* 09.10.2026 (МИНИ АПП 101, проверка №461–464): блок перестраивается целиком, и вместе с ним
+     пропадали уже найденные цепи. Чаще всего — на первом же поиске: имена в чипах берутся из словаря
+     прозвищ, он догружается позже и сам зовёт chainRender — результат мелькал и исчезал, человек видел
+     пустоту («реально ни одной цепи?»). Найденное сохраняем, если запрос (звенья, режим, формы) тот же. */
+  const _прежний=document.getElementById('chainOut');
+  const _прежнийОк=!!(_прежний && _прежний.dataset.sig && _прежний.dataset.sig===_chainSig());
   b.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:calc(13px * var(--txtScale,1));color:#c9b8ff;font-weight:700">⛓ Цепь передачи — набирай имя в поиске и тапай подсказку (нужно от 2):</span><span id="chainX" title="Свернуть и выключить режим Цепь" style="cursor:pointer;color:#e07f7f;font-weight:700;border:1px solid var(--border);border-radius:6px;padding:1px 8px;flex:none">✕</span></div>'
     +'<div style="display:flex;flex-wrap:wrap;align-items:center">'+(chips||'<span class="hint" style="font-size:calc(12px * var(--txtScale,1))">пока никто не выбран</span>')+'</div>'
     +'<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap;font-size:calc(12.5px * var(--txtScale,1));color:var(--text)">'
@@ -14527,6 +14534,7 @@ function chainRender(){
         :'<span class="hint" style="font-size:calc(11.5px * var(--txtScale,1))">'+(md==='seq'?'⚠️ в конструкции ПОРЯДОК ВВОДА = ПОРЯДОК ЦЕПИ (1-й передаёт от 2-го…)':'жми «🔎 Найти цепь» сверху')+' · между именами — форма передачи (حدثنا/عن/سمعت)</span>')
     +'<span id="chainBaseLink" title="Открыть базу самых частых цепей передачи (реестр иснадов M449)" style="cursor:pointer;color:#c9b8ff;font-size:calc(12px * var(--txtScale,1));border:1px solid #6c5ce7;border-radius:8px;padding:3px 9px;margin-inline-start:auto">⛓ База иснадов</span>'
     +'</div><div id="chainOut" style="margin-top:6px"></div>';
+  if(_прежнийОк){ const _нов=document.getElementById('chainOut'); if(_нов && _нов!==_прежний) _нов.replaceWith(_прежний); }
   // M469: ясная ОТМЕТКА об известных связях (np-пары штудирования) — информируем, выбор за человеком
   if(n>=2){ (async()=>{ try{
     const known=[];
@@ -15703,6 +15711,7 @@ async function _chainRunТело(){
   chainRender();
   try{ _actPush({t:'chain', sel:_chainSel.slice(), adj:!!window._chainAdj, mode:window._chainMode||'any', names:_chainSel.map(c=>String(c.nm||'').split(' ').slice(0,2).join(' '))}); }catch(e){_тихо(e,"L10816")}   // M462/M463
   const out=document.getElementById('chainOut'); if(!out) return;
+  out.dataset.sig=_chainSig();   // chainRender узнаёт по подписи, что найденное ещё к этому запросу
   if((window._chainMode||'any')==='seq'){ return chainRunSeq(out); }   // M483: конструкция иснада (R45 — внутри ЭТОГО же режима)
   const ids=_chainSel.map(c=>c.id);
   out.innerHTML='<div class="hint">⏳ Собираю участие выбранных… </div>';
