@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1673</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1674</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1673';
+const APPVER = 'v1674';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -11948,7 +11948,13 @@ function _qrPlay(s, a){ _qrWordStop();
   au.ontimeupdate=()=>{ if(window._qrAudio!==au) return; const t=au.currentTime;
     if(au.__off && t>=au.__off && !au.__adv){ au.__adv=1; au.onended=null; try{au.pause();}catch(e){_тихо(e,"L8463")} _advance(); return; }   // обрезать хвост-тишину → сразу следующий аят
     if(!_qw.length) return; let i=_ends.findIndex(e=>t<e); if(i<0) i=_qw.length-1;
-    if(i!==_cw){ if(_cw>=0&&_qw[_cw]) _qw[_cw].classList.remove('qwnow'); if(_qw[i]) _qw[i].classList.add('qwnow'); _cw=i; } };
+    if(i!==_cw){ if(_cw>=0&&_qw[_cw]) _qw[_cw].classList.remove('qwnow'); if(_qw[i]) _qw[i].classList.add('qwnow'); _cw=i;
+      /* №80 (владелец: «пословно читать … и всё остальное должно сохраняться в этом режиме»): слушают из
+         КАРТОЧКИ аята — а слово подсвечивалось только в тексте читалки под ней. Отражаем ту же подсветку в
+         карточке, если в ней тот же аят и столько же слов (иначе индексы разъедутся — лучше без подсветки). */
+      try{ const _ам=document.getElementById('ayahCardModal'); const _ак=window._ahCur;
+        if(_ам && _ам.style.display!=='none' && _ак && _ак.s===s && _ак.a===a){ const _пс=_ам.querySelectorAll('#ahArabic .qw');
+          if(_пс.length===_qw.length){ _пс.forEach((w,k)=>w.classList.toggle('qwnow',k===i)); } } }catch(e){_тихо(e,'80подсв')} } };
   au.onplaying=()=>{ if(window._qrAudio===au){ _qrBtnSet(a,'⏸'); if(!_qw.length) _buildWT(); try{_miniSync();}catch(e){_тихо(e,"L8466")} } };
   au.onpause=()=>{ if(window._qrAudio===au && !au.ended){ _qrBtnSet(a,'▶'); try{_miniSync();}catch(e){_тихо(e,"L8467")} } };
   au.onended=_advance;
@@ -12158,6 +12164,8 @@ async function openAyahCard(s,a,_isFollow){ s=+s; a=+a; if(!s||!a) return;
   m.style.display='flex';
   // #183: word-tap в попапе аята (как в читалке) — тап по слову → корень/Arabus/перевод
   const _ahAr=m.querySelector('#ahArabic'); if(_ahAr){ try{ loadRoots(); }catch(e){_тихо(e,"L8605")}
+    // №80: размер текста — тот же, что человек выставил в читалке Корана (A+/A−, cfg.qrFontScale); было всегда 25px
+    try{ const _qz=+cfg.qrFontScale||1; if(_qz!==1) _ahAr.style.fontSize=Math.round(25*_qz)+'px'; }catch(e){_тихо(e,'80шрифт')}
     _ahAr.addEventListener('click',e=>{ const sp=e.target.closest&&e.target.closest('.qw'); if(sp){ e.stopPropagation(); onWordTap(sp.textContent, sp, (_ahAr.textContent||'').replace(/\s+/g,' ').trim().slice(0,200)); } });
     try{ enableArabusTap(_ahAr); if(_arabusOn) _ahAr.style.cursor='pointer'; }catch(e){_тихо(e,"L8607")} }
   m.querySelector('#ahClose').onclick=()=>{ m.style.display='none'; try{ if(window._ahPlayTimer){ clearInterval(window._ahPlayTimer); window._ahPlayTimer=null; } window._ahFollow=false; }catch(e){_тихо(e,"L8608")} };   // #184: закрытие — стоп синхрона/следования
@@ -14018,6 +14026,52 @@ function _имНоминатив(v){ try{
   return _voc;
 }catch(e){ return String(v||''); } }
 let _mudPromise=null;
+/* №375 (владелец, скрин: «тут почему ты не пишешь источник и не даёшь активную ссылку на первоисточник,
+   что он мудаллис?»). Довод из Такриба (40 из 202 записей mudallisin.json) и из «طبقات المدلسين» Ибн Хаджара
+   (59) открывал общую ТАБЛИЦУ мудаллисов — книги с этими словами человек не видел. Теперь ищем страницу в
+   самой книге (Такриб 8609, Табакат 1186, аль-Кашиф 2171 — те же номера, что в _SVOD_BID) и открываем с
+   подсветкой. Порядок запросов из замера 09.10 на аль-Аʿмаше: ① окно из 5 слов вокруг «يدلس/تدليس» в самой
+   цитате (Такриб: «…عارف بالقراءات ورع لكنه يدلس» → лист 180); ② имя; в Такрибе печать пишет «ابن», а не «بن»
+   («سليمان بن مهران» там — ноль находок). Ничего не нашлось — как раньше, таблица мудаллисов. */
+async function _мудОткрытьИсточник(td, имя, id, доп){
+  const s=String(td&&td.s||'');
+  const bid=/تقريب/.test(s)?'8609':(/طبقات المدلسين|التقديس/.test(s)?'1186':(/الكاشف/.test(s)?'2171':''));
+  const запасной=()=>{ const _b=document.getElementById('mudTblBtn'); if(_b) _b.onclick(); };
+  if(!bid || !BACKEND_URL){ запасной(); return; }
+  try{ toast('🔎 Ищу довод в первоисточнике…'); }catch(e){}
+  const н=x=>stripDiac(String(x||'')).replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي');
+  // Ключ узнавания равия в отрывке: первое имя (у «ابن X»/«أبو X» — X; у «عبد X» — оба слова).
+  // Выборка 30 записей 09.10 показала: общие фразы довода («متروك وكان يدلس», «مرتبة تدليس») находят
+  // страницу ЧУЖОГО равия (Хариджи, Катады). Страница засчитывается, только если в отрывке есть ключ.
+  const иw=н(имя).split(/\s+/).filter(Boolean);
+  // Ключ — СЛОВА, которые все должны стоять в отрывке. Вторая выборка показала: одно слово («محمد», «يزيد»)
+  // совпадает с чужим равием на той же странице. Поэтому у «X بن Y» ключ — и имя, и имя отца.
+  let ключ=[];
+  { let w=иw.slice(); if(/^(عبد|عبيد)$/.test(w[0]) && w[1]){ w=[w[0]+' '+w[1]].concat(w.slice(2)); }
+    if(/^(ابن|ابو|ابي|ام)$/.test(w[0]) && w[1]) ключ=[w[1]];
+    else if(w[1]==='بن' && w[2]) ключ=[w[0], (w[2]==='عبد'||w[2]==='عبيد'||w[2]==='ابي'||w[2]==='ابو')&&w[3]?((w[2]==='ابي'||w[2]==='ابو')?w[3]:(w[2]+' '+w[3])):w[2]];   // «حميد بن أبي حميد» → [حميد, حميد], не «ابي»
+    else if(w[0]) ключ=[w[0]]; }
+  // Второй путь узнать равия в отрывке — по ОТЛИЧИТЕЛЬНЫМ словам полного имени, нисб и куньи (≥2 из них):
+  // статья Аʿмаша в Такрибе («…الكاهلي أبو محمد الكوفي الأعمش ثقة…») имени «سليمان بن مهران» в окне отрывка не несёт.
+  let _ext=''; try{ const _e=id!=null?(await loadNarrExt()).get(+id):null; _ext=_e?(_e[0]||''):''; }catch(e){}
+  const _общ=/^(محمد|احمد|علي|عمر|الحسن|الحسين|ابراهيم|اسماعيل|يحيي|سعيد|عبد الله|عبد الرحمن|بن|ابن|ابو|ابي|ام|مولاهم|الحافظ|الامام|يقال|ويقال|اصله|من|الكوفي|البصري|المدني|البغدادي|الشامي|المكي|المصري|الواسطي|القرشي)$/;
+  const отл=[...new Set(н(String(имя||'')+' '+String(доп||'')+' '+_ext).split(/\s+/).filter(w=>w.length>=4 && !_общ.test(w)))];
+  const сл=н(td.q).replace(/[^\u0621-\u064A\s]/g,' ').split(/\s+/).filter(Boolean);
+  const k=сл.findIndex(w=>/يدلس|تدليس|مدلس/.test(w));
+  const окно=k>=0?сл.slice(Math.max(0,k-4),k+1).join(' '):(сл.length>=4?сл.slice(0,6).join(' '):'');
+  const им=иw.slice(0,3).join(' ');
+  const им8609=bid==='8609'?им.replace(/(^|\s)بن(\s|$)/g,'$1ابن$2'):им;
+  const qs=[окно, им8609, (ключ.length&&окно)?(ключ[0]+' '+сл.slice(Math.max(0,k-2),k+1).join(' ')):''].filter(q=>q && q.replace(/\s/g,'').length>=6);
+  for(const q of qs){
+    try{ const j=await bjson(BACKEND_URL+'/maktaba?q='+encodeURIComponent(q)+'&book='+bid+'&page=1&initData='+encodeURIComponent(INITDATA), 20000);
+      if(j && j.error==='rate'){ try{ toast('Сервер просит подождать минуту — пока открываю таблицу мудаллисов'); }catch(e){} запасной(); return; }   // 429 — это не «не нашлось»
+      const x=(j&&j.data||[]).find(d=>{ if(!d||!d.page_id) return false; const t=н(String(d.snip||'').replace(/<[^>]*>/g,' '));
+        if(/\[\s*\]/.test(String(d.snip||''))) return false;   // «[] الكاهلي هو سليمان» — указатель прозвищ в конце Такриба, не статья
+        return ключ.every(w=>t.indexOf(w)>=0) || отл.filter(w=>t.indexOf(w)>=0).length>=2; });
+      if(x){ openBook(bid, x.page_id, false, _hlИзОтрывка(x.snip)||q); return; } }catch(e){_тихо(e,"375поиск")}
+  }
+  try{ toast('В книге довод не нашёлся — открываю таблицу мудаллисов'); }catch(e){}
+  запасной(); }
 async function _loadMudallisin(){ if(window._MUDCACHE) return window._MUDCACHE;
   if(!_mudPromise) _mudPromise=fetch('mudallisin.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>{_mudPromise=null; return {};});
   return _mudPromise; }   // владелец 01.07.2026: тот же promise-кэш баг — mudallisin.json грузился 150+ раз параллельно
@@ -17274,6 +17328,9 @@ function выгрузитьТаблицуCSV(имяФайла, заголовк�
 function _кнопкаВыгрузки(id, подсказка){
   return '<button class="mini" id="'+id+'" title="'+подсказка+'" style="flex:none;padding:5px 10px;border:1px solid var(--border);border-radius:8px">📥 CSV</button>';
 }
+// №101: русское название сборника в фильтре таблицы → его печати (bid; у Бухари их пять) — «бухари 999», «муслим 5». Только самые частые — по COLL_BIDS.
+function _htКнигаПоРус(w){ w=String(w||'').toLowerCase().trim(); const м={'бухари':'bukhari','муслим':'muslim','абу дауд':'abudawud','абу дауда':'abudawud','тирмизи':'tirmidhi','насаи':'nasai','ибн маджа':'ibnmajah','ибн маджах':'ibnmajah','ахмад':'ahmad','малик':'malik','дарими':'darimi'};
+  const код=м[w]; if(!код) return []; try{ return (COLL_BIDS[код]||[]).map(String); }catch(e){ return []; } }
 async function openHadithTable(){
   let m=document.getElementById('hadTblModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='hadTblModal';
@@ -17308,7 +17365,7 @@ async function openHadithTable(){
   if(!_htMeta){ list.innerHTML='<div class="hint">Таблица недоступна.</div>'; return; }
   try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr()]); }catch(e){_тихо(e,"L12072")}
   info.innerHTML='Хадисов: <b>'+_htMeta.total.toLocaleString('ru')+'</b> · общих №: <b>'+_htMeta.general.toLocaleString('ru')+'</b> · уник. версий: <b>'+_htMeta.uniq_ver.toLocaleString('ru')+'</b> · уник. хадисов: <b>'+_htMeta.uniq_had.toLocaleString('ru')+'</b>'+(_htMeta.uniq_tahrij?(' · 🌿 ТАХРИДЖ: <b style="color:#9fd3a8">'+_htMeta.uniq_tahrij.toLocaleString('ru')+'</b> хадисов, из них с версиями <b style="color:#9fd3a8">'+(_htMeta.multi_tahrij||0).toLocaleString('ru')+'</b>'+(_htMeta.no_tahrij?(' · без тахриджа: <b>'+_htMeta.no_tahrij.toLocaleString('ru')+'</b>'):'')):'')+' · точных копий: '+_htMeta.dups.toLocaleString('ru');
-  let loaded=[], pagesLoaded=0, shown=0; const step=40; let filt='';
+  let loaded=[], pagesLoaded=0, shown=0; const step=40; let filt=''; let _htSeq=0, _htScan=0, _htFound=0;   // №101: поиск по частям — позиция, счёт, токен
   async function ensure(upto){ while(loaded.length<upto && pagesLoaded<_htMeta.pages){ let pg=_htPage[pagesLoaded];
     if(!pg){ try{ const r=await fetch('./htab/p'+pagesLoaded+'.json?v='+APPVER); pg=r.ok?await r.json():[]; }catch(e){ pg=[]; } _htPage[pagesLoaded]=pg; }
     loaded=loaded.concat(pg); pagesLoaded++; } }
@@ -17357,22 +17414,39 @@ async function openHadithTable(){
     if(f[0]==='v') return ('v'+r[4])===f; if(f[0]==='u') return ('u'+r[5])===f; if(f[0]==='s'&&!isNaN(+f.slice(1))) return ('s'+(r[7]||0))===f;
     if(f[0]==='b'&&/^\d+$/.test(f.slice(1))) return String(r[1])===f.slice(1);   // M491: b<bid> — фильтр по сборнику (книге)
     if(f[0]==='c'||f.startsWith('c')){ if((r[3]||'').toLowerCase().indexOf(f)>=0) return true; }
+    /* №101: «бухари 999» — это Бухари №999, а не «любая строка, где где-то стоит 999». Раньше буквы просто
+       выбрасывались, и запрос искал 999 во всех 64 печатях сразу. Теперь: есть и слово, и число — слово
+       сверяем с названием сборника (или b<bid>), число — с номером хадиса В НЁМ. */
+    { const _m=f.match(/^\s*(b\d+|[^\d]*[a-zа-яёء-ي][^\d]*?)\s*[№#]?\s*(\d+)\s*$/i);
+      if(_m){ const _кн=_m[1].trim(), _нм=_m[2];
+        if(String(r[2])!==_нм) return false;
+        if(/^b\d+$/.test(_кн)) return String(r[1])===_кн.slice(1);
+        try{ const _бн=String(bookName(String(r[1]))||'').toLowerCase(); const _тр=(typeof _catTr!=='undefined'&&_catTr.map&&_catTr.map[bookName(String(r[1]))])||null;
+          return _бн.indexOf(_кн)>=0 || (_тр && String(_тр.ru||'').toLowerCase().indexOf(_кн)>=0) || (_htКнигаПоРус(_кн).indexOf(String(r[1]))>=0); }catch(e){ return false; } } }
     const num=f.replace(/[^0-9]/g,''); if(num) return String(Math.abs(r[0]))===num||String(r[2])===num||String(r[4])===num||String(r[5])===num;
     try{ const bn=(typeof bookName==='function')?String(bookName(String(r[1]))||'').toLowerCase():''; if(bn && bn.indexOf(f)>=0) return true; }catch(e){_тихо(e,"L12124")}   // M491: по НАЗВАНИЮ сборника («бухари»)
     return (r[3]||'').toLowerCase().indexOf(f)>=0; };
   const draw=async()=>{ more.textContent='⏳…'; more.disabled=true;
-    if(filt){ // фильтр — грузим все страницы (один раз) и фильтруем
-      await ensure(_htMeta.total);
-      const res=loaded.filter(matchF);
-      res.slice(shown,shown+step).forEach(r=>list.insertBefore(rowEl(r), more)); shown+=Math.min(step,Math.max(0,res.length-shown));
-      info.firstChild&&(info.innerHTML='Найдено по фильтру: <b>'+res.length.toLocaleString('ru')+'</b> · показано '+shown);
-      const done=shown>=res.length; more.textContent=done?'— всё показано —':'⬇️ Показать ещё'; more.disabled=done; return; }
+    if(filt){ /* №101: раньше фильтр сперва скачивал ВСЕ 135 частей таблицы (15 МБ, 269 877 строк) и только потом
+         показывал хоть строку — на телефоне это и было «не грузит», вечные «⏳…». Теперь идём по частям,
+         показываем найденное сразу и пишем процент просмотренного; «Искать дальше» продолжает с того же места. */
+      const my=_htSeq;
+      let added=0;
+      while(added<step){
+        while(_htScan<loaded.length && added<step){ const r=loaded[_htScan++]; if(matchF(r)){ list.insertBefore(rowEl(r), more); added++; _htFound++; shown++; } }
+        if(added>=step || pagesLoaded>=_htMeta.pages) break;
+        await ensure(loaded.length+1); if(my!==_htSeq) return;
+        info.innerHTML='🔎 Ищу: просмотрено <b>'+pagesLoaded+'</b> из '+_htMeta.pages+' частей ('+Math.round(pagesLoaded*100/_htMeta.pages)+'%) · найдено <b>'+_htFound+'</b>'; }
+      const done=_htScan>=loaded.length && pagesLoaded>=_htMeta.pages;
+      info.innerHTML=done?('Найдено по фильтру: <b>'+_htFound.toLocaleString('ru')+'</b> · просмотрена вся таблица')
+        :('Найдено пока: <b>'+_htFound.toLocaleString('ru')+'</b> · просмотрено '+Math.round(pagesLoaded*100/_htMeta.pages)+'% таблицы');
+      more.textContent=done?(_htFound?'— всё показано —':'— не найдено —'):'⬇️ Искать дальше'; more.disabled=done; return; }
     await ensure(shown+step);
     loaded.slice(shown,shown+step).forEach(r=>list.insertBefore(rowEl(r), more)); shown=Math.min(loaded.length,shown+step);
     const done=shown>=loaded.length && pagesLoaded>=_htMeta.pages;
     more.textContent=done?'— все хадисы показаны —':'⬇️ Показать ещё (всего '+_htMeta.total.toLocaleString('ru')+')'; more.disabled=done; };
   const baseInfo=info.innerHTML;
-  const reset=async()=>{ list.innerHTML=''; shown=0; if(!filt) info.innerHTML=baseInfo; list.appendChild(more); await draw(); };
+  const reset=async()=>{ _htSeq++; _htScan=0; _htFound=0; list.innerHTML=''; shown=0; if(!filt) info.innerHTML=baseInfo; list.appendChild(more); await draw(); };
   let tmr=null; q.oninput=()=>{ clearTimeout(tmr); tmr=setTimeout(()=>{ filt=q.value.trim(); reset(); }, 250); };
   more.onclick=draw; await reset();
 }
@@ -20663,7 +20737,7 @@ async function showNarratorCardLocal(name, host, forceId){
   if(!host.dataset.noTT){ try{ const _ttBox=document.createElement('div'); const _cardEl=host.firstElementChild; if(_cardEl&&_cardEl.nextSibling) host.insertBefore(_ttBox,_cardEl.nextSibling); else host.appendChild(_ttBox); await renderTestimoniesCard(id, _ttBox); }catch(e){_тихо(e,"L14306")} }   // свод пропускается если showNarratorBio рендерит его сам (флаг noTT) — иначе дубль
   try{ const _mp=host.querySelector('.mudProof'); if(_mp) _mp.onclick=(e)=>{ e.stopPropagation(); try{ hap('light'); }catch(_e){_тихо(_e,"L14307")}
     if(_mp.dataset.src==='sham'){ try{ openLink('https://shamela.ws/narrator/'+_mp.dataset.mid); }catch(_e){ window.open('https://shamela.ws/narrator/'+_mp.dataset.mid,'_blank'); } }
-    else { const _b=document.getElementById('mudTblBtn'); if(_b) _b.onclick(); } }; }catch(e){_тихо(e,"L14309")}   // #375: довод мудаллиса кликабелен → источник
+    else { _мудОткрытьИсточник(_td, _c1, c[0], c[3]); } }; }catch(e){_тихо(e,"L14309")}   // #375: довод мудаллиса кликабелен → источник
   try{ const _oi=host.querySelector('.ourId'); if(_oi) _oi.onclick=()=>{ try{ navigator.clipboard.writeText(String(c[0])); }catch(e){_тихо(e,"L14310")} try{ hap('light'); }catch(e){_тихо(e,"L14310")} try{ toast('🆔 ID #'+c[0]+' скопирован'); }catch(e){_тихо(e,"L14310")} }; }catch(e){_тихо(e,"L14310")}   // #362: наш Muslimoon ID — заметный + копирование по клику
   // v1090 (аудит ②-2): мост «по нашим цепям» → секция Охват (ищем текстовым маркером، как в _narrAnchors)
   try{ const _ocj=host.querySelector('.ourColsJump'); if(_ocj) _ocj.onclick=()=>{ try{
