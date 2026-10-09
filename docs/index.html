@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1682</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1683</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1682';
+const APPVER = 'v1683';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -20750,11 +20750,14 @@ async function showNarratorCardLocal(name, host, forceId){
       // ведущих частиц и рвём слипшийся список на элементы. Корень — в данных relx, здесь страхуемся при показе.
       const _relClean=(s)=>{ try{ return String(s||'')
           .replace(/^\s*(?:ما|و|هو|هي|هما|ابن|بنت)\s+(?=[؀-ۿ])/,'')   // «ما زينب…» → «زينب…»
-          .replace(/\s{2,}/g,' ').replace(/^[،,\s]+|[،,\s]+$/g,'').trim(); }catch(e){ return s; } };
+          .replace(/\s{2,}/g,' ').replace(/^[،,\s]+|[،,\s]+$/g,'').replace(/\s+(?:بن|بنت|ابن|أبي|ابي)$/,'').trim(); }catch(e){ return s; } };   // хвост «محمد بن زيد بن» — обрывок
       const _relSplit=(v)=>{ if(Array.isArray(v)) return v.map(_relClean).filter(Boolean);
         const s=_relClean(v); if(!s) return [];
         return s.split(/\s*[،,]\s*|\s+و(?=[؀-ۿ]{3,})\s*/).map(x=>_relClean(x)).filter(x=>x&&x.length>2); };
-      const lines=_nb.relx.map(([k,v0])=>{
+      /* «أمه زينب بنت مظعون أخت عثمان بن مظعون»: «сестра (кого-то)» сразу за матерью — это сама мать, а названный
+         человек — её брат, то есть дядя по матери. Показывалось «Сестра (кого-то): عثمان بن مظعون» (Ибн Умар, 09.10). */
+      const _relx=_nb.relx.map((p,i,a)=>(p[0]==='сестра (кого-то)' && i>0 && a[i-1][0]==='мать')?['брат матери (дядя по матери)',p[1]]:p);
+      const lines=_relx.map(([k,v0])=>{
         const _parts=_relSplit(v0); const v = (Array.isArray(v0)||_parts.length>1) ? _parts : (_parts[0]||'');
         if(Array.isArray(v)){ const head=v.slice(0,6).map(_arSpan).join('، '); const rest=v.length>6?' <span style="color:var(--muted)">и ещё '+(v.length-6)+'</span>':''; return (_IC[k]||'🧬')+' '+esc(k[0].toUpperCase()+k.slice(1))+' ('+v.length+'): '+head+rest; }
         return (_IC[k]||'🧬')+' '+esc(k[0].toUpperCase()+k.slice(1))+': '+_arSpan(v);
