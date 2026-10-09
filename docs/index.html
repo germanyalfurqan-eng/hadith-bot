@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1679</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1680</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1679';
+const APPVER = 'v1680';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -8462,7 +8462,7 @@ async function maktabaByNum(seq, n){
     const wk=(window._wikiT&&window._wikiT[bid])||null;   // W-чип (замечание: «википедии ссылок нету»)
     if((tr&&tr.ru)||wk||_shamChip(bid)){ h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:2px">'
       +((tr&&tr.ru)?('<span style="font-size:calc(12.5px * var(--txtScale,1));color:#bcd0ff">'+esc(tr.ru)+'</span>'):'')
-      +(_wikiOk(wk)?('<span class="nbWk" style="cursor:pointer;font-size:calc(11px * var(--txtScale,1));color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px;white-space:nowrap"><b style="font-family:Georgia,serif">W</b> Википедия ↗</span>'):'')
+      +((wk&&wk.url)?('<span class="nbWk" style="cursor:pointer;font-size:calc(11px * var(--txtScale,1));color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:1px 7px;white-space:nowrap"><b style="font-family:Georgia,serif">W</b> Википедия ↗</span>'):'')
       +_shamChip(bid)
       +'</div>'; }
     if(x.author) h+='<div class="nbAuth" style="font-size:calc(12px * var(--txtScale,1));color:var(--link);margin-top:2px;direction:rtl;text-align:right;cursor:pointer" title="Все книги этого автора">✍️ '+esc(x.author)+'</div>';
@@ -8845,14 +8845,20 @@ async function _renderScopeList(){ var box=document.getElementById('scopeListBox
     +'<button id="scPlus" style="flex:1;padding:7px 6px;border-radius:9px;border:1px solid var(--border);'
     +'background:'+(window._scopeРежимВыбора?'var(--btn)':'transparent')+';color:'+(window._scopeРежимВыбора?'var(--btn-t)':'var(--fg)')
     +';font-size:calc(12px * var(--txtScale,1))">✓ выбрать нужные</button></div>';
-  html+='<div class="hint" style="font-size:calc(11px * var(--txtScale,1));margin-bottom:4px">Выбрано '+_scopeIds.size+' книг'+(_more?(' · показаны первые '+_SHOWN):'')+' — лишнюю убери «−»:</div><div style="border:1px solid var(--border);border-radius:8px;max-height:38vh;overflow:auto;background:var(--card)">';
+  html+='<div class="hint" style="font-size:calc(11px * var(--txtScale,1));margin-bottom:4px">Выбрано '+_scopeIds.size+' книг'+(_more?(' · показаны первые '+_SHOWN):'')+(window._scopeРежимВыбора?' — нажми «＋» у нужной:':' — лишнюю убери «−»:')+'</div><div style="border:1px solid var(--border);border-radius:8px;max-height:38vh;overflow:auto;background:var(--card)">';
+  /* №599 (владелец: «плюс надо добавлять же википедия ссылка»): чип «W» у книги — те же выверенные статьи
+     (wiki_titles_verified.json, _wikiOk), что в каталоге и в выдаче по номеру. Словарь грузится лениво:
+     если его ещё нет — дорисуем список, когда придёт. */
+  if(!window._wikiT && typeof loadWikiTitles==='function' && !window._scWkЖду){ window._scWkЖду=1; loadWikiTitles().then(()=>{ try{ _renderScopeList(); }catch(e){} }).catch(()=>{}); }
   books.slice(0,_SHOWN).forEach(b=>{ const ru=(_catTr.map[b.n]&&_catTr.map[b.n].ru)||'';
-    html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 9px;border-bottom:1px solid var(--border)"><span style="flex:1;min-width:0">'+(ru?('<div style="font-size:calc(13px * var(--txtScale,1))">📖 '+esc(ru)+'</div>'):'')+'<div style="font-size:calc(12.5px * var(--txtScale,1));color:#9fb6d6;direction:rtl;text-align:right">'+esc(b.n)+'</div></span>'+(window._scopeРежимВыбора
+    const _wk=(window._wikiT||{})[String(b.i)]; const _wkOk=!!(_wk&&_wk.url);   // книги: wiki_titles_verified.json уже выверен; _wikiOk — для записей РАВИЕВ (поле u), на книге всегда «нет»
+    html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 9px;border-bottom:1px solid var(--border)"><span style="flex:1;min-width:0">'+(ru?('<div style="font-size:calc(13px * var(--txtScale,1))">📖 '+esc(ru)+'</div>'):'')+(_wkOk&&_wk.url?('<span class="scWk" data-u="'+esc(_wk.url)+'" title="Википедия" style="display:inline-block;margin-top:2px;cursor:pointer;font-size:calc(10.5px * var(--txtScale,1));color:#e6e6e6;border:1px solid #72777d;border-radius:4px;padding:0 6px"><b style="font-family:Georgia,serif">W</b> Википедия ↗</span>'):'')+'<div style="font-size:calc(12.5px * var(--txtScale,1));color:#9fb6d6;direction:rtl;text-align:right">'+esc(b.n)+'</div></span>'+(window._scopeРежимВыбора
       ? ('<button class="scAdd" data-id="'+String(b.i)+'" style="border:1px solid '+(_scopeIds.has(String(b.i))?'#2e9b5b':'var(--border)')+';color:'+(_scopeIds.has(String(b.i))?'#7fe0a4':'var(--fg)')+';background:transparent;padding:2px 11px;font-size:15px;border-radius:7px;cursor:pointer;flex:none">'+(_scopeIds.has(String(b.i))?'✓':'+')+'</button>')
       : ('<button class="scDel" data-id="'+String(b.i)+'" style="border:1px solid #b3502e;color:#ff9b7a;background:transparent;padding:2px 11px;font-size:15px;border-radius:7px;cursor:pointer;flex:none">−</button>'))+'</div>'; });
   html+='</div>';
   if(_more) html+='<div class="hint" style="font-size:calc(11px * var(--txtScale,1));margin-top:5px">…и ещё '+_more+' книг — они тоже участвуют в поиске. Чтобы выбрать точечно, открой «➕ Другие сборники».</div>';
   box.innerHTML=html;
+  box.querySelectorAll('.scWk').forEach(w=>w.onclick=(e)=>{ e.stopPropagation(); try{ openLink(w.dataset.u); }catch(_e){ window.open(w.dataset.u,'_blank'); } });   // №599
   /* Переключатели режима. «Выбрать нужные» ОЧИЩАЕТ выбор: смысл режима в том, чтобы начать
      с чистого листа и добавить пять книг, а не выкидывать тысячу двести. Возврат к «убрать
      лишние» восстанавливает полный состав раздела — тот, что запомнили при первом показе. */
