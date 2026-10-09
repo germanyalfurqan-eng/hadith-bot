@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1672</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1673</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1672';
+const APPVER = 'v1673';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -10827,10 +10827,28 @@ async function _renderTlinkLinks(id, host, onPick){
          ещё даже не раскрыл. Теперь наполнение висит на самой строке и срабатывает, когда
          её показывают: раскрыли блок — наполнились видимые, нажали «показать ещё» —
          наполнились остальные. */
+      /* №94 («имена должны содержать самые известные упоминания, например أَبُو مُعَاوِيَةَ — именно
+         он встречается часто») и №403 («что за Абдулла? пиши узнаваемые»). Замер 09.10.2026, карточка
+         Аʿмаша: «محمد التميمي» вместо أبو معاوية, «سعيد الشهيد» вместо سعيد بن جبير, «ذكوان السمان» вместо
+         أبو صالح — эвристика «первое имя + нисба» узнаваемой формы не даёт. Данные с ответом были: narr_voc.json —
+         САМАЯ ЧАСТАЯ огласованная форма имени в наших иснадах (build_narr_voc.py, codif.na). Ставим её
+         главной, а полное имя — во вторую строку, чтобы тёзок можно было различить. */
       row.__налить=()=>{ if(row.__налито) return; row.__налито=1;
-        _narrCard(oid).then(v=>{ if(v){ var _sh=''; try{ _sh=_shuhraOf(v[1],[v[3]]); }catch(e){ _sh=v[1].split(/\s+/).slice(0,4).join(' '); }   // ЗАКОН ИМЕНИ: узнаваемая шухра, не «первые 4 слова»
-          const _n=row.querySelector('._tnm'); if(_n&&v[1]) _n.textContent=_sh||v[1];
-          const _r=row.querySelector('._tru'); if(_r){ let ru=''; try{ ru=arNameRu(_sh||v[1],5); }catch(e){_тихо(e,"L7546")} const yr=v[4]?('ت '+v[4]+' هـ'):''; _r.textContent=[ru?('≈ '+ru):((_sh&&v[1]&&_sh!==v[1])?v[1]:''),yr].filter(Boolean).join('  ·  '); } } }).catch(()=>{}); };   // #510: пустой транслит → полное арабское имя, не пустота
+        Promise.all([_narrCard(oid), loadNarrVoc().catch(()=>({})), loadNarrExt().catch(()=>null)]).then(([v,_vm,_ex])=>{ if(v){ var _sh=''; try{ _sh=_shuhraOf(v[1],[v[3]]); }catch(e){ _sh=v[1].split(/\s+/).slice(0,4).join(' '); }   // ЗАКОН ИМЕНИ: узнаваемая шухра, не «первые 4 слова»
+          // кунья (أبو معاوية) в полном имени (محمد بن خازم) не встречается — она в narrators_ext: [кунья+нисба, смерть, известность]
+          let _кн=''; try{ const _e=_ex&&(_ex.get(+oid)||_ex.get(String(oid))); _кн=_e?(_e[0]||''):''; }catch(e){}
+          const _вц=_формаИзЦепей((_vm||{})[String(oid)], v[1], (v[3]||'')+' '+_кн);
+          let _гл=_вц||_sh||v[1];
+          // обрубок шухры «ابن عمر بن أبي» (полное: «ابن عمر بن أبي سلمة قيل اسمه محمد») — дотягиваем по полному имени до пояснений
+          if(/\s(بن|أبي|ابي|أبو|ابو|عبد|عبيد)$/.test(stripDiac(_гл)) && v[1]){ const _ws=_cleanNarrName(v[1]).split(' ').slice(0,6);
+            while(_ws.length>2 && /^(بن|أبي|ابي|أبو|ابو|عبد|عبيد)$/.test(stripDiac(_ws[_ws.length-1]))) _ws.pop();   // «إبراهيم بن عبد الله بن» → «… بن حنين» или без висящего «بن»
+            _гл=_ws.join(' '); }
+          const _n=row.querySelector('._tnm'); if(_n&&v[1]){ _n.textContent=_гл; _n.title=v[1]; }
+          const _r=row.querySelector('._tru'); if(_r){ let ru=''; try{ ru=arNameRu(stripDiac(_гл),5); }catch(e){_тихо(e,"L7546")} const yr=v[4]?('ت '+v[4]+' هـ'):'';
+            // полное имя — для различения тёзок; родословную в 15 колен («…بن ذهل بن سعد بن مالك بن النخع») режем до шести слов
+            let _полн=(v[1] && stripDiac(_гл)!==v[1])?_cleanNarrName(v[1]):''; { const _пс=_полн.split(' '); if(_пс.length>6) _полн=_пс.slice(0,6).join(' ')+' …'; }
+            if(_полн && _полн.split(' ').length<=stripDiac(_гл).split(' ').length && _полн.indexOf('…')<0 && stripDiac(_гл).indexOf(_полн)===0) _полн='';   // «عبد الله» под «عبد الله الهمداني» ничего не добавляет
+            _r.textContent=[ru?('≈ '+ru):'',_полн,yr].filter(Boolean).join('  ·  '); } } }).catch(()=>{}); };   // #510: пустой транслит → полное арабское имя, не пустота
       if(rz) row.title='зафиксировано (تهذيب الكمال): '+((typeof _ramzHuman==='function'&&_ramzHuman(rz))||rz);
       row.onclick=()=>{ _narrCard(oid).then(v=>{ if(v&&v[1]) onPick(v[1]); }).catch(()=>{}); };
       w.appendChild(row); });
@@ -10845,6 +10863,27 @@ async function _renderTlinkLinks(id, host, onPick){
   host.appendChild(ts);
   return true;
 }
+/* №94: форма имени из иснада стоит в падеже цепи — «عن أَبِي صَالِحٍ» даёт «أَبِي صَالِحٍ». Отдельной строкой имя
+   читается в именительном: первое слово кунья/«ибн» переводим — أبي→أبو, ابن с кясрой→с даммой. Остальные
+   огласовки не трогаем: они из текста сводов (#247).
+   ЗАСЛОНЫ (проверка 09.10 на карточке Аʿмаша, 59 строк): форма из текста бывает ① однословной — «جَرِير»,
+   «سُفْيَان» двусмысленнее прежней шухры; ② с хвостом пояснений — «يَعْلَى، - وَهُوَ ابْنُ عُبَيْدٌ», «… أَوْ قَيْسٌ
+   وَيُقَالُ دِينَارٌ»; ③ обрубком — «أَحْمَدُ بْنُ بَشِيرٍ أَبُو»; ④ ЧУЖОЙ — у «أبو بكر» стояло «سفيان بن الحكم…».
+   Берём форму только если 2–5 слов, без пояснений и обрубка, и хоть одно её имя есть в полном имени или
+   кунье/нисбе этого равия. Иначе '' — и остаётся прежняя шухра. */
+function _формаИзЦепей(ф, полное, доп){ ф=String(ф||'').trim(); if(!ф) return '';
+  if(/[،,\-–—:()]/.test(ф)) return '';
+  const w=ф.split(/\s+/); const чист=w.map(x=>stripDiac(x).replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي'));
+  if(w.length<2 || w.length>5) return '';
+  if(чист.some(x=>/^(او|يقال|ويقال|قيل|وقيل|وهو|اسمه|يعني)$/.test(x))) return '';
+  if(/^(مولي|مولا|لمولي)$/.test(чист[0].replace(/ى/g,'ي'))) return '';   // «مَوْلًى لأُسَامَةَ» — описание, а не имя
+  if(/^(ابو|ابي|ام|بن|ابن)$/.test(чист[чист.length-1])) return '';
+  const св=new Set((stripDiac(String(полное||''))+' '+stripDiac(String(доп||''))).replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').split(/\s+/)
+    .filter(x=>x.length>=3 && !/^(بن|ابن|ابو|ابي|ام|عبد|الله|عن)$/.test(x)));
+  const имена=чист.filter(x=>x.length>=3 && !/^(بن|ابن|ابو|ابي|ام|عبد|الله)$/.test(x));
+  if(!имена.length || !имена.some(x=>св.has(x)||св.has(x.replace(/^ال/,''))||св.has('ال'+x))) return '';
+  if(чист[0]==='ابي') w[0]='أَبُو'; else if(чист[0]==='ابن') w[0]='ابْنُ';
+  return w.join(' '); }
 function _cleanNarrName(nm){ const ws=String(nm||"").trim().split(/ +/); const st={"وقيل":1,"ويقال":1,"يقال":1,"وقال":1,"قال":1,"او":1}; const o=[]; for(const w of ws){ if(st[stripDiac(w)]) break; o.push(w); if(o.length>=9) break; } return o.join(" ")||nm; }
 /* #684 (С67, владелец про «أبي الشعثاء المحاربي»: «почему так»). Карточка неопознанного равия была
    тупиком: одна строка «Не удалось опознать передатчика точно» и три кнопки. Пустое окно — худший ответ,
