@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1681</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1682</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1681';
+const APPVER = 'v1682';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -26267,6 +26267,7 @@ function _readRender(){
     cap.textContent=(kind==='китаб'?'📕 Книга (китаб)':kind==='глава'?'📑 Глава (باب)':'📄 Из книги — вне нумерации (муалляк, слова автора)')+(h.стр?(' · стр. '+h.стр):'');
     body.appendChild(cap); body.appendChild(d);
     try{ enableArabusTap(d); }catch(e){_тихо(e,"L18192")}
+    try{ _readСоседиКнопки(); }catch(e){_тихо(e,"540а")}
     return;
   }
   // #661: если полного потока нет (книга ещё не переведена на него) — показываем хотя бы НАЗВАНИЕ главы
@@ -26327,6 +26328,40 @@ function _readRender(){
     try{ addTr(meta,card,h.text||'',null,{k:'h|'+_readCode+'|'+h.num,type:'h',coll:arOf(_readCode),label:arOf(_readCode)+' №'+h.num,text:String(h.text||'').slice(0,200)}); }catch(_e4){_тихо(_e4,"L18215")}
     card.appendChild(meta); body.appendChild(card);
   }
+  try{ _readСоседиКнопки(); }catch(e){_тихо(e,"540б")}
+}
+/* №540 (владелец 06.07: «режим читалки вниз-вверх страница открывалась же? Читалка открывается, например, из
+   карточки хадиса при нажатии на источник»). Наша читалка всегда показывала ОДИН хадис и листалась кнопками;
+   у читалки Мактабы есть «показать предыдущую страницу выше / следующую ниже» — читать подряд прокруткой.
+   Даём то же: соседние записи подгружаются выше и ниже обычными карточками. Основная позиция (_readIdx,
+   «Предыдущий/Следующий», номер наверху) не меняется — подгруженное лишь дополняет страницу. */
+function _readСоседиКнопки(){
+  const body=document.getElementById('readBody'); if(!body||!_readArr||!_readArr.length) return;
+  window._readОкно={lo:_readIdx, hi:_readIdx};
+  const кн=(txt)=>{ const b=document.createElement('button'); b.className='mini';
+    b.style.cssText='display:block;width:100%;margin:6px 0;padding:8px;border:1px dashed var(--border);border-radius:10px;color:var(--link);font-weight:600;font-size:calc(12.5px * var(--txtScale,1))';
+    b.textContent=txt; return b; };
+  const верх=кн('⬆️ Показать предыдущий хадис выше'), низ=кн('⬇️ Показать следующий хадис ниже');
+  if(_readIdx<=0) верх.style.display='none'; if(_readIdx>=_readArr.length-1) низ.style.display='none';
+  body.insertBefore(верх, body.firstChild); body.appendChild(низ);
+  const узел=async(i)=>{ let h=_readArr[i]; if(!h) return null;
+    if(h._пусто){ try{ await ((_readCode==='ahmad')?_ahmШард(Math.floor((+h.num)/1000)):_rshКусок(_readCode, Math.floor(i/_RSH))); }catch(e){} h=_readArr[i]; if(!h||h._пусто) return null; }
+    const w=document.createElement('div'); w.className='readExtra'; w.style.cssText='border-top:2px dashed var(--border);margin-top:8px;padding-top:6px';
+    const _n=String(h.num==null?'':h.num).trim();
+    const лб=document.createElement('div'); лб.style.cssText='text-align:center;font-size:calc(11.5px * var(--txtScale,1));color:var(--mark);margin-bottom:4px';
+    лб.textContent=(_n&&_n!=='0')?('№'+_n):(h.вид==='глава'?'📑 глава':h.вид==='китаб'?'📕 китаб':'📄'); w.appendChild(лб);
+    if(h.вид && h.вид!=='хадис'){ const d=document.createElement('div'); d.dir='rtl'; d.style.cssText=_AF+';font-size:16.5px;line-height:2;color:#e8c35a';
+      let т=String(h.text||''); try{ т=_текстБезАппарата(т,_readCode,null).матн; }catch(e){} d.textContent=т; w.appendChild(d); return w; }
+    let hp=h; try{ const сн=_сноскиШамилы(h.text); if(сн) hp=Object.assign({},h,{text:сн.матн}); }catch(e){}
+    try{ w.appendChild(cardHadith({code:_readCode,h:hp,noNav:true},_groups||[])); }catch(e){ const d=document.createElement('div'); d.className='ar'; d.textContent=String(h.text||''); w.appendChild(d); }
+    return w; };
+  верх.onclick=async()=>{ const o=window._readОкно; if(!o||o.lo<=0) return; верх.disabled=true; верх.textContent='⏳ Загружаю…';
+    const h0=body.scrollHeight, t0=body.scrollTop; const n=await узел(o.lo-1);
+    if(n){ body.insertBefore(n, верх.nextSibling); o.lo--; try{ body.scrollTop=t0+(body.scrollHeight-h0); }catch(e){} }
+    верх.disabled=false; верх.textContent='⬆️ Показать предыдущий хадис выше'; if(o.lo<=0) верх.style.display='none'; };
+  низ.onclick=async()=>{ const o=window._readОкно; if(!o||o.hi>=_readArr.length-1) return; низ.disabled=true; низ.textContent='⏳ Загружаю…';
+    const n=await узел(o.hi+1); if(n){ body.insertBefore(n, низ); o.hi++; }
+    низ.disabled=false; низ.textContent='⬇️ Показать следующий хадис ниже'; if(o.hi>=_readArr.length-1) низ.style.display='none'; };
 }
 // Р-07: _prefetchTranslate удалён (был отключён `return;`, дёргался вызовом — мёртвый код; авто-перевод запрещён, только по кнопке).
 async function _readOpen(code,fromNum){
