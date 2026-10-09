@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1670</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1671</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1670';
+const APPVER = 'v1671';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2943,6 +2943,27 @@ function canonИмя(s){ return foldИмя(stripDiac(s)).replace(/\s+/g,' ').tri
 // #442 (владелец, скрин: одинокая «P» в тексте хадиса Ибн Маджи №656): «другие печати» берут СЫРОЙ сниппет прямо
 // с бэкенда (/api/maktaba), только срезая HTML-теги — БЕЗ очистки от «P»+control-байт (маркер матн↔сноска издателя
 // из сырого Мактаба-дампа; наши curated-издания это уже режут в extract_clean41_v2.py, сюда та же логика не попадала).
+// ОБР-3497 (09.10.2026, «включаю „открыть в книге“, а он экран не направляет на соответствующий кусок и не
+// выделяет его»). Читалка Мактабы умеет сама найти фразу, подсветить и прокрутить к ней (openBook, 4-й
+// параметр _hl) — но так её звали только выверенные цитаты критиков. Карточки поиска по Мактабе, «№ в книге»,
+// свидетельства в карточке равия передавали одну СТРАНИЦУ: лист открывался сверху, искать глазами.
+// Здесь из отрывка берём кусок для подсветки: тот чистый кусок арабских букв (между знаками препинания),
+// где больше всего найденных слов (<em>); если он короче 6 букв (одно слово) — самый длинный кусок отрывка.
+// (Сперва брался кусок с ПЕРВЫМ найденным словом — на «من غشنا فليس منا» у Ибн Маджи подсветился
+// соседний «بجنبات رجل…»: первое <em> стояло не в самой фразе.)
+// Огласовки снимаем: подсветка их не требует, а предел openBook в 46 знаков тогда — 8–9 слов, а не 3.
+function _hlИзОтрывка(raw){ try{
+  let s=String(raw||'').replace(/<em>/g,'\u0001');
+  // &quot; — настоящая кавычка в книге: раскодируем, чтобы она РЕЗАЛА кусок, как режет его в тексте страницы
+  // (Муслим, глава «…وسلم "من غشنا»: с пробелом вместо кавычки кусок склеивался и не находился).
+  s=stripDiac(s.replace(/<[^>]*>/g,' ').replace(/&quot;/gi,'"').replace(/&amp;/gi,'&').replace(/&[a-z#0-9]+;/gi,' '));
+  const parts=s.split(/[^\u0001\u0621-\u063A\u0641-\u064A\u0671\s]+/).map(x=>x.replace(/\s+/g,' ').trim()).filter(Boolean);
+  let hit='', hitN=0, best='';
+  parts.forEach(p=>{ const n=p.split('\u0001').length-1, q=p.replace(/\u0001/g,'').replace(/\s+/g,' ').trim();
+    if(n>hitN || (n>0 && n===hitN && q.length>hit.length)){ hit=q; hitN=n; } if(q.length>best.length) best=q; });
+  const r=(hit.length>=6)?hit:best;
+  return r.length>=6?r:(hit||'');
+}catch(e){ return ''; } }
 function _cleanMaktabaSnip(s){ s=String(s||''); const m=s.match(/P[\x00-\x1f]/); s=(m?s.slice(0,m.index):s).trim();
   // владелец 03.07 («тут че за скобки?»): сниппет — ОКНО вокруг найденного слова из полного текста книги, поэтому
   // иногда начинается/заканчивается на ОДИНОКУЮ скобку без пары (пара осталась ЗА окном) — режем, выглядит мусором.
@@ -7551,6 +7572,10 @@ async function _bookLoad(){
     if(!j.text){ tEl.innerHTML='<span class="hint">Страница пуста. Полистай ← / → или введи другой номер.</span>'; }
     else { let clean=(j.text||'').replace(/<[^>]*>/g,'').replace(/ /g,' ');   // убрать turath-теги <span…> (мусор)
       _bookView.firstLeaf=_bookView.pg; _bookView.lastLeaf=_bookView.pg;   // диапазон загруженных листов (для «добавить страницу»)
+      // ОБР-3497 (09.10.2026): в тексте Муслима (1727, лист 1933) на экране стояло «quot&;» — turath отдаёт кавычку
+      // мнемоникой &quot;, а дальше esc() экранирует «&» и мнемоника выходит буквами. Раскодируем здесь, один раз:
+      // и обычный показ, и подсветка (doFind) берут текст отсюда. esc() потом всё равно экранирует < > " &.
+      clean=clean.replace(/&nbsp;|&#160;/gi,' ').replace(/&quot;/gi,'"').replace(/&#(\d{1,5});/g,(m,n)=>{ const c=+n; return (c>=32&&c<=1114111)?String.fromCodePoint(c):' '; }).replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/&amp;/gi,'&');
       tEl.dataset.txt=clean;
       // как в Шамиле: [⬆️ добавить пред.] [пред.] [ТЕКУЩАЯ] [след.] [⬇️ добавить след.] — читать подряд, не перелистывая
       const _addBtnCss='display:block;width:100%;box-sizing:border-box;padding:9px;border:1px dashed var(--btn);background:transparent;color:var(--link);border-radius:10px;font-size:calc(13px * var(--txtScale,1));font-weight:600;cursor:pointer';
@@ -8172,7 +8197,7 @@ function maktabaCard(x){
   const loc=(x.vol?('т.'+x.vol+' · '):'')+(x.page!=null?('стр. '+x.page):'');
   const head=document.createElement('div'); head.style.cssText='font-size:calc(13.5px * var(--txtScale,1));color:var(--link);margin-bottom:6px;direction:rtl;text-align:right;font-weight:700;cursor:pointer';
   head.innerHTML='📖 '+esc(nm)+(au?(' <span style="color:var(--hint);font-weight:400;font-size:calc(12px * var(--txtScale,1))">· '+esc(au)+'</span>'):'')+(loc?(' <span style="color:var(--hint);font-weight:400;font-size:calc(12px * var(--txtScale,1))">· '+esc(loc)+'</span>'):'');
-  head.title='Открыть книгу на этой странице'; head.onclick=()=>{ try{ openBook(bid, pid); }catch(e){_тихо(e,"L5797")} };
+  head.title='Открыть книгу на этой странице'; head.onclick=()=>{ try{ openBook(bid, pid, false, _hlИзОтрывка(x.snip)); }catch(e){_тихо(e,"L5797")} };
   card.appendChild(head);
   // #334: печати разнятся (ويدع/ويترك) — частичное совпадение (≥60% слов, но не все) честно помечаем бейджем
   if(x._inexact){ const bx=document.createElement('div');
@@ -8183,7 +8208,7 @@ function maktabaCard(x){
   ar.innerHTML=esc(snip); card.appendChild(ar);
   try{ enableArabusTap(ar); if(_arabusOn) ar.style.cursor='pointer'; }catch(e){_тихо(e,"L5806")}
   const open=document.createElement('button'); open.className='mini'; open.textContent='📖 Открыть в книге →'; open.style.cssText='margin-top:8px;border:1px solid var(--btn);color:var(--btn);background:transparent;padding:6px 12px;border-radius:9px;font-size:calc(13px * var(--txtScale,1));font-weight:600';
-  open.onclick=()=>{ try{ openBook(bid, pid); }catch(e){_тихо(e,"L5808")} };
+  open.onclick=()=>{ try{ openBook(bid, pid, false, _hlИзОтрывка(x.snip)); }catch(e){_тихо(e,"L5808")} };
   card.appendChild(open);
   return card;
 }
@@ -8360,7 +8385,7 @@ async function maktabaByNum(seq, n){
     try{ neuroBadgeF40(bid, n, meta); }catch(e){_тихо(e,"L5971n")}
     card.appendChild(meta);
     if(it[0]){ const ob=document.createElement('span'); ob.style.cssText='display:inline-block;margin-top:6px;color:var(--link);cursor:pointer;font-weight:700;font-size:calc(13.5px * var(--txtScale,1))';   // #48: убрано подчёркивание — было непостоянно (та же книга вверху без подчёркивания); цвет ссылки достаточно
-      ob.textContent='📖 '+bn+' №'+n; ob.title='Открыть '+bn+' №'+n+' в книге (лист '+it[0]+')'; ob.onclick=()=>{ try{ openBook(bid, it[0]); }catch(e){_тихо(e,"L5974")} }; card.appendChild(ob); }   // R45: «Книга №» активная ссылка как везде (не «открыть в книге»)
+      ob.textContent='📖 '+bn+' №'+n; ob.title='Открыть '+bn+' №'+n+' в книге (лист '+it[0]+')'; ob.onclick=()=>{ try{ openBook(bid, it[0], false, _hlИзОтрывка(it[1])); }catch(e){_тихо(e,"L5974")} }; card.appendChild(ob); }   // R45: «Книга №» активная ссылка как везде (не «открыть в книге»)
     try{ dzChainLazy(card, bid, n); }catch(e){_тихо(e,"L5975")}   // 🧬 M378b: цепочка по кодам Э1.1 (#335: лениво+через гейт)
     try{ enableArabusTap(ar); }catch(e){_тихо(e,"L5976")}
     wrap.appendChild(lbl); wrap.appendChild(card);
@@ -8414,7 +8439,7 @@ async function maktabaByNum(seq, n){
     h+='<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="mini nbBtn" style="font-size:calc(12.5px * var(--txtScale,1));padding:6px 12px">📖 Открыть №'+n+(x.vol?(' · т.'+esc(String(x.vol))+' стр.'+esc(String(x.page||'')) ):'')+'</button>'
       +'<button class="mini nbFull" style="font-size:calc(12.5px * var(--txtScale,1));padding:6px 12px" title="Полный текст хадиса прямо здесь + Перевод/Передатчики/Где ещё передаётся">📜 Текст + инструменты</button></div>';
     card.innerHTML=h;
-    const open=()=>{ try{ hap('light'); }catch(e){_тихо(e,"L6015")} openBook(bid, x.page_id); };
+    const open=()=>{ try{ hap('light'); }catch(e){_тихо(e,"L6015")} openBook(bid, x.page_id, false, _hlИзОтрывка(sn||x.snip)); };
     card.querySelector('.nbOpen').onclick=open; card.querySelector('.nbBtn').onclick=open;
     const au=card.querySelector('.nbAuth'); if(au) au.onclick=()=>{ try{ openAuthor(x.author); }catch(e){_тихо(e,"L6017")} };
     const wkEl=card.querySelector('.nbWk'); if(wkEl&&wk) wkEl.onclick=(e)=>{ e.stopPropagation(); try{ openLink(wk.url); }catch(_e){_тихо(_e,"L6018")} };
@@ -11042,7 +11067,7 @@ async function openNarratorRijal(name, forceId){
         const loc=(x.vol?('т.'+x.vol+' '):'')+(x.page!=null?('стр. '+x.page):'');
         c.innerHTML='<div class="rjH" style="font-size:calc(12.5px * var(--txtScale,1));color:var(--link);direction:rtl;text-align:right;font-weight:600;cursor:pointer">📖 '+esc(x.book_name||'')+(x.critic?(' <span style="color:#bff5d4">· '+esc(_critRu(x.critic))+'</span>'):'')+(loc?(' <span style="color:var(--hint);font-weight:400">· '+esc(loc)+'</span>'):'')+'</div>'
           +'<div class="ar" style="font-size:calc(16px * var(--txtScale,1));margin-top:5px;line-height:1.9">'+esc(_cleanMaktabaSnip((x.snip||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim()))+'</div>';
-        c.querySelector('.rjH').onclick=()=>{ try{ openBook(x.book_id, x.page_id||x.page||1); }catch(e){_тихо(e,"L7760")} };
+        c.querySelector('.rjH').onclick=()=>{ try{ openBook(x.book_id, x.page_id||x.page||1, false, _hlИзОтрывка(x.snip)); }catch(e){_тихо(e,"L7760")} };
         try{ enableArabusTap(c.querySelector('.ar')); if(_arabusOn) c.querySelector('.ar').style.cursor='pointer'; }catch(e){_тихо(e,"L7761")}
         rjOut.appendChild(c); });
       rjBtn.disabled=false; rjBtn.textContent='📚 Обновить поиск по трудам риджаля';
@@ -14435,7 +14460,7 @@ async function anyTextSearch(qRaw, seq){
              (номер, достоверность, тахридж, передатчики, sunnah.com) держатся на данных, которых у страницы
              книги физически нет, — их не выдумываем, разбор различий целиком в отчёте. */
           +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center"><button class="mini anyGo" style="font-size:calc(12px * var(--txtScale,1));padding:5px 11px">📖 Открыть страницу</button>'+(_rawSnip?'<button class="mini anyCp" style="font-size:calc(12px * var(--txtScale,1));padding:5px 11px" title="Копировать отрывок">⧉</button>':'')+(_rawSnip?'<button class="mini anyTr" style="font-size:calc(12px * var(--txtScale,1));padding:5px 11px;color:var(--link)">🌐 Перевести</button>':'')+_shamChip(bid, x.page_id)+'</div><div class="anyTrOut" style="display:none;margin-top:6px;font-size:calc(13px * var(--txtScale,1));line-height:1.6;border-top:1px dashed var(--border);padding-top:6px"></div>';   // #23: кнопка перевода
-        const go=()=>{ try{ _actPush({t:'book', bid:bid, pg:x.page_id}); }catch(e){_тихо(e,"L10246")} openBook(bid, x.page_id); };
+        const go=()=>{ try{ _actPush({t:'book', bid:bid, pg:x.page_id}); }catch(e){_тихо(e,"L10246")} openBook(bid, x.page_id, false, _hlИзОтрывка(_rawSnip)); };
         d.querySelector('.anyOpen').onclick=go; d.querySelector('.anyGo').onclick=go;
         /* #691 (С67): те же две вещи, что и у карточки хадиса и у sunnah-карточки — копирование с подписью
            и тап по слову (Arabus). Обе работают от одного текста, никаких данных хадиса им не нужно. */
@@ -18939,6 +18964,7 @@ async function renderNarrVerdicts(id, host){
       h+='<div style="direction:rtl;text-align:right;font-size:16px;line-height:1.95;margin-top:3px">…'+esc(it.q.q)+'…</div>';
       if(it.q.p!=null) h+='<div style="margin-top:2px"><span class="vOpen" data-bid="'+it.b.i+'" data-pg="'+it.q.p+'" style="cursor:pointer;color:var(--link);font-size:calc(11px * var(--txtScale,1))">📖 открыть в книге (стр. '+it.q.p+')</span></div>';
       card.innerHTML=h;
+      try{ const _vo=card.querySelector('.vOpen'); if(_vo) _vo._q=String(it.q.q||''); }catch(e){_тихо(e,"ОБР3497")}   // ОБР-3497: цитату — в читалку для подсветки
       card.appendChild(_qToolsRow(it.q.q, 'narrv'+id+'_'+it.b.i+'_'+j, it.b.b));
       cb.appendChild(card);
     });
@@ -18948,7 +18974,7 @@ async function renderNarrVerdicts(id, host){
   body.insertAdjacentHTML('beforeend','<div style="font-size:calc(10.5px * var(--txtScale,1));color:var(--hint);margin-top:5px">Автоматическая квалификация по ключевым словам учёных — открывай источник и проверяй контекст. Свидетельства слышания важны для непрерывности иснада (اتصال).</div>');
   hdr.onclick=()=>{ const op=body.style.display!=='none'; body.style.display=op?'none':'block'; hdr.querySelector('.vTg').textContent=op?'▸':'▾'; };
   sec.appendChild(hdr); sec.appendChild(body); host.appendChild(sec);
-  body.querySelectorAll('.vOpen').forEach(o=>o.onclick=()=>{ try{ var mm=document.getElementById('catModal'); if(mm) mm.style.display='none'; openBook(+o.dataset.bid, +o.dataset.pg||1); }catch(e){_тихо(e,"L13302")} });
+  body.querySelectorAll('.vOpen').forEach(o=>o.onclick=()=>{ try{ var mm=document.getElementById('catModal'); if(mm) mm.style.display='none'; openBook(+o.dataset.bid, +o.dataset.pg||1, false, o._q||''); }catch(e){_тихо(e,"L13302")} });
   try{ loadJarhGl(); }catch(e){_тихо(e,"L13303")}
   body.querySelectorAll('.vTerm').forEach(t=>t.onclick=(e)=>{ e.stopPropagation(); loadJarhGl().then(()=>{ const ex=jarhExplain(t.dataset.w); toast(ex||('«'+t.dataset.w+'» — термина пока нет в глоссарии')); }); });
 }
@@ -20956,7 +20982,7 @@ async function doRijalCorpus(name, out, btn){
     const loc=(x.vol?('т.'+x.vol+' '):'')+(x.page!=null?('стр. '+x.page):'');
     c.innerHTML='<div class="rjH" style="font-size:calc(12.5px * var(--txtScale,1));color:var(--link);direction:rtl;text-align:right;font-weight:600;cursor:pointer" title="Открыть книгу на этой странице">📖 '+esc(x.book_name||'')+(x.critic?(' <span style="color:#bff5d4">· '+esc(_critRu(x.critic))+'</span>'):'')+(loc?(' <span style="color:var(--hint);font-weight:400">· '+esc(loc)+'</span>'):'')+'</div>'
       +'<div class="ar" style="font-size:calc(16px * var(--txtScale,1));margin-top:5px;line-height:1.9">'+esc(_cleanMaktabaSnip((x.snip||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim()))+'</div>';
-    c.querySelector('.rjH').onclick=()=>{ try{ openBook(x.book_id, x.page_id||x.page||1); }catch(e){_тихо(e,"L14597")} };
+    c.querySelector('.rjH').onclick=()=>{ try{ openBook(x.book_id, x.page_id||x.page||1, false, _hlИзОтрывка(x.snip)); }catch(e){_тихо(e,"L14597")} };
     try{ enableArabusTap(c.querySelector('.ar')); if(_arabusOn) c.querySelector('.ar').style.cursor='pointer'; }catch(e){_тихо(e,"L14598")}
     return c; };
   const render=()=>{
