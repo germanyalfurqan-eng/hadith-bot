@@ -35991,6 +35991,51 @@ app.add_handler(MessageHandler(filters.ChatType.GROUPS | filters.ChatType.CHANNE
 # Видеомост живёт СВОЕЙ группой обработчиков: он не должен ни перехватывать обычную
 # работу бота, ни падать вместе с ней. Своя группа — свой поток исключений.
 app.add_handler(MessageHandler(filters.ALL, видеомост), group=11)
+
+# 🧪 УЧАСТНИК β (задание владельца 08.10.2026): служба uchastnik.py на хосте, порт 8099, читает
+# КАЖДОЕ сообщение группы и сама решает, вступать ли (зов «бета», ответ на её сообщение, вопрос
+# по теме без ответа 4 минуты). Бот только передаёт сообщение и НЕ ждёт: мозг отвечает минутами,
+# а ответ участник отправляет сам через /api/skazat. Своя группа обработчиков (12), как у
+# видеомоста: участник не перехватывает работу бота и не падает вместе с ней.
+# Чаты — переменная UCHASTNIK_CHATS (через запятую); по умолчанию только @jamaat_ru.
+_УЧ_ЧАТЫ = set(int(_х) for _х in (os.environ.get('UCHASTNIK_CHATS') or str(JAMAAT_RU_CHAT_ID)).split(',')
+               if _х.strip().lstrip('-').isdigit())
+
+
+def _уч_отправить(_тело):
+    for _адрес in ('http://172.17.0.1:8099/soobshchenie', 'http://127.0.0.1:8099/soobshchenie'):
+        try:
+            if requests.post(_адрес, json=_тело, timeout=4).status_code == 200:
+                return
+        except Exception:
+            continue
+
+
+async def участник_мост(update, context):
+    try:
+        m = getattr(update, 'effective_message', None)
+        if not m or not BACKUP_SECRET:
+            return
+        чат = int(getattr(m.chat, 'id', 0) or 0)
+        if чат not in _УЧ_ЧАТЫ:
+            return
+        у = getattr(update, 'effective_user', None)
+        if not у or getattr(у, 'is_bot', False):
+            return
+        текст = (m.text or m.caption or '').strip()
+        if not текст:
+            return
+        отв = getattr(m, 'reply_to_message', None)
+        имя = ' '.join(x for x in (getattr(у, 'first_name', '') or '', getattr(у, 'last_name', '') or '') if x).strip()
+        тело = {'secret': BACKUP_SECRET, 'чат': чат, 'id': int(m.message_id), 'uid': int(у.id),
+                'имя': имя or (getattr(у, 'username', '') or 'участник'), 'текст': текст[:3000],
+                'ответ_на': int(getattr(отв, 'message_id', 0) or 0), 'владелец': bool(is_owner(update))}
+        await asyncio.to_thread(_уч_отправить, тело)
+    except Exception as _б:
+        print('участник_мост:', str(_б)[:200])
+
+
+app.add_handler(MessageHandler(filters.ALL, участник_мост), group=12)
 async def _on_error(update, context):
     err = str(context.error); print("ERR:", err)
     # 🔴 04.09.2026. Стек НЕ выбрасываем. Раньше в журнал уходило только сообщение, и запись
