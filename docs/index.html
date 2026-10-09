@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1687</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1688</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1687';
+const APPVER = 'v1688';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -15768,8 +15768,18 @@ async function chainRunSeq(out){
       for(let k=0;k<groups.length;k++){ if(groups[k].indexOf(seq[st+k])<0){ ok=false; break; } } if(ok) return st; } return -1; };
   const availForms=Array.from({length:Math.max(0,groups.length-1)},()=>({}));   // на каждом ребре: какие формы встречаются (для подсказки)
   let allRecs=[];
-  for(let i=0;i<arr.length && i<600;i++){ const rec=await _regRec(arr[i]); if(rec) allRecs.push({cid:arr[i], n:rec.n, ex:rec.ex, s:rec.s, f:rec.f});
-    if(i%60===0) out.innerHTML='<div class="hint">⏳ загружаю цепи… '+i+'/'+Math.min(arr.length,600)+'</div>'; }
+  /* 09.10.2026 (МИНИ АПП 101, проверка №461–464): здесь стоял потолок «первые 600 цепей» без
+     всякой отметки. Пара Абу Муавия ← аль-Аʿмаш даёт 1912 цепей — заголовок писал «цепей 600 ·
+     хадисов 765», то есть две трети находки молча пропадали, а «самые частые» выбирались из
+     случайной трети (список ещё не отсортирован). И грузились цепи по одной, файл за файлом —
+     на холодную около минуты. Потолок ничего не экономил: 600 случайных цепей уже задевают
+     ~230 из 256 файлов реестра. Теперь: нужные файлы реестра — пачками параллельно, затем все цепи. */
+  const _префы=[...new Set(arr.map(c=>String(c).slice(1,3)))];
+  for(let i=0;i<_префы.length;i+=12){
+    await Promise.all(_префы.slice(i,i+12).map(p=>_regRec('C'+p).catch(()=>null)));
+    const _сд=Math.min(_префы.length,i+12);
+    out.innerHTML='<div class="hint">⏳ загружаю реестр цепей… '+_сд+'/'+_префы.length+' ('+Math.round(_сд*100/_префы.length)+'%)</div>'; }
+  for(let i=0;i<arr.length;i++){ const rec=await _regRec(arr[i]); if(rec) allRecs.push({cid:arr[i], n:rec.n, ex:rec.ex, s:rec.s, f:rec.f}); }
   // собрать доступные формы по рёбрам (по ВСЕМ найденным, до фильтра)
   allRecs.forEach(rc=>{ if(!rc.f) return; const st=_alignStart(rc.s); if(st<0) return;
     for(let k=0;k<groups.length-1;k++){ const g=rc.f[st+k+1]||''; const cnt=rc.n||1; availForms[k][g]=(availForms[k][g]||0)+cnt; } });
