@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1686</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1687</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1686';
+const APPVER = 'v1687';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7527,6 +7527,15 @@ function _bookPageBlock(clean, printedPage, headings){
   if(headings&&headings.length){ const hb=document.createElement('div'); hb.style.cssText='direction:rtl;text-align:right;font-size:calc(12px * var(--txtScale,1));color:var(--mark);margin-bottom:6px;line-height:1.5'; hb.textContent='📑 '+headings.join(' ‹ '); d.appendChild(hb); }   // главы/разделы этой страницы
   const tx=document.createElement('div'); tx.style.cssText='direction:rtl;text-align:right'; tx.innerHTML=esc(clean).replace(/\n+/g,'<br>'); d.appendChild(tx);
   try{ enableArabusTap(tx); if(_arabusOn) tx.style.cursor='pointer'; }catch(e){_тихо(e,"L5211")}
+  /* №467: подгруженный лист шёл голым текстом — передатчики не подсвечивались вовсе (Бухари №218 в
+     Султании открывается именно так: №217 на листе, №218 — «следующая страница ниже»). Тот же
+     разбор, что у основного листа: по блокам хадисов, обе подсветки, тап → карточка равия. */
+  try{ let _nms=[];
+    String(clean||'').split(/(?=(?:^|[\n\s])[٠-٩]{1,5}\s*[-–—]\s)/).forEach(b=>{ if(b&&b.trim()) isnadNarrators(b).forEach(n=>_nms.push(n)); });
+    _nms=[...new Set(_nms)].filter(_keepNarr);
+    if(_nms.length) highlightNarratorsInDiv(tx, _nms, nm=>{ try{ openNarratorRijal(nm); }catch(e){_тихо(e,"L467a")} });
+    try{ highlightRelationalInDiv(tx); }catch(e){_тихо(e,"L467b")}
+  }catch(e){_тихо(e,"L467c")}
   return d;
 }
 async function _bookAddNext(){
@@ -13471,6 +13480,10 @@ function isnadNarrators(text){
   // Если есть маркер (ح) И матн в кавычках «» — берём иснад ДО «» (обе цепи целиком). Маркер ح — не передатчик, чистим всегда (иначе «ليث ح» не распознаётся).
   try{ if(/\(\s*ح\s*\)/.test(flat) && flat.indexOf('«')>0) isn=flat.split('«')[0]; }catch(e){_тихо(e,"L9680")}
   isn=isn.replace(/\(\s*ح\s*\)/g,' ').replace(/(?:^|\s)ح(?=\s|$)/g,' ').replace(/\s+/g,' ').trim();
+  /* №467 (Бухари №218, Султания): метка страницы печати «[٥٤]» / «⦗٥٤⦘» / «[ص: 54]» стоит ПОСРЕДИ иснада
+     («حدثنا محمد بن خازم [٥٤] قال: حدثنا الأعمش») и приклеивалась к имени — «محمد بن خازم [٥٤]»
+     в тексте не находится, Абу Муавия оставался без подсветки. Метка — не часть имени: убираем. */
+  isn=isn.replace(/[\[⦗]\s*(?:ص\s*:\s*)?[\d٠-٩]+\s*[\]⦘]/g,' ').replace(/\s+/g,' ').trim();
   /* Салават и молитвенные обороты — не имена, но разбор ловил из них призрака: «صلى الله عليه وسلم»
      делится по «و», «وسلم» теряет «و» и превращается в «سلم» — а «سلم» индекс равиев знает как имя
      (Салм — настоящий передатчик). Проверено на боевом v1461: цепь «حدثنا فلان عن الزهري أن رجلا سأل
@@ -13638,12 +13651,29 @@ function highlightNarratorsInDiv(ad, names, onClick, idMap){
   // ② аппарат тахкика начинается после матна — граница по маркерам речи Пророка ﷺ / открывающей кавычке
   //    / первой печатной сноске вида [ص: N] или [٢٤٤]. До границы — иснад, после — не наше дело.
   var _MATN_EDGE=/«|"|\[\s*ص\s*:|\[[\d٠-٩]{2,}\]|قال رسول الله|قَالَ رَسُولُ اللَّه|أن رسول الله|أَنَّ رَسُولَ اللَّه|قال النبي|قَالَ النَّبِيّ|صلى الله عليه وسلم|صَلَّى اللَّهُ عَلَيْهِ وَسَلَّم/;
-  var _seen=0, _limitHit=false;
+  var _seen=0, _limitHit=false, _меткаЖдёт=false;
+  /* №467 (Бухари №218, Султания): «[٥٤]» — это не только сноска тахкика после матна, но и метка
+     страницы печати ПОСРЕДИ иснада: «حدثنا محمد بن خازم [٥٤] قال: حدثنا الأعمش…». Граница матна
+     срабатывала на ней, и всё после метки (الأعمش، مجاهد، طاوس…) не подсвечивалось.
+     Отличаем по продолжению: за меткой идёт форма передачи (قال/حدثنا/عن…) — это ещё иснад.
+     Метка в конце узла (в читалке строки разбиты <br>) — решаем по началу СЛЕДУЮЩЕГО узла. */
+  const _ИСНАД_ДАЛЬШЕ=/^[\s:،,]*(?:قال|قالا|حدثنا|حدثني|أخبرنا|أخبرني|أنبأنا|ثنا|نا|عن|سمعت|وحدثنا|وأخبرنا)(?:\s|:|$)/;
+  const _краяМатна=t=>{ const re=new RegExp(_MATN_EDGE.source,'g'); let m;
+    while((m=re.exec(t))){
+      if(m[0].charAt(0)==='['){ const _за=stripDiac(t.slice(m.index+m[0].length)).replace(/ـ/g,'');
+        const _скобка=_за.indexOf(']'); const _после=(m[0].indexOf(':')>=0 && _скобка>=0)?_за.slice(_скобка+1):_за;
+        if(_ИСНАД_ДАЛЬШЕ.test(_после)) continue;
+        if(!_после.trim()) return {i:m.index, ждать:true}; }
+      return {i:m.index, ждать:false}; }
+    return null; };
   nodes.forEach(node=>{
     if(_limitHit) return;
     try{ if(node.parentElement && node.parentElement.closest && node.parentElement.closest('.cnote')) return; }catch(e){_тихо(e,"L9792")}
     var _t0=node.nodeValue||'';
-    var _e=_t0.search(_MATN_EDGE);
+    if(_меткаЖдёт){ if(!_t0.trim()) return; _меткаЖдёт=false;
+      if(!_ИСНАД_ДАЛЬШЕ.test(stripDiac(_t0).replace(/ـ/g,''))){ _limitHit=true; return; } }
+    var _кр=_краяМатна(_t0), _e=-1;
+    if(_кр){ if(_кр.ждать) _меткаЖдёт=true; else _e=_кр.i; }
     var _cut=(_e>=0)?_e:_t0.length;      // в этом узле подсвечиваем только до границы матна
     if(_e>=0) _limitHit=true;            // дальше по карточке — ни одного имени
     _seen+=_cut;
