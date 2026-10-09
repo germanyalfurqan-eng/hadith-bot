@@ -7572,6 +7572,33 @@ def _сырьё_письма(_м):
     return _вышло, list(dict.fromkeys(поля))[:40]
 
 
+# 📎 09.10.2026, ЛОКАЛКИ 34. Владелец прислал скриншот с подписью «Локалки срочно скачай» —
+# в очередь легла одна подпись, картинка пропала, и сессия гадала, что качать (ОБР-3512).
+# «А ты разберись, чтобы доходило!!!» Запоминаем картинку каждого входящего сообщения
+# (обработчик в группе -50 срабатывает раньше всех), обращение берёт её номер с собой,
+# сессия скачивает по /api/foto.
+_ФОТО_СМС = {}
+
+
+async def _запомнить_фото(update, context):
+    try:
+        м = update.effective_message
+        if not м:
+            return
+        fid = None
+        if м.photo:
+            fid = м.photo[-1].file_id
+        elif м.document and str(м.document.mime_type or '').startswith('image/'):
+            fid = м.document.file_id
+        if fid:
+            _ФОТО_СМС[(int(м.chat_id), int(м.message_id))] = fid
+            if len(_ФОТО_СМС) > 500:
+                for _к in list(_ФОТО_СМС)[:250]:
+                    _ФОТО_СМС.pop(_к, None)
+    except Exception:
+        pass
+
+
 def dsoc_позвать_клода(chat_id, msg_id, текст, кто="", важность="срочно", отмечено=None,
                        кому="клод"):
     """Положить обращение в очередь технадзора. Клод читает её и отвечает В ТОТ ЖЕ ЧАТ.
@@ -7625,6 +7652,12 @@ def dsoc_позвать_клода(chat_id, msg_id, текст, кто="", ва�
                    # моя, — и обращение к другой сессии некуда было положить: его брал
                    # помощник и отвечал сам. Номер обращения есть у каждого адресата.
                    'кому': (кому or 'клод')})
+        try:
+            _фото = _ФОТО_СМС.get((int(chat_id), int(msg_id))) if msg_id else None
+        except Exception:
+            _фото = None
+        if _фото:
+            сп[-1]['фото'] = _фото
         _data_put(DSOC_ОЧЕРЕДЬ_ФАЙЛ, сп, 'очередь технадзора +#%d' % н)
         return н
     except Exception:
@@ -30298,6 +30331,28 @@ async def _api_serve(application=None):
         return _cors(web.json_response({'ok': ок, 'error': беда, 'пост': _n,
                                         'ссылка': _ссылка}))
 
+    async def foto(r):
+        """Отдать картинку из письма владельца по её номеру (file_id) — для сессий (09.10.2026)."""
+        if not application or not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            return _cors(web.json_response({'error': 'bad_json'}, status=400))
+        if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        fid = str(body.get('file_id') or '').strip()
+        if not fid:
+            return _cors(web.json_response({'error': 'нужен file_id'}, status=400))
+        try:
+            _ф = await app.bot.get_file(fid)
+            данные = bytes(await _ф.download_as_bytearray())
+        except Exception as e:
+            return _cors(web.json_response({'error': str(e)[:300]}, status=502))
+        имя = os.path.basename(str(_ф.file_path or 'foto.jpg'))
+        return web.Response(body=данные, content_type='application/octet-stream',
+                            headers={'X-Imya': имя})
+
     async def udalit(r):
         """Убрать сообщение из чата по номеру (16.08.2026). Пара к `ozvuchit`.
 
@@ -33823,7 +33878,7 @@ async def _api_serve(application=None):
         return ответ
 
     a = web.Application(middlewares=[_счёт_трафика], client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/proba_ii', proba_ii), web.post('/api/fayl', fayl), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/vyzov', vyzov), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/proba_ii', proba_ii), web.post('/api/fayl', fayl), web.post('/api/foto', foto), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/vyzov', vyzov), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
@@ -35134,6 +35189,7 @@ app.add_handler(CallbackQueryHandler(on_spam, pattern=r'^spam:'))   # #178: ре
 app.add_handler(CommandHandler("start", start_cmd))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | filters.VIDEO | filters.PHOTO | filters.Document.ALL, handle))
+app.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, _запомнить_фото), group=-50)
 
 
 # ===== ПУСТОЕ ПИСЬМО ВЛАДЕЛЬЦА: СКАЗАТЬ, А НЕ ПРОМОЛЧАТЬ (06.09.2026, #2855) =====
