@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1702</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1703</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1702';
+const APPVER = 'v1703';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -10850,8 +10850,12 @@ async function _renderTlinkLinks(id, host, onPick){
       const _impossible=(_selfD&&nd)?(dGap>80):(tabGap>=4);   // год смерти точнее табаки: разрыв >80 лет (الأعمش↔عائشة=89 откинуть) ИЛИ ≥4 поколений (когда нет года). Реальные учители с разрывом ≤80/≤3 (الأعمش↔أبو وائل) остаются.
       if(_impossible) return;
       if(_selfD&&nd){ (nd<=_selfD?_teaM:_stuM).set(o,''); }
-      else if(_selfT&&nt&&nt!==_selfT){ (nt<_selfT?_teaM:_stuM).set(o,''); }
-      else { _neuM.set(o,''); } }); }   // фолбэк направления по табаке если года смерти нет
+      /* №381 (10.10.2026, проверка на живом v1702, карточка аль-Аʿмаша): по табаке без года смерти в «учителя»
+         попадал «جرير» (#7302, табака 3), а в «ученики» — «شقيق» (#2806) и «أبو بكر» (#215). Это не люди, а
+         записи-однословы, куда сложены короткие упоминания разных людей из цепей; их табака ничего не говорит
+         о направлении. Без года смерти направление по нашим цепям НЕ утверждаем — такие идут в «связи
+         (направление не уточнено)». Учителя и ученики по تهذيب الكمال (выше) этого не касаются. */
+      else { _neuM.set(o,''); } }); }
   if(!_teaM.size && !_stuM.size && !_neuM.size) return false;
   const _arr=(m)=>[...m.entries()].sort((a,b)=>_cnt(b[0])-_cnt(a[0]));
   // 20.07 дефект C (ревизия карточки, замер живьём): связь с битым id (0/пусто) рендерилась в интерфейс как
@@ -10893,6 +10897,13 @@ async function _renderTlinkLinks(id, host, onPick){
           let _кн=''; try{ const _e=_ex&&(_ex.get(+oid)||_ex.get(String(oid))); _кн=_e?(_e[0]||''):''; }catch(e){}
           const _вц=_формаИзЦепей((_vm||{})[String(oid)], v[1], (v[3]||'')+' '+_кн);
           let _гл=_вц||_sh||v[1];
+          /* №381: запись-однослов («إبراهيم», «سفيان», «جابر») — короткие упоминания РАЗНЫХ людей из цепей,
+             собранные под одним номером. Приписанная ей нисба давала «إبراهيم العقيلي», «سفيان العقيلي» —
+             имена людей, которых тут нет. Показываем как записано и честно помечаем. */
+          // только без года смерти: у «ذكوان» (Абу Салих, ум. 101) имя тоже из одного слова, но это опознанный человек
+          const _слв=String(v[1]||'').trim().split(/\s+/);
+          const _однослов=!v[4] && (_слв.length===1 || (_слв.length===2 && /^(?:عبد|أبو|ابو|أم|ام)$/.test(stripDiac(_слв[0]))));
+          if(_однослов){ _гл=v[1]; row.__однослов=1; }
           // обрубок шухры «ابن عمر بن أبي» (полное: «ابن عمر بن أبي سلمة قيل اسمه محمد») — дотягиваем по полному имени до пояснений
           if(/\s(بن|أبي|ابي|أبو|ابو|عبد)$/.test(stripDiac(_гл)) && v[1]){ const _ws=_cleanNarrName(v[1]).split(' ').slice(0,6);
             while(_ws.length>1 && /^(بن|أبي|ابي|أبو|ابو|عبد)$/.test(stripDiac(_ws[_ws.length-1]))) _ws.pop();   // «إبراهيم بن عبد الله بن» → «… بن حنين» или без висящего «بن»
@@ -10902,7 +10913,8 @@ async function _renderTlinkLinks(id, host, onPick){
             // полное имя — для различения тёзок; родословную в 15 колен («…بن ذهل بن سعد بن مالك بن النخع») режем до шести слов
             let _полн=(v[1] && stripDiac(_гл)!==v[1])?_cleanNarrName(v[1]):''; { const _пс=_полн.split(' '); if(_пс.length>6) _полн=_пс.slice(0,6).join(' ')+' …'; }
             if(_полн && _полн.split(' ').length<=stripDiac(_гл).split(' ').length && _полн.indexOf('…')<0 && stripDiac(_гл).indexOf(_полн)===0) _полн='';   // «عبد الله» под «عبد الله الهمداني» ничего не добавляет
-            _r.textContent=[ru?('≈ '+ru):'',_полн,yr].filter(Boolean).join('  ·  ');
+            _r.textContent=row.__однослов ? ((ru?('≈ '+ru+'  ·  '):'')+'так записано в цепях — кто именно, не опознано (разные люди с этим именем)')
+                                          : [ru?('≈ '+ru):'',_полн,yr].filter(Boolean).join('  ·  ');
             /* №403 («пиши узнаваемые и ссылки Википедия»): чип «W» — ТОЛЬКО через _wikiOk, как в подсказках равиев.
                Без проверки нельзя: у Абу Муавии (5577) в narrators_wiki.json лежит статья о другом человеке
                («Khazim ibn Khuzayma al-Tamimi», v:0). Неверная ссылка хуже, чем никакой. */
