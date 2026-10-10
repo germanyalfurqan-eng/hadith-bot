@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1712</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1713</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1712';
+const APPVER = 'v1713';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -9078,7 +9078,9 @@ function _приБлизости(el, fn, запас){
 function cardHadith(d,groups){
   const {code,h}=d;
   // #78/R54: Муслим (Абд аль-Баки) — несколько риваятов одного номера (⚬) = СТРОГО ОТДЕЛЬНЫЕ карточки (свой текст/инструменты/перевод/избранное), не блоки в одной
-  const riw = (code==='muslim' && (h.text||'').indexOf('⚬')!==-1) ? h.text.split('⚬').map(s=>s.trim()).filter(s=>s.length>5) : null;
+  /* №310 (скрин Муслим 987, риваят 4/6 «٣٩ وَحَدَّثَنَاهُ قُتَيْبَةُ…»): в 4 риваятах из 7629 (920, 964, 987, 2004) в начале
+     висит голое число разметки издания — не текст хадиса. Снимаем только число перед و/ف/ح (началом иснада). */
+  const riw = (code==='muslim' && (h.text||'').indexOf('⚬')!==-1) ? h.text.split('⚬').map(s=>s.trim().replace(/^[٠-٩0-9]{1,4}\s+(?=[وفح])/,'')).filter(s=>s.length>5) : null;
   if(riw && riw.length>1){
     const wrap=document.createElement('div');
     riw.forEach((t,i)=>{ wrap.appendChild(_cardHadithOne(code, h, t, i+1, riw.length, groups, d.noNav)); });
@@ -21492,12 +21494,22 @@ async function openIsnadTree(text, out, ref){
   out.innerHTML='<div class="hint">🌳 Строю древо иснада с оценкой достоверности…</div>';
   try{ await loadNarrNames(); }catch(e){_тихо(e,"L14691")}
   const nodes=[];
-  for(const nm of names){ let id=null; try{ id=await _narrLookup(nm); }catch(e){_тихо(e,"L14693")} let cc=null; if(id!=null){ try{ cc=await _narrCard(id); }catch(e){_тихо(e,"L14693")} }
+  /* №310 (Муслим 987 риваят 4/6): звено «عبد العزيز - يعني الدراوردي -» искалось целиком и опознавалось как ЧУЖОЙ
+     «عبد العزيز» (#3461, «وثقه ابن حبان»), хотя это ад-Дараварди (#3493, «صدوق…يخطئ»). Уточнение после «يعني» — ключ к
+     человеку: ищем склейку «X Y» («خالد بن الحارث» из «خالد - يعني ابن الحارث -»), затем само уточнение, если оно
+     нисба или из двух слов и больше. Голое «X» не подставляем: лучше «нет оценки», чем оценка другого равия. */
+  const _яни=nm=>{ const m=String(nm||'').match(/^(.+?)\s*[-–،,]?\s*يعني\s*:?\s*(.+?)\s*[-–]?\s*$/); if(!m) return null;
+    const x=m[1].replace(/[-–،,\s]+$/,'').trim(), y=m[2].replace(/^[-–\s]+|[-–\s]+$/g,'').trim(); if(!x||!y) return null;
+    const вар=[x+' '+y.replace(/^ابن\s/,'بن ')]; if(/^ال/.test(y)||y.split(/\s+/).length>=2) вар.push(y); return {вар, показ:x+' (يعني '+y+')'}; };
+  for(let nm of names){ let id=null; const _я=_яни(nm);
+    let _q=nm; if(_я){ _q=_я.вар[0]; for(const v of _я.вар){ try{ id=await _narrLookup(v); }catch(e){_тихо(e,"L14693я")} if(id!=null){ _q=v; break; } } nm=_я.показ; }
+    else { try{ id=await _narrLookup(nm); }catch(e){_тихо(e,"L14693")} }
+    let cc=null; if(id!=null){ try{ cc=await _narrCard(id); }catch(e){_тихо(e,"L14693")} }
     let gr=_narrGrade(cc?cc[5]:'', cc?cc[6]:''); const tnm=(nm||'').trim();
     // TB-ТРЕВОГА: голая кунья (أبو/أم X, ≤3 слов) опознана как СЛАБАЯ (r≤1) — НЕНАДЁЖНО (десятки однофамильцев, сахаби спутан
     // с чужим слабым). Сахаби — عدول, не «ضعيف». Не клеймим: показываем «нет оценки» (лучше неизвестно, чем ложная слабость).
     if(gr.r!=null && gr.r<=1 && /^(أبو|أبي|أم)\s/.test(tnm) && tnm.split(/\s+/).length<=3){ gr={g:'нет оценки (кунья — неоднозначно)', c:'#95a5a6', bg:'rgba(149,165,166,.1)', r:null}; cc=null; }
-    nodes.push({nm, rankH:cc?cc[5]:'', gr}); }
+    nodes.push({nm, q:_q, rankH:cc?cc[5]:'', gr}); }
   // общая оценка цепочки = по слабейшему звену (хадис крепок настолько, насколько крепок самый слабый равий)
   const known=nodes.filter(n=>n.gr.r!=null); const unknown=nodes.length-known.length;
   let verd='';
@@ -21513,7 +21525,7 @@ async function openIsnadTree(text, out, ref){
     if(i<nodes.length-1) html+='<div style="margin:1px '+(ind+20)+'px;color:var(--hint);font-size:calc(13px * var(--txtScale,1));line-height:1">↓</div>'; });
   html+='<div class="hint" style="font-size:calc(11px * var(--txtScale,1));margin-top:8px">🟢 ثقة · 🟡 صдوق · 🟠 ضعيف · 🔴 متروك · ⚪ нет оценки. Тап по звену → полная карточка (كنية/رتبة/джарх + наши труды).</div></div>';
   out.innerHTML=html;
-  out.querySelectorAll('.isNode').forEach(el=>{ el.onclick=()=>{ const i=+el.dataset.i; const bx=document.createElement('div'); bx.style.marginTop='6px'; out.appendChild(bx); showNarratorBio(nodes[i].nm, bx); try{ bx.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){_тихо(e,"L14714")} }; });
+  out.querySelectorAll('.isNode').forEach(el=>{ el.onclick=()=>{ const i=+el.dataset.i; const bx=document.createElement('div'); bx.style.marginTop='6px'; out.appendChild(bx); showNarratorBio(nodes[i].q||nodes[i].nm, bx); try{ bx.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){_тихо(e,"L14714")} }; });
   // режим версий (طرق): собрать версии хадиса и показать, где цепочки расходятся
   const vb=document.createElement('button'); vb.className='mini'; vb.style.cssText='display:block;width:100%;margin:9px 0 2px;padding:9px;border:1px solid #6c5ce7;border-radius:10px;background:#2e1d4a;color:#d9ccff;font-weight:700;cursor:pointer'; vb.textContent='🔀 Версии (طرق) — где расходятся';
   const vout=document.createElement('div'); vout.style.marginTop='6px';
