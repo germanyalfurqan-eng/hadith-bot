@@ -25665,8 +25665,22 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     _msg = f"📖 {NAMES.get(_наш, _наш)}, №{_n324}\n\n"
                     if _ar:
                         _msg += f"🔤 {_ar}\n\n"
+                    # ОБР-3544 (11.10.2026): английский в русскоязычном проекте не показываем и здесь — как в
+                    # основном пути (#126). Нет русского — переводим арабский той же translate_matn.
+                    _нет_перевода = ""
+                    if _ar and (not _tr or _lang == "англ"):
+                        try:
+                            _tr = await asyncio.wait_for(asyncio.get_event_loop().run_in_executor(
+                                None, lambda: translate_matn(_ar[:6000], "had_" + str(_наш), owner=is_owner(update))),
+                                timeout=90) or ""
+                        except Exception:
+                            _tr = ""
+                        if not _tr:
+                            _нет_перевода = "ℹ️ Русского перевода в изданиях нет, а машинный сейчас не собрался — показываю арабский.\n"
                     if _tr:
                         _msg += f"🌍 {_tr}\n"
+                    elif _нет_перевода:
+                        _msg += _нет_перевода
                     if _gr:
                         _msg += f"\n📊 {_gr}"
                     _sc326 = {"ahmad_local": "ahmad"}.get(_наш, _наш)
