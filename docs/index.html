@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1721</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1722</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2028,7 +2028,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1721';
+const APPVER = 'v1722';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -20083,9 +20083,23 @@ async function renderTestimoniesCard(mid, host){
   // поэтому честнее пометить черновое, чем выдавать за выверенное (тот же приём, что бейдж «авто ⚠» у транслитерации).
   const _ruDraft=(t)=>{ const s=String(t||''); return /[A-Za-z]{3,}/.test(s)||/В приближении|Говорили о близком|Худи ас-Сари/.test(s); };
   // Единая строка русского перевода: свой шрифт и свой dir (см. _RF) + пометка, если перевод черновой.
-  const _ruLine=(t,fs)=>{ const d=document.createElement('div');
+  /* №489 · 11.10.2026 · МИНИ АПП 101. Перевод свидетельства машинный; ревизия всех 70 286 на сайте нашла 403 строки, где он
+     ТЕРЯЕТ или ПЕРЕВОРАЧИВАЕТ оценку: «كان يدلس» → «Он был лживым», «وضاع» → «Он оставлен», «ليس بشيء» → «ни слова».
+     Перевод — вспомогательный, эталон — арабский. Где в арабском стоит термин оценки, а в русском нет его смысла —
+     честно говорим, что перевод неточен, и называем потерянный термин. Правила сверены на всех строках (_mini101/audit_ru_testim2.py). */
+  const _RU_ТЕРМИНЫ=[
+    ['мудаллис (тадлис)', /مدلس|يدلس|التدليس/, /мудал|мудел|тадлис|тдл|скрыв|утаив/],
+    ['«ليس بشيء» — «он ничто»', /ليس بشي/, /ничего|ничто|ничтож|ни о ч|ни в ч|не стоит|ничем/],
+    ['лжец', /كذاب|يكذب/, /лж|лгал|лгу|ложь|выдум|подд|опроверг|обвин|врал|вра[нт]/],
+    ['выдумщик хадисов', /وضاع|يضع الحديث/, /выдум|сочин|подд|фабрик|лж|вадда|сфабр/],
+    ['«оставлен» (матрук)', /متروك(?!ين)/, /остав|отверг|матрук|метрук|отброш|брош|покину/],
+    ['«не силён»', /ليس بالقوي|ليس بقوي/, /не\s+(?:является\s+|очень\s+|был\s+|так\s+|особо\s+)?(?:сил|крепк|надёж|надеж|сика)|некрепк|несил/],
+    ['«слаб» (даиф)', /(?:^|[\s:،(«"])ضعيف|ضعفه/, /слаб|даиф|ненадёж|ненадеж|джа.иф|ослаб/]];
+  const _ruНеточен=(ar,ru)=>{ try{ const a=String(ar||'').replace(/[\u064B-\u0652\u0670\u0640]/g,''); const r=String(ru||'').toLowerCase();
+    if(!a||!r) return ''; for(const [нм,ra,rr] of _RU_ТЕРМИНЫ){ if(ra.test(a) && !rr.test(r)) return нм; } }catch(e){} return ''; };
+  const _ruLine=(t,fs,ar)=>{ const d=document.createElement('div'); const _нет=_ruНеточен(ar,t);
     d.style.cssText='font-size:'+(fs||13)+'px;color:#9aa7b5;margin-top:4px;line-height:1.5;'+_RF;
-    d.innerHTML='≈ '+esc(String(t))+(_ruDraft(t)?(' <span title="Черновой машинный перевод — в нём осталось непереведённое или неверно передано название книги. Эталон — арабский текст выше." style="font-size:calc(9.5px * var(--txtScale,1));color:#c9a24a;border:1px solid #5e4d23;border-radius:6px;padding:0 5px;cursor:help;white-space:nowrap">черновой ⚠</span>'):'');
+    d.innerHTML='≈ '+esc(String(t))+(_нет?(' <span title="Машинный перевод потерял или исказил оценку: в арабском стоит «'+esc(_нет)+'», а в русском её смысла нет. Верен арабский текст выше." style="font-size:calc(9.5px * var(--txtScale,1));color:#ff9b9b;border:1px solid #a33;border-radius:6px;padding:0 5px;cursor:help;white-space:nowrap">⚠ перевод неточен: в арабском — '+esc(_нет)+'</span>'):'')+((!_нет&&_ruDraft(t))?(' <span title="Черновой машинный перевод — в нём осталось непереведённое или неверно передано название книги. Эталон — арабский текст выше." style="font-size:calc(9.5px * var(--txtScale,1));color:#c9a24a;border:1px solid #5e4d23;border-radius:6px;padding:0 5px;cursor:help;white-space:nowrap">черновой ⚠</span>'):'');
     return d; };
   // 08.10.2026 · МИНИ АПП 99 · №367 («когда кликаешь, надо чтобы удобно открывалось и уходило назад … справа будет
   // выходить»). ① каждая строка — явный ПУНКТ списка: номер слева, «›» справа (значит — откроется);
@@ -20122,7 +20136,7 @@ async function renderTestimoniesCard(mid, host){
           q.innerHTML=(parts?('<span style="display:inline-flex;width:17px;height:17px;border-radius:50%;background:#1c2b44;color:#9cc3f0;font-size:calc(10.5px * var(--txtScale,1));align-items:center;justify-content:center;margin-left:6px;vertical-align:middle">'+(vi+1)+'</span>'):'')+h;
           it.appendChild(q); }); }
       const ruT=((c[9]&&String(c[9]).trim())||_ruVerdict([c[1]]));
-      if(ruT) it.appendChild(_ruLine(ruT,13));
+      if(ruT) it.appendChild(_ruLine(ruT,13,c[3]||c[1]));
       try{ if(i===0 || _ttЕстьКнига(c)) it.appendChild(_ttLinkRow(c[5],c[6],mid,c[7],c[4],c[3],c[0])); }catch(_e){_тихо(_e,"ttSide-lnk")}
       box.appendChild(it); });
     w.appendChild(box);
@@ -20293,7 +20307,7 @@ async function renderTestimoniesCard(mid, host){
         b.innerHTML='<span style="display:inline-flex;width:17px;height:17px;border-radius:50%;background:#1c2b44;color:#9cc3f0;font-size:calc(10.5px * var(--txtScale,1));align-items:center;justify-content:center;margin-left:6px;vertical-align:middle">'+(vi+1)+'</span>'+esc(v);
         vw.appendChild(b); });
       row.appendChild(vw);
-      if(ruv) row.appendChild(_ruLine(ruv,12.5));
+      if(ruv) row.appendChild(_ruLine(ruv,12.5,c0[3]||c0[1]));
     }
     if(!_vars && c0[3]){ const q=document.createElement('div'); q.dir='rtl';
       // владелец 02.07 (скрин «джарх в зелёной рамке»): рамка/фон цитаты — ПО ПОЛЯРНОСТИ вердикта: джарх ВСЕГДА красным, таусик зелёным, нейтральное серым
@@ -20309,7 +20323,7 @@ async function renderTestimoniesCard(mid, host){
         _xp.onclick=function(){ var was=q.style.maxHeight!==''; q.style.maxHeight=was?'':'120px'; _xp.textContent=was?'▴ свернуть':'▾ цитата целиком'; };
         row.appendChild(q); row.appendChild(_xp); }
       else row.appendChild(q); }
-    if(!_vars && ruv) row.appendChild(_ruLine(ruv,13));
+    if(!_vars && ruv) row.appendChild(_ruLine(ruv,13,c0[3]||c0[1]));
     try{ row.appendChild(_ttLinkRow(c0[5],c0[6],mid,c0[7],c0[4],c0[3],c0[0])); }catch(e){_тихо(e,"L13839")}
     // R-61 Э4: у ОСТАЛЬНЫХ записей группы тоже есть свои книги-носители (bid+стр) — раньше рисовалась только первая
     try{ items.slice(1).forEach(cx=>{ if(_ttЕстьКнига(cx)){ const _x=_ttLinkRow(cx[5],cx[6],mid,cx[7],cx[4],cx[3],cx[0]); _x.style.marginTop='3px'; row.appendChild(_x); } }); }catch(e){_тихо(e,"L13841")}
@@ -20333,7 +20347,7 @@ async function renderTestimoniesCard(mid, host){
       if(_longT){ const aq=document.createElement('div'); aq.dir='rtl';
         aq.style.cssText='font-size:calc(19px * var(--readScale,1));'+_AF+';color:#e6edf3;background:rgba(122,134,147,.07);border:1px solid #3a434d;border-radius:8px;padding:5px 9px;margin-top:5px;line-height:1.75';
         aq.textContent=_arT; rr.appendChild(aq); }
-      if(ruv) rr.appendChild(_ruLine(ruv,13));
+      if(ruv) rr.appendChild(_ruLine(ruv,13,(c0[3]||terms.join('، '))));
       try{ const _cnEl=rr.querySelector('.critNameCl'); if(_cnEl) _cnEl.onclick=(e)=>{ e.stopPropagation(); try{ openNarratorRijal(cr); }catch(_e){_тихо(_e,"L13862")} }; }catch(e){_тихо(e,"L13862")}
       lb.appendChild(rr);
       try{ _ttПункт(rr, cr, items, null, 0); }catch(e){_тихо(e,"ttSide-late")}   // 08.10.2026 · МИНИ АПП 99 · №367: и поздние своды выезжают справа (закон единообразия R45)
