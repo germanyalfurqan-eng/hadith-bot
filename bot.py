@@ -29462,6 +29462,35 @@ def isnad_ai(text):
         _data_put("isnad_ai.json", _isnadai_cache, f"isnad_ai: +{key} ({len(names)})")
     return {"names": names, "cached": False}
 
+
+# №444 (владелец, 01.07: «что значит это?… все ошибки должны быть понятны чайнику — указ!»). Текст ошибки
+# браузера («Cannot read properties of null (reading 'innerHTML')») владельцу ничего не говорит. Переводим
+# частые виды на простой язык; сырой текст остаётся строкой выше — он нужен для разбора.
+def _ошибка_по_простому(msg):
+    import re as _re
+    m = str(msg or '')
+    п = _re.search(r"Cannot read propert(?:y|ies) of (null|undefined) \(reading '([^']+)'\)", m)
+    if п:
+        что = ('части страницы, которой сейчас нет (её ещё не нарисовали или уже убрали)' if п.group(1) == 'null'
+               else 'данным, которых нет (не загрузились или пустые)')
+        return ('код обратился к %s и хотел взять у неё «%s». Не сработало одно действие — то, на котором это '
+                'случилось; остальное приложение работает.' % (что, п.group(2)))
+    п = _re.search(r"([\w$]+) is not defined", m)
+    if п:
+        return 'в коде вызвано имя «%s», которого нет (опечатка или не догрузилось). Не сработает только это действие.' % п.group(1)
+    п = _re.search(r"([\w$.]+) is not a function", m)
+    if п:
+        return 'код попытался выполнить «%s» как действие, а это не действие. Не сработает только эта кнопка или функция.' % п.group(1)
+    if _re.search(r"Failed to fetch|NetworkError|Load failed", m, _re.I):
+        return 'не удалось связаться с сервером или скачать файл — сеть у человека или сервер не ответил.'
+    if _re.search(r"SyntaxError|Unexpected token|JSON", m):
+        return 'данные пришли не того вида (например, вместо данных — страница ошибки) или испорчен текст программы.'
+    if m.strip().rstrip('.') == 'Script error':
+        return 'ошибка в чужом скрипте (например, в самом Telegram); подробностей браузер не даёт.'
+    if 'Quota' in m:
+        return 'память браузера переполнена — что-то не сохранилось.'
+    return 'непредвиденный сбой в коде приложения; подробности строкой выше — разберу.'
+
 async def _api_serve(application=None):
     from aiohttp import web
     loop = asyncio.get_event_loop()
@@ -32326,6 +32355,7 @@ async def _api_serve(application=None):
                 except Exception:
                     pass
                 _enote = (f"🐞 НОВАЯ ОШИБКА {_eid} (app {ver})\n{where}: {msg}\n"
+                          f"💬 По-простому: {_ошибка_по_простому(msg)}\n"
                           f"👤 наткнулся: {_кто}\n"
                           f"(открыта; всего в журнале: {len(cur)} · решить: «ошибка решена {_eid}»)")
                 try:
