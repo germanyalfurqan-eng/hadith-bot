@@ -10424,10 +10424,31 @@ def get_quran_ayah(surah, ayah):
         a = r = ""
         ra = requests.get(ua, timeout=10)
         if ra.status_code == 200: a = ra.json().get("text", "")
-        rr = requests.get(ur, timeout=10)
-        if rr.status_code == 200: r = rr.json().get("text", "")
+        # №363 (владелец, чат @jamaat_ru, 27.06): «не пиши в скобках музыку — это ложный тафсир». У внешнего
+        # издания rus-elmirkuliev в 31:6 вставлено «потешные речи (песни и музыку)». Русский текст берём из НАШЕГО
+        # quran_ru.json — того же, что в приложении (там 31:6 без вставки); внешнее издание — только запасом.
+        r = _наш_перевод_аята(surah, ayah)
+        if not r:
+            rr = requests.get(ur, timeout=10)
+            if rr.status_code == 200: r = rr.json().get("text", "")
         return a, r
     except: return "", ""
+
+
+_НАШ_КОРАН_РУ = {'д': None, 'когда': 0}
+
+
+def _наш_перевод_аята(surah, ayah):
+    """Перевод аята из quran_ru.json приложения (кэш на 6 часов). Нет файла — пустая строка."""
+    try:
+        import time as _t
+        if _НАШ_КОРАН_РУ['д'] is None or _t.time() - _НАШ_КОРАН_РУ['когда'] > 6 * 3600:
+            ру = requests.get(WEBAPP_URL + 'quran_ru.json', timeout=30).json()
+            _НАШ_КОРАН_РУ['д'] = {(int(x['s']), int(x['a'])): x.get('t', '') for x in ру if isinstance(x, dict)}
+            _НАШ_КОРАН_РУ['когда'] = _t.time()
+        return _НАШ_КОРАН_РУ['д'].get((int(surah), int(ayah)), '')
+    except Exception:
+        return ''
 
 # Сколько аятов в каждой суре. Таблица жила ВНУТРИ get_random_quran и была не видна
 # никому другому; напоминаниям (№733) она нужна, чтобы не вылезти за конец суры.
