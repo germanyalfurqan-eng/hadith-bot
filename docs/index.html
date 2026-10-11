@@ -1145,7 +1145,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1715</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1716</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2023,7 +2023,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1715';
+const APPVER = 'v1716';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -21532,7 +21532,17 @@ async function openIsnadTree(text, out, ref){
   const _яни=nm=>{ const m=String(nm||'').match(/^(.+?)\s*[-–،,]?\s*يعني\s*:?\s*(.+?)\s*[-–]?\s*$/); if(!m) return null;
     const x=m[1].replace(/[-–،,\s]+$/,'').trim(), y=m[2].replace(/^[-–\s]+|[-–\s]+$/g,'').trim(); if(!x||!y) return null;
     const вар=[x+' '+y.replace(/^ابن\s/,'بن ')]; if(/^ال/.test(y)||y.split(/\s+/).length>=2) вар.push(y); return {вар, показ:x+' (يعني '+y+')'}; };
+  /* №454 (владелец, чат @jamaat_ru: «тахкик пишет передатчика раджулюн и пишет мухталяф. Как раджуль мухталяф может
+     быть? Это же маджхуль. Так и пиши маджхуль красным, и вся цепочка слетает»). Замер на Абу Дауд «مسدد ← يحيى ←
+     مسعر ← عمرو بن مرة ← رجل ← نافع بن جبير»: «رجل» шёл серым «нет оценки», итог цепи — «ثقة»; а голое «يحيى»
+     (это аль-Каттан) опознавалось как «مجهول». Теперь: безымянный (رجل/امرأة/شيخ/بعض…/عمن…) — красный «مبهم»,
+     и цепь падает; маджхуль — тоже красный и в счёт; однословное имя, опознанное слабым или маджхулем, — «нет
+     оценки (имя из одного слова)»: лучше честное «не знаю», чем чужой ярлык надёжному человеку. */
+  const _МУБХАМ=/^(?:رجل|رجلا|امرأة|امراة|شيخ|بعض|عمن|من سمع|رجال|أناس|اناس|ناس|فلان)(?:\s|$)/;
+  const _КРАСН={c:'#e74c3c', bg:'rgba(231,76,60,.16)'};
   for(let nm of names){ let id=null; const _я=_яни(nm);
+    { const _чист=String(nm||'').replace(/[ً-ْٰ]/g,'').trim();
+      if(_МУБХАМ.test(_чист)){ nodes.push({nm, q:nm, rankH:'', gr:Object.assign({g:'مبهم — не назван (маджхуль)', r:0.5}, _КРАСН), mubham:true}); continue; } }
     let _q=nm; if(_я){ _q=_я.вар[0]; for(const v of _я.вар){ try{ id=await _narrLookup(v); }catch(e){_тихо(e,"L14693я")} if(id!=null){ _q=v; break; } } nm=_я.показ; }
     else { try{ id=await _narrLookup(nm); }catch(e){_тихо(e,"L14693")} }
     let cc=null; if(id!=null){ try{ cc=await _narrCard(id); }catch(e){_тихо(e,"L14693")} }
@@ -21540,12 +21550,17 @@ async function openIsnadTree(text, out, ref){
     // TB-ТРЕВОГА: голая кунья (أبو/أم X, ≤3 слов) опознана как СЛАБАЯ (r≤1) — НЕНАДЁЖНО (десятки однофамильцев, сахаби спутан
     // с чужим слабым). Сахаби — عدول, не «ضعيف». Не клеймим: показываем «нет оценки» (лучше неизвестно, чем ложная слабость).
     if(gr.r!=null && gr.r<=1 && /^(أبو|أبي|أم)\s/.test(tnm) && tnm.split(/\s+/).length<=3){ gr={g:'нет оценки (кунья — неоднозначно)', c:'#95a5a6', bg:'rgba(149,165,166,.1)', r:null}; cc=null; }
+    // №454: однословное имя («يحيى») опознано слабым или маджхулем — это догадка о тёзке, не оценка: не клеймим
+    if(!_я && tnm.split(/\s+/).length===1 && ((gr.r!=null && gr.r<=1) || gr.g==='مجهول')){ gr={g:'нет оценки (имя из одного слова — неоднозначно)', c:'#95a5a6', bg:'rgba(149,165,166,.1)', r:null}; cc=null; }
+    // №454: маджхуль — красным и в счёт цепи (было серым и вне счёта)
+    if(gr.g==='مجهول'){ gr=Object.assign({g:'مجهول — неизвестен', r:0.5}, _КРАСН); }
     nodes.push({nm, q:_q, rankH:cc?cc[5]:'', gr}); }
   // общая оценка цепочки = по слабейшему звену (хадис крепок настолько, насколько крепок самый слабый равий)
   const known=nodes.filter(n=>n.gr.r!=null); const unknown=nodes.length-known.length;
   let verd='';
   if(known.length){ const weak=known.reduce((a,b)=>b.gr.r<a.gr.r?b:a);
-    verd='<div style="margin:0 0 9px;padding:8px 11px;border-radius:9px;background:'+weak.gr.bg+';border:1px solid '+weak.gr.c+'"><b style="color:'+weak.gr.c+'">🔗 Цепочка по слабейшему звену: '+esc(weak.gr.g)+'</b>'+(unknown?(' <span style="color:#95a5a6;font-size:calc(12px * var(--txtScale,1))">· '+unknown+' звен(а) без оценки — картина неполная</span>'):'')+'</div>'; }
+    verd='<div style="margin:0 0 9px;padding:8px 11px;border-radius:9px;background:'+weak.gr.bg+';border:1px solid '+weak.gr.c+'"><b style="color:'+weak.gr.c+'">🔗 Цепочка по слабейшему звену: '+esc(weak.gr.g)+'</b>'+(unknown?(' <span style="color:#95a5a6;font-size:calc(12px * var(--txtScale,1))">· '+unknown+' звен(а) без оценки — картина неполная</span>'):'')
+      +(weak.gr.r===0.5?('<div style="font-size:calc(12px * var(--txtScale,1));color:#e74c3c;margin-top:4px">'+(weak.mubham?'В цепи есть безымянный передатчик':'В цепи есть неизвестный передатчик (маджхуль)')+' — по этой цепи хадис не держится. Если в другой версии этого хадиса он назван по имени, это видно в «🔀 Версии (طرق)» ниже.</div>'):'')+'</div>'; }
   let html='<div style="border:1px solid #6c5ce7;border-radius:12px;padding:11px;margin:6px 0;background:rgba(108,92,231,.06)">'
     +'<div style="font-weight:700;color:#d9ccff;font-size:calc(13.5px * var(--txtScale,1));margin-bottom:8px">🌳 Древо иснада (цвет = достоверность по учёным):</div>'+verd;
   nodes.forEach((n,i)=>{ const ind=Math.min(i,6)*16;
