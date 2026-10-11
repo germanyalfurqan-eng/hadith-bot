@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1729</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1730</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2028,7 +2028,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1729';
+const APPVER = 'v1730';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -21659,7 +21659,14 @@ async function _buildIsnadTreeData(vs){
   const flat=[];
   for(const v of vs){ if(!v.chain||!v.chain.length) continue; let node=root; root.n++;
     const rev=[...v.chain].reverse();
-    for(const nm0 of rev){ const nm=_nomCase(clean(nm0)); const plain=stripDiac(nm);
+    // №474 · 12.10.2026: звено с союзом «و» в начале (кроме имён на «و»: Вакиʿ, Вахб…) — ВТОРОЙ учитель того же уровня
+    // («حدثنا أبو بكر وهشام، قالا: حدثنا سفيان»). Вешаем его рядом с соседом под общим учителем, а не под соседом.
+    let _рядом=null;
+    for(const nm00 of rev){ const _p0=stripDiac(clean(nm00)).trim();
+      const _пара=/^و\S/.test(_p0) && !/^و(?:كيع|هب|هيب|ائل|اقد|رقاء|برة|ضاح|ابصة|اثلة|رد|حشي|اصل|هبان|ثيمة|ساع|زير|هبيب|سنان|داعة)/.test(_p0);
+      const nm0=_пара?String(nm00).replace(/^\s*وَ?\s*/,''):nm00;
+      if(_рядом){ node=_рядом; _рядом=null; }
+      const nm=_nomCase(clean(nm0)); const plain=stripDiac(nm);
       if(plain.length<3||/^[حو\s]+$/.test(plain)) continue;
       if(/^(أبو|ابو|أبي|ابي|ابن|أم|عبد|بن)$/.test(plain.trim())) continue;   // одиночное служебное слово (остаток تحويل/обрыва) — не узел
       if(plain.split(/\s+/).length>5 && !isNameLike(nm)) continue;
@@ -21683,7 +21690,7 @@ async function _buildIsnadTreeData(vs){
       const k=canon(plain);
       if(!node.ch.has(k)){ const nd={nm, id, grade:null, death:null, ch:new Map(), srcs:[], n:0, i:flat.length}; flat.push(nd); node.ch.set(k, nd);
         if(id!=null){ try{ const cc=await _narrCard(id); if(cc){ nd.grade=_narrGrade(cc[5]||'', cc[6]||''); nd.death=cc[4]||null; nd.full=cc[1]||''; nd.kun=cc[2]||''; } }catch(e){_тихо(e,"L14806")} } }
-      node=node.ch.get(k); node.n++; }
+      { const _род=node; node=node.ch.get(k); node.n++; if(_пара) _рядом=_род; } }
     v.srcs.forEach(s=>node.srcs.push(s)); }
   let madar=null, cur=root;
   while(true){ const kids=[...cur.ch.values()]; const k=(kids.length===1&&kids[0].n===root.n)?kids[0]:null; if(!k) break; cur=k; madar=cur; }
