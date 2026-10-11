@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1731</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1732</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2028,7 +2028,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1731';
+const APPVER = 'v1732';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -8983,9 +8983,19 @@ async function appendMaktaba(seq, q, primary){
     await loadBooksMap();
     let fsrc=data.slice(0,fn), rest=data.slice(fn);
     if(strictWords){ fsrc=_snipMarkInexact(fsrc.filter(x=>_snipHasAll(x.snip,strictWords)),strictWords); rest=_snipMarkInexact(rest.filter(x=>_snipHasAll(x.snip,strictWords)),strictWords); }   // #334: пометить частичные
+    // №334 (12.10.2026): точные совпадения — ВСЕГДА первыми, похожие (≈, не все слова) — после них.
+    if(strictWords){ const _ex=x=>x._inexact?1:0; fsrc.sort((p,q2)=>_ex(p)-_ex(q2)); rest.sort((p,q2)=>_ex(p)-_ex(q2)); }
     const view=fsrc.concat(rest); const hid=data.length-view.length;
     const strictNote = strictWords ? (' · 🎯 строго: все слова'+(hid>0?(' (частичных скрыто '+hid+')'):'')) : '';
     sec.textContent=(_scopeIds?('🎯 '+_scopeName+' · найдено на странице: '+view.length+(j.count?(' (~'+(j.count||0).toLocaleString('ru')+' во всей Мактабе)'):'')+' (листай — добираю ещё)'):('📚 Поиск по всей Мактабе · показано '+view.length+(j.count>view.length?(' из ~'+(j.count||0).toLocaleString('ru')):'')+(fsrc.length?' · ⭐ первоисточники сверху':'')))+strictNote;   // M166c: общий счёт в Мактабе
+    // №334: ясный итог строгого поиска НАД выдачей — человек сразу видит, есть ли ровно то, что он ввёл.
+    if(strictWords && view.length){ try{ const _точ=view.filter(x=>!x._inexact).length, _пох=view.length-_точ;
+      const bn=document.createElement('div'); bn.className='hint';
+      if(!_точ){ bn.style.cssText='font-size:calc(13px * var(--txtScale,1));margin:6px 0 9px;padding:8px 11px;border-radius:9px;border:1px solid #a33;background:rgba(226,75,74,.10);color:#ffb3b3;line-height:1.5';
+        bn.innerHTML='🎯 <b>Ровно так, как вы ввели, — не найдено</b> (на этой странице Мактабы): «'+esc(q)+'». Ниже — <b>похожие</b> места (≈): совпала только часть слов — возможно, разночтение печати. Это НЕ ваш точный текст.'; }
+      else { bn.style.cssText='font-size:calc(12.5px * var(--txtScale,1));margin:6px 0 9px;color:#9fd3a8';
+        bn.textContent='🎯 Точных совпадений (все слова): '+_точ+(_пох?(' · ниже — похожих (≈, не все слова): '+_пох+', они помечены'):''); }
+      res.appendChild(bn); }catch(e){_тихо(e,'334')} }
     try{ const _fb=_maktFilterBar(res,view); if(_fb) res.appendChild(_fb); }catch(e){_тихо(e,"L6398")}
     if(fsrc.length){ const h=document.createElement('div'); h.className='hint'; h.style.cssText='color:#d6b25a;font-size:calc(12.5px * var(--txtScale,1));font-weight:700;margin:4px 0 7px'; /* #691 (владелец: «почему карточки хадисов отличаются от наших»). Отличаются, потому что это
          РАЗНЫЕ вещи: первоисточники мы держим у себя — с номером, цепью, переводом и оценкой, — а
