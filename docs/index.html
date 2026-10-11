@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1723</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1724</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2028,7 +2028,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1723';
+const APPVER = 'v1724';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -23194,8 +23194,21 @@ async function verifyNarr(card, place, text){
     // владелец 03.07: «в цепях всегда везде выделяй сподвижников явно золотым» — предзагрузка статуса ДО рендера (forEach ниже синхронный)
     const _sahFlags=await Promise.all(auth.map(r=>_isSahById(r[2])));
     h+='<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:5px;direction:rtl;line-height:1.9">';
+    /* №474 (владелец 03.07: «это же по факту две цепи — считать как два пути? продумай») + сдвиг стрелок (11.10.2026, МИНИ АПП 101).
+       ① «حدثنا أبو بكر بن أبي شيبة وهشام بن عمار، قالا: حدثنا سفيان» — два учителя РЯДОМ (передача в паре, макрун): оба слышали
+       от Суфьяна, это два пути, сходящиеся на нём. Раньше Хишам рисовался как передавший от Абу Бакра «←حدثنا←» — ложная связь.
+       Звено, чьё имя в тексте начинается с союза «و» (кроме настоящих имён на «و»: Вакиʿ, Вахб…), — пара предыдущему.
+       ② Список форм (_isnadForms) включает глагол ПЕРЕД первым звеном, а стрелка брала forms[i-1] — все стрелки ехали на одну
+       позицию: у Бухари 65 между Ибн Мукатилем и Абдуллахом стояло «حدثنا», а в тексте «أخبرنا عبد الله». «قالا/قالوا» — не форма
+       передачи («оба сказали: …»), выкидываем. Есть ведущий глагол — сдвиг 1, нет (текст начат с имени) — по-старому. */
+    const _пара=new Set(); auth.forEach((r,i)=>{ try{ const p=stripDiac(String(r[1]||'')).trim();
+      if(i>0 && /^و\S/.test(p) && !/^و(?:كيع|هب|هيب|ائل|اقد|رقاء|برة|ضاح|ابصة|اثلة|رد|حشي|اصل|هبان|ثيمة|ساع|زير|هبيب|سنان|داعة)/.test(p)) _пара.add(i); }catch(e){} });
+    const _ф=(forms||[]).filter(f=>!/^قال(?:ا|وا)$/.test(f)); const _звеньев=auth.length-_пара.size; const _вед=_ф.length>=_звеньев?1:0;
+    const _nth=[]; { let k=-1; auth.forEach((r,i)=>{ if(!_пара.has(i)) k++; _nth[i]=k; }); }
     auth.forEach((r,i)=>{ const nm=r[1], mid=r[2]?String(r[2]):null; const ok=idMode?ourSet.has(mid):true;
-      if(i>0 && forms[i-1]) h+='<span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1));font-family:var(--arFont,\'Noto Naskh Arabic\',\'Amiri\',serif)">←'+esc(forms[i-1])+'←</span>';
+      const _фи=(i>0 && !_пара.has(i))?_ф[_nth[i]-1+_вед]:null;
+      if(i>0 && _пара.has(i)) h+='<span title="Два учителя рядом (в тексте «… و …، قالا»): оба передали от следующего звена — это ДВА пути, а не «один от другого»" style="color:#9cc3f0;font-size:calc(11px * var(--txtScale,1));border:1px dashed #2f5580;border-radius:6px;padding:0 5px;cursor:help">＋ و</span>';
+      else if(i>0 && _фи) h+='<span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1));font-family:var(--arFont,\'Noto Naskh Arabic\',\'Amiri\',serif)">←'+esc(_фи)+'←</span>';
       else if(i>0) h+='<span style="color:var(--hint)">←</span>';
       const _vd=mid?(_NVD[mid]||''):'';
       let _bc=idMode?(ok?'#3a8a5a':'#e0796a'):'#6c5ce7', _bg=idMode?(ok?'rgba(58,138,90,.12)':'rgba(224,121,106,.12)'):'rgba(108,92,231,.10)', _vtag='';
@@ -23213,6 +23226,11 @@ async function verifyNarr(card, place, text){
       h+='<span class="vChip'+(_isSahHere?' sahMed':'')+'"'+(mid?(' data-mid="'+esc(mid)+'"'):'')+' style="'+(mid?'cursor:pointer;':'')+'border:1px solid '+_bc+';border-radius:8px;padding:2px 7px;background:'+_bg+'"'+(mid?(' title="Карточка в Мактабе: shamela.ws/narrator/'+esc(mid)+'"'):'')+'><span style="font-family:var(--arFont,\'Noto Naskh Arabic\',\'Amiri\',serif)">'+esc(nm)+'</span>'+(mid?(' <span style="color:var(--hint);font-size:calc(10px * var(--txtScale,1));direction:ltr">'+(idMode?(ok?'✓':'✗'):'👤')+' id'+esc(mid)+' ↗</span>'):(idMode?' <span style="color:#e0796a;font-size:calc(10px * var(--txtScale,1));direction:ltr" title="sunnah.com опознал, наш мост — ещё нет">؟ не опознан</span>':''))+_vtag+_sahTag+_numTag+'</span>';
     });
     h+='</div>';
+    if(_пара.size){ try{ auth.forEach((r,i)=>{ if(_пара.has(i) || !_пара.has(i+1)) return;
+      const гр=[i]; let j=i+1; while(_пара.has(j)){ гр.push(j); j++; } const to=auth[j];
+      const им=гр.map(k=>'<span dir="rtl" style="'+_AF+'">'+esc(k===i?String(auth[k][1]):String(auth[k][1]).replace(/^\s*وَ?\s*/,''))+'</span>');
+      const сп=им.length===2?(им[0]+' и '+им[1]):(им.slice(0,-1).join(', ')+' и '+им[им.length-1]);
+      h+='<div style="margin-top:6px;font-size:calc(12px * var(--txtScale,1));color:#9cc3f0;line-height:1.55;border:1px dashed #2f5580;border-radius:8px;padding:5px 9px">⑂ <b>'+(гр.length===2?'Два пути':(гр.length+' пути'))+':</b> '+сп+' — '+(гр.length===2?'оба':'все')+' передали'+(to?(' от <span dir="rtl" style="'+_AF+'">'+esc(String(to[1]))+'</span>'):'')+' (в тексте «… و …، قالا/قالوا»). Это не «один от другого»: собиратель слышал хадис от каждого, и цепь держится, если надёжен хотя бы один из них (передача в паре — макрун).</div>'; }); }catch(e){_тихо(e,'pair474')} }
     // #182: ЯВНЫЙ компактный СПИСОК передатчиков с id ВНИЗУ (повтор Бухари 415) — клик по id → карточка Мактабы
     if(idMode){
       // #182: дедуп по id (один и тот же равий не считается дважды — «два Абдулла лишний»); порядок цепи сохраняем (#187)
