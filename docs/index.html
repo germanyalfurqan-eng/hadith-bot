@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1741</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1742</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2028,7 +2028,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1741';
+const APPVER = 'v1742';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -10736,7 +10736,8 @@ async function openAuthor(authorName){
     m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
   }
   modalTop(m); m.dataset.author=authorName; m._books=books;
-  m.querySelector('#authTitle').innerHTML='✍️ '+esc(authorName)+' <span style="font-size:calc(11px * var(--txtScale,1));color:var(--hint);font-weight:400">· книг: '+books.length+'</span>';
+  m.querySelector('#authTitle').innerHTML='✍️ '+esc(authorName)+' <span style="font-size:calc(11px * var(--txtScale,1));color:var(--hint);font-weight:400">· книг: '+books.length+'</span>'
+    +' <span class="authWikiLnk" title="Статья о нём: русская, если нет — английская, если нет — арабская" style="cursor:pointer;font-size:calc(11.5px * var(--txtScale,1));color:var(--link);font-weight:400;white-space:nowrap">· W Википедия ↗</span>';   // №252: ссылкой рядом с именем, а не кнопкой справа
   const out=m.querySelector('#authBioOut'); out.style.display='none'; out.innerHTML='';
   const authTr={on:false};
   const drawList=()=>{ const list=m.querySelector('#authList'); list.innerHTML='';
@@ -10745,7 +10746,12 @@ async function openAuthor(authorName){
       it.innerHTML='<div style="font-weight:600;color:var(--link);font-size:15px">'+esc((tr&&tr.voc)?tr.voc:b.n)+'</div>'+((tr&&tr.ru)?('<div style="direction:ltr;text-align:left;font-size:calc(13px * var(--txtScale,1));color:#bcd0ff">'+esc(tr.ru)+'</div>'):'')+(b.c?('<div style="font-size:calc(11px * var(--txtScale,1));color:var(--hint)">'+esc(catLabel(b.c).split(' — ')[1]||b.c)+'</div>'):'');
       it.onclick=()=>{ m.style.display='none'; openBook(b.i); }; list.appendChild(it); }); };
   drawList();
-  try{ const _aw=m.querySelector('#authWiki'); if(_aw) _aw.onclick=()=>{ try{ openLink('https://ar.wikipedia.org/w/index.php?search='+encodeURIComponent(authorName)); }catch(e){_тихо(e,"L7417")} }; }catch(e){_тихо(e,"L7417")}   // #207: Википедия у имён-авторов (поиск; «несколько статей» = результаты поиска)
+  try{ const _aw=m.querySelector('#authWiki'); if(_aw) _aw.style.display='none';   // №252: большая кнопка справа убрана
+    const _wl=m.querySelector('.authWikiLnk');
+    if(_wl){ let _адр='https://ar.wikipedia.org/w/index.php?search='+encodeURIComponent(authorName);
+      _викиСтатья(authorName).then(u=>{ _адр=u; if(!/[?&]search=/.test(u)) _wl.title='Открыть статью: '+decodeURIComponent(u.replace(/^https:\/\/(\w+)\.wikipedia\.org\/wiki\//,'$1: ')); }).catch(()=>{});
+      _wl.onclick=()=>{ try{ openLink(_адр); }catch(e){_тихо(e,"L7417")} }; }   // адрес готовится заранее: открытие после await браузер счёл бы всплывающим окном
+  }catch(e){_тихо(e,"L7417")}   // #207: Википедия у имён-авторов (поиск; «несколько статей» = результаты поиска)
   m.querySelector('#authBio').onclick=async()=>{ const b=m.querySelector('#authBio'); if(out.dataset.shown==='1'){ out.style.display='none'; out.dataset.shown=''; return; }
     out.style.display='block'; out.innerHTML='<span class="hint">📜 ИИ готовит биографию…</span>'; out.dataset.shown='1';
     try{ const r=await fetch(BACKEND_URL+'/authorinfo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({author:authorName,initData:INITDATA})});
@@ -10759,7 +10765,32 @@ async function openAuthor(authorName){
     b.style.background=authTr.on?'#173d30':''; b.style.color=authTr.on?'#bff5d4':'var(--text)'; b.textContent=authTr.on?'🌐 Перевод ВКЛ ✓':'🌐 Перевести названия';
     if(authTr.on && BACKEND_URL){ const need=books.slice(0,40).map(x=>x.n).filter(n=>n&&!_catTr.map[n]); if(need.length){ try{ const r=await fetch(BACKEND_URL+'/booktrans',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({titles:need,initData:INITDATA})}); const j=await r.json().catch(()=>({})); if(j.map) Object.assign(_catTr.map,j.map); }catch(e){_тихо(e,"L7429")} } }
     drawList(); };
+  /* №252 (владелец: «зачем тут кнопка перевести — просто с переводом делай»): как в каталоге (book_titles_ru.json,
+     перевод по умолчанию) — названия сразу с переводом, недостающие догружаются, кнопки нет. */
+  try{ const _tb=m.querySelector('#authTr'); if(_tb){ _tb.style.display='none'; if(!authTr.on) _tb.onclick(); } }catch(e){_тихо(e,"L252t")}
   m.style.display='flex';
+}
+/* №252/№258: статья Википедии напрямую, а не страница поиска. Ищем арабскую статью по имени, по её языковым ссылкам
+   берём русскую, нет — английскую, нет — арабскую. Ничего не нашлось — честно открываем поиск. */
+async function _викиСтатья(имя){
+  const поиск='https://ar.wikipedia.org/w/index.php?search='+encodeURIComponent(имя);
+  try{
+    // берём только статью, в заголовке которой есть само имя, и не страницу-разводку: «الدارمي» иначе вёл
+    // через разводку на «Дхарма (значения)» (поймано пробой 12.10.2026)
+    const _н=x=>stripDiac(String(x||'')).replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/\s+/g,' ').trim();
+    const r=await fetch('https://ar.wikipedia.org/w/api.php?action=query&list=search&srlimit=8&format=json&origin=*&srsearch='+encodeURIComponent(_н(имя).split(' ').length===1?(имя+' محدث'):имя));   // одно слово («مسلم») — без уточнения поиск даёт «Мусульманин»
+    const j=await r.json(); const кк=((j&&j.query&&j.query.search)||[]).map(x=>x.title);
+    const _одно=_н(имя).split(' ').length===1, _книга=/^(?:تفسير|سنن|صحيح|مسند|قائمة|كتاب|معجم|تاريخ|مصنف|موطأ|جامع|شرح|طبقات)\s/;
+    const т=(!_одно && кк.find(x=>_н(x)===_н(имя)))                         // составное имя — точный заголовок первым
+         || кк.find(x=>_н(x).indexOf(_н(имя))>=0 && !_книга.test(_н(x)) && !/توضيح/.test(x) && !(_одно && _н(x)===_н(имя)));   // иначе: с именем, но не книга/список и не голое слово-понятие
+    if(!т) return поиск;
+    const r2=await fetch('https://ar.wikipedia.org/w/api.php?action=query&prop=langlinks|pageprops&ppprop=disambiguation&lllimit=500&format=json&origin=*&titles='+encodeURIComponent(т));
+    const j2=await r2.json(); const стр=j2&&j2.query&&j2.query.pages?Object.values(j2.query.pages)[0]:null;
+    if(стр && стр.pageprops && 'disambiguation' in стр.pageprops) return поиск;
+    const лл=(стр&&стр.langlinks)||[];
+    for(const яз of ['ru','en']){ const л=лл.find(x=>x.lang===яз); if(л&&л['*'] && !/значения|disambiguation/i.test(л['*'])) return 'https://'+яз+'.wikipedia.org/wiki/'+encodeURIComponent(л['*'].replace(/ /g,'_')); }
+    return 'https://ar.wikipedia.org/wiki/'+encodeURIComponent(т.replace(/ /g,'_'));
+  }catch(e){ return поиск; }
 }
 // === 👤 Разбор ПЕРЕДАТЧИКА (ильм риджаль): что говорят учёные (джарх/тадиль) ===
 // 🔬 НЕЙРО-ТАХКИК (бета) — наглядная схема-древо иснада: цветные звенья + слова учёных + связи
