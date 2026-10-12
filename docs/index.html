@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1746</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1747</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2029,7 +2029,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1746';
+const APPVER = 'v1747';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -22367,6 +22367,26 @@ async function _codifHighlight(text, card, out, place){
       for(const nm of _extra){ if(nm in f2id) continue; let _mid=null; try{ _mid=await _narrLookup(nm); }catch(e){_тихо(e,"L15254")} if(_mid==null) continue;
         if(_vIds && !_vIds.has(String(_mid))) continue;   // чужой id на эталонном хадисе — не подсвечиваем (тёзка-риск)
         f2id[nm]=String(_mid); names.push(nm); } }catch(e){_тихо(e,"L15256")}
+    /* №100 (Бухари 999, 12.10.2026): фраза имени из эталона обрывается на полуслове родословной — «أبي بكر بن عمر بن عبد الرحمن
+       بن عبد» (дальше «الله بن عمر بن الخطاب»). Подсветка кончалась на «بن عبد», и хвост «عبد الله بن عمر» подсвечивался ОТДЕЛЬНЫМ
+       именем (#3807) — кусок родословной выглядел передатчиком. Висячую фразу (кончается на بن/ابن/بنت/عبد/ابي/ابو/ام) дотягиваем по
+       самому тексту: подряд берём следующие слова, пока не кончится родословная («бин …» / «абд …»), но не дальше 4 слов. */
+    try{ const _вис=/(?:^|\s)(?:بن|ابن|بنت|عبد|ابي|ابو|ام)$/; const _ог='[ً-ْٰـ]*';
+      const _т0=String(text||'');
+      for(let _i=0;_i<names.length;_i++){ const _нм=names[_i]; const _гол=stripDiac(String(_нм)).replace(/[أإآ]/g,'ا').replace(/\s+/g,' ').trim();
+        if(!_вис.test(_гол)) continue;
+        const _эк=ч=>(/[.*+?^${}()|[\]\\\/]/.test(ч)?('\\'+ч):ч);
+        const _ре=new RegExp(_гол.split('').map(ч=>ч===' '?'\\s+':((ч==='ا'?'[اأإآ]':_эк(ч))+_ог)).join(''));
+        const _м=_ре.exec(_т0); if(!_м) continue;
+        let _хв=_т0.slice(_м.index+_м[0].length), _доб='';
+        for(let _k=0;_k<6;_k++){ const _сл=/^\s+([^\s،,.:؛]+)/.exec(_хв); if(!_сл) break; _доб+=' '+_сл[1]; _хв=_хв.slice(_сл[0].length);
+          const _сг=stripDiac(_сл[1]).replace(/[أإآ]/g,'ا'); if(!/^(?:بن|ابن|بنت|عبد|ابي|ابو|ام)$/.test(_сг)) { const _дал=/^\s+([^\s،,.:؛]+)/.exec(_хв); if(!_дал || !/^(?:بن|ابن|بنت)$/.test(stripDiac(_дал[1]))) break; } }
+        _доб=_доб.replace(/\s+\S+$/, m=>/^\s+(?:بن|ابن|بنت|عبد|ابي|ابو|ام)$/.test(stripDiac(m).replace(/[أإآ]/g,'ا'))?'':m);   // висячий хвост не берём
+        if(!_доб) continue;
+        const _нов=_м[0]+_доб; f2id[_нов]=f2id[_нм]; names[_i]=_нов;
+        // хвост родословной, который эталон выдал отдельным звеном, внутри новой фразы подсвечивать не нужно —
+        // highlightNarratorsInDiv берёт более длинное совпадение первым, поэтому повтор «عبد الله بن عمر» в матне останется
+      } }catch(_e){_тихо(_e,"L100v")}
     // #160/#158: при наличии авторитетной na подсвечиваем ТОЛЬКО её (= строгий стандарт sunnah.com). Эвристический n НЕ добавляем —
     // он тащил мусор-матн (напр. «الله ما كذبني #484» в Бухари 5590) и тёзка-дубли с неверными id. na — полная цепь, добивка не нужна.
     if(names.length){
