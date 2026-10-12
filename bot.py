@@ -10453,7 +10453,7 @@ def _наш_аят_ар(surah, ayah):
         import time as _t
         if _НАШ_КОРАН_АР['д'] is None or _t.time() - _НАШ_КОРАН_АР['когда'] > 6 * 3600:
             ар = requests.get(WEBAPP_URL + 'quran.json', timeout=30).json()
-            _НАШ_КОРАН_АР['д'] = {(int(x['s']), int(x['a'])): x.get('text', '') for x in ар if isinstance(x, dict)}
+            _НАШ_КОРАН_АР['д'] = {(int(x['s']), int(x['a'])): x.get('text', '').replace(chr(0xFEFF), '') for x in ар if isinstance(x, dict)}
             _НАШ_КОРАН_АР['когда'] = _t.time()
         return _НАШ_КОРАН_АР['д'].get((int(surah), int(ayah)), '')
     except Exception:
