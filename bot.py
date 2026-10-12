@@ -10425,8 +10425,13 @@ def get_quran_ayah(surah, ayah):
         ua = f"https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/ara-quranindopak/{surah}/{ayah}.min.json"
         ur = f"https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/rus-elmirkuliev/{surah}/{ayah}.min.json"
         a = r = ""
-        ra = requests.get(ua, timeout=10)
-        if ra.status_code == 200: a = ra.json().get("text", "")
+        # 12.10.2026 (МИНИ АПП 101): арабский — из НАШЕГО quran.json (Танзиль, усманский, тот же, что
+        # в приложении и в законе «эталон — quran_uthmani/Tanzil»). Раньше бот брал индо-пакское
+        # издание (اِلٰي، مُوۡسٰ٘ي) — люди в чате видели аят иначе, чем в приложении.
+        a = _наш_аят_ар(surah, ayah)
+        if not a:
+            ra = requests.get(ua, timeout=10)
+            if ra.status_code == 200: a = ra.json().get("text", "")
         # №363 (владелец, чат @jamaat_ru, 27.06): «не пиши в скобках музыку — это ложный тафсир». У внешнего
         # издания rus-elmirkuliev в 31:6 вставлено «потешные речи (песни и музыку)». Русский текст берём из НАШЕГО
         # quran_ru.json — того же, что в приложении (там 31:6 без вставки); внешнее издание — только запасом.
@@ -10439,6 +10444,20 @@ def get_quran_ayah(surah, ayah):
 
 
 _НАШ_КОРАН_РУ = {'д': None, 'когда': 0}
+_НАШ_КОРАН_АР = {'д': None, 'когда': 0}
+
+
+def _наш_аят_ар(surah, ayah):
+    """Арабский текст аята из quran.json приложения (Танзиль, кэш на 6 часов). Нет файла — пустая строка."""
+    try:
+        import time as _t
+        if _НАШ_КОРАН_АР['д'] is None or _t.time() - _НАШ_КОРАН_АР['когда'] > 6 * 3600:
+            ар = requests.get(WEBAPP_URL + 'quran.json', timeout=30).json()
+            _НАШ_КОРАН_АР['д'] = {(int(x['s']), int(x['a'])): x.get('text', '') for x in ар if isinstance(x, dict)}
+            _НАШ_КОРАН_АР['когда'] = _t.time()
+        return _НАШ_КОРАН_АР['д'].get((int(surah), int(ayah)), '')
+    except Exception:
+        return ''
 
 
 def _наш_перевод_аята(surah, ayah):
@@ -10926,7 +10945,7 @@ _ИЗДАНИЯ_ВРЕМЯ = {}   # когда книгой пользовали
 def _голый_араб(с):
     """Арабский без огласовок, татвиля и разнобоя хамз — чтобы сравнивать по букве, а не по виду."""
     т = _АР_ЗНАКИ.sub('', с or '')
-    for a, b in (('أ', 'ا'), ('إ', 'ا'), ('آ', 'ا'), ('ى', 'ي'), ('ة', 'ه')):
+    for a, b in (('أ', 'ا'), ('إ', 'ا'), ('آ', 'ا'), ('ى', 'ي'), ('ة', 'ه'), ('ٱ', 'ا')):
         т = т.replace(a, b)
     return т.strip()
 
