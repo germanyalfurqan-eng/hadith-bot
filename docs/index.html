@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1732</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1733</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2028,7 +2028,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1732';
+const APPVER = 'v1733';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -23703,7 +23703,9 @@ async function translateTafsir(txt, key, s, a, host, btn, kind){
   if(btn){ btn.classList.add('btnBusy'); btn.innerHTML='<span class="miniSpin"></span>перевожу'; }
   _tick=setInterval(_draw,500);
   const restore=()=>{ try{ clearInterval(_tick); }catch(e){_тихо(e,"L16140")} if(btn){ btn.classList.remove('btnBusy'); btn.style.pointerEvents=''; btn.textContent='🧠 Перевести (ИИ)'; } };
-  const _ac=new AbortController(); const _to=setTimeout(()=>{try{_ac.abort();}catch(e){_тихо(e,"L16141")}},60000);   // #323: таймаут 60с — перевод тафсира/равия не виснет вечно
+  // №697 (12.10.2026): длинный тафсир бесплатная модель переводит ~100 с (замер: 10 000 знаков — 98,8 с через Gemini),
+  // а ждали 60 с — и человек видел «Перевод прерван», хотя сервер дорабатывал и клал перевод в базу. Длинному — 3 минуты.
+  const _долгий=(String(txt||'').length>2500); const _ac=new AbortController(); const _to=setTimeout(()=>{try{_ac.abort();}catch(e){_тихо(e,"L16141")}},_долгий?180000:60000);   // #323: не виснет вечно
   try{ const _cx=host.querySelector('#_trCancel'); if(_cx) _cx.onclick=()=>{ try{_ac.abort();}catch(e){_тихо(e,"L16142")} };   // v1094: ожидание можно прервать
   }catch(e){_тихо(e,"L16143")}
   try{ const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -23741,7 +23743,7 @@ async function translateTafsir(txt, key, s, a, host, btn, kind){
     }
   }catch(e){ try{clearTimeout(_to);}catch(_t){_тихо(_t,"L16177")} const _ab=(e&&e.name==='AbortError');
     host.innerHTML='<div class="stateBox err"><div class="ic">'+(_ab?'⏳':'🔧')+'</div><div class="tt">'+(_ab?'Перевод прерван':'Сервис перевода недоступен')+'</div>'
-      +'<div class="hh">'+(_ab?'Вы отменили ожидание или каналы не ответили за минуту.':'Не достучались до сервера — проверьте связь.')+'</div>'
+      +'<div class="hh">'+(_ab?('Вы отменили ожидание или каналы не ответили за '+(_долгий?'3 минуты':'минуту')+'. Сервер мог дописать перевод позже — «повторить» возьмёт его из базы сразу.'):'Не достучались до сервера — проверьте связь.')+'</div>'
       +'<div class="bb"><button class="go" id="_trRetry2" style="font-size:calc(12.5px * var(--txtScale,1));padding:7px 12px">🔄 повторить</button></div></div>';
     try{ const rb=host.querySelector('#_trRetry2'); if(rb) rb.onclick=()=>translateTafsir(txt,key,s,a,host,btn,kind); }catch(_e){_тихо(_e,"L16181")}
     restore(); }
