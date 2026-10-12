@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1735</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1736</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2028,7 +2028,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1735';
+const APPVER = 'v1736';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -22039,7 +22039,7 @@ async function codifChain(bid,num){ const key=bid+'_'+Math.floor(+num/500);
     if(!_codifCacheP[key]) _codifCacheP[key]=fetch('./codif/'+key+'.json?v='+APPVER).then(async r=>{ let m=r.ok?await r.json():null; if(m) m=await _applyIdfix(m); return m; }).catch(()=>null);
     _codifCache[key]=await _codifCacheP[key];
   }
-  const m=_codifCache[key]; return m?(m[String(num)]||null):null; }
+  const m=_codifCache[key]; const _r=m?(m[String(num)]||null):null; if(_r && _r._bid==null) _r._bid=String(bid); return _r; }   // №495: книга нужна _codifNarrPairs
 // слаг сборника (h-карточка) → bid кодификации. Только издания, где № совпадает с нашей таблицей (иначе пропускаем → фолбэк).
 const _SLUG2BID={bukhari:'1681',muslim:'1727',abudawud:'1726',nasai:'829',ibnmajah:'1198',ahmad:'25794',malik:'28107',tirmidhi:'7895'};   // #242/В-01: + abudawud 1726; СВЕРКА не-мостовых: + tirmidhi 7895 (verify∩codif 90% — нумерация совпадает; Дарими 21795 НЕ добавлен — 8% рассинхрон нумерации, нужен ре-бридж)
 function _codifPlace(ref){ if(!ref||ref.num==null) return null;
@@ -22096,10 +22096,28 @@ function _isnadSlots(text){
 // С38: ЕДИНЫЙ источник истины для не-5 книг — ЧИСТАЯ цепь [[имя-в-тексте, id], …] в порядке иснада.
 // База = i (мост ~83%), имена резолвим в КАНОН и ищем форму в тексте; добор из n (id∉i) без цепи передачи КНИГИ (قراءة/سماع, год смерти >360).
 // Используют И подсветка (_codifHighlight), И сверка (verifyNarr) — чтобы число/состав совпадали (как полагается).
+/* №495 (владелец 03.07, скрин Шуаб аль-Иман №7741: «почему тут все не распознаны»).
+   Учителя аль-Байхаки в Шуабе названы одной куньей — «أخبرنا أبو عبد الله الحافظ» (аль-Хаким),
+   «أبو عبد الرحمن السلمي», «أبو سعد الماليني». Разметка книги отдала их случайным безвестным
+   карточкам с той же куньей и без года смерти: #311 «أبو عبد الله الجشمي» (2 713 раз первым звеном),
+   #7391 «أبو عبد الرحمن التميمي» (296), #273 «أبو سعد الساعدي» (252). Нейротахкик честно звал их
+   «маджхуль», и цепи аль-Байхаки выглядели слабыми. Сверено поиском по книге (12.10.2026):
+   «أخبرنا أبو عبد الله» — «الحافظ» в 49 образцах из 49, «أبو عبد الرحمن» — «السلمي» во всех,
+   «أبو سعد» — «الماليني» в 36 из 45 (остальные — другие люди). Поэтому подменяем ТОЛЬКО когда
+   кунья с этой нисбой стоит в самом тексте хадиса, и только в этой книге. Данные книги не трогаем:
+   по исходным номерам считается код цепи, и «та же цепь ещё в N хадисах» не должна сломаться. */
+const _ШУАБ_УЧИТЕЛЯ=[['311','ابو عبد الله الحافظ','11776'],['7391','ابو عبد الرحمن السلمي','11771'],['273','ابو سعد الماليني','11680'],['21143','ابو العباس محمد بن يعقوب','12319']];   // аль-Асамм (ум. 346) — «أبو العباس محمد بن يعقوب» в цепях аль-Хакима однозначен
+function _учителяБайхаки(ids, rec, text){
+  if(String(rec&&rec._bid)!=='748' || !text) return ids;
+  const _к=x=>_narrCanon(stripDiac(String(x||'')).replace(/ـ/g,'')).replace(/(^|\s)اب[اي](\s)/g,'$1ابو$2');
+  const _т=' '+_к(text).replace(/[،,.:؛]/g,' ').replace(/\s+/g,' ')+' ';
+  return ids.map(x=>{ const _п=_ШУАБ_УЧИТЕЛЯ.find(r=>r[0]===x); if(_п && _т.indexOf(' '+_к(_п[1])+' ')>=0){ if(rec) (rec._фраза=rec._фраза||{})[_п[2]]=_п[1]; return _п[2]; } return x; });
+}
 async function _codifNarrPairs(rec, text){
   if(!rec) return [];
-  const _iset=new Set((rec.i||[]).map(String));
-  let _iord=(rec.i||[]).map(String).filter(x=>x!=='?');
+  const _iSrc=_учителяБайхаки((rec.i||[]).map(String), rec, text);   // №495
+  const _iset=new Set(_iSrc);
+  let _iord=_iSrc.filter(x=>x!=='?');
   _iord=_iord.slice().reverse(); if(_iord.length>1) _iord=_iord.slice(1);          // порядок текста, без верхнего собирателя
   const _nph={}; for(const pr of (rec.n||[])){ const id=String(pr[1]); if(!(id in _nph)) _nph[id]=String(pr[0]||''); }
   const _BOOKMARK=/(?:قراه|قرات|قراءه|سماعا?|اجازه|مناوله|كتب الي|اذن لي)/;
@@ -22150,6 +22168,7 @@ async function _codifNarrPairs(rec, text){
     if(_lak && wo.length>1 && _lak.length>=4 && /^ال/.test(_lak) && !_STOPNIS.has(_lak)
        && (_nisBusy[_norm(_lak)]||0)<=1) cands.push(_lak);   // лакаб (الأعمش)
     if(wo[0] && _norm(wo[0]).length>=4) cands.push(wo[0]);   // одиночное имя (سفيان/مالك/شعبة) — ПОСЛЕДНИЙ приоритет
+    if(rec._фраза && rec._фраза[String(id)]) cands.unshift(rec._фраза[String(id)]);   // №495: учителя аль-Байхаки ищем по той фразе, что стоит в тексте (иначе «محمد بن» крадёт чужое имя)
     let pick=null, pos=-1;
     for(const cand of cands){ const cc=_norm(cand); if(cc.length<4) continue;
       let p=_ct.indexOf(' '+cc+' ',_cur); if(p<0) p=_ct.indexOf(' '+cc,_cur); if(p<0) p=_ct.indexOf(' '+cc);    // по порядку иснада, затем по всему тексту
