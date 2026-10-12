@@ -14640,7 +14640,17 @@ async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _ctag = "#" + re.sub(r"\W+", "_", (chat.title or "чат")).strip("_")[:32]
             _atag = {"kicked": "#удалён", "restricted": "#ограничен"}.get(
                 member.new_chat_member.status, "#вышел")
-            msg = f"#участники {_atag} {_ctag}\n{a} {_ник}\n🔗 {_польз}\n🆔 <code>{uid}</code>\n📁 {_чат_имя}\n🕐 {now}"
+            # №574: «почему удалён» — причину Telegram не сообщает, но сообщает, КТО это сделал.
+            _кем = ""
+            try:
+                _fu = getattr(member, "from_user", None)
+                if _fu and getattr(_fu, "id", None) and _fu.id != uid:
+                    _кем = "\n👮 кем: " + html.escape(" ".join(x for x in (_fu.first_name, _fu.last_name) if x) or "админ") + (f" (@{_fu.username})" if _fu.username else "") + f" · <code>{_fu.id}</code> — причину Телеграм не передаёт"
+                elif member.new_chat_member.status in ("left",):
+                    _кем = "\n👤 ушёл сам"
+            except Exception:
+                _кем = ""
+            msg = f"#участники {_atag} {_ctag}\n{a} {_ник}{_кем}\n🔗 {_польз}\n🆔 <code>{uid}</code>\n📁 {_чат_имя}\n🕐 {now}"
         else: return
         try:
             _пост = await context.bot.send_message(chat_id=LOG_CHAT_ID, text=msg, parse_mode="HTML",
