@@ -7761,9 +7761,77 @@ def dsoc_выговор_записать(текст, **поля):
 #   JM <текст> / заметки JM <текст>  — записать заметку №N с датой
 #   JM список / заметки JM           — все заметки (длинный список — файлом .md)
 #   JM готово N  ·  JM убрать N      — отметить выполненной · удалить
-# Напоминания по дате — следующим шагом (владелец: «будем развивать это направление»).
+#   JM <текст> напомни <когда>       — заметка с напоминанием (12.10.2026, МИНИ АПП 101)
+#   JM напомни N <когда>             — поставить напоминание к уже записанной заметке
+#   <когда>: «через 3 часа / 2 дня / неделю», «завтра», «20.10», «20.10 14:00» (время МСК)
+# Напоминание приходит в @jamaat_ru ответом на исходное сообщение; проверка — раз в 15 мин
+# вместе с остальными напоминаниями (_напоминания_вотчер), так что точность — четверть часа.
 JM_ФАЙЛ = "jm_zametki.json"
 _JM_РЕ = re.compile(r'^\s*(?:заметк[аиу]\s+)?(?:JM|ЖМ)\b[\s:.,—-]*(.*)$', re.I | re.S)
+import datetime as _дт   # модуль: имя datetime в этом файле занято классом
+_JM_КОГДА_РЕ = re.compile(
+    r'[\s,.—-]*напомн\w*\s+(через\s+(?:(\d{1,3})\s+)?(час\w*|д(?:ень|ня|ней)|недел\w*)|завтра|'
+    r'(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?(?:\s+(?:в\s+)?(\d{1,2})[:.](\d{2}))?)\s*$', re.I)
+
+
+def _jm_когда(хв):
+    """«…напомни через 2 дня» → (unix-время, текст без хвоста). Нет хвоста — (None, хв)."""
+    м = _JM_КОГДА_РЕ.search(хв or '')
+    if not м:
+        return None, хв
+    мск = _дт.timezone(_дт.timedelta(hours=3))
+    сейчас = _дт.datetime.now(мск)
+    когда = None
+    if м.group(3):                                   # «через N единиц»
+        n = int(м.group(2) or 1)
+        ед = м.group(3).lower()
+        шаг = (_дт.timedelta(hours=n) if ед.startswith('час') else
+               _дт.timedelta(weeks=n) if ед.startswith('недел') else _дт.timedelta(days=n))
+        когда = сейчас + шаг
+    elif м.group(1).lower().startswith('завтра'):
+        когда = (сейчас + _дт.timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+    else:                                            # «20.10[.2026] [14:00]»
+        try:
+            год = int(м.group(6)) if м.group(6) else сейчас.year
+            if год < 100:
+                год += 2000
+            когда = _дт.datetime(год, int(м.group(5)), int(м.group(4)),
+                                      int(м.group(7) or 9), int(м.group(8) or 0), tzinfo=мск)
+            if not м.group(6) and когда < сейчас:    # дата без года уже прошла — значит следующий год
+                когда = когда.replace(year=год + 1)
+        except ValueError:
+            return None, хв
+    return когда.timestamp(), хв[:м.start()].strip()
+
+
+def _jm_когда_текстом(ts):
+    return _дт.datetime.fromtimestamp(ts, _дт.timezone(_дт.timedelta(hours=3))).strftime('%d.%m.%Y %H:%M МСК')
+
+
+async def jm_напоминания_круг(бот):
+    """Из _напоминания_вотчер: заметкам JM, которым пора, — напоминание в @jamaat_ru."""
+    д = _data_get(JM_ФАЙЛ, {}) or {}
+    пора = [з for з in (д.get('заметки') or []) if з.get('напомнить') and not з.get('напомнено')
+            and not з.get('удалена') and not з.get('готово') and float(з['напомнить']) <= time.time()]
+    for з in пора:
+        н = з.get('n')
+        try:
+            await бот.send_message(
+                JAMAAT_RU_CHAT_ID,
+                '⏰ Напоминание по заметке JM №%s (записана %s):\n%s\n\nВыполнено: «JM готово %s»'
+                % (н, з.get('d', ''), (з.get('т') or '')[:1500], н),
+                reply_to_message_id=з.get('смс') or None, allow_sending_without_reply=True)
+        except Exception as е:
+            print('заметки JM: напоминание №%s не ушло — %s' % (н, str(е)[:160]))
+            continue
+
+        def _отм(дд, н=н):
+            for зз in (дд or {}).get('заметки', []):
+                if зз.get('n') == н:
+                    зз['напомнено'] = _now_msk()
+            return дд
+        await asyncio.get_event_loop().run_in_executor(
+            None, lambda: _data_atomic_mutate(JM_ФАЙЛ, _отм, 'jm: напомнено №%s' % н))
 
 
 async def jm_заметки(update, context, text):
@@ -7789,8 +7857,11 @@ async def jm_заметки(update, context, text):
                 return True
             строки = []
             for з in зс:
-                строки.append('%s №%s · %s\n%s' % ('✅' if з.get('готово') else '▫️', з['n'],
-                                                   з.get('d', ''), з.get('т', '')))
+                _нап = ''
+                if з.get('напомнить'):
+                    _нап = ' · ⏰ ' + _jm_когда_текстом(float(з['напомнить'])) + (' (напомнено)' if з.get('напомнено') else '')
+                строки.append('%s №%s · %s%s\n%s' % ('✅' if з.get('готово') else '▫️', з['n'],
+                                                     з.get('d', ''), _нап, з.get('т', '')))
             весь = '📒 ЗАМЕТКИ JAMAAT MUSLIMIN — всего %d (открыто %d)\n\n' % (
                 len(зс), sum(1 for з in зс if not з.get('готово'))) + '\n\n'.join(строки)
             if len(весь) <= 3500:
@@ -7802,6 +7873,33 @@ async def jm_заметки(update, context, text):
                 await context.bot.send_document(update.effective_chat.id, бф, filename='zametki_JM.md',
                                                 caption='📒 Заметки JM — %d' % len(зс),
                                                 reply_to_message_id=_м.message_id)
+            return True
+
+        мн = re.match(r'напомн\w*\s*№?\s*(\d+)\s+(.+)$', хв, re.I)
+        if мн:
+            н = int(мн.group(1))
+            кт, _ = _jm_когда('напомни ' + мн.group(2))
+            if not кт:
+                await _м.reply_text('⚠️ Не понял, когда напомнить. Так: «JM напомни %d через 3 дня», '
+                                    '«… завтра», «… 20.10 14:00».' % н)
+                return True
+            есть = {}
+
+            def _нап(д):
+                д = д if isinstance(д, dict) else {}
+                for з in д.get('заметки', []):
+                    if з.get('n') == н and not з.get('удалена'):
+                        з['напомнить'] = кт
+                        з.pop('напомнено', None)
+                        есть['т'] = з.get('т', '')
+                return д
+            ок, _ = await цикл.run_in_executor(None, lambda: _data_atomic_mutate(
+                JM_ФАЙЛ, _нап, 'jm: напомнить №%d' % н))
+            if ок and есть:
+                await _м.reply_text('⏰ Напомню о заметке №%d — %s:\n%s' % (н, _jm_когда_текстом(кт), есть['т'][:300]))
+            else:
+                await _м.reply_text('⚠️ Напоминание к заметке №%d не поставлено — %s.' % (
+                    н, 'такой заметки нет' if ок else 'запись не сохранилась'))
             return True
 
         мд = re.fullmatch(r'(готово|сделано|выполнено|убрать|удалить)\s*№?\s*(\d+)', хв, re.I)
@@ -7832,19 +7930,26 @@ async def jm_заметки(update, context, text):
             return True
 
         запись = {}
+        кт, хв = _jm_когда(хв)
+        if not хв:
+            await _м.reply_text('⚠️ Пустая заметка не записана. Так: «JM текст заметки напомни через 2 дня».')
+            return True
 
         def _доб(д):
             д = д if isinstance(д, dict) else {}
             зс = д.setdefault('заметки', [])
             н = max([з.get('n', 0) for з in зс] or [0]) + 1
             запись.update({'n': н, 'd': _now_msk(), 'т': хв[:4000], 'смс': _м.message_id})
+            if кт:
+                запись['напомнить'] = кт
             зс.append(dict(запись))
             return д
         ок, _ = await цикл.run_in_executor(None, lambda: _data_atomic_mutate(
             JM_ФАЙЛ, _доб, 'jm: заметка'))
         if ок and запись.get('n'):
-            await _м.reply_text('📒 Заметка JM №%d записана · %s\n%s\n\nСписок: «JM список» · '
-                                'выполнено: «JM готово %d»' % (запись['n'], запись['d'], хв[:500], запись['n']))
+            await _м.reply_text('📒 Заметка JM №%d записана · %s\n%s%s\n\nСписок: «JM список» · '
+                                'выполнено: «JM готово %d»' % (запись['n'], запись['d'], хв[:500],
+                                ('\n⏰ Напомню: ' + _jm_когда_текстом(кт)) if кт else '', запись['n']))
         else:
             await _м.reply_text('⚠️ Заметку записать не вышло — хранилище недоступно. НЕ записана.')
         return True
@@ -10804,6 +10909,10 @@ async def _напоминания_вотчер(application):
                 _data_put(НАПОМИНАНИЯ_ФАЙЛ, _н, 'напоминания: отметка о рассылке')
         except Exception as e:
             print('напоминания: круг не вышел — %s' % str(e)[:160])
+        try:
+            await jm_напоминания_круг(application.bot)    # №505: напоминания заметок JM
+        except Exception as e:
+            print('заметки JM: круг напоминаний не вышел — %s' % str(e)[:160])
         await asyncio.sleep(900)
 
 
