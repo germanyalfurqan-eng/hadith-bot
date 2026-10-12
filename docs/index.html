@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1738</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1739</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2028,7 +2028,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1738';
+const APPVER = 'v1739';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7750,7 +7750,12 @@ async function _bookLoad(){
       bNext.title='Вперёд по книге';
       bNext.style.cssText='flex:1;padding:11px 12px;font-weight:700';
       bNext.onclick=()=>{ try{hap('light');}catch(e){_тихо(e,"L5371")} _bookView.pg++; _bookLoad(); };
-      nav2.appendChild(bPrev); nav2.appendChild(bNext);
+      /* №304 (владелец 20.06: «как в мактабе — конец книги слева, это арабский язык, а не русский»)
+         против №656 (позже: «внизу стрелки запутанно») — два слова владельца спорят. Не выбираю за него:
+         порядок по умолчанию прежний (влево = назад), а «как в Мактабе» — переключатель под кнопками. */
+      if(_navRtl()){ bNext.textContent='⟵ Следующая страница'; bPrev.textContent='Предыдущая страница ⟶';
+        nav2.appendChild(bNext); nav2.appendChild(bPrev); }
+      else { nav2.appendChild(bPrev); nav2.appendChild(bNext); }
       bot.appendChild(nav2);
       // #38: пара «в начало книги / в конец книги» (как ⏮/⏭ в Мактабе) — ясные подписи, не зависит от RTL
       const nav3=document.createElement('div'); nav3.style.cssText='display:flex;gap:7px;width:100%;margin-top:6px';
@@ -7760,7 +7765,10 @@ async function _bookLoad(){
       const bLast=document.createElement('button'); bLast.className='mini'; bLast.textContent='⤓ В конец книги';
       bLast.style.cssText='flex:1;border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:calc(13px * var(--txtScale,1));color:var(--text)';
       bLast.onclick=()=>{ try{hap('light');}catch(e){_тихо(e,"L5381")} _bkJumpLast(); };
-      nav3.appendChild(bFirst); nav3.appendChild(bLast); bot.appendChild(nav3);
+      if(_navRtl()){ bLast.textContent='В конец книги ⤓'; nav3.appendChild(bLast); nav3.appendChild(bFirst); }
+      else { nav3.appendChild(bFirst); nav3.appendChild(bLast); }
+      bot.appendChild(nav3);
+      bot.appendChild(_navRtlToggle(()=>{ try{ _bookLoad(); }catch(e){_тихо(e,"L304b")} }));   // №304
     }
     // ── РЯД ТОГГЛОВ: ⚙️ Инструменты (поиск/копия/ссылка/шрифт/тема) + 🧠 ИИ — панели по требованию, чтение не загромождено
     const tgl=document.createElement('div'); tgl.style.cssText='display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap';
@@ -19747,6 +19755,24 @@ function _цитМесто(mid, quote){
    записи стоял номер книги (поле 5) — а он заполнен у меньшинства записей: свод назван у 100%, номер у ~34%.
    _ttLinkRow сам умеет вывести книгу из названия свода (_SVOD_BID) и из критика (_bidПоКритику) и искать в ней
    цитату. Значит, кнопку показываем всякий раз, когда книгу хоть одним из трёх способов определить можно. */
+/* №304: направление листания читалок. '1' — как в Мактабе (справа налево: «Следующая» и «В конец» слева). */
+function _navRtl(){ try{ return localStorage.getItem('navRtl')==='1'; }catch(e){ return false; } }
+function _navRtlToggle(после){
+  const t=document.createElement('div'); t.style.cssText='margin-top:6px;text-align:center;font-size:calc(11.5px * var(--txtScale,1));color:var(--link);cursor:pointer;opacity:.85';
+  t.textContent=_navRtl()?'⇄ Листать слева направо (как в русской книге)':'⇄ Листать как в Мактабе (справа налево)';
+  t.title='Меняет местами кнопки листания в обеих читалках; выбор запоминается';
+  t.onclick=()=>{ try{ localStorage.setItem('navRtl', _navRtl()?'0':'1'); }catch(e){_тихо(e,"L304t")} try{ _readNavApply(); }catch(e){_тихо(e,"L304r")} try{ if(после) после(); }catch(e){_тихо(e,"L304p")} };
+  return t; }
+/* читалка наших сборников: кнопки стоят в разметке — переставляем рядами, тексты меняем по месту */
+function _readNavApply(){ try{
+  const p=document.getElementById('readPrev'), n=document.getElementById('readNext'), f=document.getElementById('readFirst'), l=document.getElementById('readLast');
+  if(!p||!n||!f||!l) return; const r=_navRtl();
+  p.parentNode.style.flexDirection=r?'row-reverse':'row'; f.parentNode.style.flexDirection=r?'row-reverse':'row';
+  p.textContent=r?'Предыдущий ⟶':'⟵ Предыдущий'; n.textContent=r?'⟵ Следующий':'Следующий ⟶';
+  if(!document.getElementById('readNavTgl')){ const t=_navRtlToggle(null); t.id='readNavTgl'; f.parentNode.parentNode.insertBefore(t, f.parentNode.nextSibling); }
+  else document.getElementById('readNavTgl').textContent=r?'⇄ Листать слева направо (как в русской книге)':'⇄ Листать как в Мактабе (справа налево)';
+}catch(e){_тихо(e,"L304a")} }
+try{ document.addEventListener('DOMContentLoaded', _readNavApply); setTimeout(_readNavApply, 0); }catch(e){}
 function _ttЕстьКнига(c){ try{ if(c[5] && Number(c[5])>0) return true; const bk=String(c[4]||'').trim();
   if(bk && _SVOD_BID[bk]) return true; return !!_bidПоКритику(bk, c[0]); }catch(e){ return false; } }
 function _ttLinkRow(bid,page,mid,shnum,book,quote,crit){
