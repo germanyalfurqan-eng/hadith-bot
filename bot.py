@@ -13663,11 +13663,24 @@ def translate_matn(arabic, src="", owner=False, force=False, model_out=None):
         return ""
     cache = _load_trans()
     key = _trans_key(arabic)
-    if key in cache and not force:
-        v = cache[key]
+    # 🔴 12.10.2026 (МИНИ АПП 101): ключ — только НАЧАЛО текста (300 букв). Текст с тем же началом, но
+    # длиннее (тафсир, хадис с доп. риваятами) получал перевод КОРОТКОГО — обрезанный. Теперь есть ключ с
+    # длиной (key2), а старая запись без длины проверяется на явное несовпадение.
+    key2 = key + "|n" + str(len(arabic) // 200)
+    for _k in ((key2, key) if not force else ()):
+        if _k not in cache:
+            continue
+        v = cache[_k]
         cru = v.get("ru", "") if isinstance(v, dict) else v
-        if cru and not _is_mostly_arabic(cru):
-            return cru                 # нормальный русский кэш
+        _n0 = v.get("n") if isinstance(v, dict) else None
+        _ar0 = (v.get("ar") or "") if isinstance(v, dict) else ""
+        if _n0:
+            _тот = abs(int(_n0) - len(arabic)) <= max(40, len(arabic) // 20)
+        else:
+            _тот = not ((_ar0 and len(_ar0) < 600 and len(arabic) > len(_ar0) + 40)
+                        or (len(arabic) > 1500 and cru and len(cru) < len(arabic) * 0.33))
+        if cru and _тот and not _is_mostly_arabic(cru):
+            return cru                 # нормальный русский кэш именно ЭТОГО текста
         # иначе — старый битый (арабский) кэш: игнорируем и переводим заново ниже
     if src and "jarh" in src.lower():   # P0-2: это ОЦЕНКА передатчика (джарх ва таʿдиль), не аят/тафсир — иначе идиомы переводятся буквально в бессмыслицу
         sysmsg = ("Ты переводишь с арабского на русский ОЦЕНКУ передатчика хадиса (джарх ва таʿдиль) — "
@@ -13867,7 +13880,8 @@ def translate_matn(arabic, src="", owner=False, force=False, model_out=None):
             # базу только там, где проверяли ровно то, что в ней лежит.
             if лучше and (араб or '').strip() == (arabic or '').strip():
                 cache[key] = {"ar": arabic[:600], "ru": лучше, "src": (src or "")[:120],
-                              "правил": судья}
+                              "правил": судья, "n": len(arabic)}
+                cache[key + "|n" + str(len(arabic) // 200)] = cache[key]
                 # Запись базы — это коммит в ветку данных, её тянут все клиенты. Проверяющий
                 # работает в стороне и может исправлять часто, поэтому пишем не чаще раза в
                 # две минуты: правка уже лежит в памяти и уйдёт на диск с ближайшим сохранением.
@@ -13937,7 +13951,11 @@ def translate_matn(arabic, src="", owner=False, force=False, model_out=None):
     else:
         ru = (_one(arabic) or "").strip()
     if ru and not _is_mostly_arabic(ru) and not _отговорка(ru):
-        cache[key] = {"ar": arabic[:600], "ru": ru, "src": (src or "")[:120]}
+        _зап = {"ar": arabic[:600], "ru": ru, "src": (src or "")[:120], "n": len(arabic)}
+        cache[key + "|n" + str(len(arabic) // 200)] = _зап
+        _старая = cache.get(key)
+        if not (isinstance(_старая, dict) and _старая.get("n") and _старая.get("n") != len(arabic)):
+            cache[key] = _зап   # общий ключ не перетираем переводом ДРУГОГО по длине текста
         _trans_dirty += 1
         if _trans_dirty >= 3:          # батч: коммитим в репо каждые 3 новых
             _save_trans(); _trans_dirty = 0
