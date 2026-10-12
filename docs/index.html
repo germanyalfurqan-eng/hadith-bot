@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1739</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1740</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2028,7 +2028,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1739';
+const APPVER = 'v1740';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -22618,7 +22618,8 @@ function neuroDecode(nv){
            majhul_link:['🔴','маджхуль-звено — цепь не держится (тавсик не установлен)','#ff8787'],   // №454: маджхуль — красным, цепь падает (было серым ⚪)
            daif:['🔴','даиф (слабое звено)','#ff9b7a'],
            daif_matruk:['🔴','даиф/матрук (отвергнутое звено)','#ff8787'],
-           incomplete:['◻️','неполный расчёт (в цепи неопознанные звенья '+esc(nv.cov||'')+')','#8a93a0']};
+           incomplete:['◻️','неполный расчёт ('+(function(c){ const м=/^(\d+)\s*\/\s*(\d+)$/.exec(String(c||'').trim());   // №449: «8/11» = опознано 8 из 11, а читалось «неопознанных 8»
+             return м ? ('опознано звеньев '+м[1]+' из '+м[2]+', остальные не опознаны') : ('в цепи неопознанные звенья '+esc(c||'')); })(nv.cov)+')','#8a93a0']};
   /* 🔴 11.10.2026 (МИНИ АПП 101, замер по всем neuro/): из 29 466 вердиктов «маджхуль-звено» в 5 778 виновник — голое
      имя из одного слова (سعيد 3557 раз по всем вердиктам, يحيى 2677, قتادة 2117, مالك 1402, جابر 1339, حماد 1206, أيوب…).
      Это почти наверняка известные надёжные передатчики, спутанные с тёзкой-маджхулем. Красное «цепь не держится» для
@@ -23297,9 +23298,22 @@ async function verifyNarr(card, place, text){
       if(i>0 && /^و\S/.test(p) && !/^و(?:كيع|هب|هيب|ائل|اقد|رقاء|برة|ضاح|ابصة|اثلة|رد|حشي|اصل|هبان|ثيمة|ساع|زير|هبيب|سنان|داعة)/.test(p)) _пара.add(i); }catch(e){} });
     const _ф=(forms||[]).filter(f=>!/^قال(?:ا|وا)$/.test(f)); const _звеньев=auth.length-_пара.size; const _вед=_ф.length>=_звеньев?1:0;
     const _nth=[]; { let k=-1; auth.forEach((r,i)=>{ if(!_пара.has(i)) k++; _nth[i]=k; }); }
+    /* №449 (владелец 02.07, скрин Абу Дауда 666: «почему этот бардак, карточка кривая»). «حدثنا عيسى الغافقي حدثنا ابن وهب
+       ح وحدثنا قتيبة حدثنا الليث … عن معاوية» — «ح» (тахвиль) значит ПЕРЕХОД КО ВТОРОМУ ПУТИ. Эталон даёт звенья одной
+       линией, и рисовалось «ابن وهب ←حدثنا← قتيبة» — будто Ибн Вахб передал от Кутайбы. Если в тексте между двумя
+       соседними звеньями стоит отдельное «ح», связи между ними нет: ставим «⑂ ح» и говорим словами. Где пути сходятся,
+       текст не всегда называет — не угадываем. */
+    const _тахв=new Set(); try{
+      const _т=' '+stripDiac(String(text||'')).replace(/[،,.:؛()\[\]«»"]/g,' ').replace(/\s+/g,' ')+' ';
+      let _от=0; const _поз=[];
+      auth.forEach((r,i)=>{ const н=stripDiac(String(r[1]||'')).replace(/^\s*و(?=\S)/,'').trim().split(/\s+/).slice(0,2).join(' ');
+        const п=(н.length>=3)?_т.indexOf(' '+н,_от):-1; _поз[i]=п; if(п>=0) _от=п+н.length; });
+      for(let i=1;i<auth.length;i++){ if(_поз[i-1]>=0 && _поз[i]>_поз[i-1] && /\sح\s/.test(_т.slice(_поз[i-1],_поз[i]+1))) _тахв.add(i); }
+    }catch(e){_тихо(e,"L449t")}
     auth.forEach((r,i)=>{ const nm=r[1], mid=r[2]?String(r[2]):null; const ok=idMode?ourSet.has(mid):true;
       const _фи=(i>0 && !_пара.has(i))?_ф[_nth[i]-1+_вед]:null;
-      if(i>0 && _пара.has(i)) h+='<span title="Два учителя рядом (в тексте «… و …، قالا»): оба передали от следующего звена — это ДВА пути, а не «один от другого»" style="color:#9cc3f0;font-size:calc(11px * var(--txtScale,1));border:1px dashed #2f5580;border-radius:6px;padding:0 5px;cursor:help">＋ و</span>';
+      if(i>0 && _тахв.has(i)) h+='<span title="«ح» — переход к другому пути (тахвиль): этот передатчик НЕ слышал от предыдущего, это начало второй цепи" style="color:#9cc3f0;font-weight:700;padding:0 3px">⑂ ح</span>';
+      else if(i>0 && _пара.has(i)) h+='<span title="Два учителя рядом (в тексте «… و …، قالا»): оба передали от следующего звена — это ДВА пути, а не «один от другого»" style="color:#9cc3f0;font-size:calc(11px * var(--txtScale,1));border:1px dashed #2f5580;border-radius:6px;padding:0 5px;cursor:help">＋ و</span>';
       else if(i>0 && _фи) h+='<span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1));font-family:var(--arFont,\'Noto Naskh Arabic\',\'Amiri\',serif)">←'+esc(_фи)+'←</span>';
       else if(i>0) h+='<span style="color:var(--hint)">←</span>';
       const _vd=mid?(_NVD[mid]||''):'';
@@ -23318,6 +23332,10 @@ async function verifyNarr(card, place, text){
       h+='<span class="vChip'+(_isSahHere?' sahMed':'')+'"'+(mid?(' data-mid="'+esc(mid)+'"'):'')+' style="'+(mid?'cursor:pointer;':'')+'border:1px solid '+_bc+';border-radius:8px;padding:2px 7px;background:'+_bg+'"'+(mid?(' title="Карточка в Мактабе: shamela.ws/narrator/'+esc(mid)+'"'):'')+'><span style="font-family:var(--arFont,\'Noto Naskh Arabic\',\'Amiri\',serif)">'+esc(nm)+'</span>'+(mid?(' <span style="color:var(--hint);font-size:calc(10px * var(--txtScale,1));direction:ltr">'+(idMode?(ok?'✓':'✗'):'👤')+' id'+esc(mid)+' ↗</span>'):(idMode?' <span style="color:#e0796a;font-size:calc(10px * var(--txtScale,1));direction:ltr" title="sunnah.com опознал, наш мост — ещё нет">؟ не опознан</span>':''))+_vtag+_sahTag+_numTag+'</span>';
     });
     h+='</div>';
+    if(_тахв.size){ try{ const _им=k=>'<span dir="rtl" style="'+_AF+'">'+esc(String(auth[k][1]).replace(/^\s*وَ?\s*/,''))+'</span>';
+      [..._тахв].forEach(i=>{ h+='<div style="margin-top:6px;font-size:calc(12px * var(--txtScale,1));color:#9cc3f0;line-height:1.55;border:1px dashed #2f5580;border-radius:8px;padding:5px 9px">⑂ <b>«ح» — два пути:</b> '
+        +'первый идёт до '+_им(i-1)+', второй начинается с '+_им(i)+'. '+_им(i-1)+' НЕ передавал от '+_им(i)+' — это разные цепи, '
+        +'которые сходятся на общем передатчике ниже (точку схождения текст не всегда называет).</div>'; }); }catch(e){_тихо(e,"L449n")} }
     if(_пара.size){ try{ auth.forEach((r,i)=>{ if(_пара.has(i) || !_пара.has(i+1)) return;
       const гр=[i]; let j=i+1; while(_пара.has(j)){ гр.push(j); j++; } const to=auth[j];
       const им=гр.map(k=>'<span dir="rtl" style="'+_AF+'">'+esc(k===i?String(auth[k][1]):String(auth[k][1]).replace(/^\s*وَ?\s*/,''))+'</span>');
