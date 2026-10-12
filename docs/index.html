@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1734</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1735</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2028,7 +2028,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1734';
+const APPVER = 'v1735';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -16727,15 +16727,27 @@ function _nmShort(nm,n){ n=n||3; const w=String(nm||'').trim().split(/\s+/); if(
   let k=n; const HANG=/^(بن|ابن|أبي|ابي|بنت|أبو|ابو|عبد)$/;
   while(k<w.length && HANG.test(stripDiac(w[k-1]))) k++;
   return w.slice(0,k).join(' ')+(k<w.length?'…':''); }
+/* №494 (владелец 03.07: «ещё и не опознан держишь в цепях — нет бы проштудировать таблицу»).
+   dz/u_rid.json — U-код краткой формы → id равия, ТОЛЬКО для однозначных форм (ابن ابي نجيح,
+   ابن لهيعه, مسدد, ابو حذيفه…), список составлен вручную и каждая форма сверена с карточкой
+   (имя, кунья, год смерти) — _mini101/ceni494/karta_u.py. 1290 кодов, 85 641 место в книгах.
+   Двусмысленные формы (سفيان, حماد, ابو اسحاق…) в карту не входят и остаются «не опознан». */
+let _uRidMap, _uRidP=null;
+function _uRidLoad(){ if(_uRidMap!==undefined) return Promise.resolve(_uRidMap);
+  if(!_uRidP) _uRidP=fetch('./dz/u_rid.json?v='+APPVER).then(r=>r.ok?r.json():{}).catch(()=>({})).then(m=>{ _uRidMap=m||{}; return _uRidMap; });
+  return _uRidP; }
+function _uRid(c){ return (typeof c==='string' && _uRidMap && _uRidMap[c]!=null) ? Number(_uRidMap[c]) : null; }
 function _dzChips(codes, row, forms, uResolved, numOverride){
   uResolved=uResolved||{}; numOverride=numOverride||{};
+  if(_uRidMap===undefined) _uRidLoad();
   const arr=codes.slice(0,16);
   arr.forEach((c,i)=>{
     const b=document.createElement('span');
     b.style.cssText='cursor:pointer;font-size:calc(12.5px * var(--txtScale,1));padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.03)';
     const ovr=(numOverride[i]!=null);   // числовой id перекрыт авторитетным (по сверке)
-    const rid=ovr?Number(numOverride[i]):((typeof c==='number')?c:(uResolved[c]!=null?Number(uResolved[c]):null));   // #1/#4/#6: U-код/чужой id опознан через na/сверку (همام→6739, خالد 16274→1768)
-    if(rid!=null){ b.textContent='#'+rid+' ✓'; b.style.color='#9fd3a8'; b.title='опознан — id базы '+rid+(typeof c==='number'?'':' (по сверке sunnah.com)');
+    const _поФорме=(!ovr && typeof c!=='number' && uResolved[c]==null) ? _uRid(c) : null;   // №494
+    const rid=ovr?Number(numOverride[i]):((typeof c==='number')?c:(uResolved[c]!=null?Number(uResolved[c]):_поФорме));   // #1/#4/#6: U-код/чужой id опознан через na/сверку (همام→6739, خالد 16274→1768)
+    if(rid!=null){ b.textContent='#'+rid+' ✓'; b.style.color='#9fd3a8'; b.title='опознан — id базы '+rid+(typeof c==='number'?'':(_поФорме!=null?' (однозначная форма имени, сверено вручную — №494)':' (по сверке sunnah.com)'));
       /* 🚀 #694 «передатчики долго грузятся» — ЗАМЕР, а не догадка. Карточка аль-Хасана
          аль-Басри открывалась 71,9 с на боевом сайте. Разбор: сама карточка рисуется за
          0,1 с, длинных задач ноль, «снов» в коде нет — а fetch-ей 72, и почти все это
@@ -17101,8 +17113,9 @@ async function ibDoSearch(q, focusEl, listEl){
   }
   if(/^C[0-9a-fA-F]{6,}/.test(q)){   // код цепи
     let rec=null; try{ rec=await _regRec(q); }catch(e){_тихо(e,"L11767")}
+    try{ await _uRidLoad(); }catch(e){_тихо(e,"L494f")}   // №494
     if(!rec){ focusEl.innerHTML='<div class="hint">Цепь '+esc(q)+' не найдена в реестре.</div>'; return; }
-    const seq=rec.s||rec.seq||[]; const idn=seq.filter(x=>typeof x==='number').length;
+    const seq=rec.s||rec.seq||[]; const idn=seq.filter(x=>typeof x==='number' || _uRid(x)!=null).length;   // №494
     const d=document.createElement('div'); d.style.cssText='border:1px solid #6c5ce7;border-radius:11px;padding:10px;margin-bottom:9px;background:rgba(108,92,231,.09)';
     d.innerHTML='<div style="font-size:calc(12px * var(--txtScale,1));color:#c9b8ff;margin-bottom:6px">⛓ Эта цепь <b style="font-family:monospace">'+esc(q)+'</b> · <span style="color:'+(idn===seq.length?'#9fd3a8':'#e0b34a')+'">опознано '+idn+'/'+seq.length+'</span> · <b style="color:#9fd3a8">📊 '+rec.n+' хадис'+_pluralHadith(rec.n)+'</b></div>';
     const row=document.createElement('div'); row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;direction:rtl'; d.appendChild(row);
@@ -17217,6 +17230,7 @@ async function openIsnadBase(focusCid){
   modalTop(m); m.style.display='flex';
   const list=m.querySelector('#ibList'), info=m.querySelector('#ibInfo');
   list.innerHTML='<div class="hint">⏳ загружаю реестр цепей…</div>';
+  try{ await _uRidLoad(); }catch(e){_тихо(e,"L494u")}   // №494: опознанные формы — до первой строки таблицы
   if(_chMeta===undefined){ try{ const r=await fetch('./isnad/chains_meta.json'); _chMeta=r.ok?await r.json():null; }catch(e){ _chMeta=null; } }
   if(!_chMeta && !_topChains){ try{ const r=await fetch('./isnad/top_chains.json'); _topChains=r.ok?await r.json():[]; }catch(e){ _topChains=[]; } }
   list.innerHTML='';
@@ -17256,7 +17270,7 @@ async function openIsnadBase(focusCid){
         if(ch.n>ex.length){ const mo=document.createElement('div'); mo.className='hint'; mo.style.cssText='font-size:calc(10.5px * var(--txtScale,1));margin-top:3px'; mo.textContent='… показаны первые '+ex.length+' из '+ch.n; lst.appendChild(mo); } };
       d.appendChild(pl); d.appendChild(lst); return d;
     }
-    const idn=ch.seq.filter(x=>typeof x==='number').length;
+    const idn=ch.seq.filter(x=>typeof x==='number' || _uRid(x)!=null).length;   // №494
     const d=document.createElement('div'); d.style.cssText='padding:8px 4px;border-bottom:1px solid var(--border)';
     const tp=document.createElement('div'); tp.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px';
     tp.innerHTML='<span style="font-size:calc(12px * var(--txtScale,1));color:var(--hint)">#'+rank+' · <b style="color:#bcd0ff;font-family:monospace">'+esc(ch.cid)+'</b> <span class="ibCpy" title="Копировать код цепи" style="cursor:pointer;font-size:calc(11px * var(--txtScale,1))">📋</span> · <span style="color:'+(idn===ch.seq.length?'#9fd3a8':'#e0b34a')+'" title="опознано звеньев / всего (остальные — U-коды коротких форм)">опознано '+idn+'/'+ch.seq.length+'</span></span><span style="font-size:calc(12px * var(--txtScale,1));color:#9fd3a8;font-weight:700">📊 '+ch.n+' хадис'+_pluralHadith(ch.n)+'</span>';
@@ -17272,7 +17286,7 @@ async function openIsnadBase(focusCid){
       try{ await Promise.all([loadBooksMap(), loadBookTr&&loadBookTr(), loadWikiTitles&&loadWikiTitles()]); }catch(e){_тихо(e,"L11858")}
       let inf=null; try{ inf=await _isnadInfo(ch.seq, ch.f); }catch(e){_тихо(e,"L11859")}
       const ex=(inf&&inf.ex)||[];
-      const _seqIds=ch.seq.filter(x=>typeof x==='number');
+      const _seqIds=ch.seq.map(x=>typeof x==='number'?x:_uRid(x)).filter(x=>x!=null);   // №494
       ex.slice(0,40).forEach(p=>lst.appendChild(_dzPlaceCard(p[0],p[1],p[2],_seqIds)));   // #594/#653 (С67)
       if(ch.n>ex.length){ const mo=document.createElement('div'); mo.className='hint'; mo.style.cssText='font-size:calc(10.5px * var(--txtScale,1));margin-top:3px'; mo.textContent='… показаны первые '+ex.length; lst.appendChild(mo); } };
     d.appendChild(pl); d.appendChild(lst); return d;
