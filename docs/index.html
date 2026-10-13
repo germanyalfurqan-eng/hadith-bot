@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1757</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1758</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2037,7 +2037,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1757';
+const APPVER = 'v1758';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6246,7 +6246,12 @@ async function runSearch(explicit){
     b.style.cssText='display:block;margin:14px 0 6px;cursor:pointer;color:var(--link);border:1px dashed var(--border);border-radius:12px;padding:9px 12px;text-align:center;font-size:calc(13px * var(--txtScale,1))';
     b.textContent='📚 Искать ещё в наших первоисточниках ('+codes.length+' изданий)';   // Р-19: честно — кнопка грузит ИМЕННО наши доп. издания (codes), а НЕ «всю библиотеку ~9000»; полная Мактаба (8589) ищется автоматом ниже через appendMaktaba (свой счётчик)
     // #2a: первоисточники (наши доп. издания) структурируем СРАЗУ после Ахмада — потоково, с прогрессом.
-    const runMore=async()=>{ if(seq!==_seq) return; b.style.pointerEvents='none';
+    /* 13.10.2026 (перепроверка №162 «поиск во всей Мактабе»): блок Мактабы пропадал. runMore и appendMaktaba
+       шли ПАРАЛЛЕЛЬНО; добор первоисточников кончался посреди Мактабы и звал renderResultsView() —
+       тот делает res.innerHTML='' и стирал уже добавленную Мактабу (замер: «بدعة» — 0 карточек Мактабы при
+       96 551 в ответе). Теперь runMore оставляет обещание, а appendMaktaba ждёт его перед тем, как рисовать. */
+    const runMore=()=>{ const _п=_runMoreТело(); window._runMoreP=_п; return _п; };
+    const _runMoreТело=async()=>{ if(seq!==_seq) return; b.style.pointerEvents='none';
       b.textContent='📚 Загружаю первоисточники ('+codes.length+')…';
       // ⚡ ПАРАЛЛЕЛЬНО (а не по очереди) — одна медленная книга (Ибн аль-Мубарак) больше НЕ держит остальные.
       const loaded=await Promise.all(codes.map(code=>loadByCode(code).then(arr=>({code,arr})).catch(e=>({code,arr:null}))));
@@ -9004,6 +9009,7 @@ async function _maktUpgrade(x){
 }
 async function appendMaktaba(seq, q, primary){
   if(!BACKEND_URL || !q) return;
+  try{ if(window._runMoreP){ await window._runMoreP.catch(()=>{}); if(seq!==_seq) return; } }catch(e){_тихо(e,"L162w")}   // 13.10: ждём добор, иначе его перерисовка сотрёт Мактабу
   const res=document.getElementById('res'); if(primary) res.innerHTML='';
   const sec=document.createElement('div'); sec.className='hint';
   sec.style.cssText=primary?'color:#4ade80;font-size:calc(13px * var(--txtScale,1));margin:0 0 8px':'color:#4ade80;font-size:calc(13px * var(--txtScale,1));margin:14px 0 6px;border-top:1px solid var(--border);padding-top:10px';
@@ -9012,6 +9018,7 @@ async function appendMaktaba(seq, q, primary){
     const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(q)+'&initData='+encodeURIComponent(INITDATA));
     if(seq!==_seq) return;
     const j=await r.json().catch(()=>({}));
+    try{ if(window._runMoreP){ await window._runMoreP.catch(()=>{}); if(seq!==_seq) return; } }catch(e){_тихо(e,"L162w2")}   // добор мог стартовать во время запроса
     if(r.status===403){ sec.textContent='🌐 Мактаба: доступ пока не открыт.'; try{ res.appendChild(sec); }catch(e){_тихо(e,"L6373")} return; }
     if(r.status===429){ sec.textContent='🌐 Слишком часто, подожди немного.'; try{ res.appendChild(sec); }catch(e){_тихо(e,"L6374")} return; }
     let data=j.data||[]; let fn=j.first_n||0;
