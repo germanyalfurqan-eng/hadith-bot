@@ -23911,6 +23911,35 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                  "🔕 Уведомления о закрытых заявках выключены. Включить: «уведомления о заявках вкл»."))
             return
 
+        # ===== №257 (владелец 15.06: «при ответе на текст словом заявка записывай заявку — выделяемое смс»).
+        # 13.10.2026: старая отметка «сделано» не подтвердилась — текстом бот заявку НЕ писал (только фото с подписью,
+        # голос и DSOC). Теперь: «заявка <текст>» — заявка из текста; «заявка» ОТВЕТОМ на сообщение — заявка из
+        # текста того сообщения (+ добавка после слова, если есть). Только владелец, только в личке.
+        if (_tl == "заявка" or _tl.startswith("заявка ") or _tl.startswith("заявка:") or _tl.startswith("заявка\n")):
+            try:
+                _свой = int(update.effective_user.id) == int(OWNER_ID) and update.effective_chat.type == "private"
+            except Exception:
+                _свой = False
+            if _свой:
+                _доб = text.strip()[6:].lstrip(" :\n").strip()
+                _исх = ""
+                try:
+                    _rm = update.message.reply_to_message
+                    if _rm is not None:
+                        _исх = (_rm.text or _rm.caption or "").strip()
+                except Exception:
+                    _исх = ""
+                _тело = (_исх + ("\n\n— " + _доб if _доб else "")).strip() if _исх else _доб
+                if not _тело:
+                    await _мсообщ(update).reply_text("Напиши «заявка <текст>» или ответь словом «заявка» на сообщение с текстом.")
+                    return
+                rid = req_add(_тело)
+                await _мсообщ(update).reply_text(
+                    f"📥 Заявка #{rid} записана ✅ · 🤖 бот ({_now_msk()})"
+                    + (" — из текста сообщения, на которое ты ответил." if _исх else "")
+                    + " Ищи в журнале командой «заявки».")
+                return
+
         # ===== АНОНС в канал приложения вручную ===== «анонс» = текущий update_note.txt; «анонс <текст>» = свой
         if _tl == "анонс" or _tl.startswith("анонс ") or _tl.startswith("анонс\n"):
             custom = text.strip()[5:].strip()
