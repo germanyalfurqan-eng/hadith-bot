@@ -31211,8 +31211,18 @@ async def _api_serve(application=None):
             if (getattr(предмет, 'file_size', 0) or 0) > 20 * 1024 * 1024:
                 return _cors(web.json_response({'error': 'файл больше 20 МБ — Bot API такие не отдаёт', 'опись': оп},
                                                status=413, dumps=lambda o: json.dumps(o, ensure_ascii=False)))
-            фл = await app.bot.get_file(предмет.file_id)
-            данные = bytes(await фл.download_as_bytearray())
+            # 14.10: с ожиданием по умолчанию (~5 с) первая проба упала «Timed out» — файловый
+            # сервер Телеграма отвечает медленнее. Ждём дольше и пробуем трижды.
+            данные, фл = None, None
+            for _попытка in range(3):
+                try:
+                    фл = await app.bot.get_file(предмет.file_id, read_timeout=60, connect_timeout=30)
+                    данные = bytes(await фл.download_as_bytearray(read_timeout=180, connect_timeout=30))
+                    break
+                except Exception:
+                    if _попытка == 2:
+                        raise
+                    await asyncio.sleep(3)
         except Exception as _е:
             return _cors(web.json_response({'error': 'не скачать: %s' % str(_е)[:160]}, status=502))
         finally:
