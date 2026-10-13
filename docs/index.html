@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1759</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1760</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2037,7 +2037,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1759';
+const APPVER = 'v1760';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3179,6 +3179,10 @@ const _TWORDS=['حدثناه','حدثنا','حدثني','اخبرنا','اخبر
 function _twPat(w){ return [...w].map(ch=>{ const c=(ch==='ا')?'[اأإآ]':ch; return c+'[ً-ْٰـ]*'; }).join(''); }
 const _TW_RE=new RegExp('(^|[\\s،؛>])('+_TWORDS.map(_twPat).join('|')+')(?=[\\s،؛<]|$)','g');
 function markTword(html){ try{ return String(html).replace(_TW_RE,'$1<span class="tword">$2</span>'); }catch(e){ return html; } }
+// №222: в матне «عن» — предлог, а не форма передачи. Снимаем с него пометку tword (остальные глаголы передачи в матне
+// бывают законно — вложенный риваят «قال حدثنا…», их не трогаем).
+function _безАнВМатне(html){ try{ return String(html).replace(/<span class="tword">(ع[ً-ْٰـ]*ن[ً-ْٰـ]*)<\/span>/g,'$1'); }catch(e){ return html; } }
+function _снятьАнВМатнеDOM(root){ try{ (root||document).querySelectorAll('.mkp-matn .tword, .mkp-author .tword, .mkp-sharh .tword, .matn .tword').forEach(t=>{ if(stripDiac(t.textContent).trim()==='عن') t.replaceWith(document.createTextNode(t.textContent)); }); }catch(e){} }
 // #30: кликабельные Telegram-ссылки (t.me/…, @username) в УЖЕ экранированном тексте (разборы, заметки). Клик → openLink (нативный Telegram).
 function _linkifyTg(escHtml){ try{ let h=String(escHtml);
   h=h.replace(/(https?:\/\/)?(t\.me|telegram\.me)\/([A-Za-z0-9_\/+\-]+)/g, (m)=>{ const u=(/^https?:/i.test(m)?m:('https://'+m)).replace(/"/g,'&quot;'); return '<span class="tgLink" data-u="'+u+'" style="color:var(--link);cursor:pointer;text-decoration:underline">'+m+' ↗</span>'; });
@@ -3212,7 +3216,9 @@ function hl(text,groups){
   let r;
   if(cfg.hideIsnad){ const sp=splitIsnad(disp); r=markTword(markMatn(highlight(sp[1]||disp,groups,modes))); }   // показываем только матн
   else if(!cfg.isnad) r=markTword(markMatn(highlight(disp,groups,modes)));
-  else { const sp=splitIsnad(disp); r=sp[0]?markTword(markMatn('<span class="isnad">'+highlight(sp[0],groups,modes)+'</span> '+highlight(sp[1],groups,modes))):markTword(markMatn(highlight(disp,groups,modes))); }
+  // 13.10.2026 (перепроверка №222 «ʿан светится как передача в عن وجهه»): формы передачи помечаем ТОЛЬКО в иснаде;
+  // в матне «عن» — обычный предлог («отвернул лицо», «спросил о…»), подсвечивать его как передачу — ложь.
+  else { const sp=splitIsnad(disp); r=sp[0]?markMatn('<span class="isnad">'+markTword(highlight(sp[0],groups,modes))+'</span> '+_безАнВМатне(markTword(highlight(sp[1],groups,modes)))):markTword(markMatn(highlight(disp,groups,modes))); }
   return _linkAyatHtml(r);
 }
 // поиск аята по тексту-фрагменту (для клика по ﴿…﴾): canon-содержание в Коране
@@ -9288,6 +9294,7 @@ async function _applyIsnadMatn(ar, code, num, text){
       +'<div class="mkp-matn">'+H(matnCore)+'</div>'
       +(авторТекст?('<div class="mkp-author" title="Слова автора сборника — не слова Пророка ﷺ"><span class="mkp-lbl">слова автора сборника</span>'+H(авторТекст)+'</div>'):'')
       +(sharhTail?('<div class="mkp-sharh" title="Пояснение издания (шарх) — не текст хадиса">'+H(sharhTail)+'</div>'):'');
+    _снятьАнВМатнеDOM(ar);   // №222: «عن» в матне — не форма передачи
     _styleCollectorNote(ar);
   }catch(e){_тихо(e,"L6530")}
 }
