@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1758</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1759</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2037,7 +2037,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1758';
+const APPVER = 'v1759';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4414,16 +4414,23 @@ function _srcВМактабу(meta, code, num){
     if(!/📖/.test(sp.textContent)) sp.insertAdjacentText('afterbegin','📖 ');
     // openByCodeNum ищет «N -» поиском Мактабы — он нечёткий (Ибн Хиббан №100 привёл на лист с №1126).
     // Точнее прыжок самой читалки (_bkJumpHno): карта f40c, иначе бинарный поиск по маркерам «N -» на листах.
-    sp.onclick=(e)=>{ try{ e.stopPropagation(); }catch(_e){}
-      try{ openBook(bid, 1, true); let k=0; const т=setInterval(()=>{ k++;
-        if(typeof _bookView!=='undefined' && String(_bookView.id)===String(bid)){ clearInterval(т); _bkJumpHno(+n); }
-        else if(k>40){ clearInterval(т); } }, 150); }catch(_e){ openByCodeNum(bid, n); } };
+    sp.onclick=(e)=>{ try{ e.stopPropagation(); }catch(_e){} openByCodeNum(bid, n); };   // точный прыжок теперь внутри openByCodeNum
   }catch(e){_тихо(e,"L13src")}
 }
 async function openByCodeNum(bid, num){
   let b=String(bid==null?'':bid).replace(/[^0-9]/g,''); const n=String(num==null?'':num).replace(/[^0-9]/g,'');
   if(!b) return;
   if((b==='1727'||b==='711') && n){ try{ const sh=await _mListSheet(n); if(sh){ openBook('711', sh, true); return; } }catch(e){_тихо(e,"L3052")} b='711'; }   // Муслим → турецкое изд. 711 + точный лист из карты (все ссылки)
+  /* 13.10.2026 (перепроверка №220 «ссылка Мактабы, хотя хадис другой»): поиск «N -» в Мактабе ниже — НЕЧЁТКИЙ,
+     первое совпадение часто чужое (Ибн Хиббан №100 → лист с №1126; на «١٠٠ -» сервер вернул «إن شئت…»).
+     Точнее прыжок самой читалки: карта f40c, иначе бинарный поиск по маркерам «N -» на листах (_bkJumpHno).
+     Открываем книгу и прыгаем; нечёткий поиск остаётся только запасным путём, если прыжок не завёлся. */
+  if(n && typeof _bkJumpHno==='function'){
+    try{ openBook(b, 1, true); let k=0; const ок=await new Promise(res=>{ const т=setInterval(()=>{ k++;
+        if(typeof _bookView!=='undefined' && String(_bookView.id)===b){ clearInterval(т); res(true); }
+        else if(k>40){ clearInterval(т); res(false); } }, 150); });
+      if(ок){ _bkJumpHno(+n); return; } }catch(e){_тихо(e,"L220j")}
+  }
   if(n && typeof BACKEND_URL!=='undefined' && BACKEND_URL){
     try{ toast('📖 Ищу №'+n+' в Мактабе…');
       const _an=n.replace(/[0-9]/g,function(d){ return '٠١٢٣٤٥٦٧٨٩'[+d]; });   // #64: в тексте turath номера АРАБСКИМИ цифрами (٥٥٥), латинские «555 -» давали 0 → страница не открывалась
