@@ -19523,7 +19523,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         _зов_по_имени = ''
     if (text and _хозяин(update) and _ответ_сессии
-            and not re.match(r'^\s*(?:ботяр\w*|dsoc|дсос|помощник)\b', (text or '').strip().lower())):
+            and not re.match(r'^\s*(?:ботяр\w*|dsoc|дсос|помощник|заявка)\b', (text or '').strip().lower())):   # №257: ответ «заявка» — в журнал заявок, не сессии
         try:
             _чид = getattr(update.effective_chat, 'id', 0)
             _рп = update.message.reply_to_message
@@ -19615,7 +19615,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Две поправки: ① позвали по имени помощника — значит это ему, чьё бы имя ни мелькнуло
     # дальше; ② «если не сможешь — обратись к технадзору» это УСЛОВИЕ на будущее, а не зов
     # сейчас. Зовут меня словами «передай технадзору» или обращением с самого начала.
-    _зовут_помощника = bool(re.match(r'^\s*(?:ботяр\w*|dsoc|дсос|помощник)\b',
+    _зовут_помощника = bool(re.match(r'^\s*(?:ботяр\w*|dsoc|дсос|помощник|заявка)\b',   # №257: «заявка» — не обращение к сессии
                                      (text or '').strip().lower()))
     _условный_зов = bool(re.search(r'если\s+(?:не|что)\b[^.!?]{0,60}'
                                    r'(?:технадзор|клод)', (text or '').lower()))
