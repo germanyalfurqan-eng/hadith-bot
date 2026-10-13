@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1760</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1761</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2037,7 +2037,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1760';
+const APPVER = 'v1761';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3182,7 +3182,16 @@ function markTword(html){ try{ return String(html).replace(_TW_RE,'$1<span class
 // №222: в матне «عن» — предлог, а не форма передачи. Снимаем с него пометку tword (остальные глаголы передачи в матне
 // бывают законно — вложенный риваят «قال حدثنا…», их не трогаем).
 function _безАнВМатне(html){ try{ return String(html).replace(/<span class="tword">(ع[ً-ْٰـ]*ن[ً-ْٰـ]*)<\/span>/g,'$1'); }catch(e){ return html; } }
-function _снятьАнВМатнеDOM(root){ try{ (root||document).querySelectorAll('.mkp-matn .tword, .mkp-author .tword, .mkp-sharh .tword, .matn .tword').forEach(t=>{ if(stripDiac(t.textContent).trim()==='عن') t.replaceWith(document.createTextNode(t.textContent)); }); }catch(e){} }
+function _снятьАнВМатнеDOM(root){ try{ (root||document).querySelectorAll('.mkp-matn .tword, .mkp-author .tword, .mkp-sharh .tword, .matn .tword').forEach(t=>{ if(stripDiac(t.textContent).trim()==='عن') t.replaceWith(document.createTextNode(t.textContent)); });
+  // №222, второй заход (боевой v1760, Бухари 435/436): разметка базы относит к «иснаду» и рассказ до слов Пророка ﷺ
+  // («…كشفها عن وجهه…»). Поэтому и в иснаде: «عن» перед существительным с местоимением (وجهه/يده/رأسها…) — предлог,
+  // не передача. Родство (عن أبيه/جده/عمه/أمه…) — это как раз передача, его оставляем.
+  const _РОДНЯ=/^(ابي|ابيه|ابيها|ابيهم|امه|امها|جده|جدها|جدته|عمه|عمها|عمته|خاله|خالته|اخيه|اخته|مولاه|مولاها|مولاته|سيده|ابنه|ابنته|زوجه|زوجته|بعض|رجل|امراه|شيخ|اصحابه|اهله)$/;
+  (root||document).querySelectorAll('.mkp-isnad .tword, .isnad .tword').forEach(t=>{ if(stripDiac(t.textContent).trim()!=='عن') return;
+    let n=t.nextSibling, s=''; while(n && s.length<25){ s+=n.textContent||''; n=n.nextSibling; }
+    const w=(stripDiac(s).replace(/[إأآ]/g,'ا').replace(/ى/g,'ي').trim().split(/[\s،,.؛:]+/)[0]||'');
+    // только «ه/ها/هما/هم/هن» — НЕ «ك»: на «ك» кончаются имена (مالك، شريك)
+    if(w.length>=3 && /(ه|ها|هما|هم|هن)$/.test(w) && !_РОДНЯ.test(w)) t.replaceWith(document.createTextNode(t.textContent)); }); }catch(e){} }
 // #30: кликабельные Telegram-ссылки (t.me/…, @username) в УЖЕ экранированном тексте (разборы, заметки). Клик → openLink (нативный Telegram).
 function _linkifyTg(escHtml){ try{ let h=String(escHtml);
   h=h.replace(/(https?:\/\/)?(t\.me|telegram\.me)\/([A-Za-z0-9_\/+\-]+)/g, (m)=>{ const u=(/^https?:/i.test(m)?m:('https://'+m)).replace(/"/g,'&quot;'); return '<span class="tgLink" data-u="'+u+'" style="color:var(--link);cursor:pointer;text-decoration:underline">'+m+' ↗</span>'; });
