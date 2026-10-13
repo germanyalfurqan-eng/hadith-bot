@@ -23885,6 +23885,32 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await _мсообщ(update).reply_text('Не собралось: %s' % (_беда or 'без причины'))
             return
 
+        # ===== №62: «уведомления о заявках вкл/выкл» — владелец сам решает, писать ли ему о каждой закрытой заявке.
+        # Просьба 14.06: присылать в личку о каждой сделанной заявке и сколько осталось, с возможностью выключить.
+        # Само уведомление шлёт /api/zayavka; здесь только выключатель. Только для владельца.
+        if _tl in ("уведомления о заявках выкл", "уведомления о заявках вкл", "уведомления заявок выкл", "уведомления заявок вкл"):
+            try:
+                if int(update.effective_user.id) != int(OWNER_ID):
+                    return
+            except Exception:
+                return
+            _вкл = _tl.endswith("вкл")
+            def _флаг(o, _в=_вкл):
+                o = o or {}
+                o["zayavka_uvedomlenie_off"] = (not _в)
+                return o
+            _data_atomic_mutate("journal.json", _флаг, "уведомления о заявках: %s" % ("вкл" if _вкл else "выкл"))
+            try:
+                if _journal_cache is not None:
+                    _journal_cache["zayavka_uvedomlenie_off"] = (not _вкл)
+            except Exception:
+                pass
+            await _мсообщ(update).reply_text(
+                ("🔔 Уведомления о закрытых заявках включены: о каждой пришлю номер, суть, итог и сколько осталось."
+                 if _вкл else
+                 "🔕 Уведомления о закрытых заявках выключены. Включить: «уведомления о заявках вкл»."))
+            return
+
         # ===== АНОНС в канал приложения вручную ===== «анонс» = текущий update_note.txt; «анонс <текст>» = свой
         if _tl == "анонс" or _tl.startswith("анонс ") or _tl.startswith("анонс\n"):
             custom = text.strip()[5:].strip()
@@ -31585,13 +31611,24 @@ async def _api_serve(application=None):
             return _cors(web.json_response({'error': 'заявки №%d нет в журнале' % рид}, status=404))
         # Владелец узнаёт о закрытии СРАЗУ: заявка его, и решение по ней он вправе оспорить,
         # пока помнит, о чём просил. Молча закрытая заявка — это закрытая от него, а не для него.
+        # №62: остаток открытых — владелец просил видеть, сколько ещё не сделано; и выключатель
+        # «уведомления о заявках выкл» (команда в личке бота). По умолчанию — включено.
+        _откр = None; _молчать = False
         try:
+            if isinstance(_нов, dict):
+                _откр = sum(1 for _з in (_нов.get('requests') or []) if isinstance(_з, dict) and not _з.get('done'))
+                _молчать = bool(_нов.get('zayavka_uvedomlenie_off'))
+        except Exception:
+            pass
+        try:
+          if not _молчать:
             await app.bot.send_message(
                 OWNER_ID,
                 ('🔁 <b>Заявка №%d открыта заново</b>' % рид) if открыть else
-                ('✅ <b>Заявка №%d закрыта</b> · %s\n\n<i>%s</i>\n\n%s'
+                ('✅ <b>Заявка №%d закрыта</b> · %s\n\n<i>%s</i>\n\n%s%s'
                  % (рид, html.escape(кто), html.escape(_нашли.get('текст') or ''),
-                    html.escape(итог[:600]))),
+                    html.escape(итог[:600]),
+                    ('\n\n🔴 открытых заявок осталось: %d' % _откр) if _откр is not None else '')),
                 parse_mode='HTML', disable_web_page_preview=True)
         except Exception:
             pass
