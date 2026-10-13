@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1763</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1764</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2037,7 +2037,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1763';
+const APPVER = 'v1764';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2251,6 +2251,21 @@ const COLLECTIONS = [
 const _COLL_EN={bukhari:['Bukhari','al-Bukhari','Sahih al-Bukhari'],muslim:['Muslim','Sahih Muslim'],abudawud:['Abu Dawud','Abu Dawood','Sunan Abu Dawud'],tirmidhi:['Tirmidhi','al-Tirmidhi','Tirmidthi'],nasai:["Nasa'i",'Nasai','al-Nasai','an-Nasai'],ibnmajah:['Ibn Majah','Ibn Maja'],malik:['Malik','Muwatta'],ahmad:['Ahmad','Musnad Ahmad']};
 function _collRu(code){ const c=COLLECTIONS.find(x=>x.code===code); return c?c.ru:code; }
 // #204/#243: детектор ссылок на обсуждаемый хадис в тексте разбора («Бухари 5590» / «البخاري ٥٥٩٠» / «Muslim 2026») → кликабельные ссылки в нашу базу
+/* №243 (владелец: «почему Сахих Муслим 2026 в карточке дважды, и в первом причём он не кликабельный»).
+   Упоминания хадисов в САМОМ тексте разбора делаем нажимаемыми — тем же правилом, что и чипы «📌 упомянуты»
+   (_razFindHadithRefs: том/страница «1/275» ссылкой не считается). Клик — тот же обработчик .ourRazRef. */
+function _razСсылкиВТексте(html){
+  try{
+    let h=String(html||'');
+    COLLECTIONS.forEach(c=>{ [c.ru,c.ar].concat(_COLL_EN[c.code]||[]).forEach(nm=>{ if(!nm) return;
+      const _имя=nm.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      const re=new RegExp(String.raw`((?:Сахих|Сунан|Муснад)?\s*` + _имя
+        + String.raw`[а-яёА-ЯЁ]{0,4}[\s,:№#\-.]{0,6}?)([\d٠-٩۰-۹]{1,5})(?!\s*[/\\]\s*[\d٠-٩۰-۹])(?![^<]*>)`,'g');
+      h=h.replace(re,(m0,pre,num)=>{ const n=String(num).replace(/[٠-٩]/g,d=>String(d.charCodeAt(0)-0x0660)).replace(/[۰-۹]/g,d=>String(d.charCodeAt(0)-0x06F0));
+        return '<span class="ourRazRef" data-code="'+c.code+'" data-num="'+n+'" style="color:#ffd479;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" title="Открыть этот хадис в нашей базе">'+m0+'</span>'; }); }); });
+    return h;
+  }catch(e){ _тихо(e,"L243t"); return html; }
+}
 function _razFindHadithRefs(text){
   if(!text) return []; const out=[], seen=new Set();
   /* ПОЖАР #645 (С79, 21.08.2026). Жалоба владельца: «кнопка о недостоверности нашего разбора
@@ -11663,7 +11678,7 @@ async function openOurRazbory(){
       // ПОЛНЫЙ разбор (скрыт)
       html+='<div id="'+cid+'" style="display:none;padding:0 12px 11px;border-top:1px solid var(--border)">';
       if(c.kind==='audio'){ html+='<div style="margin:9px 0 4px"><span class="ourRazL" data-u="'+esc(c.url)+'" style="display:inline-flex;align-items:center;gap:7px;background:#16302a;color:#7fe3bf;border:1px solid #2e9b6b;border-radius:11px;padding:9px 15px;font-size:14px;cursor:pointer;font-weight:600">▶ Слушать аудио-разбор</span> <span style="font-size:calc(11px * var(--txtScale,1));color:var(--hint)">(в канале · ниже — конспект из аудио)</span></div>'; }   // #201: заметная плей-кнопка аудио-разбора
-      html+='<div style="white-space:pre-wrap;word-break:break-word;font-size:calc(15px * var(--readScale,1));line-height:1.7;margin:8px 0;font-family:var(--arFont,\'Noto Naskh Arabic\',serif)">'+_linkifyTg(esc(c.text||''))+'</div>';   // #30: кликабельные t.me/@username
+      html+='<div style="white-space:pre-wrap;word-break:break-word;font-size:calc(15px * var(--readScale,1));line-height:1.7;margin:8px 0;font-family:var(--arFont,\'Noto Naskh Arabic\',serif)">'+_razСсылкиВТексте(_linkifyTg(esc(c.text||'')))+'</div>';   // #30: кликабельные t.me/@username
       if(c.href){ var _hc=String(c.href).split(':'); var _hru=_collRu(_hc[0]||'')+' №'+esc(_hc[1]||'');   // #243: по-русски «Муслим №2026», не код «muslim:2026»
         html+='<div style="margin:6px 0;display:flex;gap:8px;flex-wrap:wrap"><span class="ourRazHadith" data-code="'+esc(_hc[0]||'')+'" data-num="'+esc(_hc[1]||'')+'" style="display:inline-block;color:#ffd479;cursor:pointer;border:1px solid #a8862e;border-radius:9px;padding:5px 12px;font-size:calc(13px * var(--txtScale,1))">📖 Открыть хадис в нашей базе: '+esc(_hru)+'</span><span class="ourRazHadFltBtn" data-href="'+esc(c.href)+'" style="display:inline-block;color:#d8cdff;cursor:pointer;border:1px solid #6c5ce7;border-radius:9px;padding:5px 12px;font-size:calc(13px * var(--txtScale,1))">🔎 разборы этого хадиса</span></div>'; }
       // #204: упомянутые в тексте хадисы (кроме уже привязанного href) → кликабельные ссылки в нашу базу
