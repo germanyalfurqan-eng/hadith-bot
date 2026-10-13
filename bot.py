@@ -6672,6 +6672,33 @@ DSOC_ЛЕНТА_ФАЙЛ = "dsoc_lenta.json"
 # Файлы приходят в ГРУППУ, оттуда переносятся в КАНАЛ. Сюда уходит всё тяжёлое, чем жалко
 # засорять чат джамаата, рабочий журнал и канал приложения.
 АРХИВ_ГРУППА = -1002142402317
+
+
+def _предмет_вложения(м):
+    """Само вложение сообщения (объект с file_id) — любого вида; у фото — самое крупное. 14.10.2026."""
+    for пол in ('voice', 'audio', 'video', 'video_note', 'animation', 'document', 'sticker'):
+        о = getattr(м, пол, None)
+        if о:
+            return о
+    фото = getattr(м, 'photo', None)
+    return фото[-1] if фото else None
+
+
+def _опись_вложения(м):
+    """Что за вложение: вид, имя файла, размер, длительность, mime, дата ИСХОДНОГО сообщения. 14.10.2026.
+    Повод: опись группы «Ютуб мой» не видела голосовых и имён видео — сопоставлять ролики было нечем."""
+    вид = ('голосовое' if getattr(м, 'voice', None) else 'аудио' if getattr(м, 'audio', None) else
+           'видео' if getattr(м, 'video', None) else 'кружок' if getattr(м, 'video_note', None) else
+           'гифка' if getattr(м, 'animation', None) else 'документ' if getattr(м, 'document', None) else
+           'стикер' if getattr(м, 'sticker', None) else 'фото' if getattr(м, 'photo', None) else '')
+    о = _предмет_вложения(м)
+    дата = getattr(getattr(м, 'forward_origin', None), 'date', None) or getattr(м, 'forward_date', None)
+    return {'вид': вид,
+            'имя_файла': (getattr(о, 'file_name', '') or '') if о is not None else '',
+            'размер': (getattr(о, 'file_size', 0) or 0) if о is not None else 0,
+            'длительность': (getattr(о, 'duration', 0) or 0) if о is not None else 0,
+            'mime': (getattr(о, 'mime_type', '') or '') if о is not None else '',
+            'дата_исходного': дата.isoformat() if дата else ''}
 АРХИВ_КАНАЛ = -1004401930494
 ЧАТ_ЛЕНТА = {}            # chat_id → последние сообщения [{i, кто, т}]
 _ЛЕНТА_ГРЯЗНО = [0]
@@ -31126,6 +31153,10 @@ async def _api_serve(application=None):
                     # обойти архив и понять, ЧТО в постах лежит, нельзя — «есть вложение»
                     # говорит, что оно есть, и молчит о том, что это.
                     'файл': (getattr(getattr(м, 'document', None), 'file_name', '') or ''),
+                    # 14.10.2026 (ЛОКАЛКИ 36, слово владельца «доработай»): опись группы «Ютуб мой»
+                    # не видела ни ГОЛОСОВЫХ (voice не проверялся), ни имён видео/аудио, ни размеров,
+                    # ни даты исходного сообщения — сопоставить готовые ролики с проектами было нечем.
+                    **_опись_вложения(м),
                 })
                 # прибираем за собой: служебный архив не должен зарастать пересылками
                 try:
@@ -31144,6 +31175,57 @@ async def _api_serve(application=None):
                                         'причины': причины,
                                         'пропущено': промахи, 'сообщения': собрано},
                                        dumps=lambda o: json.dumps(o, ensure_ascii=False)))
+
+    async def vlozhenie(r):
+        """Скачать ВЛОЖЕНИЕ сообщения по номеру — без доступа к ключам бота снаружи (14.10.2026, ЛОКАЛКИ 36).
+
+        Слово владельца: «доработай и доступ я тебе даю». Повод: экспорт Telegram Desktop завис на одном
+        голосовом (чат JAMAAT MUSLIMIN, №660372), владелец нажал «Пропустить» и попросил: «пропущенные
+        файлы потом добери». Скачать файл может только бот, а его ключ живёт лишь на сервере.
+        Как: пересылаем сообщение в служебный ЧАТ архива, берём file_id вложения, качаем, убираем свою
+        пересылку. В исходном чате ничего не меняется. Ограничение Bot API: отдаёт файлы до 20 МБ —
+        больше честно отвечаем «слишком большой», а не молчим.
+        Вход: {secret, чат, номер}. Выход: сам файл; имя — в заголовке Content-Disposition, опись — в X-Opis (JSON)."""
+        if not application or not BACKUP_SECRET:
+            return _cors(web.json_response({'error': 'disabled'}, status=503))
+        try:
+            body = await r.json()
+        except Exception:
+            return _cors(web.json_response({'error': 'bad_json'}, status=400))
+        if str(body.get('secret', '')).strip() != (BACKUP_SECRET or '').strip():
+            return _cors(web.json_response({'error': 'auth'}, status=403))
+        try:
+            чат, номер = int(body.get('чат')), int(body.get('номер'))
+        except Exception:
+            return _cors(web.json_response({'error': 'нужны числовые чат и номер'}, status=400))
+        try:
+            м = await app.bot.forward_message(chat_id=АРХИВ_ГРУППА, from_chat_id=чат, message_id=номер)
+        except Exception as _е:
+            return _cors(web.json_response({'error': 'не переслать: %s' % str(_е)[:160]}, status=404))
+        try:
+            оп = _опись_вложения(м)
+            предмет = _предмет_вложения(м)
+            if предмет is None:
+                return _cors(web.json_response({'error': 'в сообщении нет вложения', 'опись': оп}, status=404,
+                                               dumps=lambda o: json.dumps(o, ensure_ascii=False)))
+            if (getattr(предмет, 'file_size', 0) or 0) > 20 * 1024 * 1024:
+                return _cors(web.json_response({'error': 'файл больше 20 МБ — Bot API такие не отдаёт', 'опись': оп},
+                                               status=413, dumps=lambda o: json.dumps(o, ensure_ascii=False)))
+            фл = await app.bot.get_file(предмет.file_id)
+            данные = bytes(await фл.download_as_bytearray())
+        except Exception as _е:
+            return _cors(web.json_response({'error': 'не скачать: %s' % str(_е)[:160]}, status=502))
+        finally:
+            try:
+                await app.bot.delete_message(chat_id=АРХИВ_ГРУППА, message_id=м.message_id)
+            except Exception:
+                pass
+        имя = оп.get('имя_файла') or ('%s_%d%s' % (оп.get('вид', 'файл'), номер,
+                                                  os.path.splitext(getattr(фл, 'file_path', '') or '')[1] or '.bin'))
+        from urllib.parse import quote as _q
+        return _cors(web.Response(body=данные, content_type=оп.get('mime') or 'application/octet-stream',
+                                  headers={'Content-Disposition': "attachment; filename*=UTF-8''%s" % _q(имя),
+                                           'X-Opis': _q(json.dumps(оп, ensure_ascii=False))}))
 
     # 🔴🔴 07.08.2026, 16:26. Владелец: «ты зачем путь к файлам показываешь, я ЖЕ СКАЗАЛ фильтр
     # поставь, чтобы не слать кухню».
@@ -34209,7 +34291,7 @@ async def _api_serve(application=None):
         return ответ
 
     a = web.Application(middlewares=[_счёт_трафика], client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/proba_ii', proba_ii), web.post('/api/fayl', fayl), web.post('/api/foto', foto), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/vyzov', vyzov), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/vlozhenie', vlozhenie), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/proba_ii', proba_ii), web.post('/api/fayl', fayl), web.post('/api/foto', foto), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/vyzov', vyzov), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
