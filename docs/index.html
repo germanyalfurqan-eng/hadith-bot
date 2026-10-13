@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1751</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1752</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2037,7 +2037,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1751';
+const APPVER = 'v1752';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -20889,6 +20889,14 @@ async function showNarratorCardLocal(name, host, forceId){
     // не дописываем то, что уже стоит в заголовке или в подписи (иначе «أم المؤمنين عائشة · أم المؤمنين»)
     const _есть=(s)=>_narrCanon(stripDiac(String(s||''))).indexOf(_вф)>=0;
     if(_вф && !_есть(_hdrSub) && !_есть(_hdrMain)) _hdrSub=_hdrSub?(_hdrSub+' · '+_voc):_voc; } }catch(e){_тихо(e,"L14119b")}
+  /* №253 (владелец, 17.06, по анонсу v606 «عبد الله بن محمد بن أبي شيبة показывается как ابن أبي شيبة»: «ровно то, что
+     в скрине, надо открывать по ссылке, а открывает другое»). Родовая шухра «ابن أبي X» считается (_shuhraOf, #246),
+     но в шапку проходила огласованная форма из корпуса (#247) — и самого известного имени человек не видел.
+     Не меняем шапку (огласовка — тоже закон), а ДОПИСЫВАЕМ строку «известен как …», если её нет ни в шапке, ни в подписи. */
+  let _извКак='';
+  try{ if(_sh && /^ابن أبي /.test(_sh)){ const _к=_narrCanon(stripDiac(_sh)).replace(/\s+/g,'');
+    const _уже=[_hdrMain,_hdrSub].some(s=>_narrCanon(stripDiac(String(s||''))).replace(/\s+/g,'')===_к);
+    if(!_уже) _извКак=_sh; } }catch(e){_тихо(e,"L253")}
   // v1089 (аудит DeepSeek ②-1, паритет sunnah.com: степени и от Ибн Хаджара, и от аз-Захаби): сводный вердикт
   // аз-Захаби из «الكاشف» (narr_dhahabi.json, 3593 равия, собран из НАШИХ testimonies — build_narr_dhahabi.py)
   let _dhb=null; try{ _словарь('_dhbP','./narr_dhahabi.json'); _dhb=(await window._dhbP)[String(id)]||null; }catch(e){_тихо(e,"L14122")}
@@ -21005,6 +21013,7 @@ async function showNarratorCardLocal(name, host, forceId){
         // 10.07 (владелец, эталон sunnah.com «سمي القرشي (سمي مولى أبي بكر)»): главный заголовок = канон.имя + различающая нисба, полная форма (мавля и т.п.) — подписью в скобках
         +'<div dir="rtl" style="font-weight:700;font-size:calc(23px * var(--txtScale,1));color:#f0f6fc;line-height:1.15;'+_AF+'">'+esc(_hdrMain)+'</div>'
         +(_hdrSub?('<div dir="rtl" style="font-size:calc(13px * var(--txtScale,1));color:#8fa3b8;margin-top:1px;'+_AF+'">('+esc(_hdrSub)+')</div>'):'')
+        +(_извКак?('<div style="font-size:calc(12.5px * var(--txtScale,1));color:#d9c27a;margin-top:2px">известен как <span dir="rtl" style="font-weight:700;'+_AF+'">'+esc(_извКак)+'</span></div>'):'')
         /* Владелец 27.07.2026: «перевод Катада ибн Диʿама писать на белом прямоугольнике, табличке
            с тенями и лёгким свечением, а сам текст отчётливым чёрным шрифтом». Имя — главное, ради
            чего открывают карточку, а бледно-голубая строчка на тёмном тонула. Белая табличка держит
@@ -22448,6 +22457,7 @@ async function _codifHighlight(text, card, out, place){
           setTimeout(()=>{ try{ _подсветитьСподвижника(card, _посл[0], _посл[1], async (nm,id)=>{
             out.style.display='block'; let c=null; try{ c=await _narrCard(+id); }catch(e){_тихо(e,"L15275")}
             openNarratorRijal((c&&c[1])||nm, id); }); }catch(e){_тихо(e,"L15276")} }, 220); } }catch(e){_тихо(e,"L15276")}
+      setTimeout(()=>{ try{ _пометитьОтсылку(card); }catch(e){_тихо(e,"L268a")} }, 1200);   // №268
       return true;
     }
   }
@@ -22460,6 +22470,7 @@ async function _codifHighlight(text, card, out, place){
     highlightNarratorsInDiv(ad, names, async nm=>{ const id=f2id[nm]; out.style.display='block'; let c=null; try{ c=await _narrCard(id); }catch(e){_тихо(e,"L15286")}
       openNarratorRijal((c&&c[1])||nm); }, f2id);   /* не рвём карточку хадиса — равий открывается модалкой (как в поиске), указ владельца */ }
     try{ highlightRelationalInDiv(ad); }catch(e){_тихо(e,"L15288")} }); }catch(e){_тихо(e,"L15288")} }, 0);
+  setTimeout(()=>{ try{ _пометитьОтсылку(card); }catch(e){_тихо(e,"L268b")} }, 1200);   // №268
   return true;
 }
 /* #686 (С67, владелец: «сверка не работают, потому что Ибн Умар не отмечен и не определён»).
@@ -22474,6 +22485,48 @@ async function _codifHighlight(text, card, out, place){
    у которого есть id из codif, помечаем отдельным проходом — ровно одно имя, ровно первое вхождение,
    и только если оно ещё не помечено. Ни на что другое проход не смотрит.
    Класс широкий: так устроены тысячи хадисов вида «عن نافع: «أن ابن عمر…» — сподвижник всегда у границы матна. */
+/* №268 (владелец, Муслим 987, 18.06: «а почему Ибн Масира не надо досвечивать? как думаешь»).
+   В «… عن زيد بن أسلم في هذا الإسناد بمعنى حديث حفص بن ميسرة» Хафс ибн Майсара — НЕ звено этой цепи:
+   это отсылка «по смыслу как в риваяте Хафса» (соседний риваят 987a, где Хафс — звено). Считать его
+   звеном нельзя: сверка с sunnah.com дала бы лишнее звено и ложное «не совпадает». Но и молчать плохо —
+   человек видит имя и не понимает, почему оно серое. Поэтому помечаем его ОТДЕЛЬНО: пунктир, не зелёная
+   плашка, класс nhlRef (не nhl — счётчики звеньев и сверка его не видят), подсказка объясняет, что
+   это отсылка. id берём у того же имени, уже подсвеченного в соседнем риваяте выдачи; нет — ищем по имени. */
+function _пометитьОтсылку(card){
+  const ad=card && card.querySelector('.ar'); if(!ad || ad.querySelector('.nhlRef')) return;
+  const sk=s=>stripDiac(String(s||'')).replace(/ـ/g,'').replace(/[أإآٱ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/\s+/g,' ').trim();
+  const walker=document.createTreeWalker(ad, NodeFilter.SHOW_TEXT, null); const nodes=[];
+  while(walker.nextNode()) nodes.push(walker.currentNode);
+  for(const node of nodes){
+    try{ if(node.parentElement.closest('.nhl,.nhlRef')) continue; }catch(e){ continue; }
+    const raw=node.nodeValue||''; let flat='', map=[];
+    for(let i=0;i<raw.length;i++){ const ch=raw[i]; if(/[ً-ْٰـ]/.test(ch)) continue; flat+=ch; map.push(i); }
+    // «بمعنى/بمثل/بنحو/مثل/نحو حديث[ه] <имя>» — имя: слово + до двух звеньев «بن X»
+    const m=/(?:بمعنى|بمثل|بنحو|مثل|نحو)\s+حديث\s+((?:ابي|أبي|ابى|أبى)\s+)?([ء-ي]{2,})((?:\s+(?:بن|ابن)\s+[ء-ي]{2,}){0,2})/.exec(flat);
+    if(!m) continue;
+    const имя=((m[1]||'')+m[2]+(m[3]||'')).trim();
+    const p=m.index+m[0].length-имя.length;
+    const s0=map[p], s1=(m.index+m[0].length<map.length)?map[m.index+m[0].length]:raw.length;
+    // id: то же имя, уже подсвеченное в соседней карточке выдачи (первое слово + совпадение «ибн»-части)
+    let id=null; const первое=sk(m[2]), ибн=sk((m[3]||'').replace(/^\s*(?:بن|ابن)\s+/,''));
+    try{ const box=card.closest('#res')||document;
+      const cand=[...box.querySelectorAll('.nhl[data-id]')].filter(x=>!card.contains(x));
+      const поИмени=cand.filter(x=>sk(x.textContent).split(' ')[0].replace(/^(ال)/,'')===первое.replace(/^(ال)/,''));
+      for(const x of поИмени){ const xid=x.dataset.id;
+        const сИбн=!ибн || cand.some(y=>y.dataset.id===xid && sk(y.textContent).includes(ибн.split(' ')[0]));
+        if(сИбн){ id=xid; break; } } }catch(e){_тихо(e,"L268i")}
+    const span=document.createElement('span'); span.className='nhlRef'; span.textContent=raw.slice(s0,s1);
+    span.style.cssText='cursor:pointer;color:#e8dcae;border-bottom:1.5px dashed #9a8a55;padding:0 1px';
+    span.title='Отсылка к соседнему риваяту («по смыслу как в хадисе '+имя+'») — не звено этой цепи, в сверке не считается'+(id?(' · id'+id):'')+' · Нажми: кто это';
+    span.onclick=(e)=>{ e.stopPropagation(); try{ openNarratorRijal(имя, id||undefined); }catch(_e){_тихо(_e,"L268o")} };
+    const frag=document.createDocumentFragment();
+    if(s0>0) frag.appendChild(document.createTextNode(raw.slice(0,s0)));
+    frag.appendChild(span);
+    if(s1<raw.length) frag.appendChild(document.createTextNode(raw.slice(s1)));
+    node.parentNode.replaceChild(frag, node);
+    return;
+  }
+}
 function _подсветитьСподвижника(card, имя, id, onClick){
   try{
     if(!card || !имя || id==null) return false;
