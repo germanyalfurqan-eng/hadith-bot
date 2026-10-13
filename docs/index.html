@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1756</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1757</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2037,7 +2037,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1756';
+const APPVER = 'v1757';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -18120,7 +18120,13 @@ async function narrCandidates(qRaw){
       else if(full!==nm && full.indexOf(cn)>0) sc=25;
       if(sc) out.push({nm:nm,id:it[1],sc:sc-nm.length*0.05+Math.min(e?e[2]:0,150)*0.02, y:e?(e[1]||0):0}); }
     // №377: гарант знаменитой шухры и для арабского ввода (раньше — только для кириллицы)
-    try{ const famA=_NARR_FAMOUS[String(qRaw).trim()]||_NARR_FAMOUS[cn];
+    /* 13.10.2026 (перепроверка №169/№178/№181): «قتادة» снова давал первым ар-Рахави #15293, ас-Садуси — третьим.
+       Ключи _NARR_FAMOUS РУССКИЕ («катада»), а здесь спрашивали арабским запросом — гарант не срабатывал
+       никогда. Обратный путь: значения словаря, начинающиеся с арабского запроса как с ПЕРВОГО слова
+       («قتاده بن دعامه»). Только если такое значение ОДНО — иначе тёзок не разводим (عبد الله и т.п.). */
+    let _famAr=null; try{ const _ks=[...new Set(Object.values(_NARR_FAMOUS).filter(v=>(v+' ').indexOf(cn+' ')===0))];
+      if(cn && cn.indexOf(' ')<0 && _ks.length===1) _famAr=_ks[0]; }catch(e){_тихо(e,"L169ar")}
+    try{ const famA=_NARR_FAMOUS[String(qRaw).trim()]||_NARR_FAMOUS[cn]||_famAr;
       if(famA){ const hits=idx.filter(it=>it[0].indexOf(famA)===0);
         if(hits.length){ const hit=hits.reduce((a,b)=>(((ext.get(b[1])||[])[2]||0)>((ext.get(a[1])||[])[2]||0)?b:a));
           const j=out.findIndex(c=>c.id===hit[1]); if(j>=0) out.splice(j,1);
@@ -18345,8 +18351,12 @@ function _shuhraOf(name, extRow){
   // Срабатывает ТОЛЬКО когда «بن أبي X» — НЕ отец (есть بن РАНЬШЕ), т.е. дед+. Для «سعد بن أبي وقاص»/«علي بن أبي طالب» (это отец) НЕ применяется → шухра остаётся по имени.
   // Лечит #246: «عبد الله بن محمد بن أبي شيبة» давал «ابن محمد» (слепое عبد الله→ابن<отец>); теперь «ابن أبي شيبة».
   for(let i=2;i<nw.length-1;i++){ if((nw[i]==='أبي'||nw[i]==='ابي') && nw[i-1]==='بن'){
-    let priorBn=false; for(let k=0;k<i-1;k++){ if(nw[k]==='بن') priorBn=true; }
-    if(priorBn) return 'ابن أبي '+nw[i+1]; break; } }
+    let priorBn=0; for(let k=0;k<i-1;k++){ if(nw[k]==='بن') priorBn++; }
+    /* 13.10.2026: «مالك بن أنس بن مالك بن أبي عامر» давал «ابن أبي عامر» — прапрадед, а не Малик ибн Анас
+       (поймано в подсказке равиев). Родовая шухра — это ДЕД (ровно одно بن до «بن أبي X»: ابن أبي شيبة/ليلى/
+       مليكة) либо известный род, где предок дальше (ابن أبي ذئب и т.п. — список ниже). Иначе — не трогаем. */
+    const _РОД_АБИ={'ذئب':1,'شيبة':1,'شيبه':1,'ليلى':1,'ليلي':1,'مليكة':1,'مليكه':1,'حاتم':1,'الدنيا':1,'عاصم':1,'داود':1,'عدي':1,'زائدة':1,'زائده':1,'نجيح':1,'عروبة':1,'عروبه':1,'خيثمة':1,'خيثمه':1,'عمر':1,'أويس':1,'اويس':1};
+    if(priorBn===1 || (priorBn>1 && _РОД_АБИ[nw[i+1]])) return 'ابن أبي '+nw[i+1]; break; } }
   let nis='';
   if(extRow&&extRow[0]){ const ws=String(extRow[0]).split(' '); const t=[];
     for(let i=0;i<ws.length;i++){ const w=ws[i];
@@ -18355,6 +18365,8 @@ function _shuhraOf(name, extRow){
     nis = t.find(x=>!_shTribe[x]) || t[0] || ''; }   // #карточка: различающая нисба важнее родового племени → «يزيد الكوفي» (а не «يزيد القرشي»); الثوري/الزهري остаются
   if(/^(ابو|أبو|ابي|أبي|ام|أم)$/.test(nw[0])&&nw.length>=2){ const _kw0=/^(ابي|أبي)$/.test(nw[0])?'أبو':nw[0];   // #владелец 01.07.2026: кунья хранится в родительном (أبي صالح, как в цепи после «عن») — в шапке карточки нужен ИМЕНИТЕЛЬНЫЙ (أبو صالح)
     const kun=_kw0+' '+nw[1]; return nis?(kun+' '+nis):kun; }
+  // 13.10.2026: «عبد الله بن أبي قتادة» давал обрубок «ابن ابي» — отец по кунье, это два слова («ابن أبي قتادة»).
+  if(nw[0]==='عبد'&&nw[1]==='الله'&&nw[2]==='بن'&&/^(أبي|ابي|أم|ام)$/.test(nw[3]||'')&&nw[4]) return 'ابن '+nw[3]+' '+nw[4];
   if(nw[0]==='عبد'&&nw[1]==='الله'&&nw[2]==='بن'&&nw[3]) return 'ابن '+nw[3];   // عبد الله بن عباس → ابن عباس (привычная шухра)
   const first=(/^(عبد|عبيد)$/.test(nw[0])&&nw[1])?(nw[0]+' '+nw[1]):nw[0];      // составное первое имя НЕ рвать («عبد الهاشمي» — мусор)
   // ЗАКОН ИМЕНИ: если выбранная нисба РОДОВАЯ/географ. (البصري…), а в имени есть чистый патроним-дед «X بن جد» (جد≠часть كنية «أبي X») — он узнаваемее (Ибн Сирин «محمد بن سيرين», не «محمد البصري»).
