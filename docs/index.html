@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1754</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1755</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2037,7 +2037,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1754';
+const APPVER = 'v1755';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7306,6 +7306,22 @@ function _bkApplyTheme(tEl){
 // Дерево = плоский список с отступами по level; текущая глава подсвечена (последний заголовок с p<=pg);
 // клик → переход на лист главы (p = pg листа, без пересчёта печатных страниц). Кэш на книгу в памяти.
 let _bkTocCache={};
+// №33: путь страницы по оглавлению — [предок…, текущая глава]. Оглавление грузится один раз на книгу (тихо, в фоне).
+let _bkTocP={};
+async function _bkПуть(id, pg){
+  try{
+    let hs=_bkTocCache[id];
+    if(!hs){ if(!_bkTocP[id]) _bkTocP[id]=bjson(BACKEND_URL+'/book_toc?id='+id+'&initData='+encodeURIComponent(INITDATA), 60000)
+        .then(j=>{ const h=(j&&j.headings)||[]; if(h.length) _bkTocCache[id]=h; return h; }).catch(()=>{ delete _bkTocP[id]; return []; });
+      hs=await _bkTocP[id]; }
+    if(!hs||!hs.length) return null;
+    let cur=-1; for(let i=0;i<hs.length;i++){ if((hs[i].p||1)<=pg) cur=i; else break; }
+    if(cur<0) return null;
+    const путь=[String(hs[cur].t||'').trim()]; let ур=hs[cur].l||1;
+    for(let i=cur-1;i>=0 && ур>1;i--){ const l=hs[i].l||1; if(l<ур){ путь.unshift(String(hs[i].t||'').trim()); ур=l; } }
+    return путь.filter(Boolean).map(t=>t.length>70?t.slice(0,68)+'…':t);
+  }catch(e){ return null; }
+}
 async function _bkTOC(){
   const id=_bookView.id; if(!id) return;
   let tm=document.getElementById('bkTocModal');
@@ -7648,6 +7664,16 @@ async function _bookLoad(){
     let _шамЧип=''; try{ _шамЧип=_shamChip(_bookView.id, null, 'reader')||''; }catch(e){_тихо(e,"L74sham")}
     crumb.innerHTML=(_hd.length?('📑 '+_hd.map(h=>esc(h)).join(' ‹ ')):'')+(_шамЧип?((_hd.length?' &nbsp; ':'')+_шамЧип):'');
     crumb.style.display=(_hd.length||_шамЧип)?'block':'none';
+    /* №33 (владелец, скрин Муснада Ахмада на shamela.ws: «возьми пользу с сайта Мактаба»). Почти всё с того
+       экрана у нас уже есть (том/страница/№, A−/A+, оглавление, поиск по книге, огласовки, справа налево).
+       Не было «مسار الصفحة الحالية» — пути страницы: посреди главы человек не видел, где он. Заголовки
+       приходят только на тех листах, где глава НАЧИНАЕТСЯ. Берём путь из оглавления книги (тот же
+       /book_toc, кэш на книгу): текущая глава = последний заголовок с p<=лист, предки — по уровням выше. */
+    if(!_hd.length){ const _pg0=_bookView.pg, _id0=_bookView.id;
+      _bkПуть(_id0, _pg0).then(путь=>{ try{
+        if(!путь || _bookView.pg!==_pg0 || _bookView.id!==_id0) return;
+        crumb.innerHTML='<span title="Путь страницы по оглавлению книги — как «مسار الصفحة الحالية» в Мактабе">📍 '+путь.map(h=>esc(h)).join(' ‹ ')+'</span>'+(_шамЧип?(' &nbsp; '+_шамЧип):'');
+        crumb.style.display='block'; }catch(e){_тихо(e,"L33p")} }); }
     if(!j.text){ tEl.innerHTML='<span class="hint">Страница пуста. Полистай ← / → или введи другой номер.</span>'; }
     else { let clean=(j.text||'').replace(/<[^>]*>/g,'').replace(/ /g,' ');   // убрать turath-теги <span…> (мусор)
       _bookView.firstLeaf=_bookView.pg; _bookView.lastLeaf=_bookView.pg;   // диапазон загруженных листов (для «добавить страницу»)
