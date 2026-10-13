@@ -24056,9 +24056,21 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception: pass
             ICON = {"done": "✅", "open": "🔴", "wait": "⏳", "progress": "🟡"}
             cnt = {"done": 0, "open": 0, "wait": 0, "progress": 0}
-            for k, v in st.items():
-                if k.startswith("_"): continue
-                s = (v or {}).get("s", "open"); cnt[s] = cnt.get(s, 0) + 1
+            # 🔴 13.10.2026, №110/№136. Статус брался ТОЛЬКО из docs/requests_status.json — а его с 13.09
+            # никто не обновлял: заявки закрываются через /api/zayavka полем done в журнале. Замер:
+            # в файле 724 «сделано», из них 168 в журнале открыты (#55, #62, #63, #93…), и по
+            # крайней мере одна отметка ложная (#62: «выключить командой «журнал»» — такой команды
+            # в боте нет). Владелец видел почти пустой список при 176 открытых.
+            # Теперь: done в журнале — закрыта; иначе старая отметка «сделано» из файла НЕ прячет
+            # заявку, а показывается пометкой «не подтверждено».
+            def _статус(r):
+                rid_ = str(r.get("id"))
+                if r.get("done"):
+                    return "done"
+                s_ = (st.get(rid_) or {}).get("s", "open")
+                return "open" if s_ == "done" else s_
+            for r in breqs:
+                s = _статус(r); cnt[s] = cnt.get(s, 0) + 1
             # Немота недопустима: нули от неудачного запроса выглядят как честные нули,
             # а решение по ним принимает человек. Не прочлось — так и скажем.
             _ст_строка = ('\n🔴 СТАТУСЫ НЕ ПРОЧЛИСЬ (%s) — показаны ВСЕ заявки, '
@@ -24070,7 +24082,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             lines = [head]
             for r in breqs:
                 rid = str(r.get("id"))
-                s = (st.get(rid) or {}).get("s", "open")
+                s = _статус(r)
                 if s == "done": continue
                 quote = corr.get(rid) or r.get("t", "")
                 quote = re.sub(r"\s+", " ", quote).strip()[:95]
@@ -24079,6 +24091,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if meta.get("v"): tail += " · " + meta["v"]
                 if s != "open" and (meta.get("why") or meta.get("r")):
                     tail += " · " + (meta.get("why") or meta.get("r"))[:45]
+                elif meta.get("s") == "done":
+                    tail += " · ⚠️ раньше отмечена «сделано», не подтверждено"
                 lines.append(f"{ICON.get(s, '🔴')} #{rid} ({r.get('d','')[:16]}): {quote}{tail}")
             # 🔴 07.09.2026, слово владельца (#3032 «Клод не работает ссылка»). Ссылка вела
             # на blob в хранилище и была мёртвой дважды. Во-первых, файла там нет вовсе:
