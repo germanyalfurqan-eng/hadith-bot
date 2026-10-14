@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1765</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1766</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2037,7 +2037,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1765';
+const APPVER = 'v1766';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6072,6 +6072,25 @@ async function runSearch(explicit){
   _arabusOn=false;   // M-fix: новый поиск → Arabus сброшен в ВЫКЛ (по умолчанию выключен)
   let q=document.getElementById('q').value.trim(); const shown=q;
   if(!q){ toast('Введите запрос'); return; }
+  /* №232 (перепроверка 14.10): «"ибн аби шейба"» — это НАЗВАНИЕ сборника, а поиск искал его по тексту
+     хадисов и находил 1610 мест со словом «аби». Запрос, целиком совпавший с названием или автором
+     сборника, получает над выдачей кнопку «открыть сборник»; сам поиск по тексту идёт как раньше. */
+  try{ const _cbo=document.getElementById('collBanner'); if(_cbo) _cbo.remove();
+    const _qn=q.replace(/["«»“”„']/g,'').trim().toLowerCase().replace(/ё/g,'е').replace(/[ʿʼ‘’`]/g,'');
+    if(_qn.length>=4 && !/\d/.test(_qn)){
+      const _норм=s=>String(s||'').toLowerCase().replace(/ё/g,'е').replace(/[ʿʼ‘’`]/g,'').trim();
+      const _все=COLLECTIONS.concat(typeof EXTRA!=='undefined'?EXTRA:[]);
+      const _нашл=_все.filter(c=>[c.short,c.author,c.ru,c.ar].concat(_COLL_EN[c.code]||[]).some(nm=>nm && (_норм(nm)===_qn || _норм(String(nm).split(' — ')[0])===_qn)))
+        .filter(c=>(typeof isReadable==='function'&&isReadable(c.code)) || (typeof EXTRA_BIDS!=='undefined'&&EXTRA_BIDS[c.code])).slice(0,4);
+      if(_нашл.length){ const b=document.createElement('div'); b.className='hint'; b.id='collBanner';
+        b.style.cssText='margin:8px 0;padding:10px 12px;border:1.5px solid #6fa8dc;border-radius:10px;background:rgba(111,168,220,.12);font-size:calc(13.5px * var(--txtScale,1))';
+        b.innerHTML='📚 Это название сборника. Ниже — поиск этих слов по тексту хадисов.';
+        _нашл.forEach(c=>{ const a=document.createElement('div'); a.style.cssText='margin-top:6px;cursor:pointer;color:#9fd3ff;font-weight:700;text-decoration:underline';
+          a.textContent='📖 Открыть сборник «'+(c.ru||c.short)+'»'+(c.n?' · '+Number(c.n).toLocaleString('ru-RU')+' хадисов':'');
+          a.onclick=()=>{ try{ if(typeof isReadable==='function'&&isReadable(c.code)) openReader(c.code,1); else openBook(EXTRA_BIDS[c.code],1,true); }catch(e){_тихо(e,"L232o")} };
+          b.appendChild(a); });
+        let _пост=false; try{ const _an=document.querySelector('.modes'); if(_an&&_an.parentNode){ _an.parentNode.insertBefore(b,_an.nextSibling); _пост=true; } }catch(e){_тихо(e,"L232p")}
+        if(!_пост){ const _r=document.getElementById('res'); if(_r) _r.insertBefore(b,_r.firstChild); } } } }catch(e){_тихо(e,"L232")}
   q=q.replace(/[​-‏‪-‮﻿⁦-⁩]/g,'');   // M438: НЕВИДИМКИ из копипасты Шамелы (ZWNJ и пр.) ломали матч — «в Мактабе находится, у нас нет»
   q=q.replace(/[،؛؟,;!]+/g,' ').replace(/\s+/g,' ').trim();   // M283: убрать пунктуацию (запятая прилипала к слову и ломала строгий матч)
   /* 🔗 #849 (владелец 18.08.2026): «пусть приложение тоже понимает ссылки библиотек — книга,
