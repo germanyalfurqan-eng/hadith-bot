@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1769</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1770</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2037,7 +2037,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1769';
+const APPVER = 'v1770';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4639,10 +4639,15 @@ function _collScopeToggle(code){   // клик по чипу при активн
 function _updRandBtn(){ var r=document.getElementById('randHadithRow'); if(!r) return;
   if(!(typeof cfg!=='undefined' && cfg.randHadith)){ r.style.display='none'; return; }   // #193: по умолчанию ВЫКЛ; включается тумблером в Настройках
   var q=''; try{ q=(document.getElementById('q')||{}).value||''; }catch(e){_тихо(e,"L3128")}
-  var res=document.getElementById('res'); var hasRes = res && res.children && res.children.length>0;
+  /* №188 (МИНИ АПП 103, 15.10.2026): у каждого, кто хоть раз искал, в #res висит чип «↩ Вернуться к
+     последнему поиску» (#resumeChip) — и он считался «результатами»: кнопка не появлялась даже с
+     включённым тумблером. Вторая причина рядом: при старте приложение само кладёт прошлый запрос в
+     поле (muslimoon_state.q), и непустое поле тоже считалось работой. Проверено живьём на v1769:
+     тумблер вкл, в #res только resumeChip — кнопки не было; с правкой — есть. */
+  var res=document.getElementById('res'); var hasRes = res && res.children && [].some.call(res.children, function(c){ return c.id!=='resumeChip'; });
   var engaged = (typeof tab!=='undefined' && tab!=='hadith')
     || (typeof modes!=='undefined' && (modes.chain||modes.any||modes.narr))
-    || (q.trim().length>0) || hasRes;
+    || (q.trim().length>0 && q!==window._qВосстановлен) || hasRes;   // №188: прошлый запрос, который приложение само вернуло в поле, — не работа
   r.style.display = engaged ? 'none' : 'flex';
 }
 function renderCols(){
@@ -27317,7 +27322,7 @@ async function boot(){
     try{ const st=JSON.parse(localStorage.getItem('muslimoon_state')||'null');
       if(st){ if(st.tab && st.tab!=='hadith'){ var _bt=document.querySelector('.tab[data-tab="'+st.tab+'"]'); if(_bt && _bt.offsetParent!==null) _bt.click(); }   // QA-low: восстановить любую видимую вкладку (была только quran; hadith=дефолт; trending только если виден)
         (st.cols||[]).forEach(c=>selCols.add(c));
-        if(st.q) document.getElementById('q').value=st.q;
+        if(st.q){ document.getElementById('q').value=st.q; window._qВосстановлен=st.q; }   // №188: восстановленный запрос — не «начал работать»
         // M35: вернулся < 2ч после поиска → чип «вернуться к результатам» (сам поиск НЕ перезапускаем — только по клику)
         if(st.q && st.ts && (Date.now()-st.ts) < 2*3600*1000){
           const _res=document.getElementById('res');
