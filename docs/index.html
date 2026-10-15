@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1767</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1768</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2037,7 +2037,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1767';
+const APPVER = 'v1768';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5545,6 +5545,19 @@ function relaxSearch(words, getNorm, pool, strict){
   if(zero.length){ used=words.filter(w=>df[w]>0); dropped.push(...zero);
     if(used.length){ hits=pool.filter(it=>test(used,it)); if(hits.length) return {hits,dropped,used}; } }
   if(!used.length) return {hits:[], dropped, used:[]};
+  /* ②а №404 (МИНИ АПП 103, 15.10.2026): «остерегайтесь этих групп» не находил хадис Хузайфы
+     («сторонись всех этих групп», Бухари 7084). Жадный шаг ② ронял самое частое «этих», потом
+     «групп» — и оставалось одно «остерегайтесь» (17 карточек ни о чём). А пара «этих групп»
+     находит 18, и Хузайфа среди них. Поэтому при 3–6 словах сначала пробуем убрать КАЖДОЕ слово
+     по одному и берём самый УЗКИЙ непустой набор; не нашлось — прежний жадный порядок. */
+  if(used.length>=3 && used.length<=6){ let best=null;
+    for(const w of used){ const ws=used.filter(x=>x!==w); const h=pool.filter(it=>test(ws,it));
+      if(h.length && (!best || h.length<best.hits.length)) best={hits:h, w, ws}; }
+    /* вперёд — тексты, где оставшиеся слова стоят ПОДРЯД («этих групп» у Хузайфы), а не
+       разбросаны по длинному хадису (Бухари 18 стоял первым из-за «групп…» и «этих» в разных местах) */
+    if(best){ const фр=best.ws.join(' '); const подряд=best.hits.filter(it=>getNorm(it).indexOf(фр)!==-1);
+      const прочие=best.hits.filter(it=>getNorm(it).indexOf(фр)===-1);
+      return {hits:подряд.concat(прочие), dropped:dropped.concat([best.w]), used:best.ws}; } }
   // ② убирать самые ЧАСТЫЕ (малоинформативные) по одному, оставляя редкие/специфичные
   //    («марьям финики»: убрать частое «марьям», оставить редкое «финики»)
   const order=[...used].sort((a,b)=>df[b]-df[a]); let cur=used.slice();
@@ -6497,6 +6510,11 @@ async function runSearch(explicit){
       // «бида»/«закят»/«салят» — кириллица = ТРАНСЛИТ арабского термина (translitSuggest даёт بدعة). Не угадываю молча (бида = بدعة или العبادة?), а предлагаю ЧИПЫ — владелец тапает нужный → поиск по-арабски. Реальные русские слова (вера/молитва) транслит не дают → чипов нет.
       if(!strict && shown.trim().split(/\s+/).length<=2 && shown.trim().length<=12){
         try{ const _tw=await translitSuggest(shown.trim()); let _ar=[...new Set((_tw||[]).filter(x=>isArabic(x)&&canon(x).replace(/\s/g,'').length>=3))].slice(0,3);
+          /* №404 попутно (МИНИ АПП 103, 15.10.2026): на ДВА русских слова словарь отдаёт по одному
+             арабскому слову-обрывку — «этих групп» → «الطاعة ءايته وغرابيب», «салят духа» → «سولت»,
+             «ночная молитва» → «أنشأنا». Одно слово не может быть переводом фразы из двух: такие не
+             предлагаем. Однословные запросы («бида» → بدعة) не тронуты. */
+          if(shown.trim().split(/\s+/).length>=2) _ar=_ar.filter(x=>x.trim().split(/\s+/).length>=2);
           let _ruleAr='';   // УКАЗ-2: правило-транслит-фолбэк (джильбаб→جلباب), когда словарь молчит
           if(!_ar.length){ try{ _ruleAr=_ruToAr(shown.trim()); }catch(e){_тихо(e,"L4497")} }
           if(_ruleAr && !_ruАрПравдоподобенФраза(shown.trim(), _ruleAr)) _ruleAr='';   /* #676 (С67): лучше промолчать, чем подсказать бессмыслицу */
