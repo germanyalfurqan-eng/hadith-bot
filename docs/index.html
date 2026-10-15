@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1768</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1769</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2037,7 +2037,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1768';
+const APPVER = 'v1769';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -19606,7 +19606,24 @@ let _testimShard={}, _testimShardP={};
 // (замерено: testimonies/32.json грузился 6+ раз за один поиск). Promise-кэш — второй и далее вызовы ждут ТОТ ЖЕ fetch.
 async function _testimGet(mid){ const b=Math.floor(mid/100);
   if(!_testimShardP[b]) _testimShardP[b]=fetch('./testimonies/'+b+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
-  if(_testimShard[b]===undefined) _testimShard[b]=await _testimShardP[b];
+  if(_testimShard[b]===undefined){ _testimShard[b]=await _testimShardP[b];
+    /* №440 (МИНИ АПП 103, 15.10.2026; скрин владельца «нравится ли им этот бардак»): цитаты из «Тахзиб
+       аль-Камаль» пришли вместе с подстрочным аппаратом издания — «ثقة _________ (١) العلل: ٢ / ١١٨،
+       والجرح والتعديل…», а перевод честно переводил сноску («причины: 2 / 118»). Замер по всем 60 597
+       записям: хвост после черты «___» у 677, значки «(١)» у 4 846. Слова критика кончаются на черте:
+       всё после неё — примечания издателя. Чистим один раз на шард, и цитату [3], и перевод [9]. */
+    try{ const _ш=_testimShard[b]; if(_ш) for(const _k in _ш){ for(const c of (_ш[_k]||[])){
+        for(const i of [3,9]) if(c && typeof c[i]==='string' && c[i]){
+          const _ч=c[i].replace(/\s*_{3,}[\s\S]*$/,'').replace(/\s*\((?:[١٢٣٤٥٦٧٨٩٠]{1,2}|\d{1,2})\)/g,'').replace(/\s+([.،,])/g,'$1').trim();
+          if(_ч) c[i]=_ч; }
+        /* №440, вторая находка того же скрина: у Ахмада слова «أيهما أوثق؟ … كلاهما ثقة» («кто из них
+           надёжнее? — оба надёжны») стояли в красной рамке с бейджем джарха и подсветкой «أيهم». Сборщик
+           вынул термин «يهم» («ошибается») из ЧУЖОГО слова — «أيهما», «عليهم», «إليهم», «محدثيهم».
+           Замер: из 173 записей с термином «يهم» у 136 (120 равиев, среди них сподвижник №6589) такого
+           слова в цитате нет вовсе. Тот же класс, что #654 («لين» в «علينا»). Снимаем термин — знак
+           записи тогда берётся из её настоящих слов. «لين»/«واه» не трогаем: «لينه», «واهي» — законные
+           формы, и там это вопрос науки, а не кода. */
+        if(c && String(c[1]||'').trim()==='يهم' && !/(^|[^ء-ي])[وف]?يهم($|[^ء-ي])/.test(stripDiac(String(c[3]||'')))) c[1]=''; } } }catch(e){_тихо(e,"L440snoski")} }
   const _сп=(_testimShard[b]||{})[String(mid)]||null;
   /* №377 (Абу Ханифа, #6571, ум. 150, табака 6): в списке стояло «аль-Бухари: صحابي» — свидетельство о
      СПОДВИЖНИЧЕСТВЕ у человека шестого поколения. Это чужая строка, прилипшая при сборке (у тёзки-сподвижника).
