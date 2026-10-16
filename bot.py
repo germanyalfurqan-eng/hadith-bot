@@ -27612,6 +27612,9 @@ def _ensure_data_branch():
         pass
     return _data_branch_ready
 
+_DATA_ETAG = {}   # путь → (ETag, сырые байты) для условных запросов, см. _data_get
+
+
 def _data_get(path, default=None):
     """Прочитать JSON из ветки data через contents API (без CDN-кэша).
 
@@ -27638,17 +27641,35 @@ def _data_get(path, default=None):
     Сырой файл (raw) остаётся третьим запасом — он кэшируется до пяти минут, поэтому идёт
     последним, а не первым.
     """
+    # 🔴 16.10.2026, МИНИ АПП 103. С 11:43 до 11:50 /api/ochered отвечал всем 503 «очередь не
+    # прочиталась»: у токена кончился часовой лимит GitHub, 5000 из 5000. Замер изнутри
+    # контейнера: фон ~80 запросов в минуту, то есть ~4800 в час — впритык к пределу. Каждый
+    # опрос очереди (четыре слушателя раз в 20 с) стоил ДВА запроса — contents и blob файла
+    # в 8,5 МБ, — хотя файл между опросами почти всегда тот же.
+    # Лечение — условный запрос: GitHub отдаёт ETag, и повтор с If-None-Match при неизменном
+    # файле получает 304, который В ЛИМИТ НЕ ЗАСЧИТЫВАЕТСЯ (проверено на живом токене).
+    # Свежесть при этом ТА ЖЕ: 304 приходит только когда в ветке ровно эта версия, иначе 200
+    # с новой. Храним сырые байты, а не разобранный объект — вызывающие правят результат на
+    # месте перед записью, и общий объект перетёк бы между ними.
     try:
         if GITHUB_TOKEN:
             заг = {"Authorization": f"token {GITHUB_TOKEN}"}
             api = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}?ref=data"
-            r = requests.get(api, headers=заг, timeout=8)
+            запомнено = _DATA_ETAG.get(path)
+            r = requests.get(api, headers=dict(заг, **{"If-None-Match": запомнено[0]})
+                             if запомнено else заг, timeout=8)
+            if r.status_code == 304 and запомнено:
+                return json.loads(запомнено[1].decode("utf-8"))
             if r.status_code != 200:
                 return default
             тело = r.json()
             сырое = тело.get("content") or ""
             if сырое.strip():
-                return json.loads(base64.b64decode(сырое).decode("utf-8"))
+                байты = base64.b64decode(сырое)
+                итог = json.loads(байты.decode("utf-8"))
+                if r.headers.get("ETag"):
+                    _DATA_ETAG[path] = (r.headers["ETag"], байты)
+                return итог
             # содержимого нет — файл перерос предел contents. Берём по sha, точной версией.
             sha = тело.get("sha")
             if sha:
@@ -27656,7 +27677,10 @@ def _data_get(path, default=None):
                     f"https://api.github.com/repos/{GITHUB_REPO}/git/blobs/{sha}",
                     headers=dict(заг, Accept="application/vnd.github.raw"), timeout=20)
                 if b.status_code == 200 and b.content:
-                    return json.loads(b.content.decode("utf-8"))
+                    итог = json.loads(b.content.decode("utf-8"))
+                    if r.headers.get("ETag"):
+                        _DATA_ETAG[path] = (r.headers["ETag"], b.content)
+                    return итог
         r = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/data/{path}",
                          timeout=20)
         if r.status_code == 200:
