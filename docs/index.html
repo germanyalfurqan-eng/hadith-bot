@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1771</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1772</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2037,7 +2037,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1771';
+const APPVER = 'v1772';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6480,7 +6480,8 @@ async function runSearch(explicit){
           setStatus(''); logSearch(shown,tab,нашелось); return;
         }
       }
-      const cwAll=canon(q).split(' ').filter(w=>w.length>1);
+      // #3688: знаки препинания и сноски «(١)» резали куски («ذلك.», «تري؟») — оставляем только буквы
+      const cwAll=canon(q).replace(/[^ء-ي ]+/g,' ').split(' ').filter(w=>w.length>1);
       if(cwAll.length>12){ const N=cwAll.length;
         const cands=[...new Set([0.45,0.6,0.3,0.75,0.5].map(p=>cwAll.slice(Math.floor(N*p),Math.floor(N*p)+6).join(' ')))].filter(s=>s.split(' ').length>=4);
         await appendWideMulti(seq, cands); setStatus(''); logSearch(shown,tab,0); return; }
@@ -8401,7 +8402,14 @@ async function appendWideMulti(seq, cands){
       if(seq!==_seq) return;
       if(r.status===403){ sec.textContent='🌐 Большая библиотека: доступ пока не открыт.'; return; }
       if(r.status===429){ sec.textContent='🌐 Слишком часто, подожди немного.'; return; }
-      const j=await r.json().catch(()=>({})); const data=j.data||[];
+      const j=await r.json().catch(()=>({}));
+      // #3688 (16.10.2026): sunnah.one ищет нестрого — на кусок в 6 слов из длинной вставки
+      // (слова Малика об омовении рук перед едой) он вернул «хадис о фитнах» на 20 тыс. знаков,
+      // где эти слова просто встречаются вразброс. Берём только записи, где 4 слова куска стоят ПОДРЯД.
+      const _bz=s=>canon(s).replace(/[^ء-ي ]+/g,' ').replace(/\s+/g,' ').trim();
+      const _cw=_bz(c).split(' ').filter(Boolean);
+      const _ok=x=>{ const t=_bz((x.text||'').replace(/<\/?mark>/g,'')); for(let i=0;i+4<=_cw.length;i++){ if(t.includes(_cw.slice(i,i+4).join(' '))) return true; } return false; };
+      const data=(j.data||[]).filter(_ok);
       if(data.length){ await loadBooksMap(); try{ await loadS1Books(); }catch(e){_тихо(e,"M237b")}   // M237
         sec.textContent='🌐 Найдено по всей Мактабе · '+data.length+(j.count>data.length?(' из ~'+j.count):''); data.forEach(x=>res.appendChild(wideCard(x))); res.appendChild(wideMoreBtn(seq, c, {page:(j.page||1), shown:data.length, count:(j.count||data.length)})); return; }
     }catch(e){_тихо(e,"L5782")}
