@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1778</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1779</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2039,7 +2039,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1778';
+const APPVER = 'v1779';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -7988,7 +7988,15 @@ async function _bookLoad(){
       let html;
       if(qf){ let re=null;
         try{ const D='['+DIAC+']*'; const _FCLS={'ا':'اإأآٱ','ي':'يىئ','و':'وؤ','ه':'هة','ك':'كگ'};   // отзеркалено из fold() — алиф/я/вав/та-марбута/каф варианты, чтобы запрос «الاعمال» нашёл «الأعمالُ» (как canon)
-          const pat=[...stripDiac(qf)].map(c=>{ if(/\s/.test(c)) return '\\s+'; const cls=_FCLS[fold(c)]; return (cls?('['+cls+']'):c.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'))+D; }).join(''); re=new RegExp(pat,'g'); }catch(e){ re=null; }
+          /* 20.10.2026, МИНИ АПП 103 (№251/#722): между словами допускались ТОЛЬКО пробелы. На странице же
+             цитата стоит с кавычками и сносками — «وذكره ابنُ حِبَّان في كتاب "الثقات" (٣) وَقَال» — и ни
+             «كتاب الثقات», ни запятая из цитаты («الثقات ، وقال») не находились: страница открывалась без
+             подсветки. Теперь слова запроса — только буквы, а между ними — любой небуквенный хвост
+             (пробел, «،», кавычки, скобки сноски, цифры), включая экранированные &quot; и &amp;. */
+          const _сл=stripDiac(qf).split(/[^\p{L}]+/u).filter(Boolean);
+          const _SEP='(?:[^\\p{L}<>&]|&[a-z#0-9]+;)+';
+          const pat=_сл.map(w=>[...w].map(c=>{ const cls=_FCLS[fold(c)]; return (cls?('['+cls+']'):c.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'))+D; }).join('')).join(_SEP);
+          re=pat?new RegExp(pat,'gu'):null; }catch(e){ re=null; }
         html = re ? esc(clean).replace(re, m=>'<mark>'+m+'</mark>') : esc(clean).split(esc(qf)).join('<mark>'+esc(qf)+'</mark>');
         // R-61 Э4 (владелец 16.07, двухцветная подсветка): РАМКА ПЕРЕДАЧИ перед цитатой (سمعت أبي يقول: فلان…) — ГОЛУБЫМ,
         // сама цитата остаётся жёлтым <mark>. Ищем глагол передачи (с огласовками) не дальше 90 символов до первого совпадения.
