@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1774</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1775</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2039,7 +2039,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1774';
+const APPVER = 'v1775';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -4678,9 +4678,18 @@ function renderCols(){
        (R45 — единообразие), не трогая видимую подпись: ряд по авторам остаётся ровным. */
     try{ if(!d.title) d.title=(typeof RU_TITLE!=='undefined' && RU_TITLE[c.code])||c.ru; }catch(_e){_тихо(_e,"L3153")}
     d.onclick=()=>{ if(_scopeIds){ _collScopeToggle(c.code); return; } selCols.has(c.code)?selCols.delete(c.code):selCols.add(c.code); renderCols(); };
-    box.appendChild(d); });
+    box.appendChild(d);
+    /* №151 (владелец 15.06.2026): «Сунан ад-Дарими — один из первоисточников, он должен идти после
+       Муватты Малика». Дарими живёт в доп. сборниках (своё издание, в API fawazahmed0 его нет), поэтому
+       в основной ряд его чип ставим отдельно — сразу за Маликом; выбор тот же, что у доп. сборника. */
+    if(c.code==='malik' && EXTRA_MAP.darimi){ try{ const dd=document.createElement('div');
+      dd.className='col'+(selExtra.has('darimi')?' on':''); dd.textContent='Дарими';
+      dd.title=(typeof RU_TITLE!=='undefined' && RU_TITLE.darimi)||'ад-Дарими — Сунан';
+      dd.onclick=()=>{ selExtra.has('darimi')?selExtra.delete('darimi'):selExtra.add('darimi'); renderCols(); try{ updateExtraSel(); }catch(_e){_тихо(_e,'151дар')} };
+      box.appendChild(dd); }catch(_e){_тихо(_e,'151дар')} }
+  });
   // выбранные доп. сборники — отдельными чипами (нажал = убрать)
-  [...selExtra].forEach(code=>{ const e=EXTRA_MAP[code]; if(!e) return;
+  [...selExtra].forEach(code=>{ if(code==='darimi') return; const e=EXTRA_MAP[code]; if(!e) return;   // №151: Дарими уже стоит в основном ряду
     const d=document.createElement('div'); d.className='col extra on'; d.title='Доп. сборник — нажми, чтобы убрать';
     d.innerHTML=esc(e.short)+' ✕';
     d.onclick=()=>{ selExtra.delete(code); renderCols(); updateExtraSel(); };
@@ -6851,11 +6860,16 @@ async function showHadithRefs(refs, sr, shown, seq){
     }catch(e){_тихо(e,"L4686")}
   }
   if(!out.length) return {shown:0,verified:0};
+  /* №266 (владелец 17.06.2026, скрин: «камни с небес, ибн Аббас» → Бухари 4386 про бану Тамим —
+     «почему он не выдаёт ответ»). ИИ назвал номер наугад, фразы из запроса в том тексте нет, а мы
+     всё равно писали «нашёл конкретный хадис». Если сверить было ЧЕМ (фразы есть) и не сошёлся НИ
+     ОДИН — номера ИИ не показываем: вызывающий код уходит в обычный поиск по смыслу. */
+  if(phr.length && !out.some(o=>o.verified)) return {shown:0,verified:0};
   out.sort((a,b)=>(b.verified?1:0)-(a.verified?1:0));
   res.innerHTML=''; _results=[]; _groups=[];
   const anyText=out.some(o=>o.by==='text'||o.by==='both');
   const hd=document.createElement('div'); hd.className='hint';
-  hd.innerHTML='🧠 '+(sr.fixed?('✅ исправлено: «'+esc(sr.fixed)+'» · '):'')+(sr.note?esc(sr.note)+' · ':'')+'нашёл конкретный хадис'+(anyText?' (текст совпал ✅)':' (по номеру от ИИ)')+':';
+  hd.innerHTML='🧠 '+(sr.fixed?('✅ исправлено: «'+esc(sr.fixed)+'» · '):'')+(sr.note?esc(sr.note)+' · ':'')+(anyText?'нашёл конкретный хадис (текст совпал ✅)':'ИИ назвал номер — текст с запросом не сверен, проверьте')+':';
   res.appendChild(hd);
   // M168 (остаток заявки): кандидатов МНОГО — дать ВЫБОР. Пик-панель чипов «источник №N»:
   // выбранный кандидат → запрос «источник №N» → ИИ извлекает ключевые слова именно его (окно выбора из заявки)
