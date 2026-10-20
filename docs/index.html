@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1777</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1778</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2039,7 +2039,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1777';
+const APPVER = 'v1778';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2837,7 +2837,7 @@ async function fetchJSON(url, ms, opts){ ms=ms||20000;
    спасал. Теперь ключ — отпечаток самого файла (хеш блоба в git): файл тот же → берём из памяти
    устройства (кэш книг), файл изменился → отпечаток другой → качаем. Проставляет _mini101/vypusk.py
    при выпуске по HEAD клона — руками не править. Новый файл данных положи в клон ДО выпуска. */
-const _ДАННЫЕ_ВЕР = {"catalog.json": "cc787cbedc", "narrators_names.json": "34dea8dc0f", "narrators_names2.json": "441c7650af", "ar2ru_ext.json": "59835a8d9c"};
+const _ДАННЫЕ_ВЕР = {"catalog.json": "cc787cbedc", "narrators_names.json": "34dea8dc0f", "narrators_names2.json": "441c7650af", "ar2ru_ext.json": "59835a8d9c", "books_map.json": "216bbce834", "wiki_titles_verified.json": "511d59fc93", "arabus.json": "76f87109f0", "narr_table.json": "4200e49a47", "narr_voc.json": "720d928002", "narrators_ext.json": "f09f0127be", "narrators_wiki.json": "756afcee85", "quran_roots.json": "5c8e6dc19c", "dict_pages.json": "912c24055e", "book_titles_ru.json": "a6eb8c9b50"};
 function _данныеАдрес(f){ const h=_ДАННЫЕ_ВЕР[f]; return './'+f+(h?('?d='+h):('?v='+APPVER)); }
 /* Уборка: копия с прежним отпечатком больше никогда не спросится — убираем её на простое. */
 setTimeout(function(){ try{ if(!window.caches) return; const _живые=new Set(Object.values(_ДАННЫЕ_ВЕР));
@@ -7357,7 +7357,7 @@ function info(t){const d=document.createElement('div');d.className='hint';d.styl
 // M211: карта turath book_id → название (из shamela_catalog), чтобы в wide-выдаче показывать ИМЯ книги
 let _booksMap=null,_booksMapP=null;
 function loadBooksMap(){ if(_booksMap) return Promise.resolve(_booksMap); if(_booksMapP) return _booksMapP;
-  _booksMapP=fetch('./books_map.json').then(r=>r.ok?r.json():null).then(j=>{_booksMap=j||{};return _booksMap;}).catch(()=>{_booksMap={};return _booksMap;}); return _booksMapP; }
+  _booksMapP=cachedFetchJSON(_данныеАдрес('books_map.json'), 60000, {silent:true}).catch(()=>null).then(j=>{_booksMap=j||{};return _booksMap;}).catch(()=>{_booksMap={};return _booksMap;}); return _booksMapP; }
 function bookName(id){ id=String(id||''); return (_booksMap&&_booksMap[id])||''; }
 // M237: справочник книг sunnah.one (код → имя). ОТДЕЛЬНЫЙ от _booksMap: нумерации разные,
 // и путать их — ровно та беда, из-за которой 35% карточек несли чужое имя.
@@ -9726,12 +9726,12 @@ function cardMuh(d,groups){
 /* ===== 🌿 СЛОВО → КОРЕНЬ → все места в Коране (M18/M28/M20) — настоящие корни Quranic Arabic Corpus ===== */
 let _roots=null, _rootsP=null;
 async function loadRoots(){ if(_roots) return _roots; if(_rootsP) return _rootsP;
-  _rootsP=(async()=>{ try{ const j=await (await fetch('./quran_roots.json')).json(); _roots=j; return j; }
+  _rootsP=(async()=>{ try{ const j=await cachedFetchJSON(_данныеАдрес('quran_roots.json'), 60000, {silent:true}); _roots=j; return j; }
     catch(e){ _roots={f:{},r:{},rf:{},ro:{}}; return _roots; } })(); return _rootsP; }
 // M404: индекс «корень → страница статьи» в 6 авторитетных словарях (dict_pages.json, локально R37)
 let _dictPg=null,_dictPgP=null;
 async function loadDictPages(){ if(_dictPg) return _dictPg; if(_dictPgP) return _dictPgP;
-  _dictPgP=(async()=>{ try{ _dictPg=await (await fetch('./dict_pages.json')).json(); }
+  _dictPgP=(async()=>{ try{ _dictPg=await cachedFetchJSON(_данныеАдрес('dict_pages.json'), 60000, {silent:true}); }
     catch(e){ _dictPg={meta:{order:[],ar:[],ru:[],dec:{}},roots:{}}; } return _dictPg; })(); return _dictPgP; }
 function _dictLeaf(page,dec){ if(!page||!dec) return 0; if(dec==='B') return page; if(dec==='A1') return Math.floor(page/10)+1; return Math.floor(page/10); }   // Ф-11: без калибровки (dec) лист не считаем
 function rootKey(w){ return canon(w).replace(/[^ء-ي]/g,''); }   // ключ как в quran_roots.json
@@ -10834,7 +10834,7 @@ async function _buildSecPick(){ const host=document.getElementById('catSecPick')
 // предперевод названий (GPT-батч, book_titles_ru.json) — рус.названия показываем СРАЗУ, без кнопки
 let _bookTrLoaded=false;
 async function loadBookTr(){ if(_bookTrLoaded) return; _bookTrLoaded=true;
-  try{ const r=await fetch('./book_titles_ru.json'); if(!r.ok) return; const j=await r.json();
+  try{ const j=await cachedFetchJSON(_данныеАдрес('book_titles_ru.json'), 30000, {silent:true}); if(!j) return;
     for(const k in j){ if(!_catTr.map[k]) _catTr.map[k]={ru:j[k]}; }
     if(!_catTr._userSet) _catTr.on=true;   // по умолчанию ВКЛ — раз названия уже переведены
   }catch(e){_тихо(e,"L7289")}
@@ -11907,7 +11907,7 @@ document.addEventListener('click',e=>{ const s=e.target&&e.target.closest&&e.tar
 const _WK_COMMON={ 'джами ат-тирмизи':'Сунан ат-Тирмизи', 'джами‘ ат-тирмизи':'Сунан ат-Тирмизи', "джами' ат-тирмизи":'Сунан ат-Тирмизи' };
 function _wkCommon(nm){ if(!nm) return nm; const k=String(nm).toLowerCase().replace(/ё/g,'е').replace(/\s+/g,' ').trim(); return _WK_COMMON[k]||nm; }
 function loadWikiTitles(){ if(_wikiT) return Promise.resolve(_wikiT); if(_wikiTP) return _wikiTP;
-  _wikiTP=fetch('./wiki_titles_verified.json').then(r=>r.ok?r.json():{}).then(j=>{ _wikiT=j||{}; window._wikiT=_wikiT; return _wikiT; }).catch(()=>{ _wikiT={}; window._wikiT={}; return _wikiT; }); return _wikiTP; }
+  _wikiTP=cachedFetchJSON(_данныеАдрес('wiki_titles_verified.json'), 60000, {silent:true}).catch(()=>({})).then(j=>{ _wikiT=j||{}; window._wikiT=_wikiT; return _wikiT; }).catch(()=>{ _wikiT={}; window._wikiT={}; return _wikiT; }); return _wikiTP; }
 async function openCatalog(q0){   // q0 (опц.) — начальный запрос: открыть каталог сразу с фильтром по нему (без гонки таймингов)
   const _firstOpen = (typeof _catalog==='undefined' || !_catalog);
   if(_firstOpen){ try{ setStatus('📚 Открываю библиотеку Мактаба…'); toast('📚 Загружаю библиотеку…'); }catch(e){_тихо(e,"L8054")} }   // #4: индикатор загрузки
@@ -13018,7 +13018,7 @@ let _arabusLocal=null, _arabusLocalP=null;
 function loadArabusLocal(){
   if(_arabusLocal) return Promise.resolve(_arabusLocal);
   if(_arabusLocalP) return _arabusLocalP;
-  _arabusLocalP=fetch('./arabus.json').then(r=>r.ok?r.json():null).then(j=>{ _arabusLocal=j||{}; return _arabusLocal; }).catch(()=>{ _arabusLocal={}; return _arabusLocal; });
+  _arabusLocalP=cachedFetchJSON(_данныеАдрес('arabus.json'), 60000, {silent:true}).catch(()=>null).then(j=>{ _arabusLocal=j||{}; return _arabusLocal; }).catch(()=>{ _arabusLocal={}; return _arabusLocal; });
   return _arabusLocalP;
 }
 function arabusLocalLookup(word, root){   // word уже очищен от огласовок; ключи файла — тоже
@@ -17985,7 +17985,7 @@ function openIsnadCtor(){   // ярлык меню «Поиск по иснад�
 /* ===== 📋 M412: ОБЩАЯ ТАБЛИЦА ПЕРЕДАТЧИКОВ (19 106) — сортировки, фильтры передачи, переход по #id ===== */
 let _narrTbl=null,_narrTblP=null;
 function loadNarrTable(){ if(_narrTbl) return Promise.resolve(_narrTbl); if(_narrTblP) return _narrTblP;
-  _narrTblP=fetch('./narr_table.json').then(r=>r.ok?r.json():[]).then(a=>{ _narrTbl=a||[]; return _narrTbl; }).catch(()=>{ _narrTbl=[]; return _narrTbl; }); return _narrTblP; }
+  _narrTblP=cachedFetchJSON(_данныеАдрес('narr_table.json'), 60000, {silent:true}).catch(()=>[]).then(a=>{ _narrTbl=a||[]; return _narrTbl; }).catch(()=>{ _narrTbl=[]; return _narrTbl; }); return _narrTblP; }
 let _dzNPC={};
 async function dzNP(id){ const sh=Math.floor(id/200); const m=await _dzFetch(_dzNPC,sh,'./np/'+sh+'.json?v='+APPVER); return (m&&m[String(id)])||null; }
 // M504: ясное имя равия для шапки таблицы — шухра (لقب из lakab_map, если есть) + рус-транскрипция
@@ -18176,7 +18176,7 @@ function loadNarrVoc(){ if(_narrVoc) return Promise.resolve(_narrVoc); if(_narrV
   // #247 (огласовки имён, без ИИ): корпус narr_voc.json (4618 имён из codif.na — огласовки из текста сводов, build_narr_voc.py)
   // + курированные narrators_voc.json (150, ПРИОРИТЕТ — выверенные формы). Object.assign: курированные перекрывают корпус.
   _narrVocP=Promise.all([
-    fetch('./narr_voc.json').then(r=>r.ok?r.json():{}).catch(()=>({})),
+    cachedFetchJSON(_данныеАдрес('narr_voc.json'), 60000, {silent:true}).catch(()=>({})).catch(()=>({})),
     fetch('./narrators_voc.json').then(r=>r.ok?r.json():{}).catch(()=>({}))
   ]).then(([corp,cur])=>{ _narrVoc=Object.assign({}, corp||{}, cur||{}); return _narrVoc; }).catch(()=>{ _narrVoc={}; return _narrVoc; }); return _narrVocP; }
 function _vocApply(host, id, plainName){ loadNarrVoc().then(vm=>{ try{ const t=vm[String(id)]; if(!t||!host) return;
@@ -18184,7 +18184,7 @@ function _vocApply(host, id, plainName){ loadNarrVoc().then(vm=>{ try{ const t=v
 }catch(e){_тихо(e,"L12345")} }).catch(()=>{}); }
 let _narrExt=null, _narrExtP=null;   // расширение: id → [кунья+нисба (канон), год смерти, известность(трудов-критиков)] — матчинг «ас-Саури» + ранжирование знаменитостей
 function loadNarrExt(){ if(_narrExt) return Promise.resolve(_narrExt); if(_narrExtP) return _narrExtP;
-  _narrExtP=fetch('./narrators_ext.json').then(r=>r.ok?r.json():null).then(a=>{ _narrExt=new Map(); (a||[]).forEach(x=>_narrExt.set(x[0],[x[1]||'',x[2]||0,x[3]||0])); return _narrExt; }).catch(()=>{ _narrExt=new Map(); return _narrExt; }); return _narrExtP; }
+  _narrExtP=cachedFetchJSON(_данныеАдрес('narrators_ext.json'), 60000, {silent:true}).catch(()=>null).then(a=>{ _narrExt=new Map(); (a||[]).forEach(x=>_narrExt.set(x[0],[x[1]||'',x[2]||0,x[3]||0])); return _narrExt; }).catch(()=>{ _narrExt=new Map(); return _narrExt; }); return _narrExtP; }
 /* №173 (владелец: «поиск бидʿа — нажимаю, сильно зависает»). Замер 09.10.2026 на свежей загрузке: первый
    РУССКИЙ запрос держал экран намертво 2,8 с + 1,1 с, первая карточка через 4,1–4,9 с; повторный — 0,26 с.
    Причина: русское слово заодно ищется как имя передатчика, и для этого здесь ОДНИМ куском строились
@@ -18809,7 +18809,7 @@ let _narrWiki=null;
 let _narrWikiP=null;
 function loadNarrWiki(){ if(_narrWiki) return Promise.resolve(_narrWiki);
   if(_narrWikiP) return _narrWikiP;
-  _narrWikiP=fetch('./narrators_wiki.json').then(r=>r.ok?r.json():{}).then(j=>{_narrWiki=j||{};return _narrWiki;}).catch(()=>{_narrWiki={};return _narrWiki;});
+  _narrWikiP=cachedFetchJSON(_данныеАдрес('narrators_wiki.json'), 60000, {silent:true}).catch(()=>({})).then(j=>{_narrWiki=j||{};return _narrWiki;}).catch(()=>{_narrWiki={};return _narrWiki;});
   return _narrWikiP; }
 // Карта изображений равиев с Википедии (собрана ОФЛАЙН в narr_img/, закон суверенности) — аватар вместо 👤
 let _narrWikiImg=null;
