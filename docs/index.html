@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1772</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1773</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1586,6 +1586,8 @@ window.тихоОтчёт = function () {
         <div class="row"><span>📿 Наши разборы достоверности (наши мухаддисы)</span><button class="go" id="ourRazboryBtn" style="padding:5px 12px">Открыть</button></div>
         <div class="row"><span>📋 Таблица всех передатчиков (<span data-narrcnt>19 106</span> равиев)</span><button class="go" id="narrTblBtn" style="padding:5px 12px">Открыть</button></div>
         <div class="row"><span>🟠 Таблица мудаллисов <span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1))">(طبقات المدلسين Ибн Хаджара + ذكر المدلسين ан-Насаи)</span></span><button class="go" id="mudTblBtn" style="padding:5px 12px">Открыть</button></div>
+        <!-- #233 (владелец 16.06.2026, @jamaat_ru 702221): «надо сделать в программе редкие полезные слова учёных», первое — из вопроса 702218 («почему Альбани мутасахил»). Слова — в redkie_slova.json, чтобы пополнять без правки кода. -->
+        <div class="row"><span>📘 Редкие слова учёных <span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1))">(термины критиков: что значит и у кого)</span></span><button class="go" id="redkieBtn" style="padding:5px 12px">Открыть</button></div>
         <!-- ⚖️ С39 закон «одна таблица»: 3 таблицы объединены в ОДНУ. База иснадов = клик по коду цепи C внутри неё; идентификация = её базовые колонки. Старые кнопки скрыты (элементы оставлены — их JS-обработчики безопасны). -->
         <div class="row" style="display:none"><span>📊 Таблица цепей передачи (база иснадов)</span><button class="go" id="chainTblBtn" style="padding:5px 12px">Открыть</button></div>
         <div class="row"><span>🧬 Конструктор иснада <span style="color:var(--hint);font-size:calc(11px * var(--txtScale,1))">(собери цепь — найди хадисы с ней)</span></span><button class="go" id="isnadCtorBtn" style="padding:5px 12px">Открыть</button></div>
@@ -2037,7 +2039,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1772';
+const APPVER = 'v1773';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -11572,6 +11574,29 @@ function loadNarrAliases(){ if(_narrAliases) return Promise.resolve(_narrAliases
     .then(d=>{ _narrAliases=d||{}; return _narrAliases; })
     .catch(()=>{ _narrAliasesP=null; return null; });
   return _narrAliasesP; }
+/* #233 «Редкие слова учёных» (владелец 16.06.2026). Окно со списком из ./redkie_slova.json:
+   [{слово, ар, смысл, у_кого, источник, откуда}]. Данные отдельно от кода — пополнять файлом. */
+let _redkie=null;
+async function openRedkieSlova(){
+  let m=document.getElementById('redkieModal');
+  if(!m){ m=document.createElement('div'); m.className='modal'; m.id='redkieModal';
+    m.innerHTML='<div class="panel" style="max-width:680px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px"><b>📘 Редкие слова учёных</b><button class="mini" id="redkieClose">закрыть ✕</button></div><div class="hint" style="margin:0 0 10px">Термины, которыми мухаддисы и критики передатчиков описывают людей и хадисы: что слово значит и у кого встречается.</div><div id="redkieBody"></div></div>';
+    document.body.appendChild(m); m.querySelector('#redkieClose').onclick=()=>m.style.display='none';
+    m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
+  }
+  modalTop(m); m.style.display='flex';
+  const body=m.querySelector('#redkieBody'); body.innerHTML='<div class="hint">Загружаю…</div>';
+  try{ if(!_redkie) _redkie=await (await fetch('./redkie_slova.json?v='+APPVER)).json(); }
+  catch(e){ body.innerHTML='<div class="hint">Не удалось загрузить список слов.</div>'; return; }
+  const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  body.innerHTML=(_redkie||[]).map((w,i)=>'<div style="border:1px solid var(--border);border-radius:12px;padding:11px 13px;margin-bottom:10px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><b>'+(i+1)+'. '+esc(w.слово)+'</b><span dir="rtl" lang="ar" style="font-family:var(--arFont,\'Noto Naskh Arabic\',\'Amiri\',serif);font-size:calc(22px * var(--txtScale,1))">'+esc(w.ар)+'</span></div>'
+    +'<div style="margin-top:6px">'+esc(w.смысл)+'</div>'
+    +(w.у_кого?'<div class="hint" style="margin-top:6px">'+esc(w.у_кого)+'</div>':'')
+    +(w.источник?'<div class="hint" style="margin-top:4px">📚 '+esc(w.источник)+'</div>':'')
+    +(w.откуда?'<div class="hint" style="margin-top:4px">💬 '+esc(w.откуда)+'</div>':'')
+    +'</div>').join('') || '<div class="hint">Пока пусто.</div>';
+}
 async function openHadithScience(_overNarr){
   let m=document.getElementById('hadModal');
   if(!m){ m=document.createElement('div'); m.className='modal'; m.id='hadModal';
@@ -26670,6 +26695,7 @@ var _ntsB=document.getElementById('notesBtn'); if(_ntsB) _ntsB.onclick=()=>{ doc
 var _rb2=document.getElementById('readBtn2'); if(_rb2) _rb2.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openReader(); };
 var _rbr=document.getElementById('rootBrowBtn'); if(_rbr) _rbr.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openRootBrowser(); };
 var _hsb=document.getElementById('hadScienceBtn'); if(_hsb) _hsb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openHadithScience(); };
+var _rsb=document.getElementById('redkieBtn'); if(_rsb) _rsb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; openRedkieSlova(); };
 var _orb=document.getElementById('ourRazboryBtn'); if(_orb) _orb.onclick=()=>{ try{ var s=document.getElementById('settingsModal'); if(s) s.style.display='none'; }catch(e){_тихо(e,"L17874")} try{ openOurRazbory(); }catch(e){_тихо(e,"L17874")} };   // 📿 #147
 var _ntb=document.getElementById('narrTblBtn'); if(_ntb) _ntb.onclick=()=>{ document.getElementById('menuModal').style.display='none'; try{ openNarrTable(); }catch(e){_тихо(e,"L17875")} };
 // 🟠 ТАБЛИЦА МУДАЛЛИСОВ (указ владельца 02.07.2026): свод из أطبقات المدلسين (Ибн Хаджар) + ذكر المدلسين (ан-Насаи), билдер build_mudallisin_table.py, привязка к карточкам namesake-safe
