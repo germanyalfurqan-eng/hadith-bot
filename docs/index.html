@@ -1138,7 +1138,7 @@ window.тихоОтчёт = function () {
 })();</script>
 <!-- ШЛАГБАУМ для не-владельца -->
 <div class="gate" id="gate" style="display:none">
-  <img class="logo" src="./logo.png" alt="M" style="width:78px;height:78px;box-shadow:0 0 26px #2f7be6cc">
+  <img class="logo" loading="lazy" src="./logo.png" alt="M" style="width:78px;height:78px;box-shadow:0 0 26px #2f7be6cc">
 
   <h2 id="gateTitle" style="cursor:pointer" title="▶ Открыть YouTube-канал Muslimoon">Muslimoon Bot <span style="font-size:calc(12px * var(--txtScale,1));color:var(--hint);vertical-align:middle;white-space:nowrap">▶ YouTube</span></h2>
   <p id="gateMsg">🔒 Доступ пока только для владельца. Скоро откроем больше функций для всех — ин ша Аллах.</p>
@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1776</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1777</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2039,7 +2039,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1776';
+const APPVER = 'v1777';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2831,6 +2831,19 @@ async function fetchJSON(url, ms, opts){ ms=ms||20000;
 //     обязана поднимать имя кеша: иначе человек, однажды скачавший старые переводы,
 //     не увидит исправленных НИКОГДА. Мост переводов Муслима перепишет этот файл.
 // Совместим с fetchJSON по сигнатуре и формату ошибки (журнал /api/errlog, opts.silent).
+/* #3832 (скорость, 20.10.2026): ОТПЕЧАТКИ ДАННЫХ. Указатель имён (3,2 МБ, 650 КБ по сети) и словарь
+   ar2ru качались с ?v=APPVER — то есть заново после КАЖДОЙ версии (120 за месяц), хотя сами файлы
+   менялись 1–2 раза. ETag у GitHub Pages тоже меняется на каждой выкатке, так что кэш браузера не
+   спасал. Теперь ключ — отпечаток самого файла (хеш блоба в git): файл тот же → берём из памяти
+   устройства (кэш книг), файл изменился → отпечаток другой → качаем. Проставляет _mini101/vypusk.py
+   при выпуске по HEAD клона — руками не править. Новый файл данных положи в клон ДО выпуска. */
+const _ДАННЫЕ_ВЕР = {"catalog.json": "cc787cbedc", "narrators_names.json": "34dea8dc0f", "narrators_names2.json": "441c7650af", "ar2ru_ext.json": "59835a8d9c"};
+function _данныеАдрес(f){ const h=_ДАННЫЕ_ВЕР[f]; return './'+f+(h?('?d='+h):('?v='+APPVER)); }
+/* Уборка: копия с прежним отпечатком больше никогда не спросится — убираем её на простое. */
+setTimeout(function(){ try{ if(!window.caches) return; const _живые=new Set(Object.values(_ДАННЫЕ_ВЕР));
+  caches.open('muslimoon-books-v1').then(function(c){ return c.keys().then(function(ks){ ks.forEach(function(r){
+    const m=/[?&]d=([0-9a-f]+)/.exec(r.url); if(m && !_живые.has(m[1])) c.delete(r).catch(function(){}); }); }); }).catch(function(){});
+}catch(e){} }, 15000);
 const _BOOK_CACHE_NS='muslimoon-books-v1';
 function _книгаОтметки(){ try{ return JSON.parse(localStorage.getItem('bkCacheTs')||'{}')||{}; }catch(e){ return {}; } }
 function _книгаВКэшеОтметить(url){ try{ const м=_книгаОтметки(); м[String(url)]=Date.now(); localStorage.setItem('bkCacheTs', JSON.stringify(м)); }catch(e){} }
@@ -10695,7 +10708,9 @@ async function showRootPlaces(root, opts){
 // M216/M127: браузер ВСЕЙ Мактабы (8589 книг каталога Шамилы=turath) → открыть любую в читалке
 let _catalog=null,_catalogP=null;
 function loadCatalog(){ if(_catalog) return Promise.resolve(_catalog); if(_catalogP) return _catalogP;
-  _catalogP=fetch('./catalog.json').then(r=>r.ok?r.json():null).then(j=>{_catalog=j||[];return _catalog;}).catch(()=>{_catalog=[];return _catalog;}); return _catalogP; }
+  /* #3832 (скорость, 20.10.2026): каталог (1,3 МБ, 263 КБ по сети) брался голым fetch — Pages держит его
+     в кэше браузера 10 минут, и каждый холодный запуск качал его заново. Теперь — кэш книг (срок 7 дней). */
+  _catalogP=cachedFetchJSON(_данныеАдрес('catalog.json'), 30000, {silent:true}).then(j=>{_catalog=Array.isArray(j)?j:[];return _catalog;}).catch(()=>{_catalog=[];_catalogP=null;return _catalog;}); return _catalogP; }
 function _catNotFound(list,q){ try{ addNotFoundBtn(list,'книга в Мактабе: «'+(q||'').slice(0,120)+'»'); }catch(e){_тихо(e,"L7163")} }
 // Разделы Мактабы: огласованный арабский + русский перевод; ПОРЯДОК = приоритет (сунна → хадис-науки → тафсир → …)
 const CATS_INFO=[
@@ -14386,7 +14401,7 @@ let _narr2Ok=false, _narr2Попыток=0;   /* #598/#655/#686: пришёл л
 function loadNarrNames(){ if(_narrNames && (_narr2Ok || _narr2Попыток>=3)) return Promise.resolve(_narrNames); if(_narrNamesP) return _narrNamesP;
   // #497-хвост (владелец, «долго зависает»): у этих двух файлов НЕ было ?v=APPVER — правки в них (напр. новый
   // алиас شухра) могли зависать в HTTP-кэше браузера у пользователя до истечения срока, как и у меня в тестах.
-  _narrNamesP=fetchJSON('./narrators_names.json?v='+APPVER, 20000, {silent:true}).then(async j=>{ _narrNames=j||[];   // QA-свип: таймаут (индекс имён — узкое место подсветки; голый fetch висел)
+  _narrNamesP=cachedFetchJSON(_данныеАдрес('narrators_names.json'), 20000, {silent:true}).then(async j=>{ _narrNames=j||[];   // QA-свип: таймаут (индекс имён — узкое место подсветки; голый fetch висел)
     /* 🔴 10.09.2026 (смена 92). В подписях было ЗАШИТО «18 989 равиев» — в девяти местах,
        а в базе их 19 106, и таблица честно писала 19 106. Владелец видел на одном экране
        два разных числа об одном и том же. Зашитое число устаревает молча, поэтому теперь
@@ -14394,7 +14409,7 @@ function loadNarrNames(){ if(_narrNames && (_narr2Ok || _narr2Попыток>=3)
     try{ const _n=(_narrNames||[]).length; if(_n) document.querySelectorAll('[data-narrcnt]').forEach(e=>{ e.textContent=_n.toLocaleString('ru'); }); }catch(e){_тихо(e,"narrcnt")}
     // M381: расширенный индекс форм (كنية/نسب: أبو مالك الأشعري، الحسن البصري…) — уникальные вливаются в общий
     _narr2Попыток++;
-    try{ const n2=await fetchJSON('./narrators_names2.json?v='+APPVER, 45000, {silent:true});
+    try{ const n2=await cachedFetchJSON(_данныеАдрес('narrators_names2.json'), 45000, {silent:true});
       if(n2 && ((n2.u&&n2.u.length) || (n2.m&&n2.m.length))){
         (n2.u||[]).forEach(p=>_narrNames.push(p)); window._narrMulti=n2.m||[]; _narr2Ok=true;
         /* 🔴 10.09.2026 (смена 93). window._narrMulti ПРИСВАИВАЛСЯ И НИГДЕ НЕ ЧИТАЛСЯ —
@@ -18949,7 +18964,7 @@ const _AR2RU={'عبد الله':'Абдуллах','عبد الرحمن':'Абд
  'مره':'Мурра','عجلان':'Аджлан','سماك':'Симак','زبيده':'Зубайда','سيرين':'Сирин','حيان':'Хайян'};
 const _AR2RU_CH={'ب':'б','ت':'т','ث':'с','ج':'дж','ح':'х','خ':'х','د':'д','ذ':'з','ر':'р','ز':'з','س':'с','ش':'ш','ص':'с','ض':'д','ط':'т','ظ':'з','غ':'г','ف':'ф','ق':'к','ك':'к','ل':'л','م':'м','ن':'н','ه':'х'};
 // #422/#439: расширенный словарь транслита (батч-ИИ по всем словам имён равиев) — тихо подгружаем на старте; до загрузки работает старый фолбэк
-try{ fetch('./ar2ru_ext.json?v='+(typeof APPVER!=='undefined'?APPVER:'')).then(r=>r.ok?r.json():null).then(j=>{ if(j) window._AR2RU_EXT=j; }).catch(()=>{}); }catch(e){_тихо(e,"L12720")}
+try{ cachedFetchJSON(_данныеАдрес('ar2ru_ext.json'), 30000, {silent:true}).then(j=>{ if(j) window._AR2RU_EXT=j; }).catch(()=>{}); }catch(e){_тихо(e,"L12720")}
 // #404 патч ②: ОБРАТНЫЙ словарь ru→ar (ar2ru_ext 7079 слов + встроенный _AR2RU). Ловит русские ТРАНСЛИТ-слова при нуле. Индекс ленивый.
 let _RU2AR=null;
 function _ru2arIndex(){ if(_RU2AR) return _RU2AR; _RU2AR={};
