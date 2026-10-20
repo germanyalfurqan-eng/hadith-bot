@@ -1150,7 +1150,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1775</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1776</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2039,7 +2039,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1775';
+const APPVER = 'v1776';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -2183,7 +2183,15 @@ async function _checkUpdate(){ try{
   const latest=(await r.text()).trim(); if(!latest || latest===APPVER) return;
   const ln=parseInt((latest.match(/\d+/)||[])[0]||'0'), cn=parseInt((APPVER.match(/\d+/)||[])[0]||'0');
   if(ln && cn && ln<=cn) return;   // только СТРОГО новее
-  const doReload=async()=>{ try{ if(window.caches&&caches.keys){ const ks=await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))); } }catch(e){_тихо(e,"L1700")}
+  const doReload=async()=>{ try{ if(window.caches&&caches.keys){ const ks=await caches.keys();
+      /* #3832 (владелец 20.10.2026: «ускорить приложение везде, где можно, начиная с запуска»).
+         Здесь стирались ВСЕ кэши — и кэш книг тоже (Ахмад 25 МБ, Муслим 8,6 МБ, Ибн Хиббан 11 МБ…).
+         Версии выходят по несколько в день, и после каждой человек качал десятки мегабайт заново.
+         Теперь: кэш книг остаётся (у копии свой срок — 7 дней, см. _книгаСтарше), из него убираются
+         только записи с ?v= (привязаны к версии) и разметка цепей markup/* (пересобирается при правках). */
+      await Promise.all(ks.map(async k=>{ if(k===_BOOK_CACHE_NS){ try{ const c=await caches.open(k); const rq=await c.keys();
+          await Promise.all(rq.filter(r=>/[?&]v=|\/markup\//.test(r.url)).map(r=>c.delete(r))); }catch(_){} return; }   // markup/* — разметка цепей, пересобирается при правках: её не держим
+        return caches.delete(k); })); } }catch(e){_тихо(e,"L1700")}
     location.replace(location.pathname+'?v='+encodeURIComponent(latest)+'&t='+Date.now()+location.hash); };   // M430: TG-кэш пробивается двойным бастером + чисткой caches
   // только открыл, ничего не делал, ещё не перезагружались → тихо обновить
   if(!window.__interacted && sessionStorage.getItem('verReloaded')!=='1'){ sessionStorage.setItem('verReloaded','1'); doReload(); return; }
@@ -2824,10 +2832,19 @@ async function fetchJSON(url, ms, opts){ ms=ms||20000;
 //     не увидит исправленных НИКОГДА. Мост переводов Муслима перепишет этот файл.
 // Совместим с fetchJSON по сигнатуре и формату ошибки (журнал /api/errlog, opts.silent).
 const _BOOK_CACHE_NS='muslimoon-books-v1';
+function _книгаОтметки(){ try{ return JSON.parse(localStorage.getItem('bkCacheTs')||'{}')||{}; }catch(e){ return {}; } }
+function _книгаВКэшеОтметить(url){ try{ const м=_книгаОтметки(); м[String(url)]=Date.now(); localStorage.setItem('bkCacheTs', JSON.stringify(м)); }catch(e){} }
+function _книгаСтарше(url, мс){ try{ const м=_книгаОтметки(); const т=м[String(url)];
+  if(!т){ _книгаВКэшеОтметить(url); return false; } return (Date.now()-т)>мс; }catch(e){ return false; } }
 async function cachedFetchJSON(url, ms, opts){ ms=ms||60000; opts=opts||{};
   let cache=null; let _снятьКэш=function(){};
   try{ if(window.caches){ cache=await caches.open(_BOOK_CACHE_NS);
-        const hit=await cache.match(url);
+        let hit=await cache.match(url);
+        /* #3832 (скорость): книги больше не стираются при каждой новой версии (см. _checkUpdate) —
+           зато у копии в памяти есть срок: 7 дней. Пересобранная книга без смены _BOOK_CACHE_NS
+           дойдёт до человека не позже чем через неделю, а не «никогда». Нет отметки (запись
+           старше этой правки) — ставим её сейчас, а не выкидываем: это и есть экономия. */
+        if(hit && _книгаСтарше(url, 7*864e5)){ try{ await cache.delete(url); }catch(_){} hit=null; }
         if(hit){
           /* 🔴 ЗАЯВКА #720 (владелец, 18.08.2026): «загрузка идёт сверху, а слева индикатор
              загрузки молчит — значит кто-то врёт». Врёт ВЕРХНЯЯ строка, и вот чем.
@@ -2877,6 +2894,7 @@ async function cachedFetchJSON(url, ms, opts){ ms=ms||60000; opts=opts||{};
        заведомо целое, и клон больше не держит в памяти вторую копию книги. */
     const _вКэш=function(тело){
       try{ if(cache) cache.put(url, new Response(тело, {headers:{'content-type':'application/json'}}))
+                          .then(function(){ _книгаВКэшеОтметить(url); })
                           .catch(e=>{_тихо(e,"L2148")}); }catch(e){_тихо(e,"L2148")}
     };
     // ПОЛОСА ЗАГРУЗКИ (заявка владельца 26.07.2026: «это универсальная вещь, должна быть везде,
@@ -26379,9 +26397,31 @@ try{
   var _вчера=localStorage.getItem('чтоНовогоПоказано');
   var _сегодня=new Date().toISOString().slice(0,10);
   if(_вчера!==_сегодня && localStorage.getItem('чтоНовогоВерсия')!==APPVER){
-    setTimeout(function(){ try{ window.showUpdateNotes(APPVER);
+    /* #3832 (владелец 20.10.2026): «эта плашка в начале приложения навязчивая слишком — надо, чтобы
+       вверху выплывало предложение посмотреть, что нового, а кто не хочет — пролистывал». Окно на весь
+       экран заменено полоской сверху: выезжает плавно, тап — открыть «Что нового», ✕ / прокрутка /
+       12 с — уехать. Правило «раз в сутки и только при новой версии» прежнее. */
+    setTimeout(function(){ try{
       localStorage.setItem('чтоНовогоПоказано', _сегодня);
       localStorage.setItem('чтоНовогоВерсия', APPVER);
+      if(document.getElementById('wnBar')) return;
+      var бар=document.createElement('div'); бар.id='wnBar';
+      бар.style.cssText='position:fixed;left:50%;top:calc(var(--tgTop,0px) + env(safe-area-inset-top,0px) + 8px);transform:translate(-50%,-140%);'
+        +'z-index:9000;max-width:calc(100% - 24px);display:flex;align-items:center;gap:10px;padding:9px 10px 9px 14px;border-radius:14px;'
+        +'background:rgba(16,42,36,.96);border:1px solid #2e9b6b;box-shadow:0 6px 22px rgba(0,0,0,.45);color:#e8fff4;'
+        +'font-size:calc(13.5px * var(--txtScale,1));cursor:pointer;transition:transform .45s cubic-bezier(.2,.9,.3,1.2),opacity .35s;opacity:0';
+      бар.innerHTML='<span>🆕 <b>Что нового в '+esc(APPVER)+'</b> — посмотреть ›</span>'
+        +'<button type="button" aria-label="закрыть" style="flex:none;background:transparent;border:0;color:#9fd8bf;font-size:16px;padding:2px 6px;cursor:pointer">✕</button>';
+      var убрать=function(){ try{ бар.style.transform='translate(-50%,-140%)'; бар.style.opacity='0'; setTimeout(function(){ try{ бар.remove(); }catch(_){} },500);
+        window.removeEventListener('touchmove', наПрокрутку, true); window.removeEventListener('wheel', наПрокрутку, true); }catch(_){} };
+      var наПрокрутку=function(){ убрать(); };
+      бар.onclick=function(ev){ if(ev.target && ev.target.tagName==='BUTTON'){ ev.stopPropagation(); убрать(); return; }
+        убрать(); try{ window.showUpdateNotes(APPVER); }catch(err){_тихо(err,'3832wn')} };
+      document.body.appendChild(бар);
+      setTimeout(function(){ бар.style.transform='translate(-50%,0)'; бар.style.opacity='1'; }, 40);   // таймер, а не requestAnimationFrame: тот спит во фоне, и полоска осталась бы невидимой
+      // уезжает от ЖЕСТА человека, а не от любой прокрутки: приложение само прокручивает при запуске
+      setTimeout(function(){ window.addEventListener('touchmove', наПрокрутку, {capture:true,passive:true}); window.addEventListener('wheel', наПрокрутку, {capture:true,passive:true}); }, 800);
+      setTimeout(убрать, 12000);
     }catch(e){_тихо(e,"L17615")} }, 1500);   // 1,5 с — дать приложению дорисоваться
   }
 }catch(e){_тихо(e,"L17618")}
