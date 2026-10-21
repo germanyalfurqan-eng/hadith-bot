@@ -35784,7 +35784,7 @@ def разметку_в_текст(т):
 app = ApplicationBuilder().token(TOKEN).post_init(_setup).build()
 try:   # ЛОКАЛКИ 37 · 21.10.2026: «ботяра нарисуй / измени / генерация вкл|выкл|статус» — только владелец
     import generaciya_tg as _генерация_тг
-    _генерация_тг.podklyuchit(app, OWNER_ID, is_owner)
+    _генерация_тг.podklyuchit(app, OWNER_ID, is_owner, dsoc_память)
 except Exception as _е_ген:
     print('generaciya_tg: команды не подключены —', _е_ген, flush=True)
 # B-004 ГЛОБАЛЬНЫЙ ФИКС «can't parse entities» (×32 в журнале): спецсимвол (_*[]`) в тексте/имени/запросе ломал Markdown.
