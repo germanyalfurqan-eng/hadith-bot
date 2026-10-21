@@ -14,7 +14,8 @@
 ни путей, ни команд. Ключ работника — свой (GEN_SECRET), не общий BACKUP_SECRET: утечка одного
 не открывает другое. Нет GEN_SECRET в окружении — дверь работника закрыта (503).
 
-ДОСТУП (этап 1): только OWNER_ID, только личка с ним и группа @jamaat_ru. Никому больше —
+ДОСТУП (этап 1): только владелец по is_owner бота (личный ID, второй аккаунт, его канал «MUSLIMOON»), только
+личка и группа @jamaat_ru. Никому больше —
 сообщение чужого просто идёт дальше по обычному пути бота, как будто модуля нет.
 """
 import asyncio, base64, io, json, os, re, time, uuid
@@ -38,6 +39,7 @@ KOMANDA = re.compile(r'^\s*ботяра[\s,:!]+(нарисуй|измени|ге
 
 _app = None
 _owner = None
+_svoy = None   # проверка «это владелец» из bot.py
 _zamok = asyncio.Lock()
 _rabotnik = {'kogda': 0.0, 'vkl_lokalno': None, 'imya': ''}
 
@@ -149,12 +151,15 @@ async def _kartinka_iz(m):
 
 async def _obrabotchik(update, context):
     m = update.effective_message
-    u = update.effective_user
-    if not m or not u or u.id != _owner:
-        return                                   # чужой — модуля для него нет, сообщение идёт дальше
-    if m.chat.id not in (_owner, GRUPPA_JAMAAT):
+    if not m:
         return
-    if m.sender_chat:                            # от имени канала/группы — не человек, не владелец
+    # 🔴 21.10, первая живая проба владельца: он пишет в @jamaat_ru от имени своего канала «MUSLIMOON»
+    # (sender_chat), его личного ID в таком сообщении НЕТ — а я такие отбрасывал, и команду перехватывал
+    # общий ИИ («я текстовый ассистент»). Владельца узнаём той же проверкой, что весь бот: is_owner из
+    # bot.py (личный ID, второй аккаунт OWNER_ID2, канал владельца OWNER_CHANNEL_ID).
+    if not (_svoy(update) if _svoy else (update.effective_user and update.effective_user.id == _owner)):
+        return                                   # чужой — модуля для него нет, сообщение идёт дальше
+    if not (m.chat.type == 'private' or m.chat.id == GRUPPA_JAMAAT):
         return
     tekst = m.text or m.caption or ''
     k = KOMANDA.match(tekst)
@@ -211,7 +216,7 @@ async def _komanda(m, vid, prosba, nit):
         nomer = _nomer(z)
         pered = sum(1 for v in z.values() if v.get('status') in ('ждёт', 'у работника'))
         z[zid] = {'id': zid, 'nomer': nomer, 'vid': vid, 'promt': prosba, 'vhod': vhod, 'chat': m.chat.id,
-                  'soob': m.message_id, 'nit': nit, 'kto': m.from_user.id, 'status': 'ждёт', 'sozdano': time.time(),
+                  'soob': m.message_id, 'nit': nit, 'kto': (m.sender_chat.id if m.sender_chat else m.from_user.id), 'status': 'ждёт', 'sozdano': time.time(),
                   'popytka': 0}
         _pisat(FAYL, z)
     s = await _skazat(m.chat.id, '🎨 №%d принято: %s%s\n%s' % (
@@ -324,10 +329,10 @@ async def _gotovo(r):
     return web.json_response({'ok': True})
 
 
-def podklyuchit(app, owner_id):
-    """Зовётся из bot.py сразу после сборки Application."""
-    global _app, _owner
-    _app, _owner = app, int(owner_id)
+def podklyuchit(app, owner_id, eto_vladelec=None):
+    """Зовётся из bot.py сразу после сборки Application. eto_vladelec — is_owner(update) самого бота."""
+    global _app, _owner, _svoy
+    _app, _owner, _svoy = app, int(owner_id), eto_vladelec
     app.add_handler(MessageHandler((filters.TEXT | filters.CAPTION) & ~filters.COMMAND, _obrabotchik), group=-60)
 
 
