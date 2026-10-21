@@ -34599,6 +34599,11 @@ async def _api_serve(application=None):
         return ответ
 
     a = web.Application(middlewares=[_счёт_трафика], client_max_size=50 * 1024 * 1024)   # #259: дефолт aiohttp=1МБ рубил бэкап-zip (~1.2МБ) как «Request Entity Too Large» ещё до обработчика
+    try:   # ЛОКАЛКИ 37 · 21.10.2026: дверь работника генерации картинок (generaciya_tg.py, ключ GEN_SECRET)
+        import generaciya_tg as _генерация_тг
+        a.add_routes(_генерация_тг.marshruty())
+    except Exception as _е_ген:
+        print('generaciya_tg: маршруты не подключены —', _е_ген, flush=True)
     a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/vlozhenie', vlozhenie), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/proba_ii', proba_ii), web.post('/api/fayl', fayl), web.post('/api/foto', foto), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/vyzov', vyzov), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
@@ -35777,6 +35782,11 @@ def разметку_в_текст(т):
 
 
 app = ApplicationBuilder().token(TOKEN).post_init(_setup).build()
+try:   # ЛОКАЛКИ 37 · 21.10.2026: «ботяра нарисуй / измени / генерация вкл|выкл|статус» — только владелец
+    import generaciya_tg as _генерация_тг
+    _генерация_тг.podklyuchit(app, OWNER_ID)
+except Exception as _е_ген:
+    print('generaciya_tg: команды не подключены —', _е_ген, flush=True)
 # B-004 ГЛОБАЛЬНЫЙ ФИКС «can't parse entities» (×32 в журнале): спецсимвол (_*[]`) в тексте/имени/запросе ломал Markdown.
 # Патчим метод класса Bot.send_message → при ошибке разметки автоматически шлём БЕЗ parse_mode (сообщение НЕ теряется, ошибка не плодится). Покрывает и reply_text (он зовёт send_message).
 try:
