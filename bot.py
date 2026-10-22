@@ -35800,6 +35800,11 @@ try:   # ЛОКАЛКИ 37 · 21.10.2026: «ботяра нарисуй / изм
     _генерация_тг.podklyuchit(app, OWNER_ID, is_owner, dsoc_память)
 except Exception as _е_ген:
     print('generaciya_tg: команды не подключены —', _е_ген, flush=True)
+try:   # ЛОКАЛКИ 37 · 22.10.2026: архив каждого сообщения @jamaat_ru на Оракле (chat_arhiv.py) — для ассистента
+    import chat_arhiv as _архив_чата
+    _архив_чата.podklyuchit(app)
+except Exception as _е_арх:
+    print('chat_arhiv: не подключён —', _е_арх, flush=True)
 # B-004 ГЛОБАЛЬНЫЙ ФИКС «can't parse entities» (×32 в журнале): спецсимвол (_*[]`) в тексте/имени/запросе ломал Markdown.
 # Патчим метод класса Bot.send_message → при ошибке разметки автоматически шлём БЕЗ parse_mode (сообщение НЕ теряется, ошибка не плодится). Покрывает и reply_text (он зовёт send_message).
 try:
