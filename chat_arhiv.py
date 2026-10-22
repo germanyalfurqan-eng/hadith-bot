@@ -10,7 +10,7 @@
 Читает архив Гермес на Оракле через мост (most_germesa.py → /chat/novye), пачками, а не целиком.
 Бэкап — вместе с /opt/muslimoon в ночном архиве (ne_v_git).
 """
-import asyncio, io, json, os, time
+import asyncio, contextlib, io, json, os, time
 from telegram.ext import MessageHandler, filters
 
 CHATY = {-1001925828112}          # @jamaat_ru
@@ -54,9 +54,12 @@ async def _arhiv(update, context):
         imya = time.strftime('%Y-%m', time.localtime(z['kogda'])) + '.jsonl'
         with io.open(os.path.join(PAPKA, imya), 'a', encoding='utf-8') as f:
             f.write(json.dumps(z, ensure_ascii=False) + '\n')
-        if not z['pravka'] and ARHIV_CHAT:
+        if ARHIV_CHAT:
             _zapustit_rabotnika()
-            _ochered.put_nowait((z['chat'], z['id']))
+            if z['pravka']:
+                _ochered.put_nowait(('pravka', z['chat'], z['id'], z['tekst'], z['pravka_kogda']))
+            else:
+                _ochered.put_nowait(('kopiya', z['chat'], z['id'], None, None))
     except Exception as e:
         print('chat_arhiv: не записал —', e, flush=True)
 
@@ -66,19 +69,47 @@ async def _arhiv(update, context):
 # не перепутай мои файлы — именно пересланные с чата джм»). В архивном чате лежат и файлы самого владельца,
 # поэтому номер КАЖДОГО пересланного ботом сообщения пишется в svyaz.jsonl: ассистент берёт из архива ТОЛЬКО
 # сообщения с номерами из этого списка — файлы владельца для него невидимы.
-# Правки не пересылаются (Telegram не даёт переслать правку) — новая версия текста есть в jsonl.
+# Правку Telegram переслать не даёт, поэтому (владелец 22.10.2026 08:04: «как быть, если смс редактируется потом,
+# а бот переслал в облачный архив?») на каждую правку бот пишет в архивный чат ОТВЕТ к копии оригинала:
+# «✏️ правка ЧЧ:ММ: новый текст». Оригинал и все правки лежат рядом; удалённое в чате остаётся в архиве.
 # Темп — не чаще раза в 3,5 с: у Telegram предел ~20 сообщений в минуту в одну группу; очередь не теряет пачки.
 ARHIV_CHAT = int(os.environ.get('ARHIV_JAMAAT_CHAT') or -1002142402317)
 _ochered = asyncio.Queue()
 _app = None
 
 
+def _arhiv_id(chat, mid):
+    """Номер архивной копии сообщения по svyaz.jsonl (последняя запись выигрывает), или None."""
+    naydeno = None
+    with contextlib.suppress(OSError), io.open(os.path.join(PAPKA, 'svyaz.jsonl'), encoding='utf-8') as f:
+        for l in f:
+            with contextlib.suppress(ValueError):
+                s = json.loads(l)
+                if s.get('chat') == chat and s.get('id') == mid:
+                    naydeno = s.get('arhiv_id')
+    return naydeno
+
+
+async def _pravka_v_arhiv(chat, mid, tekst, kogda):
+    vremya = time.strftime('%H:%M', time.localtime(kogda or time.time()))
+    aid = _arhiv_id(chat, mid)
+    if aid:
+        await _app.bot.send_message(ARHIV_CHAT, f'✏️ правка {vremya}:\n{tekst or "(текст убран)"}',
+                                    reply_to_message_id=aid, disable_notification=True, allow_sending_without_reply=True)
+    else:
+        await _app.bot.send_message(ARHIV_CHAT, f'✏️ правка {vremya} к t.me/jamaat_ru/{mid} (копии в архиве нет):\n{tekst or "(текст убран)"}',
+                                    disable_notification=True, disable_web_page_preview=True)
+
+
 async def _peresylka():
     from telegram.error import RetryAfter
     while True:
-        chat, mid = await _ochered.get()
+        vid, chat, mid, tekst, kogda = await _ochered.get()
         for _ in range(3):
             try:
+                if vid == 'pravka':
+                    await _pravka_v_arhiv(chat, mid, tekst, kogda)
+                    break
                 m = await _app.bot.forward_message(ARHIV_CHAT, chat, mid, disable_notification=True)
                 with io.open(os.path.join(PAPKA, 'svyaz.jsonl'), 'a', encoding='utf-8') as f:
                     f.write(json.dumps({'chat': chat, 'id': mid, 'arhiv_chat': ARHIV_CHAT, 'arhiv_id': m.message_id,
