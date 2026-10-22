@@ -69,9 +69,9 @@ async def _arhiv(update, context):
 # не перепутай мои файлы — именно пересланные с чата джм»). В архивном чате лежат и файлы самого владельца,
 # поэтому номер КАЖДОГО пересланного ботом сообщения пишется в svyaz.jsonl: ассистент берёт из архива ТОЛЬКО
 # сообщения с номерами из этого списка — файлы владельца для него невидимы.
-# Правку Telegram переслать не даёт, поэтому (владелец 22.10.2026 08:04: «как быть, если смс редактируется потом,
-# а бот переслал в облачный архив?») на каждую правку бот пишет в архивный чат ОТВЕТ к копии оригинала:
-# «✏️ правка ЧЧ:ММ: новый текст». Оригинал и все правки лежат рядом; удалённое в чате остаётся в архиве.
+# Правки (владелец 22.10.2026 08:04/08:12): пересылка после правки несёт уже новую версию, поэтому на каждую правку
+# бот пересылает сообщение заново и подписывает ответом «✏️ исправлено ЧЧ:ММ · прежняя версия: ссылка».
+# В архиве лежат все версии по порядку; удалённое в чате остаётся в архиве.
 # Темп — не чаще раза в 3,5 с: у Telegram предел ~20 сообщений в минуту в одну группу; очередь не теряет пачки.
 ARHIV_CHAT = int(os.environ.get('ARHIV_JAMAAT_CHAT') or -1002142402317)
 _ochered = asyncio.Queue()
@@ -91,14 +91,25 @@ def _arhiv_id(chat, mid):
 
 
 async def _pravka_v_arhiv(chat, mid, tekst, kogda):
-    vremya = time.strftime('%H:%M', time.localtime(kogda or time.time()))
-    aid = _arhiv_id(chat, mid)
-    if aid:
-        await _app.bot.send_message(ARHIV_CHAT, f'✏️ правка {vremya}:\n{tekst or "(текст убран)"}',
-                                    reply_to_message_id=aid, disable_notification=True, allow_sending_without_reply=True)
-    else:
-        await _app.bot.send_message(ARHIV_CHAT, f'✏️ правка {vremya} к t.me/jamaat_ru/{mid} (копии в архиве нет):\n{tekst or "(текст убран)"}',
+    """Владелец 08:12: «может, чтобы прослеживал и, если смс изменилось, пересылал последнюю актуальную?» — пересылка после
+    правки несёт уже новую версию: пересылаем заново (автор сохраняется), svyaz.jsonl ведёт на свежую копию, а под ней —
+    ответ «✏️ исправлено ЧЧ:ММ» со ссылкой на прежнюю. Переслать не вышло (удалено и т.п.) — текст правки ответом к старой копии."""
+    vremya = time.strftime('%H:%M', time.gmtime((kogda or time.time()) + 3 * 3600))   # МСК: часы контейнера в UTC
+    staraya = _arhiv_id(chat, mid)
+    ssylka = f't.me/c/{str(ARHIV_CHAT)[4:]}/{staraya}' if staraya else f't.me/jamaat_ru/{mid}'
+    try:
+        m = await _app.bot.forward_message(ARHIV_CHAT, chat, mid, disable_notification=True)
+    except Exception as e:
+        print('chat_arhiv: правку #%s не переслал —' % mid, e, flush=True)
+        await _app.bot.send_message(ARHIV_CHAT, f'✏️ правка {vremya} (переслать не вышло):\n{tekst or "(текст убран)"}',
+                                    reply_to_message_id=staraya, allow_sending_without_reply=True,
                                     disable_notification=True, disable_web_page_preview=True)
+        return
+    with io.open(os.path.join(PAPKA, 'svyaz.jsonl'), 'a', encoding='utf-8') as f:
+        f.write(json.dumps({'chat': chat, 'id': mid, 'arhiv_chat': ARHIV_CHAT, 'arhiv_id': m.message_id,
+                            'kogda': int(time.time()), 'pravka': True}) + '\n')
+    await _app.bot.send_message(ARHIV_CHAT, f'✏️ исправлено {vremya} · прежняя версия: {ssylka}',
+                                reply_to_message_id=m.message_id, disable_notification=True, disable_web_page_preview=True)
 
 
 async def _peresylka():
