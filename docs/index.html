@@ -73,6 +73,10 @@ window.тихоОтчёт = function () {
 };
 </script>
 <style>
+/* 23.10.2026 (ревизия Гермеса О-0351/О-0352 п.21): у кнопок не было видимого фокуса — outline:none везде, пиксели «покой» и «фокус»
+   совпадали; человек с клавиатурой не видел, где он. :focus-visible рисует контур только при управлении с клавиатуры,
+   на касание пальцем не влияет. */
+:focus-visible{ outline:2px solid var(--link)!important; outline-offset:2px!important }
 /* 23.10.2026 (ревизия Гермеса О-0341): 315 размеров шрифта стояли жёсткими px и не слушали «Aa» — все обёрнуты в calc(Npx * var(--txtScale,1)); при масштабе 1 вид прежний. */
 
 
@@ -1158,7 +1162,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1782</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1783</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2047,7 +2051,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1782';
+const APPVER = 'v1783';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -3073,6 +3077,17 @@ function parseRuSourceNum(s){
   if(!rawName) return null;
   const nrm=x=>(x||'').toLowerCase().replace(/^(аль|al|ал)[\s\-’']*/,'').replace(/[\s'’.\-—·()]/g,'');
   const name=nrm(rawName); if(name.length<3) return null;
+  /* 23.10.2026 (ревизия Гермеса О-0347/О-0352 п.17–18): «nasai 4», «ahmad 1» выдавали ЧУЖОЙ хадис (Абу Дауд №281),
+     а «tirmidhi 5», «abudawud 5», «ibnmajah 12» — ноль: разбор знал только русские имена, и латиница уходила в
+     текстовый поиск по переводам. Латинские имена — код свода и английские названия (_COLL_EN); сравниваем
+     ЦЕЛИКОМ или по началу (не короче 5 букв), без «подстроки внутри», чтобы «covid 19» не стал сводом.
+     Стоит ДО общего цикла: иначе «bukhari 54» ловился полем автора у «аль-Адаб аль-муфрад», «nasai 4» — у «аль-Кубра». */
+  if(/^[a-z]/.test(name)){
+    for(const c of COLLECTIONS.concat(EXTRA)){
+      const lat=[c.code].concat((typeof _COLL_EN!=='undefined'&&_COLL_EN[c.code])||[]).map(nrm).filter(x=>x && x.length>=4);
+      if(lat.some(x=> x===name || (name.length>=5 && x.indexOf(name)===0) || ('sunan'+x)===name || ('sahih'+x)===name)) return {code:c.code, num:num};
+    }
+  }
   for(const c of COLLECTIONS.concat(EXTRA)){
     const cand=[c.ru,c.short,c.author].map(nrm).filter(Boolean);
     if(cand.some(x=> x.indexOf(name)!==-1 || name.indexOf(x)!==-1)) return {code:c.code, num:num};
@@ -6543,10 +6558,10 @@ async function runSearch(explicit){
     }
     await loadReverse();
     // «Бухари 5063» / «муслим 100» / «ибн маджа 50» — русское имя сборника + № → поиск по номеру в нём
-    if(!modes.ai && /[а-яё]/i.test(shown) && /\d/.test(shown)){
+    if(!modes.ai && /[а-яёa-z]/i.test(shown) && /\d/.test(shown)){   /* 23.10: и латиница («nasai 4»), см. parseRuSourceNum */
       const rs=parseRuSourceNum(shown);
       if(rs){ const code=rs.code, qn=String(parseInt(rs.num,10));
-        const C=COLLECTIONS.find(x=>x.code===code), X=EXTRA_MAP[code]; let h=null;
+        const C=COLLECTIONS.find(x=>x.code===code), X=EXTRA_MAP[code]; let h=null, _номСбой=null;
         try{
           if(code==='muhaymin'){ const a=await loadMuhaymin(); h=a.find(x=>String(x.n)===qn); }
           else if(code==='ahmad'){ h=await loadAhmadOne(qn); }
@@ -6554,11 +6569,16 @@ async function runSearch(explicit){
           else if(X){ const a=await loadExtra(code); h=a.find(x=>x.num===qn); }
           else if(C&&C.file){ const a=await loadLocal(code,C.file); h=a.find(x=>x.num===qn); }
           else { h=await getOne(code,qn); }
-        }catch(e){_тихо(e,"L4484")}
+        }catch(e){ _номСбой=e; _тихо(e,"L4484"); }
         if(seq!==_seq) return;   // #308: устаревший запуск (live-search обогнал Enter) НЕ вставляет карточку → нет дубля
         if(h) add(code==='muhaymin'?{type:'m',h}:{type:'h',code,h});
         setHead(true); setStatus(''); logSearch(shown,tab,count);
-        if(!count) res.innerHTML='<div class="status">'+esc(nameOf(code))+' №'+qn+' — не нашёл. Проверь номер.</div>';
+        /* 23.10.2026 (ревизия Гермеса О-0349/О-0352 п.20): без сети книга не скачивалась, исключение глоталось, и человек
+           читал «не нашёл. Проверь номер» — приговор номеру, хотя номер верный. Сбой загрузки или офлайн — говорим про связь. */
+        if(!count){ const _офлайн=(typeof navigator!=='undefined' && navigator.onLine===false);
+          res.innerHTML = (_номСбой||_офлайн)
+            ? '<div class="status">📶 '+esc(nameOf(code))+' №'+qn+' — не удалось загрузить сборник: '+(_офлайн?'нет связи с интернетом':'сбой сети')+'. Номер тут ни при чём — повторите, когда связь вернётся.</div>'
+            : '<div class="status">'+esc(nameOf(code))+' №'+qn+' — не нашёл. Проверь номер.</div>'; }
         return; }
     }
     // Слово владельца 25.07 («пишешь пример "Абу Хурайра" — надо, чтобы подсказкой всплывала КАРТОЧКА Абу Хурайры»):
@@ -26798,6 +26818,19 @@ try{
 document.getElementById('menuBtn').onclick=()=>{ try{ setupMenuRows(); }catch(e){_тихо(e,"L17861")} var _mm=document.getElementById('menuModal'); try{modalTop(_mm);}catch(e){_тихо(e,"L17861")} _mm.style.display='flex'; };   // M340: z-index-инвариант
 document.getElementById('menuClose').onclick=()=>{ document.getElementById('menuModal').style.display='none'; };
 var _setB=document.getElementById('setBtn'); if(_setB) _setB.onclick=()=>{ var _sm=document.getElementById('settingsModal'); try{modalTop(_sm);}catch(e){_тихо(e,"L17863")} _sm.style.display='flex'; };   // M340: z-index-инвариант
+/* 23.10.2026 (ревизия Гермеса О-0351/О-0352 п.22): ловушки фокуса в окнах не было — из открытых Настроек Tab уводил
+   в строку поиска за окном (4 шага из 6 снаружи). Держим Tab внутри верхнего открытого окна (.modal), по кругу. */
+document.addEventListener('keydown', function(e){ try{
+  if(e.key!=='Tab') return;
+  const ms=[...document.querySelectorAll('.modal')].filter(m=>m.style.display==='flex'||m.style.display==='block');
+  if(!ms.length) return;
+  const m=ms.reduce((a,b)=>((+getComputedStyle(b).zIndex||0)>=(+getComputedStyle(a).zIndex||0)?b:a));
+  const f=[...m.querySelectorAll('button,[href],input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')].filter(x=>!x.disabled && x.offsetParent!==null);
+  if(!f.length) return;
+  const first=f[0], last=f[f.length-1], act=document.activeElement;
+  if(e.shiftKey){ if(act===first || !m.contains(act)){ e.preventDefault(); last.focus(); } }
+  else { if(act===last || !m.contains(act)){ e.preventDefault(); first.focus(); } }
+}catch(_){} }, true);
 /* 23.10.2026 (ревизия Гермеса О-0341): числа «· N» в заголовках групп Настроек были вписаны руками
    (9/9/5/4/5/4) и разошлись с пунктами. Теперь считаем ВИДИМЫЕ пункты (.row) группы при каждом
    открытии окна — скрытые от читателя пункты владельца в счёт не входят. Перевод заголовков (i18n)
