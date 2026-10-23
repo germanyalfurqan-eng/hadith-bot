@@ -1162,7 +1162,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1789</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1790</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2051,7 +2051,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1789';
+const APPVER = 'v1790';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -23134,6 +23134,17 @@ async function neuroVerdict(bid,num){
 
 /* Расшифровка вердикта: значок · человеческие слова · цвет. ОДНА таблица на всё приложение —
    раньше она стояла внутри verifyNarr, и второе место показа неизбежно завело бы вторую копию. */
+/* 🔴 23.10.2026 (МИНИ АПП 103): у достоверного хадиса Ахмада №8735 стояло «🔴 маджхуль-звено — цепь не держится · №1 أبو سلمة».
+   Защита 11.10 ловила только имя из ОДНОГО слова. Замер по всем neuro/: ещё 1 739 приговоров «маджхуль» из 29 466 валят на
+   голую кунью или «ибн» из двух слов — أبو داود 112, أبو عاصم 99, أبو الوليد 87, أبو إسحاق 34, أبو الزبير 25, أبو سلمة 25…
+   Это известнейшие надёжные передатчики (ат-Таялиси, ан-Набиль, ас-Сабиʿи, Мухаммад ибн Муслим), спутанные с тёзкой.
+   Возвращает пояснение («имя из одного слова» / «голая кунья») или '' — тогда имя полное и приговор показываем как есть. */
+function _голоеИмя(имя){
+  const сл=String(имя||'').trim().split(/\s+/).filter(Boolean);
+  if(сл.length===1) return 'имя из одного слова';
+  if(сл.length===2 && /^(أبو|أبي|أبا|ابو|ابي|ابا|ابن|بن|أم|ام)$/.test(сл[0])) return 'голая кунья без имени';
+  return '';
+}
 function neuroDecode(nv){
   if(!nv) return null;
   const T={sahih_isnad:['🟢','иснад сахих (по нашим правилам)','#7ee08a'],
@@ -23150,8 +23161,8 @@ function neuroDecode(nv){
      Это почти наверняка известные надёжные передатчики, спутанные с тёзкой-маджхулем. Красное «цепь не держится» для
      них — ложный приговор; честнее «неполный расчёт: опознание неуверенное», пока вердикты не пересчитаны. */
   try{ const п=(nv.w&&nv.w[0])||null;
-    if(nv.v==='majhul_link' && Array.isArray(п) && String(п[1]||'').indexOf('majhul')===0 && String(п[2]||'').trim().split(/\s+/).length===1)
-      return ['◻️','неполный расчёт (звено опознано неуверенно — имя из одного слова)','#8a93a0'];
+    if(nv.v==='majhul_link' && Array.isArray(п) && String(п[1]||'').indexOf('majhul')===0 && _голоеИмя(п[2]))
+      return ['◻️','неполный расчёт (звено опознано неуверенно — '+_голоеИмя(п[2])+')','#8a93a0'];
   }catch(e){_тихо(e,"L_нейро1")}
   return T[nv.v]||['❔',nv.v,'#9aa7b5'];
 }
@@ -23181,7 +23192,7 @@ function neuroВиновник(nv){
     const место = (п.length > 3 && +п[3] > 0) ? ('№' + (+п[3]) + ' ') : '';
     /* №438/№454 (11.10.2026): виновником «маджхуль» назначалось голое имя из одного слова — «قتادة» у Ибн Аби Шейбы №2
        (это Катада ибн Диʿама, один из известнейших табиʿинов). Это догадка о тёзке, а не оценка — говорим об этом прямо. */
-    if(String(п[1]||'').indexOf('majhul')===0 && имя.split(/\s+/).length===1) return место + имя + ' (имя из одного слова — опознание неуверенное)';
+    if(String(п[1]||'').indexOf('majhul')===0 && _голоеИмя(имя)) return место + имя + ' (' + _голоеИмя(имя) + ' — опознание неуверенное)';
     return место + имя;
   }catch(e){ return ''; }
 }
@@ -23190,7 +23201,7 @@ function neuroBadge(nv){
   const _вин = neuroВиновник(nv);
   const _хвост = _вин ? (' · <span style="font-weight:600">' + esc(_вин) + '</span>') : '';
   return '<span class="ntBadge" title="Нейротахкик (БЕТА): '+esc(d[1])+'. Формула по нашим правилам ПР-1…5 (таусик — только от 48 муʿтабаров, нужно ≥2; джарх принимается шире), это не ИИ. Полный разбор — в блоке сверки цепи." '
-    +'style="display:inline-block;font-size:calc(10.5px * var(--txtScale,1));font-weight:700;color:'+d[2]+';border:1px solid '+d[2]+'55;border-radius:7px;padding:1px 7px;background:rgba(108,92,231,.10);vertical-align:middle;white-space:nowrap">'
+    +'style="display:inline-block;font-size:calc(10.5px * var(--txtScale,1));font-weight:700;color:'+d[2]+';border:1px solid '+d[2]+'55;border-radius:7px;padding:1px 7px;background:rgba(108,92,231,.10);vertical-align:middle;white-space:normal;max-width:100%;box-sizing:border-box">'
     +'🤖 '+d[0]+' '+esc(d[1].split(' (')[0])+_хвост+' <span style="font-size:calc(8.5px * var(--txtScale,1));opacity:.75">БЕТА</span></span>';
 }
 
