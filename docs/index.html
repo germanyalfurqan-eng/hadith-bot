@@ -28,6 +28,25 @@
 <meta name="twitter:card" content="summary">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
+/* 24.10.2026 (МИНИ АПП 103, заявка #3576, ошибка A-259 с v1765): «TypeError: IntersectionObserver is not a constructor»
+   — у старого Telegram WebView (Android до Chrome 51) его нет. В приложении 11 мест ленивой подгрузки на нём
+   (лента, «показать ещё», цепи, тахридж) — все молча не срабатывали. Запасной вариант на одном месте вместо 11 проверок:
+   смотрим, попал ли элемент в окно (с запасом rootMargin) — сразу после observe и при каждой прокрутке/повороте.
+   На современных браузерах не включается вовсе. */
+if(typeof window.IntersectionObserver!=='function'){ (function(){
+  var все=[], ждёт=false;
+  function запас(o){ var m=/(-?\d+)px/.exec((o&&o.rootMargin)||''); return m?+m[1]:0; }
+  function проверить(){ ждёт=false; var h=window.innerHeight||document.documentElement.clientHeight;
+    все.slice().forEach(function(н){ н._цели.slice().forEach(function(ц){ try{ var r=ц.getBoundingClientRect();
+      if(r.bottom>=-н._запас && r.top<=h+н._запас && (r.width||r.height)) н._cb([{isIntersecting:true,target:ц,intersectionRatio:1}],н); }catch(e){} }); }); }
+  function позже(){ if(!ждёт){ ждёт=true; setTimeout(проверить,120); } }
+  window.addEventListener('scroll',позже,true); window.addEventListener('resize',позже);
+  window.IntersectionObserver=function(cb,o){ this._cb=cb; this._цели=[]; this._запас=запас(o); все.push(this); };
+  window.IntersectionObserver.prototype.observe=function(ц){ if(все.indexOf(this)<0) все.push(this); if(this._цели.indexOf(ц)<0) this._цели.push(ц); позже(); };
+  window.IntersectionObserver.prototype.unobserve=function(ц){ var i=this._цели.indexOf(ц); if(i>=0) this._цели.splice(i,1); };
+  window.IntersectionObserver.prototype.disconnect=function(){ this._цели=[]; var i=все.indexOf(this); if(i>=0) все.splice(i,1); };
+  window.IntersectionObserver.prototype.takeRecords=function(){ return []; };
+})(); }
 /* 🔇→🔊 Снятие немоты с пустых catch (08.08.2026, Э-2 плана сдачи).
    Ошибка гасится как и раньше — поведение приложения не менялось. Но теперь она видна:
    пишется в консоль и копится в кольцевом журнале на 300 записей.
@@ -1162,7 +1181,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1792</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1793</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2051,7 +2070,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1792';
+const APPVER = 'v1793';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
