@@ -15133,11 +15133,8 @@ async def track_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _кн_прив = _КЛ([*_строки, *(_kb.inline_keyboard if _kb else [])])
                 # Ролик, если владелец его прислал: шлём видео с подписью — одним постом,
                 # а не двумя, иначе в чате снова будет лента служебных сообщений.
+                # ⛔ 23.10.2026 (тревога #4164): видео в приветствии выключено — только текст с кнопками.
                 _рол = None
-                try:
-                    _рол = (_data_get('privet_video.json', None) or {}).get('file_id')
-                except Exception:
-                    _рол = None
                 if _рол:
                     _вчат = await context.bot.send_video(
                         chat_id=chat.id, video=_рол, caption=_прив[:1024],
@@ -19536,11 +19533,15 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Поэтому: любое видео из его лички запоминаем сразу — не файлом, а его номером у
     # Telegram (file_id). По этому номеру мы можем слать ролик сколько угодно раз, ничего не
     # скачивая и не храня у себя.
+    # ⛔ 23.10.2026, ТРЕВОГА ВЛАДЕЛЬЦА #4164: в 14:23 владелец прислал в личку образец видео для
+    # другой работы — бот молча сделал его приветствием, и ролик ушёл новичкам в @jamaat_ru.
+    # Владелец: «срочно убери эту настройку и никогда такие вещи больше не делай».
+    # Авто-запись видео из лички в приветствие ВЫКЛЮЧЕНА навсегда (условие `False`).
     try:
         _вид = (getattr(update.message, 'video', None)
                 or getattr(update.message, 'animation', None)
                 or getattr(update.message, 'video_note', None))
-        if _вид and _хозяин(update) and getattr(update.effective_chat, 'type', '') == 'private':
+        if False and _вид and _хозяин(update) and getattr(update.effective_chat, 'type', '') == 'private':
             _fid = getattr(_вид, 'file_id', '')
             _сек = int(getattr(_вид, 'duration', 0) or 0)
             _data_put('privet_video.json',
