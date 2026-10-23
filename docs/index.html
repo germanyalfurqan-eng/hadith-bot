@@ -1162,7 +1162,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1791</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1792</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2051,7 +2051,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1791';
+const APPVER = 'v1792';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6859,8 +6859,16 @@ async function runSearch(explicit){
   if(modes.ai && aiPhrases && aiPhrases.length){ const ap=aiPhrases.find(p=>isArabic(p)); if(ap) wideQ=ap; }
   const _selNarrow = (typeof selCols!=='undefined' && selCols.size>0) || (typeof selExtra!=='undefined' && selExtra.size>0);   // #50: выбран конкретный сборник чипом
   const wideWill = (tab==='hadith' && explicit && !_selNarrow);   // #162/M284/M420: по умолчанию (ничего не выбрано) ВСЕГДА ищем по всей Мактабе; при выбранном сборнике (#50) НЕ ищем по Мактабе (это ловит первая проверка _scopeIds выше). Условие isArabic||numMode||ai УБРАНО — оно ошибочно сужало поиск до первоисточников при русском/смысловом запросе
+  /* 24.10.2026 (МИНИ АПП 103, обход живого v1791): «2:255» на вкладке «Хадисы» + Enter — подсказка под полем честно
+     говорила «Аят 2:255 — открыть», а сам поиск уходил искать цифры ТЕКСТОМ по всей Мактабе (5,7 МБ+ загрузки и
+     «ничего» в конце). Годная ссылка на аят при нуле хадисов — это просьба открыть аят, а не текстовый запрос. */
+  const _аятСсылка=(function(){ const м=String(shown||'').trim().replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).match(/^(\d{1,3})\s*:\s*(\d{1,3})$/); if(!м) return null;
+    const s=+м[1], a=+м[2]; return (s>=1 && s<=114 && a>=1 && a<=SURA_AYAHS[s-1]) ? {s,a} : null; })();
   if(!count && seq===_seq){
     if(tab==='quran' && !strict && await tryRootFallback(shown, seq)){ /* M212/M225: показал по корню (в строгом режиме — не подменяем) */ }
+    else if(tab==='hadith' && _аятСсылка){ const {s,a}=_аятСсылка;
+      res.innerHTML='<div class="status">📖 «'+s+':'+a+'» — это ссылка на аят: сура '+esc(SURA_NAMES[s-1])+', аят '+a+'. <span id="_аятОткрыть" style="color:var(--link);cursor:pointer;font-weight:600">открыть аят →</span></div>';
+      const _о=document.getElementById('_аятОткрыть'); if(_о) _о.onclick=()=>{ try{ openQuranReader(s,a); }catch(e){ _тихо(e,"L_аятСсылка"); } }; }
     else if(wideWill){ res.innerHTML='<div class="status" id="_wideWait">🔎 В ПЕРВОИСТОЧНИКАХ хадисов точного совпадения нет, но уже ищу по всей Мактабе (8 589 книг) — секунду… <span class="ldot">⏳</span></div>'; }   // M420: одним предложением, чтобы человек не ушёл · #669 (С67): дали id — это и есть «крутится», которое надо погасить, когда Мактаба ответила
     else if(!res.querySelector('.corrGo')){ res.innerHTML='<div class="status">Ничего не найдено 🤷</div>';
       // M423: смысловой запрос (русский/длинный) при нуле — БОЛЬШАЯ кнопка ИИ-поиска, чтобы человек не ушёл с пустыми руками
@@ -6885,7 +6893,7 @@ async function runSearch(explicit){
   }
   // Поиск по ВСЕЙ библиотеке: наши книги выше (если нашлись), ниже — остальной корпус (sunnah.one). Только при явном «Найти»/Enter.
   if(_scopeIds && _scopeIds.size && explicit && shown && tab==='hadith'){ await appendMaktaba(seq, wideQ||shown); }   // 🎯 поиск в выбранных книгах (риджаль-149 и т.п.)
-  else if(wideWill) await appendMaktaba(seq, wideQ);
+  else if(wideWill && !(!count && _аятСсылка)) await appendMaktaba(seq, wideQ);   // 24.10: ссылка на аят при нуле хадисов — Мактабу не гоняем (см. _аятСсылка)
   }finally{
     // #665 «подвисает поиск» + #669 «крутится, хотя написано не нашёл»: у runSearch десятки ранних
     // return (режимы narr/any/rag/chain, поиск по номеру, поиск в выбранных книгах) — на каждом из них
