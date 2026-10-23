@@ -1162,7 +1162,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1783</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1784</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -1783,7 +1783,7 @@ window.тихоОтчёт = function () {
     </div>
     <div id="readPick">
       <div class="hint" style="margin:0 0 8px">Выбери сборник — открою его подряд (листать хадис за хадисом). Можно начать с номера.</div>
-      <select id="readSel" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-size:calc(14px * var(--txtScale,1))"></select>
+      <select id="readSel" aria-label="Сборник для чтения" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-size:calc(14px * var(--txtScale,1))"></select>
       <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
         <input type="number" id="readFrom" placeholder="с № (необязательно)" min="1"
                style="flex:1;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-size:calc(14px * var(--txtScale,1))">
@@ -1950,7 +1950,7 @@ window.тихоОтчёт = function () {
       <div class="ad">Опиши ошибку или пожелание — улетит ко мне (в журнал разработки), внесу в заявки и отчитаюсь. Можно приложить скрин.</div>
       <textarea id="dfText" placeholder="Что не так / что добавить…" style="width:100%;box-sizing:border-box;min-height:70px;margin-top:8px;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg);color:var(--text);font-size:calc(14px * var(--txtScale,1));resize:vertical"></textarea>
       <div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap">
-        <input type="file" id="dfImg" accept="image/*" style="font-size:calc(12px * var(--txtScale,1));color:var(--hint);max-width:62%">
+        <input type="file" id="dfImg" aria-label="Приложить снимок экрана" accept="image/*" style="font-size:calc(12px * var(--txtScale,1));color:var(--hint);max-width:62%">
         <button class="go" id="dfSend" style="padding:7px 14px">📤 Отправить Claude</button>
       </div>
       <div id="dfOut" class="hint" style="margin-top:6px"></div>
@@ -2051,7 +2051,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1783';
+const APPVER = 'v1784';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -6580,6 +6580,20 @@ async function runSearch(explicit){
             ? '<div class="status">📶 '+esc(nameOf(code))+' №'+qn+' — не удалось загрузить сборник: '+(_офлайн?'нет связи с интернетом':'сбой сети')+'. Номер тут ни при чём — повторите, когда связь вернётся.</div>'
             : '<div class="status">'+esc(nameOf(code))+' №'+qn+' — не нашёл. Проверь номер.</div>'; }
         return; }
+      /* 23.10.2026 (ревизия Гермеса О-0352 п.19): «мукатта 3» — свод не узнан, и запрос уходил в обычный поиск
+         с 1044 карточками без единого слова о том, что сборник не распознан. Если первое слово отличается от
+         названия свода на 1–2 буквы — подсказываем верное с кнопкой, сам поиск не трогаем. */
+      try{ const _мм=shown.trim().match(/^([^\d\s]{4,})\s+(\d{1,7})$/i); if(_мм){
+        const _w=_мм[1].toLowerCase().replace(/ё/g,'е'), _н=_мм[2];
+        const _лев=(x,y)=>{ const d=[...Array(y.length+1).keys()]; for(let i=1;i<=x.length;i++){ let p=d[0]; d[0]=i; for(let j=1;j<=y.length;j++){ const t=d[j]; d[j]=Math.min(d[j]+1,d[j-1]+1,p+(x[i-1]===y[j-1]?0:1)); p=t; } } return d[y.length]; };
+        let _лучш=null; for(const c of COLLECTIONS){ for(const nm of [c.ru,c.code].concat(c.code==='malik'?['муватта','муатта','muwatta']:[]).concat((typeof _COLL_EN!=='undefined'&&_COLL_EN[c.code])||[])){
+          const v=String(nm||'').toLowerCase().replace(/ё/g,'е').replace(/^(аль|al)[\s-]*/,'').replace(/\s+/g,''); if(v.length<4) continue;
+          const dd=_лев(_w,v); if(dd>0 && dd<=2 && (!_лучш||dd<_лучш.d)) _лучш={d:dd,c:c}; } }
+        if(_лучш){ const _бн=document.createElement('div'); _бн.className='hint'; _бн.style.cssText='margin:6px 0 8px;padding:8px 10px;border:1px solid var(--border);border-radius:10px';
+          _бн.innerHTML='🤔 Сборник «'+esc(_мм[1])+'» не узнан. Может быть, <b class="_свПодск" style="cursor:pointer;color:var(--link);text-decoration:underline">'+esc(_лучш.c.ru)+' №'+esc(_н)+'</b>? Ниже — обычный поиск по словам.';
+          const _к=_бн.querySelector('._свПодск'); if(_к) _к.onclick=()=>{ const i=document.getElementById('q'); if(i){ i.value=_лучш.c.ru+' '+_н; try{ runSearch(true); }catch(_){} } };
+          res.insertBefore(_бн, res.firstChild); }
+      } }catch(e){_тихо(e,'подсказкаСвода')}
     }
     // Слово владельца 25.07 («пишешь пример "Абу Хурайра" — надо, чтобы подсказкой всплывала КАРТОЧКА Абу Хурайры»):
     // механизм #85 (_narrHintNormal) срабатывал только по ВВОДУ с клавиатуры — дёргаем его и после поиска.
@@ -13796,6 +13810,7 @@ async function doTakhrij(text, ref, out, btn, force){
      с пометкой «загружено» (повторный тап только сворачивал пустоту), а кнопка — навсегда «ищу…». Теперь обрыв
      только при повторном запуске в ТОЙ ЖЕ карточке. */
   const myseq=++_takhSeq; out.dataset.takhSeq=String(myseq); const aborted=()=>out.dataset.takhSeq!==String(myseq);
+  window._последнийТахридж=out;   // 23.10 (О-0352): Esc сворачивает последний раскрытый блок
   btn.disabled=true; const prev=btn.textContent; btn.textContent='ищу…'; out.style.display='block';
   out.innerHTML='';
   const mk=()=>{ const d=document.createElement('div'); out.appendChild(d); return d; };
@@ -24938,7 +24953,10 @@ async function doTranslate(text,out,btn,ref,force,повод){
       if((!j.cached||force) && src && (num||num===0)) trMark(src,num,j.translation);   // свежий/обновлённый ИИ → теперь в базе
       const e=(src!=null)?trHas(src,num):null;
       const tag = force ? '🔄 Перевод обновлён (ИИ — возможны ошибки):'
-                : (j.cached ? ('♻️ Перевод (из нашей базы'+(e&&e.d?(', ИИ от '+e.d):'')+', бесплатно):') : '🧠 Перевод (сделал ИИ — возможны ошибки):');
+                /* 23.10.2026 (ревизия Гермеса О-0345): у одного хадиса подпись «прыгала» — в первый раз «сделал ИИ», потом
+                   «из нашей базы, бесплатно». Источник при этом ОДИН: второй раз отдавался тот же ИИ-перевод, сохранённый
+                   после первого. Подпись «из нашей базы» читалась как другой, проверенный перевод. Говорим прямо. */
+                : (j.cached ? ('♻️ Перевод ИИ, сохранённый в нашей базе'+(e&&e.d?(' ('+e.d+')'):'')+' — бесплатно, возможны ошибки:') : '🧠 Перевод (сделал ИИ — возможны ошибки):');
       // «🔄 обновить» — переперевести заново (чинит оборванный/неточный перевод). Тратит ключ → подтверждение.
       const redo='<span class="trRedo" style="cursor:pointer;color:var(--link);text-decoration:underline;font-size:calc(12px * var(--txtScale,1));white-space:nowrap">🔄 обновить перевод</span>';
       _трСтоп();
@@ -26818,6 +26836,12 @@ try{
 document.getElementById('menuBtn').onclick=()=>{ try{ setupMenuRows(); }catch(e){_тихо(e,"L17861")} var _mm=document.getElementById('menuModal'); try{modalTop(_mm);}catch(e){_тихо(e,"L17861")} _mm.style.display='flex'; };   // M340: z-index-инвариант
 document.getElementById('menuClose').onclick=()=>{ document.getElementById('menuModal').style.display='none'; };
 var _setB=document.getElementById('setBtn'); if(_setB) _setB.onclick=()=>{ var _sm=document.getElementById('settingsModal'); try{modalTop(_sm);}catch(e){_тихо(e,"L17863")} _sm.style.display='flex'; };   // M340: z-index-инвариант
+/* 23.10.2026 (ревизия Гермеса О-0352): Esc закрывал окна, но не сворачивал раскрытый блок «Где ещё передаётся».
+   Нет открытых окон — Esc сворачивает последний раскрытый блок (повторный тап по кнопке раскроет его без новой загрузки). */
+document.addEventListener('keydown', function(e){ try{ if(e.key!=='Escape') return;
+  if([...document.querySelectorAll('.modal')].some(m=>m.style.display==='flex'||m.style.display==='block')) return;
+  const o=window._последнийТахридж; if(o && o.isConnected && o.style.display!=='none'){ o.style.display='none'; }
+}catch(_){} });
 /* 23.10.2026 (ревизия Гермеса О-0351/О-0352 п.22): ловушки фокуса в окнах не было — из открытых Настроек Tab уводил
    в строку поиска за окном (4 шага из 6 снаружи). Держим Tab внутри верхнего открытого окна (.modal), по кругу. */
 document.addEventListener('keydown', function(e){ try{
@@ -26841,8 +26865,17 @@ function _настройкиСчёт(){ try{ document.querySelectorAll('#setting
       if(!r.querySelector('input,select,button,textarea,.sw,[role=switch]')) return;   /* строки-пояснения («ℹ️ …», «✅ шрифт доступен») — не пункты */
       n++; });
     var t=sm.textContent||'', i=t.indexOf(' · '); sm.textContent=(i>=0?t.slice(0,i):t)+' · '+n; }); }catch(e){_тихо(e,'настройкиСчёт')} }
-try{ var _smo=document.getElementById('settingsModal'); if(_smo){ _настройкиСчёт();
-  new MutationObserver(function(){ if(_smo.style.display==='flex') _настройкиСчёт(); }).observe(_smo,{attributes:true,attributeFilter:['style']}); } }catch(e){_тихо(e,'настройкиСчёт-набл')}
+/* 23.10.2026 (ревизия Гермеса О-0348): 6 из 8 полей Настроек и строка поиска не имели подписи для экранного чтеца —
+   он читал «комбобокс» без названия. Проставляем aria-label из подсказки поля, title или текста строки настройки. */
+function _подписиПолей(root){ try{ (root||document).querySelectorAll('input,select,textarea').forEach(function(f){
+    if(f.type==='hidden' || f.getAttribute('aria-label') || f.getAttribute('aria-labelledby') || f.closest('label')) return;
+    if(f.id && document.querySelector('label[for="'+f.id+'"]')) return;
+    var t=f.getAttribute('placeholder')||f.getAttribute('title')||'';
+    if(!t){ var r=f.closest('.row'); if(r){ var sp=r.querySelector('span'); t=(sp||r).textContent; } }
+    t=String(t||'').replace(/\s+/g,' ').trim().slice(0,80); if(t) f.setAttribute('aria-label',t); }); }catch(e){_тихо(e,'подписиПолей')} }
+try{ _подписиПолей(document); }catch(_){}
+try{ var _smo=document.getElementById('settingsModal'); if(_smo){ _настройкиСчёт(); _подписиПолей(_smo);
+  new MutationObserver(function(){ if(_smo.style.display==='flex'){ _настройкиСчёт(); _подписиПолей(_smo); } }).observe(_smo,{attributes:true,attributeFilter:['style']}); } }catch(e){_тихо(e,'настройкиСчёт-набл')}
 var _setC=document.getElementById('settingsClose'); if(_setC) _setC.onclick=()=>{ document.getElementById('settingsModal').style.display='none'; };
 var _lgB=document.getElementById('legendBtn'); if(_lgB) _lgB.onclick=()=>{ var m=document.getElementById('legendModal'); if(m) modalTop(m); m.style.display='flex'; };   // #152
 var _lgC=document.getElementById('legendClose'); if(_lgC) _lgC.onclick=()=>{ document.getElementById('legendModal').style.display='none'; };
