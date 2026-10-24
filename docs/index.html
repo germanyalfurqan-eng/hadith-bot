@@ -1181,7 +1181,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1801</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1802</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2070,7 +2070,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1801';
+const APPVER = 'v1802';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5723,12 +5723,20 @@ function _руОснова(w){
   /* «и» основы не отрезаем: «намерение» → «намерени» (а не «намерен», которое цепляло «намеренно лгать») */
   const m=w.match(/(ями|ами|ого|его|ому|ему|ыми|ими|ах|ях|ов|ев|ей|ой|ый|ая|яя|ое|ее|ую|юю|ом|ем|ам|ям|ы|и|а|я|о|е|у|ю|ь)$/);
   if(!m) return w; const s=w.slice(0,-m[1].length); return s.length>=4?s:w; }
+/* 24.10.2026: русское слово ищем с НАЧАЛА слова, а не где угодно внутри: «терпение» находило «нетерпение»
+   (2:51 у Абу Аделя стоял первым на «терпение»), «али» — «сказали». Арабское — по-прежнему подстрокой:
+   там «و», «ب», «ال» пишутся слитно со словом, и подстрока нужна. */
+function _естьСлово(t, w){
+  if(!/[а-яё]/.test(w)) return t.indexOf(w)!==-1;
+  let p=t.indexOf(w);
+  while(p!==-1){ if(p===0 || !/[а-яёa-z0-9]/.test(t[p-1])) return true; p=t.indexOf(w, p+1); }
+  return false; }
 function relaxSearch(words, getNorm, pool, strict){
-  const test=(ws,it)=>ws.every(w=>getNorm(it).indexOf(w)!==-1);
+  const test=(ws,it)=>ws.every(w=>_естьСлово(getNorm(it), w));
   let hits=pool.filter(it=>test(words,it));
   if(hits.length || words.length<2 || strict) return {hits, dropped:[], used:words};
   const df={}; words.forEach(w=>df[w]=0);
-  for(const it of pool){ const t=getNorm(it); for(const w of words) if(t.indexOf(w)!==-1) df[w]++; }
+  for(const it of pool){ const t=getNorm(it); for(const w of words) if(_естьСлово(t, w)) df[w]++; }
   const dropped=[]; let used=words.slice();
   // ① убрать слова, которых вообще нет в текстах
   const zero=words.filter(w=>df[w]===0);
@@ -6752,7 +6760,7 @@ async function runSearch(explicit){
         const pool = allow ? ru.filter(x=>allow.has(x.s)) : ru;
         if(qw.length){ let useWords=qw;
           // ЗАКОН владельца 05.07 («право искать строго что ввёл»): коррекция ТОЛЬКО если оригинал даёт НОЛЬ
-          if(!strict){ const _origHas=pool.some(x=>qw.every(w=>x.norm.indexOf(w)>=0));
+          if(!strict){ const _origHas=pool.some(x=>qw.every(w=>_естьСлово(x.norm, w)));
             if(!_origHas){ corr=correctQuery(qw, ruVocabFrom('h', ru.map(x=>x.norm))); if(corr.changed.length) useWords=corr.corrected; } }
           relax=relaxSearch(useWords, x=>x.norm, pool, strict);   // M172: ослабление при нуле по всем словам
           /* #543 (владелец: «че за вакханалия», скрин «Сума истаким» → 614 хадисов про суры).
@@ -6903,10 +6911,10 @@ async function runSearch(explicit){
       }
       else if(!modes.ai && /[а-яёa-z]/i.test(shown) && !isArabic(shown)){   // поиск по РУССКОМУ переводу (Кулиев) — НЕ в ИИ-режиме (там ищем по арабским фразам q)
         const ru=await loadQuranRu(); if(seq!==_seq) return;
-        const qw=_ruNumExpand(shown).toLowerCase().split(/\s+/).filter(w=>w.length>1);
+        const qw=_ruNumExpand(shown).toLowerCase().split(/\s+/).filter(w=>w.length>1).map(w=>strict?w:_руОснова(w));   // окончания — как в поиске по хадисам
         const _oEd=(cfg&&cfg.qtr==='rus-abuadel')?'rus-elmirkuliev':'rus-abuadel'; let ru2={}; try{ ru2=await loadQuranTr(_oEd)||{}; }catch(e){ ru2={}; } if(seq!==_seq) return; const _has2=Object.keys(ru2).length>0;
         if(qw.length){ const gn=v=>{ const a=(ru[v.s+':'+v.a]||''); const b=_has2?(ru2[v.s+':'+v.a]||''):''; return (a+' '+b).toLowerCase(); }; let useWords=qw;
-          if(!strict){ const _origHasQ=arr.some(v=>{ const g=gn(v); return qw.every(w=>g.indexOf(w)>=0); });
+          if(!strict){ const _origHasQ=arr.some(v=>{ const g=gn(v); return qw.every(w=>_естьСлово(g, w)); });
             if(!_origHasQ){ corrQ=correctQuery(qw, ruVocabFrom('q', Object.values(ru))); if(corrQ.changed.length) useWords=corrQ.corrected; } }   // ЗАКОН 05.07: только при нуле оригинала
           relaxQ=relaxSearch(useWords, gn, arr, strict);   // M172: ослабление при нуле по всем словам
           /* #543: то же правило и здесь — не складывать исправление с урезанием (разбор у ветки хадисов) */
