@@ -1181,7 +1181,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1800</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1801</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2070,7 +2070,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1800';
+const APPVER = 'v1801';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -5713,6 +5713,16 @@ let _strictSearch=false;   // M173: пользователь настоял на
 // words: слова запроса (lowercase, len>1); getNorm(item)->норм.текст; pool: массив элементов; strict: не ослаблять.
 // Возвращает {hits,dropped,used}: сначала ВСЕ слова; пусто → убрать слова, которых нет в текстах,
 // затем самые редкие по одному, пока что-то не найдётся. dropped — что убрали (честно показать).
+/* 24.10.2026 (МИНИ АПП 103, обход живого v1800): русский поиск сравнивал слово запроса ПОДСТРОКОЙ без окончаний.
+   «намерение» находилось внутри «намерением» и только там: «намерениям» (аль-Бухари №1 «дела оцениваются по
+   намерениям»), «намерения», «намерений» — мимо. Было 36 карточек, все из аль-Бухари, начиная с №1557.
+   Отрезаем одно окончание (самое длинное из списка), основа не короче 4 букв; слова до 4 букв и с цифрами
+   не трогаем. В строгом режиме («в кавычках») слово ищется как введено. */
+function _руОснова(w){
+  if(!w || w.length<5 || /[^а-яё]/.test(w)) return w;
+  /* «и» основы не отрезаем: «намерение» → «намерени» (а не «намерен», которое цепляло «намеренно лгать») */
+  const m=w.match(/(ями|ами|ого|его|ому|ему|ыми|ими|ах|ях|ов|ев|ей|ой|ый|ая|яя|ое|ее|ую|юю|ом|ем|ам|ям|ы|и|а|я|о|е|у|ю|ь)$/);
+  if(!m) return w; const s=w.slice(0,-m[1].length); return s.length>=4?s:w; }
 function relaxSearch(words, getNorm, pool, strict){
   const test=(ws,it)=>ws.every(w=>getNorm(it).indexOf(w)!==-1);
   let hits=pool.filter(it=>test(words,it));
@@ -6737,7 +6747,7 @@ async function runSearch(explicit){
       }
       let relax=null, corr=null, _догадка=null;   // #543: догадка не подставляется молча, а предлагается
       try{ const ru=await loadHadithRu(); if(seq!==_seq) return;
-        const qw=_ruNumExpand(q).toLowerCase().split(/\s+/).filter(w=>w.length>1);   // #181-фикс: искать конвертированный q (катада), не сырой shown (rfnflf)
+        const qw=_ruNumExpand(q).toLowerCase().split(/\s+/).filter(w=>w.length>1).map(w=>strict?w:_руОснова(w));   // #181-фикс: искать конвертированный q (катада), не сырой shown (rfnflf)
         const allow = (selCols.size||selExtra.size) ? new Set([...selCols,...selExtra]) : null;
         const pool = allow ? ru.filter(x=>allow.has(x.s)) : ru;
         if(qw.length){ let useWords=qw;
