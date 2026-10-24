@@ -35874,7 +35874,14 @@ def разметку_в_текст(т):
     return т.strip()
 
 
-app = ApplicationBuilder().token(TOKEN).post_init(_setup).build()
+# 🔴 25.10.2026 (МИНИ АПП 103, сбой по слову владельца через ЛОКАЛКИ 38: «/api/skazat отдаёт 500 Timed out, доклады
+# не уходят»). У python-telegram-bot 21.3 по умолчанию 5 с на чтение и запись ответа Telegram и 1 с на ожидание
+# соединения из пула. Замер из контейнера 25.10 01:10: sendChatAction владельцу — 0,05 с обычно, но 4,35 и 2,17 с
+# в двух из восьми попыток. Длинное сообщение с разметкой в такую минуту переваливает за 5 с → telegram.error.TimedOut
+# → 500. Даём запросам бота 30 с; long polling (getUpdates) живёт на своих настройках и этим не задет.
+app = (ApplicationBuilder().token(TOKEN)
+       .connect_timeout(15).read_timeout(30).write_timeout(30).pool_timeout(15)
+       .post_init(_setup).build())
 try:   # ЛОКАЛКИ 37 · 21.10.2026: «ботяра нарисуй / измени / генерация вкл|выкл|статус» — только владелец
     import generaciya_tg as _генерация_тг
     _генерация_тг.podklyuchit(app, OWNER_ID, is_owner, dsoc_память)
