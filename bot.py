@@ -25489,7 +25489,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif chat_type != "private" and not _ai_loop_guard(update, text):
             # #236/#284: ботяра-ИИ в группе отвечает ТОЛЬКО при ВКЛ рубильнике. Когда ВЫКЛ — НЕ выходим из обработчика:
             # обычные команды-лукапы (Бухари 7288 / Коран / передатчик) ниже ДОЛЖНЫ работать (бот = админ группы, сообщения получает).
-            if (not _GROUP_AI_OFF) and ("ботяра" in text.lower() or (is_reply_to_bot and not is_reply_to_channel)):
+            # 24.10.2026 (МИНИ АПП 103, заявка #3380 «это команда вызывала аят же просто — зачем ты портишь»): прямая
+            # команда («Коран 26:63», «Бухари 1»), написанная ОТВЕТОМ на сообщение бота, уходила в ИИ-болтовню, а не в
+            # лукап ниже. Человек назвал инструмент прямо — ответ боту этого не отменяет (та же мерка _это_команда_бота).
+            if (not _GROUP_AI_OFF) and ("ботяра" in text.lower() or (is_reply_to_bot and not is_reply_to_channel
+                                                                    and not _это_команда_бота(text))):
                 if not rate_ok('botchat:' + str(chat_id), limit=6, window=120):
                     return
                 clean = text.replace("ботяра", "").strip()
