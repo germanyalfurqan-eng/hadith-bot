@@ -1006,11 +1006,14 @@ _ЛИЧНЫЕ_ФАЙЛЫ = {
     "spam_watch.json", "poll_likes.json", "vhody_videli.json", "moderaciya.json",
     "moderaciya_chaty.json", "slova_vladelca.json",
 }
+# скрины заявок владельца и откликов людей (base64) — те же личные данные, только картинкой
+_ЛИЧНЫЕ_ПАПКИ = ("req_img/", "devfb_img/", "fb_img/")
 
 
 def _репо_данных(path):
     """Куда идёт этот файл ветки data: личное — в закрытый репозиторий, прочее — в публичный."""
-    return GITHUB_DATA_REPO if (GITHUB_DATA_REPO and path in _ЛИЧНЫЕ_ФАЙЛЫ) else GITHUB_REPO
+    return GITHUB_DATA_REPO if (GITHUB_DATA_REPO and (
+        path in _ЛИЧНЫЕ_ФАЙЛЫ or path.startswith(_ЛИЧНЫЕ_ПАПКИ))) else GITHUB_REPO
 
 
 ANNOUNCE_CHAT_ID = -1003982210885
