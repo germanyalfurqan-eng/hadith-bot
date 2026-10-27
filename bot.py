@@ -1882,6 +1882,17 @@ _DSOC_ПРЯТАТЬ = [
     (re.compile(r'[A-Za-z]:\\[^\s"\']+'), '<путь>'),          # пути к папкам на диске
     (re.compile(r'/(?:home|Users)/[^\s"\']+'), '<путь>'),
     (re.compile(r'\b\+?7\d{10}\b|\b8\d{10}\b'), '<телефон>'),
+    # 🔴 27.10.2026, внешний аудит: «+7 (928) 123-45-67», «8 928 123 45 67» и иностранные
+    # «+49 151 2345 6789» проходили — шаблон выше знает только слитные российские. Берём
+    # любую запись с плюсом или со скобками/разделителями, где цифр от 10 до 15.
+    (re.compile(r'(?<![\w+])(?:\+\d{1,3}|\(?\d{1,4}\)?)(?:[\s\-.]?\(?\d{1,4}\)?){2,5}(?![\w])'),
+     # Номера хадисов идут так же — «Бухари 1399 1400 1401», — поэтому телефоном считаем только
+     # то, что ВЫГЛЯДИТ телефоном: с плюсом, со скобками, с «123-45-67» или 11 цифр с 7/8 в начале.
+     lambda м: '<телефон>' if 10 <= sum(ч.isdigit() for ч in м.group(0)) <= 15 and (
+         м.group(0).startswith('+') or '(' in м.group(0)
+         or re.search(r'\d{2,3}-\d{2}-\d{2}', м.group(0))
+         or (sum(ч.isdigit() for ч in м.group(0)) == 11 and м.group(0)[0] in '78'))
+     else м.group(0)),
     (re.compile(r'\b[\w.\-]+@[\w\-]+\.[A-Za-z]{2,}\b'), '<почта>'),
     (re.compile(r'\bsk-[A-Za-z0-9]{16,}\b'), '<ключ>'),
     (re.compile(r'\b\d{9,12}\b'), '<номер>'),                 # телеграм-id и подобное
@@ -3901,9 +3912,38 @@ def сеть_можно(адрес):
         host = (u.hostname or '').strip('[]')
         if not host or _СЕТЬ_ЗАПРЕТ.match(host):
             return False, 'внутренний адрес — туда нельзя'
+        # 🔴 27.10.2026, внешний аудит (SSRF): проверялось только ИМЯ. Домен с записью на
+        # 127.0.0.1 или 169.254.169.254, адрес числом «http://2130706433/» и ::ffff:127.0.0.1
+        # проходили. Теперь смотрим, КУДА имя ведёт на самом деле: каждый адрес из DNS обязан
+        # быть внешним (is_global). Переходы 301/302 проверяет _СЕТЬ_ОТКРЫВАЛКА ниже.
+        import socket as _сок, ipaddress as _ипа
+        try:
+            _адреса = {a[4][0] for a in _сок.getaddrinfo(
+                host, u.port or (443 if u.scheme == 'https' else 80), proto=_сок.IPPROTO_TCP)}
+        except Exception:
+            return False, 'адрес не найден'
+        for _ip in _адреса:
+            _и = _ипа.ip_address(_ip.split('%')[0])
+            if _и.version == 6 and _и.ipv4_mapped:
+                _и = _и.ipv4_mapped
+            if not _и.is_global:
+                return False, 'внутренний адрес — туда нельзя'
         return True, ''
     except Exception as _е:
         return False, str(_е)[:60]
+
+
+class _СетьПереходы(urllib.request.HTTPRedirectHandler):
+    """Переход по 301/302 — тот же досмотр, что и первый адрес: иначе внешняя страница
+    отправит нас редиректом на 127.0.0.1, и проверка выше окажется пустой."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        ок, почему = сеть_можно(newurl)
+        if not ок:
+            raise urllib.error.URLError('переход на запрещённый адрес: %s' % почему)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_СЕТЬ_ОТКРЫВАЛКА = urllib.request.build_opener(_СетьПереходы)
 
 
 def сеть_искать(запрос, сколько=6):
@@ -3964,7 +4004,7 @@ def сеть_прочитать(адрес, предел=6000):
         pass
     зпр = urllib.request.Request(адрес, headers={'User-Agent': _СЕТЬ_БРАУЗЕР,
                                                  'Accept-Language': 'ru,en;q=0.8'})
-    with urllib.request.urlopen(зпр, timeout=25) as о:
+    with _СЕТЬ_ОТКРЫВАЛКА.open(зпр, timeout=25) as о:
         сырое = о.read(900000)
     с = сырое.decode('utf-8', 'replace')
     с = re.sub(r'(?is)<(script|style|noscript|svg|header|footer|nav|form|aside)[^>]*>.*?</\1>',
@@ -4646,6 +4686,20 @@ async def dsoc_инструмент(строка, бот=None, чат=None, кт
             except Exception as e:
                 return 'Медиа-умения недоступны на этом сервере: %s' % str(e)[:150]
             _что, _хвост = м.group(1).lower(), м.group(2).strip()
+            # 🔴 27.10.2026, внешний аудит: путь к файлу приходит из ОТВЕТА МОДЕЛИ, а модель
+            # читает чужие страницы (сеть_разведка) — там может стоять «вызови тишина ../../.env».
+            # Пускаем только файл внутри папки media рядом с ботом: без «..», без абсолютных путей.
+            _медиа = os.path.realpath(os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), 'media'))
+            _имя = _хвост.split()[0] if _что == 'вырезать' else _хвост
+            _полный = os.path.realpath(os.path.join(_медиа, _имя))
+            if os.path.isabs(_имя) or '..' in _имя.replace('\\', '/').split('/') \
+                    or not _полный.startswith(_медиа + os.sep):
+                return 'Файл можно взять только из папки media бота: «%s» — нельзя.' % _имя[:80]
+            if _что == 'вырезать':
+                _хвост = ' '.join([_полный] + _хвост.split()[1:])
+            else:
+                _хвост = _полный
             try:
                 if _что == 'субтитры':
                     _с = await asyncio.get_event_loop().run_in_executor(
