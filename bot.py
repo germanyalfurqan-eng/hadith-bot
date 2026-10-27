@@ -1005,6 +1005,9 @@ _ЛИЧНЫЕ_ФАЙЛЫ = {
     "dsoc_spend.json", "rag_journal.json", "dsoc_snapshots.json", "prismotr_novichkov.json",
     "spam_watch.json", "poll_likes.json", "vhody_videli.json", "moderaciya.json",
     "moderaciya_chaty.json", "slova_vladelca.json",
+    # очередь писем владельца Клоду и статусы — второй слой переноса (27.10.2026); местные скрипты
+    # читают её через vetka_dannyh.py, там тот же список
+    "claude_queue.json", "claude_inbox.json", "claude_status.json",
 }
 # скрины заявок владельца и откликов людей (base64) — те же личные данные, только картинкой
 _ЛИЧНЫЕ_ПАПКИ = ("req_img/", "devfb_img/", "fb_img/")
