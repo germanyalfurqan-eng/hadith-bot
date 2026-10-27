@@ -992,6 +992,27 @@ def _взять_данные_гх(имя, часов=6):
     return None
 LOG_CHAT_ID = -1003480426073
 GITHUB_REPO = "germanyalfurqan-eng/hadith-bot"
+# 🔴 27.10.2026, внешний аудит, срочная тревога владельца. Репозиторий ПУБЛИЧНЫЙ, и ветку data
+# любой читал без входа: переписку помощника с владельцем и в группах, списки допуска с ID и
+# именами, участников чатов. Личное теперь живёт в ЗАКРЫТОМ репозитории (ветка data там же);
+# справочное, которое тянет мини-апп и сторожа, осталось в публичном. Решает ИМЯ файла: все
+# записи и чтения идут через _data_get/_data_put/_data_atomic_mutate, а они спрашивают
+# _репо_данных(). Добавляешь личный файл — впиши его сюда, иначе он уйдёт в публичную ветку.
+GITHUB_DATA_REPO = os.environ.get("GITHUB_DATA_REPO", "germanyalfurqan-eng/hadith-bot-data")
+_ЛИЧНЫЕ_ФАЙЛЫ = {
+    "dsoc_context.json", "dsoc_dostup.json", "chat_members.json", "kto_skazal.json",
+    "admin_zayavki.json", "chats_registry.json", "dsoc_lenta.json", "dsoc_vygovory.json",
+    "dsoc_spend.json", "rag_journal.json", "dsoc_snapshots.json", "prismotr_novichkov.json",
+    "spam_watch.json", "poll_likes.json", "vhody_videli.json", "moderaciya.json",
+    "moderaciya_chaty.json", "slova_vladelca.json",
+}
+
+
+def _репо_данных(path):
+    """Куда идёт этот файл ветки data: личное — в закрытый репозиторий, прочее — в публичный."""
+    return GITHUB_DATA_REPO if (GITHUB_DATA_REPO and path in _ЛИЧНЫЕ_ФАЙЛЫ) else GITHUB_REPO
+
+
 ANNOUNCE_CHAT_ID = -1003982210885
 APP_CHANNEL_ID = -1003989206932   # @muslimoonapp — публичный канал приложения (обновления для подписчиков)
 
@@ -27959,7 +27980,7 @@ def _data_get(path, default=None):
     try:
         if GITHUB_TOKEN:
             заг = {"Authorization": f"token {GITHUB_TOKEN}"}
-            api = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}?ref=data"
+            api = f"https://api.github.com/repos/{_репо_данных(path)}/contents/{path}?ref=data"
             запомнено = _DATA_ETAG.get(path)
             r = requests.get(api, headers=dict(заг, **{"If-None-Match": запомнено[0]})
                              if запомнено else заг, timeout=8)
@@ -27979,13 +28000,15 @@ def _data_get(path, default=None):
             sha = тело.get("sha")
             if sha:
                 b = requests.get(
-                    f"https://api.github.com/repos/{GITHUB_REPO}/git/blobs/{sha}",
+                    f"https://api.github.com/repos/{_репо_данных(path)}/git/blobs/{sha}",
                     headers=dict(заг, Accept="application/vnd.github.raw"), timeout=20)
                 if b.status_code == 200 and b.content:
                     итог = json.loads(b.content.decode("utf-8"))
                     if r.headers.get("ETag"):
                         _DATA_ETAG[path] = (r.headers["ETag"], b.content)
                     return итог
+        if _репо_данных(path) != GITHUB_REPO:
+            return default          # закрытый репозиторий raw без входа не отдаёт
         r = requests.get(f"https://raw.githubusercontent.com/{GITHUB_REPO}/data/{path}",
                          timeout=20)
         if r.status_code == 200:
@@ -28047,7 +28070,7 @@ def _data_put(path, obj, message):
     try:
         content = _замазать_секреты(json.dumps(obj, ensure_ascii=False, indent=1))
         b64 = base64.b64encode(content.encode("utf-8")).decode()
-        api = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
+        api = f"https://api.github.com/repos/{_репо_данных(path)}/contents/{path}"
         h = {"Authorization": f"token {GITHUB_TOKEN}"}
         r = requests.get(api + "?ref=data", headers=h, timeout=8)
         sha = r.json().get("sha", "") if r.status_code == 200 else ""
@@ -28071,7 +28094,7 @@ def _data_atomic_mutate(path, mutate_fn, message, retries=4):
                                     # синхронизируется здесь, а не у каждого звонящего
     if not GITHUB_TOKEN or not _ensure_data_branch():
         return False, None
-    api = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
+    api = f"https://api.github.com/repos/{_репо_данных(path)}/contents/{path}"
     h = {"Authorization": f"token {GITHUB_TOKEN}"}
     for _ in range(retries):
         # 🔴 11.09.2026. ФАЙЛ ПЕРЕШАГНУЛ 1 МБ — И ВСЯ ЗАПИСЬ ВСТАЛА МОЛЧА.
@@ -28108,7 +28131,7 @@ def _data_atomic_mutate(path, mutate_fn, message, retries=4):
                     obj = None
                     try:
                         _b = requests.get(
-                            f"https://api.github.com/repos/{GITHUB_REPO}/git/blobs/{sha}",
+                            f"https://api.github.com/repos/{_репо_данных(path)}/git/blobs/{sha}",
                             headers=dict(h, Accept="application/vnd.github.raw"), timeout=25)
                         if _b.status_code == 200 and _b.content:
                             obj = json.loads(_b.content.decode("utf-8"))
