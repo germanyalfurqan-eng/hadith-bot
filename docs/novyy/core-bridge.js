@@ -27,7 +27,7 @@
       if(!/[ء-ي]/.test(token))return {text:token};
       const e=roots.f?.[rootKey(token)],root=Array.isArray(e)&&e[0]?String(e[0]):'';
       const refs=root&&Array.isArray(roots.r?.[root])?roots.r[root]:[];
-      return {text:token,word:true,index:index++,translation:aligned?String(gloss[index-1]||''):'',root,grammar:Array.isArray(e)&&e[2]?gramRu(String(e[2])):'',references:refs,referenceCount:refs.length};
+      return {text:token,word:true,index:index++,translation:aligned?String(gloss[index-1]||''):'',root,lemma:Array.isArray(e)&&e[1]?String(e[1]):'',tag:Array.isArray(e)&&e[2]?String(e[2]):'',grammar:Array.isArray(e)&&e[2]?gramRu(String(e[2])):'',references:refs,referenceCount:refs.length};
     })};
   }
   let catalogPromise=null,fullCatalog=null;
@@ -239,6 +239,40 @@
       if(lastWord!==count)throw Error('Разметка не совпала с количеством слов аята');
       const url=new URL(data.audio);if(url.protocol!=='https:'||url.hostname!=='download.quranicaudio.com')throw Error('Источник аудио недоступен');
       return {url:url.href,start,end,segments,reciter:'Махмуд аль-Хусари'};
+    }
+    // Arabus (our downloaded dictionary): the dictionary form of a Quran word and its meanings — by lemma, then the word itself.
+    if(action==='arabus'){
+      if(typeof loadArabusLocal!=='function'||typeof arabusLocalLookup!=='function')return {entries:[]};
+      await loadArabusLocal();const plain=t=>String(t||'').replace(/[\u064B-\u065F\u0670\u0640]/g,'').trim();
+      let hit=null;for(const w of [args.lemma,args.word].map(plain).filter(Boolean)){try{hit=arabusLocalLookup(w,plain(args.root));}catch(e){}if(hit&&hit.entries&&hit.entries.length)break;}
+      // the entry that IS the word's dictionary form comes first (سَيِّئَة — «зло», not the verb سَوَّأَ of the same root)
+      const lem=plain(args.lemma).replace(/[أإآ]/g,'ا').replace(/ة$/,'ه'),key=t=>plain(t).replace(/[أإآ]/g,'ا').replace(/ة$/,'ه').replace(/[ٌٍٓ]/g,'');
+      const list=((hit&&hit.entries)||[]).map(x=>({ar:String(x.ar||''),gram:String(x.gram||''),ru:String(x.ru||''),exact:!!lem&&key(x.ar)===lem}));
+      list.sort((x,y)=>(y.exact?1:0)-(x.exact?1:0));
+      return {entries:list.slice(0,8),matched:String((hit&&(hit.matched||hit.word))||''),exact:list.some(x=>x.exact)};
+    }
+    // Тафсир аята — те же своды, что у прежнего вида (Ибн Касир, ас-Саади, Мухтасар, ат-Табари, аль-Куртуби, аль-Багави).
+    if(action==='tafsir'){
+      const s=Number(args.sura),a=Number(args.ayah);if(!Number.isSafeInteger(s)||s<1||s>114||!Number.isSafeInteger(a)||a<1)throw Error('Неверный номер аята');
+      const list=typeof TAFSIRS!=='undefined'?TAFSIRS:[],tf=list.find(t=>t.key===args.key)||list[0];if(!tf)throw Error('Тафсиры недоступны');
+      const lang=args.lang==='ru'&&tf.ru?'ru':'ar',ed=lang==='ru'?tf.ru:tf.ar;
+      const j=await fetchJSON(TAFSIR_CDN+ed+'/'+s+'/'+a+'.json',15000,{silent:true});
+      let text=String((j&&j.text)||'').replace(/\[\[[^\]]*\]\]/g,'').trim();
+      let ours=null;try{const ot=await loadOurTafsir();ours=ot&&ot[s+':'+a]||null;}catch(e){}
+      return {text,lang,key:tf.key,name:tf.nm,hasRu:!!tf.ru,list:list.map(t=>({key:t.key,name:t.nm,ru:!!t.ru})),recommended:ours&&ours.tafk||''};
+    }
+    // Настройки чтения Корана, общие с прежним видом: перевод (Кулиев / Абу Адель) и чтец.
+    if(action==='quranSettings'){
+      if(args.qtr&&['rus-elmirkuliev','rus-abuadel'].includes(args.qtr)){cfg.qtr=args.qtr;saveCfg(cfg);try{quranRu=null;}catch(e){}}
+      if(args.reciter&&/^[A-Za-z0-9_]+$/.test(args.reciter)){cfg.reciter=args.reciter;saveCfg(cfg);}
+      return {qtr:cfg.qtr||'rus-elmirkuliev',reciter:_чтец(),translations:[['rus-elmirkuliev','Кулиев'],['rus-abuadel','Абу Адель']],
+        reciters:[['OmarHisham','Омар Хишам'],['Husary_128kbps','Махмуд аль-Хусари'],['Alafasy_128kbps','Мишари аль-Афаси'],['Abdul_Basit_Murattal_192kbps','Абд аль-Басит'],['Minshawi_Murattal_128kbps','Мухаммад аль-Миншави'],['Hudhaify_128kbps','Али аль-Хузайфи']]};
+    }
+    // Вся сура лентой: арабский и перевод каждого аята.
+    if(action==='suraVerses'){
+      const s=Number(args.sura);if(!Number.isSafeInteger(s)||s<1||s>114)throw Error('Неверный номер суры');
+      const verses=(await loadQuran()).filter(v=>Number(v.s)===s);let tr={};try{tr=await loadQuranRu();}catch(e){}
+      return {sura:s,name:(typeof SURA_RU!=='undefined'&&SURA_RU[s])||'',verses:verses.map(v=>({a:Number(v.a),text:String(v.text||''),ru:cleanText(tr[s+':'+v.a]||'')}))};
     }
     if(action==='quranVerse'){
       const s=Number(args.sura),a=Number(args.ayah);
@@ -805,7 +839,7 @@
   window.addEventListener('message',event=>{
     if(event.origin!==location.origin||event.source!==parent||event.data?.source!=='muslimoon-design-ui')return;
     const {id,action,args}=event.data;
-    if(typeof id!=='string'||!['ready','suraInfo','narrators','bookToc','translate','takhrij','narrCands','chainFind','narrCard','isnadLinks','maktabaSearch','catalog','bookInfo','bookPageData','locateLeaf','bookMeta','leafByHadith','lastLeaf','hermesAsk','quranWordData','quranAudioInfo','quranTimedAudio','quranVerse','quranNeighbor','search','read','browse','scientific','library','tool','toolsCatalog','openOriginalTool','showOriginalHome','numberMore','assistantAsk'].includes(action))return;
+    if(typeof id!=='string'||!['ready','suraInfo','narrators','bookToc','translate','takhrij','narrCands','chainFind','narrCard','isnadLinks','maktabaSearch','arabus','tafsir','quranSettings','suraVerses','catalog','bookInfo','bookPageData','locateLeaf','bookMeta','leafByHadith','lastLeaf','hermesAsk','quranWordData','quranAudioInfo','quranTimedAudio','quranVerse','quranNeighbor','search','read','browse','scientific','library','tool','toolsCatalog','openOriginalTool','showOriginalHome','numberMore','assistantAsk'].includes(action))return;
     // Only the actions that drive the old screen (search, browse, its tools) must wait their turn; data-only requests run
     // at once (owner 29.10: «очень долго грузится») — the hadith search no longer waits for the library, cards for each other.
     if(!SERIAL_ONLY.has(action)){request(action,args||{}).then(payload=>send(id,payload)).catch(e=>send(id,null,String(e&&e.message||e)));return;}
