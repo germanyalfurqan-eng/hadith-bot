@@ -604,7 +604,7 @@
   function ensureNativeBook(){
     let dialog=$('#native-book-reader');if(dialog)return dialog;
     dialog=document.createElement('dialog');dialog.id='native-book-reader';dialog.className='reader-dialog native-book-dialog';dialog.setAttribute('aria-labelledby','native-book-title');
-    dialog.innerHTML=`<div class="reader-shell"><header class="reader-toolbar"><button type="button" class="icon-button native-book-close" aria-label="Закрыть книгу">${icon('back')}</button><span>ЧТЕНИЕ КНИГИ</span><button type="button" class="text-button native-book-about">О книге</button></header><div class="reader-body native-book-body"><h1 id="native-book-title"></h1><div class="native-book-location" aria-live="polite"></div><div class="native-book-actions"><button type="button" class="nb-action native-book-toc">${icon('book')}Оглавление</button><button type="button" class="nb-action native-book-translate">${icon('helper')}Перевод ИИ</button></div><div class="native-book-headings" lang="ar" dir="rtl"></div><div class="native-book-text" lang="ar" dir="rtl"></div><div class="native-book-tr" hidden></div><div class="native-book-notes"></div><p class="native-book-status" role="status" aria-live="polite"></p><button type="button" class="native-book-tools">Инструменты книги</button></div><nav class="native-book-bar" aria-label="Листание книги" dir="ltr"><button type="button" class="nb-turn native-book-next" aria-label="Следующая страница">${icon('back')}</button><div class="nb-jump"><button type="button" class="nb-edge nb-end">Конец</button><label class="nb-field"><span>Страница</span><input class="nb-page" inputmode="numeric" enterkeyhint="go" aria-label="Перейти на страницу издания"></label><label class="nb-field nb-field-num"><span>№ хадиса</span><input class="nb-hadith" inputmode="numeric" enterkeyhint="go" placeholder="—" aria-label="Перейти к хадису, асару или документу по его номеру в книге"></label><button type="button" class="nb-edge nb-start">Начало</button></div><button type="button" class="nb-turn native-book-prev" aria-label="Предыдущая страница">${icon('arrow')}</button></nav></div>`;
+    dialog.innerHTML=`<div class="reader-shell"><header class="reader-toolbar"><button type="button" class="icon-button native-book-close" aria-label="Закрыть книгу">${icon('back')}</button><span>ЧТЕНИЕ КНИГИ</span><button type="button" class="help-q" data-help="book" aria-label="Справка по этой странице">?</button><button type="button" class="text-button native-book-about">О книге</button></header><div class="reader-body native-book-body"><h1 id="native-book-title"></h1><div class="native-book-location" aria-live="polite"></div><div class="native-book-actions"><button type="button" class="nb-action native-book-toc">${icon('book')}Оглавление</button><button type="button" class="nb-action native-book-translate">${icon('helper')}Перевод ИИ</button></div><div class="native-book-headings" lang="ar" dir="rtl"></div><div class="native-book-text" lang="ar" dir="rtl"></div><div class="native-book-tr" hidden></div><div class="native-book-notes"></div><p class="native-book-status" role="status" aria-live="polite"></p><button type="button" class="native-book-tools">Инструменты книги</button></div><nav class="native-book-bar" aria-label="Листание книги" dir="ltr"><button type="button" class="nb-turn native-book-next" aria-label="Следующая страница">${icon('back')}</button><div class="nb-jump"><button type="button" class="nb-edge nb-end">Конец</button><label class="nb-field"><span>Страница</span><input class="nb-page" inputmode="numeric" enterkeyhint="go" aria-label="Перейти на страницу издания"></label><label class="nb-field nb-field-num"><span>№ хадиса</span><input class="nb-hadith" inputmode="numeric" enterkeyhint="go" placeholder="—" aria-label="Перейти к хадису, асару или документу по его номеру в книге"></label><button type="button" class="nb-edge nb-start">Начало</button></div><button type="button" class="nb-turn native-book-prev" aria-label="Предыдущая страница">${icon('arrow')}</button></nav></div>`;
     document.body.appendChild(dialog);
     $('.native-book-close',dialog).onclick=()=>dialog.close();
     $('.native-book-about',dialog).onclick=()=>{const book=nativeBook;if(book)openBookInfo(collectionForBid(book.bid,book.title));};
@@ -1015,7 +1015,9 @@
     const eff=n=>n.doubt?'unsure':(n.verdict&&n.verdict.kind),cnt=k=>items.filter(n=>eff(n)===k).length,good=cnt('sound')+cnt('sahabi'),bad=cnt('weak')+cnt('rejected');
     const anMud=items.filter((n,i)=>n.mudallis&&items[i+1]&&items[i+1].via&&items[i+1].via.cls==='A').length;
     const collector=COLLECTOR[full.collection]||'';
-    const summary=`<div class="chain-summary"><b>${items.length} ${items.length===1?'звено':items.length<5?'звена':'звеньев'}</b><span class="vs-sound">надёжных ${good}</span>${cnt('mixed')?`<span class="vs-mixed">спорных ${cnt('mixed')}</span>`:''}${bad?`<span class="vs-weak">слабых ${bad}</span>`:''}${cnt('unknown')+cnt('none')?`<span class="vs-unknown">не установлено ${cnt('unknown')+cnt('none')}</span>`:''}${cnt('unsure')?`<span class="vs-mixed">сверить с текстом ${cnt('unsure')}</span>`:''}${anMud?`<span class="vs-mixed">мудаллис с «عن»: ${anMud}</span>`:''}</div>`
+    // each count is a button: it brings the screen to those links one after another (owner 29.10)
+    const jump=(cls,set,label)=>`<button type="button" class="${cls}" data-jump="${set}">${label}</button>`;
+    const summary=`<div class="chain-summary"><b>${items.length} ${items.length===1?'звено':items.length<5?'звена':'звеньев'}</b>${good?jump('vs-sound','sound sahabi','надёжных '+good):''}${cnt('mixed')?jump('vs-mixed','mixed','спорных '+cnt('mixed')):''}${bad?jump('vs-weak','weak rejected','слабых '+bad):''}${cnt('unknown')+cnt('none')?jump('vs-unknown','unknown none','не установлено '+(cnt('unknown')+cnt('none'))):''}${cnt('unsure')?jump('vs-mixed','unsure','сверить с текстом '+cnt('unsure')):''}${anMud?jump('vs-mixed','mud','мудаллис с «عن»: '+anMud):''}</div>`
       +'<p class="chain-rule">Свидетельства — с карточек передатчиков Мактабы и sunnah.com. Надёжность — по свидетельствам 48 муʿтабаров: нужно два подтверждения (توثيق), «в Сахихайн» без тяжкого джарха — тоже два. Ибн Хаджар и аз-Захаби — поздние своды, в счёт не идут. Это оценка звеньев, а не приговор хадису.</p>';
     const node=(n,i)=>{const v=n.verdict||{kind:'none'},kind=(byName&&v.kind!=='sahabi')||n.doubt?'muted':v.kind;
       // «ثقة — надёжный (توثيق ≥2 муʿтабаров)» → the Arabic term into the badge, the reason on its own line
@@ -1025,14 +1027,18 @@
       const cards=n.links?`<p class="narr-cards">Карточки: <a class="src-tag src-maktaba" href="${escape(n.links.maktaba)}">Мактаба</a>${n.links.sunnah?` <a class="src-tag src-sunnah" href="${escape(n.links.sunnah)}">sunnah.com</a>`:''}${v.fromSunnah?` · с sunnah.com добавлено ${v.fromSunnah}, чего не было в Мактабе`:''}</p>`:'';
       const late=(n.hajar||n.dhahabi)?`<p class="narr-late">Справочно, не в счёт: ${n.hajar?`Ибн Хаджар — <b lang="ar" dir="rtl">${escape(n.hajar)}</b>`:''}${n.hajar&&n.dhahabi?' · ':''}${n.dhahabi?`аз-Захаби — <b lang="ar" dir="rtl">${escape(n.dhahabi)}</b>`:''}</p>`:'';
       const counts=v.kind==='sahabi'?'':v.kind==='none'?'':`<span class="narr-count"><bdi lang="ar">توثيق</bdi> <b>${v.nT}</b> из 48${v.sahihayn?' · в Сахихайн':''}${v.nJ?` · джарх <b>${v.nJ}</b>`:''}</span>`;
-      return `<article class="narr-row narr-${kind}"><span class="narr-step">${i+1}</span><div class="narr-main"><p class="narr-name" lang="ar" dir="rtl" title="${escape(n.full||n.name)}">${escape(shortNasab(n.full||n.name))}</p>`
+      return `<article class="narr-row narr-${kind}" data-eff="${escape(eff(n)||'none')}"${n.mudallis?' data-mud="1"':''}><span class="narr-step">${i+1}</span><div class="narr-main">${n.id?`<button type="button" class="narr-name narr-name-btn" data-narr-card="${escape(n.id)}" lang="ar" dir="rtl" title="${escape(n.full||n.name)}">${escape(shortNasab(n.full||n.name))}</button>`:`<p class="narr-name" lang="ar" dir="rtl" title="${escape(n.full||n.name)}">${escape(shortNasab(n.full||n.name))}</p>`}`
         +`${(n.kunya||n.nisba)?`<p class="narr-sub" lang="ar" dir="rtl">${escape([n.kunya,n.nisba].filter(Boolean).join(' · '))}</p>`:''}`
         +`${n.death?`<p class="narr-meta">ум. ${escape(n.death)}${n.tabaqa?' · табака '+escape(n.tabaqa):''}</p>`:''}`
         +(n.id?`<p class="narr-verdict"><span class="narr-badge">${escape(VERDICT_RU[v.kind]||'')}${term?` <bdi lang="ar">${escape(term)}</bdi>`:''}</span>${counts}</p>${reason?`<p class="narr-v">Основание: <bdi dir="ltr">${escape(reason)}</bdi></p>`:''}${v.note?`<p class="narr-note">${escape(v.note)}</p>`:''}${why}${late}${cards}`:'<p class="narr-meta">в нашей базе не найден</p>')
         +`${n.doubt?`<p class="narr-warn">${String(n.doubt).startsWith('late')?`Сомнительное звено: умер в ${escape(n.doubt.split(':')[1])} г., а собиратель — в ${escape(n.doubt.split(':')[2])} г. Готовая разметка цепи, похоже, взяла тёзку — итог по нему не учитывайте, сверьте с текстом.`:'Этого имени нет в тексте иснада: звено взято из готовой разметки цепи и может быть ошибочным — итог по нему не учитывайте, сверьте с текстом.'}</p>`:''}`
         +`${n.mudallis?`<p class="narr-note">Отмечен как мудаллис${n.mudallis?' ('+escape(n.mudallis)+')':''}: его «عن» без явного слышания требует проверки.</p>`:''}`
         +`</div>${n.id?`<button type="button" class="narr-fav${favNarrators().some(f=>String(f.id)===String(n.id))?' on':''}" data-narr-fav="${i}" aria-label="В избранные передатчики">${icon('star')}</button>`:''}</article>`;};
-    body.innerHTML=`<p class="notes-hint">${escape(source(full))}${full.number?' · № '+escape(full.number):''} · от собирателя к Пророку ﷺ</p>`
+    // the original at hand: the isnad, the words of the hadith, or both folded (owner 29.10)
+    const fparts=Array.isArray(full.parts)?full.parts.filter(p=>p&&p.text&&p.text.trim()):[];
+    const isnadText=fparts.filter(p=>p.role==='isnad').map(p=>p.text).join(' ')||'',matnText=fparts.filter(p=>p.role==='matn').map(p=>p.text).join(' ')||'';
+    const origin=`<div class="narr-origin"><div class="narr-origin-bar">${isnadText?'<button type="button" data-origin="isnad">Развернуть иснад</button>':''}<button type="button" data-origin="matn">${isnadText?'Развернуть хадис':'Развернуть текст'}</button><button type="button" data-origin="none" hidden>Свернуть всё</button></div>${isnadText?`<div class="narr-origin-text origin-isnad" lang="ar" dir="rtl" hidden>${escape(isnadText)}</div>`:''}<div class="narr-origin-text origin-matn" lang="ar" dir="rtl" hidden>${escape(isnadText?matnText:full.arabic)}</div></div>`;
+    body.innerHTML=`<p class="notes-hint">${escape(source(full))}${full.number?' · № '+escape(full.number):''} · от собирателя к Пророку ﷺ</p>`+origin
       +(byName?'<p class="narr-warn">Готовой цепочки для этого хадиса в базе нет: передатчики определены по написанию имён — у тёзок возможна путаница, итог сверяйте.</p>':'')
       +(!byName&&cnt('unsure')>=2?`<p class="narr-warn">${cnt('unsure')} звена из ${items.length} не находятся в тексте иснада. Готовая разметка, похоже, описывает другую цепь под этим номером — другой риваят того же хадиса или сбой нумерации. Итог по цепи сверяйте с текстом.</p>`:'')
       +summary
@@ -1042,7 +1048,19 @@
       +narrLink(toProphet,false)+`<div class="chain-end chain-prophet"><span lang="ar" dir="rtl">رسول الله ﷺ</span><small>Пророк</small></div></div>`
       +(items.filter(n=>n.id).length>=2?'<button type="button" class="apply-button narr-to-ctor">Искать хадисы с этой цепью</button><p class="notes-hint">Откроется конструктор цепи: верхние звенья (ближе к Пророку ﷺ) строго по порядку, с теми же формами передачи — их можно поменять.</p>':'');
     const toCtor=body.querySelector('.narr-to-ctor');if(toCtor)toCtor.onclick=()=>{const known=items.filter(n=>n.id),last=known.slice(-5);narrDialog.close();openChainCtor({mode:'seq',sel:last.map(n=>({id:String(n.id),name:n.full||n.name,death:n.death||''})),forms:last.slice(1).map(n=>n.via&&n.via.form||'')});};
-    body.onclick=e=>{const b=e.target.closest('[data-narr-fav]');if(!b)return;const on=toggleFavNarrator(items[+b.dataset.narrFav]);b.classList.toggle('on',on);toast(on?'Передатчик в избранном — он в «Закладках»':'Убрано из избранного');};
+    const isn=body.querySelector('.origin-isnad');if(isn)linkIsnadNames(isn,full,null);
+    let jumpAt={};
+    body.onclick=e=>{
+      const o=e.target.closest('[data-origin]');if(o){const w=o.dataset.origin,box=body.querySelector('.narr-origin');
+        if(w==='none'){box.querySelectorAll('.narr-origin-text').forEach(x=>x.hidden=true);}
+        else{const t=box.querySelector('.origin-'+w);if(t)t.hidden=!t.hidden;}
+        const any=[...box.querySelectorAll('.narr-origin-text')].some(x=>!x.hidden);box.querySelector('[data-origin="none"]').hidden=!any;
+        box.querySelectorAll('[data-origin="isnad"],[data-origin="matn"]').forEach(b=>{const t=box.querySelector('.origin-'+b.dataset.origin);b.classList.toggle('on',!!t&&!t.hidden);b.textContent=(t&&!t.hidden?'Свернуть ':'Развернуть ')+(b.dataset.origin==='isnad'?'иснад':isnadText?'хадис':'текст');});return;}
+      const j=e.target.closest('[data-jump]');if(j){const set=j.dataset.jump.split(' '),rows=[...body.querySelectorAll('.narr-row')].filter(r=>set.includes('mud')?r.dataset.mud==='1':set.includes(r.dataset.eff));
+        if(!rows.length)return;const k=(jumpAt[j.dataset.jump]||0)%rows.length;jumpAt[j.dataset.jump]=k+1;const row=rows[k];
+        row.scrollIntoView({block:'center',behavior:reducedMotion.matches?'instant':'smooth'});row.classList.remove('flash-row');void row.offsetWidth;row.classList.add('flash-row');
+        if(rows.length>1)toast(`${k+1} из ${rows.length} — нажмите ещё раз, чтобы перейти к следующему`);return;}
+      const b=e.target.closest('[data-narr-fav]');if(!b)return;const on=toggleFavNarrator(items[+b.dataset.narrFav]);b.classList.toggle('on',on);toast(on?'Передатчик в избранном — он в «Закладках»':'Убрано из избранного');};
   }
   // ── Где ещё передаётся — тахридж прежнего вида, только подтверждённый источником (указ владельца: совпадения «по
   // похожему тексту» не показываем — это были бы догадки). Номер — кнопка: наш сборник открывается в карточке, прочие
@@ -1100,7 +1118,7 @@
   function renderCtor(){
     ctorDialog.querySelectorAll('[data-ctor-mode]').forEach(b=>{const on=b.dataset.ctorMode===ctor.mode;b.classList.toggle('selected',on);b.setAttribute('aria-checked',String(on));b.setAttribute('role','radio');});
     cq('.ctor-help').textContent=CTOR_HELP[ctor.mode];
-    cq('.ctor-slots').innerHTML=ctor.sel.map((n,i)=>`<div class="ctor-slot"><span class="narr-step">${i+1}</span><div class="ctor-slot-main"><p lang="ar" dir="rtl">${escape(shortNasab(n.name))}</p>${n.death?`<small>ум. ${escape(n.death)}</small>`:''}</div><button type="button" class="ctor-remove" data-ctor-remove="${i}" aria-label="Убрать">×</button></div>`
+    cq('.ctor-slots').innerHTML=ctor.sel.map((n,i)=>`<div class="ctor-slot"><span class="narr-step">${i+1}</span><div class="ctor-slot-main"><button type="button" class="narr-name-btn" data-narr-card="${escape(n.id)}" lang="ar" dir="rtl">${escape(shortNasab(n.name))}</button>${n.death?`<small>ум. ${escape(n.death)}</small>`:''}</div><button type="button" class="ctor-remove" data-ctor-remove="${i}" aria-label="Убрать">×</button></div>`
       +(ctor.mode==='seq'&&i<ctor.sel.length-1?`<label class="ctor-edge"><span>${i+1}-й получил от ${i+2}-го:</span><select data-ctor-form="${i}">${CTOR_FORMS.map(([v,t])=>`<option value="${v}"${(ctor.forms[i]||'')===v?' selected':''}>${t}</option>`).join('')}</select></label>`:'')).join('');
     const input=cq('.ctor-input');input.hidden=ctor.sel.length>=5;input.placeholder=`Имя ${ORD[ctor.sel.length]||''} передатчика — по-арабски или по-русски`;
     cq('.ctor-go').disabled=ctor.sel.length<2;cq('.ctor-go').textContent=ctor.sel.length<2?`Выберите ещё ${2-ctor.sel.length} — и можно искать`:'Найти хадисы';
@@ -1135,12 +1153,122 @@
       if(!r.total){out.innerHTML='<p class="takh-empty">Цепей с такой конструкцией подряд не нашлось.</p><p class="notes-hint">Проверьте порядок (1-й передаёт ОТ 2-го), снимите формы или переключитесь на «Вместе в иснаде».</p>';return;}
       const hints=(r.avail||[]).map((a,k)=>a.length?`<p class="ctor-hint">${k+1}-й ← ${k+2}-й, встречаются формы:</p><p class="ctor-fpills">${a.slice(0,6).map(f=>`<span class="ctor-fpill"><b lang="ar">${escape(f.ar)}</b><small>${f.count}</small></span>`).join('')}</p>`:'').join('');
       out.innerHTML=`<p class="ctor-total">Цепей: <b>${r.total}</b> · хадисов: <b>${r.hadiths}</b>${r.total>40?' · показаны 40 самых частых':''}</p>${hints}`
-        +r.chains.map((c,ci)=>`<section class="takh-block ctor-chain"><div class="ctor-chain-head"><b>${c.n} ${c.n===1?'хадис':c.n<5?'хадиса':'хадисов'}</b>${c.unk?'<span class="ctor-unk">форма передачи в этом своде не размечена</span>':''}</div><div class="ctor-links" dir="rtl">${c.links.map((l,i)=>`${i&&l.ar?`<span class="ctor-form">${escape(l.ar)}</span>`:i?'<span class="ctor-form ctor-form-none">·</span>':''}<span class="ctor-link" lang="ar">${escape(shortNasab(l.name)||'#'+l.id)}</span>`).join('')}</div><details class="ctor-places"><summary>Хадисы с этой цепью (${c.places.length})</summary>${c.places.map(p=>`<span class="ctor-place"><small>${escape(p.book)}</small>${ctorPlaceBtn(p,places)}</span>`).join('')}</details></section>`).join('');
+        +r.chains.map((c,ci)=>`<section class="takh-block ctor-chain"><div class="ctor-chain-head"><b>${c.n} ${c.n===1?'хадис':c.n<5?'хадиса':'хадисов'}</b>${c.unk?'<span class="ctor-unk">форма передачи в этом своде не размечена</span>':''}</div><div class="ctor-links" dir="rtl">${c.links.map((l,i)=>`${i&&l.ar?`<span class="ctor-form">${escape(l.ar)}</span>`:i?'<span class="ctor-form ctor-form-none">·</span>':''}<button type="button" class="ctor-link" data-narr-card="${escape(l.id)}" lang="ar">${escape(shortNasab(l.name)||'#'+l.id)}</button>`).join('')}</div><details class="ctor-places"><summary>Хадисы с этой цепью (${c.places.length})</summary>${c.places.map(p=>`<span class="ctor-place"><small>${escape(p.book)}</small>${ctorPlaceBtn(p,places)}</span>`).join('')}</details></section>`).join('');
     }
     out.onclick=async e=>{const b=e.target.closest('[data-ctor-place]');if(!b)return;const p=places[+b.dataset.ctorPlace];if(!p)return;
       if(p.code&&state.collections.some(c=>c.id===p.code)){ctorDialog.close();openReader({kind:'hadith',collection:p.code,number:p.n});return;}
       b.disabled=true;try{const leaf=p.leaf||(await state.api.leafByHadith(p.bid,Number(p.n))).leaf;ctorDialog.close();const c=collectionForBid(p.bid,p.book);openNativeBook(p.bid,leaf,c.title,{mark:p.n,arabicTitle:c.arabicTitle});}catch(_){toast('Это место в издании сейчас не открылось');}finally{b.disabled=false;}};
   }
+  // ── Имена передатчиков в тексте иснада — кнопки (owner 29.10: «передатчики должны быть кликабельны, везде»).
+  // The bridge gives the names as the text spells them, with the narrator's number; each is wrapped in place, in order.
+  async function linkIsnadNames(box,record,token){
+    if(!box||!state.api||typeof state.api.isnadLinks!=='function')return;
+    let links=[];try{links=(await state.api.isnadLinks(record.arabic,record.collection,record.number)).links||[];}catch(_){return;}
+    if(token!=null&&token!==state.readerToken)return;if(!box.isConnected)return;
+    const walker=()=>{const nodes=[];const w=document.createTreeWalker(box,NodeFilter.SHOW_TEXT,{acceptNode:n=>n.parentElement&&n.parentElement.closest('button,.isnad-name')?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});let n;while((n=w.nextNode()))nodes.push(n);return nodes;};
+    // the name is found whatever its vowels: «سماك بن حرب» meets «سِمَاكِ بْنِ حَرْبٍ», «أبو» meets «أَبِي»
+    const DIA='[\\u064B-\\u065F\\u0670\\u0640]*';
+    const nameRe=s=>{const f=String(s).replace(/[\u064B-\u065F\u0670\u0640]/g,'').replace(/\s+/g,' ').trim();if(!f)return null;
+      const word=w=>/^[اأإآ]ب[ويا]$/.test(w)?'[اأإآ]'+DIA+'ب'+DIA+'[وياى]'+DIA:w.split('').map(ch=>(/[اأإآ]/.test(ch)?'[اأإآ]':/[يى]/.test(ch)?'[يى]':/[هة]/.test(ch)?'[هة]':ch.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'))+DIA).join('');
+      return new RegExp(f.split(' ').map(word).join('\\s+'));};
+    let from={node:null,offset:0};
+    for(const l of links){if(!l.id||!l.said)continue;const re=nameRe(l.said);if(!re)continue;const nodes=walker();let started=!from.node;
+      for(const node of nodes){if(!started){if(node===from.node)started=true;else continue;}
+        const start=node===from.node?from.offset:0,m=re.exec(node.data.slice(start));if(!m)continue;const at=start+m.index;
+        const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+m[0].length);
+        const b=document.createElement('button');b.type='button';b.className='isnad-name';b.dataset.narrCard=l.id;b.setAttribute('aria-label','Передатчик — открыть карточку');
+        try{range.surroundContents(b);}catch(_){break;}
+        const next=b.nextSibling;from=next&&next.nodeType===3?{node:next,offset:0}:{node:null,offset:0};break;}}
+  }
+  // ── Карточка передатчика — одна на весь новый вид: из текста иснада, «Передатчиков», конструктора, закладок.
+  const nCardDialog=document.createElement('dialog');nCardDialog.className='native-assistant-dialog narr-dialog ncard-dialog';
+  nCardDialog.innerHTML=`<div class="native-assistant-shell"><header class="native-assistant-head"><span class="book-seal">${icon('helper')}</span><h2>Передатчик</h2><button type="button" class="help-q" data-help="ncard" aria-label="Справка по этой странице">?</button><button type="button" class="native-assistant-close ncard-close" aria-label="Закрыть">×</button></header><div class="notes-body ncard-body"></div></div>`;
+  document.body.appendChild(nCardDialog);nCardDialog.querySelector('.ncard-close').onclick=()=>nCardDialog.close();
+  let nCardToken=0;
+  async function openNarratorCard(id){
+    const body=nCardDialog.querySelector('.ncard-body'),token=++nCardToken;
+    body.innerHTML='<div class="native-chat-pending"><span class="think-dots"><i></i><i></i><i></i></span><span class="think-text">Открываю карточку</span></div>';
+    if(!nCardDialog.open)nCardDialog.showModal();
+    let c=null;try{c=await state.api.narrCard(id);}catch(error){if(token===nCardToken)body.innerHTML=`<p class="notes-hint">${escape(String(error?.message||'Карточка сейчас не открылась'))}</p>`;return;}
+    if(token!==nCardToken)return;
+    const v=c.verdict||{kind:'none'},term=v.kind==='sahabi'?'صحابي':String(v.v||'').split(' — ')[0].trim(),reason=v.kind==='sahabi'?'الصحابة عدول — сподвижники надёжны по единогласию учёных (иджма)':((String(v.v||'').match(/\(([^()]*)\)\s*$/)||[])[1]||'');
+    const T=c.testimonies||[],mut=T.filter(t=>t.mut),rest=T.filter(t=>!t.mut);
+    const tline=t=>`<p lang="ar" dir="rtl"><b>${escape(t.critic)}:</b> ${escape(t.text)} <span class="src-tag src-${t.src}" dir="ltr">${t.src==='sunnah'?'sunnah.com':'Мактаба'}</span></p>`;
+    const people=(list,total,label)=>list&&list.length?`<section class="ncard-sec"><h3>${label} <small>${total>list.length?`${list.length} из ${total}, самые частые в наших цепях`:total}</small></h3><div class="ncard-people">${list.map(p=>`<button type="button" class="ncard-person" data-narr-card="${escape(p.id)}"><span lang="ar" dir="rtl">${escape(shortNasab(p.name)||'#'+p.id)}</span><small>${[p.death?'ум. '+escape(p.death):'',p.n?escape(p.n)+' в цепях':''].filter(Boolean).join(' · ')}</small></button>`).join('')}</div></section>`:'';
+    const fav=favNarrators().some(f=>String(f.id)===String(c.id));
+    body.innerHTML=`<article class="ncard narr-${v.kind}"><h1 class="ncard-name" lang="ar" dir="rtl">${escape(c.full||c.name)}</h1>`
+      +`${(c.kunya||c.nisba)?`<p class="narr-sub" lang="ar" dir="rtl">${escape([c.kunya,c.nisba].filter(Boolean).join(' · '))}</p>`:''}`
+      +`<p class="narr-meta">${[c.death?'ум. '+escape(c.death):'',c.tabaqa?'табака <bdi lang="ar">'+escape(c.tabaqa)+'</bdi>':''].filter(Boolean).join(' · ')}</p>`
+      +`<p class="narr-verdict"><span class="narr-badge">${escape(VERDICT_RU[v.kind]||'')}${term?` <bdi lang="ar">${escape(term)}</bdi>`:''}</span>${v.kind==='sahabi'||v.kind==='none'?'':`<span class="narr-count"><bdi lang="ar">توثيق</bdi> <b>${v.nT}</b> из 48${v.sahihayn?' · в Сахихайн':''}${v.nJ?` · джарх <b>${v.nJ}</b>`:''}</span>`}</p>`
+      +`${reason?`<p class="narr-v">Основание: <bdi dir="ltr">${escape(reason)}</bdi></p>`:''}${v.note?`<p class="narr-note">${escape(v.note)}</p>`:''}`
+      +`<div class="ncard-actions"><button type="button" class="ncard-fav${fav?' on':''}">${icon('star')}${fav?'В избранном':'В избранное'}</button><button type="button" class="ncard-ctor">${icon('grid')}В конструктор цепи</button></div>`
+      +`<p class="narr-cards">Карточки: <a class="src-tag src-maktaba" href="${escape((c.links||{}).maktaba||'')}">Мактаба</a>${c.links&&c.links.sunnah?` <a class="src-tag src-sunnah" href="${escape(c.links.sunnah)}">sunnah.com</a>`:''}</p></article>`
+      +(mut.length?`<section class="ncard-sec"><h3>Свидетельства 48 муʿтабаров <small>${mut.length}</small></h3>${mut.map(tline).join('')}</section>`:'')
+      +(rest.length?`<details class="ncard-sec ncard-rest"><summary>Другие учёные — справочно, в счёт не идут <small>${rest.length}</small></summary>${rest.map(tline).join('')}</details>`:'')
+      +(!T.length?'<p class="notes-hint">Свидетельств о нём в карточках Мактабы и sunnah.com нет.</p>':'')
+      +people(c.teachers,c.teachersTotal,'Учителя — от кого передаёт')+people(c.students,c.studentsTotal,'Ученики — кто передаёт от него')
+      +((c.teachers||[]).length||(c.students||[]).length?'<p class="notes-hint">Учителя и ученики — по «Тахзиб аль-Камаль» аль-Мизи; число — сколько раз пара встречается в наших размеченных цепях.</p>':'');
+    body.scrollTop=0;
+    body.querySelector('.ncard-fav').onclick=e=>{const on=toggleFavNarrator({id:c.id,full:c.full,name:c.name,kunya:c.kunya,death:c.death,hajar:c.hajar});e.currentTarget.classList.toggle('on',on);e.currentTarget.lastChild.textContent=on?'В избранном':'В избранное';toast(on?'Передатчик в избранном — он в «Закладках»':'Убрано из избранного');};
+    body.querySelector('.ncard-ctor').onclick=()=>{nCardDialog.close();openChainCtor({mode:'any',sel:[{id:String(c.id),name:c.full||c.name,death:c.death||''}],forms:[]});};
+  }
+  // any [data-narr-card] anywhere in the new view opens the card
+  document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-narr-card]');if(!t||!t.dataset.narrCard)return;e.preventDefault();e.stopPropagation();openNarratorCard(t.dataset.narrCard);},true);
+  // ── Справка «?» по странице (owner 29.10: «кнопочка вопроса общей справки по странице — про всё, что может вызывать
+  // вопросы»): one dialog, the text depends on where the person is.
+  const HELP={
+    reader:['Карточка хадиса',[
+      ['Текст','Сверху — арабский оригинал. Цепочка передатчиков (иснад) чуть приглушена, слова хадиса (матн) ярче. Это можно выключить: «Ещё» → «Выделять иснад и матн».'],
+      ['Имена в иснаде','Подчёркнутое имя — кнопка: откроется карточка передатчика с итогом по 48 муʿтабарам и свидетельствами.'],
+      ['Хадис · Страница в книге · О книге','«Страница в книге» открывает этот хадис на странице печатного издания — с соседним текстом и главами. «О книге» — описание и ссылки на источник.'],
+      ['Перевод','Кнопка «Перевод» прячет и показывает русский перевод.'],
+      ['Инструменты','Передатчики — цепь и итог о каждом звене; Где ещё передаётся — тахридж; Пояснение — ИИ-помощник; Озвучить; Мои заметки; Копировать; Поделиться ссылкой; Без огласовок; страница на sunnah.com.'],
+      ['Закладка','Значок вверху справа сохраняет хадис в «Закладки».']]],
+    narrators:['Передатчики',[
+      ['Итог о звене','Надёжность считается по свидетельствам 48 муʿтабаров — ранних авторитетных критиков: нужно два подтверждения (توثيق). Если передатчик в Сахихайн и нет тяжкого джарха — тоже два. Ибн Хаджар и аз-Захаби — поздние своды, в счёт не идут, показаны справочно. Сподвижники — الصحابة عدول.'],
+      ['Цвета','Зелёный — надёжный, жёлтый — спорный, оранжевый — слабый, серый — не установлено. Это оценка звеньев, а не приговор хадису.'],
+      ['Сводка сверху','«надёжных», «спорных» и другие — кнопки: нажатие ведёт к этим звеньям, повторное — к следующему.'],
+      ['Как передано','Между звеньями — форма передачи: حدّثنا «рассказал нам — слышал», أخبرنا «сообщил — чтение шейху», عن «от» — без уточнения, как получил. Слышание — сплошная линия, «عن» — пунктир. Мудаллис, передающий через «عن», помечен.'],
+      ['Сверить с текстом','Звено из готовой разметки цепи, которого нет в тексте иснада или которое не сходится по годам, помечено: итог по нему не учитывайте.'],
+      ['Оригинал','«Развернуть иснад» и «Развернуть хадис» показывают оригинал прямо здесь; «Свернуть всё» прячет.'],
+      ['Свидетельства','С карточек передатчиков Мактабы и sunnah.com; у каждого — метка источника. Имя передатчика — кнопка его карточки.']]],
+    ncard:['Карточка передатчика',[
+      ['Итог','Тот же расчёт, что в «Передатчиках»: два подтверждения от 48 муʿтабаров; Сахихайн без тяжкого джарха — тоже два; поздние своды не в счёт.'],
+      ['Свидетельства','Сначала — 48 муʿтабаров, ниже — другие учёные, справочно. Метка «Мактаба» или «sunnah.com» — откуда взято свидетельство.'],
+      ['Учителя и ученики','По «Тахзиб аль-Камаль» аль-Мизи. Число — сколько раз пара встречается в наших цепях. Имя — кнопка его карточки.'],
+      ['В конструктор цепи','Откроет конструктор с этим передатчиком: добавьте второго — и найдутся хадисы, где они вместе.']]],
+    takhrij:['Где ещё передаётся',[
+      ['Что показано','Только тахридж, подтверждённый источником: أطراف и تحفة الأشراف у Бухари, тахкик шейха Шуайба аль-Арнаута у Ахмада и четырёх Сунанов, свод sunnah.one, сноски мухаккиков изданий, аль-Мухаймин. Совпадения «по похожему тексту» не показываем — это были бы догадки.'],
+      ['Тот же хадис и шавахид','«Тот же хадис» — тот же текст в других книгах. «Свидетельства (شواهد)» — другие хадисы о том же.'],
+      ['Номера','Номер — кнопка. Перед открытием «того же хадиса» текст сверяется: номер из другой печати не откроет чужой хадис.']]],
+    ctor:['Конструктор цепи',[
+      ['Режимы','«Вместе в иснаде» — все выбранные в одной цепи, в любом порядке. «Рядом» — подряд. «Строго по порядку» — 1-й передаёт от 2-го, 2-й от 3-го…'],
+      ['Формы передачи','В режиме «по порядку» между звеньями можно выбрать форму: حدّثنا, أخبرنا, سمعت, عن… Над выдачей видно, какие формы реально встречаются. Где форма в своде не размечена, цепь показана с пометкой.'],
+      ['Имена','Подбор по-арабски или по-русски; в режиме «по порядку» первыми идут те, кто реально стоит рядом с предыдущим звеном. Имя в выдаче — кнопка карточки передатчика.']]],
+    book:['Чтение книги',[
+      ['Страница и № хадиса','«Страница» — страница печатного издания. «№ хадиса» — номер хадиса (асара, документа) в книге. Над текстом — номера хадисов, что на этой странице.'],
+      ['Оглавление','Разделы книги; у раздела раскрываются главы, есть поиск по главам.'],
+      ['Перевод ИИ','Машинный перевод страницы — черновой, сверяйте с оригиналом.'],
+      ['Начало и Конец','Первая и последняя страницы издания; стрелки листают.']]],
+    main:['Muslimoon',[
+      ['Поиск','Пишите слова, фразу или номер: «бухари 1», «2:255». Пример в строке — подсказка, он печатается сам.'],
+      ['Настроить поиск','Где искать (книги, разделы, авторы) и как: по словам, с огласовками, по корню, только матн, передатчик, цепь (конструктор), RAG.'],
+      ['ИИ','«Спросить ИИ» превращает строку в вопрос помощнику.'],
+      ['Внизу','Библиотека — книги; Закладки — всё избранное; Ещё — настройки.']]]};
+  const helpDialog=document.createElement('dialog');helpDialog.className='native-assistant-dialog help-dialog';
+  helpDialog.innerHTML=`<div class="native-assistant-shell"><header class="native-assistant-head"><span class="book-seal">?</span><h2></h2><button type="button" class="native-assistant-close help-close" aria-label="Закрыть">×</button></header><div class="notes-body help-body"></div></div>`;
+  document.body.appendChild(helpDialog);helpDialog.querySelector('.help-close').onclick=()=>helpDialog.close();
+  function openHelp(ctx){const h=HELP[ctx]||HELP.main;helpDialog.querySelector('h2').textContent=h[0];helpDialog.querySelector('.help-body').innerHTML=h[1].map(([t,d])=>`<section class="help-item"><h3>${escape(t)}</h3><p>${escape(d)}</p></section>`).join('');helpDialog.showModal();}
+  document.addEventListener('click',e=>{const q=e.target.closest&&e.target.closest('[data-help]');if(!q)return;e.preventDefault();openHelp(q.dataset.help);});
+  // «?» in each page's own header, and a quiet one in the corner of the main screen
+  (function placeHelp(){
+    const add=(sel,ctx,before)=>{const host=document.querySelector(sel);if(!host||host.querySelector('.help-q'))return;const b=document.createElement('button');b.type='button';b.className='help-q';b.dataset.help=ctx;b.setAttribute('aria-label','Справка по этой странице');b.textContent='?';const ref=before?host.querySelector(before):null;ref?host.insertBefore(b,ref):host.appendChild(b);};
+    add('#reader .reader-toolbar','reader','#reader-save');
+    add('.narr-dialog:not(.takh-dialog):not(.ctor-dialog):not(.ncard-dialog) .native-assistant-head','narrators','.narr-close');
+    add('.takh-dialog .native-assistant-head','takhrij','.takh-close');
+    add('.ctor-dialog .native-assistant-head','ctor','.ctor-close');
+    const corner=document.createElement('button');corner.type='button';corner.className='help-q help-corner';corner.dataset.help='main';corner.setAttribute('aria-label','Справка по странице');corner.textContent='?';document.body.appendChild(corner);
+  })();
   // ── Озвучить — голосом самого телефона (как в прежнем виде): арабский, если в телефоне есть арабский голос, иначе перевод.
   function speakRecord(record){
     const synth=window.speechSynthesis;if(!synth||typeof SpeechSynthesisUtterance==='undefined'){toast('Озвучка на этом телефоне недоступна');return;}
@@ -1267,7 +1395,9 @@
     // The original as one text (owner 29.10: «зачем скрыл иснад? пусть оригинал будет, просто выделяй»): the chain
     // quieter, the words of the hadith brighter; «Выделять иснад и матн» in «Ещё» turns the difference off.
     const roles = new Set(parts.map(part => part.role)), mark = isnadMarkOn() && roles.has('isnad') && roles.has('matn');
-    const legend = mark ? '<div class="parts-legend" aria-label="Разделы текста"><span class="legend-isnad">иснад — приглушённо</span><span>матн — ярко</span></div>' : '';
+    // no labels over the text (owner 29.10: «арабский оригинал лишнее, и так понятно; „иснад приглушённо, матн ярко“ тоже
+    // не надо писать тут») — the explanation lives in the page help «?».
+    const legend = '';
     const flow = parts.filter(part => part.role !== 'comment').map(part => `<span class="flow-${escape(part.role || 'text')}">${textWithNotes(part.text,record)}</span>`).join(' ');
     const comments = parts.filter(part => part.role === 'comment').map(part => `<section class="comment-block"><p class="part-label">${escape(part.label || 'Комментарий составителя')}</p><div class="reader-arabic" lang="ar" dir="rtl">${textWithNotes(part.text,record)}</div></section>`).join('');
     return legend + `<div class="reader-arabic reader-flow${mark ? ' mark-parts' : ''}" lang="ar" dir="rtl">${flow}</div>` + comments;
@@ -1369,7 +1499,7 @@
     const russian = String(record.russian || '').trim(), title = String(record.title || '').trim(), bookSource = record.kind==='quran'&&title?title:source(record), number = record.kind==='quran'&&record.ayah?'аят '+record.ayah:recordNumber(record);
     const distinctTitle = title && fold(title) !== fold(bookSource).trim();
     $('#reader-body').setAttribute('aria-busy','false');
-    $('#reader-body').innerHTML = `<div class="reader-source"><span class="book-seal">${icon(record.kind === 'quran' ? 'quran' : 'book')}</span>${sourceLine(bookSource,record.kind==='quran'?'':arabicTitleOf(record),number,'reader-source-text')}</div>${record.kind==='hadith'&&!record.isExcerpt&&record.collection?`<div class="reader-modes" role="group" aria-label="Как читать"><button type="button" class="reader-mode active" aria-pressed="true">Хадис</button><button type="button" class="reader-mode" id="reader-open-page" aria-pressed="false">Страница в книге</button><button type="button" class="text-button reader-about" id="reader-about">О книге</button></div>`:''}<h1 id="reader-title"${distinctTitle ? '' : ' class="visually-hidden"'}>${escape(distinctTitle ? title : `${bookSource}${number ? ' · '+number : ''}`)}</h1><div class="reader-translation-control"><button type="button" id="translation-toggle" class="translation-toggle active" aria-pressed="true" aria-controls="reader-translation">Перевод${icon('check')}</button></div><div class="arabic-part"><p class="reader-language">АРАБСКИЙ ОРИГИНАЛ</p>${readerArabic(record)}</div><div class="translation-part" id="reader-translation"><div class="reader-divider"></div><p class="reader-language">РУССКИЙ ПЕРЕВОД</p>${russian ? `<div class="reader-russian">${textWithNotes(russian,record)}</div>` : '<p class="reader-missing">Русский перевод для этой записи пока недоступен.</p>'}</div><aside id="reader-note" class="reader-footnote-preview" hidden aria-live="polite"></aside><div class="reader-tool-actions"><button type="button" class="reader-chain">${icon('grid')}<span>Конструктор передач<small>Исследовать цепочку передатчиков</small></span>${icon('arrow')}</button><button type="button" class="reader-scientific">${icon('source')}<span>Сравнить версии<small>Открыть инструменты исследования источника</small></span>${icon('arrow')}</button></div>`;
+    $('#reader-body').innerHTML = `<div class="reader-source"><span class="book-seal">${icon(record.kind === 'quran' ? 'quran' : 'book')}</span>${sourceLine(bookSource,record.kind==='quran'?'':arabicTitleOf(record),number,'reader-source-text')}</div>${record.kind==='hadith'&&!record.isExcerpt&&record.collection?`<div class="reader-modes" role="group" aria-label="Как читать"><button type="button" class="reader-mode active" aria-pressed="true">Хадис</button><button type="button" class="reader-mode" id="reader-open-page" aria-pressed="false">Страница в книге</button><button type="button" class="text-button reader-about" id="reader-about">О книге</button></div>`:''}<h1 id="reader-title"${distinctTitle ? '' : ' class="visually-hidden"'}>${escape(distinctTitle ? title : `${bookSource}${number ? ' · '+number : ''}`)}</h1><div class="reader-translation-control"><button type="button" id="translation-toggle" class="translation-toggle active" aria-pressed="true" aria-controls="reader-translation">Перевод${icon('check')}</button></div><div class="arabic-part">${readerArabic(record)}</div><div class="translation-part" id="reader-translation"><div class="reader-divider"></div><p class="reader-language">РУССКИЙ ПЕРЕВОД</p>${russian ? `<div class="reader-russian">${textWithNotes(russian,record)}</div>` : '<p class="reader-missing">Русский перевод для этой записи пока недоступен.</p>'}</div><aside id="reader-note" class="reader-footnote-preview" hidden aria-live="polite"></aside><div class="reader-tool-actions"><button type="button" class="reader-chain">${icon('grid')}<span>Конструктор передач<small>Исследовать цепочку передатчиков</small></span>${icon('arrow')}</button><button type="button" class="reader-scientific">${icon('source')}<span>Сравнить версии<small>Открыть инструменты исследования источника</small></span>${icon('arrow')}</button></div>`;
     // «Страница в книге»: the same hadith inside its printed page — chapters, neighbours, the author's words, untouched.
     if ($('#reader-open-page')) $('#reader-open-page').onclick = async () => {
       const button = $('#reader-open-page'), label = button.textContent; button.disabled = true; button.textContent = 'Ищем страницу…';
@@ -1415,6 +1545,7 @@
     const readerTools = record.kind==='quran'?[{id:'quranReader',title:'Открыть читалку Корана',icon:'book'},{id:'explain',title:'Пояснение',icon:'helper'}]:record.kind==='book'?[...(record.page?[{id:'bookPage',title:'Открыть страницу книги',icon:'book'}]:[]),{id:'explain',title:'Пояснение',icon:'helper'},{id:'notes',title:'Мои заметки',icon:'pen'}]:[{id:'narrators',title:'Передатчики',icon:'book'},{id:'takhrij',title:'Где ещё передаётся',icon:'source'},{id:'explain',title:'Пояснение',icon:'helper'},{id:'audio',title:'Озвучить',icon:'audio'},{id:'notes',title:'Мои заметки',icon:'pen'},{id:'copy',title:'Копировать',icon:'source'},{id:'share',title:'Поделиться',icon:'arrow'},{id:'tashkeel',title:'Без огласовок',icon:'info'},...(SUNNAH_COM[record.collection]?[{id:'source',title:'На sunnah.com',icon:'source'}]:[])];
     $('.reader-tool-actions').innerHTML = `<details class="reader-tools-disclosure" open><summary>Инструменты <span>${readerTools.length}</span></summary><div class="reader-tools-grid">${readerTools.map(tool => `<button type="button" data-reader-tool="${tool.id}">${icon(tool.icon)}<span>${tool.title}</span>${icon('arrow')}</button>`).join('')}</div>${record.kind==='book'?'<p>Для этого отрывка доступны перечисленные инструменты. Остальные функции требуют полного текста и проверки источника.</p>':''}</details>`;
     $$('[data-reader-tool]').forEach(button => button.onclick = () => {if (!NATIVE_TOOLS.has(button.dataset.readerTool)) $('#reader').close(); invokeTool(button.dataset.readerTool,record);});
+    if(record.kind==='hadith'&&record.arabic){const box=$('.reader-flow .flow-isnad',$('#reader-body'))||$('.reader-flow',$('#reader-body'))||$('.reader-arabic',$('#reader-body'));if(box)linkIsnadNames(box,record,state.readerToken);}
   }
   async function openReader(record,options={}) {
     stopReaderAudio();

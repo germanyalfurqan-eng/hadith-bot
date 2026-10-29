@@ -6,7 +6,7 @@
   const readiness=new Promise((resolve,reject)=>{resolveReady=resolve;rejectReady=reject;});
   const frame=document.createElement('iframe');
   frame.title='Научные инструменты Muslimoon';
-  frame.src='core.html?v=20261029163419&design='+encodeURIComponent(document.documentElement.dataset.theme||'gold')+(location.hash||'');
+  frame.src='core.html?v=20261029164926&design='+encodeURIComponent(document.documentElement.dataset.theme||'gold')+(location.hash||'');
   frame.style.cssText='width:100%;height:100%;border:0;display:block;background:#111';
   const shell=document.createElement('section');
   shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Научные инструменты');
@@ -44,7 +44,7 @@
     suraInfo:()=>ask('suraInfo',{}),narrators:(text,collection,number)=>ask('narrators',{text,collection,number}),hermesAsk:(question,screen,actions,opora)=>ask('hermesAsk',{question,screen,actions,opora}),
     bookPageData:(bid,leaf)=>ask('bookPageData',{bid,leaf}),
     locateLeaf:(collection,number,text)=>ask('locateLeaf',{collection,number,text}),
-    bookMeta:bid=>ask('bookMeta',{bid}),bookToc:bid=>ask('bookToc',{bid}),takhrij:(collection,number)=>ask('takhrij',{collection,number}),narrCands:(q,prev)=>ask('narrCands',{q,prev}),chainFind:(ids,mode,forms)=>ask('chainFind',{ids,mode,forms}),translate:(text,source,num)=>ask('translate',{text,source,num}),
+    bookMeta:bid=>ask('bookMeta',{bid}),bookToc:bid=>ask('bookToc',{bid}),takhrij:(collection,number)=>ask('takhrij',{collection,number}),narrCands:(q,prev)=>ask('narrCands',{q,prev}),chainFind:(ids,mode,forms)=>ask('chainFind',{ids,mode,forms}),narrCard:id=>ask('narrCard',{id}),isnadLinks:(text,collection,number)=>ask('isnadLinks',{text,collection,number}),translate:(text,source,num)=>ask('translate',{text,source,num}),
     leafByHadith:(bid,number)=>ask('leafByHadith',{bid,number}),
     lastLeaf:(bid,from)=>ask('lastLeaf',{bid,from}),
     quranWordData:(sura,ayah,text)=>ask('quranWordData',{sura,ayah,text}),

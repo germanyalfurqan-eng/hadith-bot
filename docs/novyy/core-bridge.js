@@ -430,12 +430,12 @@
     // Итог о передатчике — формулой прежнего вида (_ttNeuro, владелец: «48 муʿтабаров дают два свидетельства, а не Ибн
     // Хаджар»): توثيق = свидетельства двух ранних муʿтабаров из 48; Сахихайн без тяжкого джарха = два; поздние
     // (Ибн Хаджар, аз-Захаби, аль-Мизи…) не в счёт; сподвижники — الصحابة عدول. Между звеньями — форма передачи из текста.
+    // sunnah.com opinions on its narrator card (collected earlier: sunverd_full/<sid%60>.json)
+    const sunnahOf=async sid=>{if(!sid||!/^\d+$/.test(String(sid)))return [];const sh=+sid%60;window._sunverdFull=window._sunverdFull||{};
+      if(window._sunverdFull[sh]===undefined)window._sunverdFull[sh]=await fetch('./sunverd_full/'+sh+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
+      return (window._sunverdFull[sh]&&window._sunverdFull[sh][String(sid)])||[];};
     const narrEnrich=async(items,how,text)=>{
       let flags={},mud={},m2s={};try{flags=await loadNarrFlags()||{};}catch(e){}try{mud=await _loadMudallisin()||{};}catch(e){}try{m2s=await loadMid2Sid()||{};}catch(e){}
-      // sunnah.com opinions on its narrator card (collected earlier: sunverd_full/<sid%60>.json)
-      const sunnahOf=async sid=>{if(!sid||!/^\d+$/.test(String(sid)))return [];const sh=+sid%60;window._sunverdFull=window._sunverdFull||{};
-        if(window._sunverdFull[sh]===undefined)window._sunverdFull[sh]=await fetch('./sunverd_full/'+sh+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
-        return (window._sunverdFull[sh]&&window._sunverdFull[sh][String(sid)])||[];};
       for(const it of items){if(it.id==null)continue;const n=+it.id,sid=m2s[String(n)];
         it.links={maktaba:'https://shamela.ws/narrator/'+n,sunnah:sid&&/^\d+$/.test(String(sid))?'https://sunnah.com/narrator/'+sid:''};
         try{if(typeof _isSahById==='function'&&await _isSahById(n)){it.verdict={kind:'sahabi',v:'صحابي — сподвижник',nT:0,nJ:0};continue;}}catch(e){}
@@ -444,6 +444,7 @@
         let added=[];try{const ours=[...new Set((list||[]).map(c=>_mCanon(c[0])))];
           added=(await sunnahOf(sid)).filter(x=>{const c=_mCanon(x.s);return c&&!ours.some(oc=>oc===c||oc.indexOf(c)>=0||c.indexOf(oc)>=0);}).map(x=>[String(x.s),String(x.q||''),'sunnah']);}catch(e){}
         const all=(list||[]).concat(added);
+        if(how==='card')it.testimonies=all.filter(c=>c&&c[0]&&String(c[1]||'').trim()).map(c=>({critic:String(c[0]),text:String(c[1]).slice(0,500),src:c[2]==='sunnah'?'sunnah':'maktaba',mut:!!(_critOk(c[0])&&_isMut(c[0]))}));
         const inSah=flags[String(n)]==='bm';let r=null;try{r=all.length?_ttNeuro(all,inSah):null;}catch(e){}
         if(!r&&inSah)r=_ttNeuro([],true);
         if(r){const kind=r.em==='🟢'?'sound':r.em==='🟡'?'mixed':r.em==='🟠'?'weak':r.em==='🔴'?'rejected':'unknown';
@@ -486,6 +487,40 @@
       }catch(e){}
       return {items,how,toProphet};
     };
+    // Карточка передатчика в новом виде: тот же итог по 48, все свидетельства (Мактаба + sunnah.com) с источником,
+    // учителя и ученики по «Тахзиб аль-Камаль» аль-Мизи (с числом передач в наших цепях).
+    if(action==='narrCard'){
+      const id=+args.id;if(!(id>0))throw Error('Нет номера передатчика');
+      let c=null;try{c=await _narrCard(id);}catch(e){}if(!c)throw Error('Передатчик не найден в нашей базе');
+      const it={name:String(c[1]||''),id:String(id),full:String(c[1]||''),kunya:String(c[2]||''),nisba:String(c[3]||''),death:String(c[4]||''),hajar:String(c[5]||''),dhahabi:String(c[6]||''),tabaqa:String(c[7]||'')};
+      await narrEnrich([it],'card','');
+      if(it.verdict&&it.verdict.kind==='sahabi'&&!it.testimonies){let list=[];try{list=await _testimGet(id)||[];}catch(e){}
+        it.testimonies=list.filter(x=>x&&x[0]&&String(x[1]||'').trim()).map(x=>({critic:String(x[0]),text:String(x[1]).slice(0,500),src:'maktaba',mut:!!(_critOk(x[0])&&_isMut(x[0]))}));}
+      const tea=[],stu=[];
+      try{const rec=await _tlinkGet(id)||{};let edg={};try{edg=await _edgesGet(id)||{};}catch(e){}
+        for(const k in rec){const v=String(rec[k]||'');(v[0]==='T'?tea:stu).push({id:String(k),n:edg[String(k)]||0});}
+        tea.sort((a,b)=>b.n-a.n);stu.sort((a,b)=>b.n-a.n);}catch(e){}
+      const top=[...tea.slice(0,16),...stu.slice(0,16)];
+      await Promise.all(top.map(async x=>{try{const k=await _narrCard(+x.id);x.name=k?String(k[1]||''):'';x.death=k&&k[4]?String(k[4]):'';}catch(e){}}));
+      return {...it,teachers:tea.slice(0,16),students:stu.slice(0,16),teachersTotal:tea.length,studentsTotal:stu.length};
+    }
+    // Имена иснада, как они стоят в тексте, с номером передатчика — чтобы имя в тексте открывало его карточку.
+    if(action==='isnadLinks'){
+      const text=String(args.text||'').slice(0,6000);if(!text||typeof _parseIsnad!=='function')return {links:[]};
+      let p=null;try{p=_parseIsnad(text);}catch(e){}
+      const plain=t=>String(t||'').replace(/[\u064B-\u065F\u0670\u0640]/g,'');
+      const links=((p&&p.links)||[]).filter(l=>l&&l.name&&!/رسول الله|النبي|رسول اللة/.test(plain(l.name)));
+      try{if(typeof loadNarrNames==='function')await loadNarrNames();}catch(e){}
+      let seq=null;try{if(args.collection&&args.number&&typeof dzChainFull==='function'){const book=(await catalog()).collections.find(c=>String(c.id)===String(args.collection));
+        const r=book&&book.bid?await dzChainFull(+book.bid,String(args.number).replace(/\D.*$/,'')):null;seq=r&&r.seq&&r.seq.length===links.length?r.seq:null;}}catch(e){}
+      const out=[];for(let i=0;i<links.length&&i<30;i++){let id=seq&&seq[i]!=null?seq[i]:null;if(id==null){try{id=await _narrLookup(links[i].name);}catch(e){}}
+        out.push({said:String(links[i].name),id:id==null?null:String(id)});}
+      // the parse stops at «ح» (a second chain): the names after it come from the old view's own name finder
+      try{const seen=new Set(out.map(x=>plain(x.said).replace(/\s+/g,' ').trim()));
+        for(const nm of (typeof isnadNarrators==='function'?isnadNarrators(text)||[]:[]).slice(0,40)){const k=plain(nm).replace(/\s+/g,' ').trim();if(!k||seen.has(k))continue;seen.add(k);
+          let id=null;try{id=await _narrLookup(nm);}catch(e){}if(id!=null)out.push({said:String(nm),id:String(id)});}}catch(e){}
+      return {links:out};
+    }
     if(action==='narrators'){
       const card=async id=>{let c=null;try{c=await _narrCard(id);}catch(e){}return c?{name:String(c[1]||''),id:String(id),full:String(c[1]||''),kunya:String(c[2]||''),nisba:String(c[3]||''),death:String(c[4]||''),hajar:String(c[5]||''),dhahabi:String(c[6]||''),tabaqa:String(c[7]||'')}:null;};
       // 1) the hadith's own chain from our base — narrators by id, no namesakes
@@ -752,7 +787,7 @@
   window.addEventListener('message',event=>{
     if(event.origin!==location.origin||event.source!==parent||event.data?.source!=='muslimoon-design-ui')return;
     const {id,action,args}=event.data;
-    if(typeof id!=='string'||!['ready','suraInfo','narrators','bookToc','translate','takhrij','narrCands','chainFind','catalog','bookInfo','bookPageData','locateLeaf','bookMeta','leafByHadith','lastLeaf','hermesAsk','quranWordData','quranAudioInfo','quranTimedAudio','quranVerse','quranNeighbor','search','read','browse','scientific','library','tool','toolsCatalog','openOriginalTool','showOriginalHome','numberMore','assistantAsk'].includes(action))return;
+    if(typeof id!=='string'||!['ready','suraInfo','narrators','bookToc','translate','takhrij','narrCands','chainFind','narrCard','isnadLinks','catalog','bookInfo','bookPageData','locateLeaf','bookMeta','leafByHadith','lastLeaf','hermesAsk','quranWordData','quranAudioInfo','quranTimedAudio','quranVerse','quranNeighbor','search','read','browse','scientific','library','tool','toolsCatalog','openOriginalTool','showOriginalHome','numberMore','assistantAsk'].includes(action))return;
     serial=serial.then(()=>request(action,args||{})).then(payload=>send(id,payload)).catch(e=>send(id,null,String(e&&e.message||e)));
   });
   let attempts=0;
