@@ -1034,7 +1034,7 @@
         +`</div>${n.id?`<button type="button" class="narr-fav${favNarrators().some(f=>String(f.id)===String(n.id))?' on':''}" data-narr-fav="${i}" aria-label="В избранные передатчики">${icon('star')}</button>`:''}</article>`;};
     body.innerHTML=`<p class="notes-hint">${escape(source(full))}${full.number?' · № '+escape(full.number):''} · от собирателя к Пророку ﷺ</p>`
       +(byName?'<p class="narr-warn">Готовой цепочки для этого хадиса в базе нет: передатчики определены по написанию имён — у тёзок возможна путаница, итог сверяйте.</p>':'')
-      +(!byName&&cnt('unsure')>=2?`<p class="narr-warn">${cnt('unsure')} звена из ${items.length} не находятся в тексте иснада. Готовая разметка цепи под этим номером, похоже, относится к другому хадису — номера изданий расходятся. Итог по цепи сверяйте с текстом.</p>`:'')
+      +(!byName&&cnt('unsure')>=2?`<p class="narr-warn">${cnt('unsure')} звена из ${items.length} не находятся в тексте иснада. Готовая разметка, похоже, описывает другую цепь под этим номером — другой риваят того же хадиса или сбой нумерации. Итог по цепи сверяйте с текстом.</p>`:'')
       +summary
       +`<div class="chain-flow">`
       +(collector?`<div class="chain-end"><span lang="ar" dir="rtl">${escape(collector)}</span><small>собиратель</small></div>`:'')
