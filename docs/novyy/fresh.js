@@ -152,7 +152,10 @@
     const promise=new Promise(resolve=>cardPartsQueue.push({key,record,resolve}));cardPartsPending.set(key,promise);runCardPartsQueue();return promise;
   }
   function paintCardParts(element,record,parts){
-    if(!element.isConnected||!parts.some(p=>p.role==='isnad')||!parts.some(p=>p.role==='matn'))return;
+    if(!element.isConnected)return;
+    if(!parts.some(p=>p.role==='isnad')||!parts.some(p=>p.role==='matn')){   // не разделился (Муслим №321) — имена всё равно выделяем
+      const whole=element.querySelector('.card-arabic-extra p')||element.querySelector('.card-text.arabic-preview');
+      if(whole&&!whole.dataset.namesLinked){whole.dataset.namesLinked='1';linkIsnadNames(whole,record,null);}return;}
     if(selectingWithin(element)){deferredCardPaints.set(element,{record,parts});return;}
     const block=element.querySelector('.card-arabic-extra p')||element.querySelector('.card-text.arabic-preview');if(!block)return;
     // owner 29.10: «не надо блоками делить иснад/матн — как в оригинале вместе, лёгкая разница в цвете»
@@ -1238,11 +1241,12 @@
       const word=w=>/^[اأإآ]ب[ويا]$/.test(w)?'[اأإآ]'+DIA+'ب'+DIA+'[وياى]'+DIA:w.split('').map(ch=>(/[اأإآ]/.test(ch)?'[اأإآ]':/[يى]/.test(ch)?'[يى]':/[هة]/.test(ch)?'[هة]':ch.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'))+DIA).join('');
       return new RegExp(f.split(' ').map(word).join('\\s+'));};
     let from={node:null,offset:0};
-    for(const l of links){if(!l.id||!l.said)continue;const re=nameRe(l.said);if(!re)continue;const nodes=walker();let started=!from.node;
+    // владелец 29.10: «все должны быть передатчики выделены» — и без опознанного номера: такой зовёт выбор из тёзок
+    for(const l of links){if(!l.said)continue;const re=nameRe(l.said);if(!re)continue;const nodes=walker();let started=!from.node;
       for(const node of nodes){if(!started){if(node===from.node)started=true;else continue;}
         const start=node===from.node?from.offset:0,m=re.exec(node.data.slice(start));if(!m)continue;const at=start+m.index;
         const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+m[0].length);
-        const b=document.createElement('button');b.type='button';b.className='isnad-name';b.dataset.narrCard=l.id;b.setAttribute('aria-label','Передатчик — открыть карточку');
+        const b=document.createElement('button');b.type='button';b.className='isnad-name'+(l.id?'':' isnad-name-unknown');if(l.id)b.dataset.narrCard=l.id;else b.dataset.narrSaid=l.said;b.setAttribute('aria-label',l.id?'Передатчик — открыть карточку':'Передатчик не опознан однозначно — выбрать из тёзок');
         try{range.surroundContents(b);}catch(_){break;}
         const next=b.nextSibling;from=next&&next.nodeType===3?{node:next,offset:0}:{node:null,offset:0};break;}}
   }
@@ -1278,6 +1282,14 @@
     body.querySelector('.ncard-fav').onclick=e=>{const on=toggleFavNarrator({id:c.id,full:c.full,name:c.name,kunya:c.kunya,death:c.death,hajar:c.hajar});e.currentTarget.classList.toggle('on',on);e.currentTarget.lastChild.textContent=on?'В избранном':'В избранное';toast(on?'Передатчик в избранном — он в «Закладках»':'Убрано из избранного');};
     body.querySelector('.ncard-ctor').onclick=()=>{nCardDialog.close();openChainCtor({mode:'any',sel:[{id:String(c.id),name:c.full||c.name,death:c.death||''}],forms:[]});};
   }
+  async function openNarratorNamesakes(said){
+    const body=nCardDialog.querySelector('.ncard-body'),token=++nCardToken;if(!nCardDialog.open)nCardDialog.showModal();
+    body.innerHTML='<div class="native-chat-pending"><span class="think-dots"><i></i><i></i><i></i></span><span class="think-text">Ищу, кто это</span></div>';
+    let items=[];try{items=(await state.api.narrCands(said,'')).items||[];}catch(_){}if(token!==nCardToken)return;
+    body.innerHTML=`<p class="ncard-said" lang="ar" dir="rtl">${escape(said)}</p><p class="notes-hint">В этой цепи имя не опознано однозначно. ${items.length?'Подходящие передатчики — выберите:':'В нашей базе подходящих не нашлось.'}</p>`
+      +items.map(x=>`<button type="button" class="ctor-cand" data-narr-card="${escape(String(x.id))}"><span lang="ar" dir="rtl">${escape(shortNasab(x.name))}</span><small>${escape([x.kunya,x.death?'ум. '+x.death:''].filter(Boolean).join(' · '))}</small></button>`).join('');
+  }
+  document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-narr-said]');if(!t||t.dataset.narrCard)return;e.preventDefault();e.stopPropagation();openNarratorNamesakes(t.dataset.narrSaid);},true);
   // any [data-narr-card] anywhere in the new view opens the card
   document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-narr-card]');if(!t||!t.dataset.narrCard)return;e.preventDefault();e.stopPropagation();openNarratorCard(t.dataset.narrCard);},true);
   // ── Справка «?» по странице (owner 29.10: «кнопочка вопроса общей справки по странице — про всё, что может вызывать
@@ -1533,6 +1545,7 @@
   const ROMAN=['','I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
   // corpus-style tag («V|IMPF|VF:3|3MP|MOOD:IND») → plain Russian lines
   const POSRU={N:'имя (исм)',V:'глагол (фиʿль)',PRON:'местоимение (дамир)',P:'предлог (харф джарр)',CONJ:'союз (харф ʿатф)',ADJ:'прилагательное (сыфа)',PN:'имя собственное',REL:'относительное местоимение',DEM:'указательное местоимение',NEG:'частица отрицания',INTG:'вопросительное слово',T:'наречие времени',LOC:'наречие места',DET:'артикль «аль»',EXP:'частица исключения (истисна)',ACC:'частица «инна» и подобные',REM:'возобновительная частица',SUB:'подчинительная частица',COND:'условная частица',VOC:'звательная частица',EMPH:'усилительная частица',RES:'частица ограничения',FUT:'частица будущего',CERT:'частица утверждения («кад»)',INL:'отдельные буквы (мукаттаʿат)',PRP:'частица цели',SUP:'добавочная частица',ANS:'частица ответа',CAUS:'частица причины',CIRC:'частица состояния',COM:'частица сопровождения',EQ:'частица равенства',EXH:'побудительная частица',EXL:'частица пояснения',INC:'частица начала',INT:'частица толкования',PRO:'частица запрета',RET:'частица отказа',RSLT:'частица следствия',SUR:'частица неожиданности',IMPV:'частица повеления',AMD:'частица поправки',AVR:'частица отвращения',PREV:'частица предотвращения',NV:'имя действия (исм фиʿль)',IMPN:'имя повеления'};
+  const plural=(n,one,few,many)=>{const m=n%10,h=n%100;return m===1&&h!==11?one:m>=2&&m<=4&&(h<12||h>14)?few:many;};
   function gramDetail(tag){
     const p=String(tag||'').split('|').filter(Boolean),out=[];if(!p.length)return out;
     // метка разметки по месту: «N|PN|NOM», «P|NEG», «N|MS|NOM|ADJ» — уточнение части речи стоит после N/V/P
@@ -1572,7 +1585,18 @@
       const scroller=$('#reader-body'),top=word.getBoundingClientRect().top-scroller.getBoundingClientRect().top+scroller.scrollTop-90;
       scroller.scrollTo({top:Math.max(0,top),behavior:reducedMotion.matches?'instant':'smooth'});
       panel.querySelector('.qw-close').onclick=close;
-      const rb=panel.querySelector('.qw-refs-btn');if(rb)rb.onclick=()=>{const box=panel.querySelector('.qw-refs');box.hidden=!box.hidden;rb.setAttribute('aria-expanded',String(!box.hidden));};
+      // владелец 29.10: «места в Коране структурировать как на corpus.quran.com, а не просто цифры»
+      const rb=panel.querySelector('.qw-refs-btn');if(rb)rb.onclick=async()=>{const box=panel.querySelector('.qw-refs');box.hidden=!box.hidden;rb.setAttribute('aria-expanded',String(!box.hidden));
+        if(box.hidden||box.dataset.forms||!item.place||typeof state.api.rootForms!=='function')return;
+        let r=null;try{r=await state.api.rootForms(item.root);}catch(_){}if(current!==word||!r||!r.forms||!r.forms.length)return;box.dataset.forms='1';rb.textContent=`Места в Коране · ${r.total}`;
+        const here=`${data.sura}:${data.ayah}:${item.index+1}`;
+        box.innerHTML=`<p class="qw-forms-head">Корень <b lang="ar" dir="rtl">${escape(item.root.split('').join(' '))}</b> встречается в Коране ${r.total} ${plural(r.total,'раз','раза','раз')} в ${r.forms.length} ${plural(r.forms.length,'форме','формах','формах')}:</p>`
+          +r.forms.map((f,i)=>`<div class="qw-form${f.lemma===item.lemma?' is-this':''}"><button type="button" class="qw-form-btn" data-form="${i}" aria-expanded="false"><span class="qw-form-n">${f.places.length}</span>`
+            +`<span class="qw-form-kind">${escape(f.kind)}</span><b lang="ar" dir="rtl">${escape(f.lemma)}</b>${f.sound||f.ru?`<small>${escape([f.sound,f.ru].filter(Boolean).join(' — '))}</small>`:''}</button>`
+            +`<div class="qw-form-places" hidden>${f.places.map(pl=>{const [s,a]=pl.split(':');return `<button type="button" data-quran-ref="${s}:${a}" class="${pl===here?'is-here':''}">${escape(pl)}</button>`;}).join('')}</div></div>`).join('');
+        box.querySelectorAll('.qw-form-btn').forEach(btn=>btn.onclick=()=>{const pl=btn.nextElementSibling;pl.hidden=!pl.hidden;btn.setAttribute('aria-expanded',String(!pl.hidden));});
+        box.querySelectorAll('[data-quran-ref]').forEach(ref=>ref.onclick=async()=>{const [s,a]=ref.dataset.quranRef.split(':').map(Number),token=state.readerToken;ref.disabled=true;try{const verse=await state.api.quranVerse(s,a);if(token===state.readerToken&&$('#reader').open)openReader(verse);}catch(_){toast('Не удалось открыть аят');}finally{ref.disabled=false;}});
+      };
       panel.querySelectorAll('[data-quran-ref]').forEach(ref=>ref.onclick=async()=>{const [s,a]=ref.dataset.quranRef.split(':').map(Number),token=state.readerToken;ref.disabled=true;try{const verse=await state.api.quranVerse(s,a);if(token===state.readerToken&&$('#reader').open)openReader(verse);}catch(_){toast('Не удалось открыть аят');}finally{ref.disabled=false;}});
       let arabus=null;const loadArabus=async()=>{if(arabus)return arabus;try{arabus=await state.api.arabus(item.text,item.root,item.lemma);}catch(_){arabus={entries:[]};}return arabus;};
       loadArabus().then(r=>{if(current!==word)return;const e=(r.entries||[])[0],el=panel.querySelector('.qw-lemma-ru');if(!el)return;

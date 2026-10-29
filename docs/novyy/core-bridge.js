@@ -370,6 +370,20 @@
       throw Error('Точная страница этого хадиса в издании не найдена');
     }
     // Конструктор цепи: подбор передатчика по имени (тот же narrCandidates, что у прежнего вида) и поиск по реестру цепей.
+    // Корень по формам — как «Quran Dictionary» на corpus.quran.com: ذ ك ر — 292 раза в 14 формах (84 — глагол I породы
+    // ذَكَرَ, 76 — масдар ذِكْر…). Указатель собран из разметки по месту: data/morph_roots/<код первой буквы>.json.
+    if(action==='rootForms'){
+      const root=String(args.root||'').trim();if(!root)return {forms:[]};
+      const idx=await modelFile('morph_roots/'+root.codePointAt(0)+'.json'),lem2=await modelFile('quran_lemmas_v2.json');
+      const ROM=['','I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+      const kindOf=tag=>{const t=String(tag||'').split('|'),vf=+((t.find(x=>x.startsWith('VF:'))||'').split(':')[1]||0),r=vf>1?` ${ROM[vf]||vf} породы`:'';
+        if(t[0]==='V')return 'глагол '+(ROM[vf]||'I')+' породы';if(t.includes('VN'))return 'масдар (отглагольное имя)'+r;
+        if(t.includes('ACT_PCPL'))return 'действительное причастие'+r;if(t.includes('PASS_PCPL'))return 'страдательное причастие'+r;
+        if(t.includes('PN'))return 'имя собственное';if(t.includes('ADJ'))return 'прилагательное';return t[0]==='N'?'имя':'частица';};
+      const forms=((idx&&idx[root])||[]).map(g=>{const d=lem2[g[0]]||{};return {lemma:String(g[0]),kind:kindOf(g[1]),sound:String(d.t||''),ru:String(d.ru||''),
+        places:(g[2]||[]).map(String)};});
+      return {root,total:forms.reduce((n,f)=>n+f.places.length,0),forms};
+    }
     if(action==='narrCands'){
       const q=String(args.q||'').trim().replace(/^["'«»\s]+|["'«»\s]+$/g,'');if(q.length<2)return {items:[]};
       let c=[];try{c=await narrCandidates(q)||[];}catch(e){}
@@ -608,7 +622,7 @@
       // the parse stops at «ح» (a second chain): the names after it come from the old view's own name finder
       try{const seen=new Set(out.map(x=>plain(x.said).replace(/\s+/g,' ').trim()));
         for(const nm of (typeof isnadNarrators==='function'?isnadNarrators(text)||[]:[]).slice(0,40)){const k=plain(nm).replace(/\s+/g,' ').trim();if(!k||seen.has(k))continue;seen.add(k);
-          let id=null;try{id=await _narrLookup(nm);}catch(e){}if(id!=null)out.push({said:String(nm),id:String(id)});}}catch(e){}
+          let id=null;try{id=await _narrLookup(nm);}catch(e){}out.push({said:String(nm),id:id==null?null:String(id)});}}catch(e){}   // без номера тоже: выделяется, по нажатию — тёзки
       return {links:out};
     }
     if(action==='narrators'){
