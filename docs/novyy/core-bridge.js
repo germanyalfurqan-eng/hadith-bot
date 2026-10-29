@@ -256,7 +256,8 @@
     if(action==='quranAudioInfo'){
       const s=Number(args.sura),a=Number(args.ayah);if(!Number.isSafeInteger(s)||s<1||s>114||!Number.isSafeInteger(a)||a<1)throw Error('Неверный номер аята');
       const verses=await loadQuran();if(!verses.some(v=>Number(v.s)===s&&Number(v.a)===a))throw Error('Аят не найден');
-      const selected=_чтец(),effective=selected===OMAR_ID&&!OMAR_SURY.has(s)?'Hudhaify_128kbps':selected,url=new URL(_ayahURL(s,a));
+      const pad=n=>String(n).padStart(3,'0'),forced=args.reciter==='Husary_128kbps';   // тот же чтец, что у подсветки
+      const selected=forced?'Husary_128kbps':_чтец(),effective=selected===OMAR_ID&&!OMAR_SURY.has(s)?'Hudhaify_128kbps':selected,url=new URL(forced?`https://everyayah.com/data/Husary_128kbps/${pad(s)}${pad(a)}.mp3`:_ayahURL(s,a));
       if(url.protocol!=='https:'||!['everyayah.com','cdn.jsdelivr.net'].includes(url.hostname))throw Error('Источник аудио недоступен');
       const labels={OmarHisham:'Омар Хишам',Hudhaify_128kbps:'Али аль-Хузайфи',Alafasy_128kbps:'Мишари аль-Афаси',Husary_128kbps:'Махмуд аль-Хусари',Abdul_Basit_Murattal_192kbps:'Абд аль-Басит',Minshawi_Murattal_128kbps:'Мухаммад аль-Миншави'};
       return {url:url.href,reciter:labels[effective]||effective,fallback:effective!==selected};
@@ -271,9 +272,11 @@
       if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start)throw Error('Неверная разметка времени');
       // the reciter may repeat a phrase (40:40 — words 17–19 twice): a word may come back; time only moves forward
       let maxWord=0;for(const segment of segments){const [n,f,t]=segment||[];if(!Number.isSafeInteger(n)||n<1||n>count||!Number.isFinite(f)||!Number.isFinite(t)||f<last-50||t<=f||t>end+50)throw Error('Разметка слов неполная');last=t;lastWord=n;maxWord=Math.max(maxWord,n);}
-      if(maxWord!==count)throw Error('Разметка не совпала с количеством слов аята');
+      // первый аят суры в тексте приложения начинается с басмалы (4 слова), а разметка считает только сам аят — сдвигаем
+      let shift=0;if(a===1&&s!==1&&s!==9&&maxWord+4===count)shift=4;
+      if(maxWord+shift!==count)throw Error('Разметка не совпала с количеством слов аята');
       const url=new URL(data.audio);if(url.protocol!=='https:'||url.hostname!=='download.quranicaudio.com')throw Error('Источник аудио недоступен');
-      return {url:url.href,start,end,segments,reciter:'Махмуд аль-Хусари'};
+      return {url:url.href,start,end,segments:shift?segments.map(([n,f,t])=>[n+shift,f,t]):segments,reciter:'Махмуд аль-Хусари'};
     }
     // Arabus (our downloaded dictionary): the dictionary form of a Quran word and its meanings — by lemma, then the word itself.
     if(action==='arabus'){

@@ -78,9 +78,12 @@
   document.addEventListener('pointerdown',event=>{const b=event.target.closest('button,[role="button"],a.setting-card,summary,select');if(!b||b.disabled)return;
     b.classList.remove('tap-flash');void b.offsetWidth;b.classList.add('tap-flash');setTimeout(()=>b.classList.remove('tap-flash'),460);
     try{const h=window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.HapticFeedback;if(h&&window.Telegram.WebApp.initData)h.selectionChanged();}catch(_){}},{passive:true,capture:true});
+  // владелец 29.10: «копировать нажал — лёгкое красивое уведомление появляется и исчезает». Уведомление лежало под
+  // открытым окном читалки (окно — верхний слой), поэтому его не было видно: кладём его в самое верхнее открытое окно.
   function toast(message) {
-    $('#toast').textContent = message; $('#toast').hidden = false;
-    clearTimeout(toastTimeout); toastTimeout = setTimeout(() => $('#toast').hidden = true,2900);
+    const el=$('#toast'),top=[...document.querySelectorAll('dialog[open]')].pop();(top||document.body).appendChild(el);
+    el.textContent = message; el.classList.remove('toast-out'); el.hidden = false;
+    clearTimeout(toastTimeout); toastTimeout = setTimeout(() => {el.classList.add('toast-out');toastTimeout=setTimeout(()=>{el.hidden=true;el.classList.remove('toast-out');},320);},2200);
   }
   function loading(target,title='Ищем в источниках',subtitle='Ещё немного — и можно читать') {
     target.innerHTML = `<div class="loading-state"><span class="loading-orbit"></span><p>${escape(title)}<span>${escape(subtitle)}</span></p></div><div class="skeleton-card"><span></span><i></i><i></i><i></i></div>`;
@@ -515,7 +518,12 @@
   }
   function renderLibrary() {
     const query = catalogFold(state.libraryQuery).trim();
-    const books = state.collections.filter(collection => {if (!query) return true; const title = `${collection.title || ''} ${collection.arabicTitle || ''}`, author = String(collection.author || ''); return catalogFold(state.librarySearchMode === 'author' ? author : state.librarySearchMode === 'title' ? title : `${title} ${author}`).includes(query);});
+    // раздел — как «Все разделы» в старом окне Мактабы, только своим видом (владелец 29.10: «весь каталог — старое опять высветилось»)
+    let catSel = $('#catalog-category'); if (!catSel) {catSel = document.createElement('select'); catSel.id = 'catalog-category'; catSel.className = 'catalog-search-mode catalog-category'; catSel.setAttribute('aria-label','Раздел библиотеки'); $('.catalog-search').after(catSel);
+      catSel.onchange = () => {state.libraryCategory = catSel.value; state.libraryShown = 24; renderLibrary();};}
+    if (catSel.options.length < 2 && state.categories.length) catSel.innerHTML = `<option value="">Все разделы · ${state.collections.length}</option>` + state.categories.map(c => `<option value="${escape(String(c.id))}">${escape(String(c.title).split('|')[0].trim())} · ${c.count || ''}</option>`).join('');
+    const cat = state.libraryCategory || '';
+    const books = state.collections.filter(collection => {if (cat && String(collection.category || '') !== cat) return false; if (!query) return true; const title = `${collection.title || ''} ${collection.arabicTitle || ''}`, author = String(collection.author || ''); return catalogFold(state.librarySearchMode === 'author' ? author : state.librarySearchMode === 'title' ? title : `${title} ${author}`).includes(query);});
     const favorites = books.filter(favoriteBook);
     // Favourites are a section you open (owner 29.10), not a list that always hangs above the catalog.
     $('.favorite-books-section').hidden = true;
@@ -800,7 +808,9 @@
     try {if (typeof state.api[method] !== 'function') throw new Error('Panel is unavailable'); await state.api[method](record);}
     catch (error) {toast('Раздел пока недоступен. Попробуйте позже.'); console.warn('Muslimoon panel unavailable',error);}
   }
-  $('#full-library').onclick = () => invokePanel('library');
+  // «Весь каталог книг»: родной список всех книг (state.collections — все 8589), а не старое окно Мактабы
+  $('#full-library').onclick = () => {state.libraryFavOnly = false; state.libraryQuery = ''; state.libraryCategory = ''; state.libraryShown = 24; $('#catalog-query').value = ''; renderLibrary();
+    const box = $('.catalog-search'); if (box) box.scrollIntoView({block:'start', behavior: reducedMotion.matches ? 'instant' : 'smooth'}); setTimeout(() => $('#catalog-query').focus({preventScroll:true}), 350);};
   async function invokeTool(name,record) {
     $('#assistant-notice').hidden = true;
     if(name==='bookPage'&&record?.bid&&record?.page){openNativeBook(record.bid,record.page,source(record));return;}
@@ -812,7 +822,7 @@
     if(name==='askAi'){askAssistant(record.kind==='quran'?`Аят ${record.sura}:${record.ayah}${record.title?' ('+record.title+')':''}: о чём он, коротко, и что говорят толкователи?`:`${source(record)}${record.number?' № '+record.number:''}: о чём этот хадис и насколько он достоверен?`);return;}
     if(name==='audio'){speakRecord(record);return;}
     if(name==='copy'){const text=[record.arabic,record.russian,source(record)+(record.number?' № '+record.number:'')].filter(Boolean).join('\n\n');
-      try{await navigator.clipboard.writeText(text);toast('Скопировано: оригинал, перевод и источник');}catch(_){toast('Не удалось скопировать — разрешите доступ к буферу');}return;}
+      try{await navigator.clipboard.writeText(text);toast('✓ Скопировано — оригинал, перевод и источник');}catch(_){toast('Не удалось скопировать — разрешите доступ к буферу');}return;}
     if(name==='share'){const n=String(record.number||'').replace(/\D.*$/,''),link=record.kind==='hadith'&&record.collection&&n?'https://t.me/muslimoontt_bot/app?startapp='+(record.collection==='muhaymin'?'m_'+n:'r_'+record.collection+'_'+n):'https://t.me/muslimoontt_bot/app';
       const text=source(record)+(record.number?' № '+record.number:'')+(record.russian?'\n'+cutText(record.russian,300):'');const tg=window.Telegram&&window.Telegram.WebApp;
       try{if(tg&&tg.initData&&tg.openTelegramLink)tg.openTelegramLink('https://t.me/share/url?url='+encodeURIComponent(link)+'&text='+encodeURIComponent(text));else if(navigator.share)await navigator.share({text,url:link});else{await navigator.clipboard.writeText(text+'\n'+link);toast('Ссылка скопирована');}}catch(_){}return;}
@@ -1612,16 +1622,21 @@
         root.classList.add('on');box.hidden=false;box.innerHTML='<p class="notes-hint">Открываю Арабус…</p>';const r=await loadArabus();if(current!==word)return;
         box.innerHTML=(r.entries||[]).length?`<p class="qw-arabus-head">Арабус · словарь</p>${r.entries.map(x=>`<div class="qw-entry"><b lang="ar" dir="rtl">${escape(x.ar)}</b>${x.gram?`<small lang="ar" dir="auto">${escape(x.gram)}</small>`:''}<p>${escape(x.ru)}</p></div>`).join('')}`:'<p class="notes-hint">В Арабусе статьи для этого слова нет.</p>';};
     }
+    // владелец 29.10: «предыдущий играл с караоке, переключается на следующий — чтец другой и караоке нету». При автопереходе
+    // слова включались дважды разом (mountQuranReader и start), второй вызов видел busy и отвечал false — плеер брал чтеца
+    // из настроек без подсветки. Теперь второй вызов ждёт первый.
+    let enabling=null;
     async function enable(isClickable){
-      clickable=isClickable!==false;if(enabled){text.classList.toggle('words-off',!clickable);return true;}if(busy)return false;
-      const token=state.readerToken;busy=true;
-      try{if(!data)data=await state.api.quranWordData(Number(record.sura),Number(record.ayah),record.arabic);}catch(_){busy=false;return false;}
-      busy=false;if(token!==state.readerToken||!$('#reader').open)return false;
+      clickable=isClickable!==false;if(enabled){text.classList.toggle('words-off',!clickable);return true;}
+      if(enabling)return enabling.then(ok=>{if(ok)text.classList.toggle('words-off',!clickable);return ok;});
+      const token=state.readerToken;busy=true;let release;enabling=new Promise(r=>release=r);
+      try{if(!data)data=await state.api.quranWordData(Number(record.sura),Number(record.ayah),record.arabic);}catch(_){busy=false;enabling=null;release(false);return false;}
+      busy=false;enabling=null;if(token!==state.readerToken||!$('#reader').open){release(false);return false;}
       enabled=true;text.replaceChildren();text.classList.toggle('words-off',!clickable);
       for(const item of data.tokens){if(!item.word){text.appendChild(document.createTextNode(item.text));continue;}
         const word=document.createElement('span');word.className='quran-word';word.lang='ar';word.textContent=item.text;word.setAttribute('role','button');word.tabIndex=0;
         word.onclick=()=>{if(clickable)showWord(item,word);};text.appendChild(word);}
-      return true;
+      release(true);return true;
     }
     return {enable,words:()=>Array.from(text.querySelectorAll('.quran-word')),onDisable:fn=>{onDisable=fn;},close};
   }
@@ -1650,19 +1665,34 @@
   const suraDialog=document.createElement('dialog');suraDialog.className='native-assistant-dialog sura-dialog';
   suraDialog.innerHTML=`<div class="native-assistant-shell"><header class="native-assistant-head"><span class="book-seal">${icon('quran')}</span><h2>Сура</h2><button type="button" class="native-assistant-close sura-close" aria-label="Закрыть">×</button></header><div class="notes-body sura-body"></div></div>`;
   document.body.appendChild(suraDialog);suraDialog.querySelector('.sura-close').onclick=()=>suraDialog.close();
+  let suraAudio=null,suraGen=0,suraStopUi=()=>{};
+  function suraStop(){suraGen++;if(suraAudio){suraAudio.pause();suraAudio.removeAttribute('src');suraAudio=null;}suraStopUi();}
+  const arDigits=n=>String(n).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
+  suraDialog.addEventListener('close',()=>suraStop());
   async function openSuraList(sura,ayah){
     const body=suraDialog.querySelector('.sura-body');body.innerHTML='<div class="native-chat-pending"><span class="think-dots"><i></i><i></i><i></i></span><span class="think-text">Открываю суру</span></div>';if(!suraDialog.open)suraDialog.showModal();
     let r=null;try{r=await state.api.suraVerses(sura);}catch(_){body.innerHTML='<p class="notes-hint">Суру сейчас не удалось открыть.</p>';return;}
     suraDialog.querySelector('h2').textContent=`Сура ${r.sura} · ${r.name}`;const showTr=quranOpts().translation;
     body.innerHTML=`<div class="sura-nav">${r.sura>1?`<button type="button" data-sura-go="${r.sura-1}">‹ Сура ${r.sura-1}</button>`:'<span></span>'}${r.sura<114?`<button type="button" data-sura-go="${r.sura+1}">Сура ${r.sura+1} ›</button>`:''}</div>`
-      +r.verses.map(v=>`<article class="sura-ayah${v.a===ayah?' current':''}" data-sura-ayah="${v.a}"><p class="sura-ar" lang="ar" dir="rtl">${escape(v.text)} <span class="sura-num">﴿${v.a}﴾</span></p>${showTr&&v.ru?`<p class="sura-ru">${v.a}. ${escape(v.ru)}</p>`:''}</article>`).join('');
+      +r.verses.map(v=>`<article class="sura-ayah${v.a===ayah?' current':''}" data-sura-ayah="${v.a}"><p class="sura-ar" lang="ar" dir="rtl"><span class="sura-num">﴿${arDigits(v.a)}﴾</span> ${escape(v.text)}</p>${showTr&&v.ru?`<p class="sura-ru">${v.a}. ${escape(v.ru)}</p>`:''}</article>`).join('');
     const cur=body.querySelector('.sura-ayah.current');if(cur)cur.scrollIntoView({block:'center'});else body.scrollTop=0;
+    // ▶ в окне суры (владелец 29.10): тихая круглая кнопка в углу; читает с текущего аята дальше, читаемый аят подсвечен
+    suraStop();let sp=suraDialog.querySelector('.sura-play');if(!sp){sp=document.createElement('button');sp.type='button';sp.className='sura-play';suraDialog.querySelector('.native-assistant-shell').appendChild(sp);}
+    const spIcon=on=>{sp.innerHTML=on?'<svg class="icon" aria-hidden="true"><path d="M8 5.5h3v13H8zM13 5.5h3v13h-3z" fill="currentColor"/></svg>':icon('play');sp.setAttribute('aria-label',on?'Пауза':'Слушать суру');sp.classList.toggle('playing',!!on);};spIcon(false);
+    const playFrom=async i=>{const v=r.verses[i];if(!v){suraStop();return;}const gen=++suraGen;
+      body.querySelectorAll('.sura-ayah.playing').forEach(x=>x.classList.remove('playing'));const art=body.querySelector(`[data-sura-ayah="${v.a}"]`);if(art){art.classList.add('playing');art.scrollIntoView({block:'center',behavior:reducedMotion.matches?'instant':'smooth'});}
+      let info=null;try{info=await state.api.quranAudioInfo(r.sura,v.a,quranOpts().highlight?'Husary_128kbps':'');}catch(_){toast('Аудио аята не загрузилось');suraStop();return;}if(gen!==suraGen)return;
+      suraAudio=new Audio(info.url);suraAudio.onended=()=>{if(gen===suraGen)playFrom(i+1);};suraAudio.onerror=()=>{if(gen===suraGen){toast('Аудио недоступно');suraStop();}};
+      try{await suraAudio.play();spIcon(true);}catch(_){suraStop();}};
+    sp.onclick=()=>{if(suraAudio&&!suraAudio.paused){suraAudio.pause();spIcon(false);return;}if(suraAudio&&suraAudio.paused&&suraAudio.currentTime>0){suraAudio.play().then(()=>spIcon(true)).catch(()=>{});return;}
+      const curA=body.querySelector('.sura-ayah.current'),i=curA?Math.max(0,r.verses.findIndex(v=>v.a===+curA.dataset.suraAyah)):0;playFrom(i);};
+    suraStopUi=()=>{spIcon(false);body.querySelectorAll('.sura-ayah.playing').forEach(x=>x.classList.remove('playing'));};
     body.onclick=async e=>{const go=e.target.closest('[data-sura-go]');if(go){openSuraList(+go.dataset.suraGo,0);return;}
-      const art=e.target.closest('[data-sura-ayah]');if(!art)return;try{const v=await state.api.quranVerse(r.sura,+art.dataset.suraAyah);suraDialog.close();openReader(v);}catch(_){toast('Аят не открылся');}};
+      const art=e.target.closest('[data-sura-ayah]');if(!art)return;suraStop();try{const v=await state.api.quranVerse(r.sura,+art.dataset.suraAyah);suraDialog.close();openReader(v);}catch(_){toast('Аят не открылся');}};
   }
   // Тафсир аята — inside the reader, under the translation
   async function openTafsir(record,key,lang){
-    const body=$('#reader-body');let box=$('.q-tafsir',body);if(!box){box=document.createElement('section');box.className='q-tafsir';$('#reader-translation',body).after(box);}
+    const body=$('#reader-body');let box=$('.q-tafsir',body);if(!box){box=document.createElement('section');box.className='q-tafsir';($('.q-return',body)||$('.q-status',body)||$('.reader-actions',body)||$('#reader-translation',body)).after(box);}
     box.innerHTML='<div class="native-chat-pending"><span class="think-dots"><i></i><i></i><i></i></span><span class="think-text">Загружаю тафсир</span></div>';box.scrollIntoView({block:'start',behavior:reducedMotion.matches?'instant':'smooth'});
     const token=state.readerToken;let r=null;try{r=await state.api.tafsir(record.sura,record.ayah,key||'',lang||'ru');}catch(error){if(token===state.readerToken)box.innerHTML=`<p class="notes-hint">${escape(String(error?.message||'Тафсир сейчас не загрузился'))}</p>`;return;}
     if(token!==state.readerToken)return;
@@ -1689,7 +1719,7 @@
     // the row under the ayah: ▶ (prominent), copy, share, ✦ ask AI, ⋯
     const bar=document.createElement('div');bar.className='reader-actions quran-actions';
     bar.innerHTML=`<button type="button" class="q-play" aria-label="Слушать аят">${icon('play')}</button><button type="button" data-act="copy" aria-label="Копировать">${icon('copy')}</button><button type="button" data-act="share" aria-label="Поделиться">${icon('share')}</button><button type="button" data-act="ai" class="q-ai" aria-label="Спросить ИИ об аяте">${icon('spark')}<span>Спросить ИИ</span></button><button type="button" data-act="more" aria-label="Все инструменты" aria-expanded="false">${icon('more')}</button>`;
-    $('.arabic-part',body).after(bar);const status=document.createElement('p');status.className='q-status';bar.after(status);
+    ($('#reader-translation',body)||$('.arabic-part',body)).after(bar);const status=document.createElement('p');   // в конце текстового блокаstatus.className='q-status';bar.after(status);
     if(quranReturn&&(quranReturn.sura!==s||quranReturn.ayah!==a)){const back=document.createElement('button');back.type='button';back.className='q-return';back.textContent=`↩ Вернуться к аяту ${quranReturn.sura}:${quranReturn.ayah}`;status.after(back);
       back.onclick=async()=>{stopReaderAudio();const r=quranReturn;quranReturn=null;try{openReader(await state.api.quranVerse(r.sura,r.ayah),{fromHistory:true});}catch(_){}};}
     bar.onclick=e=>{const b=e.target.closest('[data-act]');if(!b)return;const act=b.dataset.act;
@@ -1713,7 +1743,8 @@
       stop();const id=++generation,cur=quranOpts();setBtn('playing');status.textContent='Готовлю аудио…';
       try{let info=null,hl=false;
         if(cur.highlight&&await words.enable(cur.words)){try{info=await state.api.quranTimedAudio(s,a,words.words().length);hl=true;}catch(_){info=null;}}
-        if(!info)info=await state.api.quranAudioInfo(s,a);if(id!==generation)return;
+        // с подсветкой читает аль-Хусари; где для аята нет разметки времени — тот же аль-Хусари, только без подсветки
+        if(!info)info=await state.api.quranAudioInfo(s,a,cur.highlight?'Husary_128kbps':'');if(id!==generation)return;
         const player=new Audio();audio=player;player.preload='auto';player.src=info.url;
         player.addEventListener('error',()=>{if(id===generation)stop('Аудио недоступно — проверьте соединение.');});
         player.addEventListener('ended',()=>finish(id));
@@ -1722,7 +1753,7 @@
           player.addEventListener('timeupdate',()=>{if(id!==generation)return;const now=player.currentTime*1000;if(now>=info.end){finish(id);return;}
             const seg=info.segments.find(([,f,t])=>now>=f&&now<t),idx=seg?seg[0]-1:-1;words.words().forEach((w,i)=>w.classList.toggle('audio-current',i===idx));});}
         await player.play();if(id!==generation)return;
-        status.dataset.playing=`${info.reciter}${hl?' · подсветка слов':''}${info.fallback?' · запасной чтец для этой суры':''}`;status.textContent=status.dataset.playing;
+        status.dataset.playing=`${info.reciter}${hl?' · подсветка слов':cur.highlight?' · для этого аята подсветки нет':''}${info.fallback?' · запасной чтец для этой суры':''}`;status.textContent=status.dataset.playing;
       }catch(error){if(id===generation)stop(String(error?.message||'Не удалось воспроизвести')+'.');}
     }
     play.onclick=start;
@@ -1796,7 +1827,7 @@
   function renderReader(record,options={}) {
     const russian = String(record.russian || '').trim(), title = String(record.title || '').trim(), bookSource = record.kind==='quran'&&title?title:source(record), number = record.kind==='quran'&&record.ayah?'аят '+record.ayah:recordNumber(record);
     const distinctTitle = title && fold(title) !== fold(bookSource).trim();
-    $('#reader-body').setAttribute('aria-busy','false');
+    $('#reader-body').setAttribute('aria-busy','false');$('#reader-body').classList.toggle('is-quran',record.kind==='quran');
     $('#reader-body').innerHTML = `<div class="reader-source"><span class="book-seal">${icon(record.kind === 'quran' ? 'quran' : 'book')}</span>${sourceLine(bookSource,record.kind==='quran'?'':arabicTitleOf(record),number,'reader-source-text')}</div>${record.kind==='hadith'&&!record.isExcerpt&&record.collection?`<div class="reader-modes" role="group" aria-label="Как читать"><button type="button" class="reader-mode active" aria-pressed="true">Хадис</button><button type="button" class="reader-mode" id="reader-open-page" aria-pressed="false">Читать в книге</button><button type="button" class="text-button reader-about" id="reader-about">О книге</button></div>`:''}<h1 id="reader-title"${distinctTitle ? '' : ' class="visually-hidden"'}>${escape(distinctTitle ? title : `${bookSource}${number ? ' · '+number : ''}`)}</h1><div class="reader-translation-control"><button type="button" id="translation-toggle" class="translation-toggle active" aria-pressed="true" aria-controls="reader-translation">Перевод${icon('check')}</button></div><div class="arabic-part">${readerArabic(record)}</div>${record.kind==='hadith'?`<div class="reader-actions" role="toolbar" aria-label="Действия с хадисом"><button type="button" data-act="audio" aria-label="Озвучить">${icon('play')}</button><button type="button" data-act="copy" aria-label="Копировать">${icon('copy')}</button><button type="button" data-act="share" aria-label="Поделиться">${icon('share')}</button><button type="button" data-act="more" aria-label="Все инструменты" aria-expanded="false">${icon('more')}</button></div><div class="reader-takhrij" hidden></div>`:''}<div class="translation-part" id="reader-translation"><div class="reader-divider"></div><p class="reader-language">РУССКИЙ ПЕРЕВОД</p>${russian ? `<div class="reader-russian">${textWithNotes(russian,record)}</div>` : record.russianAi ? `<div class="reader-ai-tr"><p class="nb-tr-label">Перевод ИИ — черновой, сверяйте с оригиналом</p><div class="reader-russian">${escape(allahName(record.russianAi))}</div><button type="button" class="ai-tr-again">Перевести заново</button></div>` : (record.kind==='hadith'&&record.arabic?'<div class="reader-ai-tr"><p class="reader-missing">Готового русского перевода для этого хадиса у нас нет.</p><button type="button" class="ai-tr-button">Перевести ИИ</button></div>':'<p class="reader-missing">Русский перевод для этой записи пока недоступен.</p>')}</div><aside id="reader-note" class="reader-footnote-preview" hidden aria-live="polite"></aside><div class="reader-tool-actions"><button type="button" class="reader-chain">${icon('grid')}<span>Конструктор передач<small>Исследовать цепочку передатчиков</small></span>${icon('arrow')}</button><button type="button" class="reader-scientific">${icon('source')}<span>Сравнить версии<small>Открыть инструменты исследования источника</small></span>${icon('arrow')}</button></div>`;
     // «Страница в книге»: the same hadith inside its printed page — chapters, neighbours, the author's words, untouched.
     if ($('#reader-open-page')) $('#reader-open-page').onclick = async () => {
@@ -1825,7 +1856,7 @@
     }else if(record.kind==='hadith'&&record.arabic&&!(Array.isArray(record.parts)&&record.parts.length)){
       $('#reader-body').insertAdjacentHTML('afterbegin','<p class="reader-missing">Разделение цепочки передатчиков и текста хадиса для этой записи пока не подтверждено.</p>');
     }
-    const readerTools = record.kind==='quran'?[{id:'tafsir',title:'Тафсир',icon:'book'},{id:'askAi',title:'Спросить ИИ об аяте',icon:'helper'},{id:'notes',title:'Мои заметки',icon:'pen'},{id:'copy',title:'Копировать',icon:'source'},{id:'share',title:'Поделиться',icon:'arrow'}]:record.kind==='book'?[...(record.page?[{id:'bookPage',title:'Открыть страницу книги',icon:'book'}]:[]),{id:'explain',title:'Пояснение',icon:'helper'},{id:'notes',title:'Мои заметки',icon:'pen'}]:[{id:'narrators',title:'Передатчики',icon:'book'},{id:'takhrij',title:'Где ещё передаётся',icon:'source'},{id:'explain',title:'Пояснение',icon:'helper'},{id:'audio',title:'Озвучить',icon:'audio'},{id:'notes',title:'Мои заметки',icon:'pen'},{id:'copy',title:'Копировать',icon:'source'},{id:'share',title:'Поделиться',icon:'arrow'},{id:'tashkeel',title:'Без огласовок',icon:'info'},...(SUNNAH_COM[record.collection]?[{id:'source',title:'На sunnah.com',icon:'source'}]:[])];
+    const readerTools = record.kind==='quran'?[{id:'tafsir',title:'Тафсир',icon:'book'},{id:'notes',title:'Мои заметки',icon:'pen'}]:record.kind==='book'?[...(record.page?[{id:'bookPage',title:'Открыть страницу книги',icon:'book'}]:[]),{id:'explain',title:'Пояснение',icon:'helper'},{id:'notes',title:'Мои заметки',icon:'pen'}]:[{id:'narrators',title:'Передатчики',icon:'book'},{id:'takhrij',title:'Где ещё передаётся',icon:'source'},{id:'explain',title:'Пояснение',icon:'helper'},{id:'notes',title:'Мои заметки',icon:'pen'},{id:'tashkeel',title:'Без огласовок',icon:'info'},...(SUNNAH_COM[record.collection]?[{id:'source',title:'На sunnah.com',icon:'source'}]:[])];
     $('.reader-tool-actions').innerHTML = `<details class="reader-tools-disclosure"${record.kind==='book'?' open':''}><summary>Инструменты <span>${readerTools.length}</span></summary><div class="reader-tools-grid">${readerTools.map(tool => `<button type="button" data-reader-tool="${tool.id}">${icon(tool.icon)}<span>${tool.title}</span>${icon('arrow')}</button>`).join('')}</div>${record.kind==='book'?'<p>Для этого отрывка доступны перечисленные инструменты. Остальные функции требуют полного текста и проверки источника.</p>':''}</details>`;
     $$('[data-reader-tool]').forEach(button => button.onclick = () => {if (!NATIVE_TOOLS.has(button.dataset.readerTool)) $('#reader').close(); invokeTool(button.dataset.readerTool,record);});
     if(record.kind==='hadith'&&record.arabic){const box=$('.reader-flow .flow-isnad',$('#reader-body'))||$('.reader-flow',$('#reader-body'))||$('.reader-arabic',$('#reader-body'));if(box)linkIsnadNames(box,record,state.readerToken);}
@@ -1842,6 +1873,8 @@
       const nb=$('.num-badge',src);if(nb&&$('#reader-open-page')){nb.classList.add('src-link');nb.setAttribute('role','button');nb.tabIndex=0;nb.title='Открыть этот хадис в книге';nb.onclick=()=>$('#reader-open-page').click();}}
     $$('.edition-grade',body).forEach(p=>{if(!p.querySelector('.src-q'))p.insertAdjacentHTML('beforeend','<button type="button" class="src-q" data-help="grade" aria-label="Что это за оценка">?</button>');});
     const bar=$('.reader-actions',body);
+    // владелец 29.10: «кнопки — как в нейросетях, в конце текстового блока; между оригиналом и переводом ничего»
+    {const tr=$('#reader-translation',body),tk=$('.reader-takhrij',body);if(tr&&bar){tr.after(bar);if(tk)bar.after(tk);}}
     if(bar)bar.onclick=e=>{const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
       if(a==='more'){const d=$('.reader-tools-disclosure',body);if(!d)return;d.open=!d.open;b.setAttribute('aria-expanded',String(d.open));if(d.open)d.scrollIntoView({block:'nearest',behavior:reducedMotion.matches?'instant':'smooth'});return;}
       invokeTool(a==='audio'?'audio':a,record);};

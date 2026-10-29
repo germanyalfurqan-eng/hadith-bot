@@ -6,7 +6,7 @@
   const readiness=new Promise((resolve,reject)=>{resolveReady=resolve;rejectReady=reject;});
   const frame=document.createElement('iframe');
   frame.title='Научные инструменты Muslimoon';
-  frame.src='core.html?v=20261029210456&design='+encodeURIComponent(document.documentElement.dataset.theme||'gold')+(location.hash||'');
+  frame.src='core.html?v=20261029211856&design='+encodeURIComponent(document.documentElement.dataset.theme||'gold')+(location.hash||'');
   frame.style.cssText='width:100%;height:100%;border:0;display:block;background:#111';
   const shell=document.createElement('section');
   shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Научные инструменты');
@@ -48,7 +48,7 @@
     leafByHadith:(bid,number)=>ask('leafByHadith',{bid,number}),
     lastLeaf:(bid,from)=>ask('lastLeaf',{bid,from}),
     quranWordData:(sura,ayah,text)=>ask('quranWordData',{sura,ayah,text}),
-    quranAudioInfo:(sura,ayah)=>ask('quranAudioInfo',{sura,ayah}),
+    quranAudioInfo:(sura,ayah,reciter)=>ask('quranAudioInfo',{sura,ayah,reciter}),
     quranTimedAudio:(sura,ayah,wordCount)=>ask('quranTimedAudio',{sura,ayah,wordCount}),
     quranVerse:(sura,ayah)=>ask('quranVerse',{sura,ayah}),
     quranNeighbor:(sura,ayah,direction)=>ask('quranNeighbor',{sura,ayah,direction}),
