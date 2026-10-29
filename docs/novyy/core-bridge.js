@@ -36,8 +36,11 @@
       for(const id of r.seq){if(typeof id!=='number')continue;cnt++;let c=null;try{c=await _narrCard(id);}catch(e){}
         const w=fold(c&&c[1]).split(/\s+/).filter(t=>t.length>2&&!STOP.has(t));if(T&&w.length&&w.slice(0,2).some(t=>T.includes(t)))hit++;}
       const score=T?hit*2-(cnt-hit):cnt;
-      if(score>bestScore){bestScore=score;best=Object.assign({bid:b},r);}
+      if(score>bestScore){bestScore=score;best=Object.assign({bid:b,ratio:cnt?hit/cnt:0},r);}
     }
+    // Заслон: у Муслима нумерация базы цепей не наша — на 50 случайных хадисах с текстом сошлось 11% имён (цепи от других
+    // хадисов). Цепь, где с иснадом сходится меньше половины имён, не показываем: лучше имена из самого текста, чем чужая цепь.
+    if(best&&T&&best.ratio<0.5)return null;
     return best;
   }
   async function quranWordData(sura,ayah,displayedText){
@@ -48,12 +51,17 @@
     const [roots,translations]=await quranWordAssets;
     const tokens=String(verse.text).split(/(\s+)/).filter(Boolean),words=tokens.filter(t=>/[ء-ي]/.test(t));
     const gloss=translations[`${sura}:${ayah}`],aligned=Array.isArray(gloss)&&gloss.length===words.length;
-    const lemmas=await modelFile('quran_lemmas_ru.json'),pl=t=>String(t||'').replace(/[\u064B-\u065F\u0670\u0640]/g,'').trim();
-    let index=0;return {sura,ayah,aligned,tokens:tokens.map(token=>{
+    const lemmas=await modelFile('quran_lemmas_ru.json'),lemmas2=await modelFile('quran_lemmas_v2.json'),pl=t=>String(t||'').replace(/[\u064B-\u065F\u0670\u0640]/g,'').trim();
+    // Разметка по МЕСТУ слова (Quranic Arabic Corpus, data/morph/<сура>.json): корень, огласованная лемма, падеж — свои у
+    // каждого слова аята. Прежняя (quran_roots.json) была по написанию — одна на весь Коран, отсюда «ٱللَّهُ» в 2:255
+    // «родительный» и «سِنَةٌ» — «год». Нет аята в разметке или не сошлось число слов — берём прежнюю.
+    let place=null;try{const m=await modelFile('morph/'+sura+'.json');const rows=m&&m[String(ayah)];if(Array.isArray(rows)&&rows.length===words.length)place=rows;}catch(e){}
+    let index=0;return {sura,ayah,aligned,byPlace:!!place,tokens:tokens.map(token=>{
       if(!/[ء-ي]/.test(token))return {text:token};
-      const e=roots.f?.[rootKey(token)],root=Array.isArray(e)&&e[0]?String(e[0]):'';
+      const p=place?place[index]:null,e=p?[p[0],p[1],p[2]]:roots.f?.[rootKey(token)],root=Array.isArray(e)&&e[0]?String(e[0]):'';
       const refs=root&&Array.isArray(roots.r?.[root])?roots.r[root]:[];
-      return {text:token,word:true,index:index++,translation:aligned?String(gloss[index-1]||''):'',root,lemma:Array.isArray(e)&&e[1]?String(e[1]):'',lemmaInfo:Array.isArray(e)&&e[1]&&lemmas[pl(e[1])]?lemmas[pl(e[1])]:null,tag:Array.isArray(e)&&e[2]?String(e[2]):'',grammar:Array.isArray(e)&&e[2]?gramRu(String(e[2])):'',references:refs,referenceCount:refs.length};
+      const lemma=Array.isArray(e)&&e[1]?String(e[1]):'',info=lemma?(lemmas2[lemma]||(p?null:lemmas[pl(lemma)])||null):null;
+      return {text:token,word:true,index:index++,place:!!p,translation:aligned?String(gloss[index-1]||''):'',root,lemma,lemmaInfo:info,tag:Array.isArray(e)&&e[2]?String(e[2]):'',grammar:Array.isArray(e)&&e[2]?gramRu(String(e[2])):'',parts:p&&Array.isArray(p[3])?p[3].map(x=>({text:String(x[0]),tag:String(x[1]),grammar:gramRu(String(x[1]))})):[],references:refs,referenceCount:refs.length};
     })};
   }
   let catalogPromise=null,fullCatalog=null;
