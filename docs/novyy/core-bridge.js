@@ -383,6 +383,20 @@
       try{await loadReverse();const mu=reverse&&(reverse[code+' '+num]||reverse[code+' '+toAr(String(num))]);if(mu&&mu.length)blocks.push({kind:'muhaymin',title:'В аль-Мухаймин (Муршид ибн Юсуф)',nums:[...new Set(mu.map(x=>String(x.m)))],source:'по метке источника у автора'});}catch(e){}
       return {blocks};
     }
+    // Вся Мактаба (≈8000 книг) — тот же /maktaba прежнего вида, без выбора книги; страницы книг как карточки нового вида.
+    if(action==='maktabaSearch'){
+      const q=String(args.query||'').trim().slice(0,300);if(!q)return {items:[],total:0,page:1};
+      const page=Math.max(1,Math.min(50,+args.page||1));
+      const r=await fetch(BACKEND_URL+'/maktaba?q='+encodeURIComponent(q)+'&page='+page+'&initData='+encodeURIComponent(INITDATA));
+      if(r.status===429)throw Error('Слишком часто — повторите через минуту');
+      if(r.status===403)throw Error('Поиск по всей библиотеке пока не открыт');
+      const j=await r.json().catch(()=>({})),data=(j&&j.data)||[];
+      const items=data.slice(0,40).map(x=>{const bid=String(x.book_id),pid=x.page_id||x.page||1,snip=typeof _cleanMaktabaSnip==='function'?_cleanMaktabaSnip(x.snip||''):String(x.snip||'');
+        const row={id:'b:'+bid+':'+pid,kind:'book',bid,page:pid,collection:'book:'+bid,title:x.book_name||('Книга № '+bid),bookTitle:x.book_name||('Книга № '+bid),
+          number:(x.vol?'т. '+x.vol+' · ':'')+(x.page!=null?'стр. '+x.page:''),arabic:cleanText(snip),russian:'',author:x.author||''};
+        records.set(row.id,{original:x,row});return row;});
+      return {items,total:Number(j&&j.count)||items.length,page};
+    }
     // Оглавление книги (جدول المحتويات) — тот же /book_toc, что у прежнего вида: [{t: глава, l: уровень, p: лист}].
     if(action==='bookToc'){
       const bid=String(args.bid||'');if(!/^\d+$/.test(bid))throw Error('Некорректный номер книги');
@@ -391,8 +405,8 @@
     }
     // Перевод ИИ там, где своего перевода нет — /translate прежнего вида (кэш на сервере, повтор бесплатен).
     if(action==='translate'){
-      const text=String(args.text||'').trim().slice(0,1500);if(!text)throw Error('Нечего переводить');
-      const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,source:String(args.source||'maktaba'),num:String(args.num||''),initData:INITDATA})});
+      const text=String(args.text||'').trim().slice(0,12000);if(!text)throw Error('Нечего переводить');   // the server takes a whole hadith (up to 12 000)
+      const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,source:String(args.source||'maktaba'),num:String(args.num||''),force:!!args.force,initData:INITDATA})});
       const j=await r.json().catch(()=>({}));const tr=j&&(j.translation||j.ru);
       if(!r.ok||!tr)throw Error((j&&j.message)||(r.status===429?'Лимит переводов исчерпан. Попробуйте позже.':'Перевод сейчас недоступен'));
       return {translation:String(tr),cached:!!j.cached};
@@ -541,7 +555,7 @@
       }
       return await narrEnrich(items,'names',text);
     }
-    if(action==='suraInfo'){return {names:(typeof SURA_RU!=='undefined'?SURA_RU.slice(1):[]),ayahs:(typeof SURA_AYAHS!=='undefined'?SURA_AYAHS.slice():[])};}
+    if(action==='suraInfo'){return {names:(typeof SURA_RU!=='undefined'?SURA_RU.slice(1):[]),ayahs:(typeof SURA_AYAHS!=='undefined'?SURA_AYAHS.slice():[]),meanings:(typeof SURA_MEANING!=='undefined'?SURA_MEANING.slice(1):[]),arabic:(typeof SURA_NAMES!=='undefined'?SURA_NAMES.slice():[])};}
     if(action==='hermesAsk'){
       const question=String(args.question||'').trim();if(!question)throw Error('Введите вопрос');
       const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),150000);
@@ -589,6 +603,9 @@
       // Считаем тем же, чем ragSearch: книга и векторы из _ragLoad, вектор вопроса с сервера, та же планка порога.
       if(mode==='rag'&&wanted==='hadith'){
         if(typeof _ragLoad!=='function'||typeof _RAG==='undefined')return {items:[],total:0,notice:'Поиск по смыслу в этой версии недоступен.'};
+        // the meaning index holds only Sahih al-Bukhari so far: «без: Бухари» or other books chosen → say so, not search it anyway
+        const sc=Array.isArray(args.scope)?args.scope:[],bukOut=sc.some(x=>x.kind==='book'&&String(x.id)==='bukhari'&&x.exclude),inc=sc.filter(x=>!x.exclude);
+        if(bukOut||(inc.length&&!inc.some(x=>x.kind==='book'&&String(x.id)==='bukhari')))return {items:[],total:0,notice:'По смыслу (RAG) пока ищем только в «Сахих аль-Бухари» — а он в ваших условиях '+(bukOut?'исключён':'не выбран')+'. База по смыслу для других книг строится. Сейчас — обычный поиск или уберите «без: Бухари».'};
         if(!await _ragLoad())return {items:[],total:0,notice:'Не удалось загрузить книгу для поиска по смыслу. Попробуйте ещё раз.'};
         const qv=await _ragQueryVec(query);
         if(!qv){const j=_RAG.ответ;return {items:[],total:0,notice:j&&j['сообщение']?String(j['сообщение']).slice(0,300):j&&j['квота_выбита']?'Запросы по смыслу на сегодня исчерпаны — это лимит, а не поломка. Обычный поиск работает.':'Сервер поиска по смыслу сейчас не ответил. Обычный поиск работает.'};}
@@ -784,10 +801,14 @@
     }
     throw Error('Неизвестное действие');
   }
+  const SERIAL_ONLY=new Set(['ready','search','browse','scientific','library','tool','toolsCatalog','openOriginalTool','showOriginalHome','numberMore','assistantAsk','catalog']);
   window.addEventListener('message',event=>{
     if(event.origin!==location.origin||event.source!==parent||event.data?.source!=='muslimoon-design-ui')return;
     const {id,action,args}=event.data;
-    if(typeof id!=='string'||!['ready','suraInfo','narrators','bookToc','translate','takhrij','narrCands','chainFind','narrCard','isnadLinks','catalog','bookInfo','bookPageData','locateLeaf','bookMeta','leafByHadith','lastLeaf','hermesAsk','quranWordData','quranAudioInfo','quranTimedAudio','quranVerse','quranNeighbor','search','read','browse','scientific','library','tool','toolsCatalog','openOriginalTool','showOriginalHome','numberMore','assistantAsk'].includes(action))return;
+    if(typeof id!=='string'||!['ready','suraInfo','narrators','bookToc','translate','takhrij','narrCands','chainFind','narrCard','isnadLinks','maktabaSearch','catalog','bookInfo','bookPageData','locateLeaf','bookMeta','leafByHadith','lastLeaf','hermesAsk','quranWordData','quranAudioInfo','quranTimedAudio','quranVerse','quranNeighbor','search','read','browse','scientific','library','tool','toolsCatalog','openOriginalTool','showOriginalHome','numberMore','assistantAsk'].includes(action))return;
+    // Only the actions that drive the old screen (search, browse, its tools) must wait their turn; data-only requests run
+    // at once (owner 29.10: «очень долго грузится») — the hadith search no longer waits for the library, cards for each other.
+    if(!SERIAL_ONLY.has(action)){request(action,args||{}).then(payload=>send(id,payload)).catch(e=>send(id,null,String(e&&e.message||e)));return;}
     serial=serial.then(()=>request(action,args||{})).then(payload=>send(id,payload)).catch(e=>send(id,null,String(e&&e.message||e)));
   });
   let attempts=0;
@@ -808,4 +829,16 @@
   try{window.openLink=function(u){const url=String(u||'');if(!url)return;if(external(url))handOver(url);};}catch(_){}
   const nativeOpen=window.open;window.open=function(u){if(u&&external(u)){handOver(u);return null;}return nativeOpen.apply(window,arguments);};
   document.addEventListener('click',event=>{const a=event.target.closest&&event.target.closest('a[href]');if(!a||!external(a.href))return;event.preventDefault();event.stopPropagation();handOver(a.href);},true);
+})();
+
+// Прогрев (владелец 29.10: «очень долго грузится — загрузка должна быть моментальной»): первый поиск качал целиком семь
+// сборников и шёл ~6 с. Тянем их заранее, по одному, когда первый экран уже нарисован; прежний вид сам кладёт их в
+// кэш браузера, так что при следующем открытии это мгновенно.
+(function(){
+  if(window.top===window||typeof loadCollection!=='function')return;
+  // every book the search reads (READABLE), the six first
+  const first=['bukhari','muslim','abudawud','tirmidhi','nasai','ibnmajah','malik'],all=(typeof READABLE!=='undefined'?READABLE.map(x=>String(x.code)):[]);
+  const codes=[...first,...all.filter(c=>!first.includes(c))];
+  const idle=fn=>(window.requestIdleCallback?requestIdleCallback(fn,{timeout:4000}):setTimeout(fn,300));
+  setTimeout(()=>{let i=0;const next=()=>{if(i>=codes.length)return;const c=codes[i++];Promise.resolve().then(()=>loadCollection(c)).catch(()=>{}).finally(()=>idle(next));};idle(next);},2500);
 })();
