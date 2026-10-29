@@ -21,7 +21,7 @@
   const sameRecord = (a,b) => `${a.kind || ''}:${a.collection || ''}:${a.id}` === `${b.kind || ''}:${b.collection || ''}:${b.id}`;
   const isSaved = record => state.bookmarks.some(x => sameRecord(x,record));
   const source = record => record.kind === 'quran' ? 'Коран' : record.bookTitle || state.collections.find(c => String(c.id) === String(record.collection))?.title || record.collection || 'Хадис';
-  const recordNumber = record => record.kind === 'quran' && record.sura && record.ayah ? `Сура ${record.sura}, аят ${record.ayah}` : record.number != null && String(record.number) !== '' ? `№ ${record.number}` : '';
+  const recordNumber = record => record.kind === 'quran' && record.sura && record.ayah ? `Сура ${record.sura}, аят ${record.ayah}` : record.number != null && String(record.number) !== '' ? (/^(т\.|стр\.)/.test(String(record.number)) ? String(record.number) : `№ ${record.number}`) : '';
   const fold = text => String(text).toLocaleLowerCase('ru').replace(/ё/g,'е');
   const noNoteMarkers = text => String(text || '').replace(/\[\s*[0-9٠-٩۰-۹]+\s*\]/g,'').replace(/\s+/g,' ').trim();
   function excerpt(text) {
@@ -235,7 +235,7 @@
   $('#font-up').onclick = () => {state.font = Math.min(2,state.font + 1); applyFont();}; applyFont();
   $$('[data-theme-option]').forEach(a => a.classList.toggle('active',a.dataset.themeOption === document.documentElement.dataset.theme));
   // «Настроить поиск» → under the field a row of modes, one tap each (owner 29.10); the detailed panel stays below.
-  const MODE_CHIPS = [['normal','По словам'],['diac','С огласовками'],['root','По корню'],['matnonly','Только матн'],['rag','RAG'],['narr','Передатчик'],['ai','✦ По смыслу · ИИ']];
+  const MODE_CHIPS = [['normal','По словам'],['diac','С огласовками'],['root','По корню'],['matnonly','Только матн'],['narr','Передатчик'],['ctor','Цепь'],['rag','RAG'],['ai','✦ По смыслу · ИИ']];
   const modeChips = document.createElement('div'); modeChips.className = 'mode-chips'; modeChips.setAttribute('role','group'); modeChips.setAttribute('aria-label','Как искать'); modeChips.hidden = true;
   modeChips.innerHTML = MODE_CHIPS.map(([id,label]) => `<button type="button" class="mode-chip" data-mode-chip="${id}" aria-pressed="false">${label}</button>`).join('');
   $('.search-options').after(modeChips);
@@ -267,11 +267,7 @@
   aiQuick.innerHTML = icon('spark') + '<span>Спросить ИИ</span>';
   const optionRow = document.createElement('div'); optionRow.className = 'search-option-row'; $('#refine-toggle').before(optionRow); optionRow.append($('#refine-toggle'),aiQuick);
   aiQuick.onclick = () => {setAiMode(!state.aiMode); $('#query').focus();};
-  // The chain constructor lives in «Настроить поиск» (owner #4330): a tool for specialists, next to the search modes.
-  const ctorButton = document.createElement('button'); ctorButton.type = 'button'; ctorButton.className = 'refine-ctor';
-  ctorButton.innerHTML = `${icon('grid')}<span><strong>Конструктор цепей передатчиков</strong><small>собрать иснад и найти хадисы с ним · в прежнем оформлении — переносим</small></span>${icon('arrow')}`;
-  const refineHead = $('#refine-panel')?.firstElementChild; if (refineHead) refineHead.after(ctorButton); else $('.apply-button').before(ctorButton);
-  ctorButton.onclick = () => invokeTool('chain',null);
+  // The chain constructor is the «Цепь» mode chip (owner П-46): no separate card in the settings.
   function askAssistant(text) {openNativeAssistant(); const question = String(text || '').trim(); if (question) {assistantInput.value = question; $('#native-assistant-form').requestSubmit();}}
   $('#refine-toggle').onclick = () => {const opened = $('#refine-panel').hidden; $('#refine-panel').hidden = !opened; modeChips.hidden = !opened || state.section === 'quran'; syncModeChips(); $('#refine-toggle').setAttribute('aria-expanded',String(opened));};
   const modeHelp = {normal:'Введите слово или фразу на русском или арабском.',diac:'Совпадение строго с огласовками — так, как вы набрали.',rag:'Ищем по смыслу в подготовленных книгах нашей базы.',root:'Введите арабское слово: найдём также слова с тем же корнем.',matnonly:'Ищем в самом высказывании, без цепочки передатчиков.',narr:'Введите имя человека, который передал хадис.',chain:'Введите арабские имена из цепочки передатчиков — иснада.'};
@@ -280,6 +276,57 @@
   const scopeBox=document.createElement('details');scopeBox.className='multi-scope';
   scopeBox.innerHTML='<summary>Несколько книг и разделов</summary><p>Выберите книгу или раздел выше, затем добавьте или исключите его. Исключения имеют приоритет.</p><div><button type="button" data-scope-action="include">Добавить в поиск</button><button type="button" data-scope-action="exclude">Исключить</button></div><ul class="scope-list"></ul>';
   document.querySelector('label[for="mode-select"]').before(scopeBox);
+  // ── «Где искать» (owner П-46: «облегчить выбор книги конкретной, либо книг, либо групп книг»). Одно касание —
+  // группа или книга; любая другая книга или раздел из 8 589 — набором названия. Под капотом тот же список условий
+  // multiScope, что и раньше, — поиск по нему уже умеет и включать, и исключать.
+  const MAIN_BOOKS=['bukhari','muslim','abudawud','tirmidhi','nasai','ibnmajah','malik','ahmad','darimi'];
+  const BOOK_SHORT={bukhari:'Бухари',muslim:'Муслим',abudawud:'Абу Дауд',tirmidhi:'Тирмизи',nasai:'Насаи',ibnmajah:'Ибн Маджа',malik:'Малик',ahmad:'Ахмад',darimi:'Дарими'};
+  const GROUPS=[{id:'six',title:'Шесть сборников',ids:['bukhari','muslim','abudawud','tirmidhi','nasai','ibnmajah']},{id:'two',title:'Два Сахиха',ids:['bukhari','muslim']},
+    {id:'sunan',title:'Сунаны',ids:['abudawud','tirmidhi','nasai','ibnmajah','darimi']},{id:'musnad',title:'Муснад и Муватта',ids:['ahmad','malik']}];
+  const where=document.createElement('div');where.className='where-block';
+  where.innerHTML='<p class="where-title">Где искать</p><div class="where-row where-groups"></div><div class="where-row where-books"></div>'
+    +'<div class="where-find"><input type="search" class="where-input" placeholder="Другая книга или раздел — начните вводить" aria-label="Найти книгу или раздел"><div class="where-suggest" hidden></div></div><div class="where-chosen"></div>';
+  $('#refine-panel .refine-head').after(where);
+  // the old pickers stay working underneath, but out of sight: one way to choose, not three
+  ['label[for="category-select"]','#category-select','label[for="collection-select"]','#collection-select','#collection-chips','label[for="mode-select"]','#mode-select'].forEach(sel=>document.querySelector(sel)?.classList.add('legacy-scope'));
+  scopeBox.classList.add('legacy-scope');
+  const includedIds=()=>multiScope.filter(x=>!x.exclude&&x.kind==='book').map(x=>x.id);
+  const sameSet=(a,b)=>a.length===b.length&&a.every(x=>b.includes(x));
+  function bookTitleOf(id){return state.collections.find(c=>String(c.id)===String(id))?.title||BOOK_SHORT[id]||id;}
+  function setScope(list){multiScope.length=0;list.forEach(x=>multiScope.push(x));$('#category-select').value='all';$('#collection-select').value='all';renderMultiScope();filtersChanged();}
+  function scopeLabel(){
+    if(!multiScope.length)return 'Все книги';
+    const inc=includedIds(),onlyBooks=multiScope.every(x=>x.kind==='book'&&!x.exclude),g=onlyBooks&&GROUPS.find(g=>sameSet(g.ids,inc));if(g)return g.title;
+    const name=x=>x.kind==='book'?(BOOK_SHORT[x.id]||shortCollection(x.title)):x.title.split('|')[0].trim();
+    const yes=multiScope.filter(x=>!x.exclude).map(name),no=multiScope.filter(x=>x.exclude).map(name);
+    return (yes.length?(yes.length>2?yes.slice(0,2).join(', ')+' и ещё '+(yes.length-2):yes.join(', ')):'Все книги')+(no.length?' · без: '+no.join(', '):'');
+  }
+  function renderWhere(){
+    const inc=includedIds(),onlyBooks=multiScope.every(x=>x.kind==='book'&&!x.exclude);
+    where.querySelector('.where-groups').innerHTML=`<button type="button" class="collection-chip${multiScope.length?'':' selected'}" data-where-all>Все книги</button>`
+      +GROUPS.map(g=>`<button type="button" class="collection-chip${onlyBooks&&sameSet(g.ids,inc)?' selected':''}" data-where-group="${g.id}">${g.title}</button>`).join('');
+    where.querySelector('.where-books').innerHTML=MAIN_BOOKS.filter(id=>state.collections.some(c=>c.id===id)).map(id=>`<button type="button" class="collection-chip${inc.includes(id)?' selected':''}" data-where-book="${id}" aria-pressed="${inc.includes(id)}">${BOOK_SHORT[id]}</button>`).join('');
+    const extra=multiScope.filter(x=>x.exclude||!MAIN_BOOKS.includes(x.id)||x.kind!=='book');
+    where.querySelector('.where-chosen').innerHTML=extra.map(x=>`<span class="where-pick${x.exclude?' excluded':''}">${x.exclude?'без: ':''}${escape(x.kind==='book'?shortCollection(x.title):x.title.split('|')[0].trim())}<button type="button" data-where-remove="${escape(x.kind+'|'+x.id)}" aria-label="Убрать">×</button></span>`).join('');
+  }
+  where.addEventListener('click',event=>{
+    const t=event.target.closest('button');if(!t)return;
+    if(t.hasAttribute('data-where-all'))setScope([]);
+    else if(t.dataset.whereGroup){const g=GROUPS.find(x=>x.id===t.dataset.whereGroup);setScope(g.ids.filter(id=>state.collections.some(c=>c.id===id)).map(id=>({kind:'book',id,title:bookTitleOf(id),exclude:false})));}
+    else if(t.dataset.whereBook){const id=t.dataset.whereBook,list=multiScope.filter(x=>!(x.kind==='book'&&x.id===id));if(list.length===multiScope.length)list.push({kind:'book',id,title:bookTitleOf(id),exclude:false});setScope(list);}
+    else if(t.dataset.whereRemove){const [kind,...rest]=t.dataset.whereRemove.split('|'),id=rest.join('|');setScope(multiScope.filter(x=>!(x.kind===kind&&x.id===id)));}
+    else if(t.dataset.whereAdd){const [kind,...rest]=t.dataset.whereAdd.split('|'),id=rest.join('|'),exclude=t.dataset.whereExclude==='1';
+      const item=kind==='book'?state.collections.find(c=>String(c.id)===id):state.categories.find(c=>String(c.id)===id);if(!item)return;
+      setScope([...multiScope.filter(x=>!(x.kind===kind&&x.id===id)),{kind,id,title:item.title,exclude}]);where.querySelector('.where-input').value='';where.querySelector('.where-suggest').hidden=true;}
+  });
+  where.querySelector('.where-input').addEventListener('input',event=>{
+    const q=catalogFold(event.target.value).trim(),box=where.querySelector('.where-suggest');if(q.length<2){box.hidden=true;box.innerHTML='';return;}
+    const cats=state.categories.filter(c=>catalogFold(c.title).includes(q)).slice(0,3).map(c=>({kind:'category',id:String(c.id),title:c.title.split('|')[0].trim(),sub:`раздел · ${c.count||''} книг`}));
+    const books=state.collections.filter(c=>catalogFold(`${c.title} ${c.arabicTitle||''} ${c.author||''}`).includes(q)).slice(0,6).map(c=>({kind:'book',id:String(c.id),title:c.title,sub:String(c.author||'').split('|').pop().trim()}));
+    const rows=[...cats,...books];
+    box.innerHTML=rows.length?rows.map(r=>`<div class="where-option"><span dir="auto"><strong>${escape(r.title)}</strong><small>${escape(r.sub)}</small></span><button type="button" data-where-add="${escape(r.kind+'|'+r.id)}">Искать</button><button type="button" class="where-exclude" data-where-add="${escape(r.kind+'|'+r.id)}" data-where-exclude="1">Без</button></div>`).join(''):'<p class="where-none">Не нашлось — попробуйте по-арабски или по автору</p>';
+    box.hidden=false;
+  });
   function renderMultiScope(){
     $('.scope-list',scopeBox).innerHTML=multiScope.map((item,i)=>`<li>${item.exclude?'Исключить':'Искать'}: ${escape(item.title)} <button type="button" data-remove-scope="${i}" aria-label="Убрать из выбора: ${escape(item.title)}">×</button></li>`).join('');
     scopeBox.querySelectorAll('[data-remove-scope]').forEach(b=>b.onclick=()=>{multiScope.splice(Number(b.dataset.removeScope),1);renderMultiScope();filtersChanged();});
@@ -299,14 +346,15 @@
     for(const id of ['category-select','collection-select','mode-select']){const el=$('#'+id);el.hidden=state.section==='quran';const label=document.querySelector(`label[for="${id}"]`);if(label)label.hidden=state.section==='quran';}
     const chosen = state.collections.find(c => String(c.id) === state.collection);
     const category = state.categories.find(c => String(c.id) === state.category);
-    $('#search-summary').dataset.normal = state.section === 'quran' ? 'Коран · Текст или номер аята' : `${multiScope.length?'Выбрано условий: '+multiScope.length:(state.collections.find(c => String(c.id) === state.collection)?.title || state.categories.find(c => String(c.id) === state.category)?.title || 'Все разделы')} · ${modeNames[state.mode]||'По словам'}`;
-    if (!state.aiMode) $('#search-summary').textContent = state.section === 'quran' ? 'Коран · Текст или номер аята' : `${multiScope.length?'Выбрано условий: '+multiScope.length:(chosen?.title || category?.title || 'Все разделы')} · ${modeNames[state.mode]}`;
+    $('#search-summary').dataset.normal = state.section === 'quran' ? 'Коран · Текст или номер аята' : `${multiScope.length?scopeLabel():(state.collections.find(c => String(c.id) === state.collection)?.title || state.categories.find(c => String(c.id) === state.category)?.title || 'Все книги')} · ${modeNames[state.mode]||'По словам'}`;
+    if (!state.aiMode) $('#search-summary').textContent = state.section === 'quran' ? 'Коран · Текст или номер аята' : `${multiScope.length?scopeLabel():(chosen?.title || category?.title || 'Все книги')} · ${modeNames[state.mode]}`;
     renderChips(); syncModeChips(); if (state.section === 'quran') modeChips.hidden = true;
+    try {where.hidden = state.section === 'quran'; renderWhere();} catch (_) {}
   }
   $('#category-select').onchange = () => {$('#collection-select').value = 'all'; filtersChanged();};
   $('#collection-select').onchange = () => {$('#category-select').value = 'all'; filtersChanged();};
   $('#mode-select').onchange = filtersChanged;
-  $('#reset-filters').onclick = () => {$('#category-select').value = 'all'; $('#collection-select').value = 'all'; $('#mode-select').value = 'normal';multiScope.length=0;renderMultiScope(); filtersChanged();};
+  $('#reset-filters').onclick = () => {$('#category-select').value = 'all'; $('#collection-select').value = 'all'; $('#mode-select').value = 'normal';multiScope.length=0;renderMultiScope(); filtersChanged(); const wi = $('.where-input'); if (wi) {wi.value = ''; $('.where-suggest').hidden = true;}};
   $$('[data-section]').forEach(button => button.onclick = () => {
     state.section = button.dataset.section; state.searchToken++;
     $$('[data-section]').forEach(b => {b.classList.toggle('selected',b === button); b.setAttribute('aria-pressed',String(b === button));});

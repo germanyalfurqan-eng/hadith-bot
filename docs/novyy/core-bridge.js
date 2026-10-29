@@ -132,6 +132,26 @@
     if(!books.length)books=Object.keys(names).filter(x=>!['nawawi','ibnmaja'].includes(x)).map(id=>({id,title:names[id],subtitle:'Читать сборник'}));
     return {version:typeof APPVER!=='undefined'?APPVER:'v1807',collections:books};
   }
+  // Library search (chosen books and sections) — its finds as new-look cards, not the old window (owner П-46).
+  let mkRows=null;
+  try{if(typeof maktabaCard==='function'){const draw=maktabaCard;window.maktabaCard=function(x){try{if(mkRows&&x&&x.book_id!=null)mkRows.push(x);}catch(e){}return draw.apply(this,arguments);};}}catch(e){}
+  async function libraryResults(){
+    // the library pass draws its cards after runSearch returns: wait until they appear and stop growing (≤10 s)
+    // When the first page of the whole library has nothing in the chosen books, the core waits for «Ещё из Мактабы»
+    // (in a visible window scrolling pressed it); here it is pressed for the person, up to six pages.
+    let seen=-1,steady=0,more=0;for(let i=0;i<40&&mkRows;i++){await new Promise(r=>setTimeout(r,500));
+      if(!mkRows.length&&more<6&&i%3===2){const b=[...document.querySelectorAll('#res button')].find(x=>/Ещё из Мактабы/.test(x.textContent||''));if(b){b.click();more++;continue;}}
+      if(mkRows.length&&mkRows.length===seen){if(++steady>=2)break;}else steady=0;seen=mkRows.length;}
+    const rows=mkRows||[];mkRows=null;
+    const status=document.getElementById('status');
+    if(!rows.length)return {items:[],total:0,notice:String(status&&status.textContent||'В выбранных книгах совпадений не найдено')};
+    const items=rows.slice(0,120).map(x=>{
+      const bid=String(x.book_id),pid=x.page_id||x.page||1,snip=typeof _cleanMaktabaSnip==='function'?_cleanMaktabaSnip(x.snip||''):String(x.snip||'');
+      const row={id:'b:'+bid+':'+pid,kind:'book',bid,page:pid,collection:'book:'+bid,title:x.book_name||('Книга № '+bid),bookTitle:x.book_name||('Книга № '+bid),
+        number:(x.vol?'т. '+x.vol+' · ':'')+(x.page!=null?'стр. '+x.page:''),arabic:cleanText(snip),russian:'',author:x.author||''};
+      records.set(row.id,{original:x,row});return row;});
+    return {items,total:rows.length,notice:'',heading:'В книгах библиотеки · '+(_scopeName||'выбранные')};
+  }
   let serial=Promise.resolve(),lastLeafCache=null;
   let numberObserver=null, numberTimer=null, numberContext=null, numberRu=null;
   function stopNumberWatch(){if(numberObserver)numberObserver.disconnect();numberObserver=null;clearTimeout(numberTimer);numberContext=null;}
@@ -372,6 +392,19 @@
         const should=chip.dataset.mode===mode;
         if(chip.classList.contains('on')!==should)chip.click();
       });
+      // Only our main collections chosen (owner П-46: «Два Сахиха», «Шесть сборников», «без Бухари»…): the ordinary
+      // hadith search covers several collections at once and its results come back as new-look cards. The whole-library
+      // path below is for other books and sections only.
+      let mainBooks=null;
+      if(wanted==='hadith'&&Array.isArray(args.scope)&&args.scope.length&&(!args.category||args.category==='all')&&(!args.collection||args.collection==='all')){
+        const codes=(typeof READABLE!=='undefined'?READABLE:[]).map(x=>String(x.code));
+        if(codes.length&&args.scope.every(x=>x.kind==='book'&&codes.includes(String(x.id)))){
+          const inc=args.scope.filter(x=>!x.exclude).map(x=>String(x.id)),exc=new Set(args.scope.filter(x=>x.exclude).map(x=>String(x.id)));
+          mainBooks=(inc.length?inc:codes).filter(c=>!exc.has(c));
+          if(!mainBooks.length)return {items:[],total:0,notice:'После исключений не осталось книг для поиска.'};
+          args.scope=[];
+        }
+      }
       if(wanted==='hadith'&&Array.isArray(args.scope)&&args.scope.length){
         if(args.scope.length>100)throw Error('Слишком много условий выбора');
         const info=await catalog(),data=await loadCatalog(),all=new Set(data.map(b=>String(b.i))),included=new Set(),excluded=new Set();let hasIncludes=false;
@@ -395,9 +428,9 @@
         document.body.classList.remove('ml-tool-only');document.querySelector('.tab[data-tab="hadith"]').click();
         _scopeIds=selected;_scopeName='Выбранные книги и разделы';document.getElementById('q').value=query;
         const numeric=query.replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[№#\s]/g,''),numberMode=/^\d{1,5}$/.test(numeric)&&Number(numeric)>=1;
-        if(numberMode)startNumberWatch(query);await runSearch(true);
-        if(numberMode)return numberSnapshot();
-        return {opened:true,items:[],total:0,notice:''};
+        mkRows=[];if(numberMode)startNumberWatch(query);await runSearch(true);
+        if(numberMode){mkRows=null;return numberSnapshot();}
+        return await libraryResults();
       }
       if(wanted==='hadith'&&((args.category&&args.category!=='all')||String(args.collection||'').startsWith('book:'))){
         const info=await catalog(),category=info.categories.find(c=>c.id===args.category),book=info.collections.find(c=>c.id===args.collection);
@@ -409,16 +442,17 @@
         document.getElementById('q').value=query;
         const numeric=query.replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[№#\s]/g,'');
         const numberMode=/^\d{1,5}$/.test(numeric)&&Number(numeric)>=1;
-        if(numberMode)startNumberWatch(query);
+        mkRows=[];if(numberMode)startNumberWatch(query);
         await runSearch(true);
-        if(numberMode)return numberSnapshot();
-        return {opened:true,items:[],total:0,notice:''};
+        if(numberMode){mkRows=null;return numberSnapshot();}
+        return await libraryResults();
       }
       _scopeIds=null;_scopeName='';
       const tabEl=document.querySelector('.tab[data-tab="'+wanted+'"]');
       if(tabEl&&!tabEl.classList.contains('active'))tabEl.click();
       if(typeof selCols!=='undefined'){
         selCols.clear();if(args.collection&&args.collection!=='all')selCols.add(String(args.collection));
+        if(mainBooks)mainBooks.forEach(code=>selCols.add(code));
         if(typeof renderCols==='function')renderCols();
       }
       field.value=query;
