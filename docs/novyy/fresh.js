@@ -1719,7 +1719,8 @@
     // the row under the ayah: ▶ (prominent), copy, share, ✦ ask AI, ⋯
     const bar=document.createElement('div');bar.className='reader-actions quran-actions';
     bar.innerHTML=`<button type="button" class="q-play" aria-label="Слушать аят">${icon('play')}</button><button type="button" data-act="copy" aria-label="Копировать">${icon('copy')}</button><button type="button" data-act="share" aria-label="Поделиться">${icon('share')}</button><button type="button" data-act="ai" class="q-ai" aria-label="Спросить ИИ об аяте">${icon('spark')}<span>Спросить ИИ</span></button><button type="button" data-act="more" aria-label="Все инструменты" aria-expanded="false">${icon('more')}</button>`;
-    ($('#reader-translation',body)||$('.arabic-part',body)).after(bar);const status=document.createElement('p');   // в конце текстового блокаstatus.className='q-status';bar.after(status);
+    // ряд кнопок — в конце текстового блока, после перевода (владелец 29.10)
+    ($('#reader-translation',body)||$('.arabic-part',body)).after(bar);const status=document.createElement('p');status.className='q-status';bar.after(status);
     if(quranReturn&&(quranReturn.sura!==s||quranReturn.ayah!==a)){const back=document.createElement('button');back.type='button';back.className='q-return';back.textContent=`↩ Вернуться к аяту ${quranReturn.sura}:${quranReturn.ayah}`;status.after(back);
       back.onclick=async()=>{stopReaderAudio();const r=quranReturn;quranReturn=null;try{openReader(await state.api.quranVerse(r.sura,r.ayah),{fromHistory:true});}catch(_){}};}
     bar.onclick=e=>{const b=e.target.closest('[data-act]');if(!b)return;const act=b.dataset.act;
@@ -1872,7 +1873,8 @@
     if(src&&record.kind==='hadith'){$$('.source-ru,.source-ar',src).forEach(el=>{el.classList.add('src-link');el.setAttribute('role','button');el.tabIndex=0;el.title='Открыть книгу с начала';el.onclick=()=>openBookStart(record);});
       const nb=$('.num-badge',src);if(nb&&$('#reader-open-page')){nb.classList.add('src-link');nb.setAttribute('role','button');nb.tabIndex=0;nb.title='Открыть этот хадис в книге';nb.onclick=()=>$('#reader-open-page').click();}}
     $$('.edition-grade',body).forEach(p=>{if(!p.querySelector('.src-q'))p.insertAdjacentHTML('beforeend','<button type="button" class="src-q" data-help="grade" aria-label="Что это за оценка">?</button>');});
-    const bar=$('.reader-actions',body);
+    // у Корана свой ряд кнопок со своим обработчиком (▶ с подсветкой, «Спросить ИИ») — общий хадисный его не трогает
+    const bar=record.kind==='quran'?null:$('.reader-actions',body);
     // владелец 29.10: «кнопки — как в нейросетях, в конце текстового блока; между оригиналом и переводом ничего»
     {const tr=$('#reader-translation',body),tk=$('.reader-takhrij',body);if(tr&&bar){tr.after(bar);if(tk)bar.after(tk);}}
     if(bar)bar.onclick=e=>{const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
