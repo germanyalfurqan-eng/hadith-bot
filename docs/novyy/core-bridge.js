@@ -626,7 +626,15 @@
       try{const seen=new Set(out.map(x=>plain(x.said).replace(/\s+/g,' ').trim()));
         for(const nm of (typeof isnadNarrators==='function'?isnadNarrators(text)||[]:[]).slice(0,40)){const k=plain(nm).replace(/\s+/g,' ').trim();if(!k||seen.has(k))continue;seen.add(k);
           let id=null;try{id=await _narrLookup(nm);}catch(e){}out.push({said:String(nm),id:id==null?null:String(id)});}}catch(e){}   // без номера тоже: выделяется, по нажатию — тёзки
-      return {links:out};
+      // «حدثنا قتيبة، وهناد، قالا»: два учителя через запятую приходили одним звеном и не выделялись (ат-Тирмизи №5) —
+      // каждый идёт своим именем; «و» перед вторым снимается, только если без неё имя опознаётся (или с ней — нет)
+      const TAIL=new Set(['قالا','قالوا','قال','كلاهما','جميعا']),expanded=[];
+      for(const x of out){const parts=String(x.said).split(/\s*[،,]\s*/).map(t=>{const w=t.trim().split(/\s+/);while(w.length&&TAIL.has(plain(w[w.length-1])))w.pop();return w.join(' ');}).filter(t=>plain(t).replace(/\s/g,'').length>=2);
+        if(parts.length<2){expanded.push(x);continue;}
+        for(let k=0;k<parts.length;k++){let said=parts[k],id=null;try{id=await _narrLookup(said);}catch(e){}
+          if(k>0&&id==null&&/^و/.test(plain(said))){const bare=said.replace(/^و[ً-ٟ]*/,'');try{id=await _narrLookup(bare);}catch(e){}said=bare;}
+          expanded.push({said,id:id==null?null:String(id)});}}
+      return {links:expanded};
     }
     if(action==='narrators'){
       const card=async id=>{let c=null;try{c=await _narrCard(id);}catch(e){}return c?{name:String(c[1]||''),id:String(id),full:String(c[1]||''),kunya:String(c[2]||''),nisba:String(c[3]||''),death:String(c[4]||''),hajar:String(c[5]||''),dhahabi:String(c[6]||''),tabaqa:String(c[7]||'')}:null;};
