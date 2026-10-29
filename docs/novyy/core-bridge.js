@@ -653,13 +653,24 @@
       // опознаём по готовой цепи: это следующий в ней после предыдущего звена.
       const HEAD=/^(?:و?حدثنا|و?حدثني|و?أخبرنا|و?أخبرني|و?اخبرنا|و?اخبرني|أنبأنا|ح|و)$/,TAIL2=/^(?:و|يقول|قال|قالا|قالوا|قالت|جميعا|كلهم|كلاهما|ح|أنه|انه)$/;
       const KIN=/^(?:أبي|ابي|أبيه|ابيه|والدي|أبيها|جده|جدي|عمه|عمي|أمه|خاله|أخيه)$/,cleaned=[];let prevId=null;
+      const CUT=/^(?:أنه|انه|أنها|انها|أن|ان|قال|وقال|فقال|قالت|يقول|تقول|سمع|يحدث|حدثنا|حدثني|أخبرنا|أخبرني|عن)$/;
       for(const x of expanded){let w=String(x.said).split(/\s+/).filter(Boolean);
-        while(w.length>1&&HEAD.test(plain(w[0])))w.shift();while(w.length>1&&TAIL2.test(plain(w[w.length-1])))w.pop();
+        while(w.length>1&&HEAD.test(plain(w[0])))w.shift();
+        {const c=w.findIndex((t,i)=>i>0&&CUT.test(plain(t)));if(c>0)w=w.slice(0,c);}   // «عبيد الله بن عدي بن خيار أنه دخل…» → имя
+        while(w.length>1&&TAIL2.test(plain(w[w.length-1])))w.pop();
         let said=w.join(' '),id=x.id;
         if(said!==x.said&&id==null){try{id=await _narrLookup(said);}catch(e){}id=id==null?null:String(id);}
         if(id==null&&KIN.test(plain(said))&&prevId!=null){const k=chainIds.indexOf(+prevId);if(k>=0&&typeof chainIds[k+1]==='number')id=String(chainIds[k+1]);}
         if(id==null&&(w.length>5||/صلى|رسول|النبي/.test(plain(said))))continue;   // не имя — кусок матна
         cleaned.push({said,id});if(id!=null)prevId=id;}
+      // запасной проход: после каждого слова передачи до слов о Пророке ﷺ — имя, которого нет среди звеньев, если оно
+      // опознаётся (самое длинное начало из 1–5 слов): «عن جابر جعل…», «سمعت ابن عباس يقول…»
+      try{const have=new Set(cleaned.map(x=>foldN(x.said)));const tk=forParse.split(/[\s،,.:؛"«»()]+/).filter(Boolean);
+        const MK=/^(?:و?حدثنا|و?حدثني|و?أخبرنا|و?أخبرني|أنبأنا|عن|سمعت|سمع)$/;
+        for(let i=0;i<tk.length-1&&i<120;i++){const w0=plain(tk[i]);if(/رسول|النبي/.test(w0))break;if(!MK.test(w0))continue;
+          const cand=[];for(let j=i+1;j<tk.length&&cand.length<5;j++){const pj=plain(tk[j]);if(MK.test(pj)||CUT.test(pj)||TAIL2.test(pj)||/رسول|النبي|صلى/.test(pj))break;cand.push(tk[j]);}
+          for(let n=cand.length;n>=1;n--){const said=cand.slice(0,n).join(' '),f=foldN(said);if([...have].some(h=>h.includes(f)||f.includes(h)))break;
+            let id=null;try{id=await _narrLookup(said);}catch(e){}if(id!=null){cleaned.push({said,id:String(id)});have.add(f);break;}}}}catch(e){}
       return {links:cleaned};
     }
     if(action==='narrators'){
