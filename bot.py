@@ -18070,6 +18070,35 @@ _ПРОСЯТ_ПЕРЕВОД = re.compile(r'перевед|перевод|по-�
 _ПРОСЯТ_ОЗВУЧКУ = re.compile(r'озвуч|дубляж|дублируй|переозвуч|субтитр', re.I)
 
 
+def _общий_чат(update):
+    """Группа, супергруппа или канал — не личка.
+
+    🔴 29.10.2026, владелец (#4355): «почему она вмешивается в такие моменты?» — в общей группе JAMAAT MUSLIMIN бот
+    написал «🔴 Озвучка не собралась: речь не разобрана… нет ключа Whisper». В общем чате ход долгой работы и её
+    отказы людям не нужны: они идут владельцу в личку, а в чат — только готовый результат.
+    """
+    try:
+        return update.effective_chat.type in ('group', 'supergroup', 'channel')
+    except Exception:
+        return False
+
+
+async def _строка_хода(update, context, текст, ответ_на=None):
+    """Сообщение о ходе долгой работы: в личке — ответом в этот же чат, в общем чате — владельцу лично."""
+    if _общий_чат(update):
+        try:
+            _назв = getattr(update.effective_chat, 'title', '') or 'общий чат'
+            return await context.bot.send_message(OWNER_ID, '%s\n\n(чат «%s» — туда пишу только готовое)' % (текст, _назв))
+        except Exception:
+            return None
+    try:
+        if ответ_на:
+            return await update.message.reply_text(текст, reply_to_message_id=ответ_на)
+        return await update.message.reply_text(текст)
+    except Exception:
+        return None
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # 🎬 08.10.2026, МИНИ АПП 99 · неудача №109 (25.09, чат джамаата). Человек: «видео озвучь
 # тоже https://x.com/…». Помощник: «Я озвучу содержание этого видео: [Голосовое сообщение]
@@ -18487,13 +18516,9 @@ async def _озвучить_скачанное(update, context, путь_вид�
         if not _ПРОСЯТ_ОЗВУЧКУ.search(текст or ''):
             return
         import shutil as _sh
-        _ст = None
-        try:
-            _ст = await update.message.reply_text(
-                '🎙 Ролик отдал, теперь делаю русскую озвучку — распознать речь, перевести, '
-                'наговорить и свести. Это несколько минут, пришлю следом.')
-        except Exception:
-            pass
+        _ст = await _строка_хода(update, context,
+            '🎙 Ролик отдал, теперь делаю русскую озвучку — распознать речь, перевести, '
+            'наговорить и свести. Это несколько минут, пришлю следом.')
 
         async def _ход(т):
             try:
@@ -18515,11 +18540,13 @@ async def _озвучить_скачанное(update, context, путь_вид�
             if _срт and os.path.exists(_срт):
                 try:
                     with io.open(_срт, 'rb') as _фс:
+                        # в общем чате и это — владельцу лично: сборка не удалась, значит работа не готова
                         await context.bot.send_document(
-                            update.effective_chat.id, _фс, filename='perevod_ru.srt',
+                            OWNER_ID if _общий_чат(update) else update.effective_chat.id, _фс,
+                            filename='perevod_ru.srt',
                             caption='📝 Русские субтитры к ролику — перевод собрался, '
                                     'подвела только сборка.',
-                            reply_to_message_id=update.message.message_id)
+                            reply_to_message_id=None if _общий_чат(update) else update.message.message_id)
                 except Exception:
                     pass
             return
@@ -19447,9 +19474,16 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _мгр = re.search(r'оригинал\D{0,12}(\d{1,3})\s*%', text or '', re.I)
         if _мгр:
             _громкость = max(0.0, min(1.0, int(_мгр.group(1)) / 100.0))
-        _ст_д = await update.message.reply_text(
+        _ст_д = await _строка_хода(update, context,
             '🎙 Взял видео в работу. Это не быстро: распознать речь, перевести, наговорить '
-            'и свести — несколько минут.', reply_to_message_id=_вид_ответ)
+            'и свести — несколько минут.', ответ_на=_вид_ответ)
+        if _ст_д is None:
+            class _Немой:
+                async def edit_text(self, *a, **k):
+                    return None
+                async def delete(self):
+                    return None
+            _ст_д = _Немой()
         _папка_д = os.path.join('/tmp', 'dub_%s' % update.message.message_id)
         try:
             os.makedirs(_папка_д, exist_ok=True)
@@ -19481,10 +19515,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     try:
                         with io.open(_срт_ф, 'rb') as _фс:
                             await context.bot.send_document(
-                                update.effective_chat.id, _фс, filename='perevod_ru.srt',
+                                OWNER_ID if _общий_чат(update) else update.effective_chat.id, _фс,
+                                filename='perevod_ru.srt',
                                 caption='📝 Русские субтитры к этому видео — перевод собрался, '
                                         'подвела только сборка.',
-                                reply_to_message_id=_вид_ответ or update.message.message_id)
+                                reply_to_message_id=None if _общий_чат(update) else (_вид_ответ or update.message.message_id))
                     except Exception:
                         pass
                 return
