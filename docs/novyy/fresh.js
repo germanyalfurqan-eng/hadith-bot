@@ -639,10 +639,21 @@
       if(id==='quran'){const v=arg.match(/^(\d{1,3}):(\d{1,3})$/);if(!v||+v[1]<1||+v[1]>114||+v[2]<1||+v[2]>286)return '';}
       if((id==='search'||id==='findBooks')&&!arg)return '';
       const book=id==='openBook'?state.collections.find(c=>c.id===arg):null;
+      if(id==='findBooks'){authorChoices(arg).forEach(a=>{if(!actions.some(x=>x.id===a.id&&x.arg===a.arg))actions.push(a);});return '';}
       if(!actions.some(x=>x.id===id&&x.arg===arg))actions.push(act(id,arg,book?'Открыть «'+book.title+'»':id==='search'?'Найти: '+arg:id==='quran'?'Открыть аят '+arg:undefined));
       return '';
     }).replace(/\n{3,}/g,'\n\n').trim();
     return {text,actions};
+  }
+  // «Книги такого-то»: the name is checked against the catalog's authors. One author — one button with the count;
+  // several (ابن حجر → العسقلاني and الهيتمي) — a button for each, at most five, so the person picks (owner 29.10).
+  function authorChoices(name){
+    const key=catalogFold(name).trim();if(!key)return [];const counts=new Map();
+    for(const c of state.collections){const a=String(c.author||'').trim();if(a&&catalogFold(a).includes(key))counts.set(a,(counts.get(a)||0)+1);}
+    const exact=[...counts.keys()].find(a=>catalogFold(a).trim()===key);
+    const list=exact?[[exact,counts.get(exact)]]:[...counts.entries()].sort((x,y)=>y[1]-x[1]).slice(0,5);
+    if(!list.length)return [act('findBooks',name,'Книги: '+name)];
+    return list.map(([a,n])=>act('findBooks',a,`Книги: ${a.split('|').pop().trim()} · ${n}`));
   }
   function screenContext(){
     if($('#native-book-reader')?.open)return {key:'book:'+(nativeBook?.bid||''),text:`Вы читаете «${nativeBook?.title||'книгу'}», ${$('.native-book-location')?.textContent||''}. Могу: найти страницу или хадис по номеру, рассказать о книге и издании, сделать текст крупнее.`,actions:[act('fontUp')]};
