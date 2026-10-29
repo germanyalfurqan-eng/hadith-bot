@@ -284,8 +284,11 @@
       // exact — буква в букву, с хамзой: при свёрнутой хамзе имя إِلَٰه «совпадало» с глаголом أَلَّهَ (проверка 29.10);
       // near — совпало лишь со свёрнутой хамзой: берётся, только если у слова нет своей статьи словаря лемм
       const strict=t=>plain(t).replace(/ة$/,'ه').replace(/[ٌٍٓ]/g,''),fold=t=>strict(t).replace(/[أإآ]/g,'ا');
+      // с огласовкой: без танвина, сукуна и падежной гласной в конце; шадда и гласная — в одном порядке
+      const vk=t=>String(t||'').replace(/[\u064B-\u064D\u0652\u0640]/g,'').replace(/ٱ/g,'ا').replace(/\u0670/g,'ا').replace(/([\u064E\u064F\u0650])\u0651/g,'\u0651$1').replace(/[\u064E\u064F\u0650]$/,'').replace(/ة$/,'ه');
+      const voweled=/[\u064E\u064F\u0650]/.test(String(args.lemma||''));
       const lem=strict(args.lemma);
-      const list=((hit&&hit.entries)||[]).map(x=>({ar:String(x.ar||''),gram:String(x.gram||''),ru:String(x.ru||''),exact:!!lem&&strict(x.ar)===lem,near:!!lem&&fold(x.ar)===fold(args.lemma)}));
+      const list=((hit&&hit.entries)||[]).map(x=>({ar:String(x.ar||''),gram:String(x.gram||''),ru:String(x.ru||''),exact:!!lem&&strict(x.ar)===lem&&(!voweled||vk(x.ar)===vk(args.lemma)),near:!!lem&&fold(x.ar)===fold(args.lemma)}));
       list.sort((x,y)=>(y.exact?2:y.near?1:0)-(x.exact?2:x.near?1:0));
       return {entries:list.slice(0,8),matched:String((hit&&(hit.matched||hit.word))||''),exact:list.some(x=>x.exact)};
     }

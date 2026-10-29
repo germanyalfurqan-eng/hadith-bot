@@ -1536,13 +1536,15 @@
   function gramDetail(tag){
     const p=String(tag||'').split('|').filter(Boolean),out=[];if(!p.length)return out;
     // метка разметки по месту: «N|PN|NOM», «P|NEG», «N|MS|NOM|ADJ» — уточнение части речи стоит после N/V/P
-    const pos=POSRU[p.slice(1).find(x=>POSRU[x])]||POSRU[p[0]]||'частица (харф)';out.push(['Часть речи',pos]);
+    // ACC — и падеж имени, и «частица инна» у харфа: уточнение ищем только среди своих для N и для P (проверка 2:255)
+    const SUBN=['PN','PRON','DEM','REL','ADJ','T','LOC','NV','IMPN','INTG','COND'],sub=p.slice(1).find(x=>p[0]==='P'?(POSRU[x]&&!SUBN.includes(x)&&!['NOM','GEN','MS','FS','MP','FP','M','F'].includes(x)):SUBN.includes(x));
+    const pos=POSRU[sub]||POSRU[p[0]]||'частица (харф)';out.push(['Часть речи',pos]);
     const has=k=>p.includes(k),val=k=>(p.find(x=>x.startsWith(k+':'))||'').split(':')[1]||'';
     if(has('ACT_PCPL'))out.push(['Вид','действительное причастие (исм фаʿиль)']);if(has('PASS_PCPL'))out.push(['Вид','страдательное причастие (исм мафʿуль)']);if(has('VN'))out.push(['Вид','отглагольное имя (масдар)']);
     if(val('VF'))out.push(['Порода (баб)',ROMAN[+val('VF')]||val('VF')]);
     if(has('PERF'))out.push(['Время','прошедшее (мади)']);if(has('IMPF'))out.push(['Время','настоящее-будущее (мудариʿ)']);if(has('IMPV'))out.push(['Наклонение','повелительное (амр)']);
     if(has('PASS'))out.push(['Залог','страдательный (маджхуль)']);
-    const pgn=p.find(x=>/^[123]?[MF]?[SDP]?$/.test(x)&&x.length&&/[MFSDP123]/.test(x));
+    const pgn=p.slice(1).find(x=>/^[123]?[MF]?[SDP]?$/.test(x)&&x.length&&/[MFSDP123]/.test(x)&&x!=='P');   // p[0] — часть речи («P» — не «множественное»)
     if(pgn){const per={1:'1-е лицо',2:'2-е лицо',3:'3-е лицо'}[pgn.match(/[123]/)?.[0]]||'',gen={M:'мужской род',F:'женский род'}[pgn.match(/[MF]/)?.[0]]||'',num={S:'единственное число',D:'двойственное число',P:'множественное число'}[pgn.match(/[SDP]/)?.[0]]||'';
       const t=[per,gen,num].filter(Boolean).join(', ');if(t)out.push(['Лицо, род, число',t]);}
     const cs={NOM:'именительный (марфуʿ)',GEN:'родительный (маджрур)',ACC:'винительный (мансуб)'}[p.find(x=>['NOM','GEN','ACC'].includes(x))];if(cs)out.push(['Падеж',cs]);
@@ -1575,7 +1577,10 @@
       let arabus=null;const loadArabus=async()=>{if(arabus)return arabus;try{arabus=await state.api.arabus(item.text,item.root,item.lemma);}catch(_){arabus={entries:[]};}return arabus;};
       loadArabus().then(r=>{if(current!==word)return;const e=(r.entries||[])[0],el=panel.querySelector('.qw-lemma-ru');if(!el)return;
         const li=item.lemmaInfo;
-        if(e&&e.exact){panel.querySelector('.qw-lemma').textContent=e.ar||item.lemma||'';el.textContent=cutText(e.ru.replace(/^1\)\s*/,''),110)+(li&&li.t?` · звучит: ${li.t}`:'');}
+        // своя статья по огласованной лемме — первой (коротко: звучание — значение); Арабус — строкой ниже, если его
+        // словарная форма совпала с леммой и по огласовке (иначе «سِنَة» дремота получала «سُنَّة» обычай)
+        if(li&&li.v&&item.place){panel.querySelector('.qw-lemma').textContent=li.v;el.innerHTML=`${escape(li.t?li.t+' — ':'')}${escape(li.ru||'')}${li.src==='ручная'?'':' <span class="src-tag src-ai" dir="ltr">ИИ, черновое</span>'}`+(e&&e.exact?`<small class="qw-arabus-ru">Арабус: ${escape(cutText(e.ru.replace(/^1\)\s*/,'').split(/;|\d\)/)[0],70))}</small>`:'');}
+        else if(e&&e.exact){panel.querySelector('.qw-lemma').textContent=e.ar||item.lemma||'';el.textContent=cutText(e.ru.replace(/^1\)\s*/,''),110)+(li&&li.t?` · звучит: ${li.t}`:'');}
         else if(li&&li.v){panel.querySelector('.qw-lemma').textContent=li.v;el.innerHTML=`${escape(li.t?li.t+' — ':'')}${escape(li.ru||'')}${li.src==='ручная'?'':' <span class="src-tag src-ai" dir="ltr">ИИ, черновое</span>'}`;}
         else if(e&&e.near){panel.querySelector('.qw-lemma').textContent=e.ar||item.lemma||'';el.textContent=cutText(e.ru.replace(/^1\)\s*/,''),110);}
         else el.textContent=(r.entries||[]).length?'статьи этой формы нет — нажмите корень: однокоренные слова':'в Арабусе не нашлось';});
