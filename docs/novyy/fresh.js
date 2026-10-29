@@ -253,12 +253,17 @@
   aiSwitch.setAttribute('aria-label','Переключить: поиск или вопрос ИИ-помощнику'); aiSwitch.innerHTML = icon('search') + icon('spark');
   $('.search-icon').replaceWith(aiSwitch); state.aiMode = false;
   function setAiMode(on) {
-    state.aiMode = !!on; $('.search-field').classList.toggle('ai-mode',state.aiMode); aiSwitch.setAttribute('aria-pressed',String(state.aiMode));
+    state.aiMode = !!on; $('.search-field').classList.toggle('ai-mode',state.aiMode); aiSwitch.setAttribute('aria-pressed',String(state.aiMode)); $('.ai-quick')?.setAttribute('aria-pressed',String(state.aiMode));
     $('#query').placeholder = state.aiMode ? 'Спросите ИИ-помощника…' : ''; $('#query-example').hidden = state.aiMode;
     $('#search-summary').textContent = state.aiMode ? '✦ Вопрос ИИ-помощнику · ответ откроется в чате' : $('#search-summary').dataset.normal || $('#search-summary').textContent;
     syncModeChips();
   }
   aiSwitch.onclick = () => {setAiMode(!state.aiMode); $('#query').focus();};
+  // «✦ Спросить ИИ» beside «Настроить поиск» on the start screen (owner #4325): the same switch, easier to find.
+  const aiQuick = document.createElement('button'); aiQuick.type = 'button'; aiQuick.className = 'ai-quick'; aiQuick.setAttribute('aria-pressed','false');
+  aiQuick.innerHTML = icon('spark') + '<span>Спросить ИИ</span>';
+  const optionRow = document.createElement('div'); optionRow.className = 'search-option-row'; $('#refine-toggle').before(optionRow); optionRow.append($('#refine-toggle'),aiQuick);
+  aiQuick.onclick = () => {setAiMode(!state.aiMode); $('#query').focus();};
   function askAssistant(text) {openNativeAssistant(); const question = String(text || '').trim(); if (question) {assistantInput.value = question; $('#native-assistant-form').requestSubmit();}}
   $('#refine-toggle').onclick = () => {const opened = $('#refine-panel').hidden; $('#refine-panel').hidden = !opened; modeChips.hidden = !opened || state.section === 'quran'; syncModeChips(); $('#refine-toggle').setAttribute('aria-expanded',String(opened));};
   const modeHelp = {normal:'Введите слово или фразу на русском или арабском.',diac:'Совпадение строго с огласовками — так, как вы набрали.',rag:'Ищем по смыслу в подготовленных книгах нашей базы.',root:'Введите арабское слово: найдём также слова с тем же корнем.',matnonly:'Ищем в самом высказывании, без цепочки передатчиков.',narr:'Введите имя человека, который передал хадис.',chain:'Введите арабские имена из цепочки передатчиков — иснада.'};
@@ -964,7 +969,7 @@
       state.collections = Array.isArray(info.collections) ? info.collections : []; state.categories = Array.isArray(info.categories) ? info.categories : []; $('#data-version').textContent = info.version ? `Библиотека · ${info.version}` : '';
       $('#category-select').innerHTML = '<option value="all">Все разделы</option>' + state.categories.map(c => `<option value="${escape(c.id)}">${escape(c.title)}${Number.isFinite(c.count) ? ` · ${c.count}` : ''}</option>`).join('');
       $('#collection-select').innerHTML = '<option value="all">Все книги</option>' + state.collections.map(c => `<option value="${escape(c.id)}">${escape(c.title)}${c.arabicTitle&&c.arabicTitle!==c.title?' | '+escape(c.arabicTitle):''}</option>`).join('');
-      filtersChanged(); renderLibrary(); showWelcome();
+      filtersChanged(); renderLibrary(); showWelcome(); $('.search-field').classList.remove('warming');
       let restoredQuery = '';
       try {restoredQuery = String(sessionStorage.getItem('muslimoon.design.preview-query') || '').trim(); sessionStorage.removeItem('muslimoon.design.preview-query');} catch (_) {}
       let previewState=null;
@@ -980,7 +985,7 @@
       }
       if (restoredQuery) {$('#query').value = restoredQuery; syncPlaceholder(); if(state.view==='search')await performSearch();}
     } catch (error) {
-      state.api = null;
+      state.api = null; $('.search-field').classList.remove('warming');
       empty($('#search-results'),'Библиотека ещё не ответила','Тексты не загрузились. Попробуем подключиться ещё раз.','Попробовать снова',initialize);
       empty($('#library-collections'),'Нужно подключение','Сборники появятся, когда библиотека будет доступна.','Повторить',initialize);
       console.warn('Muslimoon initialization unavailable',error);
