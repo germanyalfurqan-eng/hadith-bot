@@ -620,7 +620,7 @@
       // разбор обрывался на «ـ رضى الله عنهما ـ» / «، - رضى الله عنها -» и не видел имени (Бухари №3800 — Ибн ‘Аббас):
       // для разбора эту формулу снимаем, на экране она остаётся
       const DH='[\\u064B-\\u065F\\u0670]*',HON=new RegExp('[،,]?\\s*[ـ\\-–]\\s*ر'+DH+'ض'+DH+'[يى]'+DH+'\\s+ا'+DH+'ل'+DH+'ل'+DH+'ه'+DH+'\\s+ع'+DH+'ن\\S*\\s*[ـ\\-–]?','g');
-      const forParse=text.replace(HON,' ');
+      const forParse=text.replace(HON,' ').replace(/‏/g,'').replace(/\.(?=\S)/g,'. ');   // «ابن عمر.‏والقاسم» — точка вплотную
       let p=null;try{p=_parseIsnad(forParse);}catch(e){}
       const plain=t=>String(t||'').replace(/[\u064B-\u065F\u0670\u0640]/g,'');
       const links=((p&&p.links)||[]).filter(l=>l&&l.name&&!/رسول الله|النبي|رسول اللة/.test(plain(l.name)));
@@ -653,7 +653,7 @@
       // опознаём по готовой цепи: это следующий в ней после предыдущего звена.
       const HEAD=/^(?:و?حدثنا|و?حدثني|و?أخبرنا|و?أخبرني|و?اخبرنا|و?اخبرني|أنبأنا|ح|و)$/,TAIL2=/^(?:و|يقول|قال|قالا|قالوا|قالت|جميعا|كلهم|كلاهما|ح|أنه|انه)$/;
       const KIN=/^(?:أبي|ابي|أبيه|ابيه|والدي|أبيها|جده|جدي|عمه|عمي|أمه|خاله|أخيه)$/,cleaned=[];let prevId=null;
-      const CUT=/^(?:أنه|انه|أنها|انها|أن|ان|قال|وقال|فقال|قالت|يقول|تقول|سمع|يحدث|حدثنا|حدثني|أخبرنا|أخبرني|عن)$/;
+      const CUT=/^(?:فيما|قرئ|قراءة|أنه|انه|أنها|انها|أن|ان|قال|وقال|فقال|قالت|يقول|تقول|سمع|يحدث|حدثنا|حدثني|أخبرنا|أخبرني|عن)$/;
       for(const x of expanded){let w=String(x.said).split(/\s+/).filter(Boolean);
         while(w.length>1&&HEAD.test(plain(w[0])))w.shift();
         {const c=w.findIndex((t,i)=>i>0&&CUT.test(plain(t)));if(c>0)w=w.slice(0,c);}   // «عبيد الله بن عدي بن خيار أنه دخل…» → имя
@@ -670,7 +670,8 @@
         for(let i=0;i<tk.length-1&&i<120;i++){const w0=plain(tk[i]);if(/رسول|النبي/.test(w0))break;if(!MK.test(w0))continue;
           const cand=[];for(let j=i+1;j<tk.length&&cand.length<5;j++){const pj=plain(tk[j]);if(MK.test(pj)||CUT.test(pj)||TAIL2.test(pj)||/رسول|النبي|صلى/.test(pj))break;cand.push(tk[j]);}
           for(let n=cand.length;n>=1;n--){const said=cand.slice(0,n).join(' '),f=foldN(said);if([...have].some(h=>h.includes(f)||f.includes(h)))break;
-            let id=null;try{id=await _narrLookup(said);}catch(e){}if(id!=null){cleaned.push({said,id:String(id)});have.add(f);break;}}}}catch(e){}
+            let id=null;try{id=await _narrLookup(said);}catch(e){}if(id!=null){cleaned.push({said,id:String(id)});have.add(f);break;}
+            /* «عن أبيه» без готовой цепи — пунктиром */ if(n===1&&KIN.test(plain(said))){cleaned.push({said,id:null});have.add(f);break;}}}}catch(e){}
       return {links:cleaned};
     }
     if(action==='narrators'){

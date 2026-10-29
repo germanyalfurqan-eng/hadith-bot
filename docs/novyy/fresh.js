@@ -1268,7 +1268,7 @@
       const word=w=>/^[اأإآ]ب[ويا]$/.test(w)?'[اأإآ]'+DIA+'ب'+DIA+'[وياى]'+DIA:w.split('').map(ch=>(/[اأإآ]/.test(ch)?'[اأإآ]':/[يى]/.test(ch)?'[يى]':/[هة]/.test(ch)?'[هة]':ch.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'))+DIA).join('');
       // между словами имени в тексте бывает запятая («سُمَىٍّ، مَوْلَى أَبِي بَكْرٍ» — Бухари №654, а разбор отдаёт без неё)
       // разделитель слов имени: пробел, запятая, «؛», «ـ», дефис и метка страницы посреди имени («يحيى بن ⦗ص: 524⦘ أبي كثير»)
-      return new RegExp(f.split(' ').map(word).join('(?:[\\s،,؛ـ\\-–]|⦗[^⦘]*⦘)+'));};
+      return new RegExp(f.split(' ').map(word).join('(?:[\\s،,؛ـ\\-–.\\u200f]|⦗[^⦘]*⦘)+'));};
     let from={node:null,offset:0};
     // владелец 29.10: «все должны быть передатчики выделены» — и без опознанного номера: такой зовёт выбор из тёзок
     // ищем вперёд от прошлого имени; не нашлось — с начала текста (запасной поиск имён дописывает пропущенных в конец
@@ -1321,6 +1321,11 @@
     body.querySelector('.ncard-ctor').onclick=()=>{nCardDialog.close();openChainCtor({mode:'any',sel:[{id:String(c.id),name:c.full||c.name,death:c.death||''}],forms:[]});};
   }
   async function openNarratorNamesakes(said){
+    // «عن أبيه / عن جده / عن عمه» — передатчик назван по родству: тёзок искать бессмысленно, говорим как есть
+    if(/^(?:أبي|ابي|أبيه|ابيه|والدي|أبيها|جده|جدي|عمه|عمي|أمه|خاله|أخيه)$/.test(String(said).replace(/[ً-ٰٟـ]/g,'').trim())){
+      const body=nCardDialog.querySelector('.ncard-body');++nCardToken;if(!nCardDialog.open)nCardDialog.showModal();
+      body.innerHTML=`<p class="ncard-said" lang="ar" dir="rtl">${escape(said)}</p><p class="notes-hint">Здесь передатчик назван по родству — «отец», «дед» или «дядя» предыдущего передатчика в цепи. В готовой цепи этого хадиса он не опознан; его имя смотрите в карточке предыдущего передатчика — среди его учителей.</p>`;return;}
+
     const body=nCardDialog.querySelector('.ncard-body'),token=++nCardToken;if(!nCardDialog.open)nCardDialog.showModal();
     body.innerHTML='<div class="native-chat-pending"><span class="think-dots"><i></i><i></i><i></i></span><span class="think-text">Ищу, кто это</span></div>';
     let items=[];try{items=(await state.api.narrCands(said,'')).items||[];}catch(_){}if(token!==nCardToken)return;
