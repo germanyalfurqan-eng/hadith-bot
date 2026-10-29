@@ -627,7 +627,8 @@
   function saveAssistantHistory(rows){try{localStorage.setItem(assistantKey,JSON.stringify(rows.slice(-400)));}catch(_){}}
   // A clean answer: the helper's markdown becomes plain emphasis, quotes and lists; code and web addresses are dropped.
   function chatHtml(raw){
-    const clean=String(raw||'').replace(/```[\s\S]*?```/g,'').replace(/^[^\n]*:[ \t]*\n?[ \t]*<?https?:\/\/\S+>?[ \t]*$/gm,'').replace(/\[([^\]\n]+)\]\((?:https?:)?\/\/[^)\s]+\)/g,'$1')
+    // «да будет НЕдоволен им Аллах» о сподвижнике — ошибка модели, а не благопожелание (29.10.2026)
+    const clean=String(raw||'').replace(/(да\s+будет\s+)недовол/gi,'$1довол').replace(/```[\s\S]*?```/g,'').replace(/^[^\n]*:[ \t]*\n?[ \t]*<?https?:\/\/\S+>?[ \t]*$/gm,'').replace(/\[([^\]\n]+)\]\((?:https?:)?\/\/[^)\s]+\)/g,'$1')
       .replace(/<?https?:\/\/[^\s>)»]+>?/g,'').replace(/[ \t]+$/gm,'').replace(/\n{3,}/g,'\n\n').trim();
     const inline=x=>escape(x).replace(/`([^`]+)`/g,'$1').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/__([^_]+)__/g,'<b>$1</b>')
       .replace(/(^|[\s(«])\*([^*\s][^*]*?)\*(?=[\s.,;:!?»)]|$)/g,'$1<i>$2</i>').replace(/\*\*/g,'');
