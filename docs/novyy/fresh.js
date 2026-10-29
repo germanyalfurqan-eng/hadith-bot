@@ -121,9 +121,10 @@
     const arabicTitle=arabicTitleOf(record);
     const arabic=String(record.arabic||'').trim();
     const expanded=expandedRecords.has(String(record.id));
-    const secondary=russian&&arabic?`<div class="card-arabic-extra"><span>Оригинал</span><p lang="ar" dir="rtl">${escape(expanded?arabic:excerpt(arabic))}</p></div>`:'';
+    // владелец 30.10: «арабский сначала идёт, он приоритет, не перевод» — оригинал сверху, перевод под ним (как у Корана)
+    const secondary=russian&&arabic?`<div class="card-arabic-extra card-arabic-main"><p lang="ar" dir="rtl">${escape(expanded?arabic:excerpt(arabic))}</p></div>`:'';
     const canExpand=!record.isExcerpt&&Math.max(text.length,arabic.length)>220;
-    return `<article class="hadith-card" data-card="${index}" data-record-id="${escape(record.id)}"><div class="card-header"><button type="button" class="book-seal seal-button" data-book-about="${index}" aria-label="О книге: ${escape(bookSource)}">${icon('book')}</button>${sourceLine(bookSource,arabicTitle,number,'card-source')}</div><div class="card-text${!russian && text ? ' arabic-preview' : ''}"${!russian && text ? ' lang="ar" dir="rtl"' : ''}>${escape(text ? (expanded?text:excerpt(text)) : record.title || 'Открыть текст')}</div>${secondary}${canExpand?`<button type="button" class="card-expand" data-expand="${index}" aria-expanded="${expanded}">${expanded?'Свернуть':'Развернуть'}</button>`:''}<div class="card-footer">${metadata}<div class="card-actions"><button type="button" class="card-save${saved ? ' saved' : ''}" data-save="${index}" aria-label="${saved ? 'Убрать из закладок' : 'Сохранить в закладках'}" aria-pressed="${saved}">${icon('bookmark')}</button><button type="button" class="open-card" data-open="${index}">Подробнее${icon('arrow')}</button></div></div></article>`;
+    return `<article class="hadith-card" data-card="${index}" data-record-id="${escape(record.id)}"><div class="card-header"><button type="button" class="book-seal seal-button" data-book-about="${index}" aria-label="О книге: ${escape(bookSource)}">${icon('book')}</button>${sourceLine(bookSource,arabicTitle,number,'card-source')}</div>${secondary}<div class="card-text${!russian && text ? ' arabic-preview' : ' card-ru'}"${!russian && text ? ' lang="ar" dir="rtl"' : ''}>${escape(text ? (expanded?text:excerpt(text)) : record.title || 'Открыть текст')}</div>${canExpand?`<button type="button" class="card-expand" data-expand="${index}" aria-expanded="${expanded}">${expanded?'Свернуть':'Развернуть'}</button>`:''}<div class="card-footer">${metadata}<div class="card-actions"><button type="button" class="card-save${saved ? ' saved' : ''}" data-save="${index}" aria-label="${saved ? 'Убрать из закладок' : 'Сохранить в закладках'}" aria-pressed="${saved}">${icon('bookmark')}</button><button type="button" class="open-card" data-open="${index}">Подробнее${icon('arrow')}</button></div></div></article>`;
   }
   const cardPartsCache=new Map(),cardPartsPending=new Map(),cardPartsObservers=new WeakMap();
   const deferredCardRenders=new Map(),deferredCardPaints=new Map();let selectionGestureTarget=null,selectionFlushTimer;
@@ -1263,7 +1264,8 @@
     const DIA='[\\u064B-\\u065F\\u0670\\u0640]*';
     const nameRe=s=>{const f=String(s).replace(/[\u064B-\u065F\u0670\u0640]/g,'').replace(/\s+/g,' ').trim();if(!f)return null;
       const word=w=>/^[اأإآ]ب[ويا]$/.test(w)?'[اأإآ]'+DIA+'ب'+DIA+'[وياى]'+DIA:w.split('').map(ch=>(/[اأإآ]/.test(ch)?'[اأإآ]':/[يى]/.test(ch)?'[يى]':/[هة]/.test(ch)?'[هة]':ch.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'))+DIA).join('');
-      return new RegExp(f.split(' ').map(word).join('\\s+'));};
+      // между словами имени в тексте бывает запятая («سُمَىٍّ، مَوْلَى أَبِي بَكْرٍ» — Бухари №654, а разбор отдаёт без неё)
+      return new RegExp(f.split(' ').map(word).join('[\\s،,]+'));};
     let from={node:null,offset:0};
     // владелец 29.10: «все должны быть передатчики выделены» — и без опознанного номера: такой зовёт выбор из тёзок
     // ищем вперёд от прошлого имени; не нашлось — с начала текста (запасной поиск имён дописывает пропущенных в конец

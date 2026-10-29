@@ -621,8 +621,15 @@
       const plain=t=>String(t||'').replace(/[\u064B-\u065F\u0670\u0640]/g,'');
       const links=((p&&p.links)||[]).filter(l=>l&&l.name&&!/رسول الله|النبي|رسول اللة/.test(plain(l.name)));
       try{if(typeof loadNarrNames==='function')await loadNarrNames();}catch(e){}
-      let seq=null;try{const r=await bestChain(args.collection,args.number,text);seq=r&&r.seq&&r.seq.length===links.length?r.seq:null;}catch(e){}
+      let seq=null,chainIds=[];try{const r=await bestChain(args.collection,args.number,text);seq=r&&r.seq&&r.seq.length===links.length?r.seq:null;chainIds=r&&r.seq?r.seq.filter(x=>typeof x==='number'):[];}catch(e){}
+      // З-144 (владелец 30.10: ни один передатчик без отметки): имя не опознано — пробуем часть до «مولى» и сверяем
+      // с готовой цепью хадиса по значимому слову («سمى مولى أبي بكر» → Сумайй, вольноотпущенник Абу Бакра)
+      const foldN=t=>plain(t).replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه'),STOPN=new Set(['بن','ابن','ابو','ابي','عبد','بنت','ام','الله','مولي']);
+      const byChain=async said=>{const w=foldN(said).split(/\s+/).filter(t=>t.length>2&&!STOPN.has(t));if(!w.length)return null;
+        for(const cid of chainIds){let c=null;try{c=await _narrCard(cid);}catch(e){}const cw=foldN(c&&c[1]).split(/\s+/);if(c&&w.slice(0,2).some(t=>cw.includes(t)))return cid;}return null;};
       const out=[];for(let i=0;i<links.length&&i<30;i++){let id=seq&&seq[i]!=null?seq[i]:null;if(id==null){try{id=await _narrLookup(links[i].name);}catch(e){}}
+        if(id==null){const cut=String(links[i].name).split(/\s+مَ?وْ?لَ?ى\S*\s+/)[0];if(cut&&cut!==links[i].name){try{id=await _narrLookup(cut);}catch(e){}}}
+        if(id==null)id=await byChain(links[i].name);
         out.push({said:String(links[i].name),id:id==null?null:String(id)});}
       // the parse stops at «ح» (a second chain): the names after it come from the old view's own name finder
       try{const seen=new Set(out.map(x=>plain(x.said).replace(/\s+/g,' ').trim()));
