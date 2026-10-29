@@ -235,8 +235,9 @@
       if(data.rec!=='husary'||!Array.isArray(segments)||!segments.length)throw Error('Разметка не совпала с количеством слов аята');
       const start=Number(verse.f),end=Number(verse.t);let last=start,lastWord=0;
       if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start)throw Error('Неверная разметка времени');
-      for(const segment of segments){const [n,f,t]=segment||[];if(!Number.isSafeInteger(n)||n<1||n>count||(n!==lastWord&&n!==lastWord+1)||!Number.isFinite(f)||!Number.isFinite(t)||f<last||t<=f||t>end)throw Error('Разметка слов неполная');last=t;lastWord=n;}
-      if(lastWord!==count)throw Error('Разметка не совпала с количеством слов аята');
+      // the reciter may repeat a phrase (40:40 — words 17–19 twice): a word may come back; time only moves forward
+      let maxWord=0;for(const segment of segments){const [n,f,t]=segment||[];if(!Number.isSafeInteger(n)||n<1||n>count||!Number.isFinite(f)||!Number.isFinite(t)||f<last-50||t<=f||t>end+50)throw Error('Разметка слов неполная');last=t;lastWord=n;maxWord=Math.max(maxWord,n);}
+      if(maxWord!==count)throw Error('Разметка не совпала с количеством слов аята');
       const url=new URL(data.audio);if(url.protocol!=='https:'||url.hostname!=='download.quranicaudio.com')throw Error('Источник аудио недоступен');
       return {url:url.href,start,end,segments,reciter:'Махмуд аль-Хусари'};
     }
