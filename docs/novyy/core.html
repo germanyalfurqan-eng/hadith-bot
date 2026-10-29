@@ -3,8 +3,8 @@
 <head>
 <base href="../">
 <meta name="robots" content="noindex,nofollow">
-<link rel="stylesheet" href="novyy/experiment.css?v=20261029234107">
-<link rel="stylesheet" href="novyy/reader-refresh.css?v=20261029234107">
+<link rel="stylesheet" href="novyy/experiment.css?v=20261029235032">
+<link rel="stylesheet" href="novyy/reader-refresh.css?v=20261029235032">
 <style>body.ml-tool-only #app > :not(#res),body.ml-tool-only #botNav{display:none!important}body.ml-tool-only #app,body.ml-tool-only #res{display:block!important}</style>
 <meta charset="utf-8">
 <meta name="viewport" id="vpMeta" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
@@ -8821,7 +8821,7 @@ async function maktabaByNum(seq, n){
     try{ _stdTxt[code]=canon(stripDiac(hh.text||'').replace(/ـ/g,'')); }catch(e){_тихо(e,"L5890")}
     const wrap=document.createElement('div'); wrap.className='canonStd';
     const lbl=document.createElement('div'); lbl.className='hint'; lbl.style.cssText='font-size:calc(11px * var(--txtScale,1));margin:2px 0 3px;color:#7fb3ff'; lbl.textContent='⚡ наше издание (стандартная нумерация) — мгновенно';
-    wrap.appendChild(lbl); wrap.appendChild(cardHadith({code:code, h:hh}, []));   // M379: UI-код канона (ibnmajah → ابن ماجه), данные грузились по ec
+    const _mlCard=cardHadith({code:code, h:hh}, []); _mlCard.__mlNumberRecord={kind:'canonical',code:code,h:hh,n:n}; wrap.appendChild(lbl); wrap.appendChild(_mlCard);   // M379: UI-код канона (ibnmajah → ابن ماجه), данные грузились по ec
     // владелец (03.07.2026): «дублируешь сверху и снизу цепь» — этот повторный dzChainInto() был ЛИШНИМ: cardHadith()
     // САМА уже вызывает dzChainInto ВНУТРИ карточки (_cardHadithOne, тем же bid/num) — тут получался буквальный дубль
     // всего блока «Цепочка передатчиков». Убрано (было: const _dzb={...}[code]; if(_dzb) dzChainInto(wrap,_dzb,n)).
@@ -8916,7 +8916,7 @@ async function maktabaByNum(seq, n){
       ob.textContent='📖 '+bn+' №'+n; ob.title='Открыть '+bn+' №'+n+' в книге (лист '+it[0]+')'; ob.onclick=()=>{ try{ openBook(bid, it[0], false, _hlИзОтрывка(it[1])); }catch(e){_тихо(e,"L5974")} }; card.appendChild(ob); }   // R45: «Книга №» активная ссылка как везде (не «открыть в книге»)
     try{ dzChainLazy(card, bid, n); }catch(e){_тихо(e,"L5975")}   // 🧬 M378b: цепочка по кодам Э1.1 (#335: лениво+через гейт)
     try{ enableArabusTap(ar); }catch(e){_тихо(e,"L5976")}
-    wrap.appendChild(lbl); wrap.appendChild(card);
+    card.__mlNumberRecord={kind:'book',bid:String(bid),n:n,page:it[0]||'',text:it[1],full:true,title:(tr&&tr.ru)||bn,arabicTitle:bn}; wrap.appendChild(lbl); wrap.appendChild(card);
     if(isAux){ restHdr.style.display='block'; list.appendChild(wrap); shown++; }   // M407: сборники — в нижнюю зону, в счётчик первоисточников НЕ идут
     else { (topSlots.get(bid)||listTop).appendChild(wrap); shown++; shownF++; if(SRC_OF[bid]) srcSet.add(SRC_OF[bid]); }
     _headTxt(' · ищу ещё…');
@@ -8945,7 +8945,7 @@ async function maktabaByNum(seq, n){
   if(_ужеЕсть){ try{ _ужеЕсть.parentNode.removeChild(_ужеЕсть); }catch(e){} }
   res.insertBefore(edTglBox, listCanon);
   const tail=document.createElement('div'); tail.style.cssText='text-align:center;margin:10px 0;animation:fadeInUp .25s ease-out both';   // #635: плавное появление свода «⏳ ищу дальше…»/«ещё книги»
-  const more=document.createElement('button'); more.className='mini'; more.style.cssText='border:1px solid var(--border);padding:8px 16px;border-radius:10px'; more.textContent='⬇️ Ещё книги с №'+n;
+  const more=document.createElement('button'); more.className='mini'; more.style.cssText='border:1px solid var(--border);padding:8px 16px;border-radius:10px'; more.textContent='⬇️ Ещё книги с №'+n; more.dataset.mlNumberMore='1';
   tail.appendChild(more); res.appendChild(tail);
   const seen=new Set(); let page=0, shown=0, shownF=0, emptyRuns=0, busy=false, done=false;
   const mark=new RegExp('(^|[^٠-٩])'+arN+'\\s*[-–—]');   // маркер «N -» (число целиком, не кусок большего и не сноска)
@@ -8963,6 +8963,7 @@ async function maktabaByNum(seq, n){
       +'</div>'; }
     if(x.author) h+='<div class="nbAuth" style="font-size:calc(12px * var(--txtScale,1));color:var(--link);margin-top:2px;direction:rtl;text-align:right;cursor:pointer" title="Все книги этого автора">✍️ '+esc(x.author)+'</div>';
     const i=sn.search(mark); const frag=i>=0?sn.slice(i).replace(/^[^٠-٩]*/,''):sn;
+    card.__mlNumberRecord={kind:'book',bid:bid,n:n,page:x.page_id||x.page||'',text:frag,full:false,title:(tr&&tr.ru)||bn,arabicTitle:bn,author:x.author||''};
     if(frag) h+='<div style="direction:rtl;text-align:right;font-size:calc(14px * var(--txtScale,1));line-height:1.8;margin-top:5px;color:var(--text)">'+clampTx(frag,180)+'</div>';   /* #670 (С67): вместо немого обрыва — «развернуть» (кнопка «📜 Текст + инструменты» рядом остаётся) */
     h+='<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="mini nbBtn" style="font-size:calc(12.5px * var(--txtScale,1));padding:6px 12px">📖 Открыть №'+n+(x.vol?(' · т.'+esc(String(x.vol))+' стр.'+esc(String(x.page||'')) ):'')+'</button>'
       +'<button class="mini nbFull" style="font-size:calc(12.5px * var(--txtScale,1));padding:6px 12px" title="Полный текст хадиса прямо здесь + Перевод/Передатчики/Где ещё передаётся">📜 Текст + инструменты</button></div>';
@@ -28347,6 +28348,6 @@ function openUnifiedReader(code, fromNum){
 
 </script>
 
-<script src="novyy/core-bridge.js?v=20261029234107"></script><script src="novyy/reader-refresh.js?v=20261029234107"></script><script src="novyy/narrator-experiment.js?v=20261029234107"></script>
+<script src="novyy/core-bridge.js?v=20261029235032"></script><script src="novyy/reader-refresh.js?v=20261029235032"></script><script src="novyy/narrator-experiment.js?v=20261029235032"></script>
 </body>
 </html>
