@@ -894,7 +894,7 @@
   window.addEventListener('message',event=>{
     if(event.origin!==location.origin||event.source!==parent||event.data?.source!=='muslimoon-design-ui')return;
     const {id,action,args}=event.data;
-    if(typeof id!=='string'||!['ready','suraInfo','narrators','bookToc','translate','takhrij','narrCands','chainFind','narrCard','isnadLinks','maktabaSearch','arabus','tafsir','quranSettings','suraVerses','catalog','bookInfo','bookPageData','locateLeaf','bookMeta','leafByHadith','lastLeaf','hermesAsk','quranWordData','quranAudioInfo','quranTimedAudio','quranVerse','quranNeighbor','search','read','browse','scientific','library','tool','toolsCatalog','openOriginalTool','showOriginalHome','numberMore','assistantAsk'].includes(action))return;
+    if(typeof id!=='string'||!['ready','suraInfo','narrators','bookToc','translate','takhrij','narrCands','rootForms','chainFind','narrCard','isnadLinks','maktabaSearch','arabus','tafsir','quranSettings','suraVerses','catalog','bookInfo','bookPageData','locateLeaf','bookMeta','leafByHadith','lastLeaf','hermesAsk','quranWordData','quranAudioInfo','quranTimedAudio','quranVerse','quranNeighbor','search','read','browse','scientific','library','tool','toolsCatalog','openOriginalTool','showOriginalHome','numberMore','assistantAsk'].includes(action))return;
     // Only the actions that drive the old screen (search, browse, its tools) must wait their turn; data-only requests run
     // at once (owner 29.10: «очень долго грузится») — the hadith search no longer waits for the library, cards for each other.
     if(!SERIAL_ONLY.has(action)){request(action,args||{}).then(payload=>send(id,payload)).catch(e=>send(id,null,String(e&&e.message||e)));return;}
@@ -925,9 +925,9 @@
 // кэш браузера, так что при следующем открытии это мгновенно.
 (function(){
   if(window.top===window||typeof loadCollection!=='function')return;
-  // every book the search reads (READABLE), the six first
-  const first=['bukhari','muslim','abudawud','tirmidhi','nasai','ibnmajah','malik'],all=(typeof READABLE!=='undefined'?READABLE.map(x=>String(x.code)):[]);
-  const codes=[...first,...all.filter(c=>!first.includes(c))];
+  // only the six books and Malik: their files exist as editions/ara-<code>.min.json. Прогрев всего READABLE звал и
+  // ara-ahmad.min.json, которого на сайте нет — журнал ошибок получил A-261 «HTTP 404» ×22 (29.10)
+  const codes=['bukhari','muslim','abudawud','tirmidhi','nasai','ibnmajah','malik'];
   const idle=fn=>(window.requestIdleCallback?requestIdleCallback(fn,{timeout:4000}):setTimeout(fn,300));
   setTimeout(()=>{let i=0;const next=()=>{if(i>=codes.length)return;const c=codes[i++];Promise.resolve().then(()=>loadCollection(c)).catch(()=>{}).finally(()=>idle(next));};idle(next);},2500);
 })();
