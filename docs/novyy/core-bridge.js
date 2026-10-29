@@ -7,7 +7,10 @@
   // Arabic and Russian texts by collection+number alone. These two pairs were
   // checked against the actual texts during the current preview session.
   const verifiedTextPairs=new Set(['bukhari|1','bukhari|321']);
-  const canPairText=row=>verifiedTextPairs.has(String(row.collection)+'|'+String(row.number));
+  // 29.10 (owner: «как это арабский недоступен?»): for al-Bukhari and Abu Dawud our Russian numbering is the Arabic one —
+  // the old app pairs them the same way; 9 of 9 sampled pairs matched by meaning. Muslim differs and stays unpaired.
+  const pairedCollections=new Set(['bukhari','abudawud']);
+  const canPairText=row=>pairedCollections.has(String(row.collection))||verifiedTextPairs.has(String(row.collection)+'|'+String(row.number));
   const names={bukhari:'Сахих аль-Бухари',muslim:'Сахих Муслим',abudawud:'Сунан Абу Дауда',tirmidhi:'Сунан ат-Тирмизи',nasai:'Сунан ан-Насаи',ibnmajah:'Сунан Ибн Маджи',ibnmaja:'Сунан Ибн Маджи',malik:'Муватта имама Малика',ahmad:'Муснад имама Ахмада',nawawi:'40 хадисов ан-Навави',muhaymin:'Мухэймин'};
   const send=(id,payload,error)=>parent.postMessage({source,id,payload,error},location.origin);
   let ruPromise=null;
@@ -320,6 +323,28 @@
     if(action==='bookInfo')return bookInfo(args.collection);
     if(action==='toolsCatalog')return originalTools();
     // Помощник мини-аппа на отдельном Гермесе (владелец #4302): своя сессия на пользователя, экран и белый список действий.
+    // Передатчики хадиса: имена из иснада и карточки из нашей базы (19 106 равиев) — [id,имя,кунья,нисба,смерть,Ибн Хаджар,аз-Захаби,табака].
+    if(action==='narrators'){
+      const card=async id=>{let c=null;try{c=await _narrCard(id);}catch(e){}return c?{name:String(c[1]||''),id:String(id),full:String(c[1]||''),kunya:String(c[2]||''),nisba:String(c[3]||''),death:String(c[4]||''),hajar:String(c[5]||''),dhahabi:String(c[6]||''),tabaqa:String(c[7]||'')}:null;};
+      // 1) the hadith's own chain from our base — narrators by id, no namesakes
+      try{if(args.collection&&args.number&&typeof dzChainFull==='function'){
+        const book=(await catalog()).collections.find(c=>String(c.id)===String(args.collection));
+        const r=book&&book.bid?await dzChainFull(+book.bid,String(args.number).replace(/\D.*$/,'')):null,seq=r&&(r.seq||r.s||(Array.isArray(r)?r:null));
+        if(seq&&seq.length){const items=[];for(const id of seq.slice(0,30)){const c=await card(id);if(c)items.push(c);}if(items.length)return {items,how:'chain'};}
+      }}catch(e){}
+      // 2) no ready chain: names from the isnad text, matched by spelling — namesakes may be confused
+      const text=String(args.text||'').slice(0,6000);if(!text||typeof isnadNarrators!=='function')return {items:[]};
+      let names=[];try{names=isnadNarrators(text)||[];}catch(e){}
+      try{if(typeof loadNarrNames==='function')await loadNarrNames();}catch(e){}
+      const items=[];
+      for(const name of names.slice(0,30)){
+        let id=null,c=null;try{id=await _narrLookup(name);}catch(e){}
+        if(id!=null){try{c=await _narrCard(id);}catch(e){}}
+        items.push({name,id:id==null?null:String(id),full:c?String(c[1]||''):'',kunya:c?String(c[2]||''):'',nisba:c?String(c[3]||''):'',death:c?String(c[4]||''):'',hajar:c?String(c[5]||''):'',dhahabi:c?String(c[6]||''):'',tabaqa:c?String(c[7]||''):''});
+      }
+      return {items,how:'names'};
+    }
+    if(action==='suraInfo'){return {names:(typeof SURA_RU!=='undefined'?SURA_RU.slice(1):[]),ayahs:(typeof SURA_AYAHS!=='undefined'?SURA_AYAHS.slice():[])};}
     if(action==='hermesAsk'){
       const question=String(args.question||'').trim();if(!question)throw Error('Введите вопрос');
       const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),150000);
@@ -565,7 +590,7 @@
   window.addEventListener('message',event=>{
     if(event.origin!==location.origin||event.source!==parent||event.data?.source!=='muslimoon-design-ui')return;
     const {id,action,args}=event.data;
-    if(typeof id!=='string'||!['ready','catalog','bookInfo','bookPageData','locateLeaf','bookMeta','leafByHadith','lastLeaf','hermesAsk','quranWordData','quranAudioInfo','quranTimedAudio','quranVerse','quranNeighbor','search','read','browse','scientific','library','tool','toolsCatalog','openOriginalTool','showOriginalHome','numberMore','assistantAsk'].includes(action))return;
+    if(typeof id!=='string'||!['ready','suraInfo','narrators','catalog','bookInfo','bookPageData','locateLeaf','bookMeta','leafByHadith','lastLeaf','hermesAsk','quranWordData','quranAudioInfo','quranTimedAudio','quranVerse','quranNeighbor','search','read','browse','scientific','library','tool','toolsCatalog','openOriginalTool','showOriginalHome','numberMore','assistantAsk'].includes(action))return;
     serial=serial.then(()=>request(action,args||{})).then(payload=>send(id,payload)).catch(e=>send(id,null,String(e&&e.message||e)));
   });
   let attempts=0;

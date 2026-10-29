@@ -21,6 +21,13 @@
   const sameRecord = (a,b) => `${a.kind || ''}:${a.collection || ''}:${a.id}` === `${b.kind || ''}:${b.collection || ''}:${b.id}`;
   const isSaved = record => state.bookmarks.some(x => sameRecord(x,record));
   const source = record => record.kind === 'quran' ? 'Коран' : record.bookTitle || state.collections.find(c => String(c.id) === String(record.collection))?.title || record.collection || 'Хадис';
+  // Russian translation and Arabic original of one hadith (owner 29.10: «как это арабский недоступен?»). As in the old
+  // app, our Russian numbering matches the Arabic for al-Bukhari and Abu Dawud (checked 9 of 9 pairs by meaning, 29.10);
+  // Muslim's Russian numbering differs — there the two are not put side by side.
+  const PAIRED_COLLECTIONS = new Set(['bukhari','abudawud']);
+  const SUNNAH_COM = {bukhari:'bukhari',muslim:'muslim',abudawud:'abudawud',tirmidhi:'tirmidhi',nasai:'nasai',ibnmajah:'ibnmajah',malik:'malik',ahmad:'ahmad',darimi:'darimi'};
+  const NATIVE_TOOLS = new Set(['narrators','audio','notes','source','explain','assistant','bookPage']);
+  const pairedTexts = record => PAIRED_COLLECTIONS.has(String(record.collection)) || (record.collection==='bukhari'&&['1','321'].includes(String(record.number)));
   const recordNumber = record => record.kind === 'quran' && record.sura && record.ayah ? `Сура ${record.sura}, аят ${record.ayah}` : record.number != null && String(record.number) !== '' ? (/^(т\.|стр\.)/.test(String(record.number)) ? String(record.number) : `№ ${record.number}`) : '';
   const fold = text => String(text).toLocaleLowerCase('ru').replace(/ё/g,'е');
   const noNoteMarkers = text => String(text || '').replace(/\[\s*[0-9٠-٩۰-۹]+\s*\]/g,'').replace(/\s+/g,' ').trim();
@@ -68,6 +75,9 @@
   }
   document.addEventListener('click',event => {const a = event.target.closest && event.target.closest('a[href]'); if (!a || !isExternal(a.href)) return; event.preventDefault(); askLeave(a.href);},true);
   window.addEventListener('message',event => {if (event.data && typeof event.data.muslimoonLeave === 'string' && isExternal(event.data.muslimoonLeave)) askLeave(event.data.muslimoonLeave);});
+  document.addEventListener('pointerdown',event=>{const b=event.target.closest('button,[role="button"],a.setting-card,summary,select');if(!b||b.disabled)return;
+    b.classList.remove('tap-flash');void b.offsetWidth;b.classList.add('tap-flash');setTimeout(()=>b.classList.remove('tap-flash'),460);
+    try{const h=window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.HapticFeedback;if(h&&window.Telegram.WebApp.initData)h.selectionChanged();}catch(_){}},{passive:true,capture:true});
   function toast(message) {
     $('#toast').textContent = message; $('#toast').hidden = false;
     clearTimeout(toastTimeout); toastTimeout = setTimeout(() => $('#toast').hidden = true,2900);
@@ -99,7 +109,7 @@
     openBookInfo(row || {id: code, bid: record.bid, title: source(record), arabicTitle: arabicTitleOf(record)});
   }
   function card(record,index) {
-    if(record.kind==='hadith'&&record.arabic&&record.russian&&!(record.collection==='bukhari'&&['1','321'].includes(String(record.number))))record={...record,russian:'',pairingUnverified:true};
+    if(record.kind==='hadith'&&record.arabic&&record.russian&&!pairedTexts(record))record={...record,russian:'',pairingUnverified:true};
     const saved = isSaved(record), russian = String(record.russian || '').trim(), text = russian || String(record.arabic || '').trim();
     const bookSource = source(record), number = recordNumber(record), title = noNoteMarkers(record.title || '');
     if(record.kind==='quran')return `<article class="hadith-card quran-card" data-card="${index}" data-record-id="${escape(record.id)}"><div class="card-header"><span class="book-seal">${icon('quran')}</span><span class="card-source">Коран${number?`<span class="card-number"> · ${escape(number)}</span>`:''}</span></div><div class="card-text arabic-preview" lang="ar" dir="rtl">${escape(excerpt(record.arabic||''))}</div>${russian?`<p class="quran-card-translation">${escape(excerpt(russian))}</p>`:''}<div class="card-footer"><div class="card-actions"><button type="button" class="card-save${saved?' saved':''}" data-save="${index}" aria-label="${saved?'Убрать из закладок':'Сохранить в закладки'}" aria-pressed="${saved}">${icon('bookmark')}</button><button type="button" class="open-card" data-open="${index}">Подробнее${icon('arrow')}</button></div></div></article>`;
@@ -171,7 +181,7 @@
     $$('[data-expand]',target).forEach(button=>button.onclick=()=>{
       const record=items[Number(button.dataset.expand)],element=button.closest('.hadith-card');
       const expanded=button.getAttribute('aria-expanded')!=='true';if(expanded)expandedRecords.add(String(record.id));else expandedRecords.delete(String(record.id));button.setAttribute('aria-expanded',String(expanded));button.textContent=expanded?'Свернуть':'Развернуть';
-      const safeRussian=record.kind==='hadith'&&record.arabic&&record.russian&&!(record.collection==='bukhari'&&['1','321'].includes(String(record.number)))?'':String(record.russian||'');
+      const safeRussian=record.kind==='hadith'&&record.arabic&&record.russian&&!pairedTexts(record)?'':String(record.russian||'');
       const text=safeRussian||String(record.arabic||'');const main=element.querySelector('.card-text');if(main)main.textContent=expanded?text:excerpt(text);
       const ar=element.querySelector('.card-arabic-extra p');if(ar)ar.textContent=expanded?String(record.arabic||''):excerpt(record.arabic||'');
       if(record.kind==='hadith'&&record.arabic)cardParts(record).then(parts=>paintCardParts(element,record,parts));
@@ -235,7 +245,7 @@
   $('#font-up').onclick = () => {state.font = Math.min(2,state.font + 1); applyFont();}; applyFont();
   $$('[data-theme-option]').forEach(a => a.classList.toggle('active',a.dataset.themeOption === document.documentElement.dataset.theme));
   // «Настроить поиск» → under the field a row of modes, one tap each (owner 29.10); the detailed panel stays below.
-  const MODE_CHIPS = [['normal','По словам'],['diac','С огласовками'],['root','По корню'],['matnonly','Только матн'],['narr','Передатчик'],['ctor','Цепь'],['rag','RAG'],['ai','✦ По смыслу · ИИ']];
+  const MODE_CHIPS = [['normal','По словам'],['diac','С огласовками'],['root','По корню'],['matnonly','Только матн'],['narr','Передатчик'],['ctor','Цепь'],['rag','RAG']];
   const modeChips = document.createElement('div'); modeChips.className = 'mode-chips'; modeChips.setAttribute('role','group'); modeChips.setAttribute('aria-label','Как искать'); modeChips.hidden = true;
   modeChips.innerHTML = MODE_CHIPS.map(([id,label]) => `<button type="button" class="mode-chip" data-mode-chip="${id}" aria-pressed="false">${label}</button>`).join('');
   $('.search-options').after(modeChips);
@@ -268,6 +278,22 @@
   const optionRow = document.createElement('div'); optionRow.className = 'search-option-row'; $('#refine-toggle').before(optionRow); optionRow.append($('#refine-toggle'),aiQuick);
   aiQuick.onclick = () => {setAiMode(!state.aiMode); $('#query').focus();};
   // The chain constructor is the «Цепь» mode chip (owner П-46): no separate card in the settings.
+  // Коран: выбор суры и аята «крутилками» под строкой поиска (owner 29.10: «как в старой — сура и аят»). На телефоне
+  // <select> открывается колесом выбора. Сура меняет список аятов; «Открыть» показывает аят.
+  const quranPick=document.createElement('div');quranPick.className='quran-pick';quranPick.hidden=true;
+  quranPick.innerHTML='<label><span>Сура</span><select class="qp-sura" aria-label="Сура"></select></label><label><span>Аят</span><select class="qp-ayah" aria-label="Аят"></select></label><button type="button" class="qp-open">Открыть</button>';
+  $('.search-options').after(quranPick);
+  let suraInfo=null;
+  async function fillQuranPick(){
+    if(!suraInfo){try{suraInfo=await state.api.suraInfo();}catch(_){return;}}
+    const s=quranPick.querySelector('.qp-sura');if(!s.options.length)s.innerHTML=suraInfo.names.map((n,i)=>`<option value="${i+1}">${i+1}. ${escape(n)}</option>`).join('');
+    fillAyahs();
+  }
+  function fillAyahs(){const s=+quranPick.querySelector('.qp-sura').value||1,n=suraInfo&&suraInfo.ayahs[s-1]||7,a=quranPick.querySelector('.qp-ayah'),keep=+a.value||1;
+    a.innerHTML=Array.from({length:n},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('');a.value=String(Math.min(keep,n));}
+  quranPick.querySelector('.qp-sura').onchange=()=>{quranPick.querySelector('.qp-ayah').value='1';fillAyahs();};
+  quranPick.querySelector('.qp-open').onclick=()=>{const s=quranPick.querySelector('.qp-sura').value,a=quranPick.querySelector('.qp-ayah').value;$('#query').value=s+':'+a;syncPlaceholder();performSearch();};
+  function syncQuranPick(){const q=state.section==='quran';quranPick.hidden=!q;$('#refine-toggle').hidden=q;if(q){$('#refine-panel').hidden=true;$('#refine-toggle').setAttribute('aria-expanded','false');if(state.api)fillQuranPick();}}
   function askAssistant(text) {openNativeAssistant(); const question = String(text || '').trim(); if (question) {assistantInput.value = question; $('#native-assistant-form').requestSubmit();}}
   $('#refine-toggle').onclick = () => {const opened = $('#refine-panel').hidden; $('#refine-panel').hidden = !opened; modeChips.hidden = !opened || state.section === 'quran'; syncModeChips(); $('#refine-toggle').setAttribute('aria-expanded',String(opened));};
   const modeHelp = {normal:'Введите слово или фразу на русском или арабском.',diac:'Совпадение строго с огласовками — так, как вы набрали.',rag:'Ищем по смыслу в подготовленных книгах нашей базы.',root:'Введите арабское слово: найдём также слова с тем же корнем.',matnonly:'Ищем в самом высказывании, без цепочки передатчиков.',narr:'Введите имя человека, который передал хадис.',chain:'Введите арабские имена из цепочки передатчиков — иснада.'};
@@ -283,9 +309,13 @@
   const BOOK_SHORT={bukhari:'Бухари',muslim:'Муслим',abudawud:'Абу Дауд',tirmidhi:'Тирмизи',nasai:'Насаи',ibnmajah:'Ибн Маджа',malik:'Малик',ahmad:'Ахмад',darimi:'Дарими'};
   const GROUPS=[{id:'six',title:'Шесть сборников',ids:['bukhari','muslim','abudawud','tirmidhi','nasai','ibnmajah']},{id:'two',title:'Два Сахиха',ids:['bukhari','muslim']},
     {id:'sunan',title:'Сунаны',ids:['abudawud','tirmidhi','nasai','ibnmajah','darimi']},{id:'musnad',title:'Муснад и Муватта',ids:['ahmad','malik']}];
+  const SECTION_PICKS=['كتب السنة','شروح الحديث','علوم الحديث','التفسير','العقيدة','الفقه العام','التراجم والطبقات','السيرة النبوية'];
+  const authorPicks=[];
   const where=document.createElement('div');where.className='where-block';
-  where.innerHTML='<p class="where-title">Где искать</p><div class="where-row where-groups"></div><div class="where-row where-books"></div>'
-    +'<div class="where-find"><input type="search" class="where-input" placeholder="Другая книга или раздел — начните вводить" aria-label="Найти книгу или раздел"><div class="where-suggest" hidden></div></div><div class="where-chosen"></div>';
+  where.innerHTML='<p class="where-title">Где искать</p><div class="where-row where-groups" hidden></div><div class="where-row where-books"></div>'
+    +'<details class="where-more"><summary>Ещё условия: раздел, автор, другая книга</summary><p class="where-sub">Раздел библиотеки</p><div class="where-row where-sections"></div>'
+    +'<p class="where-sub">Книга, автор или другой раздел</p><div class="where-find"><input type="search" class="where-input" placeholder="Название, автор или раздел — начните вводить" aria-label="Найти книгу, автора или раздел"><div class="where-suggest" hidden></div></div>'
+    +'<p class="where-sub where-later">По времени (век автора) — появится, когда соберём годы жизни авторов: в каталоге их пока нет.</p></details><div class="where-chosen"></div>';
   $('#refine-panel .refine-head').after(where);
   // the old pickers stay working underneath, but out of sight: one way to choose, not three
   ['label[for="category-select"]','#category-select','label[for="collection-select"]','#collection-select','#collection-chips','label[for="mode-select"]','#mode-select'].forEach(sel=>document.querySelector(sel)?.classList.add('legacy-scope'));
@@ -296,6 +326,7 @@
   function setScope(list){multiScope.length=0;list.forEach(x=>multiScope.push(x));$('#category-select').value='all';$('#collection-select').value='all';renderMultiScope();filtersChanged();}
   function scopeLabel(){
     if(!multiScope.length)return 'Все книги';
+    if(authorPicks.length&&multiScope.every(x=>x.kind==='book'&&authorPicks.some(a=>a.ids.includes(x.id))))return 'автор: '+authorPicks.map(a=>a.name).join(', ');
     const inc=includedIds(),onlyBooks=multiScope.every(x=>x.kind==='book'&&!x.exclude),g=onlyBooks&&GROUPS.find(g=>sameSet(g.ids,inc));if(g)return g.title;
     const name=x=>x.kind==='book'?(BOOK_SHORT[x.id]||shortCollection(x.title)):x.title.split('|')[0].trim();
     const yes=multiScope.filter(x=>!x.exclude).map(name),no=multiScope.filter(x=>x.exclude).map(name);
@@ -303,15 +334,25 @@
   }
   function renderWhere(){
     const inc=includedIds(),onlyBooks=multiScope.every(x=>x.kind==='book'&&!x.exclude);
-    where.querySelector('.where-groups').innerHTML=`<button type="button" class="collection-chip${multiScope.length?'':' selected'}" data-where-all>Все книги</button>`
-      +GROUPS.map(g=>`<button type="button" class="collection-chip${onlyBooks&&sameSet(g.ids,inc)?' selected':''}" data-where-group="${g.id}">${g.title}</button>`).join('');
-    where.querySelector('.where-books').innerHTML=MAIN_BOOKS.filter(id=>state.collections.some(c=>c.id===id)).map(id=>`<button type="button" class="collection-chip${inc.includes(id)?' selected':''}" data-where-book="${id}" aria-pressed="${inc.includes(id)}">${BOOK_SHORT[id]}</button>`).join('');
-    const extra=multiScope.filter(x=>x.exclude||!MAIN_BOOKS.includes(x.id)||x.kind!=='book');
-    where.querySelector('.where-chosen').innerHTML=extra.map(x=>`<span class="where-pick${x.exclude?' excluded':''}">${x.exclude?'без: ':''}${escape(x.kind==='book'?shortCollection(x.title):x.title.split('|')[0].trim())}<button type="button" data-where-remove="${escape(x.kind+'|'+x.id)}" aria-label="Убрать">×</button></span>`).join('');
+    // books one by one (owner 29.10: «убери кнопки комбо, оставь по одному»)
+    where.querySelector('.where-groups').innerHTML=`<button type="button" class="collection-chip${multiScope.length?'':' selected'}" data-where-all>Все книги</button>`;
+    where.querySelector('.where-books').innerHTML=`<button type="button" class="collection-chip${multiScope.length?'':' selected'}" data-where-all>Все книги</button>`+MAIN_BOOKS.filter(id=>state.collections.some(c=>c.id===id)).map(id=>`<button type="button" class="collection-chip${inc.includes(id)?' selected':''}" data-where-book="${id}" aria-pressed="${inc.includes(id)}">${BOOK_SHORT[id]}</button>`).join('');
+    const authorIds=new Set(authorPicks.flatMap(a=>a.ids));
+    const extra=multiScope.filter(x=>(x.exclude||!MAIN_BOOKS.includes(x.id)||x.kind!=='book')&&!(x.kind==='book'&&authorIds.has(x.id)&&!x.exclude));
+    const cats=state.categories.filter(c=>SECTION_PICKS.includes(String(c.id)));
+    where.querySelector('.where-sections').innerHTML=cats.map(c=>{const on=multiScope.some(x=>x.kind==='category'&&x.id===String(c.id)&&!x.exclude);return `<button type="button" class="collection-chip${on?' selected':''}" data-where-section="${escape(c.id)}">${escape(c.title.split('|')[0].replace(/\s*\(.*?\)\s*/g,' ').trim())}</button>`;}).join('');
+    where.querySelector('.where-chosen').innerHTML=authorPicks.map((a,i)=>`<span class="where-pick">автор: ${escape(a.name)} · ${a.ids.length}<button type="button" data-where-author-remove="${i}" aria-label="Убрать">×</button></span>`).join('')+extra.map(x=>`<span class="where-pick${x.exclude?' excluded':''}">${x.exclude?'без: ':''}${escape(x.kind==='book'?shortCollection(x.title):x.title.split('|')[0].trim())}<button type="button" data-where-remove="${escape(x.kind+'|'+x.id)}" aria-label="Убрать">×</button></span>`).join('');
   }
   where.addEventListener('click',event=>{
     const t=event.target.closest('button');if(!t)return;
-    if(t.hasAttribute('data-where-all'))setScope([]);
+    if(t.hasAttribute('data-where-all')){authorPicks.length=0;setScope([]);return;}
+    if(t.dataset.whereSection){const id=t.dataset.whereSection,item=state.categories.find(c=>String(c.id)===id),on=multiScope.some(x=>x.kind==='category'&&x.id===id);
+      setScope(on?multiScope.filter(x=>!(x.kind==='category'&&x.id===id)):[...multiScope,{kind:'category',id,title:item?item.title:id,exclude:false}]);return;}
+    if(t.dataset.whereAuthorRemove){const a=authorPicks.splice(+t.dataset.whereAuthorRemove,1)[0];if(a)setScope(multiScope.filter(x=>!(x.kind==='book'&&a.ids.includes(x.id))));return;}
+    if(t.dataset.whereAuthor){const name=t.dataset.whereAuthor,ids=state.collections.filter(c=>String(c.author||'').trim()===name).map(c=>String(c.id)).slice(0,90);if(!ids.length)return;
+      authorPicks.push({name:name.split('|').pop().trim(),ids});setScope([...multiScope.filter(x=>!ids.includes(x.id)),...ids.map(id=>({kind:'book',id,title:bookTitleOf(id),exclude:false}))]);
+      where.querySelector('.where-input').value='';where.querySelector('.where-suggest').hidden=true;return;}
+    if(false){}
     else if(t.dataset.whereGroup){const g=GROUPS.find(x=>x.id===t.dataset.whereGroup);setScope(g.ids.filter(id=>state.collections.some(c=>c.id===id)).map(id=>({kind:'book',id,title:bookTitleOf(id),exclude:false})));}
     else if(t.dataset.whereBook){const id=t.dataset.whereBook,list=multiScope.filter(x=>!(x.kind==='book'&&x.id===id));if(list.length===multiScope.length)list.push({kind:'book',id,title:bookTitleOf(id),exclude:false});setScope(list);}
     else if(t.dataset.whereRemove){const [kind,...rest]=t.dataset.whereRemove.split('|'),id=rest.join('|');setScope(multiScope.filter(x=>!(x.kind===kind&&x.id===id)));}
@@ -323,8 +364,10 @@
     const q=catalogFold(event.target.value).trim(),box=where.querySelector('.where-suggest');if(q.length<2){box.hidden=true;box.innerHTML='';return;}
     const cats=state.categories.filter(c=>catalogFold(c.title).includes(q)).slice(0,3).map(c=>({kind:'category',id:String(c.id),title:c.title.split('|')[0].trim(),sub:`раздел · ${c.count||''} книг`}));
     const books=state.collections.filter(c=>catalogFold(`${c.title} ${c.arabicTitle||''} ${c.author||''}`).includes(q)).slice(0,6).map(c=>({kind:'book',id:String(c.id),title:c.title,sub:String(c.author||'').split('|').pop().trim()}));
-    const rows=[...cats,...books];
-    box.innerHTML=rows.length?rows.map(r=>`<div class="where-option"><span dir="auto"><strong>${escape(r.title)}</strong><small>${escape(r.sub)}</small></span><button type="button" data-where-add="${escape(r.kind+'|'+r.id)}">Искать</button><button type="button" class="where-exclude" data-where-add="${escape(r.kind+'|'+r.id)}" data-where-exclude="1">Без</button></div>`).join(''):'<p class="where-none">Не нашлось — попробуйте по-арабски или по автору</p>';
+    const authorsSeen=new Map();for(const c of state.collections){const a=String(c.author||'').trim();if(a&&catalogFold(a).includes(q))authorsSeen.set(a,(authorsSeen.get(a)||0)+1);}
+    const authors=[...authorsSeen.entries()].sort((x,y)=>y[1]-x[1]).slice(0,3).map(([a,n])=>({kind:'author',id:a,title:a.split('|').pop().trim(),sub:`автор · ${n} книг`}));
+    const rows=[...authors,...cats,...books];
+    box.innerHTML=rows.length?rows.map(r=>r.kind==='author'?`<div class="where-option"><span dir="auto"><strong>${escape(r.title)}</strong><small>${escape(r.sub)}</small></span><button type="button" data-where-author="${escape(r.id)}">Все его книги</button></div>`:`<div class="where-option"><span dir="auto"><strong>${escape(r.title)}</strong><small>${escape(r.sub)}</small></span><button type="button" data-where-add="${escape(r.kind+'|'+r.id)}">Искать</button><button type="button" class="where-exclude" data-where-add="${escape(r.kind+'|'+r.id)}" data-where-exclude="1">Без</button></div>`).join(''):'<p class="where-none">Не нашлось — попробуйте по-арабски или по автору</p>';
     box.hidden=false;
   });
   function renderMultiScope(){
@@ -359,7 +402,7 @@
     state.section = button.dataset.section; state.searchToken++;
     $$('[data-section]').forEach(b => {b.classList.toggle('selected',b === button); b.setAttribute('aria-pressed',String(b === button));});
     $('#collection-chips').hidden = state.section === 'quran'; $('#category-select').disabled = state.section === 'quran'; $('#collection-select').disabled = state.section === 'quran'; $('#mode-select').disabled = state.section === 'quran';
-    filtersChanged(); showWelcome(); resetPlaceholder();
+    filtersChanged(); showWelcome(); resetPlaceholder(); try {syncQuranPick();} catch (_) {}
   });
   function shortCollection(title) {return String(title || '').replace(/^Сахих\s+/i,'').replace(/^Сунан\s+/i,'').replace(/\s*\([^)]*\)\s*/g,' ').trim();}
   function renderChips() {
@@ -604,6 +647,9 @@
     if(name==='bookPage'&&record?.bid&&record?.page){openNativeBook(record.bid,record.page,source(record));return;}
     if(name==='assistant'||name==='explain'){openNativeAssistant(record);return;}
     if(name==='notes'){const k=noteKeyOf(record);if(k)openNoteEditor(k.rk,k.label,k.ref);else openNotes();return;}
+    if(name==='narrators'){openNarrators(record);return;}
+    if(name==='audio'){speakRecord(record);return;}
+    if(name==='source'){const base=SUNNAH_COM[record.collection];if(base)askLeave(`https://sunnah.com/${base}:${String(record.number).replace(/\D.*$/,'')}`);return;}
     try {
       if (!state.api || typeof state.api.tool !== 'function') throw new Error('Tool unavailable');
       const response = await state.api.tool(name,record);
@@ -611,8 +657,8 @@
       if (response?.notice && !response?.opened) {$('#assistant-notice').textContent = String(response.notice); $('#assistant-notice').hidden = false;}
     } catch (_) {
       const message = name === 'chain' ? 'В этом макете конструктор передач сейчас недоступен.' : ['assistant','rag'].includes(name) ? 'В этом макете помощник не ответил. Поиск и чтение источников доступны.' : 'В этом макете инструмент сейчас недоступен. Поиск и чтение источников доступны.';
-      $('#assistant-notice').textContent = message; $('#assistant-notice').hidden = false;
-      if (state.view !== 'assistant') {showView('assistant');}
+      // a short message where the person is — not a jump to an empty «Инструменты» page (owner 29.10: «голая страница»)
+      toast(message);
     }
   }
   $$('[data-tool]').forEach(button => button.onclick = () => invokeTool(button.dataset.tool));
@@ -775,7 +821,7 @@
   $('#native-assistant-close').onclick=()=>assistantDialog.close();
   // Header that says what this is (owner П-45: «не просто „Помощник“ — серьёзный помощник»), with the session
   // number in small letters; outside Telegram — a plain note that the full helper lives inside Telegram.
-  const assistTitle=$('#native-assistant-title');assistTitle.textContent='ИИ-помощник Muslimoon';
+  const assistTitle=$('#native-assistant-title');assistTitle.textContent='AI MUSLIMOON';
   const assistSub=document.createElement('p');assistSub.className='native-assistant-sub';assistTitle.after(assistSub);
   const inTelegram=!!(window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.initData);
   function syncAssistHead(){let sid='';try{sid=localStorage.getItem('muslimoon_assist_sid')||'';}catch(_){}
@@ -828,6 +874,41 @@
   notesDialog.querySelector('.notes-list').addEventListener('click',event=>{const card=event.target.closest('.note-card');if(!card)return;const n=notesLoad().find(x=>x.rk===card.dataset.rk);if(!n)return;
     if(event.target.closest('[data-note-edit]'))openNoteEditor(n.rk,n.label,n.ref);else if(event.target.closest('[data-note-open]')){notesDialog.close();openNoteRef(n.ref);}});
   window.addEventListener('muslimoon-notes',openNotes);
+
+  // ── Передатчики — в новом виде (owner 29.10: «все кнопки проверь на смысл»): цепочка по порядку, у каждого имя,
+  // кунья и нисба, год смерти и оценки Ибн Хаджара и аз-Захаби из нашей базы; цвет — по словам оценки.
+  const narrDialog=document.createElement('dialog');narrDialog.className='native-assistant-dialog narr-dialog';
+  narrDialog.innerHTML=`<div class="native-assistant-shell"><header class="native-assistant-head"><span class="book-seal">${icon('book')}</span><h2>Передатчики</h2><button type="button" class="native-assistant-close narr-close" aria-label="Закрыть">×</button></header><div class="notes-body narr-body"></div></div>`;
+  document.body.appendChild(narrDialog);narrDialog.querySelector('.narr-close').onclick=()=>narrDialog.close();
+  const gradeClass=g=>/صحاب|ثقة|ثبت|حافظ|إمام|حجة/.test(g)?'grade-sound':/صدوق|لا بأس|مقبول/.test(g)?'grade-good':/ضعيف|متروك|كذاب|مجهول|منكر|لين|ليس بالقوي|وضاع|متهم/.test(g)?'grade-weak':'';
+  // «مالك بن أنس بن مالك بن أبي عامر …» → three links of the lineage, the rest in the tooltip
+  const shortNasab=t=>{const parts=String(t||'').split(/\s+بن\s+/);return parts.length>3?parts.slice(0,3).join(' بن ')+' …':String(t||'');};
+  async function openNarrators(record){
+    const body=narrDialog.querySelector('.narr-body');body.innerHTML='<div class="native-chat-pending"><span class="think-dots"><i></i><i></i><i></i></span><span class="think-text">Разбираю цепочку</span></div>';
+    if(!narrDialog.open)narrDialog.showModal();
+    let full=record;if(!full.arabic&&state.api){try{full={...record,...(await state.api.read(record))};}catch(_){}}
+    if(!full.arabic){body.innerHTML='<p class="notes-hint">У этой записи нет арабского текста с цепочкой — разобрать передатчиков не из чего.</p>';return;}
+    let items=[],how='';try{const r=await state.api.narrators(full.arabic,full.collection,full.number);items=r.items||[];how=r.how||'';}catch(_){}
+    if(!items.length){body.innerHTML='<p class="notes-hint">Цепочку передатчиков из этого текста выделить не удалось.</p>';return;}
+    const byName=how!=='chain';
+    body.innerHTML=`<p class="notes-hint">${escape(source(full))}${full.number?' · № '+escape(full.number):''} · от собирателя к Пророку ﷺ · оценки из нашей базы (19 106 передатчиков)</p>`
+      +(byName?'<p class="narr-warn">Готовой цепочки для этого хадиса в базе нет: передатчики определены по написанию имён — у тёзок возможна путаница, оценки сверяйте.</p>':'')
+      +items.map((n,i)=>`<article class="narr-row"><span class="narr-step">${i+1}</span><div><p class="narr-name" lang="ar" dir="rtl" title="${escape(n.full||n.name)}">${escape(shortNasab(n.full||n.name))}</p>`
+        +`${(n.kunya||n.nisba)?`<p class="narr-sub" lang="ar" dir="rtl">${escape([n.kunya,n.nisba].filter(Boolean).join(' · '))}</p>`:''}`
+        +`${n.death?`<p class="narr-meta">ум. ${escape(n.death)}${n.tabaqa?' · табака '+escape(n.tabaqa):''}</p>`:''}`
+        +`${n.hajar?`<p class="narr-grade ${byName?'':gradeClass(n.hajar)}"><span>Ибн Хаджар:</span> <b lang="ar" dir="rtl">${escape(n.hajar)}</b></p>`:''}`
+        +`${n.dhahabi?`<p class="narr-grade ${byName?'':gradeClass(n.dhahabi)}"><span>аз-Захаби:</span> <b lang="ar" dir="rtl">${escape(n.dhahabi)}</b></p>`:''}`
+        +`${n.id?'':'<p class="narr-meta">в нашей базе не найден</p>'}</div></article>`).join('');
+  }
+  // ── Озвучить — голосом самого телефона (как в прежнем виде): арабский, если в телефоне есть арабский голос, иначе перевод.
+  function speakRecord(record){
+    const synth=window.speechSynthesis;if(!synth||typeof SpeechSynthesisUtterance==='undefined'){toast('Озвучка на этом телефоне недоступна');return;}
+    if(synth.speaking||synth.pending){synth.cancel();toast('Озвучка остановлена');return;}
+    const voices=synth.getVoices()||[],arVoice=voices.find(v=>/^ar/i.test(v.lang)),useAr=!!(arVoice&&record.arabic),text=String(useAr?record.arabic:(record.russian||record.arabic||'')).replace(/\s+/g,' ').slice(0,4000);
+    if(!text){toast('Нечего озвучить');return;}
+    const u=new SpeechSynthesisUtterance(text);u.lang=useAr?'ar-SA':(record.russian?'ru-RU':'ar-SA');if(useAr)u.voice=arVoice;u.rate=.95;synth.speak(u);
+    toast(useAr?'Озвучиваю арабский текст — нажмите ещё раз, чтобы остановить':record.russian?'Арабского голоса в телефоне нет — озвучиваю перевод':'Озвучиваю — нажмите ещё раз, чтобы остановить');
+  }
 
   // ── «Назад» всегда под рукой (owner П-45): кнопка «назад» Телеграма закрывает верхнее окно, иначе возвращает к поиску.
   const tgBack=window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.BackButton;
@@ -1090,9 +1171,9 @@
     }else if(record.kind==='hadith'&&record.arabic&&!(Array.isArray(record.parts)&&record.parts.length)){
       $('#reader-body').insertAdjacentHTML('afterbegin','<p class="reader-missing">Разделение цепочки передатчиков и текста хадиса для этой записи пока не подтверждено.</p>');
     }
-    const readerTools = record.kind==='quran'?[{id:'quranReader',title:'Открыть читалку Корана',icon:'book'},{id:'explain',title:'Пояснение',icon:'helper'}]:record.kind==='book'?[...(record.page?[{id:'bookPage',title:'Открыть страницу книги',icon:'book'}]:[]),{id:'explain',title:'Пояснение',icon:'helper'},{id:'notes',title:'Мои заметки',icon:'pen'}]:[{id:'chain',title:'Конструктор передач',icon:'grid'},{id:'versions',title:'Сравнить версии',icon:'source'},{id:'narrators',title:'Передатчики',icon:'book'},{id:'explain',title:'Пояснение',icon:'helper'},{id:'audio',title:'Аудио',icon:'audio'},{id:'notes',title:'Мои заметки',icon:'pen'},{id:'source',title:'Открыть источник',icon:'source'}];
+    const readerTools = record.kind==='quran'?[{id:'quranReader',title:'Открыть читалку Корана',icon:'book'},{id:'explain',title:'Пояснение',icon:'helper'}]:record.kind==='book'?[...(record.page?[{id:'bookPage',title:'Открыть страницу книги',icon:'book'}]:[]),{id:'explain',title:'Пояснение',icon:'helper'},{id:'notes',title:'Мои заметки',icon:'pen'}]:[{id:'narrators',title:'Передатчики',icon:'book'},{id:'explain',title:'Пояснение',icon:'helper'},{id:'audio',title:'Озвучить',icon:'audio'},{id:'notes',title:'Мои заметки',icon:'pen'},...(SUNNAH_COM[record.collection]?[{id:'source',title:'На sunnah.com',icon:'source'}]:[])];
     $('.reader-tool-actions').innerHTML = `<details class="reader-tools-disclosure" open><summary>Инструменты <span>${readerTools.length}</span></summary><div class="reader-tools-grid">${readerTools.map(tool => `<button type="button" data-reader-tool="${tool.id}">${icon(tool.icon)}<span>${tool.title}</span>${icon('arrow')}</button>`).join('')}</div>${record.kind==='book'?'<p>Для этого отрывка доступны перечисленные инструменты. Остальные функции требуют полного текста и проверки источника.</p>':''}</details>`;
-    $$('[data-reader-tool]').forEach(button => button.onclick = () => {$('#reader').close(); invokeTool(button.dataset.readerTool,record);});
+    $$('[data-reader-tool]').forEach(button => button.onclick = () => {if (!NATIVE_TOOLS.has(button.dataset.readerTool)) $('#reader').close(); invokeTool(button.dataset.readerTool,record);});
   }
   async function openReader(record,options={}) {
     stopReaderAudio();
@@ -1106,10 +1187,12 @@
   $('#reader').addEventListener('close',() => {stopReaderAudio();state.readerToken++; document.body.style.overflow = '';});
   $('#reader').addEventListener('click',event => {if (event.target === $('#reader')) $('#reader').close();});
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const examples = ['бухари 1','2:255','дела по намерениям','إنما الأعمال بالنيات'];
+  const EXAMPLES = {hadith:['бухари 1','дела по намерениям','إنما الأعمال بالنيات','муслим 8'],quran:['2:255','милость','1:1','الرحمن الرحيم']};
+  const exs = () => EXAMPLES[state.section === 'quran' ? 'quran' : 'hadith'];
   let exampleIndex = 0, exampleTimer, exampleFadeTimer;
   function syncPlaceholder() {
-    const hidden = Boolean($('#query').value) || document.activeElement === $('#query');
+    // in AI mode the hint «Спросите ИИ-помощника…» stands alone — no running example on top of it (owner 29.10)
+    const hidden = Boolean($('#query').value) || document.activeElement === $('#query') || !!state.aiMode;
     $('#clear-query').hidden = !$('#query').value;
     $('#search-submit').disabled = !$('#query').value.trim();
     $('#query-example').hidden = hidden;
@@ -1117,11 +1200,11 @@
     if (!hidden && !reducedMotion.matches && !document.hidden) exampleTimer = setTimeout(nextExample,3800);
   }
   function nextExample() {
-    if ($('#query').value || document.activeElement === $('#query') || reducedMotion.matches || document.hidden) return;
+    if ($('#query').value || document.activeElement === $('#query') || reducedMotion.matches || document.hidden || state.aiMode) return;
     $('#query-example').classList.add('leaving');
-    exampleFadeTimer = setTimeout(() => {exampleIndex = (exampleIndex+1)%examples.length; const text = examples[exampleIndex]; $('#query-example').textContent = text; $('#query-example').lang = /[\u0600-\u06ff]/.test(text) ? 'ar' : 'ru'; $('#query-example').classList.remove('leaving'); exampleTimer = setTimeout(nextExample,3800);},320);
+    exampleFadeTimer = setTimeout(() => {exampleIndex = (exampleIndex+1)%exs().length; const text = exs()[exampleIndex]; $('#query-example').textContent = text; $('#query-example').lang = /[\u0600-\u06ff]/.test(text) ? 'ar' : 'ru'; $('#query-example').classList.remove('leaving'); exampleTimer = setTimeout(nextExample,3800);},320);
   }
-  function resetPlaceholder() {exampleIndex = state.section === 'quran' ? 1 : 0; $('#query-example').textContent = examples[exampleIndex]; $('#query-example').lang = 'ru'; syncPlaceholder();}
+  function resetPlaceholder() {exampleIndex = 0; $('#query-example').textContent = exs()[0]; $('#query-example').lang = 'ru'; syncPlaceholder();}
   $('#query').addEventListener('input',() => {syncPlaceholder(); if (!$('#query').value.trim() && state.api) {state.searchToken++; showWelcome();}});
   $('#clear-query').onclick = () => {$('#query').value = ''; state.searchToken++; showWelcome(); syncPlaceholder(); $('#query').focus();};
   $('#query').addEventListener('focus',syncPlaceholder); $('#query').addEventListener('blur',syncPlaceholder);

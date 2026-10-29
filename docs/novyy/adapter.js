@@ -41,7 +41,7 @@
     onNumberUpdate:callback=>{numberListener=callback;},
     numberMore:query=>ask('numberMore',{query}),
     assistantAsk:question=>ask('assistantAsk',{question}),
-    hermesAsk:(question,screen,actions,opora)=>ask('hermesAsk',{question,screen,actions,opora}),
+    suraInfo:()=>ask('suraInfo',{}),narrators:(text,collection,number)=>ask('narrators',{text,collection,number}),hermesAsk:(question,screen,actions,opora)=>ask('hermesAsk',{question,screen,actions,opora}),
     bookPageData:(bid,leaf)=>ask('bookPageData',{bid,leaf}),
     locateLeaf:(collection,number,text)=>ask('locateLeaf',{collection,number,text}),
     bookMeta:bid=>ask('bookMeta',{bid}),
