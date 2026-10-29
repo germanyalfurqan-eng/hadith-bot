@@ -32579,7 +32579,13 @@ async def _api_serve(application=None):
         # доступ, частота, квота ИИ; ссылки на хадисы в ответе проходят тот же заслон _хадис_доказательством.
         d = await _body(r)
         user = verify_init_data(d.get('initData'))
-        if not feature_allowed('neuro', user):
+        # #4303 (29.10): «пока не запускать, а следить» — Гермес мини-аппа отвечает только владельцу
+        # (и служебной проверке по секрету бэкапа); остальным мини-апп показывает прежнего помощника.
+        _vladelec = bool(user) and str((user or {}).get('id')) == str(OWNER_ID)
+        _proverka = bool(d.get('secret')) and hmac.compare_digest(str(d.get('secret')), os.environ.get('BACKUP_SECRET', '') or '\x00')
+        if not (_vladelec or _proverka):
+            return _cors(web.json_response({'error': 'Помощник на Гермесе пока в проверке у владельца', 'hermes_closed': True}, status=403))
+        if not feature_allowed('neuro', user) and not _proverka:
             return _deny('assistant')
         uid = _uid(user, r)
         if not rate_ok('hermes:' + uid, 8, 120):
@@ -32613,8 +32619,20 @@ async def _api_serve(application=None):
         if not ans.strip():
             return _cors(web.json_response({'error': 'Помощник не дал ответа. Попробуйте переформулировать.'}, status=502))
         ans = await _хадис_доказательством(ans)
+        _model = os.environ.get('HERMES_MINIAPP_MODEL', 'DeepSeek V4.1 Flash · OpenCode')
         _учесть_фоном(user, "помощник мини-аппа (Гермес)", True, len(q), "", "")
-        return _cors(web.json_response({'answer': ans, 'model': os.environ.get('HERMES_MINIAPP_MODEL', 'DeepSeek V4.1 Flash · OpenCode')}))
+        # #4304 (29.10): вся переписка Гермеса мини-аппа — в рабочий журнал (чат журнала) и в местный журнал.
+        _kto = 'владелец' if _vladelec else ('проверка' if _proverka else 'польз. ' + sess[-8:])
+        try:
+            with open('/obmen/hermes_miniapp.jsonl', 'a', encoding='utf-8') as _f:
+                _f.write(json.dumps({'vremya': _now_msk(), 'kto': _kto, 'sessiya': sess, 'ekran': ekran, 'vopros': q, 'otvet': ans, 'model': _model}, ensure_ascii=False) + '\n')
+        except Exception:
+            pass
+        try:
+            asyncio.ensure_future(_notify('🧠 Гермес мини-аппа · ' + _kto + ' · ' + _now_msk() + '\n📍 ' + (ekran[:120] or '—') + '\n❓ ' + q[:600] + '\n💬 ' + ans[:2500] + '\n· ' + _model))
+        except Exception:
+            pass
+        return _cors(web.json_response({'answer': ans, 'model': _model}))
 
     async def groupai(r):
         # #236: app-рубильник ИИ-«ботяра» в группах (ТОЛЬКО владелец). POST {set:bool} вкл/выкл; без set — текущее состояние.
