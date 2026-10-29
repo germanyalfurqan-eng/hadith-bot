@@ -617,7 +617,11 @@
     // Имена иснада, как они стоят в тексте, с номером передатчика — чтобы имя в тексте открывало его карточку.
     if(action==='isnadLinks'){
       const text=String(args.text||'').slice(0,6000);if(!text||typeof _parseIsnad!=='function')return {links:[]};
-      let p=null;try{p=_parseIsnad(text);}catch(e){}
+      // разбор обрывался на «ـ رضى الله عنهما ـ» / «، - رضى الله عنها -» и не видел имени (Бухари №3800 — Ибн ‘Аббас):
+      // для разбора эту формулу снимаем, на экране она остаётся
+      const DH='[\\u064B-\\u065F\\u0670]*',HON=new RegExp('[،,]?\\s*[ـ\\-–]\\s*ر'+DH+'ض'+DH+'[يى]'+DH+'\\s+ا'+DH+'ل'+DH+'ل'+DH+'ه'+DH+'\\s+ع'+DH+'ن\\S*\\s*[ـ\\-–]?','g');
+      const forParse=text.replace(HON,' ');
+      let p=null;try{p=_parseIsnad(forParse);}catch(e){}
       const plain=t=>String(t||'').replace(/[\u064B-\u065F\u0670\u0640]/g,'');
       const links=((p&&p.links)||[]).filter(l=>l&&l.name&&!/رسول الله|النبي|رسول اللة/.test(plain(l.name)));
       try{if(typeof loadNarrNames==='function')await loadNarrNames();}catch(e){}
