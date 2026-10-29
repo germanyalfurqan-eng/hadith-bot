@@ -208,7 +208,15 @@
   $$('[data-view]').forEach(button => button.onclick = () => showView(button.dataset.view));
   // The AI button sits in the middle of the bottom bar (owner 29.10).
   $$('[data-ai-open]').forEach(button => button.onclick = () => openNativeAssistant());
-  $('#brand-home').onclick = event => {event.preventDefault(); showView('search');};
+  // MUSLIMOON at the top is «домой» (owner #4320: «главная кнопка сверху не работает» — on the search screen it changed
+  // nothing): close what is open, clear the search, leave AI mode, back to hadiths at the top of the page.
+  $('#brand-home').onclick = event => {
+    event.preventDefault(); $$('dialog[open]').forEach(d => {try {d.close();} catch (_) {}});
+    if (state.aiMode) setAiMode(false);
+    if (state.section === 'quran') $('[data-section="hadith"]')?.click();
+    $('#query').value = ''; state.searchToken++; showWelcome(); syncPlaceholder();
+    showView('search'); window.scrollTo({top:0,behavior:'smooth'});
+  };
   $('.rail-mark').onclick = event => {event.preventDefault(); showView('search');};
   function renderBookmarks() {
     $('#bookmark-count').textContent = String(state.bookmarks.length);
