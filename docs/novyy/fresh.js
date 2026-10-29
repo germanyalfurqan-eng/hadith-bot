@@ -1258,13 +1258,18 @@
       return new RegExp(f.split(' ').map(word).join('\\s+'));};
     let from={node:null,offset:0};
     // владелец 29.10: «все должны быть передатчики выделены» — и без опознанного номера: такой зовёт выбор из тёзок
-    for(const l of links){if(!l.said)continue;const re=nameRe(l.said);if(!re)continue;const nodes=walker();let started=!from.node;
-      for(const node of nodes){if(!started){if(node===from.node)started=true;else continue;}
-        const start=node===from.node?from.offset:0,m=re.exec(node.data.slice(start));if(!m)continue;const at=start+m.index;
+    // ищем вперёд от прошлого имени; не нашлось — с начала текста (запасной поиск имён дописывает пропущенных в конец
+    // списка: у ат-Тирмизи №5 «قتيبة، وهناد، قالا» разбор отдал одним куском, а «قتيبة» и «هناد» пришли последними)
+    const tryLink=(l,re,pos)=>{const nodes=walker();let started=!pos.node;
+      for(const node of nodes){if(!started){if(node===pos.node)started=true;else continue;}
+        const start=node===pos.node?pos.offset:0,m=re.exec(node.data.slice(start));if(!m)continue;const at=start+m.index;
         const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+m[0].length);
         const b=document.createElement('button');b.type='button';b.className='isnad-name'+(l.id?'':' isnad-name-unknown');if(l.id)b.dataset.narrCard=l.id;else b.dataset.narrSaid=l.said;b.setAttribute('aria-label',l.id?'Передатчик — открыть карточку':'Передатчик не опознан однозначно — выбрать из тёзок');
-        try{range.surroundContents(b);}catch(_){break;}
-        const next=b.nextSibling;from=next&&next.nodeType===3?{node:next,offset:0}:{node:null,offset:0};break;}}
+        try{range.surroundContents(b);}catch(_){return null;}
+        const next=b.nextSibling;return next&&next.nodeType===3?{node:next,offset:0}:{node:null,offset:0};}
+      return null;};
+    for(const l of links){if(!l.said)continue;const re=nameRe(l.said);if(!re)continue;
+      const r=tryLink(l,re,from);if(r){from=r;continue;}if(from.node)tryLink(l,re,{node:null,offset:0});}
   }
   // ── Карточка передатчика — одна на весь новый вид: из текста иснада, «Передатчиков», конструктора, закладок.
   const nCardDialog=document.createElement('dialog');nCardDialog.className='native-assistant-dialog narr-dialog ncard-dialog';
