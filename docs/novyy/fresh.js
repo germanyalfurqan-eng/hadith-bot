@@ -615,9 +615,17 @@
     catch(error){if(token!==mkState.token)return;head.textContent=String(error?.message||'сейчас не ответила');btn.hidden=true;}
   }
   mkSection.querySelector('.mk-more').onclick=()=>{mkState.page++;maktabaWave(mkState.q,true);};
+  // Поиск при наборе (владелец 29.10: «как в предыдущей версии — ввёл и сразу ответ, не дожидаясь кнопки»): после паузы
+  // в наборе — 450 мс для номера, 700 мс для слов (от 3 букв). ИИ, «по смыслу» и цепь — только по кнопке: это запросы к моделям.
+  let liveTimer=0,liveLast='';
+  $('#query').addEventListener('input',()=>{clearTimeout(liveTimer);const q=$('#query').value.trim();if(!q)liveLast='';
+    if(!q||state.aiMode||(state.section==='hadith'&&!['normal','diac','root'].includes(state.mode||'normal')))return;
+    const num=/^[\d٠-٩\s:№#.]+$/.test(q);if(!num&&q.replace(/[^\p{L}]/gu,'').length<3)return;
+    liveTimer=setTimeout(()=>{if($('#query').value.trim()===q&&q!==liveLast)performSearch();},num?450:700);});
   async function performSearch() {
     const query = $('#query').value.trim();
     if (!query) {$('#query').focus(); return;}
+    clearTimeout(liveTimer);liveLast=query;
     if (state.section==='quran'){const m=query.match(/^(\d{1,3})\s*[:.\s]\s*(\d{1,3})$/)||query.match(/^(\d{1,3})$/);if(m)setQuranPick(m[1],m[2]||1);}
     if (!state.api) {toast('Библиотека ещё открывается'); return;}
     const token = ++state.searchToken; state.results = []; state.resultQuery = query;state.shown=8;state.numberMode=false;state.numberHasMore=false;
