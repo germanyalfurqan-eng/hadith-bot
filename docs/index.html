@@ -1112,17 +1112,30 @@ window.тихоОтчёт = function () {
 #introSplash .isk{position:absolute;bottom:16px;left:0;right:0;text-align:center;font-size:calc(11px * var(--txtScale,1));color:#fff;opacity:0;transition:opacity .4s;pointer-events:none}
 #introSplash .isk.v{opacity:.3}
 @media(prefers-reduced-motion:reduce){#introSplash{display:none!important}}
+/* v1811 (владелец 29.10): видео-заставка по умолчанию выключена у всех; вместо неё короткий мягкий вход — имя
+   проявляется из дымки, затем меню поднимается каскадом. Меньше секунды, тап пропускает. */
+#introSplash.soft{background:radial-gradient(120% 85% at 50% 42%,#15120d 0%,#070a10 72%);transition:opacity .45s cubic-bezier(.22,1,.36,1),transform .45s cubic-bezier(.22,1,.36,1)}
+#introSplash.soft.gone{transform:scale(1.02)}
+#introSplash .mnWord{font:500 25px/1 Georgia,'Times New Roman',serif;letter-spacing:.44em;padding-left:.44em;background:linear-gradient(100deg,#a8854f 0%,#f2e1bd 46%,#a8854f 92%);-webkit-background-clip:text;background-clip:text;color:transparent;opacity:0;transform:translateY(5px);filter:blur(7px);animation:mnWordIn .75s cubic-bezier(.22,1,.36,1) .04s forwards}
+@keyframes mnWordIn{to{opacity:1;transform:none;filter:none;letter-spacing:.34em;padding-left:.34em}}
 @keyframes mnRise{from{opacity:0;transform:translateY(16px);filter:blur(5px)}to{opacity:1;transform:none;filter:none}}
 #app.mnReveal>*{animation:mnRise .55s cubic-bezier(.22,1,.36,1) both}
 @media(prefers-reduced-motion:reduce){#app.mnReveal>*{animation:none}}
 </style>
-<div id="introSplash"><video id="introVid" muted playsinline autoplay preload="auto" src="./intro_logo.mp4?v=1"></video><div class="isk">нажмите, чтобы пропустить</div></div>
+<div id="introSplash"><video id="introVid" muted playsinline autoplay preload="none"></video><div class="isk">нажмите, чтобы пропустить</div></div>
 <script>(function(){var s=document.getElementById('introSplash');if(!s)return;
   function LS(k){try{return localStorage.getItem(k)!=='0';}catch(e){return true;}}
-  var onVideo=LS('mn_i_video'),onSound=LS('mn_i_sound'),onVoice=LS('mn_i_voice'),onVibro=LS('mn_i_vibro');
+  // v1811: видео — только если человек сам включил его в настройках (новый ключ: прежнее «вкл по умолчанию» не в счёт).
+  var onVideo=false;try{onVideo=localStorage.getItem('mn_i_video2')==='1';}catch(e){_тихо(e,"L682v")}
+  var onSound=LS('mn_i_sound'),onVoice=LS('mn_i_voice'),onVibro=LS('mn_i_vibro');
   var reduce=false;try{reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;}catch(e){_тихо(e,"L683")}
-  try{ if(sessionStorage.getItem('mn_intro1')||reduce||!onVideo){ s.remove(); return; } }catch(e){_тихо(e,"L684")}
+  var inFrame=false;try{inFrame=window.top!==window;}catch(e){inFrame=true;}   // ядро нового дизайна — заставка не нужна
+  try{ if(sessionStorage.getItem('mn_intro1')||reduce||inFrame){ s.remove(); return; } }catch(e){_тихо(e,"L684")}
+  if(!onVideo){ var _ok=false; var _end=function(){ if(_ok)return; _ok=true; try{sessionStorage.setItem('mn_intro1','1');}catch(e){} revealMenu();
+      s.classList.add('gone'); setTimeout(function(){ try{s.remove();}catch(e){} },500); };
+    s.innerHTML='<div class="mnWord">MUSLIMOON</div>'; s.classList.add('soft'); s.addEventListener('click',_end); setTimeout(_end,900); return; }
   var v=document.getElementById('introVid'),done=false;
+  try{ v.preload='auto'; v.src='./intro_logo.mp4?v=1'; }catch(e){_тихо(e,"L684v")}
   var snd=null,voc=null;
   try{ if(onSound){snd=new Audio('./intro_snd.mp3?v=1');snd.volume=0.5;} }catch(e){_тихо(e,"L687")}
   try{ if(onVoice){voc=new Audio('./intro_voice.mp3?v=1');voc.volume=0.5;} }catch(e){_тихо(e,"L688")}
@@ -1181,7 +1194,7 @@ window.тихоОтчёт = function () {
       <!-- лого Muslimoon Bot (камень-فاعلم): качество оригинала, чёрный фон убран режимом screen; версия — абсолютно на линии текста (52%) -->
       <span style="position:relative;display:inline-flex;line-height:0;flex:none">
         <img id="brandLogo" src="./logo_v2.png?v=2" alt="Muslimoon App" style="height:86px;width:auto;display:block;filter:drop-shadow(0 0 10px rgba(80,160,255,.45))">
-        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1810</span>
+        <span class="ver" id="verBadge" style="position:absolute;top:3px;right:3px;left:auto;transform:none;white-space:nowrap;z-index:2" title="🆕 Что нового — нажми">v1811</span>
       </span>
     </div>
     <div style="display:flex;gap:6px;flex:none">
@@ -2070,7 +2083,7 @@ window.тихоОтчёт = function () {
 <script>
 /* ===================== КОНФИГ ===================== */
 const OWNER_ID = 131827895;
-const APPVER = 'v1810';
+const APPVER = 'v1811';
 // ЕДИНЫЙ СТЕК МОДАЛОК (ревизия 11.07, корень «окно за кадром»): НИКАКИХ ручных z-index —
 // каждое открытие зовёт modalTop(el): окно ложится ПОВЕРХ текущей поверхности. Счётчик только растёт.
 let _zTop=10100;
@@ -26218,7 +26231,7 @@ var _sunsw=document.getElementById('sunBtnSw'); if(_sunsw){ _sunsw.classList.tog
     sw.classList.toggle('on',on());
     sw.onclick=function(){ var nv=!on(); try{ localStorage.setItem(key,nv?'1':'0'); }catch(e){_тихо(e,"L17121")} sw.classList.toggle('on',nv); try{ toast(nv?onT:offT); }catch(e){_тихо(e,"L17121")} };
   }
-  bindI('introVideoSw','mn_i_video','🎬 Видео-заставка вкл','Видео-заставка выкл');
+  bindI('introVideoSw','mn_i_video2','🎬 Видео-заставка вкл','Видео-заставка выкл', true);   // v1811: по умолчанию ВЫКЛ у всех (владелец 29.10)
   bindI('introSoundSw','mn_i_sound','🔊 Звук заставки вкл','Звук заставки выкл');
   bindI('introVoiceSw','mn_i_voice','🎙 Голос-приветствие вкл','Голос-приветствие выкл');
   bindI('introTapSndSw','mn_i_tapsnd','🔊 Кнопка звука на заставке вкл','Кнопка звука на заставке выкл', true);   // #625: по умолчанию ВЫКЛ — сохраняем ваше решение #618

@@ -342,7 +342,7 @@
       stopNumberWatch();
       const wanted=args.section==='quran'?'quran':'hadith';
       const field=document.getElementById('q');field.value='';
-      const mode=['root','matnonly','narr','chain'].includes(args.mode)?args.mode:'normal';
+      const mode=['root','diac','rag','matnonly','narr','chain'].includes(args.mode)?args.mode:'normal';
       document.querySelectorAll('.chip[data-mode]').forEach(chip=>{
         const should=chip.dataset.mode===mode;
         if(chip.classList.contains('on')!==should)chip.click();
@@ -516,4 +516,15 @@
       clearInterval(timer);send('ready',collections());
     }else if(attempts>300){clearInterval(timer);send('ready',null,'Не удалось запустить поисковое ядро');}
   },100);
+})();
+
+// Уход из приложения из ядра (владелец 29.10): окно «Выйти из приложения?» ядра рисуется в скрытой рамке, и человек его
+// не видит. Поэтому ядро ничего не открывает само — отдаёт адрес странице, а та спрашивает и открывает.
+(function(){
+  if(window.top===window)return;
+  const external=u=>{try{const x=new URL(String(u),location.href);return /^https?:$/.test(x.protocol)&&x.host!==location.host;}catch(_){return false;}};
+  const handOver=u=>{try{parent.postMessage({muslimoonLeave:String(u)},'*');}catch(_){}};
+  try{window.openLink=function(u){const url=String(u||'');if(!url)return;if(external(url))handOver(url);};}catch(_){}
+  const nativeOpen=window.open;window.open=function(u){if(u&&external(u)){handOver(u);return null;}return nativeOpen.apply(window,arguments);};
+  document.addEventListener('click',event=>{const a=event.target.closest&&event.target.closest('a[href]');if(!a||!external(a.href))return;event.preventDefault();event.stopPropagation();handOver(a.href);},true);
 })();

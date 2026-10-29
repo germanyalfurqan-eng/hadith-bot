@@ -48,6 +48,24 @@
     }
     return (start > 0 ? '…' : '') + clean.slice(start,end).trim() + (end < clean.length ? '…' : '');
   }
+  // Before any way out of the app — a question (owner's law since v1095, repeated 29.10). Sites open in the
+  // external browser through Telegram; the person stays in the app until they say «Перейти».
+  const leaveDialog = document.createElement('dialog'); leaveDialog.className = 'leave-dialog';
+  leaveDialog.innerHTML = '<form method="dialog" class="leave-shell"><h2>Выйти из приложения?</h2><p class="leave-text"></p><p class="leave-url" dir="ltr"></p><div class="leave-actions"><button value="stay" class="leave-stay">Остаться</button><button value="go" class="leave-go">Перейти</button></div></form>';
+  document.body.appendChild(leaveDialog);
+  const SITE_NAMES = [[/wikipedia\.org$/,'Википедия'],[/shamela\.ws$/,'Шамиля'],[/sunnah\.com$/,'sunnah.com'],[/dorar\.net$/,'dorar.net'],[/sunnah\.one$/,'sunnah.one'],[/islamweb\.net$/,'islamweb.net'],[/quran\.com$/,'quran.com'],[/turath\.io$/,'turath.io'],[/(^|\.)t\.me$/,'Telegram'],[/github\.(io|com)$/,'GitHub']];
+  function isExternal(url) {try {const x = new URL(String(url),location.href); return /^https?:$/.test(x.protocol) && x.host !== location.host;} catch (_) {return false;}}
+  function askLeave(url) {
+    let host = ''; try {host = new URL(String(url)).hostname.replace(/^www\./,'');} catch (_) {return;}
+    const name = (SITE_NAMES.find(([re]) => re.test(host)) || [null,host])[1];
+    leaveDialog.querySelector('.leave-text').textContent = `Откроется сайт «${name}» во внешнем браузере. Это не наш ресурс — за его содержимое мы не отвечаем.`;
+    leaveDialog.querySelector('.leave-url').textContent = String(url).length > 110 ? String(url).slice(0,110) + '…' : String(url);
+    leaveDialog.returnValue = ''; leaveDialog.showModal();
+    leaveDialog.onclose = () => {if (leaveDialog.returnValue !== 'go') return; const tg = window.Telegram && window.Telegram.WebApp;
+      try {if (tg && tg.initData && tg.openLink) tg.openLink(url); else window.open(url,'_blank','noopener');} catch (_) {window.open(url,'_blank','noopener');}};
+  }
+  document.addEventListener('click',event => {const a = event.target.closest && event.target.closest('a[href]'); if (!a || !isExternal(a.href)) return; event.preventDefault(); askLeave(a.href);},true);
+  window.addEventListener('message',event => {if (event.data && typeof event.data.muslimoonLeave === 'string' && isExternal(event.data.muslimoonLeave)) askLeave(event.data.muslimoonLeave);});
   function toast(message) {
     $('#toast').textContent = message; $('#toast').hidden = false;
     clearTimeout(toastTimeout); toastTimeout = setTimeout(() => $('#toast').hidden = true,2900);
@@ -206,24 +224,37 @@
   $('#font-up').onclick = () => {state.font = Math.min(2,state.font + 1); applyFont();}; applyFont();
   $$('[data-theme-option]').forEach(a => a.classList.toggle('active',a.dataset.themeOption === document.documentElement.dataset.theme));
   // «Настроить поиск» → under the field a row of modes, one tap each (owner 29.10); the detailed panel stays below.
-  const MODE_CHIPS = [['normal','По словам'],['ai','По смыслу · ИИ'],['root','По корню'],['narr','Передатчик'],['chain','Цепь'],['matnonly','Только матн'],['ctor','Конструктор цепей']];
+  const MODE_CHIPS = [['normal','По словам'],['diac','С огласовками'],['root','По корню'],['matnonly','Только матн'],['rag','RAG'],['narr','Передатчик'],['ctor','Цепь'],['ai','✦ По смыслу · ИИ']];
   const modeChips = document.createElement('div'); modeChips.className = 'mode-chips'; modeChips.setAttribute('role','group'); modeChips.setAttribute('aria-label','Как искать'); modeChips.hidden = true;
   modeChips.innerHTML = MODE_CHIPS.map(([id,label]) => `<button type="button" class="mode-chip" data-mode-chip="${id}" aria-pressed="false">${label}</button>`).join('');
   $('.search-options').after(modeChips);
-  function syncModeChips() {modeChips.querySelectorAll('[data-mode-chip]').forEach(b => {const on = b.dataset.modeChip === (state.mode || 'normal'); b.classList.toggle('selected',on); b.setAttribute('aria-pressed',String(on));});}
+  function syncModeChips() {modeChips.querySelectorAll('[data-mode-chip]').forEach(b => {const on = state.aiMode ? b.dataset.modeChip === 'ai' : b.dataset.modeChip === (state.mode || 'normal'); b.classList.toggle('selected',on); b.setAttribute('aria-pressed',String(on));});}
   modeChips.addEventListener('click',event => {
     const chip = event.target.closest('[data-mode-chip]'); if (!chip) return; const id = chip.dataset.modeChip;
-    if (id === 'ai') {askAssistant($('#query').value); return;}
+    if (id === 'ai') {setAiMode(true); $('#query').focus(); return;}
     if (id === 'ctor') {invokeTool('chain',null); return;}
+    if (state.aiMode) setAiMode(false);
     $('#mode-select').value = id; filtersChanged(); syncModeChips(); if ($('#query').value.trim()) performSearch();
   });
-  // The AI button inside the search field turns the query into a question to the helper (owner 29.10).
-  const askButton = document.createElement('button'); askButton.type = 'button'; askButton.id = 'ask-ai'; askButton.className = 'ask-ai'; askButton.setAttribute('aria-label','Спросить ИИ-помощника');
-  askButton.innerHTML = icon('helper'); $('#search-submit').before(askButton); askButton.onclick = () => askAssistant($('#query').value);
+  // The search line turns into a question to the helper (owner 29.10): no second boxed button — the magnifier itself is a
+  // quiet switch «Поиск ⇄ ИИ»; in AI mode the field glows gold, the hint changes and the arrow sends to the helper's chat.
+  const spark = document.createElementNS('http://www.w3.org/2000/svg','symbol'); spark.id = 'i-spark'; spark.setAttribute('viewBox','0 0 24 24');
+  spark.innerHTML = '<path d="M12 3.5l1.7 5.1 5.1 1.7-5.1 1.7L12 17.1l-1.7-5.1-5.1-1.7 5.1-1.7Z"/><path d="M18.5 15.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7Z"/>';
+  $('.icon-definitions').appendChild(spark);
+  const aiSwitch = document.createElement('button'); aiSwitch.type = 'button'; aiSwitch.className = 'ai-switch'; aiSwitch.setAttribute('aria-pressed','false');
+  aiSwitch.setAttribute('aria-label','Переключить: поиск или вопрос ИИ-помощнику'); aiSwitch.innerHTML = icon('search') + icon('spark');
+  $('.search-icon').replaceWith(aiSwitch); state.aiMode = false;
+  function setAiMode(on) {
+    state.aiMode = !!on; $('.search-field').classList.toggle('ai-mode',state.aiMode); aiSwitch.setAttribute('aria-pressed',String(state.aiMode));
+    $('#query').placeholder = state.aiMode ? 'Спросите ИИ-помощника…' : ''; $('#query-example').hidden = state.aiMode;
+    $('#search-summary').textContent = state.aiMode ? '✦ Вопрос ИИ-помощнику · ответ откроется в чате' : $('#search-summary').dataset.normal || $('#search-summary').textContent;
+    syncModeChips();
+  }
+  aiSwitch.onclick = () => {setAiMode(!state.aiMode); $('#query').focus();};
   function askAssistant(text) {openNativeAssistant(); const question = String(text || '').trim(); if (question) {assistantInput.value = question; $('#native-assistant-form').requestSubmit();}}
   $('#refine-toggle').onclick = () => {const opened = $('#refine-panel').hidden; $('#refine-panel').hidden = !opened; modeChips.hidden = !opened || state.section === 'quran'; syncModeChips(); $('#refine-toggle').setAttribute('aria-expanded',String(opened));};
-  const modeHelp = {normal:'Введите слово или фразу на русском или арабском.',root:'Введите арабское слово: найдём также слова с тем же корнем.',matnonly:'Ищем в самом высказывании, без цепочки передатчиков.',narr:'Введите имя человека, который передал хадис.',chain:'Введите арабские имена из цепочки передатчиков — иснада.'};
-  const modeNames = {normal:'По словам',root:'По корню слова',matnonly:'Текст хадиса',narr:'По передатчику',chain:'В цепочке передатчиков'};
+  const modeHelp = {normal:'Введите слово или фразу на русском или арабском.',diac:'Совпадение строго с огласовками — так, как вы набрали.',rag:'Ищем по смыслу в подготовленных книгах нашей базы.',root:'Введите арабское слово: найдём также слова с тем же корнем.',matnonly:'Ищем в самом высказывании, без цепочки передатчиков.',narr:'Введите имя человека, который передал хадис.',chain:'Введите арабские имена из цепочки передатчиков — иснада.'};
+  const modeNames = {normal:'По словам',diac:'С огласовками',rag:'RAG · по смыслу',root:'По корню слова',matnonly:'Текст хадиса',narr:'По передатчику',chain:'В цепочке передатчиков'};
   const multiScope=[];
   const scopeBox=document.createElement('details');scopeBox.className='multi-scope';
   scopeBox.innerHTML='<summary>Несколько книг и разделов</summary><p>Выберите книгу или раздел выше, затем добавьте или исключите его. Исключения имеют приоритет.</p><div><button type="button" data-scope-action="include">Добавить в поиск</button><button type="button" data-scope-action="exclude">Исключить</button></div><ul class="scope-list"></ul>';
@@ -247,7 +278,8 @@
     for(const id of ['category-select','collection-select','mode-select']){const el=$('#'+id);el.hidden=state.section==='quran';const label=document.querySelector(`label[for="${id}"]`);if(label)label.hidden=state.section==='quran';}
     const chosen = state.collections.find(c => String(c.id) === state.collection);
     const category = state.categories.find(c => String(c.id) === state.category);
-    $('#search-summary').textContent = state.section === 'quran' ? 'Коран · Текст или номер аята' : `${multiScope.length?'Выбрано условий: '+multiScope.length:(chosen?.title || category?.title || 'Все разделы')} · ${modeNames[state.mode]}`;
+    $('#search-summary').dataset.normal = state.section === 'quran' ? 'Коран · Текст или номер аята' : `${multiScope.length?'Выбрано условий: '+multiScope.length:(state.collections.find(c => String(c.id) === state.collection)?.title || state.categories.find(c => String(c.id) === state.category)?.title || 'Все разделы')} · ${modeNames[state.mode]||'По словам'}`;
+    if (!state.aiMode) $('#search-summary').textContent = state.section === 'quran' ? 'Коран · Текст или номер аята' : `${multiScope.length?'Выбрано условий: '+multiScope.length:(chosen?.title || category?.title || 'Все разделы')} · ${modeNames[state.mode]}`;
     renderChips(); syncModeChips(); if (state.section === 'quran') modeChips.hidden = true;
   }
   $('#category-select').onchange = () => {$('#collection-select').value = 'all'; filtersChanged();};
@@ -380,7 +412,7 @@
     $('#more-results').hidden=state.shown>=state.results.length&&!state.numberHasMore;
     $('#more-results').firstChild.textContent=state.numberHasMore&&state.shown>=state.results.length?'Ещё книги':'Показать ещё';
   }
-  $('#search-form').onsubmit = event => {event.preventDefault(); performSearch();};
+  $('#search-form').onsubmit = event => {event.preventDefault(); if (state.aiMode) {askAssistant($('#query').value); return;} performSearch();};
   $('#more-results').onclick = async () => {
     state.shown+=8;
     if(state.numberMode&&state.shown>state.results.length&&state.numberHasMore){
@@ -514,13 +546,49 @@
   }
   $$('[data-tool]').forEach(button => button.onclick = () => invokeTool(button.dataset.tool));
   const assistantDialog=$('#native-assistant'),assistantInput=$('#native-assistant-input'),assistantMessages=$('#native-assistant-messages');
-  const assistantKey='muslimoon_assist';let assistantBusy=false;
-  function assistantHistory(){try{const rows=JSON.parse(sessionStorage.getItem(assistantKey)||'[]');return Array.isArray(rows)?rows:[];}catch(_){return [];}}
-  function saveAssistantHistory(rows){try{sessionStorage.setItem(assistantKey,JSON.stringify(rows.slice(-30)));}catch(_){}}
-  function renderAssistant(){
-    const rows=assistantHistory();assistantMessages.innerHTML=rows.length?rows.map(row=>`<div class="native-chat-bubble ${row.role==='user'?'native-chat-user':'native-chat-bot'}">${escape(row.text||'')}${row.cached?' <small>из памяти</small>':''}${Array.isArray(row.actions)&&row.actions.length?`<div class="native-chat-actions">${row.actions.map(a=>`<button type="button" data-assist-action="${escape(a.id)}" data-assist-arg="${escape(a.arg||'')}">${escape(a.title)}</button>`).join('')}</div>`:''}</div>`).join(''):'<div class="native-chat-empty">Спросите о хадисе, аяте, слове или теме. Проверяйте ответ по источникам.</div>';
-    assistantMessages.scrollTop=assistantMessages.scrollHeight;
+  // The conversation stays on this device (owner 29.10: «переписка всегда сохраняется»); the phone shows the last 20
+  // and brings older ones back by 20 when the person scrolls up, so a long chat does not slow it down.
+  const assistantKey='muslimoon_assist',ASSIST_PAGE=20;let assistantBusy=false,assistantShown=ASSIST_PAGE;
+  function assistantHistory(){
+    try{let raw=localStorage.getItem(assistantKey);if(raw==null){raw=sessionStorage.getItem(assistantKey);if(raw!=null)localStorage.setItem(assistantKey,raw);}
+      const rows=JSON.parse(raw||'[]');return Array.isArray(rows)?rows:[];}catch(_){return [];}
   }
+  function saveAssistantHistory(rows){try{localStorage.setItem(assistantKey,JSON.stringify(rows.slice(-400)));}catch(_){}}
+  // A clean answer: the helper's markdown becomes plain emphasis, quotes and lists; code and web addresses are dropped.
+  function chatHtml(raw){
+    const clean=String(raw||'').replace(/```[\s\S]*?```/g,'').replace(/^[^\n]*:[ \t]*\n?[ \t]*<?https?:\/\/\S+>?[ \t]*$/gm,'').replace(/\[([^\]\n]+)\]\((?:https?:)?\/\/[^)\s]+\)/g,'$1')
+      .replace(/<?https?:\/\/[^\s>)»]+>?/g,'').replace(/[ \t]+$/gm,'').replace(/\n{3,}/g,'\n\n').trim();
+    const inline=x=>escape(x).replace(/`([^`]+)`/g,'$1').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/__([^_]+)__/g,'<b>$1</b>')
+      .replace(/(^|[\s(«])\*([^*\s][^*]*?)\*(?=[\s.,;:!?»)]|$)/g,'$1<i>$2</i>').replace(/\*\*/g,'');
+    const out=[];let kind='',buf=[];
+    const flush=()=>{if(buf.length)out.push(kind==='ul'?'<ul>'+buf.map(x=>'<li dir="auto">'+x+'</li>').join('')+'</ul>':kind==='ol'?'<ol>'+buf.map(x=>'<li dir="auto">'+x+'</li>').join('')+'</ol>':kind==='q'?'<blockquote dir="auto">'+buf.join('<br>')+'</blockquote>':'<p dir="auto">'+buf.join('<br>')+'</p>');buf=[];kind='';};
+    const add=(k,h)=>{if(k!==kind)flush();kind=k;buf.push(h);};
+    for(const line of clean.split('\n')){
+      const l=line.trim();let m;
+      if(!l||/^([-*_])\1{2,}$/.test(l)){flush();continue;}
+      if((m=l.match(/^#{1,6}\s+(.*)$/))){flush();out.push('<p class="chat-h" dir="auto">'+inline(m[1].replace(/\*\*/g,''))+'</p>');continue;}
+      if((m=l.match(/^>\s?(.*)$/))){add('q',inline(m[1]));continue;}
+      if((m=l.match(/^[-*•]\s+(.*)$/))){add('ul',inline(m[1]));continue;}
+      if((m=l.match(/^\d{1,2}[.)]\s+(.*)$/))){add('ol',inline(m[1]));continue;}
+      add('p',inline(l));
+    }
+    flush();return out.join('');
+  }
+  function chatRow(row){
+    if(row.role==='place')return `<div class="native-chat-place" dir="auto">${escape(row.text||'')}</div>`;
+    const body=row.role==='user'?escape(row.text||''):chatHtml(row.text||'');
+    return `<div class="native-chat-bubble ${row.role==='user'?'native-chat-user':'native-chat-bot native-chat-rich'}">${body}${row.cached?' <small>из памяти</small>':''}${Array.isArray(row.actions)&&row.actions.length?`<div class="native-chat-actions">${row.actions.map(a=>`<button type="button" data-assist-action="${escape(a.id)}" data-assist-arg="${escape(a.arg||'')}">${escape(a.title)}</button>`).join('')}</div>`:''}</div>`;
+  }
+  function renderAssistant(keepPlace){
+    const rows=assistantHistory(),from=Math.max(0,rows.length-assistantShown),before=assistantMessages.scrollHeight-assistantMessages.scrollTop;
+    const head=from>0?`<div class="native-chat-older">Выше ещё ${from} — прокрутите, чтобы подгрузить</div>`:rows.length>=40?'<div class="native-chat-older">Беседа сохранена на этом устройстве. В длинной беседе помощник помнит ранние сообщения в сжатом виде.</div>':'';
+    assistantMessages.innerHTML=rows.length?head+rows.slice(from).map(chatRow).join(''):'<div class="native-chat-empty">Спросите о хадисе, аяте, слове или теме. Проверяйте ответ по источникам.</div>';
+    assistantMessages.style.scrollBehavior='auto';assistantMessages.scrollTop=keepPlace?assistantMessages.scrollHeight-before:assistantMessages.scrollHeight;assistantMessages.style.scrollBehavior='';
+  }
+  assistantMessages.addEventListener('scroll',()=>{
+    if(assistantMessages.scrollTop>40||assistantBusy)return;const total=assistantHistory().length;if(assistantShown>=total)return;
+    assistantShown+=ASSIST_PAGE;renderAssistant(true);
+  },{passive:true});
   // ── Помощник-агент, экранная часть (owner 29.10, #4296–#4298). Actions come ONLY from this white list; the helper
   // proposes them as buttons and the person taps — nothing runs by itself, nothing reaches the server.
   const BOOKS_RU={bukhari:/бухари/i,muslim:/муслим/i,abudawud:/абу\s*дауд/i,tirmidhi:/тирмизи/i,ibnmajah:/ибн\s*мадж/i,nasai:/насаи/i,malik:/малик|муватт/i,ahmad:/ахмад|муснад/i};
@@ -589,12 +657,20 @@
     const button=event.target.closest('[data-assist-action]');if(!button)return;const action=ASSIST_ACTIONS[button.dataset.assistAction];if(!action)return;
     assistantDialog.close();action.run(button.dataset.assistArg||'');
   });
+  // «Откуда пришёл» — коротко, одной строкой: книга и номер (или аят) и начало текста (owner 29.10).
+  function placeOf(record){
+    if(!record)return '';const where=record.kind==='quran'?`Коран ${record.sura}:${record.ayah}`:[source(record),record.number?'№ '+record.number:''].filter(Boolean).join(' · ');
+    const quote=String(record.russian||record.arabic||'').replace(/\s+/g,' ').trim(),cut=quote.length>70?quote.slice(0,70).replace(/\s+\S*$/,'')+'…':quote;
+    return 'Из: '+where+(cut?` · «${cut}»`:'');
+  }
+  let assistantPlace=null;
   function openNativeAssistant(record){
-    const ctx=screenContext(),rows=assistantHistory();
-    if(!rows.length||rows[rows.length-1].ctx!==ctx.key){rows.push({role:'bot',text:ctx.text,actions:ctx.actions,ctx:ctx.key});saveAssistantHistory(rows);}
+    const ctx=screenContext(),rows=assistantHistory();assistantShown=ASSIST_PAGE;
+    const place=placeOf(record),last=rows[rows.length-1];assistantPlace=record||null;
+    if(place){if(!(last&&last.role==='place'&&last.text===place))rows.push({role:'place',text:place,ctx:ctx.key});saveAssistantHistory(rows);}
+    else if(!rows.length||[...rows].reverse().find(r=>r.ctx)?.ctx!==ctx.key){rows.push({role:'bot',text:ctx.text,actions:ctx.actions,ctx:ctx.key});saveAssistantHistory(rows);}
     renderAssistant();
-    if(record?.arabic&&!assistantInput.value)assistantInput.value='Объясни этот текст: '+String(record.arabic).slice(0,480);
-    if(!assistantDialog.open)assistantDialog.showModal();setTimeout(()=>assistantInput.focus(),30);
+    if(!assistantDialog.open)assistantDialog.showModal();assistantMessages.style.scrollBehavior='auto';assistantMessages.scrollTop=assistantMessages.scrollHeight;assistantMessages.style.scrollBehavior='';setTimeout(()=>assistantInput.focus(),30);
   }
   $('#native-assistant-close').onclick=()=>assistantDialog.close();
   window.addEventListener('muslimoon-native-assistant',()=>openNativeAssistant());
@@ -602,19 +678,24 @@
     event.preventDefault();const question=assistantInput.value.trim();if(!question||assistantBusy)return;
     if(!state.api){toast('Помощник ещё подключается');return;}
     assistantBusy=true;$('#native-assistant-send').disabled=true;assistantInput.value='';
-    const history=assistantHistory();history.push({role:'user',text:question});const proposals=intentActions(question);if(proposals.length)history.push({role:'bot',text:'Могу сразу:',actions:proposals});saveAssistantHistory(history);renderAssistant();
-    const pending=document.createElement('div');pending.className='native-chat-bubble native-chat-bot native-chat-pending';pending.textContent='Думаю…';assistantMessages.appendChild(pending);assistantMessages.scrollTop=assistantMessages.scrollHeight;
-    try{const ctx=screenContext();
+    const history=assistantHistory();history.push({role:'user',text:question});const proposals=intentActions(question);saveAssistantHistory(history);assistantShown=Math.max(assistantShown,ASSIST_PAGE);renderAssistant();
+    const pending=document.createElement('div');pending.className='native-chat-bubble native-chat-bot native-chat-pending';
+    pending.innerHTML='<span class="think-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="think-text">Думаю</span>';assistantMessages.appendChild(pending);assistantMessages.scrollTop=assistantMessages.scrollHeight;
+    const phases=[[7000,'Собираю ответ'],[18000,'Ещё немного']].map(([ms,t])=>setTimeout(()=>{const x=pending.querySelector('.think-text');if(x)x.textContent=t;},ms));
+    try{const ctx=screenContext();if(assistantPlace)ctx.text=placeOf(assistantPlace).replace(/^Из: /,'Человек пришёл из: ')+'. '+ctx.text;
       // Hermes is open only to the owner while on trial (#4303); everyone else quietly gets the previous helper.
-      const response=await state.api.hermesAsk(question,ctx.text,Object.keys(ASSIST_ACTIONS)).catch(async error=>{
+      // The first question after coming from a hadith or ayah carries its text (the server takes 800 characters).
+      let asked=question;if(assistantPlace&&!assistantPlace._sent){const room=780-question.length-60,body=String(assistantPlace.russian||assistantPlace.arabic||'').replace(/\s+/g,' ').trim();
+        if(room>120&&body)asked=`[${placeOf(assistantPlace).replace(/^Из: /,'').replace(/ · «.*$/,'')}. Текст: ${body.slice(0,room)}] Вопрос: ${question}`;assistantPlace._sent=true;}
+      const response=await state.api.hermesAsk(asked,ctx.text,Object.keys(ASSIST_ACTIONS)).catch(async error=>{
         if(!/в проверке/.test(String(error?.message||'')))throw error;
-        const old=await state.api.assistantAsk(question);return {answer:old.answer,model:''};});
-      const parsed=hermesActions(response.answer);let next=assistantHistory();
-      // Hermes answered with its own buttons — the quick «Могу сразу» row for this question is a duplicate now.
-      if(parsed.actions.length){const i=next.map(r=>r.text).lastIndexOf('Могу сразу:');if(i>=0&&i===next.length-1)next=next.slice(0,i);}
-      next.push({role:'bot',text:parsed.text.replace(/модель ИИ \(Muslimoon\)/,'модель ИИ: '+(response.model||'Muslimoon')),actions:parsed.actions});saveAssistantHistory(next);}
-    catch(error){const next=assistantHistory();next.push({role:'bot',text:error?.name==='AbortError'?'Помощник долго не отвечает. Попробуйте позже.':String(error?.message||'Связь с помощником недоступна.')});saveAssistantHistory(next);}
-    finally{assistantBusy=false;$('#native-assistant-send').disabled=false;renderAssistant();}
+        const old=await state.api.assistantAsk(asked);return {answer:old.answer,model:''};});
+      const parsed=hermesActions(response.answer);const next=assistantHistory();
+      // The helper's own buttons first, then the quick ones read from the question — one row, without repeats.
+      const buttons=parsed.actions.concat(proposals.filter(a=>!parsed.actions.some(b=>b.id===a.id&&b.arg===a.arg))).slice(0,6);
+      next.push({role:'bot',text:parsed.text.replace(/модель ИИ \(Muslimoon\)/,'модель ИИ: '+(response.model||'Muslimoon')),actions:buttons});saveAssistantHistory(next);}
+    catch(error){const next=assistantHistory();next.push({role:'bot',text:error?.name==='AbortError'?'Помощник долго не отвечает. Попробуйте позже.':String(error?.message||'Связь с помощником недоступна.'),actions:proposals});saveAssistantHistory(next);}
+    finally{phases.forEach(clearTimeout);assistantBusy=false;$('#native-assistant-send').disabled=false;renderAssistant();}
   };
   function updateReaderSave() {
     const saved = state.reader && isSaved(state.reader); $('#reader-save').classList.toggle('saved',!!saved); $('#reader-save').setAttribute('aria-pressed',String(!!saved)); $('#reader-save').setAttribute('aria-label',saved ? 'Убрать из закладок' : 'Сохранить в закладки');
