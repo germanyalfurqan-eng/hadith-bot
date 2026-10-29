@@ -431,18 +431,48 @@
     // Хаджар»): توثيق = свидетельства двух ранних муʿтабаров из 48; Сахихайн без тяжкого джарха = два; поздние
     // (Ибн Хаджар, аз-Захаби, аль-Мизи…) не в счёт; сподвижники — الصحابة عدول. Между звеньями — форма передачи из текста.
     const narrEnrich=async(items,how,text)=>{
-      let flags={},mud={};try{flags=await loadNarrFlags()||{};}catch(e){}try{mud=await _loadMudallisin()||{};}catch(e){}
-      for(const it of items){if(it.id==null)continue;const n=+it.id;
+      let flags={},mud={},m2s={};try{flags=await loadNarrFlags()||{};}catch(e){}try{mud=await _loadMudallisin()||{};}catch(e){}try{m2s=await loadMid2Sid()||{};}catch(e){}
+      // sunnah.com opinions on its narrator card (collected earlier: sunverd_full/<sid%60>.json)
+      const sunnahOf=async sid=>{if(!sid||!/^\d+$/.test(String(sid)))return [];const sh=+sid%60;window._sunverdFull=window._sunverdFull||{};
+        if(window._sunverdFull[sh]===undefined)window._sunverdFull[sh]=await fetch('./sunverd_full/'+sh+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
+        return (window._sunverdFull[sh]&&window._sunverdFull[sh][String(sid)])||[];};
+      for(const it of items){if(it.id==null)continue;const n=+it.id,sid=m2s[String(n)];
+        it.links={maktaba:'https://shamela.ws/narrator/'+n,sunnah:sid&&/^\d+$/.test(String(sid))?'https://sunnah.com/narrator/'+sid:''};
         try{if(typeof _isSahById==='function'&&await _isSahById(n)){it.verdict={kind:'sahabi',v:'صحابي — сподвижник',nT:0,nJ:0};continue;}}catch(e){}
         let list=null;try{list=await _testimGet(n);}catch(e){}
-        const inSah=flags[String(n)]==='bm';let r=null;try{r=list&&list.length?_ttNeuro(list,inSah):null;}catch(e){}
+        // critics sunnah.com has and the Maktaba card lacks — taken too (owner 29.10), same matching as the old reconciliation
+        let added=[];try{const ours=[...new Set((list||[]).map(c=>_mCanon(c[0])))];
+          added=(await sunnahOf(sid)).filter(x=>{const c=_mCanon(x.s);return c&&!ours.some(oc=>oc===c||oc.indexOf(c)>=0||c.indexOf(oc)>=0);}).map(x=>[String(x.s),String(x.q||''),'sunnah']);}catch(e){}
+        const all=(list||[]).concat(added);
+        const inSah=flags[String(n)]==='bm';let r=null;try{r=all.length?_ttNeuro(all,inSah):null;}catch(e){}
         if(!r&&inSah)r=_ttNeuro([],true);
         if(r){const kind=r.em==='🟢'?'sound':r.em==='🟡'?'mixed':r.em==='🟠'?'weak':r.em==='🔴'?'rejected':'unknown';
-          const muts=(list||[]).filter(c=>c&&c[0]&&_critOk(c[0])&&_isMut(c[0])&&String(c[1]||'').trim()).slice(0,8).map(c=>[String(c[0]),String(c[1]).slice(0,180)]);
-          it.verdict={kind,v:String(r.v||''),nT:r.nT|0,nJ:r.nJ|0,jah:r.jah|0,sahihayn:!!r.sahihayn,note:String(r.note||''),cnt:list?list.length:0,muts};}
-        else it.verdict={kind:'none',v:'',nT:0,nJ:0,cnt:list?list.length:0};
+          const muts=all.filter(c=>c&&c[0]&&_critOk(c[0])&&_isMut(c[0])&&String(c[1]||'').trim()).slice(0,10).map(c=>[String(c[0]),String(c[1]).slice(0,180),c[2]==='sunnah'?'sunnah':'maktaba']);
+          it.verdict={kind,v:String(r.v||''),nT:r.nT|0,nJ:r.nJ|0,jah:r.jah|0,sahihayn:!!r.sahihayn,note:String(r.note||''),cnt:all.length,muts,fromSunnah:added.length};}
+        else it.verdict={kind:'none',v:'',nT:0,nJ:0,cnt:all.length};
         if(mud[String(n)])it.mudallis=String((mud[String(n)]||{}).s||'');
       }
+      // each link of the ready chain is checked against the isnad text itself: the chain markup sometimes names a person
+      // who is not in this isnad (Tirmidhi 1: «يعقوب بن إسحاق» where the text has Qutayba) — such a link is flagged
+      const fold0=t=>String(t||'').replace(/[ً-ٰٟـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/\s+/g,' ').trim().replace(/(^| )اب[يا](?= )/g,'$1ابو');   // «أبي سلمة» in the text = «أبو سلمة» in the card
+      if(how==='chain'&&text){const ft=fold0(text);
+        // names of the isnad as the text says them («الأعمش», «الزهري», «ابن شهاب»), identified the way the old view does
+        const txtIds=new Set();try{if(typeof loadNarrNames==='function')await loadNarrNames();for(const nm of (isnadNarrators(text)||[]).slice(0,40)){try{const id=await _narrLookup(nm);if(id!=null)txtIds.add(String(id));}catch(e){}}}catch(e){}
+        for(const it of items){if(it.id==null)continue;const nm=fold0(it.full||it.name).split(' '),toks=[];
+          toks.push(['عبد','ابن','ابو','ام'].includes(nm[0])?nm.slice(0,2).join(' '):nm[0]);
+          if(it.kunya)toks.push(fold0(it.kunya).split(/\s*[·،,]\s*/)[0]);
+          {const k=nm.indexOf('بن');if(k>0&&nm[k+1])toks.push('ابن '+(nm[k+1]==='عبد'&&nm[k+2]?nm[k+1]+' '+nm[k+2]:nm[k+1]));}   // «ابن القاسم» for عبد الرحمن بن القاسم
+          fold0(it.nisba).split(/[\s·،,]+/).filter(w=>w.length>=5&&w.startsWith('ال')).forEach(w=>toks.push(w));
+          it.textOk=txtIds.has(String(it.id))||toks.some(t=>t&&t.length>=3&&ft.includes(t));
+          // «عن أبيه»: the link is the father of the previous one (Salim ← his father 'Abd Allah; Suhayl ← Abu Salih Dhakwan)
+          const ix=items.indexOf(it);if(!it.textOk&&ix>0&&/عن ابيه|عن ابيها/.test(ft)){const pn=fold0(items[ix-1].full||items[ix-1].name).split(' '),k=pn.indexOf('بن');
+            const fa=k>=0?(['عبد','ابو','ابي'].includes(pn[k+1])?pn.slice(k+1,k+3).join(' '):pn[k+1]||'').replace(/^ابي /,'ابو '):'';
+            if(fa&&(fold0(it.full||it.name).startsWith(fa)||fold0(it.kunya).startsWith(fa)))it.textOk=true;}if(!it.textOk)it.doubt='name';}
+        // the collector's own sheikh cannot have died decades after the collector — a namesake by kunya (Tirmidhi 1:
+        // «أبو عوانة» taken for Ya'qub al-Isfarayini, d. 316, while al-Tirmidhi died in 279)
+        const died={bukhari:256,muslim:261,abudawud:275,tirmidhi:279,nasai:303,ibnmajah:273,malik:179,ahmad:241,darimi:255}[String(args&&args.collection||'')];
+        const d0=items[0]&&parseInt(String(items[0].death||'').replace(/[^0-9]/g,''),10);
+        if(died&&d0&&d0>died+20&&!items[0].doubt)items[0].doubt='late:'+d0+':'+died;}
       // forms: the isnad text read from the compiler upwards; link i = how item i-1 (or the compiler) received from item i
       let toProphet=null;
       try{const p=typeof _parseIsnad==='function'?_parseIsnad(String(text||'').slice(0,6000)):null,links=(p&&p.links)||[];
