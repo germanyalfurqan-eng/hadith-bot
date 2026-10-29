@@ -1262,10 +1262,12 @@
     const walker=()=>{const nodes=[];const w=document.createTreeWalker(box,NodeFilter.SHOW_TEXT,{acceptNode:n=>n.parentElement&&n.parentElement.closest('button,.isnad-name')?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});let n;while((n=w.nextNode()))nodes.push(n);return nodes;};
     // the name is found whatever its vowels: «سماك بن حرب» meets «سِمَاكِ بْنِ حَرْبٍ», «أبو» meets «أَبِي»
     const DIA='[\\u064B-\\u065F\\u0670\\u0640]*';
-    const nameRe=s=>{const f=String(s).replace(/[\u064B-\u065F\u0670\u0640]/g,'').replace(/\s+/g,' ').trim();if(!f)return null;
+    // З-144: имя без уточнений в скобках («يحيى (يعني ابن سعيد)»), «يعني…», «رضي الله عنه», «؛» и меток страниц «⦗ص: 770⦘»
+    const cleanSaid=s=>String(s).replace(/[ً-ٰٟـ]/g,'').replace(/\([^)]*\)|⦗[^⦘]*⦘/g,' ').replace(/\s(?:يعني|أي)\s.*$/,'').replace(/\s*رض[يى]\s+الله\s+عن\S*/g,' ').replace(/[؛;()⦗⦘،,]/g,' ').replace(/\s+/g,' ').trim();
+    const nameRe=s=>{const f=cleanSaid(s);if(!f)return null;
       const word=w=>/^[اأإآ]ب[ويا]$/.test(w)?'[اأإآ]'+DIA+'ب'+DIA+'[وياى]'+DIA:w.split('').map(ch=>(/[اأإآ]/.test(ch)?'[اأإآ]':/[يى]/.test(ch)?'[يى]':/[هة]/.test(ch)?'[هة]':ch.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'))+DIA).join('');
       // между словами имени в тексте бывает запятая («سُمَىٍّ، مَوْلَى أَبِي بَكْرٍ» — Бухари №654, а разбор отдаёт без неё)
-      return new RegExp(f.split(' ').map(word).join('[\\s،,]+'));};
+      return new RegExp(f.split(' ').map(word).join('[\\s،,؛ـ]+'));};
     let from={node:null,offset:0};
     // владелец 29.10: «все должны быть передатчики выделены» — и без опознанного номера: такой зовёт выбор из тёзок
     // ищем вперёд от прошлого имени; не нашлось — с начала текста (запасной поиск имён дописывает пропущенных в конец
@@ -1280,6 +1282,10 @@
       return null;};
     for(const l of links){if(!l.said)continue;const re=nameRe(l.said);if(!re)continue;
       const r=tryLink(l,re,from);if(r){from=r;continue;}if(from.node)tryLink(l,re,{node:null,offset:0});}
+    // в одном иснаде имя повторяется во второй цепи после «ح» (Ваки‘, Шу‘ба…) — выделяем каждое появление; только там,
+    // где в коробке один иснад (в матне то же слово может быть не именем)
+    if(box.classList.contains('card-part-isnad')||box.classList.contains('flow-isnad'))
+      for(const l of links){if(!l.id)continue;const re=nameRe(l.said);if(!re)continue;for(let k=0;k<4;k++)if(!tryLink(l,re,{node:null,offset:0}))break;}
   }
   // ── Карточка передатчика — одна на весь новый вид: из текста иснада, «Передатчиков», конструктора, закладок.
   const nCardDialog=document.createElement('dialog');nCardDialog.className='native-assistant-dialog narr-dialog ncard-dialog';
