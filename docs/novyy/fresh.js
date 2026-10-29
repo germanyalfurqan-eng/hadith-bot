@@ -353,6 +353,11 @@
   function fillAyahs(){const s=+quranPick.querySelector('.qp-sura').value||1,n=suraInfo&&suraInfo.ayahs[s-1]||7,a=quranPick.querySelector('.qp-ayah'),keep=+a.value||1;
     a.innerHTML=Array.from({length:n},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('');a.value=String(Math.min(keep,n));}
   quranPick.querySelector('.qp-sura').onchange=()=>{quranPick.querySelector('.qp-ayah').value='1';fillAyahs();};
+  // владелец 29.10: поиск «2:5» — а под строкой «1. аль-Фатиха / 1», «будто открылась Фатиха 1». Выбор всегда показывает
+  // найденный или открытый аят.
+  async function setQuranPick(sura,ayah){const su=+sura,ay=+ayah;if(!(su>=1&&su<=114))return;await fillQuranPick();
+    const sel=quranPick.querySelector('.qp-sura');if(!sel.options.length)return;sel.value=String(su);quranPick.querySelector('.qp-ayah').value=String(ay||1);fillAyahs();
+    quranPick.querySelector('.qp-ayah').value=String(Math.min(ay||1,suraInfo&&suraInfo.ayahs[su-1]||ay||1));}
   quranPick.querySelector('.qp-open').onclick=()=>{const s=quranPick.querySelector('.qp-sura').value,a=quranPick.querySelector('.qp-ayah').value;$('#query').value=s+':'+a;syncPlaceholder();performSearch();};
   const quranSugg=document.createElement('div');quranSugg.className='quran-sugg';quranSugg.hidden=true;quranPick.before(quranSugg);
   function syncQuranPick(){const q=state.section==='quran';quranPick.hidden=!q;$('#refine-toggle').hidden=q;if(!q)quranSugg.hidden=true;if(q){$('#refine-panel').hidden=true;$('#refine-toggle').setAttribute('aria-expanded','false');if(state.api)fillQuranPick();}}
@@ -613,6 +618,7 @@
   async function performSearch() {
     const query = $('#query').value.trim();
     if (!query) {$('#query').focus(); return;}
+    if (state.section==='quran'){const m=query.match(/^(\d{1,3})\s*[:.\s]\s*(\d{1,3})$/)||query.match(/^(\d{1,3})$/);if(m)setQuranPick(m[1],m[2]||1);}
     if (!state.api) {toast('Библиотека ещё открывается'); return;}
     const token = ++state.searchToken; state.results = []; state.resultQuery = query;state.shown=8;state.numberMode=false;state.numberHasMore=false;
     $('#result-count').textContent = ''; $('#search-notice').hidden = true; $('#more-results').hidden = true; $('#search-results-heading').hidden = false;
@@ -1915,6 +1921,7 @@
   const readerHistory=[];
   function readerBack(){if(readerHistory.length){openReader(readerHistory.pop(),{fromHistory:true});return true;}return false;}
   async function openReader(record,options={}) {
+    if(record&&record.kind==='quran'&&record.sura)setQuranPick(record.sura,record.ayah);
     if($('#reader').open&&state.reader&&!options.fromHistory&&String(state.reader.id||state.reader.collection+state.reader.number)!==String(record.id||record.collection+record.number))readerHistory.push(state.reader);
     stopReaderAudio();
     const token = ++state.readerToken; state.reader = record; updateReaderSave();
