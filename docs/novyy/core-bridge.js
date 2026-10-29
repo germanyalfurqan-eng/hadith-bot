@@ -17,6 +17,29 @@
   let quranWordAssets=null;
   const modelData={};
   function modelFile(name){if(!modelData[name])modelData[name]=fetch('./novyy/data/'+name).then(r=>r.ok?r.json():{}).catch(()=>({}));return modelData[name];}
+  // Готовая цепь хадиса из базы цепей (dz). У сборника бывает несколько изданий, и опознание в них разное: у ат-Тирмизи
+  // в 1435 №1 — «Абу Авана» = Якуб ибн Исхак (ум. 316) и «Ибн Умар» = Ибн Умар ибн Аби Салама, в 7895 — аль-Ваддах и
+  // Абдуллах ибн Умар. Берём запись, чьи передатчики лучше совпадают с текстом иснада (совпало +2, нет −1).
+  // Замер 29.10 по ат-Тирмизи: 7895 опознаёт 23 837 звеньев (91% в тексте), 1435 — 10 807 (94%), 1363 — 7 012 (20%).
+  async function bestChain(collection,number,text){
+    if(typeof dzChainFull!=='function')return null;
+    const n=String(number||'').replace(/\D.*$/,'');if(!collection||!n)return null;
+    const bids=new Set();
+    try{const book=(await catalog()).collections.find(c=>String(c.id)===String(collection));if(book&&book.bid)bids.add(String(book.bid));}catch(e){}
+    try{if(typeof _BID2READ==='object')for(const [b,c] of Object.entries(_BID2READ))if(c===String(collection))bids.add(String(b));}catch(e){}
+    const fold=t=>String(t||'').replace(/[ً-ٰٟـ]/g,'').replace(/[أإآ]/g,'ا');
+    const T=fold(text),STOP=new Set(['بن','ابن','ابو','ابي','عبد','بنت','ام','الله']);
+    let best=null,bestScore=-Infinity;
+    for(const b of bids){
+      let r=null;try{r=await dzChainFull(+b,n);}catch(e){}if(!r||!r.seq||!r.seq.length)continue;
+      let hit=0,cnt=0;
+      for(const id of r.seq){if(typeof id!=='number')continue;cnt++;let c=null;try{c=await _narrCard(id);}catch(e){}
+        const w=fold(c&&c[1]).split(/\s+/).filter(t=>t.length>2&&!STOP.has(t));if(T&&w.length&&w.slice(0,2).some(t=>T.includes(t)))hit++;}
+      const score=T?hit*2-(cnt-hit):cnt;
+      if(score>bestScore){bestScore=score;best=Object.assign({bid:b},r);}
+    }
+    return best;
+  }
   async function quranWordData(sura,ayah,displayedText){
     if(!Number.isSafeInteger(sura)||sura<1||sura>114||!Number.isSafeInteger(ayah)||ayah<1)throw Error('Неверный номер аята');
     const verses=await loadQuran(),verse=verses.find(v=>Number(v.s)===sura&&Number(v.a)===ayah);
@@ -568,8 +591,7 @@
       const plain=t=>String(t||'').replace(/[\u064B-\u065F\u0670\u0640]/g,'');
       const links=((p&&p.links)||[]).filter(l=>l&&l.name&&!/رسول الله|النبي|رسول اللة/.test(plain(l.name)));
       try{if(typeof loadNarrNames==='function')await loadNarrNames();}catch(e){}
-      let seq=null;try{if(args.collection&&args.number&&typeof dzChainFull==='function'){const book=(await catalog()).collections.find(c=>String(c.id)===String(args.collection));
-        const r=book&&book.bid?await dzChainFull(+book.bid,String(args.number).replace(/\D.*$/,'')):null;seq=r&&r.seq&&r.seq.length===links.length?r.seq:null;}}catch(e){}
+      let seq=null;try{const r=await bestChain(args.collection,args.number,text);seq=r&&r.seq&&r.seq.length===links.length?r.seq:null;}catch(e){}
       const out=[];for(let i=0;i<links.length&&i<30;i++){let id=seq&&seq[i]!=null?seq[i]:null;if(id==null){try{id=await _narrLookup(links[i].name);}catch(e){}}
         out.push({said:String(links[i].name),id:id==null?null:String(id)});}
       // the parse stops at «ح» (a second chain): the names after it come from the old view's own name finder
@@ -581,11 +603,9 @@
     if(action==='narrators'){
       const card=async id=>{let c=null;try{c=await _narrCard(id);}catch(e){}return c?{name:String(c[1]||''),id:String(id),full:String(c[1]||''),kunya:String(c[2]||''),nisba:String(c[3]||''),death:String(c[4]||''),hajar:String(c[5]||''),dhahabi:String(c[6]||''),tabaqa:String(c[7]||'')}:null;};
       // 1) the hadith's own chain from our base — narrators by id, no namesakes
-      try{if(args.collection&&args.number&&typeof dzChainFull==='function'){
-        const book=(await catalog()).collections.find(c=>String(c.id)===String(args.collection));
-        const r=book&&book.bid?await dzChainFull(+book.bid,String(args.number).replace(/\D.*$/,'')):null,seq=r&&(r.seq||r.s||(Array.isArray(r)?r:null));
+      try{const r=await bestChain(args.collection,args.number,args.text),seq=r&&r.seq;
         if(seq&&seq.length){const items=[];for(const id of seq.slice(0,30)){const c=await card(id);if(c)items.push(c);}if(items.length)return await narrEnrich(items,'chain',args.text);}
-      }}catch(e){}
+      }catch(e){}
       // 2) no ready chain: names from the isnad text, matched by spelling — namesakes may be confused
       const text=String(args.text||'').slice(0,6000);if(!text||typeof isnadNarrators!=='function')return {items:[]};
       let names=[];try{names=isnadNarrators(text)||[];}catch(e){}
