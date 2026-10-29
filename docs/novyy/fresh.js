@@ -267,6 +267,11 @@
   aiQuick.innerHTML = icon('spark') + '<span>Спросить ИИ</span>';
   const optionRow = document.createElement('div'); optionRow.className = 'search-option-row'; $('#refine-toggle').before(optionRow); optionRow.append($('#refine-toggle'),aiQuick);
   aiQuick.onclick = () => {setAiMode(!state.aiMode); $('#query').focus();};
+  // The chain constructor lives in «Настроить поиск» (owner #4330): a tool for specialists, next to the search modes.
+  const ctorButton = document.createElement('button'); ctorButton.type = 'button'; ctorButton.className = 'refine-ctor';
+  ctorButton.innerHTML = `${icon('grid')}<span><strong>Конструктор цепей передатчиков</strong><small>собрать иснад и найти хадисы с ним · в прежнем оформлении — переносим</small></span>${icon('arrow')}`;
+  const refineHead = $('#refine-panel')?.firstElementChild; if (refineHead) refineHead.after(ctorButton); else $('.apply-button').before(ctorButton);
+  ctorButton.onclick = () => invokeTool('chain',null);
   function askAssistant(text) {openNativeAssistant(); const question = String(text || '').trim(); if (question) {assistantInput.value = question; $('#native-assistant-form').requestSubmit();}}
   $('#refine-toggle').onclick = () => {const opened = $('#refine-panel').hidden; $('#refine-panel').hidden = !opened; modeChips.hidden = !opened || state.section === 'quran'; syncModeChips(); $('#refine-toggle').setAttribute('aria-expanded',String(opened));};
   const modeHelp = {normal:'Введите слово или фразу на русском или арабском.',diac:'Совпадение строго с огласовками — так, как вы набрали.',rag:'Ищем по смыслу в подготовленных книгах нашей базы.',root:'Введите арабское слово: найдём также слова с тем же корнем.',matnonly:'Ищем в самом высказывании, без цепочки передатчиков.',narr:'Введите имя человека, который передал хадис.',chain:'Введите арабские имена из цепочки передатчиков — иснада.'};
