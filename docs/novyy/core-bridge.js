@@ -294,6 +294,20 @@
       if(await carries(Number(leaf)+1))return {bid,leaf:Number(leaf)+1};
       throw Error('Точная страница этого хадиса в издании не найдена');
     }
+    // Оглавление книги (جدول المحتويات) — тот же /book_toc, что у прежнего вида: [{t: глава, l: уровень, p: лист}].
+    if(action==='bookToc'){
+      const bid=String(args.bid||'');if(!/^\d+$/.test(bid))throw Error('Некорректный номер книги');
+      const j=await bjson(BACKEND_URL+'/book_toc?id='+bid+'&initData='+encodeURIComponent(INITDATA),60000);
+      return {headings:((j&&j.headings)||[]).slice(0,30000).map(h=>({t:String(h.t||'').trim(),l:Number(h.l)||1,p:Number(h.p)||1}))};
+    }
+    // Перевод ИИ там, где своего перевода нет — /translate прежнего вида (кэш на сервере, повтор бесплатен).
+    if(action==='translate'){
+      const text=String(args.text||'').trim().slice(0,1500);if(!text)throw Error('Нечего переводить');
+      const r=await fetch(BACKEND_URL+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,source:String(args.source||'maktaba'),num:String(args.num||''),initData:INITDATA})});
+      const j=await r.json().catch(()=>({}));const tr=j&&(j.translation||j.ru);
+      if(!r.ok||!tr)throw Error((j&&j.message)||(r.status===429?'Лимит переводов исчерпан. Попробуйте позже.':'Перевод сейчас недоступен'));
+      return {translation:String(tr),cached:!!j.cached};
+    }
     // Edition data as the library card gives it (tahqiq, publisher, printing) — the source's own words, not ours.
     if(action==='bookMeta'){
       const bid=String(args.bid||'');if(!/^\d+$/.test(bid))throw Error('Некорректный номер книги');
@@ -324,13 +338,42 @@
     if(action==='toolsCatalog')return originalTools();
     // Помощник мини-аппа на отдельном Гермесе (владелец #4302): своя сессия на пользователя, экран и белый список действий.
     // Передатчики хадиса: имена из иснада и карточки из нашей базы (19 106 равиев) — [id,имя,кунья,нисба,смерть,Ибн Хаджар,аз-Захаби,табака].
+    // Итог о передатчике — формулой прежнего вида (_ttNeuro, владелец: «48 муʿтабаров дают два свидетельства, а не Ибн
+    // Хаджар»): توثيق = свидетельства двух ранних муʿтабаров из 48; Сахихайн без тяжкого джарха = два; поздние
+    // (Ибн Хаджар, аз-Захаби, аль-Мизи…) не в счёт; сподвижники — الصحابة عدول. Между звеньями — форма передачи из текста.
+    const narrEnrich=async(items,how,text)=>{
+      let flags={},mud={};try{flags=await loadNarrFlags()||{};}catch(e){}try{mud=await _loadMudallisin()||{};}catch(e){}
+      for(const it of items){if(it.id==null)continue;const n=+it.id;
+        try{if(typeof _isSahById==='function'&&await _isSahById(n)){it.verdict={kind:'sahabi',v:'صحابي — сподвижник',nT:0,nJ:0};continue;}}catch(e){}
+        let list=null;try{list=await _testimGet(n);}catch(e){}
+        const inSah=flags[String(n)]==='bm';let r=null;try{r=list&&list.length?_ttNeuro(list,inSah):null;}catch(e){}
+        if(!r&&inSah)r=_ttNeuro([],true);
+        if(r){const kind=r.em==='🟢'?'sound':r.em==='🟡'?'mixed':r.em==='🟠'?'weak':r.em==='🔴'?'rejected':'unknown';
+          const muts=(list||[]).filter(c=>c&&c[0]&&_critOk(c[0])&&_isMut(c[0])&&String(c[1]||'').trim()).slice(0,8).map(c=>[String(c[0]),String(c[1]).slice(0,180)]);
+          it.verdict={kind,v:String(r.v||''),nT:r.nT|0,nJ:r.nJ|0,jah:r.jah|0,sahihayn:!!r.sahihayn,note:String(r.note||''),cnt:list?list.length:0,muts};}
+        else it.verdict={kind:'none',v:'',nT:0,nJ:0,cnt:list?list.length:0};
+        if(mud[String(n)])it.mudallis=String((mud[String(n)]||{}).s||'');
+      }
+      // forms: the isnad text read from the compiler upwards; link i = how item i-1 (or the compiler) received from item i
+      let toProphet=null;
+      try{const p=typeof _parseIsnad==='function'?_parseIsnad(String(text||'').slice(0,6000)):null,links=(p&&p.links)||[];
+        const fold=t=>String(t||'').replace(/[\u064B-\u065F\u0670\u0640]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').trim();
+        const isProphet=l=>/رسول الله|النبي|رسول اللة/.test(fold(l.name));
+        const chain=links.filter(l=>!isProphet(l)),last=links.find(isProphet);
+        const label=f=>f?{form:f,ar:(typeof _FORM_RU!=='undefined'&&_FORM_RU[f])||'',tip:(typeof _FORM_TIP!=='undefined'&&_FORM_TIP[f])||'',cls:(typeof _FORM_CLASS!=='undefined'&&_FORM_CLASS[f])||''}:null;
+        if(chain.length===items.length)items.forEach((it,i)=>{it.via=label(chain[i].form);it.said=chain[i].name;});
+        else{let j=0;for(const it of items){const full=fold(it.full||it.name);for(let k=j;k<chain.length;k++){const w=fold(chain[k].name).replace(/^(ال|ب|و)/,'').split(/\s+/).slice(0,2).join(' ');if(w&&full.includes(w)){it.via=label(chain[k].form);it.said=chain[k].name;j=k+1;break;}}}}
+        if(last)toProphet=label(last.form);
+      }catch(e){}
+      return {items,how,toProphet};
+    };
     if(action==='narrators'){
       const card=async id=>{let c=null;try{c=await _narrCard(id);}catch(e){}return c?{name:String(c[1]||''),id:String(id),full:String(c[1]||''),kunya:String(c[2]||''),nisba:String(c[3]||''),death:String(c[4]||''),hajar:String(c[5]||''),dhahabi:String(c[6]||''),tabaqa:String(c[7]||'')}:null;};
       // 1) the hadith's own chain from our base — narrators by id, no namesakes
       try{if(args.collection&&args.number&&typeof dzChainFull==='function'){
         const book=(await catalog()).collections.find(c=>String(c.id)===String(args.collection));
         const r=book&&book.bid?await dzChainFull(+book.bid,String(args.number).replace(/\D.*$/,'')):null,seq=r&&(r.seq||r.s||(Array.isArray(r)?r:null));
-        if(seq&&seq.length){const items=[];for(const id of seq.slice(0,30)){const c=await card(id);if(c)items.push(c);}if(items.length)return {items,how:'chain'};}
+        if(seq&&seq.length){const items=[];for(const id of seq.slice(0,30)){const c=await card(id);if(c)items.push(c);}if(items.length)return await narrEnrich(items,'chain',args.text);}
       }}catch(e){}
       // 2) no ready chain: names from the isnad text, matched by spelling — namesakes may be confused
       const text=String(args.text||'').slice(0,6000);if(!text||typeof isnadNarrators!=='function')return {items:[]};
@@ -342,7 +385,7 @@
         if(id!=null){try{c=await _narrCard(id);}catch(e){}}
         items.push({name,id:id==null?null:String(id),full:c?String(c[1]||''):'',kunya:c?String(c[2]||''):'',nisba:c?String(c[3]||''):'',death:c?String(c[4]||''):'',hajar:c?String(c[5]||''):'',dhahabi:c?String(c[6]||''):'',tabaqa:c?String(c[7]||''):''});
       }
-      return {items,how:'names'};
+      return await narrEnrich(items,'names',text);
     }
     if(action==='suraInfo'){return {names:(typeof SURA_RU!=='undefined'?SURA_RU.slice(1):[]),ayahs:(typeof SURA_AYAHS!=='undefined'?SURA_AYAHS.slice():[])};}
     if(action==='hermesAsk'){
@@ -590,7 +633,7 @@
   window.addEventListener('message',event=>{
     if(event.origin!==location.origin||event.source!==parent||event.data?.source!=='muslimoon-design-ui')return;
     const {id,action,args}=event.data;
-    if(typeof id!=='string'||!['ready','suraInfo','narrators','catalog','bookInfo','bookPageData','locateLeaf','bookMeta','leafByHadith','lastLeaf','hermesAsk','quranWordData','quranAudioInfo','quranTimedAudio','quranVerse','quranNeighbor','search','read','browse','scientific','library','tool','toolsCatalog','openOriginalTool','showOriginalHome','numberMore','assistantAsk'].includes(action))return;
+    if(typeof id!=='string'||!['ready','suraInfo','narrators','bookToc','translate','catalog','bookInfo','bookPageData','locateLeaf','bookMeta','leafByHadith','lastLeaf','hermesAsk','quranWordData','quranAudioInfo','quranTimedAudio','quranVerse','quranNeighbor','search','read','browse','scientific','library','tool','toolsCatalog','openOriginalTool','showOriginalHome','numberMore','assistantAsk'].includes(action))return;
     serial=serial.then(()=>request(action,args||{})).then(payload=>send(id,payload)).catch(e=>send(id,null,String(e&&e.message||e)));
   });
   let attempts=0;

@@ -526,13 +526,18 @@
     const dialog = $('#book-dialog'); if (!dialog.open) dialog.showModal(); document.body.style.overflow = 'hidden';
     $('#book-dialog-body').innerHTML = `<span class="book-seal book-detail-seal">${icon('book')}</span><h1 id="book-dialog-title">${escape(collection.title)}</h1>${collection.arabicTitle && collection.arabicTitle !== collection.title ? `<p class="book-arabic-title" lang="ar" dir="rtl">${escape(collection.arabicTitle)}</p>` : ''}<div class="book-detail-meta"><span>Автор</span>${author ? `<button type="button" id="book-author">${escape(author)}${icon('arrow')}</button>` : '<p>В каталоге не указан</p>'}${collection.categoryLabel || collection.category ? `<span>Раздел</span><p>${escape(collection.categoryLabel || collection.category)}</p>` : ''}</div><div id="book-description"><div class="loading-state"><span class="loading-orbit"></span><p>Ищем сведения о книге<span>Загружаем описание из источника</span></p></div></div><div class="book-dialog-actions"><button type="button" class="book-read-button" id="book-dialog-read">Читать книгу${icon('arrow')}</button><button type="button" class="book-favorite-button" id="book-dialog-favorite"></button></div>`;
     if ($('#book-author')) $('#book-author').onclick = () => authorBooks(author);
-    $('#book-dialog-read').onclick = () => {dialog.close(); showView('library'); browseCollection(collection);};
+    // «Читать книгу» — сама книга с первой страницы издания: предисловие, все главы (owner 29.10); хадисы по номерам — второй путь.
+    $('#book-dialog-read').onclick = () => {dialog.close(); if (collection.bid) openNativeBook(collection.bid,1,collection.title,{arabicTitle:collection.arabicTitle}); else {showView('library'); browseCollection(collection);}};
+    if (collection.bid && !String(collection.id||'').startsWith('book:')) $('#book-dialog-read').insertAdjacentHTML('afterend','<button type="button" class="book-list-button" id="book-dialog-list">Хадисы по номерам</button>');
+    if ($('#book-dialog-list')) $('#book-dialog-list').onclick = () => {dialog.close(); showView('library'); browseCollection(collection);};
     $('#book-dialog-favorite').onclick = () => toggleFavoriteBook(String(collection.id)); updateBookFavorite();
     $('#book-dialog-body').scrollTop = 0;
     // Owner 29.10: Wikipedia first, then links to Maktaba ash-Shamila and sunnah.com (all through «Выйти?»).
     const titleEnd = $('#book-dialog-body .book-arabic-title') || $('#book-dialog-title');
     const links = document.createElement('div'); links.className = 'book-links'; titleEnd.after(links); links.after($('#book-description'));
-    const linkRow = wiki => {links.innerHTML = [wiki ? `<a class="book-link" href="${escape(wiki)}">Википедия</a>` : '', collection.bid ? `<a class="book-link" href="https://shamela.ws/book/${encodeURIComponent(collection.bid)}">Мактаба аш-Шамила</a>` : '', SUNNAH_COM[collection.id] ? `<a class="book-link" href="https://sunnah.com/${SUNNAH_COM[collection.id]}">sunnah.com</a>` : ''].filter(Boolean).join('');};
+    // Each source with its own recognizable mark (owner 29.10: «фирменную, узнаваемую и заметнее»), drawn in CSS — no
+    // third-party images are loaded.
+    const linkRow = wiki => {links.innerHTML = [wiki ? `<a class="book-link brand-wiki" href="${escape(wiki)}"><span class="brand-mark">W</span><span class="brand-name">Википедия</span></a>` : '', collection.bid ? `<a class="book-link brand-shamela" href="https://shamela.ws/book/${encodeURIComponent(collection.bid)}"><span class="brand-mark" lang="ar">الشاملة</span><span class="brand-name">Мактаба аш-Шамила</span></a>` : '', SUNNAH_COM[collection.id] ? `<a class="book-link brand-sunnah" href="https://sunnah.com/${SUNNAH_COM[collection.id]}"><span class="brand-mark">sunnah<b>.com</b></span><span class="brand-name">этот сборник</span></a>` : ''].filter(Boolean).join('');};
     linkRow('');
     // «Что за издание» (owner 29.10): the edition card from the library itself — tahqiq, publisher, printing, volumes.
     if (collection.bid && state.api && typeof state.api.bookMeta === 'function') state.api.bookMeta(collection.bid).then(meta => {
@@ -544,7 +549,7 @@
       const info = await state.api.bookInfo(collection.id); if (token !== bookInfoToken || !dialog.open) return;
       const url = safeWebUrl(info?.sourceUrl), description = String(info?.description || '').trim();
       if (/wikipedia\.org/.test(url)) linkRow(url);
-      $('#book-description').innerHTML = `<h2>О книге</h2><p class="book-description-text" dir="auto">${escape(description || 'Описание этой книги из источников пока не получено.')}</p>${info?.notice ? `<p class="book-info-notice">${escape(info.notice)}</p>` : ''}${url ? `<a class="book-description-source" href="${escape(url)}" target="_blank" rel="noopener noreferrer">${escape(info.sourceTitle || 'Источник описания')}${info.language ? ` · ${escape(info.language)}` : ''}${icon('source')}</a>` : ''}`;
+      $('#book-description').innerHTML = `<h2>О книге${/wikipedia\.org/.test(url) ? '<small class="book-desc-from">из Википедии</small>' : ''}</h2><p class="book-description-text" dir="auto">${escape(description || 'Описание этой книги из источников пока не получено.')}</p>${info?.notice ? `<p class="book-info-notice">${escape(info.notice)}</p>` : ''}${url && !/wikipedia\.org/.test(url) ? `<a class="book-description-source" href="${escape(url)}" target="_blank" rel="noopener noreferrer">${escape(info.sourceTitle || 'Источник описания')}${info.language ? ` · ${escape(info.language)}` : ''}${icon('source')}</a>` : ''}`;
     } catch (_) {if (token === bookInfoToken && dialog.open) $('#book-description').innerHTML = '<h2>О книге</h2><p class="book-info-notice">Сейчас не удалось получить описание из источника. Доступные сведения из каталога показаны выше.</p>';}
   }
   $('#book-dialog-close').onclick = () => $('#book-dialog').close();
@@ -599,7 +604,7 @@
   function ensureNativeBook(){
     let dialog=$('#native-book-reader');if(dialog)return dialog;
     dialog=document.createElement('dialog');dialog.id='native-book-reader';dialog.className='reader-dialog native-book-dialog';dialog.setAttribute('aria-labelledby','native-book-title');
-    dialog.innerHTML=`<div class="reader-shell"><header class="reader-toolbar"><button type="button" class="icon-button native-book-close" aria-label="Закрыть книгу">${icon('back')}</button><span>ЧТЕНИЕ КНИГИ</span><button type="button" class="text-button native-book-about">О книге</button></header><div class="reader-body native-book-body"><h1 id="native-book-title"></h1><div class="native-book-location" aria-live="polite"></div><div class="native-book-headings" lang="ar" dir="rtl"></div><div class="native-book-text" lang="ar" dir="rtl"></div><div class="native-book-notes"></div><p class="native-book-status" role="status" aria-live="polite"></p><button type="button" class="native-book-tools">Инструменты книги</button></div><nav class="native-book-bar" aria-label="Листание книги" dir="ltr"><button type="button" class="nb-turn native-book-next" aria-label="Следующая страница">${icon('back')}</button><div class="nb-jump"><button type="button" class="nb-edge nb-end">Конец</button><label>стр.<input class="nb-page" inputmode="numeric" enterkeyhint="go" aria-label="Перейти на страницу"></label><label>№<input class="nb-hadith" inputmode="numeric" enterkeyhint="go" aria-label="Перейти к хадису по номеру"></label><button type="button" class="nb-edge nb-start">Начало</button></div><button type="button" class="nb-turn native-book-prev" aria-label="Предыдущая страница">${icon('arrow')}</button></nav></div>`;
+    dialog.innerHTML=`<div class="reader-shell"><header class="reader-toolbar"><button type="button" class="icon-button native-book-close" aria-label="Закрыть книгу">${icon('back')}</button><span>ЧТЕНИЕ КНИГИ</span><button type="button" class="text-button native-book-about">О книге</button></header><div class="reader-body native-book-body"><h1 id="native-book-title"></h1><div class="native-book-location" aria-live="polite"></div><div class="native-book-actions"><button type="button" class="nb-action native-book-toc">${icon('book')}Оглавление</button><button type="button" class="nb-action native-book-translate">${icon('helper')}Перевод ИИ</button></div><div class="native-book-headings" lang="ar" dir="rtl"></div><div class="native-book-text" lang="ar" dir="rtl"></div><div class="native-book-tr" hidden></div><div class="native-book-notes"></div><p class="native-book-status" role="status" aria-live="polite"></p><button type="button" class="native-book-tools">Инструменты книги</button></div><nav class="native-book-bar" aria-label="Листание книги" dir="ltr"><button type="button" class="nb-turn native-book-next" aria-label="Следующая страница">${icon('back')}</button><div class="nb-jump"><button type="button" class="nb-edge nb-end">Конец</button><label class="nb-field"><span>Страница</span><input class="nb-page" inputmode="numeric" enterkeyhint="go" aria-label="Перейти на страницу издания"></label><label class="nb-field nb-field-num"><span>№ хадиса</span><input class="nb-hadith" inputmode="numeric" enterkeyhint="go" placeholder="—" aria-label="Перейти к хадису, асару или документу по его номеру в книге"></label><button type="button" class="nb-edge nb-start">Начало</button></div><button type="button" class="nb-turn native-book-prev" aria-label="Предыдущая страница">${icon('arrow')}</button></nav></div>`;
     document.body.appendChild(dialog);
     $('.native-book-close',dialog).onclick=()=>dialog.close();
     $('.native-book-about',dialog).onclick=()=>{const book=nativeBook;if(book)openBookInfo(collectionForBid(book.bid,book.title));};
@@ -615,6 +620,8 @@
     $('.nb-start',dialog).onclick=()=>loadNativeBookLeaf(1);
     $('.nb-end',dialog).onclick=async()=>{if(!nativeBook)return;const status=$('.native-book-status',dialog);status.textContent='Ищем конец книги…';
       try{const last=await state.api.lastLeaf(nativeBook.bid,nativeBook.leaf);nativeBook.last=last.leaf;loadNativeBookLeaf(last.leaf);}catch(_){status.textContent='Конец книги сейчас не определился';}};
+    $('.native-book-toc',dialog).onclick=()=>openBookToc();
+    $('.native-book-translate',dialog).onclick=()=>translateBookPage();
     $('.native-book-tools',dialog).onclick=async()=>{const book=nativeBook;dialog.close();try{await state.api.tool('bookPage',{kind:'book',bid:book.bid,page:String(book.leaf)});}catch(_){toast('Инструменты книги сейчас недоступны');}};
     return dialog;
   }
@@ -628,12 +635,52 @@
     const arabic=n.replace(/[0-9]/g,d=>'٠١٢٣٤٥٦٧٨٩'[+d]);
     return escaped.replace(new RegExp(`(^|[\\s(])(${arabic}|${n})(\\s*-)`,'m'),'$1<mark class="hadith-anchor">$2$3</mark>');
   }
+  // Numbers of the hadiths/athar printed on this page («٣٢١ - حدثنا…» at the start of a line) — to name them plainly.
+  function pageNumbers(body){const out=[];String(body||'').replace(/(^|\n)\s*[(\[]?([0-9\u0660-\u0669]{1,6})[)\]]?\s*[-–ـ]\s/g,(m,a,n)=>{const v=String(n).replace(/[\u0660-\u0669]/g,d=>String(d.charCodeAt(0)-0x660));if(!out.includes(v))out.push(v);return m;});return out;}
+  // Оглавление книги: главы по уровням, текущая подсвечена, нажатие — на лист главы.
+  async function openBookToc(){
+    const book=nativeBook;if(!book)return;const dialog=ensureNativeBook();let box=$('.native-book-tocbox',dialog);
+    if(box){box.remove();return;}
+    box=document.createElement('div');box.className='native-book-tocbox';box.innerHTML='<div class="native-chat-pending"><span class="think-dots"><i></i><i></i><i></i></span><span class="think-text">Загружаю оглавление</span></div>';
+    $('.native-book-actions',dialog).after(box);
+    let hs=book.toc;if(!hs){try{hs=(await state.api.bookToc(book.bid)).headings||[];book.toc=hs;}catch(_){hs=[];}}
+    if(nativeBook!==book||!box.isConnected)return;
+    if(!hs.length){box.innerHTML='<p class="notes-hint">У этой книги нет оглавления в источнике. Листайте страницы или переходите по номеру.</p>';return;}
+    let cur=-1;hs.forEach((h,i)=>{if(h.p<=book.leaf)cur=i;});
+    box.innerHTML=`<input type="search" class="toc-find" placeholder="Найти главу" lang="ar" dir="rtl"><div class="toc-list" lang="ar" dir="rtl"></div>`;
+    // Big books have thousands of chapters (Bukhari ~4000): top level first, a chapter opens its sections on tap;
+    // the search looks through every level.
+    const top=Math.min(...hs.map(h=>h.l)),kids=i=>{const out=[];for(let k=i+1;k<hs.length&&hs[k].l>hs[i].l;k++)out.push(k);return out;};
+    let curTop=-1;hs.forEach((h,i)=>{if(h.l===top&&i<=cur)curTop=i;});
+    const item=i=>`<button type="button" class="toc-item lvl-${Math.min(4,hs[i].l-top+1)}${i===cur?' current':''}" data-toc="${i}">${escape(hs[i].t)}</button>`;
+    const draw=q=>{const f=catalogFold(q||''),list=box.querySelector('.toc-list');
+      if(f){const hit=[];for(let i=0;i<hs.length&&hit.length<400;i++)if(catalogFold(hs[i].t).includes(f))hit.push(item(i));list.innerHTML=hit.join('')||'<p class="notes-hint">Глава не найдена</p>';return;}
+      list.innerHTML=hs.map((h,i)=>{if(h.l!==top)return '';const k=kids(i);return `<div class="toc-group${i===curTop?' open':''}" data-group="${i}"><div class="toc-row">${item(i)}${k.length?`<button type="button" class="toc-more" data-more="${i}" aria-label="Разделы главы">${k.length}${icon('down')}</button>`:''}</div>${i===curTop?`<div class="toc-kids">${k.map(item).join('')}</div>`:''}</div>`;}).join('');};
+    draw('');box.querySelector('.toc-find').addEventListener('input',e=>draw(e.target.value));
+    box.querySelector('.toc-list').onclick=e=>{const m=e.target.closest('[data-more]');if(m){const g=m.closest('.toc-group'),i=+m.dataset.more;let kb=g.querySelector('.toc-kids');if(kb){kb.remove();g.classList.remove('open');}else{g.insertAdjacentHTML('beforeend',`<div class="toc-kids">${kids(i).map(item).join('')}</div>`);g.classList.add('open');}return;}
+      const b=e.target.closest('[data-toc]');if(!b)return;const h=hs[+b.dataset.toc];box.remove();book.mark='';loadNativeBookLeaf(h.p);};
+    const c=box.querySelector('.toc-item.current');if(c)c.scrollIntoView({block:'center'});
+  }
+  // Machine translation says «Бог» for الله; in Muslimoon the Name stays «Аллах» (Богу → Аллаху, Богом → Аллахом).
+  const allahName=t=>String(t||'').replace(/(^|[^А-Яа-яЁё])Бог(а|у|ом|е)?(?![А-Яа-яЁё])/g,(m,a,e)=>a+'Аллах'+(e||''));
+  // Перевод ИИ этой страницы — кусками до 1500 знаков (предел сервера), с честной пометкой.
+  async function translateBookPage(){
+    const book=nativeBook;if(!book)return;const dialog=ensureNativeBook(),box=$('.native-book-tr',dialog),text=pageParts($('.native-book-text',dialog).textContent).body.trim();
+    if(!box.hidden&&box.dataset.leaf===String(book.leaf)){box.hidden=true;return;}
+    if(!text){toast('На этой странице нет текста');return;}
+    box.hidden=false;box.dataset.leaf=String(book.leaf);box.innerHTML='<div class="native-chat-pending"><span class="think-dots"><i></i><i></i><i></i></span><span class="think-text">Перевожу страницу</span></div>';
+    const chunks=[];let rest=text;while(rest&&chunks.length<4){if(rest.length<=1500){chunks.push(rest);break;}let cut=Math.max(rest.lastIndexOf('.',1500),rest.lastIndexOf('،',1500),rest.lastIndexOf('\n',1500));if(cut<600)cut=1500;chunks.push(rest.slice(0,cut+1));rest=rest.slice(cut+1).trim();}
+    const out=[];
+    for(const part of chunks){try{out.push((await state.api.translate(part,'maktaba',book.bid)).translation);}catch(error){out.push('');if(!out.some(Boolean)){if(nativeBook===book&&box.dataset.leaf===String(book.leaf))box.innerHTML=`<p class="notes-hint">${escape(String(error?.message||'Перевод сейчас недоступен'))}</p>`;return;}}
+      if(nativeBook!==book||box.dataset.leaf!==String(book.leaf))return;}
+    box.innerHTML=`<p class="nb-tr-label">Перевод ИИ — черновой, сверяйте с оригиналом${rest&&chunks.length>=4?' · переведено начало страницы':''}</p>${out.filter(Boolean).map(t=>`<p>${escape(allahName(t))}</p>`).join('')}`;
+  }
   function openNativeBook(bid,leaf,title,options={}){
     const dialog=ensureNativeBook(),safeLeaf=Number(leaf);
     nativeBook={bid:String(bid),leaf:Number.isSafeInteger(safeLeaf)&&safeLeaf>0?safeLeaf:1,title:String(title||'Книга'),mark:options.mark?String(options.mark):''};
     $('#native-book-title',dialog).innerHTML=sourceLine(nativeBook.title,options.arabicTitle||'','','native-book-source');
     $('.native-book-text',dialog).textContent='';$('.native-book-notes',dialog).textContent='';$('.native-book-headings',dialog).textContent='';$('.native-book-location',dialog).textContent='';
-    if(!dialog.open)dialog.showModal();loadNativeBookLeaf(nativeBook.leaf);
+    $('.native-book-tocbox',dialog)?.remove();if(!dialog.open)dialog.showModal();loadNativeBookLeaf(nativeBook.leaf);
   }
   // Printed page → leaf: start from the current leaf−page offset, correct by what the server says (≤4 probes).
   // Pages restart in every volume and one printed page can span several leaves (Bukhari, Sultaniya: ~5), so stay in
@@ -667,7 +714,10 @@
       if(token!==nativeBookToken||!dialog.open)return;
       nativeBook.leaf=page.leaf;
       // «Том 1 · стр. 3» as the printed book says; the leaf number only when the edition has no page numbers.
-      $('.native-book-location',dialog).textContent=page.printedPage!=null?`${page.volume?'Том '+page.volume+' · ':''}стр. ${page.printedPage}`:`Лист ${page.leaf}`;
+      const parts0=pageParts(page.text),nums=pageNumbers(parts0.body);
+      $('.native-book-location',dialog).innerHTML=`<span class="nb-loc-page">${escape(page.printedPage!=null?`${page.volume?(/^\d+$/.test(String(page.volume))?'Том '+page.volume:page.volume)+' · ':''}Страница ${page.printedPage}`:`Лист ${page.leaf}`)}</span>`+(nums.length?`<span class="nb-loc-num">${nums.length===1?'№ хадиса':'№ хадисов'} ${escape(nums.length>3?nums[0]+'–'+nums[nums.length-1]:nums.join(', '))}</span>`:'');
+      $('.nb-hadith',dialog).value=nativeBook.mark&&nums.includes(String(nativeBook.mark))?String(nativeBook.mark):(nums[0]||'');
+      const tr=$('.native-book-tr',dialog);tr.hidden=true;tr.innerHTML='';
       nativeBook.offset=page.printedPage!=null?page.leaf-page.printedPage:0;nativeBook.page=page.printedPage;nativeBook.volume=page.volume||null;$('.nb-page',dialog).value=page.printedPage!=null?String(page.printedPage):String(page.leaf);
       $('.native-book-headings',dialog).textContent=page.headings.join(' ‹ ');
       const parts=pageParts(page.text);
@@ -941,12 +991,16 @@
     if(event.target.closest('[data-note-edit]'))openNoteEditor(n.rk,n.label,n.ref);else if(event.target.closest('[data-note-open]')){notesDialog.close();openNoteRef(n.ref);}});
   window.addEventListener('muslimoon-notes',openNotes);
 
-  // ── Передатчики — в новом виде (owner 29.10: «все кнопки проверь на смысл»): цепочка по порядку, у каждого имя,
-  // кунья и нисба, год смерти и оценки Ибн Хаджара и аз-Захаби из нашей базы; цвет — по словам оценки.
+  // ── Передатчики — в новом виде. Итог о каждом — по свидетельствам 48 муʿтабаров (владелец 29.10: «48 мутабаров дают
+  // два свидетельства, чтобы передатчик был достоверным, а не Ибн Хаджар»); Ибн Хаджар и аз-Захаби — справочно, не в
+  // счёт. Цепь нарисована от собирателя к Пророку ﷺ, между звеньями — как передано (حدثنا, أخبرنا, عن…).
   const narrDialog=document.createElement('dialog');narrDialog.className='native-assistant-dialog narr-dialog';
   narrDialog.innerHTML=`<div class="native-assistant-shell"><header class="native-assistant-head"><span class="book-seal">${icon('book')}</span><h2>Передатчики</h2><button type="button" class="native-assistant-close narr-close" aria-label="Закрыть">×</button></header><div class="notes-body narr-body"></div></div>`;
   document.body.appendChild(narrDialog);narrDialog.querySelector('.narr-close').onclick=()=>narrDialog.close();
-  const gradeClass=g=>/صحاب|ثقة|ثبت|حافظ|إمام|حجة/.test(g)?'grade-sound':/صدوق|لا بأس|مقبول/.test(g)?'grade-good':/ضعيف|متروك|كذاب|مجهول|منكر|لين|ليس بالقوي|وضاع|متهم/.test(g)?'grade-weak':'';
+  const VERDICT_RU={sahabi:'сподвижник',sound:'надёжный',mixed:'спорный',weak:'слабый',rejected:'отвергается',unknown:'надёжность не установлена',none:'свидетельств в базе нет'};
+  const FORM_RU={TH:'рассказал нам — слышал',THi:'рассказал мне — слышал лично',AKH:'сообщил нам — чтение шейху',AKHi:'сообщил мне — чтение шейху',ANB:'известил — иджаза',SAM:'я слышал — явное слышание',AN:'от — без уточнения, как получил',ANN:'что — без уточнения',QAL:'сказал',NA:'нам — сокращённо'};
+  const COLLECTOR={bukhari:'البخاري',muslim:'مسلم',abudawud:'أبو داود',tirmidhi:'الترمذي',nasai:'النسائي',ibnmajah:'ابن ماجه',malik:'مالك',ahmad:'أحمد',darimi:'الدارمي'};
+  const narrLink=(via,mud)=>via&&via.ar?`<div class="chain-link chain-${via.cls==='S'||via.cls==='Q'?'heard':via.cls==='A'?'an':'other'}" title="${escape(via.tip||'')}"><span class="chain-line"></span><span class="chain-form"><b lang="ar" dir="rtl">${escape(via.ar)}</b><small>${escape(FORM_RU[via.form]||via.tip||'')}</small></span>${mud&&via.cls==='A'?'<span class="chain-flag">мудаллис передаёт через «عن»</span>':''}</div>`:'<div class="chain-link chain-other"><span class="chain-line"></span></div>';
   // «مالك بن أنس بن مالك بن أبي عامر …» → three links of the lineage, the rest in the tooltip
   const shortNasab=t=>{const parts=String(t||'').split(/\s+بن\s+/);return parts.length>3?parts.slice(0,3).join(' بن ')+' …':String(t||'');};
   async function openNarrators(record){
@@ -954,17 +1008,33 @@
     if(!narrDialog.open)narrDialog.showModal();
     let full=record;if(!full.arabic&&state.api){try{full={...record,...(await state.api.read(record))};}catch(_){}}
     if(!full.arabic){body.innerHTML='<p class="notes-hint">У этой записи нет арабского текста с цепочкой — разобрать передатчиков не из чего.</p>';return;}
-    let items=[],how='';try{const r=await state.api.narrators(full.arabic,full.collection,full.number);items=r.items||[];how=r.how||'';}catch(_){}
+    let items=[],how='',toProphet=null;try{const r=await state.api.narrators(full.arabic,full.collection,full.number);items=r.items||[];how=r.how||'';toProphet=r.toProphet||null;}catch(_){}
     if(!items.length){body.innerHTML='<p class="notes-hint">Цепочку передатчиков из этого текста выделить не удалось.</p>';return;}
     const byName=how!=='chain';
-    body.innerHTML=`<p class="notes-hint">${escape(source(full))}${full.number?' · № '+escape(full.number):''} · от собирателя к Пророку ﷺ · оценки из нашей базы (19 106 передатчиков)</p>`
-      +(byName?'<p class="narr-warn">Готовой цепочки для этого хадиса в базе нет: передатчики определены по написанию имён — у тёзок возможна путаница, оценки сверяйте.</p>':'')
-      +items.map((n,i)=>`<article class="narr-row"><span class="narr-step">${i+1}</span><div><p class="narr-name" lang="ar" dir="rtl" title="${escape(n.full||n.name)}">${escape(shortNasab(n.full||n.name))}</p>`
+    const cnt=k=>items.filter(n=>n.verdict&&n.verdict.kind===k).length,good=cnt('sound')+cnt('sahabi'),bad=cnt('weak')+cnt('rejected');
+    const anMud=items.filter((n,i)=>n.mudallis&&items[i+1]&&items[i+1].via&&items[i+1].via.cls==='A').length;
+    const collector=COLLECTOR[full.collection]||'';
+    const summary=`<div class="chain-summary"><b>${items.length} ${items.length===1?'звено':items.length<5?'звена':'звеньев'}</b><span class="vs-sound">надёжных ${good}</span>${cnt('mixed')?`<span class="vs-mixed">спорных ${cnt('mixed')}</span>`:''}${bad?`<span class="vs-weak">слабых ${bad}</span>`:''}${cnt('unknown')+cnt('none')?`<span class="vs-unknown">не установлено ${cnt('unknown')+cnt('none')}</span>`:''}${anMud?`<span class="vs-mixed">мудаллис с «عن»: ${anMud}</span>`:''}</div>`
+      +'<p class="chain-rule">Надёжность — по свидетельствам 48 муʿтабаров: нужно два подтверждения (توثيق), «в Сахихайн» без тяжкого джарха — тоже два. Ибн Хаджар и аз-Захаби — поздние своды, в счёт не идут. Это оценка звеньев, а не приговор хадису.</p>';
+    const node=(n,i)=>{const v=n.verdict||{kind:'none'},kind=byName&&v.kind!=='sahabi'?'muted':v.kind;
+      // «ثقة — надёжный (توثيق ≥2 муʿтабаров)» → the Arabic term into the badge, the reason on its own line
+      const term=v.kind==='sahabi'?'صحابي':String(v.v||'').split(' — ')[0].trim(),reason=v.kind==='sahabi'?'الصحابة عدول — сподвижники надёжны по единогласию учёных (иджма)':((String(v.v||'').match(/\(([^()]*)\)\s*$/)||[])[1]||'');
+      const why=v.muts&&v.muts.length?`<details class="narr-why"><summary>Кто из 48 сказал</summary>${v.muts.map(m=>`<p lang="ar" dir="rtl"><b>${escape(m[0])}:</b> ${escape(m[1])}</p>`).join('')}</details>`:'';
+      const late=(n.hajar||n.dhahabi)?`<p class="narr-late">Справочно, не в счёт: ${n.hajar?`Ибн Хаджар — <b lang="ar" dir="rtl">${escape(n.hajar)}</b>`:''}${n.hajar&&n.dhahabi?' · ':''}${n.dhahabi?`аз-Захаби — <b lang="ar" dir="rtl">${escape(n.dhahabi)}</b>`:''}</p>`:'';
+      const counts=v.kind==='sahabi'?'':v.kind==='none'?'':`<span class="narr-count">توثيق <b>${v.nT}</b> из 48${v.sahihayn?' · в Сахихайн':''}${v.nJ?` · джарх <b>${v.nJ}</b>`:''}</span>`;
+      return `<article class="narr-row narr-${kind}"><span class="narr-step">${i+1}</span><div class="narr-main"><p class="narr-name" lang="ar" dir="rtl" title="${escape(n.full||n.name)}">${escape(shortNasab(n.full||n.name))}</p>`
         +`${(n.kunya||n.nisba)?`<p class="narr-sub" lang="ar" dir="rtl">${escape([n.kunya,n.nisba].filter(Boolean).join(' · '))}</p>`:''}`
         +`${n.death?`<p class="narr-meta">ум. ${escape(n.death)}${n.tabaqa?' · табака '+escape(n.tabaqa):''}</p>`:''}`
-        +`${n.hajar?`<p class="narr-grade ${byName?'':gradeClass(n.hajar)}"><span>Ибн Хаджар:</span> <b lang="ar" dir="rtl">${escape(n.hajar)}</b></p>`:''}`
-        +`${n.dhahabi?`<p class="narr-grade ${byName?'':gradeClass(n.dhahabi)}"><span>аз-Захаби:</span> <b lang="ar" dir="rtl">${escape(n.dhahabi)}</b></p>`:''}`
-        +`${n.id?'':'<p class="narr-meta">в нашей базе не найден</p>'}</div>${n.id?`<button type="button" class="narr-fav${favNarrators().some(f=>String(f.id)===String(n.id))?' on':''}" data-narr-fav="${i}" aria-label="В избранные передатчики">${icon('star')}</button>`:''}</article>`).join('');
+        +(n.id?`<p class="narr-verdict"><span class="narr-badge">${escape(VERDICT_RU[v.kind]||'')}${term?` <bdi lang="ar">${escape(term)}</bdi>`:''}</span>${counts}</p>${reason?`<p class="narr-v">Основание: <bdi>${escape(reason)}</bdi></p>`:''}${v.note?`<p class="narr-note">${escape(v.note)}</p>`:''}${why}${late}`:'<p class="narr-meta">в нашей базе не найден</p>')
+        +`${n.mudallis?`<p class="narr-note">Отмечен как мудаллис${n.mudallis?' ('+escape(n.mudallis)+')':''}: его «عن» без явного слышания требует проверки.</p>`:''}`
+        +`</div>${n.id?`<button type="button" class="narr-fav${favNarrators().some(f=>String(f.id)===String(n.id))?' on':''}" data-narr-fav="${i}" aria-label="В избранные передатчики">${icon('star')}</button>`:''}</article>`;};
+    body.innerHTML=`<p class="notes-hint">${escape(source(full))}${full.number?' · № '+escape(full.number):''} · от собирателя к Пророку ﷺ</p>`
+      +(byName?'<p class="narr-warn">Готовой цепочки для этого хадиса в базе нет: передатчики определены по написанию имён — у тёзок возможна путаница, итог сверяйте.</p>':'')
+      +summary
+      +`<div class="chain-flow">`
+      +(collector?`<div class="chain-end"><span lang="ar" dir="rtl">${escape(collector)}</span><small>собиратель</small></div>`:'')
+      +items.map((n,i)=>(collector||i?narrLink(n.via,i?items[i-1].mudallis:false):'')+node(n,i)).join('')
+      +narrLink(toProphet,false)+`<div class="chain-end chain-prophet"><span lang="ar" dir="rtl">رسول الله ﷺ</span><small>Пророк</small></div></div>`;
     body.onclick=e=>{const b=e.target.closest('[data-narr-fav]');if(!b)return;const on=toggleFavNarrator(items[+b.dataset.narrFav]);b.classList.toggle('on',on);toast(on?'Передатчик в избранном — он в «Закладках»':'Убрано из избранного');};
   }
   // ── Озвучить — голосом самого телефона (как в прежнем виде): арабский, если в телефоне есть арабский голос, иначе перевод.
@@ -1256,22 +1326,38 @@
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const EXAMPLES = {hadith:['бухари 1','дела по намерениям','إنما الأعمال بالنيات','муслим 8'],quran:['2:255','милость','1:1','الرحمن الرحيم']};
   const exs = () => EXAMPLES[state.section === 'quran' ? 'quran' : 'hadith'];
+  // The example types itself in, letter by letter, as a pale hint with a caret (owner #4334): it is a hint, not text in
+  // the field. When it is typed, the search button lights up for a moment and dims again — the button wakes only for
+  // the person's own words.
   let exampleIndex = 0, exampleTimer, exampleFadeTimer;
+  const exampleIdle = () => $('#query').value || document.activeElement === $('#query') || reducedMotion.matches || document.hidden || state.aiMode;
+  function stopExample() {clearTimeout(exampleTimer); clearTimeout(exampleFadeTimer); $('#search-submit').classList.remove('demo-ready'); $('#query-example').classList.remove('typing');}
   function syncPlaceholder() {
     // in AI mode the hint «Спросите ИИ-помощника…» stands alone — no running example on top of it (owner 29.10)
     const hidden = Boolean($('#query').value) || document.activeElement === $('#query') || !!state.aiMode;
     $('#clear-query').hidden = !$('#query').value;
     $('#search-submit').disabled = !$('#query').value.trim();
     $('#query-example').hidden = hidden;
-    clearTimeout(exampleTimer); clearTimeout(exampleFadeTimer); $('#query-example').classList.remove('leaving');
-    if (!hidden && !reducedMotion.matches && !document.hidden) exampleTimer = setTimeout(nextExample,3800);
+    stopExample();
+    if (hidden) return;
+    if (reducedMotion.matches || document.hidden) {$('#query-example').textContent = exs()[exampleIndex % exs().length]; return;}
+    exampleTimer = setTimeout(typeExample, 900);
   }
-  function nextExample() {
-    if ($('#query').value || document.activeElement === $('#query') || reducedMotion.matches || document.hidden || state.aiMode) return;
-    $('#query-example').classList.add('leaving');
-    exampleFadeTimer = setTimeout(() => {exampleIndex = (exampleIndex+1)%exs().length; const text = exs()[exampleIndex]; $('#query-example').textContent = text; $('#query-example').lang = /[\u0600-\u06ff]/.test(text) ? 'ar' : 'ru'; $('#query-example').classList.remove('leaving'); exampleTimer = setTimeout(nextExample,3800);},320);
+  function typeExample() {
+    if (exampleIdle()) return;
+    const el = $('#query-example'), text = exs()[exampleIndex % exs().length]; el.lang = /[؀-ۿ]/.test(text) ? 'ar' : 'ru'; el.classList.add('typing');
+    let n = 0;
+    const step = () => {if (exampleIdle()) return; el.textContent = text.slice(0, ++n);
+      if (n < text.length) {exampleTimer = setTimeout(step, 75 + Math.random() * 55); return;}
+      exampleTimer = setTimeout(() => {if (exampleIdle()) return; $('#search-submit').classList.add('demo-ready');
+        exampleFadeTimer = setTimeout(() => $('#search-submit').classList.remove('demo-ready'), 1100);
+        exampleTimer = setTimeout(erase, 2300);}, 250);};
+    const erase = () => {if (exampleIdle()) return; el.textContent = el.textContent.slice(0, -1);
+      if (el.textContent) {exampleTimer = setTimeout(erase, 32); return;}
+      exampleIndex = (exampleIndex + 1) % exs().length; exampleTimer = setTimeout(typeExample, 650);};
+    el.textContent = ''; step();
   }
-  function resetPlaceholder() {exampleIndex = 0; $('#query-example').textContent = exs()[0]; $('#query-example').lang = 'ru'; syncPlaceholder();}
+  function resetPlaceholder() {exampleIndex = 0; $('#query-example').textContent = ''; $('#query-example').lang = 'ru'; syncPlaceholder();}
   $('#query').addEventListener('input',() => {syncPlaceholder(); if (!$('#query').value.trim() && state.api) {state.searchToken++; showWelcome();}});
   $('#clear-query').onclick = () => {$('#query').value = ''; state.searchToken++; showWelcome(); syncPlaceholder(); $('#query').focus();};
   $('#query').addEventListener('focus',syncPlaceholder); $('#query').addEventListener('blur',syncPlaceholder);
