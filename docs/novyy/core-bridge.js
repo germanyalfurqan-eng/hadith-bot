@@ -643,7 +643,20 @@
         for(let k=0;k<parts.length;k++){let said=parts[k],id=null;try{id=await _narrLookup(said);}catch(e){}
           if(k>0&&id==null&&/^و/.test(plain(said))){const bare=said.replace(/^و[ً-ٟ]*/,'');try{id=await _narrLookup(bare);}catch(e){}said=bare;}
           expanded.push({said,id:id==null?null:String(id)});}}
-      return {links:expanded};
+      // З-144, разбор пропусков 30.10: к имени прилипали служебные слова («وكيع و», «جرير و», «عكرمة يقول», «وحدثنا قتيبة»)
+      // — подсветка искала их вместе с именем и промахивалась; куски матна («أما بعد أيها الناس…») шли звеном без номера и
+      // могли выделиться пунктиром как передатчик. Чистим края, длинное без номера выбрасываем, «отца/деда/дядю»
+      // опознаём по готовой цепи: это следующий в ней после предыдущего звена.
+      const HEAD=/^(?:و?حدثنا|و?حدثني|و?أخبرنا|و?أخبرني|و?اخبرنا|و?اخبرني|أنبأنا|ح|و)$/,TAIL2=/^(?:و|يقول|قال|قالا|قالوا|قالت|جميعا|كلهم|كلاهما|ح|أنه|انه)$/;
+      const KIN=/^(?:أبي|ابي|أبيه|ابيه|والدي|أبيها|جده|جدي|عمه|عمي|أمه|خاله|أخيه)$/,cleaned=[];let prevId=null;
+      for(const x of expanded){let w=String(x.said).split(/\s+/).filter(Boolean);
+        while(w.length>1&&HEAD.test(plain(w[0])))w.shift();while(w.length>1&&TAIL2.test(plain(w[w.length-1])))w.pop();
+        let said=w.join(' '),id=x.id;
+        if(said!==x.said&&id==null){try{id=await _narrLookup(said);}catch(e){}id=id==null?null:String(id);}
+        if(id==null&&KIN.test(plain(said))&&prevId!=null){const k=chainIds.indexOf(+prevId);if(k>=0&&typeof chainIds[k+1]==='number')id=String(chainIds[k+1]);}
+        if(id==null&&(w.length>5||/صلى|رسول|النبي/.test(plain(said))))continue;   // не имя — кусок матна
+        cleaned.push({said,id});if(id!=null)prevId=id;}
+      return {links:cleaned};
     }
     if(action==='narrators'){
       const card=async id=>{let c=null;try{c=await _narrCard(id);}catch(e){}return c?{name:String(c[1]||''),id:String(id),full:String(c[1]||''),kunya:String(c[2]||''),nisba:String(c[3]||''),death:String(c[4]||''),hajar:String(c[5]||''),dhahabi:String(c[6]||''),tabaqa:String(c[7]||'')}:null;};
