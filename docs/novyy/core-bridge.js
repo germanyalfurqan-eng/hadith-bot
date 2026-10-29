@@ -15,6 +15,8 @@
   const send=(id,payload,error)=>parent.postMessage({source,id,payload,error},location.origin);
   let ruPromise=null;
   let quranWordAssets=null;
+  const modelData={};
+  function modelFile(name){if(!modelData[name])modelData[name]=fetch('./novyy/data/'+name).then(r=>r.ok?r.json():{}).catch(()=>({}));return modelData[name];}
   async function quranWordData(sura,ayah,displayedText){
     if(!Number.isSafeInteger(sura)||sura<1||sura>114||!Number.isSafeInteger(ayah)||ayah<1)throw Error('Неверный номер аята');
     const verses=await loadQuran(),verse=verses.find(v=>Number(v.s)===sura&&Number(v.a)===ayah);
@@ -23,11 +25,12 @@
     const [roots,translations]=await quranWordAssets;
     const tokens=String(verse.text).split(/(\s+)/).filter(Boolean),words=tokens.filter(t=>/[ء-ي]/.test(t));
     const gloss=translations[`${sura}:${ayah}`],aligned=Array.isArray(gloss)&&gloss.length===words.length;
+    const lemmas=await modelFile('quran_lemmas_ru.json'),pl=t=>String(t||'').replace(/[\u064B-\u065F\u0670\u0640]/g,'').trim();
     let index=0;return {sura,ayah,aligned,tokens:tokens.map(token=>{
       if(!/[ء-ي]/.test(token))return {text:token};
       const e=roots.f?.[rootKey(token)],root=Array.isArray(e)&&e[0]?String(e[0]):'';
       const refs=root&&Array.isArray(roots.r?.[root])?roots.r[root]:[];
-      return {text:token,word:true,index:index++,translation:aligned?String(gloss[index-1]||''):'',root,lemma:Array.isArray(e)&&e[1]?String(e[1]):'',tag:Array.isArray(e)&&e[2]?String(e[2]):'',grammar:Array.isArray(e)&&e[2]?gramRu(String(e[2])):'',references:refs,referenceCount:refs.length};
+      return {text:token,word:true,index:index++,translation:aligned?String(gloss[index-1]||''):'',root,lemma:Array.isArray(e)&&e[1]?String(e[1]):'',lemmaInfo:Array.isArray(e)&&e[1]&&lemmas[pl(e[1])]?lemmas[pl(e[1])]:null,tag:Array.isArray(e)&&e[2]?String(e[2]):'',grammar:Array.isArray(e)&&e[2]?gramRu(String(e[2])):'',references:refs,referenceCount:refs.length};
     })};
   }
   let catalogPromise=null,fullCatalog=null;
@@ -484,6 +487,7 @@
       if(window._sunverdFull[sh]===undefined)window._sunverdFull[sh]=await fetch('./sunverd_full/'+sh+'.json?v='+APPVER).then(r=>r.ok?r.json():null).catch(()=>null);
       return (window._sunverdFull[sh]&&window._sunverdFull[sh][String(sid)])||[];};
     const narrEnrich=async(items,how,text)=>{
+      try{const ru=await modelFile('narr_ru_fix.json');for(const it of items)if(it.id!=null&&ru[String(it.id)])it.ru=String(ru[String(it.id)]);}catch(e){}
       let flags={},mud={},m2s={};try{flags=await loadNarrFlags()||{};}catch(e){}try{mud=await _loadMudallisin()||{};}catch(e){}try{m2s=await loadMid2Sid()||{};}catch(e){}
       for(const it of items){if(it.id==null)continue;const n=+it.id,sid=m2s[String(n)];
         it.links={maktaba:'https://shamela.ws/narrator/'+n,sunnah:sid&&/^\d+$/.test(String(sid))?'https://sunnah.com/narrator/'+sid:''};
@@ -551,6 +555,7 @@
         tea.sort((a,b)=>b.n-a.n);stu.sort((a,b)=>b.n-a.n);}catch(e){}
       const top=[...tea.slice(0,16),...stu.slice(0,16)];
       await Promise.all(top.map(async x=>{try{const k=await _narrCard(+x.id);x.name=k?String(k[1]||''):'';x.death=k&&k[4]?String(k[4]):'';}catch(e){}}));
+      try{const ru=await modelFile('narr_ru_fix.json');[...tea.slice(0,16),...stu.slice(0,16)].forEach(x=>{if(ru[x.id])x.ru=ru[x.id];});}catch(e){}
       return {...it,teachers:tea.slice(0,16),students:stu.slice(0,16),teachersTotal:tea.length,studentsTotal:stu.length};
     }
     // Имена иснада, как они стоят в тексте, с номером передатчика — чтобы имя в тексте открывало его карточку.
@@ -765,6 +770,7 @@
       if(!row.arabic&&row.collection&&row.number&&(!row.russian||canPairText(row))){try{row.arabic=await getArabicHadith(row.collection,row.number);}catch(e){}}
       if(!row.russian&&row.collection&&row.number&&canPairText(row)){try{const index=await ruIndex();row.russian=cleanText(index.get(row.collection+'|'+row.number)||'');}catch(e){}}
       if(!canPairText(row)){row.pairingUnverified=true;if(row.arabic&&row.russian)row.russian='';}
+      if(!row.russian&&row.collection&&row.number&&['tirmidhi','nasai','ibnmajah','malik'].includes(String(row.collection))){try{const t=(await modelFile('perevod_ii/'+row.collection+'.json'))[String(row.number).replace(/\D.*$/,'')];if(t)row.russianAi=String(t);}catch(e){}}
       try{await sourceParts(row);}catch(e){}
       return row;
     }
