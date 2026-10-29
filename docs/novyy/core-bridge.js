@@ -669,7 +669,7 @@
         const MK=/^(?:و?حدثنا|و?حدثني|و?أخبرنا|و?أخبرني|أنبأنا|عن|سمعت|سمع)$/;
         for(let i=0;i<tk.length-1&&i<120;i++){const w0=plain(tk[i]);if(/رسول|النبي/.test(w0))break;if(!MK.test(w0))continue;
           const cand=[];for(let j=i+1;j<tk.length&&cand.length<5;j++){const pj=plain(tk[j]);if(MK.test(pj)||CUT.test(pj)||TAIL2.test(pj)||/رسول|النبي|صلى/.test(pj))break;cand.push(tk[j]);}
-          for(let n=cand.length;n>=1;n--){const said=cand.slice(0,n).join(' '),f=foldN(said);if([...have].some(h=>h.includes(f)||f.includes(h)))break;
+          for(let n=cand.length;n>=1;n--){const said=cand.slice(0,n).join(' '),f=foldN(said);if(KIN.test(plain(said))?have.has(f):[...have].some(h=>h.includes(f)||f.includes(h)))break;
             let id=null;try{id=await _narrLookup(said);}catch(e){}if(id!=null){cleaned.push({said,id:String(id)});have.add(f);break;}
             /* «عن أبيه» без готовой цепи — пунктиром */ if(n===1&&KIN.test(plain(said))){cleaned.push({said,id:null});have.add(f);break;}}}}catch(e){}
       return {links:cleaned};
