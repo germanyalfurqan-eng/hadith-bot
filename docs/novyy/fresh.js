@@ -61,8 +61,10 @@
     leaveDialog.querySelector('.leave-text').textContent = `Откроется сайт «${name}» во внешнем браузере. Это не наш ресурс — за его содержимое мы не отвечаем.`;
     leaveDialog.querySelector('.leave-url').textContent = String(url).length > 110 ? String(url).slice(0,110) + '…' : String(url);
     leaveDialog.returnValue = ''; leaveDialog.showModal();
-    leaveDialog.onclose = () => {if (leaveDialog.returnValue !== 'go') return; const tg = window.Telegram && window.Telegram.WebApp;
+    // Opened right in the tap on «Перейти»: Telegram opens links only from a user's tap, not from a later close event.
+    leaveDialog.querySelector('.leave-go').onclick = event => {event.preventDefault(); leaveDialog.close('go'); const tg = window.Telegram && window.Telegram.WebApp;
       try {if (tg && tg.initData && tg.openLink) tg.openLink(url); else window.open(url,'_blank','noopener');} catch (_) {window.open(url,'_blank','noopener');}};
+    leaveDialog.querySelector('.leave-stay').onclick = event => {event.preventDefault(); leaveDialog.close('stay');};
   }
   document.addEventListener('click',event => {const a = event.target.closest && event.target.closest('a[href]'); if (!a || !isExternal(a.href)) return; event.preventDefault(); askLeave(a.href);},true);
   window.addEventListener('message',event => {if (event.data && typeof event.data.muslimoonLeave === 'string' && isExternal(event.data.muslimoonLeave)) askLeave(event.data.muslimoonLeave);});
@@ -204,6 +206,7 @@
     $$('[data-view]').forEach(el => {el.classList.toggle('active',el.dataset.view === view); if (el.classList.contains('nav-item')) {if (el.dataset.view === view) el.setAttribute('aria-current','page'); else el.removeAttribute('aria-current');}});
     if (view === 'bookmarks') renderBookmarks();
     window.scrollTo({top:0,behavior:'smooth'});
+    try {syncBack(); saveSpot();} catch (_) {}
   }
   $$('[data-view]').forEach(button => button.onclick = () => showView(button.dataset.view));
   // The AI button sits in the middle of the bottom bar (owner 29.10).
@@ -232,7 +235,7 @@
   $('#font-up').onclick = () => {state.font = Math.min(2,state.font + 1); applyFont();}; applyFont();
   $$('[data-theme-option]').forEach(a => a.classList.toggle('active',a.dataset.themeOption === document.documentElement.dataset.theme));
   // «Настроить поиск» → under the field a row of modes, one tap each (owner 29.10); the detailed panel stays below.
-  const MODE_CHIPS = [['normal','По словам'],['diac','С огласовками'],['root','По корню'],['matnonly','Только матн'],['rag','RAG'],['narr','Передатчик'],['ctor','Цепь'],['ai','✦ По смыслу · ИИ']];
+  const MODE_CHIPS = [['normal','По словам'],['diac','С огласовками'],['root','По корню'],['matnonly','Только матн'],['rag','RAG'],['narr','Передатчик'],['ai','✦ По смыслу · ИИ']];
   const modeChips = document.createElement('div'); modeChips.className = 'mode-chips'; modeChips.setAttribute('role','group'); modeChips.setAttribute('aria-label','Как искать'); modeChips.hidden = true;
   modeChips.innerHTML = MODE_CHIPS.map(([id,label]) => `<button type="button" class="mode-chip" data-mode-chip="${id}" aria-pressed="false">${label}</button>`).join('');
   $('.search-options').after(modeChips);
@@ -407,6 +410,7 @@
       state.results = Array.isArray(result.items) ? result.items : []; state.shown = 8;
       $('#result-count').textContent = `${Number.isFinite(Number(result.total)) ? Number(result.total).toLocaleString('ru-RU') : state.results.length} найдено`;
       if (result.notice) {$('#search-notice').textContent = String(result.notice); $('#search-notice').hidden = false;}
+      if (result.heading) $('#results-title').textContent = String(result.heading);
       if (state.results.length) {renderCards($('#search-results'),state.results,state.shown); $('#more-results').hidden = state.shown >= state.results.length;}
       else empty($('#search-results'),'Попробуйте другие слова','Сократите фразу или выберите все сборники в настройках поиска.');
     } catch (error) {
@@ -546,6 +550,7 @@
     $('#assistant-notice').hidden = true;
     if(name==='bookPage'&&record?.bid&&record?.page){openNativeBook(record.bid,record.page,source(record));return;}
     if(name==='assistant'||name==='explain'){openNativeAssistant(record);return;}
+    if(name==='notes'){const k=noteKeyOf(record);if(k)openNoteEditor(k.rk,k.label,k.ref);else openNotes();return;}
     try {
       if (!state.api || typeof state.api.tool !== 'function') throw new Error('Tool unavailable');
       const response = await state.api.tool(name,record);
@@ -589,7 +594,8 @@
   }
   function chatRow(row){
     if(row.role==='place')return `<div class="native-chat-place" dir="auto">${escape(row.text||'')}</div>`;
-    const body=row.role==='user'?escape(row.text||''):chatHtml(row.text||'');
+    const hits=Array.isArray(row.hits)&&row.hits.length?`<div class="chat-hits"><p class="chat-hits-title">Найдено в книгах приложения</p>${row.hits.map((h,i)=>`<article class="chat-hit"><p class="chat-hit-src">${escape(source(h))}${h.number?' · № '+escape(h.number):''}</p>${h.arabic?`<p class="chat-hit-ar" lang="ar" dir="rtl">${escape(cutText(h.arabic,240))}</p>`:''}${h.russian?`<p class="chat-hit-ru">${escape(cutText(h.russian,340))}</p>`:''}<button type="button" data-chat-hit="${i}">Открыть карточку</button></article>`).join('')}${row.text?'<p class="chat-hits-title chat-hits-note">Пояснение помощника</p>':''}</div>`:'';
+    const body=row.role==='user'?escape(row.text||''):hits+chatHtml(row.text||'');
     return `<div class="native-chat-bubble ${row.role==='user'?'native-chat-user':'native-chat-bot native-chat-rich'}">${body}${row.cached?' <small>из памяти</small>':''}${Array.isArray(row.actions)&&row.actions.length?`<div class="native-chat-actions">${row.actions.map(a=>`<button type="button" data-assist-action="${escape(a.id)}" data-assist-arg="${escape(a.arg||'')}">${escape(a.title)}</button>`).join('')}</div>`:''}</div>`;
   }
   function renderAssistant(keepPlace){
@@ -617,7 +623,8 @@
     search:{title:'Искать',run:arg=>{showView('search');$('#query').value=arg;$('#query').dispatchEvent(new Event('input',{bubbles:true}));performSearch();}},
     quran:{title:'Открыть аят',run:arg=>{showView('search');$('[data-section="quran"]').click();$('#query').value=arg;$('#query').dispatchEvent(new Event('input',{bubbles:true}));performSearch();}},
     theme:{title:'Сменить оттенок',run:()=>{location.href=document.documentElement.dataset.theme==='ice'?'./':'ice.html';}},
-    chain:{title:'Конструктор цепей',run:()=>invokeTool('chain',null)}
+    chain:{title:'Конструктор цепей',run:()=>invokeTool('chain',null)},
+    openHadith:{title:'Открыть хадис',run:arg=>ASSIST_ACTIONS.search.run(arg)}
   };
   const act=(id,arg,title)=>({id,arg:arg||'',title:title||ASSIST_ACTIONS[id].title});
   // What the person may want, read from their words: only proposals, shown as buttons.
@@ -650,7 +657,9 @@
       arg=String(arg||'').trim();const a=ASSIST_ACTIONS[id];if(!a)return '';
       if(id==='openBook'&&!state.collections.some(c=>c.id===arg))return '';
       if(id==='quran'){const v=arg.match(/^(\d{1,3}):(\d{1,3})$/);if(!v||+v[1]<1||+v[1]>114||+v[2]<1||+v[2]>286)return '';}
-      if((id==='search'||id==='findBooks')&&!arg)return '';
+      if((id==='search'||id==='findBooks'||id==='openHadith')&&!arg)return '';
+      if(id==='openHadith'){const m=arg.match(/^([a-z]+)\s+(\d{1,5})$/);const c=m&&state.collections.find(x=>x.id===m[1]);if(!m)return '';
+        if(!actions.some(x=>x.id===id&&x.arg===arg))actions.push(act(id,arg,'Открыть: '+(c?shortCollection(c.title):m[1])+' № '+m[2]));return '';}
       const book=id==='openBook'?state.collections.find(c=>c.id===arg):null;
       if(id==='findBooks'){authorChoices(arg).forEach(a=>{if(!actions.some(x=>x.id===a.id&&x.arg===a.arg))actions.push(a);});return '';}
       if(!actions.some(x=>x.id===id&&x.arg===arg))actions.push(act(id,arg,book?'Открыть «'+book.title+'»':id==='search'?'Найти: '+arg:id==='quran'?'Открыть аят '+arg:undefined));
@@ -668,7 +677,15 @@
     if(!list.length)return [act('findBooks',name,'Книги: '+name)];
     return list.map(([a,n])=>act('findBooks',a,`Книги: ${a.split('|').pop().trim()} · ${n}`));
   }
+  // First words of the helper (owner П-45: «проще — скажи, что ты помощник ИИ, чем помочь; конструктор цепей —
+  // для профессионалов, зачем его предлагать»). The greeting is short; `screen` tells the helper where the person is.
   function screenContext(){
+    const where=$('#native-book-reader')?.open?`читает книгу «${nativeBook?.title||''}», ${$('.native-book-location')?.textContent||''}`:$('#reader')?.open&&state.reader?`читает ${state.reader.kind==='quran'?'аят '+state.reader.sura+':'+state.reader.ayah:'хадис '+source(state.reader)+' № '+state.reader.number}`:
+      ({search:state.section==='quran'?'поиск по Корану':'поиск хадисов',library:'библиотека',bookmarks:'закладки',settings:'раздел «Ещё»'}[state.view]||'приложение');
+    const tips=[act('search','дела по намерениям','Хадис о намерениях'),act('quran','2:255','Аят аль-Курси'),act('findBooks','النووي','Книги ан-Навави')];
+    return {key:'hello',screen:where,text:'Ас-саляму алейкум! Я ИИ-помощник Muslimoon. Отвечаю по первоисточникам — Корану, хадисам и книгам библиотеки. Чем помочь?\nНе знаете, с чего начать, — нажмите подсказку.',actions:tips};
+  }
+  function oldScreenContext(){
     if($('#native-book-reader')?.open)return {key:'book:'+(nativeBook?.bid||''),text:`Вы читаете «${nativeBook?.title||'книгу'}», ${$('.native-book-location')?.textContent||''}. Могу: найти страницу или хадис по номеру, рассказать о книге и издании, сделать текст крупнее.`,actions:[act('fontUp')]};
     if($('#reader')?.open)return {key:'reader:'+(state.reader?.id||''),text:'Вы читаете хадис. Могу: объяснить его, найти, где он ещё передаётся, открыть страницу в книге, сделать текст крупнее.',actions:[act('fontUp')]};
     const v=state.view||'search';
@@ -677,7 +694,12 @@
     if(v==='settings')return {key:'settings',text:'Здесь инструменты и настройки. Скажите, что поменять — например «сделай текст крупнее» или «смени оттенок».',actions:[act('fontUp'),act('theme')]};
     return {key:'search:'+(state.section||'hadith'),text:state.section==='quran'?'Вы в поиске по Корану. Напишите слово, тему или номер вроде 2:255 — открою аят, объясню слово, найду по корню.':'Вы в поиске хадисов. Напишите тему, слова или «бухари 1» — найду; могу объяснить хадис, термин или помочь настроить поиск.',actions:[act('settings','','Настроить приложение'),act('chain')]};
   }
+  const cutText=(t,n)=>{t=String(t||'').replace(/\s+/g,' ').trim();return t.length>n?t.slice(0,n).replace(/\s+\S*$/,'')+'…':t;};
   assistantMessages.addEventListener('click',event=>{
+    const hitButton=event.target.closest('[data-chat-hit]');
+    if(hitButton){const bubble=hitButton.closest('.native-chat-bubble'),rows=assistantHistory(),shown=rows.slice(Math.max(0,rows.length-assistantShown));
+      const index=[...assistantMessages.querySelectorAll('.native-chat-bubble,.native-chat-place')].indexOf(bubble),row=shown[index],hit=row&&row.hits&&row.hits[+hitButton.dataset.chatHit];
+      if(hit){assistantDialog.close();openReader(hit);}return;}
     const button=event.target.closest('[data-assist-action]');if(!button)return;const action=ASSIST_ACTIONS[button.dataset.assistAction];if(!action)return;
     assistantDialog.close();action.run(button.dataset.assistArg||'');
   });
@@ -697,6 +719,88 @@
     if(!assistantDialog.open)assistantDialog.showModal();assistantMessages.style.scrollBehavior='auto';assistantMessages.scrollTop=assistantMessages.scrollHeight;assistantMessages.style.scrollBehavior='';setTimeout(()=>assistantInput.focus(),30);
   }
   $('#native-assistant-close').onclick=()=>assistantDialog.close();
+  // Header that says what this is (owner П-45: «не просто „Помощник“ — серьёзный помощник»), with the session
+  // number in small letters; outside Telegram — a plain note that the full helper lives inside Telegram.
+  const assistTitle=$('#native-assistant-title');assistTitle.textContent='ИИ-помощник Muslimoon';
+  const assistSub=document.createElement('p');assistSub.className='native-assistant-sub';assistTitle.after(assistSub);
+  const inTelegram=!!(window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.initData);
+  function syncAssistHead(){let sid='';try{sid=localStorage.getItem('muslimoon_assist_sid')||'';}catch(_){}
+    assistSub.textContent=(inTelegram?'по Корану, хадисам и книгам библиотеки':'вне Телеграма — короткие ответы')+(sid?' · сессия '+sid:'');}
+  syncAssistHead();
+  if(!inTelegram){const note=document.createElement('p');note.className='native-assistant-outside';note.textContent='Полный помощник работает внутри Телеграма: откройте Muslimoon через бота @muslimoontt_bot.';$('.native-assistant-foot').prepend(note);}
+
+  // ── Мои заметки в новом виде (owner П-45: «заметки точно удобно? красиво?»). Те же заметки, что у прежнего вида:
+  // хранятся на устройстве под «muslimoon_notes», ключи те же (h|книга|№, q|сура|аят, free_…).
+  const NOTES_KEY='muslimoon_notes';
+  const notesLoad=()=>{try{const a=JSON.parse(localStorage.getItem(NOTES_KEY));return Array.isArray(a)?a:[];}catch(_){return [];}};
+  const notesSave=a=>{try{localStorage.setItem(NOTES_KEY,JSON.stringify(a.slice(-1000)));return true;}catch(_){toast('Не удалось сохранить заметку');return false;}};
+  const noteId=()=>'n'+Date.now().toString(36)+(Date.now()%9973).toString(36);
+  const nowStr=()=>{const d=new Date(),p=x=>String(x).padStart(2,'0');return `${p(d.getDate())}.${p(d.getMonth()+1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;};
+  function noteKeyOf(record){
+    if(!record)return null;
+    if(record.kind==='quran'&&record.sura)return {rk:`q|${record.sura}|${record.ayah}`,label:`Коран ${record.sura}:${record.ayah}`,ref:{type:'q',s:record.sura,a:record.ayah}};
+    if(record.kind==='hadith'&&record.collection&&record.number){const n=String(record.number).replace(/#.*/,'');
+      return record.collection==='muhaymin'?{rk:'m|'+n,label:'аль-Мухаймин № '+n,ref:{type:'m',n}}:{rk:`h|${record.collection}|${n}`,label:`${source(record)} № ${n}`,ref:{type:'h',source:record.collection,num:n}};}
+    return null;
+  }
+  const notesDialog=document.createElement('dialog');notesDialog.className='native-assistant-dialog notes-dialog';notesDialog.setAttribute('aria-labelledby','notes-title');
+  notesDialog.innerHTML=`<div class="native-assistant-shell"><header class="native-assistant-head"><span class="book-seal">${icon('pen')}</span><h2 id="notes-title">Мои заметки</h2><button type="button" class="native-assistant-close notes-close" aria-label="Закрыть">×</button></header><div class="notes-body"><div class="notes-tools"><input type="search" class="notes-search" placeholder="Поиск по заметкам" aria-label="Поиск по заметкам"><button type="button" class="notes-new">${icon('pen')}<span>Новая</span></button></div><p class="notes-hint">Заметки хранятся только на этом устройстве. К хадису или аяту — «Мои заметки» в его карточке.</p><div class="notes-list"></div></div></div>`;
+  document.body.appendChild(notesDialog);
+  const noteEditor=document.createElement('dialog');noteEditor.className='leave-dialog note-editor';
+  noteEditor.innerHTML='<form method="dialog" class="leave-shell"><h2>Заметка</h2><p class="note-editor-label"></p><textarea class="note-editor-text" rows="6" placeholder="Ваша мысль, пометка, вопрос…"></textarea><div class="leave-actions"><button type="button" class="note-delete">Удалить</button><span class="note-spacer"></span><button type="button" class="leave-stay note-cancel">Отмена</button><button type="button" class="leave-go note-save">Сохранить</button></div></form>';
+  document.body.appendChild(noteEditor);
+  function renderNotes(){
+    const q=notesDialog.querySelector('.notes-search').value.trim().toLowerCase(),all=notesLoad().slice().reverse();
+    const list=q?all.filter(n=>`${n.text||''} ${n.label||''}`.toLowerCase().includes(q)):all;
+    notesDialog.querySelector('.notes-list').innerHTML=list.length?list.map(n=>`<article class="note-card" data-rk="${escape(n.rk)}">${n.label?`<p class="note-label" dir="auto">${escape(n.label)}</p>`:''}<p class="note-text" dir="auto">${escape(n.text||'')}</p><footer><time>${escape(n.date||'')}</time><span>${n.ref?'<button type="button" data-note-open>Открыть</button>':''}<button type="button" data-note-edit>Изменить</button></span></footer></article>`).join(''):`<div class="native-chat-empty">${all.length?'Ничего не найдено.':'Пока нет заметок. Нажмите «Новая» или откройте хадис и выберите «Мои заметки».'}</div>`;
+  }
+  function openNotes(){notesDialog.querySelector('.notes-search').value='';renderNotes();if(!notesDialog.open)notesDialog.showModal();}
+  function openNoteEditor(rk,label,ref){
+    const existing=notesLoad().find(n=>n.rk===rk),text=noteEditor.querySelector('.note-editor-text'),del=noteEditor.querySelector('.note-delete');
+    noteEditor.querySelector('.note-editor-label').textContent=label||'Свободная заметка';text.value=existing?existing.text:'';
+    del.hidden=!existing;del.textContent='Удалить';delete del.dataset.armed;noteEditor.returnValue='';noteEditor.showModal();setTimeout(()=>text.focus(),40);
+    del.onclick=()=>{if(!del.dataset.armed){del.dataset.armed='1';del.textContent='Точно удалить?';return;}
+      const a=notesLoad(),i=a.findIndex(n=>n.rk===rk);if(i>=0){a.splice(i,1);notesSave(a);toast('Заметка удалена');}noteEditor.close('deleted');if(notesDialog.open)renderNotes();};
+    // Saved right in the tap (the dialog's close event is not something to lean on — it may come late or not at all).
+    noteEditor.querySelector('.note-save').onclick=()=>{const a=notesLoad(),i=a.findIndex(n=>n.rk===rk),v=text.value.trim();
+      if(!v){if(i>=0){a.splice(i,1);notesSave(a);}}else{const rec={id:existing?existing.id:noteId(),rk,text:v,label:label||'',ref:ref||null,date:nowStr()};if(i>=0)a[i]=rec;else a.push(rec);if(notesSave(a))toast('Заметка сохранена');}
+      noteEditor.close('save');if(notesDialog.open)renderNotes();};
+    noteEditor.querySelector('.note-cancel').onclick=()=>noteEditor.close('cancel');
+  }
+  function openNoteRef(ref){if(!ref)return;if(ref.type==='q')ASSIST_ACTIONS.quran.run(ref.s+':'+(ref.a||1));else if(ref.type==='h')ASSIST_ACTIONS.search.run(`${ref.source} ${ref.num}`);else if(ref.type==='m')ASSIST_ACTIONS.search.run('мухаймин '+ref.n);}
+  notesDialog.querySelector('.notes-close').onclick=()=>notesDialog.close();
+  notesDialog.querySelector('.notes-search').addEventListener('input',renderNotes);
+  notesDialog.querySelector('.notes-new').onclick=()=>openNoteEditor('free_'+noteId(),'',null);
+  notesDialog.querySelector('.notes-list').addEventListener('click',event=>{const card=event.target.closest('.note-card');if(!card)return;const n=notesLoad().find(x=>x.rk===card.dataset.rk);if(!n)return;
+    if(event.target.closest('[data-note-edit]'))openNoteEditor(n.rk,n.label,n.ref);else if(event.target.closest('[data-note-open]')){notesDialog.close();openNoteRef(n.ref);}});
+  window.addEventListener('muslimoon-notes',openNotes);
+
+  // ── «Назад» всегда под рукой (owner П-45): кнопка «назад» Телеграма закрывает верхнее окно, иначе возвращает к поиску.
+  const tgBack=window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.BackButton;
+  function syncBack(){if(!tgBack||!inTelegram)return;const need=!!document.querySelector('dialog[open]')||state.view!=='search';try{need?tgBack.show():tgBack.hide();}catch(_){}}
+  if(tgBack&&inTelegram){try{tgBack.onClick(()=>{const open=[...document.querySelectorAll('dialog[open]')];if(open.length)open[open.length-1].close();else showView('search');syncBack();saveSpot();});}catch(_){}}
+  new MutationObserver(()=>{syncBack();saveSpot();}).observe(document.body,{subtree:true,attributes:true,attributeFilter:['open']});
+
+  // ── Вернуться туда, где был (owner П-45: «при повторном включении — в последнее открытое, даже в чат с помощником»).
+  const SPOT_KEY='muslimoon.spot';let spotRestored=false;
+  function saveSpot(){if(!spotRestored)return;try{localStorage.setItem(SPOT_KEY,JSON.stringify({t:Date.now(),view:state.view,section:state.section,q:$('#query').value,mode:state.mode,ai:!!state.aiMode,
+    chat:assistantDialog.open,notes:notesDialog.open,reader:$('#reader')?.open&&state.reader?state.reader:null}));}catch(_){}}
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveSpot();});
+  window.addEventListener('pagehide',saveSpot);
+  async function restoreSpot(){
+    let s=null;try{s=JSON.parse(localStorage.getItem(SPOT_KEY)||'null');}catch(_){}
+    try{
+      if(!s||Date.now()-s.t>7*864e5)return;
+      if(s.section==='quran')$('[data-section="quran"]')?.click();
+      if(s.mode&&Array.from($('#mode-select').options).some(o=>o.value===s.mode)){$('#mode-select').value=s.mode;filtersChanged();}
+      if(s.view&&s.view!=='search')showView(s.view);
+      if(s.ai)setAiMode(true);
+      if(s.q&&!s.ai){$('#query').value=s.q;syncPlaceholder();if(s.view==='search'||!s.view)performSearch();}else if(s.q){$('#query').value=s.q;syncPlaceholder();}
+      if(s.reader&&s.reader.id)openReader(s.reader);
+      if(s.notes)openNotes();
+      if(s.chat)openNativeAssistant();
+    }finally{spotRestored=true;syncBack();}
+  }
   window.addEventListener('muslimoon-native-assistant',()=>openNativeAssistant());
   $('#native-assistant-form').onsubmit=async event=>{
     event.preventDefault();const question=assistantInput.value.trim();if(!question||assistantBusy)return;
@@ -711,13 +815,20 @@
       // The first question after coming from a hadith or ayah carries its text (the server takes 800 characters).
       let asked=question;if(assistantPlace&&!assistantPlace._sent){const room=780-question.length-60,body=String(assistantPlace.russian||assistantPlace.arabic||'').replace(/\s+/g,' ').trim();
         if(room>120&&body)asked=`[${placeOf(assistantPlace).replace(/^Из: /,'').replace(/ · «.*$/,'')}. Текст: ${body.slice(0,room)}] Вопрос: ${question}`;assistantPlace._sent=true;}
-      const response=await state.api.hermesAsk(asked,ctx.text,Object.keys(ASSIST_ACTIONS)).catch(async error=>{
+      let hits=[];
+      if(!assistantPlace&&/хадис|сунн|бухари|муслим|абу\s*дауд|тирмизи|насаи|ибн\s*мадж|пророк|посланник|ﷺ|حديث|رسول/i.test(question)){
+        try{const found=await Promise.race([state.api.search({query:question,category:'all',collection:'all',section:'hadith',mode:'rag',scope:[]}),new Promise(r=>setTimeout(()=>r(null),15000))]);
+          hits=(found&&Array.isArray(found.items)?found.items:[]).slice(0,3).map(h=>({id:h.id,kind:h.kind,collection:h.collection,title:h.title,number:h.number,arabic:h.arabic,russian:h.russian}));}catch(_){}
+      }
+      const opora=hits.map((h,i)=>`${i+1}) ${source(h)} № ${h.number} [openHadith|${h.collection} ${String(h.number).replace(/\D.*$/,'')}]: ${cutText(h.arabic,300)} — ${cutText(h.russian,380)}`).join('\n');
+      const response=await state.api.hermesAsk(asked,'человек: '+(ctx.screen||ctx.text),Object.keys(ASSIST_ACTIONS),opora).catch(async error=>{
         if(!/в проверке/.test(String(error?.message||'')))throw error;
         const old=await state.api.assistantAsk(asked);return {answer:old.answer,model:''};});
+      if(response.session){try{localStorage.setItem('muslimoon_assist_sid',String(response.session));}catch(_){}syncAssistHead();}
       const parsed=hermesActions(response.answer);const next=assistantHistory();
       // The helper's own buttons first, then the quick ones read from the question — one row, without repeats.
       const buttons=parsed.actions.concat(proposals.filter(a=>!parsed.actions.some(b=>b.id===a.id&&b.arg===a.arg))).slice(0,6);
-      next.push({role:'bot',text:parsed.text.replace(/модель ИИ \(Muslimoon\)/,'модель ИИ: '+(response.model||'Muslimoon')),actions:buttons});saveAssistantHistory(next);}
+      next.push({role:'bot',text:parsed.text.replace(/модель ИИ \(Muslimoon\)/,'модель ИИ: '+(response.model||'Muslimoon')),actions:buttons,hits});saveAssistantHistory(next);}
     catch(error){const next=assistantHistory();next.push({role:'bot',text:error?.name==='AbortError'?'Помощник долго не отвечает. Попробуйте позже.':String(error?.message||'Связь с помощником недоступна.'),actions:proposals});saveAssistantHistory(next);}
     finally{phases.forEach(clearTimeout);assistantBusy=false;$('#native-assistant-send').disabled=false;renderAssistant();}
   };
@@ -970,6 +1081,7 @@
       $('#category-select').innerHTML = '<option value="all">Все разделы</option>' + state.categories.map(c => `<option value="${escape(c.id)}">${escape(c.title)}${Number.isFinite(c.count) ? ` · ${c.count}` : ''}</option>`).join('');
       $('#collection-select').innerHTML = '<option value="all">Все книги</option>' + state.collections.map(c => `<option value="${escape(c.id)}">${escape(c.title)}${c.arabicTitle&&c.arabicTitle!==c.title?' | '+escape(c.arabicTitle):''}</option>`).join('');
       filtersChanged(); renderLibrary(); showWelcome(); $('.search-field').classList.remove('warming');
+      if (!sessionStorage.getItem('muslimoon.design.preview-state')) restoreSpot(); else spotRestored = true;
       let restoredQuery = '';
       try {restoredQuery = String(sessionStorage.getItem('muslimoon.design.preview-query') || '').trim(); sessionStorage.removeItem('muslimoon.design.preview-query');} catch (_) {}
       let previewState=null;

@@ -41,7 +41,7 @@
     onNumberUpdate:callback=>{numberListener=callback;},
     numberMore:query=>ask('numberMore',{query}),
     assistantAsk:question=>ask('assistantAsk',{question}),
-    hermesAsk:(question,screen,actions)=>ask('hermesAsk',{question,screen,actions}),
+    hermesAsk:(question,screen,actions,opora)=>ask('hermesAsk',{question,screen,actions,opora}),
     bookPageData:(bid,leaf)=>ask('bookPageData',{bid,leaf}),
     locateLeaf:(collection,number,text)=>ask('locateLeaf',{collection,number,text}),
     bookMeta:bid=>ask('bookMeta',{bid}),

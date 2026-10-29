@@ -305,10 +305,10 @@
       const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),150000);
       try{
         const response=await fetch(BACKEND_URL+'/hermes',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,
-          body:JSON.stringify({q:question,initData:INITDATA,ekran:String(args.screen||'').slice(0,400),deystviya:Array.isArray(args.actions)?args.actions.slice(0,30):[]})});
+          body:JSON.stringify({q:question,initData:INITDATA,ekran:String(args.screen||'').slice(0,400),opora:String(args.opora||'').slice(0,2600),deystviya:Array.isArray(args.actions)?args.actions.slice(0,30):[]})});
         const data=await response.json().catch(()=>({}));
         if(!response.ok||!data.answer)throw Error(data.error||data.message||(response.status===429?'Лимит запросов исчерпан. Попробуйте позже.':'Помощник сейчас недоступен.'));
-        return {answer:String(data.answer),model:String(data.model||'')};
+        return {answer:String(data.answer),model:String(data.model||''),session:String(data.session||'')};
       }finally{clearTimeout(timeout);}
     }
     if(action==='assistantAsk'){
@@ -343,6 +343,31 @@
       const wanted=args.section==='quran'?'quran':'hadith';
       const field=document.getElementById('q');field.value='';
       const mode=['root','diac','rag','matnonly','narr','chain'].includes(args.mode)?args.mode:'normal';
+      // RAG по смыслу — без экрана прежнего приложения (владелец 29.10: «RAG тупо переводит в старую версию»).
+      // Считаем тем же, чем ragSearch: книга и векторы из _ragLoad, вектор вопроса с сервера, та же планка порога.
+      if(mode==='rag'&&wanted==='hadith'){
+        if(typeof _ragLoad!=='function'||typeof _RAG==='undefined')return {items:[],total:0,notice:'Поиск по смыслу в этой версии недоступен.'};
+        if(!await _ragLoad())return {items:[],total:0,notice:'Не удалось загрузить книгу для поиска по смыслу. Попробуйте ещё раз.'};
+        const qv=await _ragQueryVec(query);
+        if(!qv){const j=_RAG.ответ;return {items:[],total:0,notice:j&&j['сообщение']?String(j['сообщение']).slice(0,300):j&&j['квота_выбита']?'Запросы по смыслу на сегодня исчерпаны — это лимит, а не поломка. Обычный поиск работает.':'Сервер поиска по смыслу сейчас не ответил. Обычный поиск работает.'};}
+        let nq=0;for(let i=0;i<qv.length;i++)nq+=qv[i]*qv[i];nq=Math.sqrt(nq)||1;
+        const Q=new Float32Array(qv.length);for(let i=0;i<qv.length;i++)Q[i]=qv[i]/nq;
+        const dim=_RAG.dim,body=_RAG.body,S=_RAG.s,ids=_RAG.ids,best=Object.create(null);
+        for(let i=0;i<_RAG.n;i++){const off=i*dim,k=S[i];let s=0;for(let j=0;j<dim;j++)s+=Q[j]*body[off+j]*k;const cid=ids[i];if(!(cid in best)||s>best[cid])best[cid]=s;}
+        const rank=Object.keys(best).map(k=>[k,best[k]]).sort((a,b)=>b[1]-a[1]);
+        const words=(query.match(/\S+/g)||[]).length,porog=words<=1?Math.max(0.55,_RAG.порог):_RAG.порог,picked=[];
+        for(const [cid,s] of rank){if(s<porog||picked.length>=40)break;const z=_RAG.карта?_RAG.карта[cid]:null;if(z)picked.push([cid,s,z[0]]);}
+        const textsOk=await _ragТексты(picked.map(x=>x[0]));
+        const kinds={0:'хадис',1:'глава',2:'вне нумерации'},count={},items=[];
+        for(const [cid,s,kind] of picked){
+          const c=_RAG.мета[cid];if(!c)continue;
+          const label=c.n?String(c.n):('стр. '+(c.p||'—'));count[kinds[kind]||'глава']=(count[kinds[kind]||'глава']||0)+1;
+          const row=convert({s:'bukhari',n:label,arabic:c.a||c.g||'',ru:c.r||''});row.ragScore=Math.round(s*1000)/1000;items.push(row);
+        }
+        const parts=Object.entries(count).map(([k,n])=>k+' '+n).join(' · ');
+        return {items,total:items.length,notice:items.length?(textsOk?'':'Часть текстов не догрузилась — показано не всё. Повторите вопрос.'):'В Сахих аль-Бухари по смыслу ничего не нашлось (близость ниже порога '+porog.toFixed(2)+'). Попробуйте другие слова или обычный поиск.',
+          heading:items.length?'По смыслу · Сахих аль-Бухари · '+parts:''};
+      }
       document.querySelectorAll('.chip[data-mode]').forEach(chip=>{
         const should=chip.dataset.mode===mode;
         if(chip.classList.contains('on')!==should)chip.click();
