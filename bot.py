@@ -32602,11 +32602,26 @@ async def _api_serve(application=None):
         # Экран и разрешённые действия присылает мини-апп; берём только короткий текст и латинские имена действий.
         ekran = re.sub(r'\s+', ' ', str(d.get('ekran') or ''))[:400]
         deystviya = ', '.join(x for x in (d.get('deystviya') or []) if isinstance(x, str) and re.fullmatch(r'[A-Za-z]{2,20}', x))[:400]
+        # П-45 (29.10): «человеку нужен хадис — оригинал, перевод, источник, потом примечания». Мини-апп сперва ищет
+        # по смыслу в своих книгах и шлёт находки «опорой»; Гермес называет номера ТОЛЬКО из неё.
+        opora = str(d.get('opora') or '')[:2600]
+        # Имя из Телеграма — чтобы не переспрашивать «как к вам обращаться» (П-45).
+        imya = re.sub(r'[^\w\s\-]', '', str((user or {}).get('first_name') or ''))[:40].strip()
+        sys_txt = 'Экран пользователя: ' + (ekran or 'неизвестно') + '. Разрешённые действия: ' + (deystviya or 'нет') + '.'
+        if imya:
+            sys_txt += ' Имя пользователя в Телеграме: ' + imya + ' — можно обращаться по имени.'
+        if opora:
+            sys_txt += ('\nОПОРА — найдено в книгах приложения по смыслу вопроса (человек уже видит эти тексты над твоим ответом):\n'
+                        + opora + '\nНазывай номера и цитируй ТОЛЬКО отсюда. Оригинал и перевод целиком не повторяй — коротко объясни, '
+                        'о чём каждый подходящий хадис и что о нём известно, и дай кнопку к нужному: [[действие:openHadith|код номер]] '
+                        '(код и номер — из квадратных скобок опоры). Если опора не про то, о чём спросили, — так и скажи.')
         body = {'model': 'muslimoon-pomoshnik', 'messages': [
-            {'role': 'system', 'content': 'Экран пользователя: ' + (ekran or 'неизвестно') + '. Разрешённые действия: ' + (deystviya or 'нет') + '.'},
+            {'role': 'system', 'content': sys_txt},
             {'role': 'user', 'content': q}]}
         # Номер пользователя в Гермес не уходит — только его отпечаток: сессия своя, а личного там нет.
         sess = 'mini-' + hashlib.sha256(('hermes|' + str(uid)).encode()).hexdigest()[:24]
+        # Короткий номер сессии — человеку виден в шапке помощника, в журнале — рядом с ником (П-45).
+        sid = sess[-6:]
         try:
             import aiohttp as _ah
             async with _ah.ClientSession(timeout=_ah.ClientTimeout(total=150)) as s:
@@ -32622,17 +32637,33 @@ async def _api_serve(application=None):
         _model = os.environ.get('HERMES_MINIAPP_MODEL', 'DeepSeek V4.1 Flash · OpenCode')
         _учесть_фоном(user, "помощник мини-аппа (Гермес)", True, len(q), "", "")
         # #4304 (29.10): вся переписка Гермеса мини-аппа — в рабочий журнал (чат журнала) и в местный журнал.
-        _kto = 'владелец' if _vladelec else ('проверка' if _proverka else 'польз. ' + sess[-8:])
+        _kto = ('владелец' if _vladelec else ('проверка' if _proverka else 'польз.')) + ' · сессия ' + sid
+        # Первое обращение с этой сессии — отдельной строкой «ник → сессия» (П-45), раз и навсегда.
+        try:
+            _put = '/obmen/hermes_sessii.json'
+            try:
+                with open(_put, encoding='utf-8') as _f:
+                    _ses = json.load(_f)
+            except Exception:
+                _ses = {}
+            if sid not in _ses:
+                _nik = ((user or {}).get('first_name') or '') + ((' @' + user['username']) if (user or {}).get('username') else '')
+                _ses[sid] = {'nik': _nik.strip() or '—', 'nachalo': _now_msk()}
+                with open(_put, 'w', encoding='utf-8') as _f:
+                    json.dump(_ses, _f, ensure_ascii=False)
+                asyncio.ensure_future(_notify('🆔 Гермес мини-аппа · новая сессия ' + sid + ' — ' + (_nik.strip() or 'без имени') + ' · ' + _now_msk()))
+        except Exception:
+            pass
         try:
             with open('/obmen/hermes_miniapp.jsonl', 'a', encoding='utf-8') as _f:
-                _f.write(json.dumps({'vremya': _now_msk(), 'kto': _kto, 'sessiya': sess, 'ekran': ekran, 'vopros': q, 'otvet': ans, 'model': _model}, ensure_ascii=False) + '\n')
+                _f.write(json.dumps({'vremya': _now_msk(), 'kto': _kto, 'sessiya': sess, 'ekran': ekran, 'opora': opora[:600], 'vopros': q, 'otvet': ans, 'model': _model}, ensure_ascii=False) + '\n')
         except Exception:
             pass
         try:
             asyncio.ensure_future(_notify('🧠 Гермес мини-аппа · ' + _kto + ' · ' + _now_msk() + '\n📍 ' + (ekran[:120] or '—') + '\n❓ ' + q[:600] + '\n💬 ' + ans[:2500] + '\n· ' + _model))
         except Exception:
             pass
-        return _cors(web.json_response({'answer': ans, 'model': _model}))
+        return _cors(web.json_response({'answer': ans, 'model': _model, 'session': sid}))
 
     async def groupai(r):
         # #236: app-рубильник ИИ-«ботяра» в группах (ТОЛЬКО владелец). POST {set:bool} вкл/выкл; без set — текущее состояние.
