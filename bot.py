@@ -32572,6 +32572,50 @@ async def _api_serve(application=None):
         except Exception as e:
             return _cors(web.json_response({'answer': '', 'error': str(e)[:120]}))
 
+    async def hermes_ask(r):
+        # МИНИ АПП 104, 29.10.2026, владелец #4302: помощник мини-аппа — отдельный Гермес на этой же машине
+        # (служба hermes-miniapp, 172.17.0.1:8642, только API): своя сессия на каждого пользователя Телеграма,
+        # ответы в рамках мини-аппа, подпись модели и «ИИ может ошибаться». Замки — те же, что у /api/assistant:
+        # доступ, частота, квота ИИ; ссылки на хадисы в ответе проходят тот же заслон _хадис_доказательством.
+        d = await _body(r)
+        user = verify_init_data(d.get('initData'))
+        if not feature_allowed('neuro', user):
+            return _deny('assistant')
+        uid = _uid(user, r)
+        if not rate_ok('hermes:' + uid, 8, 120):
+            return _ratelimited()
+        _q = await _ai_quota(user, r)
+        if _q:
+            return _q
+        q = (d.get('q') or '').strip()[:800]
+        if len(q) < 2:
+            return _cors(web.json_response({'answer': ''}))
+        key = os.environ.get('HERMES_MINIAPP_KEY', '')
+        if not key:
+            return _cors(web.json_response({'error': 'Помощник мини-аппа ещё не подключён'}, status=503))
+        # Экран и разрешённые действия присылает мини-апп; берём только короткий текст и латинские имена действий.
+        ekran = re.sub(r'\s+', ' ', str(d.get('ekran') or ''))[:400]
+        deystviya = ', '.join(x for x in (d.get('deystviya') or []) if isinstance(x, str) and re.fullmatch(r'[A-Za-z]{2,20}', x))[:400]
+        body = {'model': 'muslimoon-pomoshnik', 'messages': [
+            {'role': 'system', 'content': 'Экран пользователя: ' + (ekran or 'неизвестно') + '. Разрешённые действия: ' + (deystviya or 'нет') + '.'},
+            {'role': 'user', 'content': q}]}
+        # Номер пользователя в Гермес не уходит — только его отпечаток: сессия своя, а личного там нет.
+        sess = 'mini-' + hashlib.sha256(('hermes|' + str(uid)).encode()).hexdigest()[:24]
+        try:
+            import aiohttp as _ah
+            async with _ah.ClientSession(timeout=_ah.ClientTimeout(total=150)) as s:
+                async with s.post('http://172.17.0.1:8642/v1/chat/completions', json=body,
+                                  headers={'Authorization': 'Bearer ' + key, 'X-Hermes-Session-Id': sess}) as resp:
+                    j = await resp.json(content_type=None)
+            ans = (((j or {}).get('choices') or [{}])[0].get('message') or {}).get('content') or ''
+        except Exception:
+            return _cors(web.json_response({'error': 'Помощник сейчас не отвечает. Попробуйте ещё раз.'}, status=502))
+        if not ans.strip():
+            return _cors(web.json_response({'error': 'Помощник не дал ответа. Попробуйте переформулировать.'}, status=502))
+        ans = await _хадис_доказательством(ans)
+        _учесть_фоном(user, "помощник мини-аппа (Гермес)", True, len(q), "", "")
+        return _cors(web.json_response({'answer': ans, 'model': os.environ.get('HERMES_MINIAPP_MODEL', 'DeepSeek V4.1 Flash · OpenCode')}))
+
     async def groupai(r):
         # #236: app-рубильник ИИ-«ботяра» в группах (ТОЛЬКО владелец). POST {set:bool} вкл/выкл; без set — текущее состояние.
         d = await _body(r)
@@ -34780,7 +34824,7 @@ async def _api_serve(application=None):
         a.add_routes(_генерация_тг.marshruty())
     except Exception as _е_ген:
         print('generaciya_tg: маршруты не подключены —', _е_ген, flush=True)
-    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/vlozhenie', vlozhenie), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/proba_ii', proba_ii), web.post('/api/fayl', fayl), web.post('/api/foto', foto), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/vyzov', vyzov), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/groupai', groupai),
+    a.add_routes([web.get('/api/health', health), web.get('/api/nvidia_test', nvidia_test), web.get('/api/gpt_test', gpt_test), web.post('/api/claude_notify', claude_notify), web.post('/api/polka', polka_put), web.post('/api/upd', upd_post), web.post('/api/skazat', skazat), web.post('/api/anons_povtor', anons_povtor), web.post('/api/prochti', prochti), web.post('/api/vlozhenie', vlozhenie), web.post('/api/golos', golos), web.post('/api/oc_balans', oc_balans), web.post('/api/proba_ii', proba_ii), web.post('/api/fayl', fayl), web.post('/api/foto', foto), web.post('/api/ozvuchit', ozvuchit), web.post('/api/udalit', udalit), web.post('/api/samotest', samotest), web.post('/api/vyzov', vyzov), web.post('/api/obezlichit', obezlichit), web.post('/api/ochered', ochered), web.post('/api/pravila', pravila), web.post('/api/promt', promt), web.post('/api/rabota', rabota), web.post('/api/vygovor', vygovor_put), web.post('/api/zayavka', zayavka_zakryt), web.post('/api/send_poll', send_poll_api), web.post('/api/neuro', neuro), web.post('/api/assistant', assistant), web.post('/api/hermes', hermes_ask), web.post('/api/groupai', groupai),
                   web.post('/api/translate', translate), web.get('/api/search', search), web.get('/api/wide', wide),
                   web.get('/api/maktaba', maktaba), web.get('/api/rijal', rijal),
                   web.post('/api/access', access), web.post('/api/balance', balance),
