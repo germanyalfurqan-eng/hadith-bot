@@ -294,6 +294,95 @@
       if(await carries(Number(leaf)+1))return {bid,leaf:Number(leaf)+1};
       throw Error('Точная страница этого хадиса в издании не найдена');
     }
+    // Конструктор цепи: подбор передатчика по имени (тот же narrCandidates, что у прежнего вида) и поиск по реестру цепей.
+    if(action==='narrCands'){
+      const q=String(args.q||'').trim().replace(/^["'«»\s]+|["'«»\s]+$/g,'');if(q.length<2)return {items:[]};
+      let c=[];try{c=await narrCandidates(q)||[];}catch(e){}
+      if(!c.length){const w=q.split(/\s+/).filter(Boolean);for(const k of [4,3,2]){if(w.length>k){try{const c2=await narrCandidates(w.slice(0,k).join(' '));if(c2&&c2.length){c=c2;break;}}catch(e){}}}}
+      const seen=new Set(),pick=[];
+      for(const x of c){if(x.id==null||seen.has(String(x.id)))continue;seen.add(String(x.id));
+        if(/(?:^|\s)(?:عن|حدثنا|حدثني|سمعت|أخبرنا|أخبرني|قال|ثنا|أنبأنا)(?:\s|$)/.test(String(x.nm||'')))continue;   // two people glued by «عن» — not one link
+        pick.push(x);if(pick.length>=12)break;}
+      const prev=args.prev!=null&&args.prev!==''?+args.prev:null;
+      const items=await Promise.all(pick.map(async x=>{let card=null;try{card=await _narrCard(x.id);}catch(e){}let pairs=0;
+        if(prev!=null){try{const p=await _pchGet(prev,+x.id);pairs=p?p.length:0;}catch(e){}}
+        return {id:String(x.id),name:String(x.nm||(card&&card[1])||''),kunya:card?String(card[2]||''):'',death:card&&card[4]?String(card[4]):(x.y?String(x.y):''),pairs};}));
+      // in «строго по порядку» those who really stand next to the previous link come first (as the old view suggested neighbours)
+      if(prev!=null)items.sort((a,b)=>b.pairs-a.pairs);
+      return {items};
+    }
+    if(action==='chainFind'){
+      const ids=(Array.isArray(args.ids)?args.ids:[]).map(Number).filter(n=>n>0).slice(0,5);if(ids.length<2)throw Error('Выберите минимум двух передатчиков');
+      const mode=['any','adj','seq'].includes(args.mode)?args.mode:'any';
+      const groups=await Promise.all(ids.map(id=>_aliasGroup(id)));
+      try{await loadBooksMap();}catch(e){}
+      const B2C=typeof _BID2READ!=='undefined'?_BID2READ:{},bname=b=>{try{return _refBookName(b);}catch(e){return 'книга '+b;}};
+      const place=p=>({bid:String(p[0]),n:String(p[1]),leaf:p[2]!=null?Number(p[2]):null,code:B2C[String(p[0])]||''});
+      const prio=(a,b)=>(_srcPrio(a[0])-_srcPrio(b[0]))||((parseInt(a[1],10)||0)-(parseInt(b[1],10)||0));
+      if(mode!=='seq'){
+        const parts=await Promise.all(groups.map(async g=>(await Promise.all(g.map(id=>dzPart(id).catch(()=>null)))).filter(Boolean).flat()));
+        const missing=ids.filter((id,i)=>!parts[i]||!parts[i].length).map(String);if(missing.length)return {mode,missing,books:[],found:0};
+        let ai=0;parts.forEach((p,i)=>{if(p.length<parts[ai].length)ai=i;});
+        const anchor=parts[ai].slice().sort(prio),found=[],t0=Date.now();let k=0;
+        for(;k<anchor.length&&found.length<400&&Date.now()-t0<60000;k++){const [bid,num]=anchor[k];let ch=null;try{ch=await dzChain(bid,num);}catch(e){}if(!ch)continue;
+          const idx=groups.map(g=>{for(const id of g){const j=ch.indexOf(id);if(j>=0)return j;}return -1;});if(idx.some(x=>x<0))continue;
+          if(mode==='adj'){const s=[...idx].sort((a,b)=>a-b);let ok=true;for(let t=1;t<s.length;t++)if(s[t]-s[t-1]!==1){ok=false;break;}if(!ok)continue;}
+          found.push(anchor[k]);}
+        const by={};found.forEach(p=>{(by[p[0]]=by[p[0]]||[]).push(place(p));});
+        return {mode,found:found.length,scanned:k,total:anchor.length,books:Object.keys(by).sort((a,b)=>_srcPrio(a)-_srcPrio(b)).map(b=>({bid:b,name:bname(b),places:by[b]}))};
+      }
+      let cids=null;
+      for(let i=0;i<groups.length-1;i++){let lst=[];for(const a of groups[i])for(const b of groups[i+1]){try{lst=lst.concat(await _pchGet(a,b)||[]);}catch(e){}}
+        const s2=new Set(lst);cids=cids?new Set([...cids].filter(x=>s2.has(x))):s2;if(!cids.size)break;}
+      const arr=[...(cids||[])];if(!arr.length)return {mode,chains:[],total:0,hadiths:0,avail:[]};
+      const pre=[...new Set(arr.map(c=>String(c).slice(1,3)))];for(let i=0;i<pre.length;i+=12)await Promise.all(pre.slice(i,i+12).map(p=>_regRec('C'+p).catch(()=>null)));
+      const recs=[];for(const cid of arr){let r=null;try{r=await _regRec(cid);}catch(e){}if(r)recs.push({cid:String(cid),n:r.n||1,s:r.s||[],f:r.f||null,ex:r.ex||[]});}
+      const align=seq=>{for(let st=0;st+groups.length<=seq.length;st++){let ok=true;for(let k=0;k<groups.length;k++){if(groups[k].indexOf(seq[st+k])<0){ok=false;break;}}if(ok)return st;}return -1;};
+      const forms=Array.isArray(args.forms)?args.forms.map(String):[],any=forms.some(Boolean),avail=Array.from({length:groups.length-1},()=>({}));
+      recs.forEach(rc=>{if(!rc.f)return;const st=align(rc.s);if(st<0)return;for(let k=0;k<groups.length-1;k++){const g=rc.f[st+k+1]||'';avail[k][g]=(avail[k][g]||0)+rc.n;}});
+      // no forms marked in the registry (most of the six books) → the chain stays, flagged «form not confirmed»: not a guess, not a loss
+      const kept=recs.filter(rc=>{if(!any)return true;if(!rc.f){rc.unk=true;return true;}const st=align(rc.s);if(st<0){rc.unk=true;return true;}
+        for(let k=0;k<forms.length;k++){if(forms[k]&&!_formMatch(rc.f[st+k+1]||'',forms[k]))return false;}return true;});
+      kept.sort((a,b)=>b.n-a.n);
+      const top=kept.slice(0,40),nids=[...new Set(top.flatMap(r=>r.s))].slice(0,240),names={};
+      await Promise.all(nids.map(async id=>{try{const c=await _narrCard(id);if(c)names[id]=String(c[1]||'');}catch(e){}}));
+      return {mode,total:kept.length,hadiths:kept.reduce((s,r)=>s+r.n,0),
+        avail:avail.map(m=>Object.entries(m).filter(([g])=>g).sort((a,b)=>b[1]-a[1]).map(([g,c])=>({form:g,ar:_FORM_RU[g]||g,count:c}))),
+        chains:top.map(rc=>({cid:rc.cid,n:rc.n,unk:!!rc.unk,links:rc.s.map((id,i)=>({id:String(id),name:names[id]||'',form:rc.f?String(rc.f[i]||''):'',ar:rc.f&&rc.f[i]?(_FORM_RU[rc.f[i]]||''):''})),
+          places:rc.ex.slice().sort(prio).slice(0,120).map(p=>({...place(p),book:bname(p[0])}))}))};
+    }
+    // «Где ещё передаётся» — тахридж прежнего вида, только подтверждённый источником (указ владельца С39).
+    if(action==='takhrij'){
+      let code=String(args.collection||'');if(code==='ibnmaja')code='ibnmajah';
+      const num=parseInt(String(args.number||'').replace(/[^0-9]/g,''),10);if(!code||!num)return {blocks:[]};
+      const ref={source:code,num:String(num)},blocks=[],B2C=typeof _BID2READ!=='undefined'?_BID2READ:{};
+      const ru={};try{Object.values(_TT_BOOK).forEach(b=>{if(b.b)ru[String(b.b)]=b.ru;});}catch(e){}
+      const place=(bid,n)=>({bid:String(bid),n:String(n),code:B2C[String(bid)]||''});
+      try{
+        if(code==='bukhari'){
+          const sh=await _ttLoad('bukhari_atraf',Math.floor(num/1000)),e=sh&&sh[String(num)];
+          const atraf=e&&e.a?[...new Set(e.a.map(Number))].filter(n=>n!==num).sort((a,b)=>a-b):[];
+          let cross={};try{await loadBooksMap();cross=await _ttCrossPlaces({source:'bukhari',num:String(num),bid:'1681'});}catch(_e){}
+          const ks=Object.keys(cross).sort((x,y)=>((_TT_RANK[x]||90)-(_TT_RANK[y]||90))||(x-y));
+          const groups=[];
+          if(atraf.length)groups.push({label:'В самом Сахихе — в других главах (أطراف)',same:true,rows:[{ar:'صحيح البخاري',ru:'Сахих аль-Бухари',places:atraf.map(n=>place('1681',n))}]});
+          if(ks.length)groups.push({label:'В других сборниках',same:true,rows:ks.map(bb=>({ar:_refBookName(bb),ru:ru[bb]||'',places:[...new Set(cross[bb].map(Number))].sort((a,b)=>a-b).map(n=>place(bb,n))}))});
+          if(groups.length)blocks.push({kind:'places',title:'Тот же хадис',source:'أطراف Сахиха аль-Бухари'+(e&&e.t?' · تحفة الأشراف '+e.t+' (аль-Мизи)':'')+' · наш указатель по 64 печатям',groups});
+        }else{
+          const src=_ttSrcOf(ref);
+          if(src){const cfg=_TT_SRC[src],sh=await _ttLoad(cfg.slug,Math.floor(num/1000)),e=sh&&sh[String(num)];
+            if(e){const order=['Бухари','Муслим','Абу Давуд','Тирмизи','Насаи','Ибн Маджа','Малик','Дарими'];
+              const zone=z=>z?[...order.filter(k=>z[k]),...Object.keys(z).filter(k=>!order.includes(k))].map(k=>{const bk=_TT_BOOK[k]||{};return {ar:bk.ar||k,ru:bk.ru||k,places:z[k].map(n=>bk.b?place(bk.b,n):{bid:'',n:String(n),code:''})};}):[];
+              const groups=[{label:'Тот же хадис (أخرجه)',same:true,rows:zone(e.d)},{label:'Свидетельства — другие хадисы о том же (شواهد)',rows:zone(e.s)}];
+              if(e.i&&e.i.length)groups.push({label:'В этом же сборнике',same:true,rows:[{ar:(_TT_BOOK[{ahmad:'Ахмад',abudawud:'Абу Давуд',ibnmajah:'Ибн Маджа',nasai:'Насаи',tirmidhi:'Тирмизи'}[src]]||{}).ar||'',ru:'',places:e.i.map(n=>place(cfg.bid,n))}]});
+              blocks.push({kind:'places',title:'Тахридж мухаккика',source:cfg.label.replace('تحقيق','тахкик'),hukm:String(e.g||''),groups:groups.filter(g=>g.rows.length)});}}
+        }
+      }catch(e){}
+      try{const pl=_codifPlace(ref);if(pl&&pl.bid&&pl.num!=null){const m=await _tsLoad(),v=m[pl.bid+':'+String(pl.num)];if(v&&v.t)blocks.push({kind:'text',title:'Где ещё выведен этот хадис',text:String(v.t),hukm:String(v.h||''),source:'свод sunnah.one — тахридж и оценка источника, не наши'});}}catch(e){}
+      try{const o=_ТАХРИДЖ_МУХ[code];if(o){const host=document.createElement('div');if(await renderMuhTakhrij(ref,host)){const t=host.querySelector('[dir="rtl"]');if(t&&t.textContent.trim())blocks.push({kind:'text',title:'Сноски мухаккика этого издания',text:t.textContent.trim(),source:o.кто+' — тахридж и суждение мухаккика, не наши'});}}}catch(e){}
+      try{await loadReverse();const mu=reverse&&(reverse[code+' '+num]||reverse[code+' '+toAr(String(num))]);if(mu&&mu.length)blocks.push({kind:'muhaymin',title:'В аль-Мухаймин (Муршид ибн Юсуф)',nums:[...new Set(mu.map(x=>String(x.m)))],source:'по метке источника у автора'});}catch(e){}
+      return {blocks};
+    }
     // Оглавление книги (جدول المحتويات) — тот же /book_toc, что у прежнего вида: [{t: глава, l: уровень, p: лист}].
     if(action==='bookToc'){
       const bid=String(args.bid||'');if(!/^\d+$/.test(bid))throw Error('Некорректный номер книги');
@@ -633,7 +722,7 @@
   window.addEventListener('message',event=>{
     if(event.origin!==location.origin||event.source!==parent||event.data?.source!=='muslimoon-design-ui')return;
     const {id,action,args}=event.data;
-    if(typeof id!=='string'||!['ready','suraInfo','narrators','bookToc','translate','catalog','bookInfo','bookPageData','locateLeaf','bookMeta','leafByHadith','lastLeaf','hermesAsk','quranWordData','quranAudioInfo','quranTimedAudio','quranVerse','quranNeighbor','search','read','browse','scientific','library','tool','toolsCatalog','openOriginalTool','showOriginalHome','numberMore','assistantAsk'].includes(action))return;
+    if(typeof id!=='string'||!['ready','suraInfo','narrators','bookToc','translate','takhrij','narrCands','chainFind','catalog','bookInfo','bookPageData','locateLeaf','bookMeta','leafByHadith','lastLeaf','hermesAsk','quranWordData','quranAudioInfo','quranTimedAudio','quranVerse','quranNeighbor','search','read','browse','scientific','library','tool','toolsCatalog','openOriginalTool','showOriginalHome','numberMore','assistantAsk'].includes(action))return;
     serial=serial.then(()=>request(action,args||{})).then(payload=>send(id,payload)).catch(e=>send(id,null,String(e&&e.message||e)));
   });
   let attempts=0;
