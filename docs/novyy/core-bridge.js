@@ -50,7 +50,9 @@
     if(!quranWordAssets)quranWordAssets=Promise.all(['./quran_roots.json','./quran_wbw_ru.json'].map(url=>fetch(url).then(r=>{if(!r.ok)throw Error('Данные слов недоступны');return r.json();}))).catch(e=>{quranWordAssets=null;throw e;});
     const [roots,translations]=await quranWordAssets;
     const tokens=String(verse.text).split(/(\s+)/).filter(Boolean),words=tokens.filter(t=>/[ء-ي]/.test(t));
-    const gloss=translations[`${sura}:${ayah}`],aligned=Array.isArray(gloss)&&gloss.length===words.length;
+    // у 770 аятов в quran_wbw_ru.json пословного нет — дописан моделью (data/quran_wbw_dop.json, черновой)
+    let dop=null;if(!Array.isArray(translations[`${sura}:${ayah}`])){try{dop=(await modelFile('quran_wbw_dop.json'))[`${sura}:${ayah}`]||null;}catch(e){}}
+    const gloss=translations[`${sura}:${ayah}`]||dop,glossAi=!!dop,aligned=Array.isArray(gloss)&&gloss.length===words.length;
     const lemmas=await modelFile('quran_lemmas_ru.json'),lemmas2=await modelFile('quran_lemmas_v2.json'),pl=t=>String(t||'').replace(/[\u064B-\u065F\u0670\u0640]/g,'').trim();
     // Разметка по МЕСТУ слова (Quranic Arabic Corpus, data/morph/<сура>.json): корень, огласованная лемма, падеж — свои у
     // каждого слова аята. Прежняя (quran_roots.json) была по написанию — одна на весь Коран, отсюда «ٱللَّهُ» в 2:255
@@ -61,7 +63,7 @@
       const p=place?place[index]:null,e=p?[p[0],p[1],p[2]]:roots.f?.[rootKey(token)],root=Array.isArray(e)&&e[0]?String(e[0]):'';
       const refs=root&&Array.isArray(roots.r?.[root])?roots.r[root]:[];
       const lemma=Array.isArray(e)&&e[1]?String(e[1]):'',info=lemma?(lemmas2[lemma]||(p?null:lemmas[pl(lemma)])||null):null;
-      return {text:token,word:true,index:index++,place:!!p,translation:aligned?String(gloss[index-1]||''):'',root,lemma,lemmaInfo:info,tag:Array.isArray(e)&&e[2]?String(e[2]):'',grammar:Array.isArray(e)&&e[2]?gramRu(String(e[2])):'',parts:p&&Array.isArray(p[3])?p[3].map(x=>({text:String(x[0]),tag:String(x[1]),grammar:gramRu(String(x[1]))})):[],references:refs,referenceCount:refs.length};
+      return {text:token,word:true,index:index++,place:!!p,translation:aligned?String(gloss[index-1]||''):'',translationAi:glossAi,root,lemma,lemmaInfo:info,tag:Array.isArray(e)&&e[2]?String(e[2]):'',grammar:Array.isArray(e)&&e[2]?gramRu(String(e[2])):'',parts:p&&Array.isArray(p[3])?p[3].map(x=>({text:String(x[0]),tag:String(x[1]),grammar:gramRu(String(x[1]))})):[],references:refs,referenceCount:refs.length};
     })};
   }
   let catalogPromise=null,fullCatalog=null;
