@@ -250,9 +250,12 @@
       await loadArabusLocal();const plain=t=>String(t||'').replace(/[\u064B-\u065F\u0670\u0640]/g,'').trim();
       let hit=null;for(const w of [args.lemma,args.word].map(plain).filter(Boolean)){try{hit=arabusLocalLookup(w,plain(args.root));}catch(e){}if(hit&&hit.entries&&hit.entries.length)break;}
       // the entry that IS the word's dictionary form comes first (سَيِّئَة — «зло», not the verb سَوَّأَ of the same root)
-      const lem=plain(args.lemma).replace(/[أإآ]/g,'ا').replace(/ة$/,'ه'),key=t=>plain(t).replace(/[أإآ]/g,'ا').replace(/ة$/,'ه').replace(/[ٌٍٓ]/g,'');
-      const list=((hit&&hit.entries)||[]).map(x=>({ar:String(x.ar||''),gram:String(x.gram||''),ru:String(x.ru||''),exact:!!lem&&key(x.ar)===lem}));
-      list.sort((x,y)=>(y.exact?1:0)-(x.exact?1:0));
+      // exact — буква в букву, с хамзой: при свёрнутой хамзе имя إِلَٰه «совпадало» с глаголом أَلَّهَ (проверка 29.10);
+      // near — совпало лишь со свёрнутой хамзой: берётся, только если у слова нет своей статьи словаря лемм
+      const strict=t=>plain(t).replace(/ة$/,'ه').replace(/[ٌٍٓ]/g,''),fold=t=>strict(t).replace(/[أإآ]/g,'ا');
+      const lem=strict(args.lemma);
+      const list=((hit&&hit.entries)||[]).map(x=>({ar:String(x.ar||''),gram:String(x.gram||''),ru:String(x.ru||''),exact:!!lem&&strict(x.ar)===lem,near:!!lem&&fold(x.ar)===fold(args.lemma)}));
+      list.sort((x,y)=>(y.exact?2:y.near?1:0)-(x.exact?2:x.near?1:0));
       return {entries:list.slice(0,8),matched:String((hit&&(hit.matched||hit.word))||''),exact:list.some(x=>x.exact)};
     }
     // Тафсир аята — те же своды, что у прежнего вида (Ибн Касир, ас-Саади, Мухтасар, ат-Табари, аль-Куртуби, аль-Багави).

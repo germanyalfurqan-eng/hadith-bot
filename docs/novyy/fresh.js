@@ -1574,7 +1574,8 @@
       loadArabus().then(r=>{if(current!==word)return;const e=(r.entries||[])[0],el=panel.querySelector('.qw-lemma-ru');if(!el)return;
         const li=item.lemmaInfo;
         if(e&&e.exact){panel.querySelector('.qw-lemma').textContent=e.ar||item.lemma||'';el.textContent=cutText(e.ru.replace(/^1\)\s*/,''),110)+(li&&li.t?` · звучит: ${li.t}`:'');}
-        else if(li&&li.v){panel.querySelector('.qw-lemma').textContent=li.v;el.innerHTML=`${escape(li.t?li.t+' — ':'')}${escape(li.ru||'')} <span class="src-tag src-ai" dir="ltr">ИИ, черновое</span>`;}
+        else if(li&&li.v){panel.querySelector('.qw-lemma').textContent=li.v;el.innerHTML=`${escape(li.t?li.t+' — ':'')}${escape(li.ru||'')}${li.src==='ручная'?'':' <span class="src-tag src-ai" dir="ltr">ИИ, черновое</span>'}`;}
+        else if(e&&e.near){panel.querySelector('.qw-lemma').textContent=e.ar||item.lemma||'';el.textContent=cutText(e.ru.replace(/^1\)\s*/,''),110);}
         else el.textContent=(r.entries||[]).length?'статьи этой формы нет — нажмите корень: однокоренные слова':'в Арабусе не нашлось';});
       const root=panel.querySelector('.qw-root-btn');if(root)root.onclick=async()=>{const box=panel.querySelector('.qw-arabus');if(!box.hidden){box.hidden=true;root.classList.remove('on');return;}
         root.classList.add('on');box.hidden=false;box.innerHTML='<p class="notes-hint">Открываю Арабус…</p>';const r=await loadArabus();if(current!==word)return;
