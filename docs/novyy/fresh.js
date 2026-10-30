@@ -609,7 +609,8 @@
     if(!more){$('#maktaba-results').innerHTML='';head.textContent='ищу по всем книгам…';btn.hidden=true;}else{btn.disabled=true;btn.textContent='Загружаю…';}
     try{const r=await state.api.maktabaSearch(query,mkState.page);if(token!==mkState.token)return;
       mkState.items=mkState.items.concat(r.items||[]);
-      if(!mkState.items.length){head.textContent='ничего не нашлось';btn.hidden=true;return;}
+      // проверка Next 30.10: «81 найдено» и рядом «Во всей Мактабе — ничего не нашлось» путали; пустой раздел не показываем
+      if(!mkState.items.length){mkSection.hidden=true;btn.hidden=true;return;}
       head.textContent=`${mkState.items.length}${r.total>mkState.items.length?' из ~'+Number(r.total).toLocaleString('ru-RU'):''}`;
       renderCards($('#maktaba-results'),mkState.items,mkState.items.length);
       btn.hidden=!(r.items||[]).length||mkState.items.length>=r.total;btn.disabled=false;btn.textContent='Ещё из Мактабы';}
@@ -634,7 +635,8 @@
     $('#results-title').textContent = 'Результаты поиска'; $('#refine-panel').hidden = true; $('#refine-toggle').setAttribute('aria-expanded','false'); loading($('#search-results'));
     // the whole library — at the same time, for an ordinary text query without chosen books
     const wholeLibrary=state.section==='hadith'&&!state.aiMode&&!multiScope.length&&state.category==='all'&&state.collection==='all'&&['normal','diac','root'].includes(state.mode||'normal')&&!/^[\d٠-٩\s:№#.]+$/.test(query);
-    mkState.token++;mkSection.hidden=true;if(wholeLibrary)maktabaWave(query,false);
+    // Мактаба ищет только по-арабски: на русский запрос раздел не запускаем
+    mkState.token++;mkSection.hidden=true;if(wholeLibrary&&/[؀-ۿ]/.test(query))maktabaWave(query,false);
     const request = {query,category:state.section === 'quran' ? 'all' : state.category,collection:state.section === 'quran' ? 'all' : state.collection,section:state.section,mode:state.section === 'quran' ? 'normal' : state.mode,scope:state.section==='hadith'?multiScope.map(({kind,id,exclude})=>({kind,id,exclude})):[]};
     try {
       const result = await state.api.search(request); if (token !== state.searchToken) return;

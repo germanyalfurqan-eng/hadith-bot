@@ -29,7 +29,7 @@
     const nativeHtml=native.length?'<h3>Основное</h3>'+native.map(x=>`<button type="button" class="helper-action lab-tool-card" data-id="${x.id}"><span class="book-seal"><svg class="icon"><use href="#i-${x.icon}"/></svg></span><span><strong>${esc(x.title)}</strong><small>${esc(x.note)}</small></span><svg class="icon"><use href="#i-arrow"/></svg></button>`).join(''):'';
     list.innerHTML=nativeHtml+filtered.map(item=>{
       // Not yet redrawn: said plainly, so nobody lands in the old look by surprise (owner П-45).
-      const name=clean(item.section),heading=item.section!==section?`<h3>${esc(name==='Инструменты'?'Ещё инструменты':name)}<span class="old-look">в прежнем оформлении — переносим</span></h3>`:'';section=item.section;
+      const name=clean(item.section),heading=item.section!==section?`<h3>${esc(name==='Инструменты'?'Ещё инструменты':name)}</h3>`:'';section=item.section;
       const {title,note}=parts(item.label);
       return heading+`<button type="button" class="helper-action lab-tool-card" data-id="${esc(item.id)}"><span class="book-seal"><svg class="icon"><use href="#i-${ICONS[item.id]||'book'}"/></svg></span><span><strong>${esc(title)}</strong>${note?`<small>${esc(note)}</small>`:''}</span><svg class="icon"><use href="#i-arrow"/></svg></button>`;
     }).join('');
