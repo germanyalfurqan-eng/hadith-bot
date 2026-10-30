@@ -81,7 +81,7 @@
         const ids=(typeof COLL_BIDS!=='undefined'&&COLL_BIDS[row.id])||((typeof EXTRA_BIDS!=='undefined'&&EXTRA_BIDS[row.id])?[EXTRA_BIDS[row.id]]:[]);
         const candidates=data.filter(b=>ids.map(String).includes(String(b.i))).sort((a,b)=>(_firstSrcRank[String(a.i)]??999)-(_firstSrcRank[String(b.i)]??999));
         const book=candidates[0];
-        return Object.assign(row,{readable:true,bid:book?String(book.i):null,author:authorLabel(book),arabicTitle:book?.n||'',category:book?.c||''});
+        return Object.assign(row,{readable:true,bid:book?String(book.i):null,author:authorLabel(book),arabicTitle:book?.n||'',category:book?.c||'',aka:book?firstByBid.get(String(book.i))?.ru||'':''});
       });
       const primaryIds=new Set(primary.map(x=>x.bid).filter(Boolean));
       const categoryDefs=typeof CATS_INFO!=='undefined'?CATS_INFO:[];
@@ -95,7 +95,7 @@
         return (categoryOrder.get(a.book.c)??999)-(categoryOrder.get(b.book.c)??999)||bp-ap||a.index-b.index;
       }).map(({book:b})=>{
         const translation=_catTr.map[b.n]?.ru||'';
-        return {id:'book:'+b.i,bid:String(b.i),title:translation||b.n,arabicTitle:b.n,author:authorLabel(b),category:b.c,categoryLabel:categoryNames.get(b.c)||b.c,subtitle:(translation?b.n+' · ':'')+(authorLabel(b)||categoryNames.get(b.c)||''),readable:false};
+        return {id:'book:'+b.i,bid:String(b.i),title:translation||b.n,arabicTitle:b.n,aka:firstByBid.get(String(b.i))?.ru||'',author:authorLabel(b),category:b.c,categoryLabel:categoryNames.get(b.c)||b.c,subtitle:(translation?b.n+' · ':'')+(authorLabel(b)||categoryNames.get(b.c)||''),readable:false};
       });
       fullCatalog={...collections(),collections:primary.concat(others),categories,catalogCount:data.length};
       return fullCatalog;

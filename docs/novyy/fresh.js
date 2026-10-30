@@ -456,7 +456,7 @@
     const q=catalogFold(where.querySelector('.where-input').value).trim(),box=where.querySelector('.where-suggest');if(q.length<2){box.hidden=true;box.innerHTML='';return;}
     const stateOf=(kind,id)=>{const x=multiScope.find(m=>m.kind===kind&&m.id===id);return x?(x.exclude?'ex':'in'):'';};
     const cats=state.categories.filter(c=>catalogFold(c.title).includes(q)).slice(0,3).map(c=>({kind:'category',id:String(c.id),title:c.title.split('|')[0].trim(),sub:`раздел · ${c.count||''} книг`}));
-    const books=state.collections.filter(c=>catalogFold(`${c.title} ${c.arabicTitle||''} ${c.author||''}`).includes(q)).slice(0,6).map(c=>({kind:'book',id:String(c.id),title:c.title,sub:String(c.author||'').split('|').pop().trim()}));
+    const books=state.collections.filter(c=>catalogFold(`${c.title} ${c.aka||''} ${c.arabicTitle||''} ${c.author||''}`).includes(q)).slice(0,6).map(c=>({kind:'book',id:String(c.id),title:c.title,sub:String(c.author||'').split('|').pop().trim()}));
     const authorsSeen=new Map();for(const c of state.collections){const a=String(c.author||'').trim();if(a&&catalogFold(a).includes(q))authorsSeen.set(a,(authorsSeen.get(a)||0)+1);}
     const authors=[...authorsSeen.entries()].sort((x,y)=>y[1]-x[1]).slice(0,3).map(([a,n])=>({kind:'author',id:a,title:a.split('|').pop().trim(),sub:`автор · ${n} книг`}));
     const rows=[...authors,...cats,...books];
@@ -532,7 +532,7 @@
       catSel.onchange = () => {state.libraryCategory = catSel.value; state.libraryShown = 24; renderLibrary();};}
     if (catSel.options.length < 2 && state.categories.length) catSel.innerHTML = `<option value="">Все разделы · ${state.collections.length}</option>` + state.categories.map(c => `<option value="${escape(String(c.id))}">${escape(String(c.title).split('|')[0].trim())} · ${c.count || ''}</option>`).join('');
     const cat = state.libraryCategory || '';
-    const books = state.collections.filter(collection => {if (cat && String(collection.category || '') !== cat) return false; if (!query) return true; const title = `${collection.title || ''} ${collection.arabicTitle || ''}`, author = String(collection.author || ''); return catalogFold(state.librarySearchMode === 'author' ? author : state.librarySearchMode === 'title' ? title : `${title} ${author}`).includes(query);});
+    const books = state.collections.filter(collection => {if (cat && String(collection.category || '') !== cat) return false; if (!query) return true; const title = `${collection.title || ''} ${collection.aka || ''} ${collection.arabicTitle || ''}`, author = String(collection.author || ''); return catalogFold(state.librarySearchMode === 'author' ? author : state.librarySearchMode === 'title' ? title : `${title} ${author}`).includes(query);});
     const favorites = books.filter(favoriteBook);
     // Favourites are a section you open (owner 29.10), not a list that always hangs above the catalog.
     $('.favorite-books-section').hidden = true;
