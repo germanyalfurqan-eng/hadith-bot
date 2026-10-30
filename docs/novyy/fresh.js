@@ -1980,6 +1980,15 @@
   // ── «Назад» — универсально (owner 29.10): a hadith opened from another hadith returns to it; windows stack.
   const readerHistory=[];
   function readerBack(){if(readerHistory.length){openReader(readerHistory.pop(),{fromHistory:true});return true;}return false;}
+  // Ссылка на хадис, аят или книгу (startapp): открываем её на месте, а не главную (сквозная проверка 30.10, заявка №83).
+  function deepLinkToken(){let g='';try{g=window.Telegram?.WebApp?.initDataUnsafe?.start_param||'';}catch(_){}
+    if(!g){const q=new URLSearchParams(location.search),h=new URLSearchParams(location.hash.replace(/^#/,''));g=h.get('tgWebAppStartParam')||q.get('tgWebAppStartParam')||q.get('g')||'';}return String(g).trim();}
+  async function runDeepLink(){const g=deepLinkToken();if(!g)return false;const p=g.split('_').filter(Boolean),t=(p[0]||'').toLowerCase();
+    try{if(t==='r'&&p[1]&&p[2]){await openReader({kind:'hadith',collection:p[1],number:String(p[2]).replace(/-\d+$/,'')});return true;}
+      if(t==='q'&&p[1]){await openReader(await state.api.quranVerse(+p[1],+p[2]||1));return true;}
+      if(t==='m'&&p[1]){ASSIST_ACTIONS.search.run('мухаймин '+p[1]);return true;}
+      if(t==='b'&&/^\d+$/.test(p[1]||'')){const c=collectionForBid(p[1],'Книга');openNativeBook(p[1],+p[2]||1,c.title,{arabicTitle:c.arabicTitle});return true;}
+    }catch(_){toast('Ссылка не открылась. Найдите нужное через поиск.');}return false;}
   async function openReader(record,options={}) {
     if(record&&record.kind==='quran'&&record.sura)setQuranPick(record.sura,record.ayah);
     if($('#reader').open&&state.reader&&!options.fromHistory&&String(state.reader.id||state.reader.collection+state.reader.number)!==String(record.id||record.collection+record.number))readerHistory.push(state.reader);
@@ -2044,7 +2053,7 @@
       $('#category-select').innerHTML = '<option value="all">Все разделы</option>' + state.categories.map(c => `<option value="${escape(c.id)}">${escape(c.title)}${Number.isFinite(c.count) ? ` · ${c.count}` : ''}</option>`).join('');
       $('#collection-select').innerHTML = '<option value="all">Все книги</option>' + state.collections.map(c => `<option value="${escape(c.id)}">${escape(c.title)}${c.arabicTitle&&c.arabicTitle!==c.title?' | '+escape(c.arabicTitle):''}</option>`).join('');
       filtersChanged(); renderLibrary(); showWelcome(); $('.search-field').classList.remove('warming');
-      if (!sessionStorage.getItem('muslimoon.design.preview-state')) restoreSpot(); else spotRestored = true;
+      if (await runDeepLink()) spotRestored = true; else if (!sessionStorage.getItem('muslimoon.design.preview-state')) restoreSpot(); else spotRestored = true;
       let restoredQuery = '';
       try {restoredQuery = String(sessionStorage.getItem('muslimoon.design.preview-query') || '').trim(); sessionStorage.removeItem('muslimoon.design.preview-query');} catch (_) {}
       let previewState=null;
