@@ -1339,6 +1339,11 @@
       const body=nCardDialog.querySelector('.ncard-body');++nCardToken;if(!nCardDialog.open)nCardDialog.showModal();
       body.innerHTML=`<p class="ncard-said" lang="ar" dir="rtl">${escape(said)}</p><p class="notes-hint">Здесь передатчик назван по родству — «отец», «дед» или «дядя» предыдущего передатчика в цепи. В готовой цепи этого хадиса он не опознан; его имя смотрите в карточке предыдущего передатчика — среди его учителей.</p>`;return;}
 
+    // «عن رجل», «حدثنا من لقي الوفد» — передатчик без имени (мубхам)
+    if(/^(?:رجل|رجلا|امرأة|امراة|غلام|شيخ|بعض|من|أناس|اناس|ناس|نفر|أشياخ|اشياخ|أشياخنا|اشياخنا|رجال)$/.test(String(said).replace(/[ً-ٰٟـ]/g,'').trim().split(/\s+/)[0].replace(/[أإآ]/g,'ا'))){
+      const body=nCardDialog.querySelector('.ncard-body');++nCardToken;if(!nCardDialog.open)nCardDialog.showModal();
+      body.innerHTML=`<p class="ncard-said" lang="ar" dir="rtl">${escape(said)}</p><p class="notes-hint">Здесь передатчик не назван по имени (в науке хадиса — «мубхам»): «человек», «тот, кто встречал…». Кто он, в этой цепи не сказано; иногда его имя известно по другим цепям того же хадиса.</p>`;return;}
+
     const body=nCardDialog.querySelector('.ncard-body'),token=++nCardToken;if(!nCardDialog.open)nCardDialog.showModal();
     body.innerHTML='<div class="native-chat-pending"><span class="think-dots"><i></i><i></i><i></i></span><span class="think-text">Ищу, кто это</span></div>';
     let items=[];try{items=(await state.api.narrCands(said,'')).items||[];}catch(_){}if(token!==nCardToken)return;

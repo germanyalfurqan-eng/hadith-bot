@@ -679,6 +679,13 @@
           // «حدثتني ربيبة النبي ﷺ زينب ابنة أبي سلمة» — имя после описания (Бухари №3491)
           let j0=i+1;if(/^(?:ربيبة|ربيب|خادم|مولى|مولاة|زوج)$/.test(plain(tk[j0]||''))&&/النبي|رسول/.test(plain(tk[j0+1]||''))){const k=tk.findIndex((t,x)=>x>j0&&x<j0+8&&/^وسلم$/.test(plain(t)));j0=k>0?k+1:j0+2;}
           const cand=[];for(let j=j0;j<tk.length&&cand.length<5;j++){const pj=plain(tk[j]);if(MK.test(pj)||CUT.test(pj)||TAIL2.test(pj)||/رسول|النبي|صلى/.test(pj))break;cand.push(tk[j]);}
+          // «عن غلام لجده يقال له مسعود» — передатчик назван после «يقال له» (ан-Насаи №800)
+          {const y=cand.findIndex((t,x)=>x>0&&/^يقال$/.test(plain(t))&&/^لها?$/.test(plain(cand[x+1]||'')));const nm=y>0?cand[y+2]:null;
+            if(nm&&!inHave(foldN(nm))){let id=null;try{id=await _narrLookup(nm);}catch(e){}cleaned.push({said:nm,id:id==null?null:String(id)});have.add(foldN(nm));continue;}}
+          // «عن رجل من أهل المدينة», «حدثنا من لقي الوفد» — передатчик без имени (мубхам): тоже передатчик, выделяется
+          // пунктиром, по нажатию сказано, что имя в цепи не названо (Муслим №18)
+          if(cand.length&&/^(?:رجل|رجلا|امرأة|امراة|غلام|شيخ|بعض|من|أناس|اناس|ناس|نفر|أشياخ|اشياخ|أشياخنا|اشياخنا|رجال)$/.test(plain(cand[0]))){
+            const said=cand.slice(0,Math.min(4,cand.length)).join(' '),f=foldN(said);if(!inHave(f)){cleaned.push({said,id:null,mubham:true});have.add(f);}continue;}
           for(let n=cand.length;n>=1;n--){const said=cand.slice(0,n).join(' '),f=foldN(said);if(KIN.test(plain(said))?have.has(f):inHave(f))break;
             let id=null;try{id=await _narrLookup(said);}catch(e){}if(id!=null){cleaned.push({said,id:String(id)});have.add(f);break;}
             /* «عن أبيه» без готовой цепи — пунктиром */ if(n===1&&KIN.test(plain(said))){cleaned.push({said,id:null});have.add(f);break;}}}}catch(e){}
