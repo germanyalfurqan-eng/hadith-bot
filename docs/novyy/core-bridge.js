@@ -73,7 +73,10 @@
       await Promise.all([loadBookTr(),_ensureFirstSrcRank(data)]);
       const firstSources=await loadFirstSrc();
       const authorNames=new Map(firstSources.filter(s=>s.author_key&&s.author_ru).map(s=>[_dial(s.author_key),s.author_ru]));
-      const authorLabel=b=>{const ru=authorNames.get(_dial(b?.a||''));return ru?ru+' | '+b.a:(b?.a||'');};
+      // в словаре названий нет части первоисточников (Абу Авана, Ибн Аби Шейба…), а в их собственном списке русское имя есть у всех 40
+      const firstByBid=new Map(firstSources.map(s=>[String(s.bid),s]));
+      for(const b of data){const s=firstByBid.get(String(b.i));if(s&&s.ru&&!_catTr.map[b.n]?.ru)_catTr.map[b.n]={..._catTr.map[b.n],ru:s.ru};}
+      const authorLabel=b=>{const ru=firstByBid.get(String(b?.i))?.author_ru||authorNames.get(_dial(b?.a||''));return ru?ru+' | '+b.a:(b?.a||'');};
       const primary=collections().collections.map(row=>{
         const ids=(typeof COLL_BIDS!=='undefined'&&COLL_BIDS[row.id])||((typeof EXTRA_BIDS!=='undefined'&&EXTRA_BIDS[row.id])?[EXTRA_BIDS[row.id]]:[]);
         const candidates=data.filter(b=>ids.map(String).includes(String(b.i))).sort((a,b)=>(_firstSrcRank[String(a.i)]??999)-(_firstSrcRank[String(b.i)]??999));
@@ -944,7 +947,7 @@
       if(tool==='notes'&&row.kind==='book'){openNotes();return {ok:true};}
       if(tool==='rag'){
         const tab=document.querySelector('.tab[data-tab="hadith"]');if(tab&&!tab.classList.contains('active'))tab.click();
-        const chip=document.querySelector('.chip[data-mode="rag"]');if(!chip)throw Error('RAG-поиск недоступен');
+        const chip=document.querySelector('.chip[data-mode="rag"]');if(!chip)throw Error('Поиск по смыслу недоступен');
         if(!chip.classList.contains('on'))chip.click();document.getElementById('q')?.focus();return {ok:true};
       }
       if(tool==='chain'){
