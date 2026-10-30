@@ -656,12 +656,14 @@
       const CUT=/^(?:فيما|قرئ|قراءة|أنه|انه|أنها|انها|أن|ان|قال|وقال|فقال|قالت|يقول|تقول|سمع|يحدث|حدثنا|حدثني|حدثتني|حدثتنا|أخبرنا|أخبرني|أخبرتني|عن)$/;
       // слова, которых в имени не бывает: с них начинается матн («فممن كان إلا من مضر…» опознавалось как «النضر بن كنانة»,
       // «فأقبل علي», «الملائكة رب ذاك» шли пунктиром как передатчики — 30.10)
-      const STOP=/^(?:كان|كانت|إلا|الا|ممن|فممن|ذاك|ذلك|هذا|هذه|رب|ربك|ربه|ربي|الملائكة|يوم|قد|لم|لن|لا|ما|إذا|اذا|إن|ثم|حتى|كيف|هل|ليس|أقبل|فأقبل|اقبل|فاقبل|جاء|فجاء|دخل|فدخل)$/;
+      const STOP=/^(?:كان|كانت|إلا|الا|ممن|فممن|ذاك|ذلك|هذا|هذه|رب|ربك|ربه|ربي|الملائكة|يوم|قد|لم|لن|لا|ما|إذا|اذا|إن|ثم|حتى|كيف|هل|ليس|أقبل|فأقبل|اقبل|فاقبل|جاء|فجاء|دخل|فدخل|له|لها)$/;
       for(const x of expanded){let w=String(x.said).split(/\s+/).filter(Boolean);
         while(w.length>1&&HEAD.test(plain(w[0])))w.shift();
         {const c=w.findIndex((t,i)=>i>0&&CUT.test(plain(t)));if(c>0)w=w.slice(0,c);}   // «عبيد الله بن عدي بن خيار أنه دخل…» → имя
         let cutStop=false;{const c=w.findIndex(t=>STOP.test(plain(t)));if(c===0)continue;if(c>0){w=w.slice(0,c);cutStop=true;}}
         while(w.length>1&&TAIL2.test(plain(w[w.length-1])))w.pop();
+        // обрывки разбора ядра: «قال» резалось посреди «يقال/فقال» → «غلام لجده ي», «له مسعود ف» (ан-Насаи №800)
+        while(w.length>1&&plain(w[w.length-1]).length===1){w.pop();cutStop=true;}
         let said=w.join(' '),id=x.id;
         if(said!==x.said&&(id==null||cutStop)){try{id=await _narrLookup(said);}catch(e){}id=id==null?null:String(id);}
         if(id==null&&KIN.test(plain(said))&&prevId!=null){const k=chainIds.indexOf(+prevId);if(k>=0&&typeof chainIds[k+1]==='number')id=String(chainIds[k+1]);}
