@@ -98,6 +98,7 @@
         return {id:'book:'+b.i,bid:String(b.i),title:translation||b.n,arabicTitle:b.n,aka:firstByBid.get(String(b.i))?.ru||'',author:authorLabel(b),category:b.c,categoryLabel:categoryNames.get(b.c)||b.c,subtitle:(translation?b.n+' · ':'')+(authorLabel(b)||categoryNames.get(b.c)||''),readable:false};
       });
       fullCatalog={...collections(),collections:primary.concat(others),categories,catalogCount:data.length};
+      for(const e of Object.values(fullCatalog.extras||{})){const f=firstByBid.get(String(e.bid));if(f&&f.ru)e.title=f.ru;}
       return fullCatalog;
     })().catch(error=>{catalogPromise=null;throw error;});
     return catalogPromise;
@@ -172,7 +173,9 @@
     let books=[];
     if(typeof READABLE!=='undefined')books=READABLE.map(x=>({id:x.code,title:names[x.code]||x.ru||x.code,subtitle:'Читать сборник'}));
     if(!books.length)books=Object.keys(names).filter(x=>!['nawawi','ibnmaja'].includes(x)).map(id=>({id,title:names[id],subtitle:'Читать сборник'}));
-    return {version:typeof APPVER!=='undefined'?APPVER:'v1807',collections:books};
+    // Книги, которые ищутся, но не входят в девять сводов читалки (Ибн Хиббан, аль-Хумайди, Табари…): без названий карточка показывала код «ibnhibban» (робот, 30.10).
+    const extras={};try{if(typeof EXTRA!=='undefined')for(const e of EXTRA)extras[e.code]={title:names[e.code]||e.ru||e.short||e.code,arabicTitle:e.ar||'',bid:(typeof EXTRA_BIDS!=='undefined'&&EXTRA_BIDS[e.code])||''};}catch(e){}
+    return {version:typeof APPVER!=='undefined'?APPVER:'v1807',collections:books,extras};
   }
   // Library search (chosen books and sections) — its finds as new-look cards, not the old window (owner П-46).
   let mkRows=null;

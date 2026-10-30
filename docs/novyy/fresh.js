@@ -20,7 +20,7 @@
   try {const favoriteBooks = JSON.parse(localStorage.getItem(FAVORITE_BOOK_STORAGE) || '[]'); state.favoriteBooks = Array.isArray(favoriteBooks) ? [...new Set(favoriteBooks.map(String))] : [];} catch (_) {}
   const sameRecord = (a,b) => `${a.kind || ''}:${a.collection || ''}:${a.id}` === `${b.kind || ''}:${b.collection || ''}:${b.id}`;
   const isSaved = record => state.bookmarks.some(x => sameRecord(x,record));
-  const source = record => record.kind === 'quran' ? 'Коран' : record.bookTitle || state.collections.find(c => String(c.id) === String(record.collection))?.title || record.collection || 'Хадис';
+  const source = record => record.kind === 'quran' ? 'Коран' : record.bookTitle || state.collections.find(c => String(c.id) === String(record.collection))?.title || state.extras?.[record.collection]?.title || record.collection || 'Хадис';
   // Russian translation and Arabic original of one hadith (owner 29.10: «как это арабский недоступен?»). As in the old
   // app, our Russian numbering matches the Arabic for al-Bukhari and Abu Dawud (checked 9 of 9 pairs by meaning, 29.10);
   // Muslim's Russian numbering differs — there the two are not put side by side.
@@ -101,7 +101,7 @@
     $('#search-results').innerHTML = '';
   }
   const NAMES_AR={bukhari:'صحيح البخاري',muslim:'صحيح مسلم',abudawud:'سنن أبي داود',tirmidhi:'سنن الترمذي',ibnmajah:'سنن ابن ماجه',ibnmaja:'سنن ابن ماجه',nasai:'سنن النسائي',malik:'موطأ مالك',ahmad:'مسند أحمد'};
-  function arabicTitleOf(record) {return String(record.arabicTitle||NAMES_AR[record.collection]||'').trim();}
+  function arabicTitleOf(record) {return String(record.arabicTitle||NAMES_AR[record.collection]||state.extras?.[record.collection]?.arabicTitle||'').trim();}
   // One source line everywhere (owner 29.10): «Русское | العربي · № N» — two names of one book on one level.
   function sourceLine(russianTitle,arabicTitle,number,className) {
     const ru=String(russianTitle||'').trim(),ar=String(arabicTitle||'').trim(),both=ar&&ar!==ru;
@@ -109,8 +109,9 @@
   }
   function openBookOfRecord(record) {
     if (!record) return; const code = record.collection === 'ibnmaja' ? 'ibnmajah' : record.collection;
-    const row = state.collections.find(c => c.id === code || c.id === record.collection || (record.bid && String(c.bid) === String(record.bid)));
-    openBookInfo(row || {id: code, bid: record.bid, title: source(record), arabicTitle: arabicTitleOf(record)});
+    const bid = record.bid || state.extras?.[code]?.bid;
+    const row = state.collections.find(c => c.id === code || c.id === record.collection || (bid && String(c.bid) === String(bid)));
+    openBookInfo(row || {id: bid ? 'book:' + bid : code, bid, title: source(record), arabicTitle: arabicTitleOf(record)});
   }
   // Бухари №652–654 и ещё 148 таких групп (Next, 30.10): издание пишет длинный хадис целиком под всеми его номерами, а перевод разбит на части.
   let sharedArabic={};fetch('data/odin_arabskiy.json').then(r=>r.ok?r.json():{}).then(j=>{sharedArabic=j||{};}).catch(()=>{});
@@ -411,7 +412,7 @@
   scopeBox.classList.add('legacy-scope');
   const includedIds=()=>multiScope.filter(x=>!x.exclude&&x.kind==='book').map(x=>x.id);
   const sameSet=(a,b)=>a.length===b.length&&a.every(x=>b.includes(x));
-  function bookTitleOf(id){return state.collections.find(c=>String(c.id)===String(id))?.title||BOOK_SHORT[id]||id;}
+  function bookTitleOf(id){return state.collections.find(c=>String(c.id)===String(id))?.title||BOOK_SHORT[id]||state.extras?.[id]?.title||id;}
   function setScope(list){multiScope.length=0;list.forEach(x=>multiScope.push(x));$('#category-select').value='all';$('#collection-select').value='all';renderMultiScope();filtersChanged();}
   function scopeLabel(){
     if(!multiScope.length)return 'Все книги';
@@ -594,7 +595,7 @@
       const info = await state.api.bookInfo(collection.id); if (token !== bookInfoToken || !dialog.open) return;
       const url = safeWebUrl(info?.sourceUrl), description = String(info?.description || '').trim();
       if (/wikipedia\.org/.test(url)) linkRow(url);
-      $('#book-description').innerHTML = `<h2>О книге${/wikipedia\.org/.test(url) ? '<small class="book-desc-from">из Википедии</small>' : ''}</h2><p class="book-description-text" dir="auto">${escape(description || 'Описание этой книги из источников пока не получено.')}</p>${info?.notice ? `<p class="book-info-notice">${escape(info.notice)}</p>` : ''}${url && !/wikipedia\.org/.test(url) ? `<a class="book-description-source" href="${escape(url)}" target="_blank" rel="noopener noreferrer">${escape(info.sourceTitle || 'Источник описания')}${info.language ? ` · ${escape(info.language)}` : ''}${icon('source')}</a>` : ''}`;
+      $('#book-description').innerHTML = !description && !url ? '' : `<h2>О книге${/wikipedia\.org/.test(url) ? '<small class="book-desc-from">из Википедии</small>' : ''}</h2><p class="book-description-text" dir="auto">${escape(description || 'Описание этой книги из источников пока не получено.')}</p>${info?.notice ? `<p class="book-info-notice">${escape(info.notice)}</p>` : ''}${url && !/wikipedia\.org/.test(url) ? `<a class="book-description-source" href="${escape(url)}" target="_blank" rel="noopener noreferrer">${escape(info.sourceTitle || 'Источник описания')}${info.language ? ` · ${escape(info.language)}` : ''}${icon('source')}</a>` : ''}`;
     } catch (_) {if (token === bookInfoToken && dialog.open) $('#book-description').innerHTML = '<h2>О книге</h2><p class="book-info-notice">Сейчас не удалось получить описание из источника. Доступные сведения из каталога показаны выше.</p>';}
   }
   $('#book-dialog-close').onclick = () => $('#book-dialog').close();
@@ -2035,7 +2036,7 @@
       for (let attempt=0; attempt<100 && !window.MuslimoonData; attempt++) await new Promise(resolve => setTimeout(resolve,100));
       if (!window.MuslimoonData) throw new Error('MuslimoonData was not loaded');
       state.api = window.MuslimoonData;state.api.onNumberUpdate(applyNumberResults); const info = await state.api.ready();
-      state.collections = Array.isArray(info.collections) ? info.collections : []; state.categories = Array.isArray(info.categories) ? info.categories : []; $('#data-version').textContent = info.version ? `Библиотека · ${info.version}` : '';
+      state.collections = Array.isArray(info.collections) ? info.collections : []; state.extras = info.extras || {}; state.categories = Array.isArray(info.categories) ? info.categories : []; $('#data-version').textContent = info.version ? `Библиотека · ${info.version}` : '';
       $('#category-select').innerHTML = '<option value="all">Все разделы</option>' + state.categories.map(c => `<option value="${escape(c.id)}">${escape(c.title)}${Number.isFinite(c.count) ? ` · ${c.count}` : ''}</option>`).join('');
       $('#collection-select').innerHTML = '<option value="all">Все книги</option>' + state.collections.map(c => `<option value="${escape(c.id)}">${escape(c.title)}${c.arabicTitle&&c.arabicTitle!==c.title?' | '+escape(c.arabicTitle):''}</option>`).join('');
       filtersChanged(); renderLibrary(); showWelcome(); $('.search-field').classList.remove('warming');
