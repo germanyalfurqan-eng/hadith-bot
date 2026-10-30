@@ -877,6 +877,9 @@
         try{const index=await ruIndex();for(const row of items)if(row.kind==='hadith'&&!row.russian&&canPairText(row))row.russian=cleanText(index.get(row.collection+'|'+row.number)||'');}catch(e){}
       }
       for(const row of items)if(row.kind==='hadith'&&!canPairText(row)){row.pairingUnverified=true;if(row.arabic&&row.russian)row.russian='';}
+      // проверка Next 30.10 (#4394): на русский запрос карточки шли без арабского, а владелец велел арабский первым —
+      // достаём оригинал из издания по книге и номеру (только где номера издания и перевода надёжно совпадают)
+      for(const row of items.slice(0,20))if(row.kind==='hadith'&&!row.arabic&&row.collection&&row.number&&canPairText(row)){try{row.arabic=cleanText(await getArabicHadith(row.collection,row.number)||'');}catch(e){}}
       const status=document.getElementById('status');
       return {items,total:results.length,notice:items.length?'':String(status&&status.textContent||'Совпадений не найдено')};
     }
