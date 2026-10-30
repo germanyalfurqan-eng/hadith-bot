@@ -861,7 +861,11 @@
       toast(message);
     }
   }
-  $$('[data-tool]').forEach(button => button.onclick = () => invokeTool(button.dataset.tool));
+  $$('[data-tool]').forEach(button => button.onclick = () => {const tool = button.dataset.tool;
+    // Конструктор и поиск по смыслу есть в новом виде: в прежний не уводим (Next, 30.10).
+    if (tool === 'chain') {openChainCtor(); return;}
+    if (tool === 'rag') {showView('search'); $('[data-section="hadith"]').click(); if (state.aiMode) setAiMode(false); $('#mode-select').value = 'rag'; filtersChanged(); syncModeChips(); $('#query').focus(); toast('Поиск по смыслу включён: напишите своими словами'); return;}
+    invokeTool(tool);});
   const assistantDialog=$('#native-assistant'),assistantInput=$('#native-assistant-input'),assistantMessages=$('#native-assistant-messages');
   // The conversation stays on this device (owner 29.10: «переписка всегда сохраняется»); the phone shows the last 20
   // and brings older ones back by 20 when the person scrolls up, so a long chat does not slow it down.

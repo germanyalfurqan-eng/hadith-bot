@@ -174,7 +174,7 @@
     if(typeof READABLE!=='undefined')books=READABLE.map(x=>({id:x.code,title:names[x.code]||x.ru||x.code,subtitle:'Читать сборник'}));
     if(!books.length)books=Object.keys(names).filter(x=>!['nawawi','ibnmaja'].includes(x)).map(id=>({id,title:names[id],subtitle:'Читать сборник'}));
     // Книги, которые ищутся, но не входят в девять сводов читалки (Ибн Хиббан, аль-Хумайди, Табари…): без названий карточка показывала код «ibnhibban» (робот, 30.10).
-    const extras={};try{if(typeof EXTRA!=='undefined')for(const e of EXTRA)extras[e.code]={title:names[e.code]||e.ru||e.short||e.code,arabicTitle:e.ar||'',bid:(typeof EXTRA_BIDS!=='undefined'&&EXTRA_BIDS[e.code])||''};}catch(e){}
+    const extras={};try{if(typeof EXTRA!=='undefined')for(const e of EXTRA)extras[e.code]={title:names[e.code]||String(e.ru||e.short||e.code).replace(/\s*\([^)]*поиск[^)]*\)/,''),arabicTitle:e.ar||'',bid:(typeof EXTRA_BIDS!=='undefined'&&EXTRA_BIDS[e.code])||''};}catch(e){}
     return {version:typeof APPVER!=='undefined'?APPVER:'v1807',collections:books,extras};
   }
   // Library search (chosen books and sections) — its finds as new-look cards, not the old window (owner П-46).
