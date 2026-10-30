@@ -185,6 +185,11 @@ async def _obrabotchik(update, context):
     if not k:
         return
     vid, prosba = k.group(1).lower(), k.group(2).strip()
+    # 30.10.2026 ЛОКАЛКИ 38, слово владельца «убери старые команды, постоянно пересекаются»: рисование отдано
+    # Гермесу Оракла (@imageJM_bot, Qwen-Image 2.1 на Kaggle). Пока в nastroyki.json стоит "germesu": true,
+    # этот модуль молчит на «ботяра нарисуй/измени/генерация» — отвечает только Гермес. Вернуть: "germesu": false.
+    if _chitat(NASTR, {}).get('germesu', True):
+        return
     nit = m.message_thread_id if getattr(m, 'is_topic_message', False) else None
     try:
         await _komanda(m, vid, prosba, nit)
