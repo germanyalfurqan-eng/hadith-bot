@@ -6,7 +6,7 @@
   const readiness=new Promise((resolve,reject)=>{resolveReady=resolve;rejectReady=reject;});
   const frame=document.createElement('iframe');
   frame.title='Научные инструменты Muslimoon';
-  frame.src='core.html?v=20261030190937&design='+encodeURIComponent(document.documentElement.dataset.theme||'gold')+(location.hash||'');
+  frame.src='core.html?v=20261030191014&design='+encodeURIComponent(document.documentElement.dataset.theme||'gold')+(location.hash||'');
   frame.style.cssText='width:100%;height:100%;border:0;display:block;background:#111';
   const shell=document.createElement('section');
   shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Научные инструменты');
