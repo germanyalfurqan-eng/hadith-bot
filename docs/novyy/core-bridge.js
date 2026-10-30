@@ -147,7 +147,7 @@
     let page=await wikiPage(original);
     if(page){
       const links=new Map((page.langlinks||[]).map(x=>[x.lang,x.url]));links.set(page.lang,page.fullurl||original);
-      const preferred=['ru','en','ar'].find(lang=>links.has(lang));
+      const preferred=['ru','ar','en'].find(lang=>links.has(lang));
       if(preferred&&preferred!==page.lang){const translated=await wikiPage(links.get(preferred));if(translated)page=translated;}
     }
     return {description:page?.extract||'',sourceUrl:page?.fullurl||known?.url||'',sourceTitle:page?'Википедия · '+page.title:'',language:page?.lang||'',notice:page?.extract?'':'Связанная справка из Википедии пока недоступна. Название, автор и раздел показаны по каталогу.'};
