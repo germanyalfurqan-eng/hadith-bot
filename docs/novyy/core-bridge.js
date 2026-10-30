@@ -662,6 +662,8 @@
         if(said!==x.said&&id==null){try{id=await _narrLookup(said);}catch(e){}id=id==null?null:String(id);}
         if(id==null&&KIN.test(plain(said))&&prevId!=null){const k=chainIds.indexOf(+prevId);if(k>=0&&typeof chainIds[k+1]==='number')id=String(chainIds[k+1]);}
         if(id==null&&(w.length>5||/صلى|رسول|النبي/.test(plain(said))))continue;   // не имя — кусок матна
+        // «وهذا حديثه», «واللفظ له», «بمثله» — слова Муслима о версии, не передатчик (№115 выделял «هذا حديثه» пунктиром)
+        if(id==null&&/^(?:و?هذا|و?هذه|و?ذلك|و?اللفظ|لفظ|و?هو|و?هي|حديثه|نحوه|مثله|بمعناه|بهذا|بمثله|بنحوه|بإسناده|باسناده|به|و?المعنى)$/.test(plain(w[0])))continue;
         cleaned.push({said,id});if(id!=null)prevId=id;}
       // запасной проход: после каждого слова передачи до слов о Пророке ﷺ — имя, которого нет среди звеньев, если оно
       // опознаётся (самое длинное начало из 1–5 слов): «عن جابر جعل…», «سمعت ابن عباس يقول…»
