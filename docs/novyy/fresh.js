@@ -835,7 +835,7 @@
   async function invokeTool(name,record) {
     $('#assistant-notice').hidden = true;
     if(name==='bookPage'&&record?.bid&&record?.page){openNativeBook(record.bid,record.page,source(record));return;}
-    if(name==='assistant'||name==='explain'){openNativeAssistant(record);return;}
+    if(name==='assistant'||name==='explain'){openNativeAssistant(record);if(name==='explain'){assistantInput.value='Объясни этот текст простым языком';$('#native-assistant-form').requestSubmit();}return;}
     if(name==='notes'){const k=noteKeyOf(record);if(k)openNoteEditor(k.rk,k.label,k.ref);else openNotes();return;}
     if(name==='narrators'){openNarrators(record);return;}
     if(name==='takhrij'){openTakhrij(record);return;}
@@ -1714,7 +1714,7 @@
     try{srv=await state.api.quranSettings();}catch(_){}
     const sw=(k,label,sub)=>`<label class="qs-row"><span><b>${label}</b>${sub?`<small>${sub}</small>`:''}</span><button type="button" class="mark-switch" role="switch" data-qs-sw="${k}" aria-checked="${!!o[k]}">${o[k]?'Включено':'Выключено'}</button></label>`;
     body.innerHTML=`<section class="qs-sec"><h3>Перевод</h3><div class="qs-choice">${srv.translations.map(([v,t])=>`<button type="button" data-qs-tr="${v}" class="${srv.qtr===v?'selected':''}">${t}</button>`).join('')}</div>${sw('translation','Показывать перевод','под аятом')}</section>`
-      +`<section class="qs-sec"><h3>Чтение вслух</h3><label class="qs-row"><span><b>Чтец</b><small>подсветка слов — по чтению аль-Хусари</small></span><select class="qs-reciter">${srv.reciters.map(([v,t])=>`<option value="${v}"${srv.reciter===v?' selected':''}>${t}</option>`).join('')}</select></label>${sw('highlight','Подсветка слов при чтении','▶ читает голосом аль-Хусари и ведёт по словам')}${sw('continuous','Читать дальше по аятам','с кнопкой «вернуться»')}</section>`
+      +`<section class="qs-sec"><h3>Чтение вслух</h3><label class="qs-row"><span><b>Чтец</b><small>подсветка слов — у Омара Хишама там, где готова его разметка, иначе по чтению аль-Хусари</small></span><select class="qs-reciter">${srv.reciters.map(([v,t])=>`<option value="${v}"${srv.reciter===v?' selected':''}>${t}</option>`).join('')}</select></label>${sw('highlight','Подсветка слов при чтении','▶ читает голосом аль-Хусари и ведёт по словам')}${sw('continuous','Читать дальше по аятам','с кнопкой «вернуться»')}</section>`
       +`<section class="qs-sec"><h3>Слова и листание</h3>${sw('words','Нажатие на слова','перевод, корень и грамматика слова')}<div class="qs-choice">${[['scroll','Лентой — вверх-вниз'],['swipe','Свайпами — ←→ суры, ↑↓ аяты']].map(([v,t])=>`<button type="button" data-qs-nav="${v}" class="${o.nav===v?'selected':''}">${t}</button>`).join('')}</div></section>`;
     body.onclick=async e=>{const b=e.target.closest('[data-qs-sw],[data-qs-tr],[data-qs-nav]');if(!b)return;const cur=quranOpts();
       if(b.dataset.qsSw){cur[b.dataset.qsSw]=!cur[b.dataset.qsSw];saveQuranOpts(cur);b.setAttribute('aria-checked',String(cur[b.dataset.qsSw]));b.textContent=cur[b.dataset.qsSw]?'Включено':'Выключено';}
