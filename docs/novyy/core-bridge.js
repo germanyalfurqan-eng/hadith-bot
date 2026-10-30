@@ -267,6 +267,16 @@
     if(action==='quranTimedAudio'){
       const s=Number(args.sura),a=Number(args.ayah),count=Number(args.wordCount);
       if(!Number.isSafeInteger(s)||s<1||s>114||!Number.isSafeInteger(a)||a<1||!Number.isSafeInteger(count)||count<1)throw Error('Неверные данные аята');
+      // №178, владелец #4377/#4378: по умолчанию — Омар Хишам с караоке там, где его разметка готова (подтверждённые суры;
+      // время слов — облачная расшифровка Groq, omar_karaoke.py); файл — аят целиком, время от его начала
+      try{const ro=await fetch('./novyy/data/omar_timings/'+s+'.json');const dv=ro.ok?(await ro.json())?.v?.[String(a)]:null;
+        if(dv&&Array.isArray(dv.s)&&dv.s.length&&typeof OMAR_CDN==='string'){let segs=dv.s;
+          // басмала в первом аяте: у приложения она может быть (а в разметке нет) или наоборот
+          if(a===1&&s!==1&&s!==9&&segs.length+4===count)segs=segs.map(([n,f,t])=>[n+4,f,t]);
+          else if(a===1&&s!==1&&s!==9&&segs.length===count+4)segs=segs.slice(4).map(([n,f,t])=>[n-4,f,t]);
+          const end=Number(dv.t),pad=n=>String(n).padStart(3,'0');
+          if(segs.length&&Math.max(...segs.map(x=>x[0]))===count&&Number.isFinite(end)&&end>0)
+            return {url:OMAR_CDN+pad(s)+pad(a)+'.mp3',start:0,end,segments:segs,reciter:'Омар Хишам'};}}catch(e){}
       const response=await fetch('./wordtimings/'+s+'.json');if(!response.ok)throw Error('Пословная разметка для суры недоступна');
       const data=await response.json(),verse=data?.v?.[String(a)],segments=verse?.s;
       if(data.rec!=='husary'||!Array.isArray(segments)||!segments.length)throw Error('Разметка не совпала с количеством слов аята');

@@ -1795,7 +1795,8 @@
       stop();const id=++generation,cur=quranOpts();setBtn('playing');status.textContent='Готовлю аудио…';
       try{let info=null,hl=false;
         if(cur.highlight&&await words.enable(cur.words)){try{info=await state.api.quranTimedAudio(s,a,words.words().length);hl=true;}catch(_){info=null;}}
-        // с подсветкой читает аль-Хусари; где для аята нет разметки времени — тот же аль-Хусари, только без подсветки
+        // с подсветкой читает Омар Хишам там, где готова его разметка слов (№178), иначе аль-Хусари; где разметки нет вовсе —
+        // аль-Хусари без подсветки
         if(!info)info=await state.api.quranAudioInfo(s,a,cur.highlight?'Husary_128kbps':'');if(id!==generation)return;
         const player=new Audio();audio=player;player.preload='auto';player.src=info.url;
         player.addEventListener('error',()=>{if(id===generation)stop('Аудио недоступно — проверьте соединение.');});
