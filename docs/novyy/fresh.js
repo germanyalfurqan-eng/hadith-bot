@@ -1290,7 +1290,9 @@
       for(const node of nodes){if(!started){if(node===pos.node)started=true;else continue;}
         const start=node===pos.node?pos.offset:0,m=re.exec(node.data.slice(start));if(!m)continue;const at=start+m.index;
         const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+m[0].length);
-        const b=document.createElement('button');b.type='button';b.className='isnad-name'+(l.id?'':' isnad-name-unknown');if(l.id)b.dataset.narrCard=l.id;else b.dataset.narrSaid=l.said;b.setAttribute('aria-label',l.id?'Передатчик — открыть карточку':'Передатчик не опознан однозначно — выбрать из тёзок');
+        // span, а не button: кнопка в строке неразрывна, и имя из нескольких слов («سُمَيٍّ، مَوْلَى أَبِي بَكْرٍ») уезжало
+        // на следующую строку целиком, оставляя пустоту (владелец 30.10); span переносится по словам, нажимается так же
+        const b=document.createElement('span');b.setAttribute('role','button');b.tabIndex=0;b.className='isnad-name'+(l.id?'':' isnad-name-unknown');if(l.id)b.dataset.narrCard=l.id;else b.dataset.narrSaid=l.said;b.setAttribute('aria-label',l.id?'Передатчик — открыть карточку':'Передатчик не опознан однозначно — выбрать из тёзок');
         try{range.surroundContents(b);}catch(_){return null;}
         const next=b.nextSibling;return next&&next.nodeType===3?{node:next,offset:0}:{node:null,offset:0};}
       return null;};
@@ -1350,6 +1352,8 @@
     body.innerHTML=`<p class="ncard-said" lang="ar" dir="rtl">${escape(said)}</p><p class="notes-hint">В этой цепи имя не опознано однозначно. ${items.length?'Подходящие передатчики — выберите:':'В нашей базе подходящих не нашлось.'}</p>`
       +items.map(x=>`<button type="button" class="ctor-cand" data-narr-card="${escape(String(x.id))}"><span lang="ar" dir="rtl">${escape(shortNasab(x.name))}</span><small>${escape([x.kunya,x.death?'ум. '+x.death:''].filter(Boolean).join(' · '))}</small></button>`).join('');
   }
+  // имя в иснаде — span с ролью кнопки: Enter и пробел открывают его, как у кнопки
+  document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('span.isnad-name')){e.preventDefault();e.target.click();}});
   document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-narr-said]');if(!t||t.dataset.narrCard)return;e.preventDefault();e.stopPropagation();openNarratorNamesakes(t.dataset.narrSaid);},true);
   // any [data-narr-card] anywhere in the new view opens the card
   document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-narr-card]');if(!t||!t.dataset.narrCard)return;e.preventDefault();e.stopPropagation();openNarratorCard(t.dataset.narrCard);},true);
