@@ -1084,6 +1084,9 @@
       noteEditor.close('save');if(notesDialog.open)renderNotes();};
     noteEditor.querySelector('.note-cancel').onclick=()=>noteEditor.close('cancel');
   }
+  // У изданий вроде «سنن الترمذي - ت شاكر» нет русского имени в таблице тахриджа (Next, 30.10): берём по началу названия, затем из каталога.
+  const TAKH_RU=[['صحيح البخاري','Сахих аль-Бухари'],['صحيح مسلم','Сахих Муслим'],['سنن أبي داود','Сунан Абу Дауда'],['سنن الترمذي','Сунан ат-Тирмизи'],['جامع الترمذي','Сунан ат-Тирмизи'],['سنن النسائي','Сунан ан-Насаи'],['سنن ابن ماجه','Сунан Ибн Маджи'],['مسند أحمد','Муснад Ахмада'],['موطأ مالك','Муватта Малика'],['سنن الدارمي','Сунан ад-Дарими'],['مسند الدارمي','Сунан ад-Дарими']];
+  function takhRu(r){if(r.ru)return r.ru;const ar=String(r.ar||'').trim();return (TAKH_RU.find(([x])=>ar.startsWith(x))||[])[1]||state.collections.find(c=>c.arabicTitle===ar&&!/[\u0600-\u06FF]/.test(c.title||''))?.title||'';}
   function openNoteRef(ref){if(!ref)return;if(ref.type==='q')ASSIST_ACTIONS.quran.run(ref.s+':'+(ref.a||1));else if(ref.type==='h')ASSIST_ACTIONS.search.run(`${ref.source} ${ref.num}`);else if(ref.type==='m')ASSIST_ACTIONS.search.run('мухаймин '+ref.n);}
   notesDialog.querySelector('.notes-close').onclick=()=>notesDialog.close();
   notesDialog.querySelector('.notes-search').addEventListener('input',renderNotes);
@@ -1186,7 +1189,7 @@
       const hukm=b.hukm?`<p class="takh-hukm"><span>Оценка источника:</span> <b lang="ar" dir="rtl">${escape(b.hukm)}</b><button type="button" class="src-q" data-help="grade" aria-label="Что это за оценка">?</button></p>`:'';
       if(b.kind==='text')return `<section class="takh-block"><h3>${escape(b.title)}</h3>${hukm}<p class="takh-text" lang="ar" dir="rtl">${escape(b.text)}</p>${src}</section>`;
       if(b.kind==='muhaymin')return `<section class="takh-block"><h3>${escape(b.title)}</h3><div class="takh-nums">${b.nums.map(n=>`<button type="button" class="takh-num" data-muh="${escape(n)}">${escape(n)}</button>`).join('')}</div>${src}</section>`;
-      return `<section class="takh-block"><h3>${escape(b.title)}</h3>${hukm}${(b.groups||[]).map(g=>`<p class="takh-group">${escape(g.label)}</p>${g.rows.map(r=>`<div class="takh-row"><p class="takh-book"><b lang="ar" dir="rtl">${escape(r.ar)}</b>${r.ru?`<small>${escape(r.ru)}</small>`:''}</p><div class="takh-nums">${r.places.map(p=>chip(p,g.same)).join('')}</div></div>`).join('')}`).join('')}${src}</section>`;
+      return `<section class="takh-block"><h3>${escape(b.title)}</h3>${hukm}${(b.groups||[]).map(g=>`<p class="takh-group">${escape(g.label)}</p>${g.rows.map(r=>`<div class="takh-row"><p class="takh-book"><b lang="ar" dir="rtl">${escape(r.ar)}</b>${takhRu(r)?`<small>${escape(takhRu(r))}</small>`:''}</p><div class="takh-nums">${r.places.map(p=>chip(p,g.same)).join('')}</div></div>`).join('')}`).join('')}${src}</section>`;
     }).join('')+'<p class="notes-hint">Нажмите на номер — хадис откроется. Совпадения «по похожему тексту» здесь не показываются.</p>';
     body.onclick=async e=>{const m=e.target.closest('[data-muh]');if(m){takhDialog.close();ASSIST_ACTIONS.search.run('мухаймин '+m.dataset.muh);return;}
       const b=e.target.closest('[data-place]');if(!b)return;const p=places[+b.dataset.place];if(!p)return;
