@@ -997,5 +997,7 @@
   // ara-ahmad.min.json, которого на сайте нет — журнал ошибок получил A-261 «HTTP 404» ×22 (29.10)
   const codes=['bukhari','muslim','abudawud','tirmidhi','nasai','ibnmajah','malik'];
   const idle=fn=>(window.requestIdleCallback?requestIdleCallback(fn,{timeout:4000}):setTimeout(fn,300));
-  setTimeout(()=>{let i=0;const next=()=>{if(i>=codes.length)return;const c=codes[i++];Promise.resolve().then(()=>loadCollection(c)).catch(()=>{}).finally(()=>idle(next));};idle(next);},2500);
+  // №140, 30.10: с ожиданием 2,5 с и по одной книге первый поиск в первые 3 с шёл 1,5–5 с; ядро в скрытой рамке, первый
+  // экран рисует страница — начинаем через 0,4 с, в две линии
+  setTimeout(()=>{let i=0;const next=()=>{if(i>=codes.length)return;const c=codes[i++];Promise.resolve().then(()=>loadCollection(c)).catch(()=>{}).finally(()=>idle(next));};idle(next);idle(next);},400);
 })();
