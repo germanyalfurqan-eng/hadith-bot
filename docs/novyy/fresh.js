@@ -632,7 +632,7 @@
   function arabicParts(text){
     const clean=String(text).replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g,'').replace(/[\uFD40-\uFD4F\uFDFA\uFDFB]/g,' ').replace(/صلى الله عليه و ?سلم|رضي الله عن(?:هما|هم|ها|ه|هن)|عليه الصلاة والسلام|عليه السلام|رحمه الله/g,' ');
     const words=(clean.match(/[\u0621-\u064A\u066E-\u06D3]+/g)||[]),n=words.length,out=[];if(n<2)return out;
-    const add=w=>{const t=w.join(' ');if(w.length>=2&&t!==String(text).trim()&&!out.includes(t))out.push(t);};add(words);
+    const add=w=>{const t=w.join(' ');if(w.length>=2&&t!==String(text).trim()&&!out.includes(t))out.push(t);};add(words.filter(w=>!/^(?:رواه|أخرجه|اخرجه|صحيح|البخاري|مسلم|الترمذي|النسائي|ابن|ماجه|داود|سنن|مسند|موطأ|حديث|رقم)$/.test(w)));add(words);
     for(const w of [Math.ceil(n*.7),Math.ceil(n*.5),6,5,4,3])if(w>=3&&w<n){add(words.slice(n-w));add(words.slice(0,w));}
     return out.slice(0,7);
   }
