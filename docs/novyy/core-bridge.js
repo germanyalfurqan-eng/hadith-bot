@@ -887,7 +887,7 @@
       // достаём оригинал из издания по книге и номеру (только где номера издания и перевода надёжно совпадают)
       for(const row of items.slice(0,20))if(row.kind==='hadith'&&!row.arabic&&row.collection&&row.number&&canPairText(row)){try{row.arabic=cleanText(await getArabicHadith(row.collection,row.number)||'');}catch(e){}}
       const status=document.getElementById('status');
-      return {items,total:results.length,notice:items.length?'':String(status&&status.textContent||'Совпадений не найдено')};
+      const said=String(status&&status.textContent||'');return {items,total:results.length,notice:items.length?'':(/^Загружаю/.test(said)||!said?'Совпадений не найдено':said)};
     }
     if(action==='read'){
       const row=Object.assign({},args.record||{});

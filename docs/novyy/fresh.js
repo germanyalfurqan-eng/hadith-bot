@@ -651,9 +651,27 @@
     mkState.token++;mkSection.hidden=true;if(wholeLibrary&&/[؀-ۿ]/.test(query))maktabaWave(query,false);
     const request = {query,category:state.section === 'quran' ? 'all' : state.category,collection:state.section === 'quran' ? 'all' : state.collection,section:state.section,mode:state.section === 'quran' ? 'normal' : state.mode,scope:state.section==='hadith'?multiScope.map(({kind,id,exclude})=>({kind,id,exclude})):[]};
     try {
+      // «По передатчику»: прежнее ядро рисует своё окно, а сюда отдаёт пусто — «0 найдено» при любом имени (владелец 31.10). Имя ищем в базе передатчиков сами.
+      let modeNote = '';
+      if (state.section === 'hadith' && state.mode === 'narr' && !state.aiMode) {
+        let cands = [];
+        if ((query.match(/\S+/g) || []).length <= 7) {try {cands = (await state.api.narrCands(query,'')).items || [];} catch (_) {} if (token !== state.searchToken) return;}
+        if (cands.length) {
+          $('#results-title').textContent = 'Передатчики'; $('#result-count').textContent = `${cands.length} найдено`;
+          $('#search-results').innerHTML = cands.map(x => `<button type="button" class="ctor-cand" data-narr-card="${escape(String(x.id))}"><span lang="ar" dir="rtl">${escape(shortNasab(x.name))}</span><small>${escape([x.kunya,x.death ? 'ум. ' + x.death : ''].filter(Boolean).join(' · '))}</small></button>`).join('');
+          return;
+        }
+        request.mode = 'normal'; modeNote = 'Такого передатчика нет, показан обычный поиск по словам.';
+      }
       let result = await state.api.search(request); if (token !== state.searchToken) return;
+      // Строгий режим ничего не дал — показываем обычный поиск и прямо об этом говорим, а не «0 найдено» (владелец 31.10)
+      if (!result.opened && !result.numeric && !(result.items || []).length && state.section === 'hadith' && !state.aiMode && !multiScope.length && ['diac','root','matnonly','rag'].includes(request.mode)) {
+        const next = await state.api.search({...request,mode:'normal'}); if (token !== state.searchToken) return;
+        request.mode = 'normal'; modeNote = `В режиме «${modeNames[state.mode]}» ничего нет, показан обычный поиск по словам.`;
+        if ((next.items || []).length) result = next;
+      }
       // Арабский текст целиком, которого в источнике нет буква в букву (лишнее слово, кавычки, ﷺ, ﵁): поиск требует все слова сразу и даёт ноль (владелец 31.10). Пробуем части.
-      if (!result.opened && !result.numeric && !(result.items || []).length && !state.aiMode && !multiScope.length && ['normal','matnonly'].includes(state.section === 'quran' ? 'normal' : (state.mode || 'normal')) && /[؀-ۿ]/.test(query)) {
+      if (!result.opened && !result.numeric && !(result.items || []).length && !state.aiMode && !multiScope.length && ['normal','matnonly'].includes(request.mode || 'normal') && /[؀-ۿ]/.test(query)) {
         loading($('#search-results'),'Точного совпадения нет','Ищем по частям текста');
         for (const part of arabicParts(query)) {
           const next = await state.api.search({...request,query:part}); if (token !== state.searchToken) return;
@@ -664,7 +682,8 @@
       if(result.numeric){applyNumberResults(result);return;}
       state.results = Array.isArray(result.items) ? result.items : []; state.shown = 8;
       $('#result-count').textContent = `${Number.isFinite(Number(result.total)) ? Number(result.total).toLocaleString('ru-RU') : state.results.length} найдено`;
-      if (result.notice) {$('#search-notice').textContent = String(result.notice); $('#search-notice').hidden = false;}
+      const noticeText = [modeNote, result.items && result.items.length || !/^Загружаю/.test(String(result.notice || '')) ? String(result.notice || '') : ''].filter(Boolean).join(' ');
+      if (noticeText) {$('#search-notice').textContent = noticeText; $('#search-notice').hidden = false;}
       if (result.heading) $('#results-title').textContent = String(result.heading);
       if (state.results.length) {renderCards($('#search-results'),state.results,state.shown); $('#more-results').hidden = state.shown >= state.results.length;}
       else empty($('#search-results'),'Попробуйте другие слова','Сократите фразу или выберите все сборники в настройках поиска.');
@@ -1483,7 +1502,7 @@
     try{
       if(!s||Date.now()-s.t>7*864e5)return;
       if(s.section==='quran')$('[data-section="quran"]')?.click();
-      if(s.mode&&Array.from($('#mode-select').options).some(o=>o.value===s.mode)){$('#mode-select').value=s.mode;filtersChanged();}
+      if(s.mode==='rag'){$('#mode-select').value=s.mode;filtersChanged();}
       if(s.view&&s.view!=='search')showView(s.view);
       if(s.ai)setAiMode(true);
       if(s.q&&!s.ai){$('#query').value=s.q;syncPlaceholder();if(s.view==='search'||!s.view)performSearch();}else if(s.q){$('#query').value=s.q;syncPlaceholder();}
