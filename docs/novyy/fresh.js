@@ -628,6 +628,14 @@
     if(!q||state.aiMode||(state.section==='hadith'&&!['normal','diac','root'].includes(state.mode||'normal')))return;
     const num=/^[\d٠-٩\s:№#.]+$/.test(q);if(!num&&q.replace(/[^\p{L}]/gu,'').length<3)return;
     liveTimer=setTimeout(()=>{if($('#query').value.trim()===q&&q!==liveLast)performSearch();},num?450:700);});
+  // Части арабского текста для повторного поиска: сперва весь текст без огласовок, знаков и благопожеланий, затем куски от конца (там обычно сам хадис, а цепь передатчиков — в начале).
+  function arabicParts(text){
+    const clean=String(text).replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g,'').replace(/[\uFD40-\uFD4F\uFDFA\uFDFB]/g,' ').replace(/صلى الله عليه و ?سلم|رضي الله عن(?:هما|هم|ها|ه|هن)|عليه الصلاة والسلام|عليه السلام|رحمه الله/g,' ');
+    const words=(clean.match(/[\u0621-\u064A\u066E-\u06D3]+/g)||[]),n=words.length,out=[];if(n<2)return out;
+    const add=w=>{const t=w.join(' ');if(w.length>=2&&t!==String(text).trim()&&!out.includes(t))out.push(t);};add(words);
+    for(const w of [Math.ceil(n*.7),Math.ceil(n*.5),6,5,4,3])if(w>=3&&w<n){add(words.slice(n-w));add(words.slice(0,w));}
+    return out.slice(0,7);
+  }
   async function performSearch() {
     const query = $('#query').value.trim();
     if (!query) {$('#query').focus(); return;}
@@ -643,7 +651,15 @@
     mkState.token++;mkSection.hidden=true;if(wholeLibrary&&/[؀-ۿ]/.test(query))maktabaWave(query,false);
     const request = {query,category:state.section === 'quran' ? 'all' : state.category,collection:state.section === 'quran' ? 'all' : state.collection,section:state.section,mode:state.section === 'quran' ? 'normal' : state.mode,scope:state.section==='hadith'?multiScope.map(({kind,id,exclude})=>({kind,id,exclude})):[]};
     try {
-      const result = await state.api.search(request); if (token !== state.searchToken) return;
+      let result = await state.api.search(request); if (token !== state.searchToken) return;
+      // Арабский текст целиком, которого в источнике нет буква в букву (лишнее слово, кавычки, ﷺ, ﵁): поиск требует все слова сразу и даёт ноль (владелец 31.10). Пробуем части.
+      if (!result.opened && !result.numeric && !(result.items || []).length && !state.aiMode && !multiScope.length && ['normal','matnonly'].includes(state.section === 'quran' ? 'normal' : (state.mode || 'normal')) && /[؀-ۿ]/.test(query)) {
+        loading($('#search-results'),'Точного совпадения нет','Ищем по частям текста');
+        for (const part of arabicParts(query)) {
+          const next = await state.api.search({...request,query:part}); if (token !== state.searchToken) return;
+          if ((next.items || []).length) {result = {...next,notice:`Точного совпадения нет. Показаны тексты, где есть эти слова: «${part}».`}; if (wholeLibrary && mkSection.hidden) maktabaWave(part,false); break;}
+        }
+      }
       if (result.opened) {showWelcome(); return;}
       if(result.numeric){applyNumberResults(result);return;}
       state.results = Array.isArray(result.items) ? result.items : []; state.shown = 8;
