@@ -19215,6 +19215,10 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _зовут_модель = True
             print('вопрос о модели узнан по-человечески: «%s»' % _низ_мод[:60])
 
+    # 🔇 31.10.2026 ЛОКАЛКИ 39, письмо #4475: «убери там команду старого бота на модель, отзывается, мешает». В @jamaat_ru модель выбирает
+    # Гермес Оракла. Вопрос о модели без «ботяра» в _джамаат_молчим не попадал, и старый бот показывал своё меню. Личка как была.
+    if _зовут_модель and ДЖАМААТ_БОТЯРА_ГЕРМЕСУ and int(getattr(getattr(update, 'effective_chat', None), 'id', 0) or 0) == JAMAAT_RU_CHAT_ID:
+        return
     if _зовут_модель and is_owner(update):
         _мчасти = text.strip().split(None, 1)
         if _мчасти[0].lower() == 'модель':
